@@ -1,14 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { garmentTypes, garmentTypeItems } from '../../api/endpoints'
-import GroupPills, { PECA_GRUPS } from './GroupPills'
+import { garmentTypeItems } from '../../api/endpoints'
+import { useGarmentCatalog } from '../grading/garmentCatalog'
+import GroupPills from './GroupPills'
 
 // Pas 5A — Selector de DOS NIVELLS: família (GarmentType) → ítem (GarmentTypeItem).
 // onSelect({ family, item }) → el wizard desa garment_type_id + garment_type_item_id (baula motor).
 
 // WIZARD-COMPLET C.2 + rectificació pills — arbre únic: els grups (ordre + etiquetes + estil de pill)
-// viuen a GroupPills/PECA_GRUPS (font única), compartits amb Garment Types i el Navegador de POM Systems.
-const GRUPS = PECA_GRUPS
+// viuen a GroupPills (font única), compartits amb Garment Types i el Navegador de POM Systems.
+// Sprint Wizard unificat (Onada 1): grups i famílies venen de `useGarmentCatalog` (mateixa font que
+// AxesSelector). Amb `target` → grups/famílies retallats als compatibles (NEWBORN inclòs per a nadó);
+// sense target → catàleg complet.
 
 const MONO = 'IBM Plex Mono, monospace'
 
@@ -18,28 +21,29 @@ function famName(f, lang) {
   return f.nom_en || f.nom_client || ''
 }
 
-export default function GarmentTypeSelector({ onSelect, selectedItemId = null }) {
+export default function GarmentTypeSelector({ onSelect, selectedItemId = null, target = null }) {
   const { t, i18n } = useTranslation()
   const lang = (i18n.language || 'ca').slice(0, 2)
 
-  const [grupActiu, setGrupActiu] = useState('TOPS')
-  const [families, setFamilies] = useState([])
-  const [loadingFam, setLoadingFam] = useState(false)
+  // Font única: grups (de BD, retallats pel target) + famílies (filtrades pel target al backend).
+  const { groups, familiesOf, loading: loadingFam } = useGarmentCatalog(target)
+  const [grupActiu, setGrupActiu] = useState(null)
   const [family, setFamily] = useState(null)   // família triada → mostra el nivell ítems
   const [items, setItems] = useState([])
   const [loadingItems, setLoadingItems] = useState(false)
   const [err, setErr] = useState(false)
 
-  // Nivell 1 — carrega famílies del grup actiu (sense mock; estat buit real).
+  // Grup actiu per defecte = primer grup disponible; en re-calcular els grups (p.ex. canvi de target)
+  // saltem a un de vàlid si l'actual ja no hi és.
   useEffect(() => {
-    let alive = true
-    setLoadingFam(true); setErr(false)
-    garmentTypes.list({ grup: grupActiu, page_size: 200, actiu: 'true' })
-      .then(res => { if (alive) setFamilies(res.data?.results ?? res.data ?? []) })
-      .catch(() => { if (alive) { setFamilies([]); setErr(true) } })
-      .finally(() => { if (alive) setLoadingFam(false) })
-    return () => { alive = false }
-  }, [grupActiu])
+    if (!groups.length) return
+    if (!grupActiu || !groups.some(g => g.codi === grupActiu)) {
+      setGrupActiu(groups[0].codi)
+      setFamily(null); setItems([])
+    }
+  }, [groups, grupActiu])
+
+  const families = familiesOf(grupActiu)
 
   // Nivell 2 — carrega ítems de la família triada.
   const openFamily = useCallback((f) => {
@@ -58,13 +62,12 @@ export default function GarmentTypeSelector({ onSelect, selectedItemId = null })
         <>
           {/* Pestanyes de grup — patró únic compartit (GroupPills). */}
           <div style={{ padding: '14px 16px', borderBottom: '0.5px solid var(--gray-l)', background: 'var(--white)' }}>
-            <GroupPills groups={GRUPS} value={grupActiu} onChange={setGrupActiu} />
+            <GroupPills groups={groups} value={grupActiu} onChange={g => { setGrupActiu(g); setFamily(null); setItems([]) }} />
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
             {loadingFam && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: 0 }}>{t('garment_selector.loading_families')}</p>}
-            {err && !loadingFam && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--err)', margin: 0 }}>{t('garment_selector.error')}</p>}
-            {!loadingFam && !err && families.length === 0 && (
+            {!loadingFam && families.length === 0 && (
               <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: 0 }}>{t('garment_selector.no_families')}</p>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 841.9 595.3">
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       FTT · TEMPLATE FTT — ESPECIFICACIÓ CANÒNICA DE LA CAPÇALERA
+       Aquest fitxer és LA REFERÈNCIA. Qualsevol render ha de coincidir-hi.
+       Unitats: pt (viewBox A4 apaïsat 841.9 x 595.3)
+
+       BANDA      x=28.6  y=39  w=784.7  h=90.2   (bottom y=129.2)
+       DIVISÒRIES x=170.3 · x=491.8      (marc ÚNIC + 2 línies, MAI 3 rects)
+       CAIXA 1    28.6 → 170.3  (w=141.7)   padding 6 → text x=34.6
+       CAIXA 2   170.3 → 491.8  (w=321.5)   padding 6 → text x=176.3
+       CAIXA 3   491.8 → 813.3  (w=321.5)   padding 6 → text x=497.8
+
+       GRAELLA (4 files)  etiqueta y = 47.5 + i*22.5  →  47.5 · 70 · 92.5 · 115
+                          valor    y = etiqueta + 10  →  57.5 · 80 · 102.5 · 125
+       SUBCOLUMNA         x + w/2 + 6   →  caixa1: 105.45 · caixa2: 337.05
+
+       TIPOGRAFIA  etiquetes 6px #777776 · valors 9px #1d1d1b · IBM Plex Mono
+       REGLA       una etiqueta / un valor per línia. Subcolumna NOMÉS per a
+                   valors curts i fixos (SEASON, PAGE).
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <defs>
+    <style>
+      .label { font-family: 'IBM Plex Mono'; font-size: 6px; fill: #777776; }
+      .value { font-family: 'IBM Plex Mono'; font-size: 9px; fill: #1d1d1b; }
+      .base  { font-family: 'IBM Plex Mono'; font-size: 9px; fill: #1d1d1b; font-weight: 700; text-decoration: underline; }
+      .frame { fill: none; stroke: #000; stroke-width: .5px; stroke-miterlimit: 10; }
+      .zone  { fill: none; stroke: #b0b0b0; stroke-width: .3px; stroke-dasharray: 2 2; }
+    </style>
+  </defs>
+
+  <!-- Marc únic + divisòries internes -->
+  <rect class="frame" x="28.6" y="39" width="784.7" height="90.2"/>
+  <line class="frame" x1="170.3" y1="39" x2="170.3" y2="129.2"/>
+  <line class="frame" x1="491.8" y1="39" x2="491.8" y2="129.2"/>
+
+  <!-- ── CAIXA 1 ── Logo (files 1-2) · DATE+PAGE (fila 3) · TECHNICIAN (fila 4) -->
+  <!-- ZONA LOGO: x 34.6→164.3 (w=129.7) · y 42.7→81.8 (h=39.1) [alçada de les files 1-2
+       de la caixa 2: top etiqueta fila1 = 47.5−0.8*6 = 42.7 · bottom valor fila2 = 80+0.2*9
+       = 81.8]. Contain aspect preservat SENSE tope (upscale permès fins que una dimensió
+       toqui), alineat a l'esquerra i centrat verticalment. El logo és captura del customer. -->
+  <rect class="zone" x="34.6" y="42.7" width="129.7" height="39.1"/>
+  <text class="label" x="34.6" y="92.5">DATE</text>
+  <text class="value" x="34.6" y="102.5">19-07-2026</text>
+  <text class="label" x="105.45" y="92.5">PAGE</text>
+  <text class="value" x="105.45" y="102.5">1 / n</text>
+  <text class="label" x="34.6" y="115">TECHNICIAN</text>
+  <text class="value" x="34.6" y="125">Agustí Devant</text>
+
+  <!-- ── CAIXA 2 ── Identificació de la peça -->
+  <text class="label" x="176.3" y="47.5">INTERNAL REFERENCE</text>
+  <text class="value" x="176.3" y="57.5">LOS-27-SS-0001</text>
+  <text class="label" x="337.05" y="47.5">SEASON</text>
+  <text class="value" x="337.05" y="57.5">SS 2027</text>
+  <text class="label" x="176.3" y="70">CLIENT REFERENCE</text>
+  <text class="value" x="176.3" y="80">LOS-QA-0001</text>
+  <text class="label" x="176.3" y="92.5">MODEL</text>
+  <text class="value" x="176.3" y="102.5">[QA] Samarreta LOSAN — prova capçalera</text>
+  <text class="label" x="176.3" y="115">COLLECTION</text>
+  <text class="value" x="176.3" y="125">[QA] capçalera</text>
+
+  <!-- ── CAIXA 3 ── Definició tècnica · UNA etiqueta / UN valor per línia -->
+  <text class="label" x="497.8" y="47.5">GARMENT TYPE | ITEM</text>
+  <text class="value" x="497.8" y="57.5">Jersey Tops | Samarreta / T-shirt</text>
+  <text class="label" x="497.8" y="70">TARGET | FIT TYPE | CONSTRUCTION</text>
+  <text class="value" x="497.8" y="80">Woman | Regular | Knit (Punt Jersey)</text>
+  <text class="label" x="497.8" y="92.5">SIZE SYSTEM</text>
+  <text class="value" x="497.8" y="102.5">LOS Woman Alpha XS-3XL</text>
+  <text class="label" x="497.8" y="115">SIZE RUN</text>
+  <text class="value" x="497.8" y="125">XS·S·<tspan class="base">M</tspan>·L·XL·2XL·3XL</text>
+</svg>

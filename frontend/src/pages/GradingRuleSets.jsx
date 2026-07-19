@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import AxesSelector from '../components/grading/AxesSelector'
+import ScopeSelector from '../components/grading/ScopeSelector'
 import SizeAuthoringDrawer from '../components/SizeAuthoringDrawer'
-import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn } from '../components/grading/gradingAxes'
+import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn, matchingRuleSetsStrict } from '../components/grading/gradingAxes'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -142,13 +143,32 @@ export default function GradingRuleSets() {
   }
 
   const handleSaved = (saved) => {
+    let newList = allRuleSets
     setAllRuleSets(prev => {
       const idx = prev.findIndex(r => r.id === saved.id)
-      if (idx >= 0) { const n = [...prev]; n[idx] = saved; return n }
-      return [...prev, saved]
+      newList = idx >= 0 ? prev.map(r => (r.id === saved.id ? saved : r)) : [...prev, saved]
+      return newList
     })
     setShowModal(false)
-    setMsg({ type: 'ok', text: editTarget?.id ? t('grading.updated') : t('grading.created') })
+    // GUARD DE COHERÈNCIA no bloquejant («prova del cotó» lleugera): després de reclassificar, si el
+    // cas target×construcció×fit×grup+system del ruleset casa amb ≠1 rulesets, avisa (el tècnic decideix).
+    const grp = saved.garment_group_codi
+      || (saved.applies_to || []).find(n => n.node_type === 'GROUP')?.group_codi || null
+    const axes = {
+      target: saved.targets_codis?.[0] || null, construction: saved.construction_codi || null,
+      fit: saved.fit_type_codi || null, garmentGroup: grp,
+    }
+    const hits = (axes.target && axes.construction && axes.fit && axes.garmentGroup && saved.size_system != null)
+      ? matchingRuleSetsStrict(newList, axes, garmentGroupCodiById, saved.size_system) : null
+    if (hits && hits.length !== 1) {
+      setMsg({ type: 'warn', text: t('grading.coherence_warn', {
+        count: hits.length,
+        axes: `${axes.target}·${axes.construction}·${axes.fit}·${axes.garmentGroup}`,
+        names: hits.map(h => h.nom).join(', ') || '—',
+      }) })
+    } else {
+      setMsg({ type: 'ok', text: editTarget?.id ? t('grading.updated') : t('grading.created') })
+    }
   }
 
   if (loading) return (
@@ -197,9 +217,9 @@ export default function GradingRuleSets() {
       {msg && (
         <div style={{
           padding: '8px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', marginBottom: 12,
-          background: msg.type === 'ok' ? '#f0f9f0' : '#fff0f0',
-          border: `0.5px solid ${msg.type === 'ok' ? '#c0dd97' : '#f09595'}`,
-          color: msg.type === 'ok' ? '#3b6d11' : '#a32d2d',
+          background: msg.type === 'ok' ? '#f0f9f0' : msg.type === 'warn' ? 'var(--warn-bg)' : '#fff0f0',
+          border: `0.5px solid ${msg.type === 'ok' ? '#c0dd97' : msg.type === 'warn' ? 'var(--warn)' : '#f09595'}`,
+          color: msg.type === 'ok' ? '#3b6d11' : msg.type === 'warn' ? 'var(--warn)' : '#a32d2d',
           display: 'flex', justifyContent: 'space-between',
         }}>
           <span>{msg.text}</span>
@@ -666,6 +686,40 @@ function ActionBtn({ onClick, label, danger = false }) {
   )
 }
 
+// TargetPills — selecció MULTI de targets (M2M del ruleset). Vocabulari únic TARGETS (gradingAxes).
+function TargetPills({ value, onToggle, disabled }) {
+  const { t } = useTranslation()
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <label style={{
+        fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)',
+        display: 'block', marginBottom: 4,
+      }}>{t('grading.field_target_ref')}</label>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {TARGETS.map(tg => {
+          const on = value.includes(tg.codi)
+          return (
+            <button
+              key={tg.codi} type="button" disabled={disabled}
+              onClick={() => onToggle(tg.codi)}
+              style={{
+                padding: '5px 12px', borderRadius: 999, cursor: disabled ? 'default' : 'pointer',
+                fontSize: 'var(--fs-body)', fontWeight: on ? 600 : 400,
+                background: on ? 'var(--warn-bg)' : 'var(--white)',
+                color: on ? 'var(--warn)' : 'var(--text-main)',
+                border: `1px solid ${on ? 'var(--warn)' : 'var(--border)'}`,
+                opacity: disabled && !on ? 0.5 : 1,
+              }}
+            >
+              {t(`model_wizard.target_${tg.codi}`, tg.nom_en)}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── RuleSetModal ────────────────────────────────────────────────────────────
 function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, authHeaders, onSave, onError, onClose }) {
   const { t } = useTranslation()
@@ -673,19 +727,33 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
   const [form, setForm] = useState({
     nom:          rs?.nom          || '',
     codi_sistema: rs?.codi_sistema || '',
-    // Target/Construction/Fit cannot be sent directly as a code
-    // because the backend expects IDs. We keep the codes in the form for the UI
-    // i (TODO) caldria endpoint per resoldre codi→id. De moment, els enviem
-    // only if the RuleSet being edited already has them (we pass the original ID).
-    target:       rs?.target       ?? null,
-    construction: rs?.construction ?? null,
-    fit_type:     rs?.fit_type     ?? null,
-    target_codi_form:       rs?.target_codi       || defaultTarget       || '',
+    // FIX BUG targets M2M: es preomple amb TOTS els targets del ruleset (pills MULTI) i en desar
+    // s'envia el conjunt sencer. Abans un sol select feia que el PATCH col·lapsés el M2M a 1 target
+    // (pèrdua silenciosa en qualsevol edició, fins i tot només-de-nom). Els lookups S2 resolen codi→id.
+    target_codis: rs?.targets_codis?.length ? [...rs.targets_codis] : (defaultTarget ? [defaultTarget] : []),
     construction_codi_form: rs?.construction_codi || defaultConstruction || '',
     fit_type_codi_form:     rs?.fit_type_codi     || defaultFit          || '',
     actiu: rs?.actiu ?? true,
   })
   const [saving, setSaving] = useState(false)
+
+  // ABAST (D1 · convergència per atrició): l'editor LLEGEIX les dues formes — scope_nodes (applies_to)
+  // o, si buit, el garment_group FK convertit a un node GROUP — i les presenta unificades al
+  // ScopeSelector. Només s'envia si l'usuari el TOCA (scopeTouched); llavors el backend reemplaça
+  // scope_nodes i buida garment_group (una sola font). Size system: igual, només si es toca.
+  const nodeLabel = (n) => n.group_codi
+    || (n.garment_type_item_id ? `#${n.garment_type_item_id}` : n.garment_type_id ? `#${n.garment_type_id}` : '?')
+  const initialScope = rs?.applies_to?.length
+    ? rs.applies_to.map(n => ({ ...n, label: nodeLabel(n) }))
+    : (rs?.garment_group_codi ? [{ node_type: 'GROUP', group_codi: rs.garment_group_codi, label: rs.garment_group_codi }] : [])
+  const [scope, setScope] = useState(initialScope)
+  const [scopeTouched, setScopeTouched] = useState(false)
+  const [sizeSystemId, setSizeSystemId] = useState(rs?.size_system ?? '')
+  const [sizeSystemTouched, setSizeSystemTouched] = useState(false)
+  const [sizeSystemsList, setSizeSystemsList] = useState([])
+  // Blindatge: un conjunt AMB regles no pot canviar de sistema (les talla_base hi pertanyen). Sortida:
+  // clonar-lo al sistema correcte. El guard dur real viu al serializer; això és l'UX.
+  const systemLocked = (rs?.regles_count || 0) > 0
 
   // F-2 — els seeds ISO (is_system_default) NO són editables als eixos (protecció; el guard dur
   // viu al serializer). Creació nova o ruleset de client → eixos editables. Els lookups S2
@@ -697,8 +765,10 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
     let alive = true
     const get = (p) => fetch(`${API}/api/v1/${p}`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : { results: [] }).then(d => d.results || [])
-    Promise.all([get('targets/'), get('construction-types/'), get('fit-types/')])
-      .then(([targets, constructions, fits]) => { if (alive) setLookups({ targets, constructions, fits }) })
+    Promise.all([get('targets/'), get('construction-types/'), get('fit-types/'), get('size-systems/?page_size=200')])
+      .then(([targets, constructions, fits, systems]) => {
+        if (alive) { setLookups({ targets, constructions, fits }); setSizeSystemsList(systems) }
+      })
       .catch(() => {})
     return () => { alive = false }
   }, [axesEditable])
@@ -721,12 +791,18 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
     if (axesEditable) {
       // F-2 — resol codi→id amb els lookups S2 i desa els FK (target + M2M targets + construction
       // + fit_type). Un eix sense selecció queda sense enviar (PATCH → intacte).
-      const tId = codeToId(lookups.targets, form.target_codi_form)
+      const tIds = form.target_codis.map(c => codeToId(lookups.targets, c)).filter(v => v != null)
       const cId = codeToId(lookups.constructions, form.construction_codi_form)
       const fId = codeToId(lookups.fits, form.fit_type_codi_form)
-      if (tId != null) { payload.target = tId; payload.targets = [tId] }
+      // Envia el CONJUNT SENCER de targets (M2M) + el FK `target` legacy sincronitzat al primer,
+      // igual que el camí de creació. Sense selecció → no s'envia (PATCH deixa el M2M intacte).
+      if (tIds.length) { payload.targets = tIds; payload.target = tIds[0] }
       if (cId != null) payload.construction = cId
       if (fId != null) payload.fit_type = fId
+      // Abast: en EDICIÓ (PATCH) només si l'usuari l'ha tocat (D1: no tocar → intacte). En CREACIÓ/CLON
+      // sempre s'envia el prefill sencer (D3: el clon HEREDA l'abast + targets del ruleset original).
+      if (scopeTouched || !isEdit) payload.applies_to = scope.map(({ label, ...n }) => n)
+      if ((sizeSystemTouched || !isEdit) && sizeSystemId) payload.size_system = Number(sizeSystemId)
     }
     // Seed (no editable): s'ometen els eixos → el PATCH els deixa intactes (el guard del serializer
     // els blinda igualment). Un possible canvi de nom/actiu no els toca.
@@ -790,7 +866,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
         onClick={e => e.stopPropagation()}
         style={{
           background: 'var(--white)', borderRadius: 12, padding: 24,
-          width: '100%', maxWidth: 480,
+          width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto',
           boxShadow: '0 10px 40px rgba(0,0,0,0.18)',
         }}
       >
@@ -799,9 +875,44 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
         </h2>
         <F label={t('grading.field_name')} field="nom" />
         <F label={t('grading.field_codi')} field="codi_sistema" />
-        <F label={t('grading.field_target_ref')} field="target_codi_form" options={TARGETS} disabled={!axesEditable} />
+        <TargetPills
+          value={form.target_codis}
+          disabled={!axesEditable}
+          onToggle={codi => setForm(f => ({
+            ...f,
+            target_codis: f.target_codis.includes(codi)
+              ? f.target_codis.filter(c => c !== codi)
+              : [...f.target_codis, codi],
+          }))}
+        />
         <F label={t('grading.field_construction_ref')} field="construction_codi_form" options={CONSTRUCTIONS} disabled={!axesEditable} />
         <F label={t('grading.field_fit_ref')} field="fit_type_codi_form" options={FITS} disabled={!axesEditable} />
+        {axesEditable && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+              {t('scope.label')}
+            </label>
+            <ScopeSelector value={scope} onChange={nodes => { setScope(nodes); setScopeTouched(true) }} />
+          </div>
+        )}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+            {t('grading.field_size_system')}
+          </label>
+          <select
+            value={sizeSystemId || ''} disabled={!axesEditable || systemLocked}
+            onChange={e => { setSizeSystemId(e.target.value); setSizeSystemTouched(true) }}
+            style={modalInput}
+          >
+            <option value="">{t('grading.select_placeholder')}</option>
+            {sizeSystemsList.map(s => <option key={s.id} value={s.id}>{s.codi} · {s.nom}</option>)}
+          </select>
+          {systemLocked && (
+            <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+              {t('grading.size_system_locked', { count: rs.regles_count })}
+            </p>
+          )}
+        </div>
         {!axesEditable && (
           <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)', margin: '4px 0 12px' }}>
             {t('grading.modal_note')}

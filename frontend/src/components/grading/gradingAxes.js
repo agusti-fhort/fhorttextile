@@ -59,6 +59,13 @@ export function nomLocal(obj, lang) {
   return lang === 'es' ? (obj.nom_es || obj.nom_en) : lang === 'ca' ? (obj.nom_ca || obj.nom_en) : obj.nom_en
 }
 
+// Etiqueta localitzada d'un GRUP de peça pel seu codi (vocabulari canònic; fallback al codi per a
+// grups nous com NEWBORN). Font única per a breadcrumbs/labels — fora còpies privades.
+export function groupLabel(codi, lang) {
+  const g = GARMENT_GROUPS.find(x => x.codi === codi)
+  return g ? nomLocal(g, lang) : (codi || '')
+}
+
 // ── Helpers de matching (idèntics a GradingRuleSets.jsx:133-193, font única) ──
 
 // Un RuleSet (M2M targets) encaixa si no en té cap o si inclou el target triat.

@@ -1,17 +1,21 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  TARGETS, GARMENT_GROUPS, nomLocal,
+  TARGETS, nomLocal,
   availableTargetCodes, availableConstructions, availableFits,
 } from './gradingAxes'
-import { garmentTypes, garmentTypeItems } from '../../api/endpoints'
+import { useGarmentCatalog } from './garmentCatalog'
+import { garmentTypeItems } from '../../api/endpoints'
 
 // AxesSelector — cascada target → construcció/fit → grup → FAMÍLIA → ITEM.
 // Sprint ÀMBIT: la cascada baixa fins a l'ITEM (arbre únic Grup→Família→Item, el mateix que el
 // selector de peça i Garment Types). Família i item són OPCIONALS: parar-se al grup manté el
 // comportament d'abans (filtre ample); baixar-hi precisa la disponibilitat per àmbit multi-node.
 // value = { target, construction, fit, garmentGroup, garmentTypeId, garmentTypeItemId }.
-// Les famílies/items es carreguen aquí (dades de catàleg, com fa GarmentTypeSelector).
+// Sprint Wizard unificat (Onada 1): grups i famílies venen de `useGarmentCatalog` (font única) i es
+// filtren pel TARGET triat — el pas Grup mostra només grups amb famílies compatibles (NEWBORN inclòs
+// per a targets nadó), i Família/Item baixen en cascada. Sense target → catàleg complet. Els items
+// segueixen carregant-se per família.
 
 export default function AxesSelector({ ruleSets = [], value, onChange }) {
   const { t, i18n } = useTranslation()
@@ -25,18 +29,10 @@ export default function AxesSelector({ ruleSets = [], value, onChange }) {
   const constructions = useMemo(() => availableConstructions(ruleSets, target), [ruleSets, target])
   const fits = useMemo(() => availableFits(ruleSets, target, construction), [ruleSets, target, construction])
 
-  const [families, setFamilies] = useState([])
+  // Font única: grups (de BD, retallats pel target) + famílies (filtrades pel target al backend).
+  const { groups, familiesOf } = useGarmentCatalog(target)
+  const families = familiesOf(garmentGroup)
   const [items, setItems] = useState([])
-
-  // Pas 4 — famílies del grup triat (arbre únic: garment-types filtrats per grup).
-  useEffect(() => {
-    if (!garmentGroup) { setFamilies([]); return }
-    let alive = true
-    garmentTypes.list({ grup: garmentGroup, actiu: 'true', page_size: 200 })
-      .then(r => { if (alive) setFamilies(r.data?.results ?? r.data ?? []) })
-      .catch(() => { if (alive) setFamilies([]) })
-    return () => { alive = false }
-  }, [garmentGroup])
 
   // Pas 5 — items de la família triada.
   useEffect(() => {
@@ -109,7 +105,7 @@ export default function AxesSelector({ ruleSets = [], value, onChange }) {
       {fit && (
         <StepSection number={3} title={t('grading.step_group')}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {GARMENT_GROUPS.map(g => (
+            {groups.map(g => (
               <SelectionButton
                 key={g.codi}
                 label={g.nom_en}

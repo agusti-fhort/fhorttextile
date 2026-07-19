@@ -10,6 +10,7 @@ import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import GroupPills from '../components/GarmentTypeSelector/GroupPills'
+import { useGarmentGroups } from '../components/grading/garmentCatalog'
 
 // Fase catàlegs · Garment Types: mestre-detall. Esquerra = llista de garment types; dreta =
 // capçalera del type + GRAELLA DE CARDS d'item (porta d'entrada a la pàgina d'autoria + termòmetre
@@ -35,6 +36,7 @@ export default function GarmentTypes() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [grup, setGrup] = useState('')
+  const bdGroups = useGarmentGroups()   // grups del catàleg des de la BD (NEWBORN inclòs), no la constant
   const [actiu, setActiu] = useState('true')   // per defecte oculta famílies inactives (catàleg antic)
   const [selectedId, setSelectedId] = useState(null)
   const [items, setItems] = useState([])
@@ -185,7 +187,7 @@ export default function GarmentTypes() {
                     (GroupPills), idèntic al selector de peça del wizard i al Navegador de POM Systems.
                     «Tots els grups» és la primera pill del mateix estil. Es desactiva mentre hi ha cerca. */}
                 <div style={{ marginBottom: 10, opacity: search.trim() ? 0.45 : 1, pointerEvents: search.trim() ? 'none' : 'auto' }}>
-                  <GroupPills value={grup} onChange={setGrup} allLabel={t('garment_types.all_groups')} />
+                  <GroupPills groups={bdGroups} value={grup} onChange={setGrup} allLabel={t('garment_types.all_groups')} />
                 </div>
                 <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
                   {shown.length === 0 ? <Center>{t('garment_types.empty')}</Center>
@@ -307,11 +309,15 @@ export default function GarmentTypes() {
 
 function TypeModal({ mode, tt, t, saving, setSaving, onCancel, onSaved, onError }) {
   const isEdit = mode === 'edit'
+  const bdGroups = useGarmentGroups()   // opcions de grup des de la BD (mateixa font que la resta)
   const [f, setF] = useState({
     codi_client: tt?.codi_client || '', nom_client: tt?.nom_client || '', nom_ca: tt?.nom_ca || '',
     grup: tt?.grup || '', actiu: tt?.actiu ?? true,
     nom_en: tt?.nom_en || '', nom_es: tt?.nom_es || '', construccio_habitual: tt?.construccio_habitual || '',
   })
+  // Preserva un grup existent no-canònic (dades antigues): si el valor desat no és a la BD, s'ofereix igual.
+  const grupCodis = bdGroups.map(g => g.codi)
+  const grupOpts = f.grup && !grupCodis.includes(f.grup) ? [f.grup, ...grupCodis] : grupCodis
   const [more, setMore] = useState(!isEdit)
   const set = (k, v) => setF(s => ({ ...s, [k]: v }))
   const invalid = !f.nom_client.trim() || (!isEdit && !f.codi_client.trim())
@@ -333,7 +339,12 @@ function TypeModal({ mode, tt, t, saving, setSaving, onCancel, onSaved, onError 
       onCancel={onCancel} onConfirm={submit} confirmDisabled={saving || invalid}>
       <Field label={t('garment_types.f_nom_client')}><input value={f.nom_client} onChange={e => set('nom_client', e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
       <Field label={t('garment_types.f_nom_ca')}><input value={f.nom_ca} onChange={e => set('nom_ca', e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
-      <Field label={t('garment_types.f_grup')}><input value={f.grup} onChange={e => set('grup', e.target.value)} placeholder="TOPS / BOTTOMS / …" style={{ ...selS, width: '100%' }} /></Field>
+      <Field label={t('garment_types.f_grup')}>
+        <select value={f.grup} onChange={e => set('grup', e.target.value)} style={{ ...selS, width: '100%' }}>
+          <option value="">—</option>
+          {grupOpts.map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
+      </Field>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginBottom: 8 }}>
         <input type="checkbox" checked={f.actiu} onChange={e => set('actiu', e.target.checked)} /><span>{t('garment_types.active')}</span>
       </label>

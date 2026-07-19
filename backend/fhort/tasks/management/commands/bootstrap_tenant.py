@@ -29,8 +29,7 @@ LLEIS QUE APLICA
   `m2` són història d'ús del tenant origen i neixen a zero.
 - **Auto-FK en 2 passades** (`SizeSystem.parent`, `GradingRuleSet.parent_version`,
   `SizingProfile.parent_profile`): es creen amb `parent=NULL` i es resolen al final.
-- **M2M** (`SizeSystem.targets`, `GarmentType.targets_recomanats`, `GradingRuleSet.targets`)
-  es copien remapejant, després de la 1a passada.
+- **M2M** (`SizeSystem.targets`, `GradingRuleSet.targets`) es copien remapejant, després de la 1a passada.
 
 En acabar verd: propaga la identitat (D7) i tanca `onboarding → actiu` (DC-6).
 Si alguna peça falla: el tenant es queda en `onboarding`, es reporta què falta i se surt
@@ -147,7 +146,7 @@ def _spec():
         (POMGlobal,          ('codi',), {}, (), None),
         (GarmentTypeGlobal,  ('codi',), {}, (), None),
         # codi_client: 19/19 distints a fhort. No hi ha constraint (cens: "sense clau natural").
-        (GarmentType,        ('codi_client',), {}, ('targets_recomanats',), None),
+        (GarmentType,        ('codi_client',), {}, (), None),
         # CORRECCIÓ AL CENS: pom_global NO és 1:1 (126 distints / 170 files). La clau és codi_client.
         (POMMaster,          ('codi_client',), {}, (), None),
         (GradingRuleSet,     ('nom',), {'customer': NULL, 'parent_version': DEFER}, ('targets',), None),
@@ -430,6 +429,18 @@ class Command(BaseCommand):
 
                     n_def = self._resolve_deferred(deferred, maps)
                     self.stdout.write(f"  {'(auto-FK 2a passada)':22} {n_def:>5} resoltes")
+
+                    # S12 — pas ESPECIAL (no és peça de _spec): la Template FTT és file-backed a
+                    # media, i _spec copia files de BD; per això es GENERA per codi i es pack-eja a
+                    # la media del tenant. Idempotent (regenera el fitxer). Respecta --dry-run.
+                    if dry:
+                        self.stdout.write(f"  {'Template FTT (mestra)':22} {'(generaria .fttpt)'}")
+                    else:
+                        from fhort.models_app.master_template import seed_master_template
+                        _, created = seed_master_template()
+                        self.stdout.write(
+                            f"  {'Template FTT (mestra)':22} "
+                            f"{(1 if created else 0):>5} creats  {(0 if created else 1):>5} actualitzats")
 
                     if ok and not dry:
                         self._close_onboarding(client)

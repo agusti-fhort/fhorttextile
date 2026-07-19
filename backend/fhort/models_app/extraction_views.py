@@ -1819,7 +1819,7 @@ def import_session_confirmar_view(request, token):
         # CREA el contenidor només com a ACTE EXPLÍCIT (combinació verge). derive_grading_rule_set
         # (creador automàtic) queda JUBILAT; es reutilitza el motor de detecció.
         from fhort.pom.grading_utils import (
-            derive_rules_from_fitxa, cerca_contenidor_client, classifica_fitxa_vs_contenidor)
+            derive_rules_from_fitxa, resolve_grading_container, classifica_fitxa_vs_contenidor)
         from fhort.pom.models import FitType, Target, ConstructionType, GradingRuleSet
         from fhort.models_app.services import (
             materialize_model_grading_rules_from_specs, afegeix_regles_al_contenidor)
@@ -1831,19 +1831,36 @@ def import_session_confirmar_view(request, token):
             confirmed_pom_ids=confirmed_pom_ids, size_system=model.size_system, avisos=grading_avisos)
         base_def_id = fitxa_specs[0]['talla_base_id'] if fitxa_specs else None
 
-        # (b) IDENTITAT del contenidor del client: resol fit (codi→FK) i cerca EL contenidor únic.
+        # (b) MATCHER ÚNIC (M1): resol fit (codi→FK) i resol EL contenidor per la llei del contenidor
+        # (N1 identitat exacta · N2 ampli item-NULL del mateix client · N3 cap). Substitueix
+        # cerca_contenidor_client (deprecada, G5). `motiu`='ambiguous' → tria conscient a fora.
         rs_fit = FitType.objects.filter(codi__iexact=model.fit_type).first() if model.fit_type else None
         gti = model.garment_type_item
-        container = cerca_contenidor_client(model.customer, model.size_system, gti, rs_fit)
+        grp_codi = model.garment_group.codi if model.garment_group_id else None
+        res_cont = resolve_grading_container(
+            model.customer, model.size_system, model.target, model.construction,
+            rs_fit, grp_codi, garment_type_item=gti)
+        container = res_cont['container']
 
-        # Tries del tècnic (re-confirmació del wizard):
+        # Tria del tècnic (re-confirmació del wizard). M3 DEROGA la negociació per-regla
+        # (conflict_resolutions/conflict_choice): amb el contenidor intocable ja no hi ha tria de
+        # catàleg, només 'create' | 'no_container' quan el client estrena la combinació.
         container_choice = (request.data.get('container_choice') or '').strip().lower()   # 'create' | 'no_container'
-        conflict_resolutions = request.data.get('conflict_resolutions') or {}             # {pom_id: keep_catalog|update_catalog|model_resident}
-        conflict_choice = (request.data.get('conflict_choice') or '').strip().lower()     # bulk fallback
 
         cls = None
         if fitxa_specs:
             # (c) DECISIONS que exigeixen tria conscient → 409 + rollback (cap escriptura encara).
+            # AMBIGÜITAT (M1): >1 contenidor candidat → NO resoldre automàticament; el tècnic ha de
+            # desambiguar (mai s'agafa el primer). Es reporten els candidats amb id+nom.
+            if res_cont['motiu'] == 'ambiguous':
+                transaction.set_rollback(True)
+                return Response({
+                    'conflict': True,
+                    'tipus': 'container_ambigu',
+                    'candidats': [{'id': c.id, 'nom': c.nom} for c in res_cont['candidats']],
+                    'message': ("Hi ha més d'un contenidor de graduació possible per a aquesta "
+                                "combinació. Cal triar-ne un abans de continuar."),
+                }, status=409)
             if container is None and container_choice not in ('create', 'no_container'):
                 transaction.set_rollback(True)
                 return Response({
@@ -1858,24 +1875,10 @@ def import_session_confirmar_view(request, token):
                                 "(peça + sistema de talles + fit). Vols crear-ne el contenidor?"),
                 }, status=409)
             if container is not None:
+                # M3 — llei del contenidor INTOCABLE: el catàleg amb regles no es toca ni es negocia
+                # per-regla (SEMBRA/AMPLIA i el 409 grading_conflict queden DEROGATS). La divergència
+                # es resol sola (override per-talla al model + watchpoint) al bloc d'aplicació.
                 cls = classifica_fitxa_vs_contenidor(fitxa_specs, container)
-                unresolved = [c for c in cls['conflicte']
-                              if not (conflict_resolutions.get(str(c['pom_id'])) or conflict_choice)]
-                if unresolved:
-                    transaction.set_rollback(True)
-                    return Response({
-                        'conflict': True,
-                        'tipus': 'grading_conflict',
-                        'container_id': container.id,
-                        'container_nom': container.nom,
-                        'divergencies': [
-                            {'pom_id': c['pom_id'], 'pom': c['pom_codi'], 'detall': c['detall']}
-                            for c in unresolved],
-                        'options': ['keep_catalog', 'update_catalog', 'model_resident'],
-                        'message': ("Algunes regles de la fitxa contradiuen el catàleg del client. "
-                                    "Per a cada POM: mantenir el catàleg, actualitzar-lo, o "
-                                    "deixar la regla només resident al model."),
-                    }, status=409)
 
         # (d) APLICAR (escriptures) — savepoint intern amb degradació amb gràcia.
         new_rule_set = model.grading_rule_set
@@ -1894,19 +1897,21 @@ def import_session_confirmar_view(request, token):
                             grading_avisos.append(
                                 "Contenidor no creat (decisió del tècnic): el model queda amb "
                                 "regles residents pròpies (sobirania de dades).")
-                        else:  # 'create' — CREAR EL contenidor amb la identitat completa.
+                        else:  # 'create' — M3: CREAR contenidor AMPLI (item=NULL) per defecte.
                             rs_target = (Target.objects.filter(codi__iexact=model.target).first()
                                          if model.target else None)
                             rs_constr = (ConstructionType.objects.filter(codi__iexact=model.construction).first()
                                          if model.construction else None)
                             nom_cont = " · ".join(p for p in [
                                 str(getattr(model.customer, 'nom', '') or model.customer or ''),
-                                (getattr(gti, 'name', '') if gti else ''),
+                                str(getattr(model.garment_group, 'nom', '') or model.garment_group or ''),
                                 str(getattr(model.size_system, 'nom', '') or model.size_system or ''),
                             ] if p)[:120] or f"Contenidor client · {model.codi_intern}"
+                            # AMPLI: garment_type_item=NULL (abast per garment_group FK → el troba M1
+                            # nivell 2 la propera vegada). NO és la identitat fina (item), és de món.
                             container = GradingRuleSet.objects.create(
                                 nom=nom_cont, size_system=model.size_system,
-                                garment_group=model.garment_group, garment_type_item=gti,
+                                garment_group=model.garment_group, garment_type_item=None,
                                 target=rs_target, construction=rs_constr, fit_type=rs_fit,
                                 is_system_default=False, actiu=True,
                                 origen=GradingRuleSet.ORIGEN_CLIENT_RUN, customer=model.customer)
@@ -1918,41 +1923,64 @@ def import_session_confirmar_view(request, token):
                             new_rule_set = container
                             resident_specs = fitxa_specs
                             grading_avisos.append(
-                                f"Contenidor de client NOU creat #{container.id} '{container.nom}' "
+                                f"Contenidor de client AMPLI NOU creat #{container.id} '{container.nom}' "
                                 f"(el client estrenava aquesta combinació) amb {len(fitxa_specs)} regla(es).")
-                    else:
-                        # CONTENIDOR EXISTENT → SEMBRA / AMPLIA / CONFLICTE.
+                    elif not container.regles.exists():
+                        # CONTENIDOR ESQUELET (0 regles) → sembrar-lo des de la fitxa és LEGÍTIM (M3).
+                        # Amb 0 regles, cls['amplia'] == totes les specs (res per coincidir/divergir).
                         if cls['amplia']:
                             afegeix_regles_al_contenidor(container, cls['amplia'], base_def_id)
-                            grading_avisos.append(
-                                f"{len(cls['amplia'])} regla(es) noves de la fitxa afegides al "
-                                f"contenidor #{container.id} (ampliació de catàleg).")
-                        resident_specs = list(cls['sembra'])
-                        for c in cls['conflicte']:
-                            choice = (conflict_resolutions.get(str(c['pom_id']))
-                                      or conflict_choice or 'keep_catalog')
-                            if choice == 'update_catalog':
-                                afegeix_regles_al_contenidor(container, [c['spec_fitxa']], base_def_id)
-                                resident_specs.append(c['spec_fitxa'])
-                                grading_avisos.append(
-                                    f"POM {c['pom_codi']}: catàleg del contenidor ACTUALITZAT amb la "
-                                    f"regla de la fitxa.")
-                            elif choice == 'model_resident':
-                                resident_specs.append(c['spec_fitxa'])
-                                grading_avisos.append(
-                                    f"POM {c['pom_codi']}: regla de la fitxa NOMÉS resident al model "
-                                    f"(catàleg del contenidor intacte).")
-                            else:  # keep_catalog
-                                resident_specs.append(c['spec_container'])
-                                grading_avisos.append(
-                                    f"POM {c['pom_codi']}: es manté la regla del catàleg del contenidor.")
-                        resident_specs += cls['amplia']
                         model.grading_rule_set = container
                         model.save(update_fields=['grading_rule_set'])
                         new_rule_set = container
+                        resident_specs = fitxa_specs
                         grading_avisos.append(
-                            f"Grading sembrat des del contenidor #{container.id} '{container.nom}' "
-                            f"({len(resident_specs)} regla(es) residents per als POMs de la fitxa).")
+                            f"Contenidor esquelet #{container.id} '{container.nom}' sembrat des de la "
+                            f"fitxa ({len(fitxa_specs)} regla(es)).")
+                    else:
+                        # CONTENIDOR AMB REGLES → INTOCABLE (llei M3): el catàleg del client NO es toca.
+                        #   coincideix (sembra) → res: el model hereta la regla del contenidor.
+                        #   divergeix (conflicte) + POM nou (amplia) → ModelGradingOverride per-talla
+                        #     (valors de la fitxa a les talles no-base) + WATCHPOINT. El motor llegeix
+                        #     l'override amb prioritat sobre la projecció del contenidor
+                        #     (services._load_model_overrides); base i talla-base van a BaseMeasurement.
+                        from fhort.pom.grading_utils import _norm as _norm_label
+                        from fhort.models_app.models import ModelGradingOverride
+                        model.grading_rule_set = container
+                        model.save(update_fields=['grading_rule_set'])
+                        new_rule_set = container
+                        # SENSE residents: el contenidor mana (all-or-nothing de _load_grading_rules).
+                        # Neteja residents ranços perquè l'herència del contenidor no quedi tapada.
+                        model.grading_rules.all().delete()
+                        resident_specs = None
+                        base_norm = _norm_label(base_size)
+                        pom_divergents = ([c['pom_id'] for c in cls['conflicte']]
+                                          + [s['pom_id'] for s in cls['amplia']])
+                        n_ovr = 0
+                        for pom_id in pom_divergents:
+                            for label, val in (valors.get(pom_id) or {}).items():
+                                if val is None or _norm_label(label) == base_norm:
+                                    continue
+                                ModelGradingOverride.objects.update_or_create(
+                                    model=model, pom_id=pom_id, size_label=label,
+                                    defaults={'value_cm': float(val), 'created_by': user_profile,
+                                              'motiu': ("Import W5 — divergència vs catàleg del "
+                                                        "contenidor (INTOCABLE)")})
+                                n_ovr += 1
+                        if cls['conflicte']:
+                            grading_avisos.append(
+                                f"⚠️ Watchpoint: {len(cls['conflicte'])} POM(s) divergeixen del catàleg "
+                                f"del contenidor #{container.id} (INTOCABLE); desats com a override "
+                                f"per-talla al model (el catàleg del client NO s'ha tocat).")
+                        if cls['amplia']:
+                            grading_avisos.append(
+                                f"⚠️ Watchpoint: {len(cls['amplia'])} POM(s) de la fitxa no són al "
+                                f"contenidor #{container.id}; desats com a override per-talla al model "
+                                f"(contenidor intocable).")
+                        if cls['sembra']:
+                            grading_avisos.append(
+                                f"{len(cls['sembra'])} POM(s) coincideixen amb el catàleg: el model "
+                                f"els hereta del contenidor #{container.id} (sense override).")
                     # SEMBRA SELECTIVA de residents (origen=IMPORTED); el motor les llegeix amb prioritat.
                     if resident_specs is not None:
                         materialize_model_grading_rules_from_specs(

@@ -27,6 +27,16 @@ class DocumentTemplateViewSet(ModelViewSet):
     serializer_class = DocumentTemplateSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        # El chooser de "nou document des de plantilla" (App.jsx → GET list) només ha de
+        # veure plantilles ACTIVES: així una plantilla retirada (actiu=False, p.ex. la
+        # "Capçalera LOSAN" substituïda per "Template FTT" a S12) surt de la llista sense
+        # esborrar-ne les dades. detail/update segueixen accedint a totes per id (gestió).
+        qs = DocumentTemplate.objects.all()
+        if self.action == 'list':
+            qs = qs.filter(actiu=True)
+        return qs
+
     def perform_create(self, serializer):
         # Plantilla creada des del tenant: created_by = usuari actual, origen = 'tenant'.
         serializer.save(created_by=self.request.user, origen='tenant')

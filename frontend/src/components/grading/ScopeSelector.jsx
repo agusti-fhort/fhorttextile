@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { garmentTypes, garmentTypeItems } from '../../api/endpoints'
-import GroupPills, { PECA_GRUPS } from '../GarmentTypeSelector/GroupPills'
+import { garmentTypeItems } from '../../api/endpoints'
+import GroupPills from '../GarmentTypeSelector/GroupPills'
+import { useGarmentCatalog } from './garmentCatalog'
 
 // ScopeSelector — ÀMBIT D'APLICABILITAT del contenidor de grading de client (sprint ÀMBIT).
 // LLEI: «aplica a» = «està disponible per a». Selecció JERÀRQUICA i ACUMULATIVA sobre l'arbre únic:
@@ -30,20 +31,20 @@ function famLabel(f, lang) {
 export default function ScopeSelector({ value = [], onChange }) {
   const { t, i18n } = useTranslation()
   const lang = (i18n.language || 'ca').slice(0, 2)
-  const [grup, setGrup] = useState(PECA_GRUPS[0]?.codi || 'TOPS')
-  const [families, setFamilies] = useState([])
+  // Font única (Onada 2): grups de BD (NEWBORN inclòs) + famílies, la mateixa que AxesSelector.
+  // Àmbit multi-node ACUMULATIU (llei ÀMBIT): NO filtrem per target (no bloquejant per defecte) —
+  // aquí es pot marcar qualsevol node com a «disponible per a», també per a contenidors multi-target.
+  const { groups, familiesOf } = useGarmentCatalog(null)
+  const [grup, setGrup] = useState(null)
   const [familyId, setFamilyId] = useState(null)
   const [items, setItems] = useState([])
+  const families = familiesOf(grup)
 
+  // Grup actiu per defecte = primer disponible; si desapareix, salta a un de vàlid.
   useEffect(() => {
-    if (!grup) { setFamilies([]); return }
-    let alive = true
-    setFamilyId(null); setItems([])
-    garmentTypes.list({ grup, actiu: 'true', page_size: 200 })
-      .then(r => { if (alive) setFamilies(r.data?.results ?? r.data ?? []) })
-      .catch(() => { if (alive) setFamilies([]) })
-    return () => { alive = false }
-  }, [grup])
+    if (!groups.length) return
+    if (!grup || !groups.some(g => g.codi === grup)) { setGrup(groups[0].codi); setFamilyId(null); setItems([]) }
+  }, [groups, grup])
 
   useEffect(() => {
     if (!familyId) { setItems([]); return }
@@ -57,7 +58,7 @@ export default function ScopeSelector({ value = [], onChange }) {
   const has = (n) => value.some(v => sameNode(v, n))
   const toggle = (n) => onChange?.(has(n) ? value.filter(v => !sameNode(v, n)) : [...value, n])
 
-  const grupObj = PECA_GRUPS.find(g => g.codi === grup)
+  const grupObj = groups.find(g => g.codi === grup)
   const grupNode = { node_type: 'GROUP', group_codi: grup, label: grupObj?.nom_en || grup }
 
   return (
@@ -84,7 +85,7 @@ export default function ScopeSelector({ value = [], onChange }) {
       </div>
 
       {/* Nivell 1 — GRUP: navega i, alhora, es pot marcar sencer */}
-      <GroupPills value={grup} onChange={setGrup} />
+      <GroupPills groups={groups} value={grup} onChange={g => { setGrup(g); setFamilyId(null); setItems([]) }} />
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
         <input type="checkbox" checked={has(grupNode)} onChange={() => toggle(grupNode)} />
         {t('scope.mark_group', { grup: grupObj ? (lang === 'ca' ? grupObj.nom_ca : lang === 'es' ? grupObj.nom_es : grupObj.nom_en) : grup })}

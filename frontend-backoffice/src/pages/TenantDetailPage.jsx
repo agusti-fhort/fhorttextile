@@ -6,6 +6,7 @@ import {
   getPlans, updateTenant, MOCK_TENANTS, MOCK_CONTACTES, MOCK_PLANS,
 } from '../api/tenants'
 import { getContractes, getContracte } from '../api/contracts'
+import { getFactures, clientConsum } from '../api/invoices'
 import { estatConfig } from '../config/estats'
 import { countryName, regimVat, regimVatLabel } from '../config/fiscal'
 
@@ -83,6 +84,78 @@ function Placeholder({ children }) {
   return (
     <div style={{ ...cardStyle, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: '48px 24px' }}>
       {children}
+    </div>
+  )
+}
+
+// ── Facturació d'un client: factures emeses/esborrany + consum per període (F-RECUR) ──
+function FacturacioClient({ codi }) {
+  const [factures, setFactures] = useState([])
+  const [consum, setConsum] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      getFactures({ client__codi_tenant: codi }).then(r => r.data?.results ?? r.data ?? []).catch(() => []),
+      clientConsum(codi).then(r => r.data?.periodes ?? []).catch(() => []),
+    ]).then(([f, c]) => { setFactures(f); setConsum(c) }).finally(() => setLoading(false))
+  }, [codi])
+
+  const th = { padding: '7px 10px', fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase',
+    letterSpacing: '0.04em', textAlign: 'left', borderBottom: '1px solid var(--border)', fontWeight: 400 }
+  const td = { padding: '8px 10px', fontSize: 13, borderBottom: '1px solid var(--border)' }
+  const money = (v, m = 'EUR') => `${Number(v ?? 0).toLocaleString('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${m}`
+  const estatColor = { esborrany: 'var(--text-muted)', emesa: 'var(--gold)', pagada: '#3d7a3d', 'cancel·lada': '#a33' }
+
+  if (loading) return <div style={{ ...cardStyle, color: 'var(--text-muted)', fontSize: 13 }}>Carregant…</div>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={cardStyle}>
+        <SectionTitle>Consum per període</SectionTitle>
+        {consum.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Cap event de consum registrat.</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr>{['Període', 'Total', 'Facturats', 'Pendents', 'Exclosos'].map(h =>
+              <th key={h} style={th}>{h}</th>)}</tr></thead>
+            <tbody>
+              {consum.map(p => (
+                <tr key={p.period}>
+                  <td style={td}>{p.period}</td>
+                  <td style={td}>{p.total}</td>
+                  <td style={{ ...td, color: '#3d7a3d' }}>{p.facturats}</td>
+                  <td style={{ ...td, color: p.pendents ? 'var(--gold)' : 'var(--text-muted)' }}>{p.pendents}</td>
+                  <td style={{ ...td, color: 'var(--text-muted)' }}>{p.exclosos || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div style={cardStyle}>
+        <SectionTitle>Factures</SectionTitle>
+        {factures.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Cap factura per a aquest client.</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr>{['Número', 'Període', 'Tipus', 'Estat', 'Total'].map(h =>
+              <th key={h} style={th}>{h}</th>)}</tr></thead>
+            <tbody>
+              {factures.map(f => (
+                <tr key={f.id}>
+                  <td style={{ ...td, color: 'var(--gold)' }}>{f.numero || '— esborrany'}</td>
+                  <td style={td}>{f.period}</td>
+                  <td style={{ ...td, color: 'var(--text-muted)' }}>{f.tipus}</td>
+                  <td style={{ ...td, color: estatColor[f.estat] }}>{f.estat}</td>
+                  <td style={{ ...td, textAlign: 'right', fontWeight: 500 }}>{money(f.total, f.moneda)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   )
 }
@@ -255,7 +328,7 @@ export default function TenantDetailPage() {
               <Field label="País fiscal" value={countryName(tenant.pais)} />
             </Grid>
           </div>
-          <Placeholder>Factures i pagaments — disponible al Sprint 6.</Placeholder>
+          <FacturacioClient codi={codi} />
         </div>
       )}
 

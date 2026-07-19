@@ -87,7 +87,7 @@ export const COL = {
 // CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
 // build*Primitives, Rects de fons/selecció, text_box, previews) DEUEN usar aquests literals,
 // no COL (que és per al DOM, on var() sí resol). Valors = mateixos hex que els tokens de :root.
-const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685' }
+const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', labelGray: '#777776' }
 
 // F1 — la caixa on entra una peça de patró. Una peça és MOLT més gran que la pàgina (el
 // TATE_FRONT fa 588×502 mm i un A4 apaïsat en fa 297×210): entra encaixada a aquesta caixa,
@@ -537,10 +537,271 @@ function buildFieldChipPrims(obj) {
   return { prims, totalW: w, totalH: h }
 }
 
-// Capçalera del model → {prims, totalW, totalH}. Dues bandes (20mm + 12mm), 277mm d'ample.
+// pt → px (via mm: 1pt=0.3528mm, MM_TO_PX px/mm). El header v2 dosifica cossos en pt reals
+// (petits i densos) a diferència del legacy, que mesurava en mm.
+const _ptPx = pt => Math.round(pt * 0.3528 * MM_TO_PX)
+
+// Amples per defecte dels 4 blocs del header v2 (percentatges de 277mm). Sobreescriptibles
+// per la config de la plantilla (per customer, sense hardcodejar cap client al codi).
+const HDR_V2_BLOCKS = [24, 24, 32, 20]
+const HDR_V2_HEIGHT_MM = 31
+const HDR_V2_LOGO_MAX_MM = 10
+
+// Rectangle del logo del customer al header v2: contingut dins el BLOC 4 (dalt-dreta),
+// alçada màxima ~10mm i amplada acotada a l'ample del bloc, preservant la relació d'aspecte.
+// Compartit per la vista viva (Konva React) i l'export offscreen perquè no derivin.
+export function headerV2LogoRect(natW, natH, totalW, config) {
+  const widths = (config && config.blocks) || HDR_V2_BLOCKS
+  const maxH = ((config && config.logoMaxMm) || HDR_V2_LOGO_MAX_MM) * MM_TO_PX
+  const PAD = 1.6 * MM_TO_PX
+  const ratio = (natW && natH) ? natW / natH : 2.4
+  let h = maxH, w = maxH * ratio
+  const b4start = totalW * (widths.slice(0, 3).reduce((a, b) => a + b, 0) / 100)
+  const b4w = totalW * (widths[3] / 100)
+  const maxW = b4w - 2 * PAD
+  if (w > maxW) { w = maxW; h = w / ratio }
+  return { x: b4start + b4w - PAD - w, y: PAD, w, h }
+}
+
+// Header v2 → {prims, totalW, totalH}. Una sola caixa (fons blanc, vora 0.75pt) de 277mm
+// dividida en 4 blocs per 3 filets verticals (0.5pt). Etiquetes regular gris + valors negre;
+// bold només a la ref del client i al nom. Anglès (excepció i18n conscient, com l'original
+// LOSAN: és una capçalera de document tècnic, no crom d'app). El logo el pinta el caller.
+// El mapping de camps és EL disseny pactat; els amples/mides viuen a `config` (per customer).
+function buildHeaderV2Primitives(m, versio, placeholderMode, config) {
+  const C = config || {}
+  const W = 277 * MM_TO_PX
+  const H = (C.heightMm || HDR_V2_HEIGHT_MM) * MM_TO_PX
+  const widths = C.blocks || HDR_V2_BLOCKS
+  const PAD = 1.6 * MM_TO_PX
+  const SZ = { head: _ptPx(9), body: _ptPx(8), small: _ptPx(7) }
+  const LABEL = KONVA_COL.textMuted, VALUE = KONVA_COL.textMain
+  const OUTER_SW = 0.75 * 0.3528 * MM_TO_PX, FILET_SW = 0.5 * 0.3528 * MM_TO_PX
+  const bx = []; let acc = 0
+  for (const w of widths) { bx.push(acc); acc += (w / 100) * W }
+  const bw = i => (widths[i] / 100) * W
+  const prims = []
+  // Caixa: fons blanc (sense color, i alhora àrea de clic per seleccionar/moure) + vora fina.
+  prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: LABEL, sw: OUTER_SW })
+  for (let i = 1; i < widths.length; i++) prims.push({ t: 'l', points: [bx[i], 0, bx[i], H], stroke: LABEL, sw: FILET_SW })
+
+  // Apila línies dins un bloc; label gris + valor negre (monospace → amplada de label determinista).
+  const draw = (bi, lines) => {
+    const x0 = bx[bi] + PAD, maxW = bw(bi) - 2 * PAD
+    let y = PAD
+    for (const ln of lines) {
+      if (!ln) continue
+      const size = ln.size || SZ.body, lh = Math.round(size * 1.5)
+      if (ln.label) {
+        const lw = ln.label.length * size * 0.62
+        prims.push({ t: 't', x: x0, y, w: lw + 2, h: lh, text: ln.label, fill: LABEL, size, mid: false })
+        prims.push({ t: 't', x: x0 + lw, y, w: maxW - lw, h: lh, text: ln.value, fill: VALUE, size, bold: !!ln.bold, mid: false })
+      } else {
+        prims.push({ t: 't', x: x0, y, w: maxW, h: lh, text: ln.value, fill: VALUE, size, bold: !!ln.bold, align: ln.align, mid: false })
+      }
+      y += lh
+    }
+  }
+  const V = (real, ph) => placeholderMode ? ph : (real || '')
+  const kv = (label, value, size) => value ? { label, value, size } : null
+
+  // BLOC 1 — Identitat (ref client + nom en bold; FTT ref petit)
+  draw(0, [
+    V(m?.codi_client, '{ref client}') ? { value: V(m?.codi_client, '{ref client}'), bold: true, size: SZ.head } : null,
+    V(m?.nom_prenda, '{nom}') ? { value: V(m?.nom_prenda, '{nom}'), bold: true, size: SZ.body } : null,
+    kv('FTT ref: ', V(m?.codi_intern, '{codi FTT}'), SZ.small),
+  ])
+  // BLOC 2 — Context
+  draw(1, [
+    kv('Collection: ', V(m?.collection, '{collection}'), SZ.body),
+    kv('Season: ', V(m?.temporada, '{season}'), SZ.body),
+    kv('Customer: ', V(m?.customer_nom, '{customer}'), SZ.body),
+    kv('Target: ', V(m?.target, '{target}'), SZ.body),
+  ])
+  // BLOC 3 — Definició tècnica (run sencer d'etiquetes + base; grading o "pending")
+  const run = _headerSizeRun(m, placeholderMode)
+  const grading = placeholderMode ? '{grading}' : (m?.grading_rule_set_nom || 'pending')
+  draw(2, [
+    kv('Garment: ', V(m?.garment_type_nom, '{garment}'), SZ.body),
+    kv('Item: ', V(m?.garment_type_item_nom, '{item}'), SZ.body),
+    kv('Sizes: ', run, SZ.small),
+    kv('Grading: ', grading, SZ.small),
+  ])
+  // BLOC 4 — Marca i estat (logo el pinta el caller a dalt; text sota, alineat dreta)
+  const b4x = bx[3] + PAD, b4w2 = bw(3) - 2 * PAD
+  let y4 = ((C.logoMaxMm || HDR_V2_LOGO_MAX_MM) * MM_TO_PX) + 2 * PAD
+  const today = placeholderMode ? '{date}' : new Date().toISOString().slice(0, 10)
+  for (const s of [today, V(m?.fase_actual, '{phase}'), V(m?.responsable_nom, '{owner}'), `v${versio ?? 1}`]) {
+    if (!s) continue
+    prims.push({ t: 't', x: b4x, y: y4, w: b4w2, h: Math.round(SZ.small * 1.5), text: s, fill: VALUE, size: SZ.small, align: 'right', mid: false })
+    y4 += Math.round(SZ.small * 1.5)
+  }
+  return { prims, totalW: W, totalH: H }
+}
+
+// Run de talles del model per a la línia "Sizes": totes les etiquetes de size_run_model
+// (separades per ·/;/,) unides per " · ", amb " — base {talla}" si el model té talla base.
+function _headerSizeRun(m, placeholderMode) {
+  if (placeholderMode) return '{sizes}'
+  const raw = (m?.size_run_model || '').trim()
+  if (!raw) return ''
+  const labels = raw.split(/[·;,]/).map(s => s.trim()).filter(Boolean)
+  let s = labels.join(' · ')
+  const base = (m?.base_size_label || '').trim()
+  if (base) s += `  — base ${base}`
+  return s
+}
+
+// Capçalera del model → {prims, totalW, totalH}. Amb `config.layout==='blocks4'` dibuixa el
+// disseny v2 (4 blocs, per customer via config); sense config manté el header LEGACY intacte
+// (dues bandes, 20mm+12mm) perquè els documents/plantilles existents no canviïn.
 // placeholderMode=true (editor de plantilla): mostra `{model.codi}` etc. en lloc de valors
 // reals (no hi ha model), excepte customer_nom que SÍ és real (la plantilla és per client).
-export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLogo = false) {
+// ─── Template FTT (S12) — capçalera mestra "3 caixes". REFERÈNCIA CANÒNICA:
+// docs/spec/plantilla_capcalera_ftt.svg. Coordenades transcrites LITERALMENT de l'SVG (pt
+// absoluts, viewBox A4L 841.9×595.3). NO s'interpreta, es MESURA. El canvas Konva té 1pt = P px
+// (P = 0.3528*MM_TO_PX); a l'export P px torna a 1pt (CANVAS_W 713 ↔ PDF 841.89). Per això TANT
+// geometria com cossos es multipliquen per P (el bug D5 era cossos 6/9 sense P). Els `y` de
+// l'SVG són BASELINES → top Konva = baseline − ASC·cos.
+const HDR_M = {
+  OX: 28.6, OY: 39, W: 784.7, H: 90.2, D1: 170.3, D2: 491.8, PAD: 6,
+  R1: 170.3, R2: 491.8, R3: 813.3,     // vores dretes de caixa 1/2/3
+  SUB1: 105.45, SUB2: 337.05,          // subcolumnes (PAGE · SEASON)
+  ASC: 0.8,                            // baseline→top ≈ 0.8·cos (IBM Plex Mono)
+}
+const _hdrP = () => 0.3528 * MM_TO_PX
+
+// FONT ÚNICA de la posició/mida de l'OBJECTE capçalera mestra (mm), DERIVADA de la geometria de
+// l'SVG canònic (HDR_M, en pt) × 0.3528 mm/pt. La usen l'insert manual (insertHeader) i, amb els
+// MATEIXOS valors, la instanciació des de template (backend master_template._HEADER_OBJ). No
+// tornar a escriure literals de posició del header en cap altre lloc.
+const _PT_TO_MM = 0.3528
+const _mm2 = pt => Math.round(pt * _PT_TO_MM * 100) / 100
+export const MASTER_HEADER_GEOM = {
+  x: _mm2(HDR_M.OX),      // 28.6pt  → 10.09mm
+  y: _mm2(HDR_M.OY),      // 39pt    → 13.76mm
+  width: _mm2(HDR_M.W),   // 784.7pt → 276.84mm
+  height: _mm2(HDR_M.H),  // 90.2pt  → 31.82mm
+}
+
+// Logo del customer: zona x 34.6→164.3 (w 129.7) · y 42.7→81.8 (h 39.1) [alçada de les files
+// 1-2 de la caixa 2: top etiqueta fila1 = 47.5−0.8·6 = 42.7 · bottom valor fila2 = 80+0.2·9 = 81.8].
+// Contain amb aspecte preservat SENSE tope a la mida natural (pot fer UPSCALE fins que la primera
+// dimensió topi): s = min(ZW/w_logo, ZH/h_logo). Alineat a l'ESQUERRA (x=34.6) i centrat vertical.
+const HDR_LOGO = { X: 34.6, Y: 42.7, W: 129.7, H: 39.1 }
+export function headerMasterLogoRect(natW, natH, _config) {
+  const P = _hdrP()
+  const { X, Y, W, H } = HDR_LOGO
+  let wPt, hPt
+  if (natW > 0 && natH > 0) {
+    const s = Math.min(W / natW, H / natH)     // contain sense clamp s<=1 (creix fins a tocar)
+    wPt = natW * s; hPt = natH * s
+  } else {
+    hPt = H; wPt = Math.min(W, H * 2.4)        // fallback aspecte 2.4 si no hi ha mida natural
+  }
+  return { x: (X - HDR_M.OX) * P, y: (Y - HDR_M.OY) * P + (H - hPt) * P / 2, w: wPt * P, h: hPt * P }
+}
+
+function _hdrDate(d) {
+  const p = n => String(n).padStart(2, '0')
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`   // DD-MM-YYYY (D7)
+}
+
+function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx) {
+  const P = _hdrP()
+  const { OX, OY, ASC } = HDR_M
+  const W = HDR_M.W * P, H = HDR_M.H * P
+  const GRAY = KONVA_COL.labelGray, INK = KONVA_COL.textMain, FRAME = KONVA_COL.textMain
+  const gx = sx => (sx - OX) * P
+  const prims = []
+  // Marc ÚNIC + 2 divisòries (mai 3 rects — D4). Frame 0.5pt.
+  prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
+  prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), H], stroke: FRAME, sw: 0.5 * P })
+  prims.push({ t: 'l', points: [gx(HDR_M.D2), 0, gx(HDR_M.D2), H], stroke: FRAME, sw: 0.5 * P })
+
+  const V = (real, ph) => placeholderMode ? ph : (real == null ? '' : String(real))
+  const join = parts => parts.filter(v => v != null && v !== '').join(' | ')   // UN valor per línia (D3)
+  // Etiqueta 6pt a baseline `by`, x `sx`, fins a `rightPt`.
+  const label = (sx, by, text, rightPt) => {
+    const f = 6 * P
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: (rightPt - HDR_M.PAD - sx) * P, h: f + 2, text, fill: GRAY, size: f })
+  }
+  // Valor 9pt (baixa a 8pt si no cap; el·lipsi via PrimNode). MAI desborda ni trenca línia.
+  const value = (sx, by, text, rightPt, opts = {}) => {
+    if (!text) return
+    const availPt = rightPt - HDR_M.PAD - sx
+    const fpt = (text.length * 9 * 0.6 > availPt) ? 8 : 9   // 9→8 = sòl de la llei
+    const f = fpt * P
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold })
+  }
+
+  // ── CAIXA 1 ── logo (files 1-2) · DATE+PAGE (fila 3) · TECHNICIAN (fila 4). DATE alineat amb MODEL.
+  label(34.6, 92.5, 'DATE', HDR_M.SUB1)
+  value(34.6, 102.5, placeholderMode ? '{date}' : _hdrDate(new Date()), HDR_M.SUB1)
+  label(HDR_M.SUB1, 92.5, 'PAGE', HDR_M.R1)
+  value(HDR_M.SUB1, 102.5, placeholderMode ? '{page}' : `${(pageCtx?.index ?? 0) + 1} / ${pageCtx?.total ?? 1}`, HDR_M.R1)
+  label(34.6, 115, 'TECHNICIAN', HDR_M.R1)
+  value(34.6, 125, V(m?.responsable_nom, '{technician}'), HDR_M.R1)
+
+  // ── CAIXA 2 ── identificació de la peça (STYLE NAME → MODEL)
+  label(176.3, 47.5, 'INTERNAL REFERENCE', HDR_M.SUB2)
+  value(176.3, 57.5, V(m?.codi_intern, '{internal ref}'), HDR_M.SUB2)
+  label(HDR_M.SUB2, 47.5, 'SEASON', HDR_M.R2)
+  value(HDR_M.SUB2, 57.5, placeholderMode ? '{season}' : [m?.temporada, m?.any].filter(Boolean).join(' '), HDR_M.R2)
+  label(176.3, 70, 'CLIENT REFERENCE', HDR_M.R2)
+  value(176.3, 80, V(m?.codi_client, '{client ref}'), HDR_M.R2)
+  label(176.3, 92.5, 'MODEL', HDR_M.R2)
+  value(176.3, 102.5, V(m?.nom_prenda, '{model}'), HDR_M.R2)
+  label(176.3, 115, 'COLLECTION', HDR_M.R2)
+  value(176.3, 125, V(m?.collection, '{collection}'), HDR_M.R2)
+
+  // ── CAIXA 3 ── definició tècnica · UNA etiqueta / UN valor per línia (D3)
+  label(497.8, 47.5, 'GARMENT TYPE | ITEM', HDR_M.R3)
+  value(497.8, 57.5, placeholderMode ? '{garment} | {item}' : join([m?.garment_type_nom, m?.garment_type_item_nom]), HDR_M.R3)
+  label(497.8, 70, 'TARGET | FIT TYPE | CONSTRUCTION', HDR_M.R3)
+  value(497.8, 80, placeholderMode ? '{target} | {fit} | {construction}' : join([m?.grading_target_nom, m?.grading_fit_nom, m?.grading_construction_nom]), HDR_M.R3)
+  label(497.8, 92.5, 'SIZE SYSTEM', HDR_M.R3)
+  value(497.8, 102.5, V(m?.size_system_nom, '{size system}'), HDR_M.R3)
+  label(497.8, 115, 'SIZE RUN', HDR_M.R3)
+  _pushSizeRun(prims, m, placeholderMode, 497.8, 125, P)
+
+  return { prims, totalW: W, totalH: H }
+}
+
+// SIZE RUN: run compacte "·" (sense espais, com l'SVG). La talla base = segment PROPI
+// bold+underline; el separador "·" NO es subratlla (D6). Mètrica mono charW=cos·0.6.
+function _pushSizeRun(prims, m, placeholderMode, sx, by, P) {
+  const f = 9 * P
+  const OX = HDR_M.OX, y = (by - HDR_M.OY) * P - HDR_M.ASC * f
+  const gx = x => (x - OX) * P
+  const INK = KONVA_COL.textMain
+  if (placeholderMode) {
+    prims.push({ t: 't', x: gx(sx), y, w: 300 * P, h: f + 2, text: '{size run}', fill: INK, size: f })
+    return
+  }
+  const raw = (m?.size_run_model || '').trim()
+  if (!raw) return
+  const labels = raw.split(/[·;,]/).map(s => s.trim()).filter(Boolean)
+  const base = (m?.base_size_label || '').trim()
+  const charWpt = 9 * 0.6
+  let cxPt = sx
+  const seg = (text, opts = {}) => {
+    prims.push({ t: 't', x: gx(cxPt), y, w: text.length * charWpt * P + 4, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, underline: !!opts.underline })
+    cxPt += text.length * charWpt
+  }
+  labels.forEach((lab, i) => {
+    const isBase = base && lab === base
+    seg(lab, isBase ? { bold: true, underline: true } : {})   // NOMÉS el label de la base (D6)
+    if (i < labels.length - 1) seg('·')                        // separador net, sense underline
+  })
+}
+
+// Capçalera del model → {prims, totalW, totalH}. `config.layout`: 'masterFtt' (Template FTT S12,
+// 3 caixes, amb consciència de pàgina via pageCtx) · 'blocks4' (v2) · absent → LEGACY intacte
+// (cap regressió a documents/plantilles existents).
+export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLogo = false, config = null, pageCtx = null) {
+  if (config && config.layout === 'masterFtt') return buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx)
+  if (config && config.layout === 'blocks4') return buildHeaderV2Primitives(m, versio, placeholderMode, config)
   const W = 277 * MM_TO_PX
   const B1 = 20 * MM_TO_PX, B2 = 12 * MM_TO_PX
   const totalH = B1 + B2
@@ -582,6 +843,7 @@ function PrimNode({ p }) {
   }
   return <Text x={p.x} y={p.y} width={p.w} height={p.h} text={p.text} fill={p.fill}
     fontSize={p.size} fontFamily={FONT} fontStyle={p.bold ? 'bold' : p.italic ? 'italic' : 'normal'}
+    textDecoration={p.underline ? 'underline' : ''}
     align={p.align || 'left'} verticalAlign={p.mid ? 'middle' : 'top'}
     ellipsis wrap="none" listening={false} />
 }
@@ -591,7 +853,7 @@ function addPrimsToGroup(group, prims) {
   for (const p of prims) {
     if (p.t === 'r') group.add(new Konva.Rect({ x: p.x, y: p.y, width: p.w, height: p.h, fill: p.fill, stroke: p.stroke, strokeWidth: p.sw, dash: p.dash }))
     else if (p.t === 'l') group.add(new Konva.Line({ points: p.points, stroke: p.stroke, strokeWidth: p.sw }))
-    else group.add(new Konva.Text({ x: p.x, y: p.y, width: p.w, height: p.h, text: p.text, fill: p.fill, fontSize: p.size, fontFamily: FONT, fontStyle: p.bold ? 'bold' : p.italic ? 'italic' : 'normal', align: p.align || 'left', verticalAlign: p.mid ? 'middle' : 'top', ellipsis: true, wrap: 'none' }))
+    else group.add(new Konva.Text({ x: p.x, y: p.y, width: p.w, height: p.h, text: p.text, fill: p.fill, fontSize: p.size, fontFamily: FONT, fontStyle: p.bold ? 'bold' : p.italic ? 'italic' : 'normal', textDecoration: p.underline ? 'underline' : '', align: p.align || 'left', verticalAlign: p.mid ? 'middle' : 'top', ellipsis: true, wrap: 'none' }))
   }
 }
 
@@ -636,16 +898,24 @@ function FieldChipNode({ obj, groupProps, isSelected }) {
 
 // Capçalera del model — Konva natiu. Resol els camps en render. Si hi ha logoUrl,
 // es pinta el logo real (cantonada superior dreta) en lloc del placeholder "(logo)".
-function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, groupProps, isSelected }) {
+function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, config, pageCtx, groupProps, isSelected }) {
   const logoImg = useImage(logoUrl || '')
   const hasLogo = !!logoImg
+  const isV2 = !!(config && config.layout === 'blocks4')
+  const isMaster = !!(config && config.layout === 'masterFtt')
   const { prims, totalW, totalH } = useMemo(
-    () => buildHeaderPrimitives(modelData, versio, placeholderMode, hasLogo),
-    [modelData, versio, placeholderMode, hasLogo])
+    () => buildHeaderPrimitives(modelData, versio, placeholderMode, hasLogo, config, pageCtx),
+    [modelData, versio, placeholderMode, hasLogo, config, pageCtx])
+  // master: logo a la caixa 1 (dalt-esq, ≤40pt); v2: logo contingut al BLOC 4; legacy: 40×16mm.
+  const logoR = (hasLogo && isMaster)
+    ? headerMasterLogoRect(logoImg.width, logoImg.height, config)
+    : (hasLogo && isV2)
+      ? headerV2LogoRect(logoImg.width, logoImg.height, totalW, config)
+      : { x: totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, w: 40 * MM_TO_PX, h: 16 * MM_TO_PX }
   return (
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
-      {hasLogo && <KonvaImage image={logoImg} x={totalW - 45 * MM_TO_PX} y={2 * MM_TO_PX} width={40 * MM_TO_PX} height={16 * MM_TO_PX} listening={false} />}
+      {hasLogo && <KonvaImage image={logoImg} x={logoR.x} y={logoR.y} width={logoR.w} height={logoR.h} listening={false} />}
       {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={KONVA_COL.gold} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
   )
@@ -951,7 +1221,8 @@ async function addObjectToLayer(layer, obj, ctx) {
     let logoEl = null
     if (obj.kind === 'header') {
       if (ctx?.customerLogoUrl) { try { logoEl = await loadImageEl(ctx.customerLogoUrl) } catch { logoEl = null } }
-      built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl)
+      const pageCtx = (ctx?.pageIndex != null) ? { index: ctx.pageIndex, total: ctx.pageTotal } : null
+      built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl, obj.config, pageCtx)
     } else if (obj.kind === 'graded_table') {
       const data = ctx?.tableData?.[obj.id]
       // Desvinculada (BIB S0): no hi ha dades ni n'hi haurà fins que el tècnic la torni a
@@ -963,7 +1234,17 @@ async function addObjectToLayer(layer, obj, ctx) {
     if (built) {
       const g = new Konva.Group(dataBlockGroupProps(obj))
       addPrimsToGroup(g, built.prims)
-      if (logoEl) g.add(new Konva.Image({ image: logoEl, x: built.totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, width: 40 * MM_TO_PX, height: 16 * MM_TO_PX }))
+      if (logoEl) {
+        const lw = logoEl.naturalWidth || logoEl.width, lh = logoEl.naturalHeight || logoEl.height
+        const isMaster = !!(obj.config && obj.config.layout === 'masterFtt')
+        const isV2 = !!(obj.config && obj.config.layout === 'blocks4')
+        const r = isMaster
+          ? headerMasterLogoRect(lw, lh, obj.config)
+          : isV2
+            ? headerV2LogoRect(lw, lh, built.totalW, obj.config)
+            : { x: built.totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, w: 40 * MM_TO_PX, h: 16 * MM_TO_PX }
+        g.add(new Konva.Image({ image: logoEl, x: r.x, y: r.y, width: r.w, height: r.h }))
+      }
       layer.add(g)
     }
     return
@@ -1134,7 +1415,7 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, onEndpointDrag }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, onEndpointDrag }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -1149,7 +1430,11 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   if (obj.type === 'data_block') {
     const dataCommon = { ...common, ...dataBlockGroupProps(obj) }
     if (obj.kind === 'header') {
-      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} groupProps={dataCommon} isSelected={selected} />
+      // Bloc ancorat (Template FTT): menú contextual (right-click) per Delete-on-page / Detach.
+      const hdrProps = onHeaderContextMenu
+        ? { ...dataCommon, onContextMenu: (e) => onHeaderContextMenu(e, obj) }
+        : dataCommon
+      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} config={obj.config} pageCtx={pageCtx} groupProps={hdrProps} isSelected={selected} />
     }
     // Desvinculada (BIB S0): mateixos prims que el PDF. Sense això queia al «Carregant
     // taula…» de sota i s'hi quedava per sempre — una taula desvinculada no carrega mai.
@@ -1467,6 +1752,8 @@ export default function TechSheetEditor() {
   // S3: picker de variant de taula (T1a/T1b/T2/custom) — null | { variant?: 't1a'|'t1b'|'t2'|'custom' }.
   // Obert des del ribbon (botó "Taula", commit 4).
   const [tablePicker, setTablePicker] = useState(null)
+  // B3 — menú contextual del bloc capçalera mestra ancorat: {x, y} en coords de pantalla.
+  const [headerMenu, setHeaderMenu] = useState(null)
   // S4: modal "Desar com a plantilla" — null | { nom, descripcio }
   const [saveAsTpl, setSaveAsTpl] = useState(null)
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
@@ -2149,9 +2436,11 @@ export default function TechSheetEditor() {
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
-        const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl }
         const thumbs = []
-        for (const p of pages) thumbs.push(await renderPageToDataURL(p, 0.18, ctx))
+        for (let pi = 0; pi < pages.length; pi++) {
+          const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
+          thumbs.push(await renderPageToDataURL(pages[pi], 0.18, ctx))
+        }
         setThumbnails(thumbs)
       } catch { /* noop */ }
     }, 300)
@@ -3161,23 +3450,57 @@ export default function TechSheetEditor() {
   }
 
   // ── Bloc de dades: capçalera del model (màxim 1 per pàgina) ─────────────────
+  // S12-UNIF/POS: "Capçalera del model" insereix la Template FTT (masterFtt) com a bloc ANCORAT
+  // (locked + layer template → no draggable/seleccionable) + menú contextual delete-on-page/detach,
+  // MATEIX tractament i MATEIXA posició que la instanciada des de template. La geometria ve de la
+  // font única MASTER_HEADER_GEOM (posició de l'SVG canònic, x=10.09 y=13.76mm). Cap camí nou crea
+  // header legacy.
   const insertHeader = () => {
     if (!locked) return
     if (objectsOf(currentPage).some(o => o.type === 'data_block' && o.kind === 'header')) {
       flash(t('tech_sheet.flash_header_exists')); return
     }
-    const { totalW, totalH } = buildHeaderPrimitives(model, sheet?.versio)
     addObject({
-      id: uid(), type: 'data_block', kind: 'header', layer: 'data',
-      x: 10, y: 8, width: totalW / MM_TO_PX, height: totalH / MM_TO_PX,
+      id: uid(), type: 'data_block', kind: 'header', layer: 'template', locked: true,
+      ...MASTER_HEADER_GEOM, config: { layout: 'masterFtt' },
     })
   }
 
   // ── Pàgines ────────────────────────────────────────────────────────────────
+  // Instància fresca de la capçalera mestra (Template FTT) per a una pàgina nova: el mateix
+  // bloc ANCORAT (locked, layer template, config masterFtt) amb un id nou. Font: la primera
+  // capçalera mestra que trobi al document. Si no n'hi ha cap (document en blanc o esborrada
+  // a totes les pàgines), la pàgina nova neix buida.
+  const masterHeaderInstance = () => {
+    for (const pg of pages) {
+      const h = (pg.objects || []).find(o => o.type === 'data_block' && o.kind === 'header' && o.config?.layout === 'masterFtt' && !o.detached)
+      if (h) return { ...h, id: uid() }
+    }
+    return null
+  }
   const addPage = () => {
     if (!locked) return
-    setPages(ps => [...ps, { id: uid(), objects: [] }])
+    const hdr = masterHeaderInstance()
+    setPages(ps => [...ps, { id: uid(), objects: hdr ? [hdr] : [] }])
     setCurrentPage(pages.length)
+  }
+  // B3 — "Delete on this page": treu la instància de la capçalera mestra NOMÉS d'aquesta
+  // pàgina (les altres intactes; les pàgines noves la tornen a portar via masterHeaderInstance).
+  const deleteHeaderOnPage = (pageIdx) => {
+    if (!locked) return
+    updatePageObjects(pageIdx, objs => objs.filter(o => !(o.type === 'data_block' && o.kind === 'header')))
+  }
+  // B3 — "Detach & edit": converteix la capçalera ancorada en un OBJECTE LLIURE d'aquesta pàgina
+  // (perd la sincronia amb la plantilla: deixa de ser locked/template i ja no es re-instancia).
+  // layer 'free' → seleccionable, arrossegable i esborrable pel camí normal (Delete/selecció).
+  const detachHeaderOnPage = (pageIdx) => {
+    if (!locked) return
+    updatePageObjects(pageIdx, objs => objs.map(o => (
+      (o.type === 'data_block' && o.kind === 'header')
+        ? { ...o, layer: 'free', locked: false, detached: true }
+        : o
+    )))
+    flash(t('tech_sheet.header_detached'))
   }
   const removePage = (index) => {
     if (!locked || pages.length <= 1) return
@@ -3192,10 +3515,10 @@ export default function TechSheetEditor() {
     setExporting(true)
     try {
       const pdf = await PDFDocument.create()
-      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl }
       const [pdfW, pdfH] = fmt.pdf
-      for (const p of pages) {
-        const dataUrl = await renderPageToDataURL(p, 3.5, ctx)
+      for (let pi = 0; pi < pages.length; pi++) {
+        const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
+        const dataUrl = await renderPageToDataURL(pages[pi], 3.5, ctx)
         const png = await pdf.embedPng(dataUrl)
         const page = pdf.addPage([pdfW, pdfH])
         page.drawImage(png, { x: 0, y: 0, width: pdfW, height: pdfH })
@@ -3718,6 +4041,12 @@ export default function TechSheetEditor() {
     menuItem('mf-save-tpl', { label: t('tech_sheet.save_as_template'), onClick: () => setSaveAsTpl({ nom: '', descripcio: '' }), disabled: !locked }),
     menuItem('mf-import', { label: t('tech_sheet.flat_import'), onClick: () => openImport('garment'), disabled: !locked }),
   ]
+  // S12-QA1-B: estat de la capçalera de la pàgina actual per a les accions del menú "Objecte".
+  // El guard de màx 1 header/pàgina fa que no calgui selecció prèvia. `detached` (post-detach)
+  // → només accionable pel camí normal d'objectes lliures. Menú i clic dret criden els MATEIXOS
+  // handlers (deleteHeaderOnPage / detachHeaderOnPage): cap tercer camí.
+  const pageHeaderObj = objectsOf(currentPage).find(o => o.type === 'data_block' && o.kind === 'header')
+  const headerAnchored = !!pageHeaderObj && !pageHeaderObj.detached
   const menuEditItems = [
     menuItem('me-undo', { label: t('tech_sheet.menu_undo'), shortcut: '⌘Z', onClick: undo }),
     menuItem('me-redo', { label: t('tech_sheet.menu_redo'), shortcut: '⇧⌘Z', onClick: redo }),
@@ -3755,6 +4084,11 @@ export default function TechSheetEditor() {
     menuSep('mo-sep5'),
     menuItem('mo-lock-sel', { label: t('tech_sheet.menu_lock_sel'), onClick: () => selectedIds.forEach(toggleLock), disabled: objDisabled(selectedIds.length === 0) }),
     menuItem('mo-hide-sel', { label: t('tech_sheet.menu_hide_sel'), onClick: () => selectedIds.forEach(toggleVisible), disabled: objDisabled(selectedIds.length === 0) }),
+    menuSep('mo-sep6'),
+    // Capçalera ancorada (Template FTT): mateixos handlers que el clic dret. Habilitades només
+    // amb un header ANCORAT a la pàgina; un cop desancorat, l'esborrat va pel camí normal.
+    menuItem('mo-hdr-delete', { label: t('tech_sheet.menu_delete_header_page'), onClick: () => deleteHeaderOnPage(currentPage), disabled: objDisabled(!headerAnchored) }),
+    menuItem('mo-hdr-detach', { label: t('tech_sheet.menu_detach_header'), onClick: () => detachHeaderOnPage(currentPage), disabled: objDisabled(!headerAnchored) }),
   ]
   const menuViewItems = [
     menuItem('mv-in', { label: t('tech_sheet.zoom_in'), onClick: () => setZoomClamped(z => z + ZOOM_STEP) }),
@@ -3971,6 +4305,8 @@ export default function TechSheetEditor() {
                 {ordered.filter(o => o.id !== editingFlatId && o.visible !== false).map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
+                    pageCtx={{ index: currentPage, total: pages.length }}
+                    onHeaderContextMenu={locked ? ((e, ho) => { e.evt.preventDefault(); setHeaderMenu(ho.detached ? null : { x: e.evt.clientX, y: e.evt.clientY }) }) : undefined}
                     selected={selectedIds.includes(o.id)}
                     selectable={locked && o.layer !== 'template' && !o.locked}
                     draggable={locked && tool === 'select' && !panActive && o.layer !== 'template' && !o.locked && activeGroup !== o.id}
@@ -4519,6 +4855,23 @@ export default function TechSheetEditor() {
           <button onClick={addPage} title={t('tech_sheet.add_page')} style={{ flexShrink: 0, width: 56, height: 40, border: `1px dashed ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>+</button>
         )}
       </div>
+
+      {/* ── Menú contextual del bloc capçalera mestra ancorat (B3) ── */}
+      {headerMenu && (<>
+        <div onClick={() => setHeaderMenu(null)} onContextMenu={(e) => { e.preventDefault(); setHeaderMenu(null) }} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+        <div style={{ position: 'fixed', left: headerMenu.x, top: headerMenu.y, zIndex: 999, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', padding: 4, minWidth: 190, fontFamily: FONT }}>
+          {[{ ic: 'ti-square-off', tk: 'header_delete_on_page', fn: () => deleteHeaderOnPage(currentPage) },
+            { ic: 'ti-unlink', tk: 'header_detach', fn: () => detachHeaderOnPage(currentPage) }].map(mi => (
+            <button key={mi.tk} type="button" onClick={() => { mi.fn(); setHeaderMenu(null) }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', border: 'none', background: 'transparent', color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', textAlign: 'left', cursor: 'pointer', borderRadius: 4 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = COL.bg }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
+              <i className={`ti ${mi.ic}`} style={{ fontSize: 14, color: COL.gold, flexShrink: 0 }} />
+              <span>{t('tech_sheet.' + mi.tk)}</span>
+            </button>
+          ))}
+        </div>
+      </>)}
 
       {/* ── Barra d'estat inferior (C3) ── */}
       <footer style={{ flexShrink: 0, background: COL.sidebar, borderTop: `1px solid ${COL.border}`, display: 'flex', alignItems: 'center', gap: 12, padding: '4px 12px', color: COL.textMuted, fontSize: 'var(--fs-label)' }}>

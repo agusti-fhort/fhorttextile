@@ -313,7 +313,7 @@ def tenant_config_view(request):
         # PATCH — camps escalars + upload opcional del logo (multipart, camp 'logo_file').
         allowed = ['unitat_mesura', 'norma_referencia', 'nom_empresa', 'logo_url', 'hourly_rate',
                    'iban', 'payment_notes', 'legal_name', 'tax_id', 'address', 'postal_code',
-                   'city', 'country', 'email', 'phone']
+                   'city', 'country', 'email', 'phone', 'legal_footer']
         for field in allowed:
             if field in request.data:
                 setattr(config, field, request.data[field])
@@ -374,33 +374,5 @@ def pom_global_search_view(request):
         return Response({'error': str(e)}, status=500)
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def garment_types_by_target_view(request):
-    """
-    GET /api/v1/garment-types/?target=WOMAN
-    Return GarmentTypes filtered by target (via M2M targets_recomanats).
-    """
-    target_codi = request.query_params.get('target', '')
-    try:
-        from fhort.pom.models import GarmentType
-        qs = GarmentType.objects.select_related('garment_type_global')
-
-        if target_codi:
-            qs = qs.filter(targets_recomanats__codi=target_codi)
-
-        results = []
-        for gt in qs.order_by('nom_client')[:100]:
-            results.append({
-                'id': gt.id,
-                'codi_client': gt.codi_client,
-                'nom_client': gt.nom_client,
-                'grup': gt.grup,
-                'construccio_habitual': gt.construccio_habitual or '',
-            })
-
-        return Response({'count': len(results), 'results': results})
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).exception("garment_types_by_target_view error")
-        return Response({'error': str(e)}, status=500)
+# garment_types_by_target_view JUBILAT (2026-07-19): filtrava famílies per `targets_recomanats` (M2M
+# buit i jubilat). El substitueix GarmentTypeViewSet `?target` (via SizingProfile). 0 cridadors.

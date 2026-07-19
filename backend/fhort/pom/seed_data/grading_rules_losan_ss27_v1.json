@@ -1,0 +1,127 @@
+{
+  "_meta": {
+    "titol": "GradingRules LOSAN SS27 — config v1 (sembra B3 estesa)",
+    "data": "2026-07-18",
+    "autor": "Claude Chat + Agus (Patró C)",
+    "regla_general": "logica LINEAR; increment_base per pas de talla; increment_break i talla_break_label només on hi ha break. pom = codi POMMaster segons diccionari CustomerPOMAlias de LOS. Claude Code valida cada codi POMMaster contra BD abans de crear; si un codi no existeix, NO el crea: el llista a l'informe.",
+    "cobertura": "2 contenidors COMPLETS (fitxa sencera digerida) + 5 PARCIALS (POMs documentats al vault) + 11 esquelet (regles entren a la fase de mesures amb la fitxa com a font)",
+    "unitats": "cm"
+  },
+
+  "contenidors_complets": [
+    {
+      "size_system": "GIRL_LOS_01",
+      "item": "dress_simple",
+      "nom": "LOS Kids Girl Dress SS27",
+      "forma": "LINEAR break a 9/10",
+      "talla_break_label": "9/10",
+      "font": "L27WKG0701_BOW (carta compartida amb PETALO i DAIRA: cos identic)",
+      "regles": [
+        {"alias_fitxa": "B",   "descripcio": "CHEST WIDTH (1/2)",          "pom": "CH",   "increment_base": 1.1, "increment_break": 2.2},
+        {"alias_fitxa": "BJ",  "descripcio": "FRONT & BACK WIDTH LOCATION","pom": "BJ",   "increment_base": 0.2, "increment_break": 0.4},
+        {"alias_fitxa": "A.1", "descripcio": "FRONT WIDTH",                "pom": "A.1",  "increment_base": 0.9, "increment_break": 1.6},
+        {"alias_fitxa": "A.2", "descripcio": "BACK WIDTH",                 "pom": "A2",   "increment_base": 0.9, "increment_break": 1.6},
+        {"alias_fitxa": "E",   "descripcio": "BOTTOM WIDTH (1/2)",         "pom": "SK SW","increment_base": 1.1, "increment_break": 2.2},
+        {"alias_fitxa": "M",   "descripcio": "TOTAL LENGTH",               "pom": "M-M79","increment_base": 3.5, "increment_break": 6.0},
+        {"alias_fitxa": "M.4", "descripcio": "CUT LOCATION",               "pom": "M4",   "increment_base": 1.5, "increment_break": 3.0},
+        {"alias_fitxa": "L.3", "descripcio": "NECK WIDTH (SEAM to SEAM)",  "pom": "NK W", "increment_base": 0.3, "increment_break": 0.6},
+        {"alias_fitxa": "L.5", "descripcio": "BACK NECK DROP",             "pom": "L.5",  "increment_base": 0.0, "increment_break": 0.0},
+        {"alias_fitxa": "L.4", "descripcio": "FRONT NECK DROP",            "pom": "L.4",  "increment_base": 0.2, "increment_break": 0.4},
+        {"alias_fitxa": "U.1", "descripcio": "JETTING WIDTH",              "pom": "U1",   "increment_base": 0.0, "increment_break": 0.0},
+        {"alias_fitxa": "K",   "descripcio": "SHOULDER",                   "pom": "SH",   "increment_base": 0.4, "increment_break": 0.6},
+        {"alias_fitxa": "K.1", "descripcio": "SHOULDER DROP",              "pom": "SH DR","increment_base": 0.0, "increment_break": 0.0,
+         "watchpoint": "fitxa declara DIM 0/0 pero els valors salten 2->2.5 al 9/10: inconsistencia de la fitxa, revisar amb Montse"},
+        {"alias_fitxa": "K.2", "descripcio": "SHOULDER TO SHOULDER",       "pom": "K.2",  "increment_base": 0.8, "increment_break": 1.2,
+         "watchpoint": "la fitxa expressa K.2 en DIFERENCIAL (base talla 2 buida, valors 0.8, 1.6...): tractar com a increment, no com a mesura absoluta"},
+        {"alias_fitxa": "H.6", "descripcio": "ARMHOLE",                    "pom": "AH DEP","increment_base": 0.5, "increment_break": 1.0},
+        {"alias_fitxa": "G",   "descripcio": "SLEEVE LENGTH",              "pom": "SL",   "increment_base": 2.5, "increment_break": 4.0},
+        {"alias_fitxa": "H",   "descripcio": "SLEEVE MUSCLE (1/2)",        "pom": "H",    "increment_base": 0.4, "increment_break": 0.8},
+        {"alias_fitxa": "H.11","descripcio": "SLEEVE OPENING",             "pom": "H11",  "increment_base": 0.2, "increment_break": 0.3}
+      ],
+      "sense_regla_pendents": [
+        {"alias_fitxa": "E (obs 2)", "descripcio": "BODY & SKIRT JOINNING", "increment_base": 1.1, "increment_break": 2.2,
+         "motiu": "segona instancia posicional del codi E; candidat POMMaster 'CL' (WAIST JOIN) per descripcio - CONFIRMAR MONTSE"},
+        {"alias_fitxa": "M.4 (obs 1)", "descripcio": "SKIRT LENGTH", "increment_base": 1.5, "increment_break": 3.0,
+         "motiu": "segona instancia posicional de M.4; candidat 'SK L' (Skirt length) - CONFIRMAR MONTSE"},
+        {"alias_fitxa": "Z",   "descripcio": "FRILL LENGHT (sic)", "motiu": "alias Z no existeix al diccionari LOS - GAP DICCIONARI"},
+        {"alias_fitxa": "SR9", "descripcio": "BOW WIDTH",  "motiu": "no al diccionari - GAP (detall, increment 0)"},
+        {"alias_fitxa": "SR10","descripcio": "BOW LENGTH", "motiu": "no al diccionari - GAP (detall, increment 0)"}
+      ]
+    },
+    {
+      "size_system": "YOUTH_GIRL_LOS_01",
+      "item": "bikini",
+      "nom": "LOS Swimwear Junior Girl Bikini SS27",
+      "forma": "LINEAR pur",
+      "talla_break_label": null,
+      "font": "CRUZADO L27SG1708 (taula SMS amb tolerancies +/-0.5)",
+      "regles": [
+        {"alias_fitxa": "B.3",  "seccio": "TOP",    "descripcio": "FRONT CHEST WIDTH",  "pom": "B3",  "increment_base": 1.6},
+        {"alias_fitxa": "A.1",  "seccio": "TOP",    "descripcio": "FRONT WIDTH",        "pom": "A.1", "increment_base": 1.0},
+        {"alias_fitxa": "M.19", "seccio": "TOP",    "descripcio": "FRONT LENGTH",       "pom": "M19", "increment_base": 1.0},
+        {"alias_fitxa": "M.8",  "seccio": "TOP",    "descripcio": "SIDE LENGTH",        "pom": "SS",  "increment_base": 0.4},
+        {"alias_fitxa": "H.8",  "seccio": "TOP",    "descripcio": "FRONT ARMHOLE",      "pom": "H8",  "increment_base": 0.6},
+        {"alias_fitxa": "C",    "seccio": "PANTIE", "descripcio": "WAIST WIDTH 1/2",    "pom": "WA",  "increment_base": 1.6},
+        {"alias_fitxa": "T.1",  "seccio": "PANTIE", "descripcio": "FRONT RISE",         "pom": "T.1", "increment_base": 1.0},
+        {"alias_fitxa": "T.2",  "seccio": "PANTIE", "descripcio": "BACK RISE",          "pom": "T.2", "increment_base": 1.0},
+        {"alias_fitxa": "A",    "seccio": "PANTIE", "descripcio": "A.1-A.2 DIST FROM HPS","pom": "A", "increment_base": 0.4},
+        {"alias_fitxa": "A.3",  "seccio": "PANTIE", "descripcio": "BACK WIDTH LOCATION","pom": "A3",  "increment_base": 0.6},
+        {"alias_fitxa": "A.2",  "seccio": "PANTIE", "descripcio": "BACK WIDTH",         "pom": "A2",  "increment_base": 0.8}
+      ],
+      "sense_regla_pendents": [
+        {"alias_fitxa": "B.4", "seccio": "TOP", "descripcio": "BACK CHEST WIDTH",  "increment_base": 1.6, "motiu": "alias B4 no al diccionari LOS - GAP"},
+        {"alias_fitxa": "E.1", "seccio": "TOP", "descripcio": "FRONT BOTTOM WIDTH","increment_base": 1.6, "motiu": "candidat E5 (FRONT BOTTOM WIDTH) per descripcio - CONFIRMAR"},
+        {"alias_fitxa": "E.2", "seccio": "TOP", "descripcio": "BACK BOTTOM WIDTH", "increment_base": 1.6, "motiu": "sense equivalent al diccionari - GAP"},
+        {"alias_fitxa": "M.1", "seccio": "TOP", "descripcio": "FRONT LENGTH CENTER","increment_base": 0.2, "motiu": "M1 no al diccionari LOS - GAP"},
+        {"alias_fitxa": "R.1", "seccio": "TOP", "descripcio": "STRAP LENGTH",      "increment_base": 1.0, "motiu": "R1 LOS no definit (nomes R8/R9/R10) - GAP; candidat 'STRAP W SW'/strap family"},
+        {"alias_fitxa": "R.2", "seccio": "TOP", "descripcio": "STRAP WIDTH",       "increment_base": 0.0, "motiu": "idem R.1 - GAP"},
+        {"alias_fitxa": "R.3", "seccio": "TOP", "descripcio": "STRAP LOCATION",    "increment_base": 0.6, "motiu": "idem R.1 - GAP"},
+        {"alias_fitxa": "M.8 (PANTIE)", "descripcio": "SIDE LENGTH pantie", "increment_base": 0.0,
+         "motiu": "POM DUPLICAT entre seccions TOP/PANTIE (tambe A.1): el bikini-peca-unica necessita mecanisme de sufix de seccio - DECISIO pendent Agus/Montse a la fase de mesures"}
+      ]
+    }
+  ],
+
+  "contenidors_parcials": [
+    {"size_system": "NEWBORN_LOS_01", "item": "baby_top", "nom": "LOS Newborn Tops SS27", "forma": "LINEAR pur",
+     "font": "LUZ/PELUCHE/ZEBRA/PINGU/RIZO (graduacio identica, bases per model)",
+     "regles": [{"alias_fitxa": "B", "pom": "CH", "increment_base": 1.0}],
+     "nota": "resta de POMs: fitxes a reprocessar a la fase de mesures"},
+    {"size_system": "YOUTH_GIRL_LOS_01", "item": "trousers", "nom": "LOS Youth Girl Bottoms SS27", "forma": "LINEAR break a 14", "talla_break_label": "14",
+     "font": "GALA + LIVERPOOL/ANCHO/WIDE_LEG/FLARE (5 fitxes, 1 graduacio)",
+     "regles": [{"alias_fitxa": "C", "pom": "WA", "increment_base": 1.5, "increment_break": 2.0}]},
+    {"size_system": "MAN_LOS_01", "item": "polo", "nom": "LOS Man Alpha Polo SS27", "forma": "LINEAR pur",
+     "font": "BERG.pdf (S-6XL absoluts)",
+     "regles": [
+       {"alias_fitxa": "B",   "pom": "CH",    "increment_base": 3.0},
+       {"alias_fitxa": "K.2", "pom": "K.2",   "increment_base": 0.8},
+       {"alias_fitxa": "M",   "pom": "M-M79", "increment_base": 1.5}]},
+    {"size_system": "WOMAN_NUM_LOS_01", "item": "trousers", "nom": "LOS Woman Numeric Bottoms SS27", "forma": "LINEAR pur",
+     "font": "BUDAPEST/GENOVEVA (36-46, +2)",
+     "regles": [{"alias_fitxa": "C", "pom": "WA", "increment_base": 2.0}]},
+    {"size_system": "MAN_NUM_LOS_01", "item": "trousers", "nom": "LOS Man Numeric Bottoms SS27", "forma": "LINEAR pur",
+     "font": "ENRIC/ALFONSO (38-52, +2)",
+     "regles": [{"alias_fitxa": "C", "pom": "WA", "increment_base": 2.0}]}
+  ],
+
+  "contenidors_esquelet": [
+    {"size_system": "NEWBORN_LOS_01",   "item": "baby_leggings",  "nom": "LOS Newborn Bottoms SS27",   "forma": "LINEAR pur", "font": "SAFARI"},
+    {"size_system": "NEWBORN_LOS_01",   "item": "baby_sleepsuit", "nom": "LOS Newborn Onepiece SS27",  "forma": "LINEAR pur", "font": "OSITO"},
+    {"size_system": "NEWBORN_LOS_01",   "item": "baby_dress",     "nom": "LOS Newborn Dress SS27",     "forma": "LINEAR pur", "font": "tech pack voile"},
+    {"size_system": "NEWBORN_LOS_01",   "item": "booties",        "nom": "LOS Newborn Booties SS27",   "forma": "LINEAR pur", "font": "ESTELADO"},
+    {"size_system": "BABY_LOS_01",      "item": "baby_top",       "nom": "LOS Baby Tops SS27",         "forma": "LINEAR pur", "font": "GLACIAR/CAMPO/BLOSSOM"},
+    {"size_system": "BABY_LOS_01",      "item": "baby_dress",     "nom": "LOS Baby Dress SS27",        "forma": "LINEAR pur", "font": "FLORES"},
+    {"size_system": "BOY_LOS_01",       "item": "jeans",          "nom": "LOS Kids Boy Bottoms SS27",  "forma": "LINEAR break a 9/10", "talla_break_label": "9/10", "font": "TARRAGONA/MARGARITA"},
+    {"size_system": "YOUTH_BOY_LOS_01", "item": "t_shirt",        "nom": "LOS Youth Boy Tops SS27",    "forma": "LINEAR pur", "font": "SOFT/VEST/ROI/ALONSO"},
+    {"size_system": "YOUTH_GIRL_LOS_01","item": "t_shirt",        "nom": "LOS Youth Girl Tops SS27",   "forma": "LINEAR break a 14", "talla_break_label": "14", "font": "ONA/PUFFY"},
+    {"size_system": "YOUTH_BOY_LOS_01", "item": "trousers",       "nom": "LOS Youth Boy Bottoms SS27", "forma": "LINEAR pur", "font": "JEREMY"},
+    {"size_system": "WOMAN_LOS_01",     "item": "t_shirt",        "nom": "LOS Woman Alpha Tops SS27",  "forma": "LINEAR pur", "font": "DANIELA"}
+  ],
+
+  "notes_transversals": [
+    "COL.LISIONS POMMaster detectades (consolidacio futura, NO resoldre ara): el cataleg POMMaster te parells semantics duplicats - 'T.1'/'RI FR', 'L.4'/'NK DR FR', 'L.5'/'NK DR BK', 'K.2'/'AC SH', 'H'/'BIC', 'M-M79'/'DR L HPS'. La config usa SEMPRE el POMMaster que dicta el diccionari LOS; les regles poden apuntar a POMs fora del GarmentPOMMap de l'item (el map es informatiu per la sembra, no obligatori - llei L1).",
+    "GAPS DICCIONARI LOS detectats: Z, SR9, SR10, B4, E.2-back, M1, R1/R2/R3 (straps swimwear). Afegir al diccionari quan Montse validi - reforca peticio C.12 (nomenclatura bany).",
+    "POMs DUPLICATS PER SECCIO al bikini (M.8 i A.1 a TOP i PANTIE): el mecanisme de sufix de seccio es decideix a la fase de mesures.",
+    "Els increments d'aquesta config son VERIFICATS contra fitxa o vault; cap valor inventat. Els contenidors esquelet reben regles quan el parser processi les seves fitxes."
+  ]
+}

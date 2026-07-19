@@ -918,7 +918,8 @@
     "no_grading": "Sense graduació (triar més tard)",
     "pick_fit": "Tria el fit",
     "grading_needs_sizes": "Defineix primer les talles (pas 3) per poder triar la graduació.",
-    "no_grading_available": "No hi ha cap joc de regles que casi amb aquesta combinació de peça i talles. Pots continuar sense graduació i afegir-la més tard."
+    "no_grading_available": "No hi ha cap joc de regles que casi amb aquesta combinació de peça i talles. Pots continuar sense graduació i afegir-la més tard.",
+    "grading_auto_proposed": "Proposat automàticament (única coincidència). Pots canviar-lo o triar «Sense graduació»."
   },
   "models_list": {
     "title": "Models",
@@ -2456,6 +2457,8 @@
     "menu_duplicate": "Duplica",
     "menu_lock_sel": "Bloqueja selecció",
     "menu_hide_sel": "Oculta selecció",
+    "menu_delete_header_page": "Elimina la capçalera d'aquesta pàgina",
+    "menu_detach_header": "Desvincula i edita la capçalera",
     "align_left": "Alinear a l'esquerra",
     "align_center": "Alinear al centre",
     "align_right": "Alinear a la dreta",
@@ -2508,6 +2511,9 @@
     "table_del_row": "Elimina última fila",
     "table_del_col": "Elimina última columna",
     "flash_header_exists": "Ja hi ha una capçalera en aquesta pàgina.",
+    "header_delete_on_page": "Elimina en aquesta pàgina",
+    "header_detach": "Desvincula i edita",
+    "header_detached": "Capçalera desvinculada: ara és editable en aquesta pàgina.",
     "confirm_delete_page": "Esborrar aquesta pàgina?",
     "tmpl_title": "Plantilla",
     "tmpl_badge": "mode plantilla",
@@ -2916,6 +2922,9 @@
     "field_target_ref": "Target",
     "field_construction_ref": "Construction",
     "field_fit_ref": "Fit Type",
+    "field_size_system": "Size System",
+    "size_system_locked": "No es pot canviar en un conjunt amb regles ({{count}}). Clona'l al sistema correcte.",
+    "coherence_warn": "Desat. ⚠️ El cas {{axes}} ara casa amb {{count}} joc(s) de regles ({{names}}). Revisa la coherència.",
     "modal_note": "Els seeds del sistema (ISO) no permeten editar els eixos.",
     "col": {
       "code": "Codi",

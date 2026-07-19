@@ -918,7 +918,8 @@
     "no_grading": "No grading (choose later)",
     "pick_fit": "Pick the fit",
     "grading_needs_sizes": "Define the sizes first (step 3) to be able to choose grading.",
-    "no_grading_available": "No rule set matches this garment and size combination. You can continue without grading and add it later."
+    "no_grading_available": "No rule set matches this garment and size combination. You can continue without grading and add it later.",
+    "grading_auto_proposed": "Proposed automatically (single match). You can change it or choose “No grading”."
   },
   "models_list": {
     "title": "Models",
@@ -2456,6 +2457,8 @@
     "menu_duplicate": "Duplicate",
     "menu_lock_sel": "Lock selection",
     "menu_hide_sel": "Hide selection",
+    "menu_delete_header_page": "Delete header on this page",
+    "menu_detach_header": "Detach & edit header",
     "align_left": "Align left",
     "align_center": "Align center",
     "align_right": "Align right",
@@ -2508,6 +2511,9 @@
     "table_del_row": "Delete last row",
     "table_del_col": "Delete last column",
     "flash_header_exists": "There is already a header on this page.",
+    "header_delete_on_page": "Delete on this page",
+    "header_detach": "Detach & edit",
+    "header_detached": "Header detached: it is now editable on this page.",
     "confirm_delete_page": "Delete this page?",
     "tmpl_title": "Template",
     "tmpl_badge": "template mode",
@@ -2916,6 +2922,9 @@
     "field_target_ref": "Target",
     "field_construction_ref": "Construction",
     "field_fit_ref": "Fit Type",
+    "field_size_system": "Size System",
+    "size_system_locked": "Can't change on a set with rules ({{count}}). Clone it to the correct system.",
+    "coherence_warn": "Saved. ⚠️ The case {{axes}} now matches {{count}} rule set(s) ({{names}}). Review coherence.",
     "modal_note": "System (ISO) seeds don't allow editing the axes.",
     "col": {
       "code": "Code",

@@ -152,7 +152,6 @@ try:
         update_grading_rule_view,
         tenant_config_view,
         pom_global_search_view,
-        garment_types_by_target_view,
     )
     from django.urls import path as _p_s2
     _s2_paths = [
@@ -165,7 +164,6 @@ try:
         _p_s2('grading-rule-sets/<int:rule_set_id>/regles/<str:pom_codi>/', update_grading_rule_view),
         _p_s2('tenant-config/', tenant_config_view),
         _p_s2('pom-global/cerca/', pom_global_search_view),
-        _p_s2('garment-types-by-target/', garment_types_by_target_view),
     ]
     urlpatterns = _s2_paths + urlpatterns
 except Exception as _e_s2:

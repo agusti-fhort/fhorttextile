@@ -78,7 +78,7 @@ export default function ItemAuthoring() {
     let alive = true
     setLoading(true)
     Promise.all([
-      gradingRuleSets.list({ page_size: 200 }),
+      gradingRuleSets.list({ page_size: 200, amb_regles: 1 }),
       garmentGroups.list({ page_size: 200 }),
       isEdit ? garmentTypeItems.get(routeItemId) : Promise.resolve(null),
     ]).then(([rsRes, ggRes, itRes]) => {

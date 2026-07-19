@@ -1,14 +1,11 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { SizeSetCard } from "./SizeSetCard"
-import { targets as targetsApi, constructionTypes, fitTypes, sizingProfiles } from "../api/endpoints"
+import { constructionTypes, fitTypes, sizingProfiles } from "../api/endpoints"
+import { TARGETS } from "./grading/gradingAxes"
 
-const TARGET_ORDER = [
-  "WOMAN","MAN","UNISEX_ADULT",
-  "BABY_GIRL","BABY_BOY","BABY_UNISEX",
-  "TODDLER_GIRL","TODDLER_BOY",
-  "GIRL","BOY","TEEN_GIRL","TEEN_BOY","MATERNITY"
-]
+// TARGETS: vocabulari ÚNIC (ordre + etiquetes) de gradingAxes — fora la còpia TARGET_ORDER + la crida
+// a targets/ (Onada 2). Les cerques de perfils van per CODI de target, no cal l'objecte de BD.
 
 function LoadError({ onRetry, label }) {
   const { t } = useTranslation()
@@ -65,7 +62,6 @@ export function SizingProfileSelector({
   onSelectionChange,
 }) {
   const { t } = useTranslation()
-  const [targets, setTargets] = useState([])
   const [constructions, setConstructions] = useState([])
   const [allFitTypes, setAllFitTypes] = useState([])
   const [profiles, setProfiles] = useState([])
@@ -81,16 +77,6 @@ export function SizingProfileSelector({
   // Carregar targets i construccions
   const loadLookups = () => {
     setLookupsError(false)
-    targetsApi.list()
-      .then(({ data: d }) => {
-        const all = Array.isArray(d) ? d : (d.results || [])
-        const sorted = TARGET_ORDER
-          .map(codi => all.find(t => t.codi === codi))
-          .filter(Boolean)
-        setTargets(sorted)
-      })
-      .catch(() => setLookupsError(true))
-
     constructionTypes.list()
       .then(({ data: d }) => setConstructions(Array.isArray(d) ? d : (d.results || [])))
       .catch(() => setLookupsError(true))
@@ -163,28 +149,25 @@ export function SizingProfileSelector({
         <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
           1 · {t("size_library.step_target")}
         </div>
-        {lookupsError ? (
-          <LoadError onRetry={loadLookups} />
-        ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {targets.map(tg => (
-              <button
-                key={tg.codi}
-                onClick={() => pickTarget(tg.codi)}
-                style={{
-                  ...chipBase, padding: "10px 14px", borderRadius: 6, fontSize: 'var(--fs-body)',
-                  background: selectedTarget === tg.codi ? "#f5e6d0" : "var(--white)",
-                  color: selectedTarget === tg.codi ? "var(--gold)" : "var(--text-main)",
-                  border: `1px solid ${selectedTarget === tg.codi ? "var(--gold)" : "var(--border)"}`,
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                  minWidth: 90,
-                }}
-              >
-                <span style={{ fontWeight: selectedTarget === tg.codi ? 600 : 400 }}>{t(`model_wizard.target_${tg.codi}`, tg.nom_en)}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Targets del vocabulari únic (estàtics): no depenen de cap càrrega. */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {TARGETS.map(tg => (
+            <button
+              key={tg.codi}
+              onClick={() => pickTarget(tg.codi)}
+              style={{
+                ...chipBase, padding: "10px 14px", borderRadius: 6, fontSize: 'var(--fs-body)',
+                background: selectedTarget === tg.codi ? "#f5e6d0" : "var(--white)",
+                color: selectedTarget === tg.codi ? "var(--gold)" : "var(--text-main)",
+                border: `1px solid ${selectedTarget === tg.codi ? "var(--gold)" : "var(--border)"}`,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                minWidth: 90,
+              }}
+            >
+              <span style={{ fontWeight: selectedTarget === tg.codi ? 600 : 400 }}>{t(`model_wizard.target_${tg.codi}`, tg.nom_en)}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* NIVELL 2 — Construction */}
@@ -193,6 +176,7 @@ export function SizingProfileSelector({
           <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
             2 · {t("size_library.step_construction")}
           </div>
+          {lookupsError && <LoadError onRetry={loadLookups} label={t("size_library.load_error")} />}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               onClick={() => pickConstruction(selectedConstruction)}

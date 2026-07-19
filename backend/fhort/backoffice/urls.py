@@ -9,6 +9,10 @@ from .views_contracts import ServiceCatalogViewSet, TenantContractViewSet
 from .views_contracts import generate_invoice_view
 from .views_pricing import pricing_public_view, pricing_view
 from .views_pricing_client import pricing_for_client_view
+from .views_invoices import (
+    ClientConsumView, InvoiceSerieViewSet, InvoiceViewSet, TancamentPeriodeView,
+    VATRateViewSet,
+)
 from .views_seeding import SeedProfileViewSet
 from .views_legal import (
     LegalActionViewSet, LegalDocumentViewSet, LegalDocumentVersionViewSet,
@@ -20,6 +24,9 @@ router.register('plans', PlanViewSet, basename='plan')
 router.register('serveis', ServiceCatalogViewSet, basename='servei')
 router.register('contractes', TenantContractViewSet, basename='contracte')
 router.register('perfils-sembra', SeedProfileViewSet, basename='perfil-sembra')
+router.register('facturacio/series', InvoiceSerieViewSet, basename='invoice-serie')
+router.register('facturacio/tipus-iva', VATRateViewSet, basename='vat-rate')
+router.register('facturacio/factures', InvoiceViewSet, basename='invoice')
 router.register('legal/documents', LegalDocumentViewSet, basename='legal-document')
 router.register('legal/versions', LegalDocumentVersionViewSet, basename='legal-version')
 
@@ -31,6 +38,8 @@ urlpatterns = [
     path('pricing/for-client/<str:codi_tenant>/', pricing_for_client_view, name='backoffice-pricing-for-client'),
     path('pricing/', pricing_view, name='backoffice-pricing'),
     path('facturacio/generar/', generate_invoice_view),
+    path('facturacio/tancament-periode/', TancamentPeriodeView.as_view(), name='tancament-periode'),
+    path('facturacio/consum/<str:codi_tenant>/', ClientConsumView.as_view(), name='client-consum'),
     path('legal/pending/', LegalActionViewSet.as_view({'get': 'pending'}), name='legal-pending'),
     path('legal/accept/', LegalActionViewSet.as_view({'post': 'accept'}), name='legal-accept'),
     path('legal/acceptances/', LegalActionViewSet.as_view({'get': 'acceptances'}), name='legal-acceptances'),

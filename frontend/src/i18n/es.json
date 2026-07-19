@@ -918,7 +918,8 @@
     "no_grading": "Sin graduación (elegir más tarde)",
     "pick_fit": "Elige el fit",
     "grading_needs_sizes": "Define primero las tallas (paso 3) para poder elegir la graduación.",
-    "no_grading_available": "No hay ningún juego de reglas que coincida con esta combinación de prenda y tallas. Puedes continuar sin graduación y añadirla más tarde."
+    "no_grading_available": "No hay ningún juego de reglas que coincida con esta combinación de prenda y tallas. Puedes continuar sin graduación y añadirla más tarde.",
+    "grading_auto_proposed": "Propuesto automáticamente (única coincidencia). Puedes cambiarlo o elegir «Sin graduación»."
   },
   "models_list": {
     "title": "Modelos",
@@ -2456,6 +2457,8 @@
     "menu_duplicate": "Duplicar",
     "menu_lock_sel": "Bloquear selección",
     "menu_hide_sel": "Ocultar selección",
+    "menu_delete_header_page": "Eliminar la cabecera de esta página",
+    "menu_detach_header": "Desvincular y editar la cabecera",
     "align_left": "Alinear a la izquierda",
     "align_center": "Alinear al centro",
     "align_right": "Alinear a la derecha",
@@ -2508,6 +2511,9 @@
     "table_del_row": "Eliminar última fila",
     "table_del_col": "Eliminar última columna",
     "flash_header_exists": "Ya hay una cabecera en esta página.",
+    "header_delete_on_page": "Eliminar en esta página",
+    "header_detach": "Desvincular y editar",
+    "header_detached": "Cabecera desvinculada: ahora es editable en esta página.",
     "confirm_delete_page": "¿Eliminar esta página?",
     "tmpl_title": "Plantilla",
     "tmpl_badge": "modo plantilla",
@@ -2916,6 +2922,9 @@
     "field_target_ref": "Target",
     "field_construction_ref": "Construction",
     "field_fit_ref": "Fit Type",
+    "field_size_system": "Size System",
+    "size_system_locked": "No se puede cambiar en un conjunto con reglas ({{count}}). Clónalo al sistema correcto.",
+    "coherence_warn": "Guardado. ⚠️ El caso {{axes}} ahora coincide con {{count}} juego(s) de reglas ({{names}}). Revisa la coherencia.",
     "modal_note": "Los seeds del sistema (ISO) no permiten editar los ejes.",
     "col": {
       "code": "Código",

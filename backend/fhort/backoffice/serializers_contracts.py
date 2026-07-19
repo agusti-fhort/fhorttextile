@@ -25,7 +25,7 @@ class TenantContractListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = TenantContract
         fields = ['id', 'client', 'client_codi', 'data_inici', 'data_fi',
-                  'actiu', 'lines_count', 'created_at']
+                  'periodicitat', 'actiu', 'lines_count', 'created_at']
 
 
 class TenantContractDetailSerializer(TenantContractListSerializer):
@@ -40,7 +40,7 @@ class TenantContractCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = TenantContract
-        fields = ['client', 'data_inici', 'data_fi', 'actiu', 'nota', 'lines']
+        fields = ['client', 'data_inici', 'data_fi', 'periodicitat', 'actiu', 'nota', 'lines']
 
     def create(self, validated_data):
         lines_data = validated_data.pop('lines', [])

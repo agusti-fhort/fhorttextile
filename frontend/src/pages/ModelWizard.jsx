@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
+import { IconBulb } from '@tabler/icons-react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import GarmentTypeSelector from '../components/GarmentTypeSelector/GarmentTypeSelector'
 import CustomerSelector from '../components/CustomerSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
-import { availableFitsStrict } from '../components/grading/gradingAxes'
+import { availableFitsStrict, matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS } from '../components/grading/gradingAxes'
 import useAuthStore from '../store/auth'
-import { models, sizeSystems, customers, gradingRuleSets, garmentGroups } from '../api/endpoints'
+import { models, sizeSystems, customers, gradingRuleSets, garmentGroups, garmentTypes } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles + GRADUACIÓ.
@@ -20,14 +21,8 @@ const YEARS = [currentYear, currentYear + 1, currentYear + 2, currentYear + 3]
 // Temporades ALINEADES amb Model.TEMPORADA_CHOICES (SS/FW/CO/SP). Corregeix el mismatch RE/PRE.
 // Només l'identificador (codi); l'etiqueta visible es resol amb t('model_wizard.<tipus>_<codi>').
 const SEASONS = ['SS', 'FW', 'CO', 'SP']
-const TARGETS = [
-  'WOMAN', 'MAN', 'UNISEX_ADULT',
-  'BABY_GIRL', 'BABY_BOY', 'BABY_UNISEX',
-  'TODDLER_GIRL', 'TODDLER_BOY',
-  'GIRL', 'BOY',
-  'TEEN_GIRL', 'TEEN_BOY', 'MATERNITY',
-]
-const CONSTRUCTIONS = ['WOVEN', 'KNIT', 'STRETCH_KNIT', 'TECHNICAL']
+// TARGETS i CONSTRUCTIONS: vocabulari ÚNIC de gradingAxes (fora la còpia privada — Onada 1). Objectes
+// {codi, nom_*}; aquí només en fem servir el `codi` (l'etiqueta la resol t('model_wizard.*')).
 
 export default function ModelWizard() {
   const { id } = useParams()
@@ -75,12 +70,13 @@ export default function ModelWizard() {
   const [fit, setFit] = useState(null)               // codi de fit triat (eix del matching)
   const [gradingRuleSetId, setGradingRuleSetId] = useState(null)  // ruleset triat (null = cap)
   const [noGrading, setNoGrading] = useState(false)  // «Sense graduació» explícit
+  const [autoProposed, setAutoProposed] = useState(false)  // B1: ruleset preseleccionat per única coincidència
   const [modelGarmentGrup, setModelGarmentGrup] = useState(null)  // grup del model en edició (prefill)
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const resetGrading = () => { setFit(null); setGradingRuleSetId(null); setNoGrading(false) }
+  const resetGrading = () => { setFit(null); setGradingRuleSetId(null); setNoGrading(false); setAutoProposed(false) }
 
   // LLEI 5 CAPES: el pas Talles retorna NOMÉS escala (sistema/run/base). La graduació (capa 4) es
   // tria per separat a la fitxa (RuleSetCard→update-step2). Aquí NO s'arrossega grading_rule_set_id.
@@ -94,6 +90,22 @@ export default function ModelWizard() {
   ), [selSystem, selectedSizes, baseSize])
 
   const resetSizing = () => { setSelSystem(null); setSelectedSizes([]); setBaseSize(null); setSizeDefs([]) }
+
+  // Coherència Onada 1+2: en CANVIAR el target, si la família seleccionada ja no és al catàleg filtrat
+  // pel nou target, es neteja família+item (+graduació, que en depèn del garment). Si SÍ hi és, es
+  // conserva (no molestar l'usuari). Comprovació amb el MATEIX endpoint que la cascada compartida
+  // (garment-types/?target=) i NOMÉS en acció d'usuari — el prefill d'edició no passa per aquí.
+  const onPickTarget = (codi) => {
+    if (codi === target) return
+    setTarget(codi)
+    if (!family) return
+    garmentTypes.list({ target: codi, actiu: 'true', page_size: 500 })
+      .then(r => {
+        const fams = r.data?.results ?? r.data ?? []
+        if (!fams.some(f => f.id === family.id)) { setFamily(null); setItem(null); resetGrading() }
+      })
+      .catch(() => {})
+  }
 
   // Peça 4 — en edició, si el model ja tenia run i el sistema de talles del perfil triat
   // és DIFERENT del que té el model, la talla base no s'autoassigna i és obligatòria.
@@ -189,7 +201,7 @@ export default function ModelWizard() {
   useEffect(() => {
     if (block !== 4) return
     let alive = true
-    Promise.all([gradingRuleSets.list({ page_size: 200 }), garmentGroups.list({ page_size: 200 })])
+    Promise.all([gradingRuleSets.list({ page_size: 200, amb_regles: 1 }), garmentGroups.list({ page_size: 200 })])
       .then(([rsRes, ggRes]) => {
         if (!alive) return
         const rs = rsRes.data?.results ?? (Array.isArray(rsRes.data) ? rsRes.data : [])
@@ -222,6 +234,27 @@ export default function ModelWizard() {
   )
 
   const gradingAxes = { ...nodeAxes, fit }
+
+  // B1 — coincidències estrictes per als eixos FIXATS (incloent el fit triat). Consumeix el matcher
+  // canònic de gradingAxes.js (no es duplica cap lògica aquí).
+  const strictMatches = useMemo(
+    () => matchingRuleSetsStrict(
+      gradingRuleSets_, gradingAxes, ggCodiById, sizingResult?.size_system_id ?? null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gradingRuleSets_, target, construction, garmentGroupCodi, family?.id, item?.id, fit, ggCodiById, sizingResult],
+  )
+
+  // B1 — autoselecció quan la coincidència és ÚNICA: preselecciona l'únic ruleset possible. Visible
+  // (bàner «proposat automàticament») i REVOCABLE (canviar de card, «Sense graduació» o canviar fit).
+  // No dispara si ja hi ha tria (manual o hidratada en edició) ni amb 0/>1 candidats.
+  useEffect(() => {
+    if (noGrading || !fit || !sizingResult) return
+    if (gradingRuleSetId != null) return
+    if (strictMatches.length === 1) {
+      setGradingRuleSetId(strictMatches[0].id)
+      setAutoProposed(true)
+    }
+  }, [strictMatches, fit, noGrading, sizingResult, gradingRuleSetId])
 
   const skeletonPayload = () => {
     // Sprint WIZARD-COMPLET: la graduació torna al payload. `undefined` = no tocar (creació sense
@@ -356,7 +389,7 @@ export default function ModelWizard() {
             <Field label={t('model_wizard.target')}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {TARGETS.map(tg => (
-                  <Chip key={tg} active={target === tg} onClick={() => setTarget(tg)}>{t(`model_wizard.target_${tg}`)}</Chip>
+                  <Chip key={tg.codi} active={target === tg.codi} onClick={() => onPickTarget(tg.codi)}>{t(`model_wizard.target_${tg.codi}`)}</Chip>
                 ))}
               </div>
             </Field>
@@ -376,6 +409,7 @@ export default function ModelWizard() {
                 ) : (
                   <div style={{ height: 460, border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
                     <GarmentTypeSelector
+                      target={target}
                       selectedItemId={item?.id}
                       onSelect={({ family: fam, item: it }) => { setFamily(fam); setItem(it); setPicking(false); resetGrading() }}
                     />
@@ -388,7 +422,7 @@ export default function ModelWizard() {
               <Field label={t('model_wizard.construction')}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {CONSTRUCTIONS.map(c => (
-                    <Chip key={c} active={construction === c} onClick={() => { if (construction !== c) { resetSizing(); resetGrading() } setConstruction(c) }}>{t(`model_wizard.construction_${c}`)}</Chip>
+                    <Chip key={c.codi} active={construction === c.codi} onClick={() => { if (construction !== c.codi) { resetSizing(); resetGrading() } setConstruction(c.codi) }}>{t(`model_wizard.construction_${c.codi}`)}</Chip>
                   ))}
                 </div>
               </Field>
@@ -480,7 +514,7 @@ export default function ModelWizard() {
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', cursor: 'pointer', color: 'var(--text-main)' }}>
               <input type="checkbox" checked={noGrading}
-                onChange={e => { setNoGrading(e.target.checked); if (e.target.checked) { setFit(null); setGradingRuleSetId(null) } }} />
+                onChange={e => { setNoGrading(e.target.checked); setAutoProposed(false); if (e.target.checked) { setFit(null); setGradingRuleSetId(null) } }} />
               {t('model_wizard.no_grading')}
             </label>
 
@@ -496,11 +530,17 @@ export default function ModelWizard() {
                   ) : (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {fitOptions.map(f => (
-                        <Chip key={f.codi} active={fit === f.codi} onClick={() => { setFit(f.codi); setGradingRuleSetId(null) }}>{t(`model_wizard.fit_${f.codi}`, f.nom_en)}</Chip>
+                        <Chip key={f.codi} active={fit === f.codi} onClick={() => { setFit(f.codi); setGradingRuleSetId(null); setAutoProposed(false) }}>{t(`model_wizard.fit_${f.codi}`, f.nom_en)}</Chip>
                       ))}
                     </div>
                   )}
                 </Field>
+                {fit && autoProposed && gradingRuleSetId != null && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gold)', background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 6, padding: '8px 12px' }}>
+                    <IconBulb size={16} stroke={1.5} />
+                    {t('model_wizard.grading_auto_proposed')}
+                  </div>
+                )}
                 {fit && (
                   <RuleSetPicker
                     ruleSets={gradingRuleSets_}
@@ -510,7 +550,7 @@ export default function ModelWizard() {
                     sizeSystemId={sizingResult?.size_system_id ?? null}
                     selectedId={gradingRuleSetId}
                     actionLabel={t('model_sheet.use_ruleset')}
-                    onPick={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false) }}
+                    onPick={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false); setAutoProposed(false) }}
                   />
                 )}
               </>
