@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
 import i18n from '../../i18n'
 import GarmentTypeSelector from '../GarmentTypeSelector/GarmentTypeSelector'
+import { groupLabel } from '../grading/gradingAxes'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -21,18 +22,6 @@ function gtName(t, lang = 'ca') {
   return t.nom_en || t.nom_client || t.global_nom || ''
 }
 
-function grupLabel(grup, lang = 'ca') {
-  const MAP = {
-    TOPS: { ca: 'Parts superiors', en: 'Tops', es: 'Partes superiores' },
-    BOTTOMS: { ca: 'Parts inferiors', en: 'Bottoms', es: 'Partes inferiores' },
-    DRESSES: { ca: 'Vestits', en: 'Dresses', es: 'Vestidos' },
-    OUTERWEAR: { ca: 'Abrics', en: 'Outerwear', es: 'Abrigos' },
-    UNDERWEAR: { ca: 'Interior', en: 'Underwear', es: 'Interior' },
-    SWIMWEAR: { ca: 'Bany', en: 'Swimwear', es: 'Baño' },
-    ACCESSORIES: { ca: 'Complements', en: 'Accessories', es: 'Complementos' },
-  }
-  return MAP[grup]?.[lang] || grup
-}
 
 // Normalitza la resposta de /api/v1/garment-pom-maps/?garment_type_item=<id> (GarmentPOMMapSerializer,
 // camps flat) al format de la UI. Cada entrada porta el seu map_id (id de GarmentPOMMap) i pom_id per
@@ -264,7 +253,7 @@ export default function POMBrowser({
           {selectedFamily?.grup && (
             <>
               <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
-                {grupLabel(selectedFamily.grup, lang)}
+                {groupLabel(selectedFamily.grup, lang)}
               </span>
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>›</span>
             </>
