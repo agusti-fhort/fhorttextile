@@ -178,6 +178,15 @@ class GradingRuleSetViewSet(viewsets.ModelViewSet):
     search_fields = ['nom']
     ordering = ['nom']
 
+    def get_queryset(self):
+        # B3 — filtre OPT-IN (?amb_regles=1) que amaga els contenidors ESQUELET (0 regles) al
+        # selector de graduació (RuleSetPicker). Les pantalles de CRUD/gestió NO passen el flag i
+        # segueixen veient els buits (esquelets a punt de sembrar). Fora del flag: cap canvi.
+        qs = super().get_queryset()
+        if self.request.query_params.get('amb_regles') in ('1', 'true', 'True'):
+            qs = qs.annotate(n_regles=Count('regles')).filter(n_regles__gt=0)
+        return qs
+
     def get_permissions(self):
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [_ConfigureWrite()]

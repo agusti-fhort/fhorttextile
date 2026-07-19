@@ -201,7 +201,7 @@ export default function ModelWizard() {
   useEffect(() => {
     if (block !== 4) return
     let alive = true
-    Promise.all([gradingRuleSets.list({ page_size: 200 }), garmentGroups.list({ page_size: 200 })])
+    Promise.all([gradingRuleSets.list({ page_size: 200, amb_regles: 1 }), garmentGroups.list({ page_size: 200 })])
       .then(([rsRes, ggRes]) => {
         if (!alive) return
         const rs = rsRes.data?.results ?? (Array.isArray(rsRes.data) ? rsRes.data : [])
