@@ -3437,15 +3437,18 @@ export default function TechSheetEditor() {
   }
 
   // ── Bloc de dades: capçalera del model (màxim 1 per pàgina) ─────────────────
+  // S12-UNIF: "Capçalera del model" insereix la capçalera Template FTT (masterFtt), amb el
+  // MATEIX tractament que la instanciada automàticament a addPage: bloc ANCORAT (locked +
+  // layer template → no draggable/seleccionable) + menú contextual delete-on-page/detach.
+  // Geometria 277×32mm (≡ 784.7×90.2pt) a x=10 y=8. Cap camí nou crea header legacy.
   const insertHeader = () => {
     if (!locked) return
     if (objectsOf(currentPage).some(o => o.type === 'data_block' && o.kind === 'header')) {
       flash(t('tech_sheet.flash_header_exists')); return
     }
-    const { totalW, totalH } = buildHeaderPrimitives(model, sheet?.versio)
     addObject({
-      id: uid(), type: 'data_block', kind: 'header', layer: 'data',
-      x: 10, y: 8, width: totalW / MM_TO_PX, height: totalH / MM_TO_PX,
+      id: uid(), type: 'data_block', kind: 'header', layer: 'template', locked: true,
+      x: 10, y: 8, width: 277, height: 32, config: { layout: 'masterFtt' },
     })
   }
 
