@@ -1,3 +1,6 @@
+> ⚠️ SUPERADA 2026-07-19 — D1/D2/D3 corregits (commits 6bd00a0 · 78d891d · d8ef3d1) i model 396
+> re-importat (20/20 mesures poblades). Consulta només com a històric.
+
 # DIAGNOSI — Import Explorer no reté mesures (model L27SBB0901 / LOS-SS27-0122)
 
 Data: 2026-07-19 · **Patró A (READ-ONLY)** · staging `/var/www/ftt-staging`, branca `dev`

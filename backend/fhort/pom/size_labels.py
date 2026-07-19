@@ -10,27 +10,44 @@ import re
 _XREPEAT = re.compile(r'^(X{2,})(L|S)$')
 
 
-def canonical_size_label(s):
-    """Forma canònica d'una etiqueta de talla per comparar (no per guardar).
+def _canon_segment(seg):
+    """Forma canònica d'UN segment d'etiqueta.
 
-    Case/whitespace-fold + col·lapsa les formes X-repetides a numèric:
-    compta les X consecutives davant la S/L final. Les formes d'una sola X (XL, XS)
-    i les ja numèriques (2XL, 3XS) queden idèntiques. Les etiquetes que no encaixen
-    amb el patró (34, 6M, 6Y, T2, S, M, L) només es passen a majúscules.
-
-    Exemples:
-        'XXL'  -> '2XL'
-        'xxxl' -> '3XL'
-        '2XL'  -> '2XL'   (ja numèrica)
-        'XL'   -> 'XL'    (una sola X)
-        'XXS'  -> '2XS'
-        'XS'   -> 'XS'
-        '34'   -> '34'
-        '6M'   -> '6M'
-        's'    -> 'S'
+    Col·lapsa X-repetides a numèric (XXL->2XL), el sufix de MESOS ('3M'->'3', '06M'->'6')
+    NOMÉS quan la 'M' va precedida de dígit (mai 'M' sola = Medium), i el zero-padding
+    numèric ('03'->'3'). Els no-numèrics (S, M, L) queden en majúscules.
     """
-    t = (s or '').strip().upper()
+    t = seg.strip().upper()
     m = _XREPEAT.match(t)
     if m:
         return f"{len(m.group(1))}X{m.group(2)}"
-    return t
+    # Sufix de mesos PER TRAM: treu una 'M' final només si va precedida de dígit (mesos:
+    # '3M','06M','12M'), MAI la 'M' solitària (talla Medium) ni una lletra final no-mes.
+    if len(t) >= 2 and t[-1] == 'M' and t[-2].isdigit():
+        t = t[:-1]
+    # Zero-padding: '03'->'3', '0'->'0'. lstrip('0') sobre no-numèrics (S) no els toca.
+    return t.lstrip('0') or '0' if t else t
+
+
+def canonical_size_label(s):
+    """Forma canònica d'una etiqueta de talla per comparar (no per guardar).
+
+    Case/whitespace-fold + separa PER TRAM en '/' i '-' (un rang '3-6' i '3/6' són la
+    mateixa cosa) + col·lapsa per tram (a) les formes X-repetides a numèric, (b) el sufix
+    de mesos precedit de dígit i (c) el zero-padding numèric. Així '3-6m'≡'03/06',
+    '6-9m'≡'06/09', '3/6'≡'03/06', '2'≡'02'. Les formes d'una sola X (XL, XS), les ja
+    numèriques (2XL) i les talles lletra soltes (S, M, L, 34) queden intactes.
+
+    Exemples:
+        'XXL'   -> '2XL'
+        'XL'    -> 'XL'
+        'XXS'   -> '2XS'
+        '34'    -> '34'
+        'S'/'M'/'L' -> 'S'/'M'/'L'   (mai es toquen; 'M' NO és mesos)
+        '03/06' -> '3/6'   ·   '3-6m' -> '3/6'   ·   '6-9M' -> '6/9'
+        '12M'   -> '12'    ·   '0M-1M' -> '0/1'
+    """
+    t = (s or '').strip().upper()
+    if not t:
+        return t
+    return '/'.join(_canon_segment(seg) for seg in re.split(r'[/-]', t))
