@@ -657,112 +657,123 @@ function _headerSizeRun(m, placeholderMode) {
 // (dues bandes, 20mm+12mm) perquè els documents/plantilles existents no canviïn.
 // placeholderMode=true (editor de plantilla): mostra `{model.codi}` etc. en lloc de valors
 // reals (no hi ha model), excepte customer_nom que SÍ és real (la plantilla és per client).
-// ─── Template FTT (S12) — capçalera mestra "3 caixes" segons Plantilla_normalitzada ───
-// Geometria del brief (pt, origen banda 28.6/39): W=784.7 H=90.2 · divisòries a 170.3 i 491.8
-// · padding 6pt · graella etiqueta y=47.5+i*22.5, valor +10pt · etiquetes 6px #777776, valors
-// 9px #1d1d1b, Plex Mono. Coords en pt → px via P=0.3528*MM_TO_PX. NOTA: l'SVG mestre no és al
-// repo; el mapatge camp→(caixa,fila,subcol) i la col·locació del logo a la caixa 1 són la
-// millor interpretació del text del brief i poden requerir ajust fi de píxel contra l'SVG.
-const HDR_M = { OX: 28.6, OY: 39, W: 784.7, H: 90.2, D1: 170.3, D2: 491.8, PAD: 6, LBL: 6, VAL: 9, LOGO_MAX_PT: 40 }
+// ─── Template FTT (S12) — capçalera mestra "3 caixes". REFERÈNCIA CANÒNICA:
+// docs/spec/plantilla_capcalera_ftt.svg. Coordenades transcrites LITERALMENT de l'SVG (pt
+// absoluts, viewBox A4L 841.9×595.3). NO s'interpreta, es MESURA. El canvas Konva té 1pt = P px
+// (P = 0.3528*MM_TO_PX); a l'export P px torna a 1pt (CANVAS_W 713 ↔ PDF 841.89). Per això TANT
+// geometria com cossos es multipliquen per P (el bug D5 era cossos 6/9 sense P). Els `y` de
+// l'SVG són BASELINES → top Konva = baseline − ASC·cos.
+const HDR_M = {
+  OX: 28.6, OY: 39, W: 784.7, H: 90.2, D1: 170.3, D2: 491.8, PAD: 6,
+  R1: 170.3, R2: 491.8, R3: 813.3,     // vores dretes de caixa 1/2/3
+  SUB1: 105.45, SUB2: 337.05,          // subcolumnes (PAGE · SEASON)
+  ASC: 0.8,                            // baseline→top ≈ 0.8·cos (IBM Plex Mono)
+}
+const _hdrP = () => 0.3528 * MM_TO_PX
 
-// Rectangle del logo del customer a la Template FTT: caixa 1, zona superior, alçada màx 40pt,
-// aspecte preservat, acotat a l'ample de la caixa menys padding. Compartit viu/export.
-export function headerMasterLogoRect(natW, natH, config) {
-  const P = 0.3528 * MM_TO_PX
-  const pad = HDR_M.PAD * P
-  const c1w = (HDR_M.D1 - HDR_M.OX) * P
-  const maxH = HDR_M.LOGO_MAX_PT * P
-  const maxW = c1w - 2 * pad
+// Logo del customer: zona x 34.6→164.3 (w 129.7) · y 45→85 (h 40) [files 1-2 de caixa 1].
+// Contain (encaixa per la dimensió que primer topi), alineat a l'esquerra, centrat verticalment.
+export function headerMasterLogoRect(natW, natH, _config) {
+  const P = _hdrP()
+  const zx = (34.6 - HDR_M.OX) * P, zy = (45 - HDR_M.OY) * P
+  const zw = 129.7 * P, zh = 40 * P
   const ratio = (natW && natH) ? natW / natH : 2.4
-  let h = maxH, w = maxH * ratio
-  if (w > maxW) { w = maxW; h = w / ratio }
-  return { x: pad, y: pad, w, h }
+  let w = zw, h = zw / ratio
+  if (h > zh) { h = zh; w = zh * ratio }
+  return { x: zx, y: zy + (zh - h) / 2, w, h }
+}
+
+function _hdrDate(d) {
+  const p = n => String(n).padStart(2, '0')
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`   // DD-MM-YYYY (D7)
 }
 
 function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx) {
-  const P = 0.3528 * MM_TO_PX
+  const P = _hdrP()
+  const { OX, OY, ASC } = HDR_M
   const W = HDR_M.W * P, H = HDR_M.H * P
-  const d1 = (HDR_M.D1 - HDR_M.OX) * P, d2 = (HDR_M.D2 - HDR_M.OX) * P
-  const pad = HDR_M.PAD * P
-  const GRAY = KONVA_COL.labelGray, INK = KONVA_COL.textMain
-  const SW = 0.5 * P
-  const cols = [{ x0: 0, x1: d1 }, { x0: d1, x1: d2 }, { x0: d2, x1: W }]
-  const rowLblY = i => (47.5 - HDR_M.OY + i * 22.5) * P
-  const rowValY = i => rowLblY(i) + 10 * P
+  const GRAY = KONVA_COL.labelGray, INK = KONVA_COL.textMain, FRAME = KONVA_COL.textMain
+  const gx = sx => (sx - OX) * P
   const prims = []
-  // Marc únic 0.5pt + 2 divisòries (cap doble filet).
-  prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: GRAY, sw: SW })
-  prims.push({ t: 'l', points: [d1, 0, d1, H], stroke: GRAY, sw: SW })
-  prims.push({ t: 'l', points: [d2, 0, d2, H], stroke: GRAY, sw: SW })
+  // Marc ÚNIC + 2 divisòries (mai 3 rects — D4). Frame 0.5pt.
+  prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
+  prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), H], stroke: FRAME, sw: 0.5 * P })
+  prims.push({ t: 'l', points: [gx(HDR_M.D2), 0, gx(HDR_M.D2), H], stroke: FRAME, sw: 0.5 * P })
 
   const V = (real, ph) => placeholderMode ? ph : (real == null ? '' : String(real))
-  // Cel·la etiqueta+valor. `ci` caixa, `ri` fila, `subIdx/subN` subcolumna (default columna sencera).
-  const cell = (ci, ri, label, value, subIdx = 0, subN = 1) => {
-    const c = cols[ci]
-    const inner = c.x1 - c.x0 - 2 * pad
-    const sw = inner / subN
-    const x = c.x0 + pad + subIdx * sw
-    const w = sw - (subN > 1 ? pad : 0)
-    prims.push({ t: 't', x, y: rowLblY(ri), w, h: HDR_M.LBL + 2, text: label, fill: GRAY, size: HDR_M.LBL })
-    if (value) prims.push({ t: 't', x, y: rowValY(ri), w, h: HDR_M.VAL + 2, text: value, fill: INK, size: HDR_M.VAL })
+  const join = parts => parts.filter(v => v != null && v !== '').join(' | ')   // UN valor per línia (D3)
+  // Etiqueta 6pt a baseline `by`, x `sx`, fins a `rightPt`.
+  const label = (sx, by, text, rightPt) => {
+    const f = 6 * P
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: (rightPt - HDR_M.PAD - sx) * P, h: f + 2, text, fill: GRAY, size: f })
+  }
+  // Valor 9pt (baixa a 8pt si no cap; el·lipsi via PrimNode). MAI desborda ni trenca línia.
+  const value = (sx, by, text, rightPt, opts = {}) => {
+    if (!text) return
+    const availPt = rightPt - HDR_M.PAD - sx
+    const fpt = (text.length * 9 * 0.6 > availPt) ? 8 : 9   // 9→8 = sòl de la llei
+    const f = fpt * P
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold })
   }
 
-  // CAIXA 1 — DATE · PAGE · TECHNICIAN (logo el pinta el caller a la zona superior via
-  // headerMasterLogoRect; els 3 camps es baixen sota el logo per no trepitjar-lo).
-  const logoDrop = (HDR_M.LOGO_MAX_PT + 4) * P
-  const c1 = cols[0], c1x = c1.x0 + pad, c1w = c1.x1 - c1.x0 - 2 * pad
-  const today = placeholderMode ? '{date}' : new Date().toISOString().slice(0, 10)
-  const pageStr = placeholderMode ? '{page}' : `${(pageCtx?.index ?? 0) + 1} / ${pageCtx?.total ?? 1}`
-  const c1rows = [['DATE', today], ['PAGE', pageStr], ['TECHNICIAN', V(m?.responsable_nom, '{technician}')]]
-  let c1y = logoDrop
-  const lineH = (HDR_M.LBL + HDR_M.VAL + 3)
-  for (const [lab, val] of c1rows) {
-    prims.push({ t: 't', x: c1x, y: c1y, w: c1w, h: HDR_M.LBL + 2, text: lab, fill: GRAY, size: HDR_M.LBL })
-    if (val) prims.push({ t: 't', x: c1x, y: c1y + HDR_M.LBL + 1, w: c1w, h: HDR_M.VAL + 2, text: val, fill: INK, size: HDR_M.VAL })
-    c1y += lineH
-  }
+  // ── CAIXA 1 ── logo (files 1-2) · DATE+PAGE (fila 3) · TECHNICIAN (fila 4). DATE alineat amb MODEL.
+  label(34.6, 92.5, 'DATE', HDR_M.SUB1)
+  value(34.6, 102.5, placeholderMode ? '{date}' : _hdrDate(new Date()), HDR_M.SUB1)
+  label(HDR_M.SUB1, 92.5, 'PAGE', HDR_M.R1)
+  value(HDR_M.SUB1, 102.5, placeholderMode ? '{page}' : `${(pageCtx?.index ?? 0) + 1} / ${pageCtx?.total ?? 1}`, HDR_M.R1)
+  label(34.6, 115, 'TECHNICIAN', HDR_M.R1)
+  value(34.6, 125, V(m?.responsable_nom, '{technician}'), HDR_M.R1)
 
-  // CAIXA 2 — INTERNAL REFERENCE · CLIENT REFERENCE | SEASON · STYLE NAME · COLLECTION
-  cell(1, 0, 'INTERNAL REFERENCE', V(m?.codi_intern, '{internal ref}'))
-  cell(1, 1, 'CLIENT REFERENCE', V(m?.codi_client, '{client ref}'), 0, 2)
-  cell(1, 1, 'SEASON', V(m?.temporada, '{season}'), 1, 2)
-  cell(1, 2, 'STYLE NAME', V(m?.nom_prenda, '{style name}'))
-  cell(1, 3, 'COLLECTION', V(m?.collection, '{collection}'))
+  // ── CAIXA 2 ── identificació de la peça (STYLE NAME → MODEL)
+  label(176.3, 47.5, 'INTERNAL REFERENCE', HDR_M.SUB2)
+  value(176.3, 57.5, V(m?.codi_intern, '{internal ref}'), HDR_M.SUB2)
+  label(HDR_M.SUB2, 47.5, 'SEASON', HDR_M.R2)
+  value(HDR_M.SUB2, 57.5, placeholderMode ? '{season}' : [m?.temporada, m?.any].filter(Boolean).join(' '), HDR_M.R2)
+  label(176.3, 70, 'CLIENT REFERENCE', HDR_M.R2)
+  value(176.3, 80, V(m?.codi_client, '{client ref}'), HDR_M.R2)
+  label(176.3, 92.5, 'MODEL', HDR_M.R2)
+  value(176.3, 102.5, V(m?.nom_prenda, '{model}'), HDR_M.R2)
+  label(176.3, 115, 'COLLECTION', HDR_M.R2)
+  value(176.3, 125, V(m?.collection, '{collection}'), HDR_M.R2)
 
-  // CAIXA 3 — GARMENT TYPE | ITEM · TARGET | FIT TYPE | CONSTRUCTION · SIZE SYSTEM · SIZE RUN
-  cell(2, 0, 'GARMENT TYPE', V(m?.garment_type_nom, '{garment}'), 0, 2)
-  cell(2, 0, 'ITEM', V(m?.garment_type_item_nom, '{item}'), 1, 2)
-  cell(2, 1, 'TARGET', V(m?.grading_target_nom, '{target}'), 0, 3)
-  cell(2, 1, 'FIT TYPE', V(m?.grading_fit_nom, '{fit}'), 1, 3)
-  cell(2, 1, 'CONSTRUCTION', V(m?.grading_construction_nom, '{construction}'), 2, 3)
-  cell(2, 2, 'SIZE SYSTEM', V(m?.size_system_nom, '{size system}'))
-  // SIZE RUN: etiqueta + run compacte "·" amb la talla base en bold+underline (3 segments, mètrica mono).
-  const c3 = cols[2], c3x = c3.x0 + pad, c3w = c3.x1 - c3.x0 - 2 * pad
-  prims.push({ t: 't', x: c3x, y: rowLblY(3), w: c3w, h: HDR_M.LBL + 2, text: 'SIZE RUN', fill: GRAY, size: HDR_M.LBL })
-  _pushSizeRunSegments(prims, m, placeholderMode, c3x, rowValY(3), HDR_M.VAL, INK)
+  // ── CAIXA 3 ── definició tècnica · UNA etiqueta / UN valor per línia (D3)
+  label(497.8, 47.5, 'GARMENT TYPE | ITEM', HDR_M.R3)
+  value(497.8, 57.5, placeholderMode ? '{garment} | {item}' : join([m?.garment_type_nom, m?.garment_type_item_nom]), HDR_M.R3)
+  label(497.8, 70, 'TARGET | FIT TYPE | CONSTRUCTION', HDR_M.R3)
+  value(497.8, 80, placeholderMode ? '{target} | {fit} | {construction}' : join([m?.grading_target_nom, m?.grading_fit_nom, m?.grading_construction_nom]), HDR_M.R3)
+  label(497.8, 92.5, 'SIZE SYSTEM', HDR_M.R3)
+  value(497.8, 102.5, V(m?.size_system_nom, '{size system}'), HDR_M.R3)
+  label(497.8, 115, 'SIZE RUN', HDR_M.R3)
+  _pushSizeRun(prims, m, placeholderMode, 497.8, 125, P)
 
   return { prims, totalW: W, totalH: H }
 }
 
-// SIZE RUN en 3 segments (abans · BASE · després) amb la base en bold+underline. Mètrica mono:
-// amplada de caràcter ≈ fontSize*0.6 (IBM Plex Mono), per posicionar cada segment sense mesurar.
-function _pushSizeRunSegments(prims, m, placeholderMode, x, y, size, ink) {
-  const charW = size * 0.6
+// SIZE RUN: run compacte "·" (sense espais, com l'SVG). La talla base = segment PROPI
+// bold+underline; el separador "·" NO es subratlla (D6). Mètrica mono charW=cos·0.6.
+function _pushSizeRun(prims, m, placeholderMode, sx, by, P) {
+  const f = 9 * P
+  const OX = HDR_M.OX, y = (by - HDR_M.OY) * P - HDR_M.ASC * f
+  const gx = x => (x - OX) * P
+  const INK = KONVA_COL.textMain
   if (placeholderMode) {
-    prims.push({ t: 't', x, y, w: 400, h: size + 2, text: '{size run}', fill: ink, size })
+    prims.push({ t: 't', x: gx(sx), y, w: 300 * P, h: f + 2, text: '{size run}', fill: INK, size: f })
     return
   }
   const raw = (m?.size_run_model || '').trim()
   if (!raw) return
   const labels = raw.split(/[·;,]/).map(s => s.trim()).filter(Boolean)
   const base = (m?.base_size_label || '').trim()
-  const sep = ' · '
-  let cx = x
+  const charWpt = 9 * 0.6
+  let cxPt = sx
+  const seg = (text, opts = {}) => {
+    prims.push({ t: 't', x: gx(cxPt), y, w: text.length * charWpt * P + 4, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, underline: !!opts.underline })
+    cxPt += text.length * charWpt
+  }
   labels.forEach((lab, i) => {
     const isBase = base && lab === base
-    const text = i < labels.length - 1 ? lab + sep : lab
-    prims.push({ t: 't', x: cx, y, w: text.length * charW + 4, h: size + 2, text, fill: ink, size, bold: !!isBase, underline: !!isBase })
-    cx += text.length * charW
+    seg(lab, isBase ? { bold: true, underline: true } : {})   // NOMÉS el label de la base (D6)
+    if (i < labels.length - 1) seg('·')                        // separador net, sense underline
   })
 }
 
