@@ -1,3 +1,6 @@
+> ⚠️ SUPERADA 2026-07-19 — implementada (FASE B: canònic estès · escombrat corrupció ·
+> talla_mapping llei de sessió · taula d'aparellament + talla base al pas 1). Consulta com a històric.
+
 # DIAGNOSI — Aparellament de talles document↔model (pas 1 del wizard d'import)
 
 Data: 2026-07-19 · **Patró A (READ-ONLY)** · staging `/var/www/ftt-staging`, branca `dev`
