@@ -92,8 +92,11 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const [file, setFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [cribratge, setCribratge] = useState(null)
-  const [tallesSel, setTallesSel] = useState([])      // working set de labels (columnes futures)
-  const [configurat, setConfigurat] = useState([])    // run configurat del model (pot canviar amb 'alinear')
+  const [tallesSel, setTallesSel] = useState([])      // columnes del document mantingudes (labels doc)
+  const [systemLabels, setSystemLabels] = useState([]) // etiquetes REALS del model (SizeDefinition)
+  const [mapping, setMapping] = useState({})          // aparellament {label_document: label_model}
+  const [baseLabel, setBaseLabel] = useState(model.base_size_label || '')  // B5 · talla base (model)
+  const [baseAvisos, setBaseAvisos] = useState([])    // B5 · divergències no bloquejants
   const [savingTalles, setSavingTalles] = useState(false)
 
   // Pas 2 — extracció POMs + matching
@@ -126,14 +129,21 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const [containerConflict, setContainerConflict] = useState(null) // {customer_nom, garment_type_item, size_system, fit}
   const [conflictChoices, setConflictChoices] = useState({})     // {pom_id: keep_catalog|update_catalog|model_resident}
 
-  const configuratSet = useMemo(() => new Set((configurat || []).map(norm)), [configurat])
-  const teDesti = (label) => configuratSet.has(norm(label))
-  const senseDesti = useMemo(() => tallesSel.filter(t => !teDesti(t)), [tallesSel, configuratSet])
   const docLabels = cribratge?.run_talles_document || []
-  const configurablesNoSel = useMemo(
-    () => (configurat || []).filter(c => !tallesSel.some(t => norm(t) === norm(c))),
-    [configurat, tallesSel],
+  // Columnes del document sense parella model → avís (no bloqueja, tret de la base).
+  const senseParella = useMemo(() => tallesSel.filter(d => !mapping[d]), [tallesSel, mapping])
+  // 1↔1: talles del model aparellades més d'un cop.
+  const modelDup = useMemo(() => {
+    const seen = {}, dup = new Set()
+    tallesSel.forEach(d => { const m = mapping[d]; if (m) { if (seen[m]) dup.add(m); seen[m] = true } })
+    return dup
+  }, [tallesSel, mapping])
+  // B5 · talla base: columna del document aparellada a la talla base del model.
+  const baseDocLabel = useMemo(
+    () => tallesSel.find(d => mapping[d] === baseLabel) || null,
+    [tallesSel, mapping, baseLabel],
   )
+  const basePaired = !!baseDocLabel
 
   // ── Upload → cribratge
   const handleUpload = async () => {
@@ -151,28 +161,59 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setUploading(false); return }
       setSessionToken(data.token)
       setCribratge(data)
-      setTallesSel(data.run_talles_document || [])
-      setConfigurat(data.run_configurat || [])
+      const docs = data.run_talles_document || []
+      setTallesSel(docs)
+      await loadProposal(data.token, docs)
     } catch (e) {
       setError(t('import_wizard.err_connection', { detail: String(e) }))
     }
     setUploading(false)
   }
 
-  const addTalla = (label) => {
-    if (!tallesSel.some(t => norm(t) === norm(label))) setTallesSel([...tallesSel, label])
+  const removeTalla = (label) => {
+    setTallesSel(tallesSel.filter(tt => tt !== label))
+    setMapping(prev => { const n = { ...prev }; delete n[label]; return n })
   }
-  const removeTalla = (label) => setTallesSel(tallesSel.filter(t => norm(t) !== norm(label)))
+  const setPair = (docLabel, modelLabel) =>
+    setMapping(prev => ({ ...prev, [docLabel]: modelLabel }))
 
-  const patchTalles = async (accio) => {
+  // Carrega l'auto-proposta d'aparellament + etiquetes REALS del model (pas 1).
+  const loadProposal = async (token, docs) => {
+    const res = await fetch(`${API}/api/v1/import-sessions/${token}/talles/`, {
+      method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ talles_seleccionades: docs }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); return }
+    setSystemLabels(data.system_labels || [])
+    const mp = {}
+    for (const p of (data.talla_mapping || [])) mp[p.document] = p.model
+    setMapping(mp)
+    setBaseLabel(data.base_size_label || '')
+    setBaseAvisos(data.base_avisos || [])
+    setSizeMapPrefill(data.size_map_prefill || null)
+  }
+
+  // Desa mapping (+ opcionalment la talla base) i retorna la resposta validada.
+  const patchTalles = async (extra = {}) => {
+    const talla_mapping = tallesSel.map(d => ({ document: d, model: mapping[d] || '' }))
     const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/talles/`, {
       method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ talles_seleccionades: tallesSel, accio }),
+      body: JSON.stringify({ talles_seleccionades: tallesSel, talla_mapping, ...extra }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); return null }
+    if (data.base_size_label !== undefined) setBaseLabel(data.base_size_label || '')
+    setBaseAvisos(data.base_avisos || [])
     setSizeMapPrefill(data.size_map_prefill || null)
     return data
+  }
+
+  // B5 · canvia la talla base del model (persisteix a base_size_label via /talles/).
+  const changeBase = async (modelLabel) => {
+    setSavingTalles(true); setError('')
+    await patchTalles({ base_size_label: modelLabel })
+    setSavingTalles(false)
   }
 
   // Obre el Size Map Setup pre-omplert. Usa el prefill del backend si el tenim;
@@ -191,23 +232,19 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     navigate(`/size-library?prefill=${encodeURIComponent(encodePrefill(prefill))}`)
   }
 
-  const handleAlinear = async () => {
-    setSavingTalles(true); setError('')
-    const data = await patchTalles('alinear')
-    if (data) setConfigurat(data.run_conciliat?.configurat || tallesSel)
-    setSavingTalles(false)
-  }
-
   const handleContinue = async () => {
     setSavingTalles(true); setError('')
-    const data = await patchTalles('res')
+    const data = await patchTalles()
     setSavingTalles(false)
     if (!data) return
+    if ((data.errors || []).length) { setError(data.errors.join(' ')); return }
     if (data.ready) { setStep(2); runExtraccio() }
-    else setError(t('import_wizard.sizes_no_dest', { sizes: (data.sense_desti || []).join(', ') }))
+    else setError(t('import_wizard.sizes_unpaired', { sizes: (data.no_aparellades || []).join(', ') }))
   }
 
-  const canContinue = tallesSel.length > 0 && senseDesti.length === 0 && !savingTalles
+  // Bloqueig del pas 1: cada columna doc aparellada, 1↔1, i la talla base aparellada (B5).
+  const canContinue = tallesSel.length > 0 && senseParella.length === 0
+    && modelDup.size === 0 && basePaired && !savingTalles
 
   // ── Pas 2 — extracció completa (Crida 2)
   const runExtraccio = async () => {
@@ -282,10 +319,11 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
 
   // ── Pas 3 — taula de mesures
   const pomsTaula = (pomsExtrets || []).filter(p => p.actiu)  // files = POMs actius
-  const baseSize = (model.base_size_label && tallesSel.includes(model.base_size_label))
-    ? model.base_size_label
-    : (extraccioMeta?.base_size && tallesSel.includes(extraccioMeta.base_size))
-      ? extraccioMeta.base_size : tallesSel[0]
+  // La columna base de la taula de mesures és la label DOCUMENT aparellada amb la talla base
+  // del model (B5); si no, fallback a l'heurística anterior.
+  const baseSize = baseDocLabel
+    || ((extraccioMeta?.base_size && tallesSel.includes(extraccioMeta.base_size))
+      ? extraccioMeta.base_size : tallesSel[0])
 
   const buildTaula = (src) => {
     const t = {}
@@ -533,85 +571,75 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             </div>
           )}
 
-          {/* Taula en construcció: columnes = talles seleccionades */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 6 }}>
-              {t('import_wizard.table_columns')}
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {tallesSel.length === 0
-                ? <span style={{ fontSize: 'var(--fs-body)', color: '#a32d2d' }}>{t('import_wizard.no_sizes_selected')}</span>
-                : tallesSel.map(t => (
-                    <TallaChip key={t} label={t} ok={teDesti(t)} onRemove={() => removeTalla(t)} />
-                  ))}
-            </div>
+          {/* Aparellament document ⟷ model (LA LLEI de la sessió) */}
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>
+            {t('import_wizard.pairing_intro')}
           </div>
 
-          {/* Dues columnes: document vs configurat */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: 12 }}>
-              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, marginBottom: 8 }}>
-                {t('import_wizard.doc_sizes')} <span style={{ color: 'var(--text-muted)' }}>({cribratge.sistema_talles})</span>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {docLabels.map(t => {
-                  const sel = tallesSel.some(x => norm(x) === norm(t))
-                  return (
-                    <span key={t} onClick={() => sel ? removeTalla(t) : addTalla(t)}
-                      style={{ cursor: 'pointer', padding: '4px 9px', borderRadius: 6, fontSize: 'var(--fs-body)',
-                               border: `1px solid ${teDesti(t) ? '#c0dd97' : '#f0c0c0'}`,
-                               background: !sel ? '#f5f0ea' : teDesti(t) ? '#f0f9f0' : '#fff0f0',
-                               color: !sel ? '#aaa' : teDesti(t) ? '#3b6d11' : '#a32d2d',
-                               textDecoration: sel ? 'none' : 'line-through' }}>
-                      {teDesti(t) ? '✓' : '✗'} {t}
-                    </span>
-                  )
-                })}
-              </div>
+          {/* B5 · targeta de la TALLA BASE (selector limitat a les SizeDefinition del system) */}
+          <div style={{ border: `1px solid ${basePaired ? '#c0dd97' : '#f0c0c0'}`, borderRadius: 8,
+                        padding: '10px 12px', marginBottom: 12, background: basePaired ? '#f7fbf2' : '#fff6f6' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>★ {t('import_wizard.base_size')}:</span>
+              <select value={baseLabel} disabled={savingTalles} onChange={e => changeBase(e.target.value)}
+                style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${BORDER}`, fontSize: 'var(--fs-body)' }}>
+                {systemLabels.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <span style={{ color: 'var(--text-muted)' }}>⟷</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: basePaired ? '#3b6d11' : '#a32d2d' }}>
+                {baseDocLabel || t('import_wizard.base_unpaired')}
+              </span>
             </div>
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: 12 }}>
-              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, marginBottom: 8 }}>
-                {t('import_wizard.model_sizes')}
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {(configurat || []).length === 0
-                  ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('import_wizard.no_run_configured')}</span>
-                  : configurat.map(t => (
-                      <span key={t} style={{ padding: '4px 9px', borderRadius: 6, fontSize: 'var(--fs-body)',
-                                             border: `1px solid ${BORDER}`, background: 'var(--white)' }}>{t}</span>
-                    ))}
-              </div>
-              {configurablesNoSel.length > 0 && (
-                <div style={{ marginTop: 10, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-                  {t('import_wizard.add_to_table')}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                    {configurablesNoSel.map(t => (
-                      <button key={t} onClick={() => addTalla(t)}
-                        style={{ padding: '3px 8px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
-                                 border: `1px dashed ${GOLD}`, background: 'transparent', color: GOLD }}>
-                        + {t}
-                      </button>
-                    ))}
+            {baseAvisos.map((a, i) => (
+              <div key={i} style={{ marginTop: 6, fontSize: 'var(--fs-small)', color: GOLD }}>⚠ {a}</div>
+            ))}
+          </div>
+
+          {/* Taula d'aparellament: una fila per etiqueta del document, selector de talla del model */}
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 10, fontSize: 'var(--fs-body)', fontWeight: 600,
+                          color: 'var(--text-muted)', paddingBottom: 6, borderBottom: `0.5px solid ${BORDER}`, marginBottom: 6 }}>
+              <div style={{ width: 110 }}>{t('import_wizard.doc_sizes')} <span style={{ fontWeight: 400 }}>({cribratge.sistema_talles})</span></div>
+              <div style={{ width: 20 }} />
+              <div>{t('import_wizard.model_sizes')}</div>
+            </div>
+            {tallesSel.map(d => {
+              const m = mapping[d] || ''
+              const isBaseRow = !!m && m === baseLabel
+              const dup = !!m && modelDup.has(m)
+              const state = !m ? 'unpaired' : dup ? 'dup' : 'ok'
+              return (
+                <div key={d} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
+                  <div style={{ width: 110, fontWeight: isBaseRow ? 700 : 400 }}>
+                    {isBaseRow ? '★ ' : ''}{d}
                   </div>
+                  <span style={{ width: 20, color: 'var(--text-muted)', textAlign: 'center' }}>⟷</span>
+                  <select value={m} disabled={savingTalles} onChange={e => setPair(d, e.target.value)}
+                    style={{ padding: '4px 8px', borderRadius: 6, fontSize: 'var(--fs-body)', minWidth: 130,
+                             border: `1px solid ${state === 'ok' ? '#c0dd97' : '#f0c0c0'}` }}>
+                    <option value="">{t('import_wizard.no_pair')}</option>
+                    {systemLabels.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <span title={t(`import_wizard.pair_${state}`)}
+                    style={{ color: state === 'ok' ? '#3b6d11' : '#a32d2d' }}>
+                    {state === 'ok' ? '✓' : '⚠'}
+                  </span>
+                  <button type="button" onClick={() => removeTalla(d)} title={t('import_wizard.remove_size')}
+                    style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-h3)' }}>×</button>
                 </div>
-              )}
-            </div>
+              )
+            })}
           </div>
 
-          {/* Desajust → oferir alinear */}
-          {senseDesti.length > 0 && (
+          {/* Columnes del document sense parella → avís no bloquejant (la base sí bloqueja) */}
+          {senseParella.length > 0 && (
             <div style={{ background: '#fff0f0', border: '1px solid #f0c0c0', borderRadius: 8,
                           padding: '10px 12px', marginBottom: 16 }}>
               <div style={{ fontSize: 'var(--fs-body)', color: '#a32d2d', marginBottom: 8 }}>
-                {t('import_wizard.mismatch_warn', { count: senseDesti.length, sizes: senseDesti.join(', ') })}
+                {t('import_wizard.unpaired_warn', { count: senseParella.length, sizes: senseParella.join(', ') })}
               </div>
-              <button type="button" onClick={handleAlinear} disabled={savingTalles}
-                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
-                         border: `1px solid ${GOLD}`, background: 'transparent', color: GOLD }}>
-                {savingTalles ? '⏳...' : `⤵ ${t('import_wizard.align_adopt', { sizes: tallesSel.join('·') })}`}
-              </button>
               <button type="button" onClick={() => setConfirmSizeMap(true)}
-                style={{ marginLeft: 8, padding: '6px 14px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
+                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
                          border: '0.5px solid #c0c0c0', background: 'transparent', color: '#666' }}>
                 ⚙ {t('import_wizard.configure_client_run')}
               </button>
