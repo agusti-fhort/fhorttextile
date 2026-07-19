@@ -27,10 +27,17 @@ MASTER_TEMPLATE_DESC = (
 )
 
 # Caixa de la capçalera (mm), mapada des de la geometria del brief en pt (×0.3528 mm/pt):
-# banda x=28.6 y=39 w=784.7 h=90.2 pt.
+# banda x=28.6 y=39 w=784.7 h=90.2 pt. La POSICIÓ de l'objecte es deriva d'aquests pt de l'SVG
+# canònic × 0.3528 mm/pt, i ha de coincidir EXACTAMENT amb MASTER_HEADER_GEOM del frontend
+# (insert manual). Font única de veritat: docs/spec/plantilla_capcalera_ftt.svg.
+_HDR_PT = {'x': 28.6, 'y': 39, 'w': 784.7, 'h': 90.2}
+_PT_TO_MM = 0.3528
 _HEADER_OBJ = {
     'id': 'hdr1', 'type': 'data_block', 'kind': 'header', 'layer': 'template',
-    'x': 10.1, 'y': 13.8, 'width': 276.9, 'height': 31.8,
+    'x': round(_HDR_PT['x'] * _PT_TO_MM, 2),        # 10.09mm
+    'y': round(_HDR_PT['y'] * _PT_TO_MM, 2),        # 13.76mm
+    'width': round(_HDR_PT['w'] * _PT_TO_MM, 2),    # 276.84mm
+    'height': round(_HDR_PT['h'] * _PT_TO_MM, 2),   # 31.82mm
     'locked': True,                       # bloc ancorat: no draggable ni seleccionable per edició
     'config': {'layout': 'masterFtt'},
 }

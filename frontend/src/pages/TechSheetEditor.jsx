@@ -671,6 +671,19 @@ const HDR_M = {
 }
 const _hdrP = () => 0.3528 * MM_TO_PX
 
+// FONT ÚNICA de la posició/mida de l'OBJECTE capçalera mestra (mm), DERIVADA de la geometria de
+// l'SVG canònic (HDR_M, en pt) × 0.3528 mm/pt. La usen l'insert manual (insertHeader) i, amb els
+// MATEIXOS valors, la instanciació des de template (backend master_template._HEADER_OBJ). No
+// tornar a escriure literals de posició del header en cap altre lloc.
+const _PT_TO_MM = 0.3528
+const _mm2 = pt => Math.round(pt * _PT_TO_MM * 100) / 100
+export const MASTER_HEADER_GEOM = {
+  x: _mm2(HDR_M.OX),      // 28.6pt  → 10.09mm
+  y: _mm2(HDR_M.OY),      // 39pt    → 13.76mm
+  width: _mm2(HDR_M.W),   // 784.7pt → 276.84mm
+  height: _mm2(HDR_M.H),  // 90.2pt  → 31.82mm
+}
+
 // Logo del customer: zona x 34.6→164.3 (w 129.7) · y 42.7→81.8 (h 39.1) [alçada de les files
 // 1-2 de la caixa 2: top etiqueta fila1 = 47.5−0.8·6 = 42.7 · bottom valor fila2 = 80+0.2·9 = 81.8].
 // Contain amb aspecte preservat SENSE tope a la mida natural (pot fer UPSCALE fins que la primera
@@ -3437,10 +3450,11 @@ export default function TechSheetEditor() {
   }
 
   // ── Bloc de dades: capçalera del model (màxim 1 per pàgina) ─────────────────
-  // S12-UNIF: "Capçalera del model" insereix la capçalera Template FTT (masterFtt), amb el
-  // MATEIX tractament que la instanciada automàticament a addPage: bloc ANCORAT (locked +
-  // layer template → no draggable/seleccionable) + menú contextual delete-on-page/detach.
-  // Geometria 277×32mm (≡ 784.7×90.2pt) a x=10 y=8. Cap camí nou crea header legacy.
+  // S12-UNIF/POS: "Capçalera del model" insereix la Template FTT (masterFtt) com a bloc ANCORAT
+  // (locked + layer template → no draggable/seleccionable) + menú contextual delete-on-page/detach,
+  // MATEIX tractament i MATEIXA posició que la instanciada des de template. La geometria ve de la
+  // font única MASTER_HEADER_GEOM (posició de l'SVG canònic, x=10.09 y=13.76mm). Cap camí nou crea
+  // header legacy.
   const insertHeader = () => {
     if (!locked) return
     if (objectsOf(currentPage).some(o => o.type === 'data_block' && o.kind === 'header')) {
@@ -3448,7 +3462,7 @@ export default function TechSheetEditor() {
     }
     addObject({
       id: uid(), type: 'data_block', kind: 'header', layer: 'template', locked: true,
-      x: 10, y: 8, width: 277, height: 32, config: { layout: 'masterFtt' },
+      ...MASTER_HEADER_GEOM, config: { layout: 'masterFtt' },
     })
   }
 
