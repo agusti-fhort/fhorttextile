@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import GarmentTypeSelector from '../components/GarmentTypeSelector/GarmentTypeSelector'
 import CustomerSelector from '../components/CustomerSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
-import { availableFitsStrict } from '../components/grading/gradingAxes'
+import { availableFitsStrict, TARGETS, CONSTRUCTIONS } from '../components/grading/gradingAxes'
 import useAuthStore from '../store/auth'
 import { models, sizeSystems, customers, gradingRuleSets, garmentGroups } from '../api/endpoints'
 
@@ -20,14 +20,8 @@ const YEARS = [currentYear, currentYear + 1, currentYear + 2, currentYear + 3]
 // Temporades ALINEADES amb Model.TEMPORADA_CHOICES (SS/FW/CO/SP). Corregeix el mismatch RE/PRE.
 // Només l'identificador (codi); l'etiqueta visible es resol amb t('model_wizard.<tipus>_<codi>').
 const SEASONS = ['SS', 'FW', 'CO', 'SP']
-const TARGETS = [
-  'WOMAN', 'MAN', 'UNISEX_ADULT',
-  'BABY_GIRL', 'BABY_BOY', 'BABY_UNISEX',
-  'TODDLER_GIRL', 'TODDLER_BOY',
-  'GIRL', 'BOY',
-  'TEEN_GIRL', 'TEEN_BOY', 'MATERNITY',
-]
-const CONSTRUCTIONS = ['WOVEN', 'KNIT', 'STRETCH_KNIT', 'TECHNICAL']
+// TARGETS i CONSTRUCTIONS: vocabulari ÚNIC de gradingAxes (fora la còpia privada — Onada 1). Objectes
+// {codi, nom_*}; aquí només en fem servir el `codi` (l'etiqueta la resol t('model_wizard.*')).
 
 export default function ModelWizard() {
   const { id } = useParams()
@@ -356,7 +350,7 @@ export default function ModelWizard() {
             <Field label={t('model_wizard.target')}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {TARGETS.map(tg => (
-                  <Chip key={tg} active={target === tg} onClick={() => setTarget(tg)}>{t(`model_wizard.target_${tg}`)}</Chip>
+                  <Chip key={tg.codi} active={target === tg.codi} onClick={() => setTarget(tg.codi)}>{t(`model_wizard.target_${tg.codi}`)}</Chip>
                 ))}
               </div>
             </Field>
@@ -389,7 +383,7 @@ export default function ModelWizard() {
               <Field label={t('model_wizard.construction')}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {CONSTRUCTIONS.map(c => (
-                    <Chip key={c} active={construction === c} onClick={() => { if (construction !== c) { resetSizing(); resetGrading() } setConstruction(c) }}>{t(`model_wizard.construction_${c}`)}</Chip>
+                    <Chip key={c.codi} active={construction === c.codi} onClick={() => { if (construction !== c.codi) { resetSizing(); resetGrading() } setConstruction(c.codi) }}>{t(`model_wizard.construction_${c.codi}`)}</Chip>
                   ))}
                 </div>
               </Field>
