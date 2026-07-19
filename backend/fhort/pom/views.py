@@ -116,8 +116,7 @@ class GarmentTypeViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # `?target=<codi>` — cascada del wizard: només les famílies COMPATIBLES amb el target.
-        # La compatibilitat target↔família viu a SizingProfile (target + garment_type poblats a
-        # staging); `GarmentType.targets_recomanats` és buit i NO és la font (vegeu
+        # La compatibilitat target↔família viu a SizingProfile (target + garment_type poblats; vegeu
         # docs/diagnosis/DIAGNOSI_WIZARD_CASCADA_TARGET.md). Sense `target` → catàleg complet.
         qs = super().get_queryset()
         target = self.request.query_params.get('target')

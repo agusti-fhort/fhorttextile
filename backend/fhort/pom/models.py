@@ -409,12 +409,8 @@ class GarmentType(models.Model):
     is_system = models.BooleanField(default=False,
         help_text="True = ve del catàleg global canònic, no esborrable")
 
-    # Sprint S1 — target and construction
-    targets_recomanats = models.ManyToManyField(
-        'Target',
-        blank=True,
-        related_name='garment_types',
-    )
+    # Sprint S1 — construction. (L'M2M `targets_recomanats` es va jubilar 2026-07-19: buit a tots els
+    # entorns i sense lector; la compatibilitat target↔família viu a SizingProfile.)
     construccio_habitual = models.CharField(
         max_length=50, blank=True,
         help_text="Ex: WOVEN, KNIT, BOTH, STRETCH_KNIT"

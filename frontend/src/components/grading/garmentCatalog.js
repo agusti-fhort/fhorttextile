@@ -8,9 +8,9 @@ import { GARMENT_GROUPS } from './gradingAxes'
 // complet (no bloqueja). Consumit per AxesSelector i GarmentTypeSelector (i, a l'Onada 2, ScopeSelector),
 // perquè totes les pantalles es comportin IGUAL.
 //
-// Compatibilitat target↔família: SizingProfile via el backend `?target` (targets_recomanats és buit a
-// staging — vegeu docs/diagnosis/DIAGNOSI_WIZARD_CASCADA_TARGET.md). Els items segueixen carregant-se
-// per família (peresós) allà on calgui.
+// Compatibilitat target↔família: SizingProfile via el backend `?target` (vegeu
+// docs/diagnosis/DIAGNOSI_WIZARD_CASCADA_TARGET.md). Els items segueixen carregant-se per família
+// (peresós) allà on calgui.
 
 // Ordre canònic + etiquetes localitzades dels grups coneguts. El registre de BD mana la DISPONIBILITAT
 // (quins grups existeixen/actius, NEWBORN inclòs); el vocabulari només aporta ordre i noms ca/en/es dels
