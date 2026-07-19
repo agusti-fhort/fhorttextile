@@ -87,7 +87,7 @@ export const COL = {
 // CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
 // build*Primitives, Rects de fons/selecció, text_box, previews) DEUEN usar aquests literals,
 // no COL (que és per al DOM, on var() sí resol). Valors = mateixos hex que els tokens de :root.
-const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685' }
+const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', labelGray: '#777776' }
 
 // F1 — la caixa on entra una peça de patró. Una peça és MOLT més gran que la pàgina (el
 // TATE_FRONT fa 588×502 mm i un A4 apaïsat en fa 297×210): entra encaixada a aquesta caixa,
@@ -657,7 +657,120 @@ function _headerSizeRun(m, placeholderMode) {
 // (dues bandes, 20mm+12mm) perquè els documents/plantilles existents no canviïn.
 // placeholderMode=true (editor de plantilla): mostra `{model.codi}` etc. en lloc de valors
 // reals (no hi ha model), excepte customer_nom que SÍ és real (la plantilla és per client).
-export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLogo = false, config = null) {
+// ─── Template FTT (S12) — capçalera mestra "3 caixes" segons Plantilla_normalitzada ───
+// Geometria del brief (pt, origen banda 28.6/39): W=784.7 H=90.2 · divisòries a 170.3 i 491.8
+// · padding 6pt · graella etiqueta y=47.5+i*22.5, valor +10pt · etiquetes 6px #777776, valors
+// 9px #1d1d1b, Plex Mono. Coords en pt → px via P=0.3528*MM_TO_PX. NOTA: l'SVG mestre no és al
+// repo; el mapatge camp→(caixa,fila,subcol) i la col·locació del logo a la caixa 1 són la
+// millor interpretació del text del brief i poden requerir ajust fi de píxel contra l'SVG.
+const HDR_M = { OX: 28.6, OY: 39, W: 784.7, H: 90.2, D1: 170.3, D2: 491.8, PAD: 6, LBL: 6, VAL: 9, LOGO_MAX_PT: 40 }
+
+// Rectangle del logo del customer a la Template FTT: caixa 1, zona superior, alçada màx 40pt,
+// aspecte preservat, acotat a l'ample de la caixa menys padding. Compartit viu/export.
+export function headerMasterLogoRect(natW, natH, config) {
+  const P = 0.3528 * MM_TO_PX
+  const pad = HDR_M.PAD * P
+  const c1w = (HDR_M.D1 - HDR_M.OX) * P
+  const maxH = HDR_M.LOGO_MAX_PT * P
+  const maxW = c1w - 2 * pad
+  const ratio = (natW && natH) ? natW / natH : 2.4
+  let h = maxH, w = maxH * ratio
+  if (w > maxW) { w = maxW; h = w / ratio }
+  return { x: pad, y: pad, w, h }
+}
+
+function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx) {
+  const P = 0.3528 * MM_TO_PX
+  const W = HDR_M.W * P, H = HDR_M.H * P
+  const d1 = (HDR_M.D1 - HDR_M.OX) * P, d2 = (HDR_M.D2 - HDR_M.OX) * P
+  const pad = HDR_M.PAD * P
+  const GRAY = KONVA_COL.labelGray, INK = KONVA_COL.textMain
+  const SW = 0.5 * P
+  const cols = [{ x0: 0, x1: d1 }, { x0: d1, x1: d2 }, { x0: d2, x1: W }]
+  const rowLblY = i => (47.5 - HDR_M.OY + i * 22.5) * P
+  const rowValY = i => rowLblY(i) + 10 * P
+  const prims = []
+  // Marc únic 0.5pt + 2 divisòries (cap doble filet).
+  prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: GRAY, sw: SW })
+  prims.push({ t: 'l', points: [d1, 0, d1, H], stroke: GRAY, sw: SW })
+  prims.push({ t: 'l', points: [d2, 0, d2, H], stroke: GRAY, sw: SW })
+
+  const V = (real, ph) => placeholderMode ? ph : (real == null ? '' : String(real))
+  // Cel·la etiqueta+valor. `ci` caixa, `ri` fila, `subIdx/subN` subcolumna (default columna sencera).
+  const cell = (ci, ri, label, value, subIdx = 0, subN = 1) => {
+    const c = cols[ci]
+    const inner = c.x1 - c.x0 - 2 * pad
+    const sw = inner / subN
+    const x = c.x0 + pad + subIdx * sw
+    const w = sw - (subN > 1 ? pad : 0)
+    prims.push({ t: 't', x, y: rowLblY(ri), w, h: HDR_M.LBL + 2, text: label, fill: GRAY, size: HDR_M.LBL })
+    if (value) prims.push({ t: 't', x, y: rowValY(ri), w, h: HDR_M.VAL + 2, text: value, fill: INK, size: HDR_M.VAL })
+  }
+
+  // CAIXA 1 — DATE · PAGE · TECHNICIAN (logo el pinta el caller a la zona superior via
+  // headerMasterLogoRect; els 3 camps es baixen sota el logo per no trepitjar-lo).
+  const logoDrop = (HDR_M.LOGO_MAX_PT + 4) * P
+  const c1 = cols[0], c1x = c1.x0 + pad, c1w = c1.x1 - c1.x0 - 2 * pad
+  const today = placeholderMode ? '{date}' : new Date().toISOString().slice(0, 10)
+  const pageStr = placeholderMode ? '{page}' : `${(pageCtx?.index ?? 0) + 1} / ${pageCtx?.total ?? 1}`
+  const c1rows = [['DATE', today], ['PAGE', pageStr], ['TECHNICIAN', V(m?.responsable_nom, '{technician}')]]
+  let c1y = logoDrop
+  const lineH = (HDR_M.LBL + HDR_M.VAL + 3)
+  for (const [lab, val] of c1rows) {
+    prims.push({ t: 't', x: c1x, y: c1y, w: c1w, h: HDR_M.LBL + 2, text: lab, fill: GRAY, size: HDR_M.LBL })
+    if (val) prims.push({ t: 't', x: c1x, y: c1y + HDR_M.LBL + 1, w: c1w, h: HDR_M.VAL + 2, text: val, fill: INK, size: HDR_M.VAL })
+    c1y += lineH
+  }
+
+  // CAIXA 2 — INTERNAL REFERENCE · CLIENT REFERENCE | SEASON · STYLE NAME · COLLECTION
+  cell(1, 0, 'INTERNAL REFERENCE', V(m?.codi_intern, '{internal ref}'))
+  cell(1, 1, 'CLIENT REFERENCE', V(m?.codi_client, '{client ref}'), 0, 2)
+  cell(1, 1, 'SEASON', V(m?.temporada, '{season}'), 1, 2)
+  cell(1, 2, 'STYLE NAME', V(m?.nom_prenda, '{style name}'))
+  cell(1, 3, 'COLLECTION', V(m?.collection, '{collection}'))
+
+  // CAIXA 3 — GARMENT TYPE | ITEM · TARGET | FIT TYPE | CONSTRUCTION · SIZE SYSTEM · SIZE RUN
+  cell(2, 0, 'GARMENT TYPE', V(m?.garment_type_nom, '{garment}'), 0, 2)
+  cell(2, 0, 'ITEM', V(m?.garment_type_item_nom, '{item}'), 1, 2)
+  cell(2, 1, 'TARGET', V(m?.grading_target_nom, '{target}'), 0, 3)
+  cell(2, 1, 'FIT TYPE', V(m?.grading_fit_nom, '{fit}'), 1, 3)
+  cell(2, 1, 'CONSTRUCTION', V(m?.grading_construction_nom, '{construction}'), 2, 3)
+  cell(2, 2, 'SIZE SYSTEM', V(m?.size_system_nom, '{size system}'))
+  // SIZE RUN: etiqueta + run compacte "·" amb la talla base en bold+underline (3 segments, mètrica mono).
+  const c3 = cols[2], c3x = c3.x0 + pad, c3w = c3.x1 - c3.x0 - 2 * pad
+  prims.push({ t: 't', x: c3x, y: rowLblY(3), w: c3w, h: HDR_M.LBL + 2, text: 'SIZE RUN', fill: GRAY, size: HDR_M.LBL })
+  _pushSizeRunSegments(prims, m, placeholderMode, c3x, rowValY(3), HDR_M.VAL, INK)
+
+  return { prims, totalW: W, totalH: H }
+}
+
+// SIZE RUN en 3 segments (abans · BASE · després) amb la base en bold+underline. Mètrica mono:
+// amplada de caràcter ≈ fontSize*0.6 (IBM Plex Mono), per posicionar cada segment sense mesurar.
+function _pushSizeRunSegments(prims, m, placeholderMode, x, y, size, ink) {
+  const charW = size * 0.6
+  if (placeholderMode) {
+    prims.push({ t: 't', x, y, w: 400, h: size + 2, text: '{size run}', fill: ink, size })
+    return
+  }
+  const raw = (m?.size_run_model || '').trim()
+  if (!raw) return
+  const labels = raw.split(/[·;,]/).map(s => s.trim()).filter(Boolean)
+  const base = (m?.base_size_label || '').trim()
+  const sep = ' · '
+  let cx = x
+  labels.forEach((lab, i) => {
+    const isBase = base && lab === base
+    const text = i < labels.length - 1 ? lab + sep : lab
+    prims.push({ t: 't', x: cx, y, w: text.length * charW + 4, h: size + 2, text, fill: ink, size, bold: !!isBase, underline: !!isBase })
+    cx += text.length * charW
+  })
+}
+
+// Capçalera del model → {prims, totalW, totalH}. `config.layout`: 'masterFtt' (Template FTT S12,
+// 3 caixes, amb consciència de pàgina via pageCtx) · 'blocks4' (v2) · absent → LEGACY intacte
+// (cap regressió a documents/plantilles existents).
+export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLogo = false, config = null, pageCtx = null) {
+  if (config && config.layout === 'masterFtt') return buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx)
   if (config && config.layout === 'blocks4') return buildHeaderV2Primitives(m, versio, placeholderMode, config)
   const W = 277 * MM_TO_PX
   const B1 = 20 * MM_TO_PX, B2 = 12 * MM_TO_PX
@@ -755,17 +868,20 @@ function FieldChipNode({ obj, groupProps, isSelected }) {
 
 // Capçalera del model — Konva natiu. Resol els camps en render. Si hi ha logoUrl,
 // es pinta el logo real (cantonada superior dreta) en lloc del placeholder "(logo)".
-function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, config, groupProps, isSelected }) {
+function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, config, pageCtx, groupProps, isSelected }) {
   const logoImg = useImage(logoUrl || '')
   const hasLogo = !!logoImg
   const isV2 = !!(config && config.layout === 'blocks4')
+  const isMaster = !!(config && config.layout === 'masterFtt')
   const { prims, totalW, totalH } = useMemo(
-    () => buildHeaderPrimitives(modelData, versio, placeholderMode, hasLogo, config),
-    [modelData, versio, placeholderMode, hasLogo, config])
-  // v2: logo contingut al BLOC 4 (dalt-dreta, alçada acotada); legacy: caixa fixa 40×16mm.
-  const logoR = (hasLogo && isV2)
-    ? headerV2LogoRect(logoImg.width, logoImg.height, totalW, config)
-    : { x: totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, w: 40 * MM_TO_PX, h: 16 * MM_TO_PX }
+    () => buildHeaderPrimitives(modelData, versio, placeholderMode, hasLogo, config, pageCtx),
+    [modelData, versio, placeholderMode, hasLogo, config, pageCtx])
+  // master: logo a la caixa 1 (dalt-esq, ≤40pt); v2: logo contingut al BLOC 4; legacy: 40×16mm.
+  const logoR = (hasLogo && isMaster)
+    ? headerMasterLogoRect(logoImg.width, logoImg.height, config)
+    : (hasLogo && isV2)
+      ? headerV2LogoRect(logoImg.width, logoImg.height, totalW, config)
+      : { x: totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, w: 40 * MM_TO_PX, h: 16 * MM_TO_PX }
   return (
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
@@ -1075,7 +1191,8 @@ async function addObjectToLayer(layer, obj, ctx) {
     let logoEl = null
     if (obj.kind === 'header') {
       if (ctx?.customerLogoUrl) { try { logoEl = await loadImageEl(ctx.customerLogoUrl) } catch { logoEl = null } }
-      built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl, obj.config)
+      const pageCtx = (ctx?.pageIndex != null) ? { index: ctx.pageIndex, total: ctx.pageTotal } : null
+      built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl, obj.config, pageCtx)
     } else if (obj.kind === 'graded_table') {
       const data = ctx?.tableData?.[obj.id]
       // Desvinculada (BIB S0): no hi ha dades ni n'hi haurà fins que el tècnic la torni a
@@ -1088,10 +1205,14 @@ async function addObjectToLayer(layer, obj, ctx) {
       const g = new Konva.Group(dataBlockGroupProps(obj))
       addPrimsToGroup(g, built.prims)
       if (logoEl) {
+        const lw = logoEl.naturalWidth || logoEl.width, lh = logoEl.naturalHeight || logoEl.height
+        const isMaster = !!(obj.config && obj.config.layout === 'masterFtt')
         const isV2 = !!(obj.config && obj.config.layout === 'blocks4')
-        const r = isV2
-          ? headerV2LogoRect(logoEl.naturalWidth || logoEl.width, logoEl.naturalHeight || logoEl.height, built.totalW, obj.config)
-          : { x: built.totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, w: 40 * MM_TO_PX, h: 16 * MM_TO_PX }
+        const r = isMaster
+          ? headerMasterLogoRect(lw, lh, obj.config)
+          : isV2
+            ? headerV2LogoRect(lw, lh, built.totalW, obj.config)
+            : { x: built.totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, w: 40 * MM_TO_PX, h: 16 * MM_TO_PX }
         g.add(new Konva.Image({ image: logoEl, x: r.x, y: r.y, width: r.w, height: r.h }))
       }
       layer.add(g)
@@ -1264,7 +1385,7 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, onEndpointDrag }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, onEndpointDrag }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -1279,7 +1400,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   if (obj.type === 'data_block') {
     const dataCommon = { ...common, ...dataBlockGroupProps(obj) }
     if (obj.kind === 'header') {
-      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} config={obj.config} groupProps={dataCommon} isSelected={selected} />
+      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} config={obj.config} pageCtx={pageCtx} groupProps={dataCommon} isSelected={selected} />
     }
     // Desvinculada (BIB S0): mateixos prims que el PDF. Sense això queia al «Carregant
     // taula…» de sota i s'hi quedava per sempre — una taula desvinculada no carrega mai.
@@ -2279,9 +2400,11 @@ export default function TechSheetEditor() {
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
-        const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl }
         const thumbs = []
-        for (const p of pages) thumbs.push(await renderPageToDataURL(p, 0.18, ctx))
+        for (let pi = 0; pi < pages.length; pi++) {
+          const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
+          thumbs.push(await renderPageToDataURL(pages[pi], 0.18, ctx))
+        }
         setThumbnails(thumbs)
       } catch { /* noop */ }
     }, 300)
@@ -3322,10 +3445,10 @@ export default function TechSheetEditor() {
     setExporting(true)
     try {
       const pdf = await PDFDocument.create()
-      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl }
       const [pdfW, pdfH] = fmt.pdf
-      for (const p of pages) {
-        const dataUrl = await renderPageToDataURL(p, 3.5, ctx)
+      for (let pi = 0; pi < pages.length; pi++) {
+        const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
+        const dataUrl = await renderPageToDataURL(pages[pi], 3.5, ctx)
         const png = await pdf.embedPng(dataUrl)
         const page = pdf.addPage([pdfW, pdfH])
         page.drawImage(png, { x: 0, y: 0, width: pdfW, height: pdfH })
@@ -4101,6 +4224,7 @@ export default function TechSheetEditor() {
                 {ordered.filter(o => o.id !== editingFlatId && o.visible !== false).map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
+                    pageCtx={{ index: currentPage, total: pages.length }}
                     selected={selectedIds.includes(o.id)}
                     selectable={locked && o.layer !== 'template' && !o.locked}
                     draggable={locked && tool === 'select' && !panActive && o.layer !== 'template' && !o.locked && activeGroup !== o.id}
