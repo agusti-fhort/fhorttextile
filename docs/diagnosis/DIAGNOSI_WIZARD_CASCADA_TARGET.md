@@ -1,7 +1,14 @@
 # DIAGNOSI — Cascada del wizard de grading: no filtra per target + grup NEWBORN absent
 
-> Staging · `fhort` · dev. Data: 2026-07-19. **Patró A (read-only). STOP al gate d'Agus — cap
-> implementació.** Abast ampliat a transversal (§4-§6) per addendum d'Agus del 19/07.
+> **⚙️ ONADA 1 IMPLEMENTADA (2026-07-19, dev sense push, commits `dbd5cfd`→`8d814b0`).** Grading
+> Rules + Wizard de Model ja filtren la cascada per target i mostren NEWBORN. Onada 2 (les altres
+> 6 superfícies + GarmentTypes) PENDENT. **Correcció a §2/§6:** la relació item↔target NO és
+> `GarmentType.targets_recomanats` (buida a staging: 0/21 tipus amb targets) sinó **`SizingProfile`**
+> (target+garment_type poblats, 41 files); el filtre backend `?target` hi passa. Backfillar
+> `targets_recomanats` o jubilar-lo és decisió d'Onada 2.
+>
+> Staging · `fhort` · dev. Data: 2026-07-19. Diagnosi original: **Patró A (read-only).**
+> Abast ampliat a transversal (§4-§6) per addendum d'Agus del 19/07.
 > Símptomes reportats amb captura: target «Nadó nena» triat i (a) passos 3-5 mostren el catàleg
 > sencer, (b) el grup NEWBORN (Fase 1) no apareix al pas 3.
 
