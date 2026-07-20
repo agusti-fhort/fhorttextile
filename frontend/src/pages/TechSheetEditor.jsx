@@ -4326,6 +4326,28 @@ export default function TechSheetEditor() {
               <span style={nodeBarSep} />
             </>
           )}
+          {/* G5 — ALINEAR/DISTRIBUIR formes (mode fletxa negra): alinear amb 2+, distribuir amb 3+.
+              Mateixa lògica que l'alinear d'objectes, aplicada a bounds de subpath. */}
+          {nodeSel.mode === 'shape' && nodeSel.shapeCount >= 2 && (
+            <>
+              {[
+                { m: 'left', icon: 'ti-layout-align-left', label: 'align_left_short' },
+                { m: 'center', icon: 'ti-layout-align-center', label: 'align_center_short' },
+                { m: 'right', icon: 'ti-layout-align-right', label: 'align_right_short' },
+                { m: 'top', icon: 'ti-layout-align-top', label: 'align_top_short' },
+                { m: 'middle', icon: 'ti-layout-align-middle', label: 'align_middle_short' },
+                { m: 'bottom', icon: 'ti-layout-align-bottom', label: 'align_bottom_short' },
+              ].map(a => (
+                <button key={a.m} type="button" onClick={() => runNode('alignShapes', a.m)}
+                  title={t(`tech_sheet.${a.label}`)} style={nodeBarBtn(false)}><i className={`ti ${a.icon}`} style={{ fontSize: 15 }} /></button>
+              ))}
+              <button type="button" onClick={() => runNode('distributeShapes', 'h')} disabled={nodeSel.shapeCount < 3}
+                title={t('tech_sheet.distribute_h_short')} style={{ ...nodeBarBtn(false), opacity: nodeSel.shapeCount < 3 ? 0.4 : 1 }}><i className="ti ti-layout-distribute-horizontal" style={{ fontSize: 15 }} /></button>
+              <button type="button" onClick={() => runNode('distributeShapes', 'v')} disabled={nodeSel.shapeCount < 3}
+                title={t('tech_sheet.distribute_v_short')} style={{ ...nodeBarBtn(false), opacity: nodeSel.shapeCount < 3 ? 0.4 : 1 }}><i className="ti ti-layout-distribute-vertical" style={{ fontSize: 15 }} /></button>
+              <span style={nodeBarSep} />
+            </>
+          )}
           {/* F5 — pintura de la subpath activa (viu al canvas Paper): swatch fill + stroke + gruix. */}
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={t('tech_sheet.fill')}>
             <i className="ti ti-color-swatch" style={{ fontSize: 14, color: COL.textMuted }} />

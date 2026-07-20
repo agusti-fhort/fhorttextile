@@ -354,6 +354,47 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       selectedPathRef.current = created.length ? pathByIndex(created[created.length - 1]) : (allPaths()[0] || null)
       setShapeSelection(created, selectedPathRef.current?.data?.index)
     }
+    // G5 — ALINEAR les formes seleccionades (2+) sobre els bounds del conjunt (mateixa lògica que
+    // l'alinear d'objectes, aplicada a bounds de subpath). mode ∈ left/center/right/top/middle/bottom.
+    const alignShapes = (mode) => {
+      const paths = [...selectedShapesRef.current].map(pathByIndex).filter(Boolean)
+      if (paths.length < 2) return
+      pushHistory()
+      const bs = paths.map(p => p.bounds)
+      const minX = Math.min(...bs.map(b => b.left)), maxX = Math.max(...bs.map(b => b.right))
+      const minY = Math.min(...bs.map(b => b.top)), maxY = Math.max(...bs.map(b => b.bottom))
+      paths.forEach(p => {
+        const b = p.bounds
+        let dx = 0, dy = 0
+        if (mode === 'left') dx = minX - b.left
+        if (mode === 'center') dx = (minX + maxX) / 2 - (b.left + b.right) / 2
+        if (mode === 'right') dx = maxX - b.right
+        if (mode === 'top') dy = minY - b.top
+        if (mode === 'middle') dy = (minY + maxY) / 2 - (b.top + b.bottom) / 2
+        if (mode === 'bottom') dy = maxY - b.bottom
+        if (dx || dy) p.translate(new scope.Point(dx, dy))
+      })
+      drawShapeSelection(); pushState()
+    }
+    // G5 — DISTRIBUIR les formes seleccionades (3+) amb espais iguals (axis 'h'/'v').
+    const distributeShapes = (axis) => {
+      const paths = [...selectedShapesRef.current].map(pathByIndex).filter(Boolean)
+      if (paths.length < 3) return
+      pushHistory()
+      const entries = paths.map(p => ({ p, b: p.bounds })).sort((a, b) => axis === 'h' ? a.b.left - b.b.left : a.b.top - b.b.top)
+      const start = axis === 'h' ? entries[0].b.left : entries[0].b.top
+      const end = axis === 'h' ? entries[entries.length - 1].b.right : entries[entries.length - 1].b.bottom
+      const totalSize = entries.reduce((s, e) => s + (axis === 'h' ? e.b.width : e.b.height), 0)
+      const gap = (end - start - totalSize) / (entries.length - 1)
+      let cursor = start
+      entries.forEach(e => {
+        const cur = axis === 'h' ? e.b.left : e.b.top
+        const d = cursor - cur
+        if (d) e.p.translate(axis === 'h' ? new scope.Point(d, 0) : new scope.Point(0, d))
+        cursor += (axis === 'h' ? e.b.width : e.b.height) + gap
+      })
+      drawShapeSelection(); pushState()
+    }
 
     const toViewPx = (mm) => toPx(mm) * zoomRef.current
     const rotation = ((flat.rotation || 0) * Math.PI) / 180
@@ -476,6 +517,8 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       split: () => { const p = selectedPathRef.current; const sel = [...selectedSegsRef.current]; if (p && sel.length === 1) splitInTwo(splitAtNode(readSegs(p), p.closed, sel[0])) },
       removeSelection,
       booleanShapes: (op) => booleanSelectedShapes(op),   // G3 — buscatraços entre formes seleccionades
+      alignShapes: (mode) => alignShapes(mode),           // G5 — alinear formes seleccionades
+      distributeShapes: (axis) => distributeShapes(axis), // G5 — distribuir formes seleccionades
       setFill: (c) => applyPaint('fill', c),
       setStroke: (c) => applyPaint('stroke', c),
       setStrokeWidth: (w) => applyPaint('strokeWidth', w),
