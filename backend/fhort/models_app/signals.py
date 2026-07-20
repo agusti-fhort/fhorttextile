@@ -87,8 +87,13 @@ def sync_size_fitting(sender, instance, created, **kwargs):
     Configuration fields (garment_type, size_system, etc.) are NOT duplicated
     on the SF: they live on the Model and are accessed via the FK sf.model.X.
 
-    Skip if Model.responsable is None (creat_per is required + PROTECT
-    on SizeFitting). In that case the SF can be created manually later.
+    creat_per is a non-null PROTECT FK, so we resolve an actor from the model's
+    own metadata: responsable → created_by → any UserProfile (last resort). The
+    SF is created ALWAYS (a model sembrat sense responsable is the normal
+    onboarding case for any new client; skipping the SF left the measurement /
+    grading surface mute — the universal hole B2). Only a tenant with zero
+    UserProfiles can't satisfy PROTECT; there we log and skip, never crash model
+    creation.
     """
     try:
         Model = _get_model_class()
@@ -101,12 +106,22 @@ def sync_size_fitting(sender, instance, created, **kwargs):
     if not created:
         return
 
-    if not instance.responsable_id:
-        return  # We cannot create an SF without creat_per
-
     try:
         from fhort.fitting.models import SizeFitting
         if SizeFitting.objects.filter(model=instance).exists():
+            return
+        # Actor: responsable → created_by → primer perfil (tots són UserProfile,
+        # igual que creat_per). Sense cap perfil al tenant, no es pot satisfer PROTECT.
+        actor_id = instance.responsable_id or instance.created_by_id
+        if actor_id is None:
+            from fhort.accounts.models import UserProfile
+            first = UserProfile.objects.first()
+            actor_id = first.id if first else None
+        if actor_id is None:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"No UserProfile available to create SF for {instance}"
+            )
             return
         number = 1
         code = f"{instance.codi_intern}-SF{number}"
@@ -117,7 +132,7 @@ def sync_size_fitting(sender, instance, created, **kwargs):
             tipus='Proto',
             estat='Pendent',
             base_tancada=False,
-            creat_per_id=instance.responsable_id,
+            creat_per_id=actor_id,
         )
     except Exception as e:
         import logging
