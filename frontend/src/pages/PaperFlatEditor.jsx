@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import paper from 'paper'
-import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle, closeSegments, openAtNode, splitAtNode, splitAtLocation, moveSegment, deleteSegment } from './ftt/paperOps'
+import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle, closeSegments, openAtNode, splitAtNode, splitAtLocation, moveSegment, deleteSegment, translateSubpath } from './ftt/paperOps'
 
 const PAPER_COL = {
   node: '#185fa5',
@@ -203,27 +203,41 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       scope.view.update(); pushState()
     }
 
-    // F6 — HISTÒRIA INTERNA de la sessió d'edició (undo/redo sense sortir del mode). Instantànies de
-    // la path activa (segments view px + closed) + pintura pendent. En sortir amb "Fet" → 1 sol commit
-    // al model; Escape cancel·la tot (sense aplicar). Les operacions que creen objectes nous al pare
-    // (split/tisores obertes) van a la història del MODEL, no aquí.
+    // F6/G2 — HISTÒRIA INTERNA de la sessió d'edició (undo/redo sense sortir del mode). Instantània de
+    // TOTA l'escena (totes les formes: segments view px + closed + estil) + pintura pendent + forma
+    // primària. Full-scene perquè les operacions de FORMA (moure/esborrar/duplicar/booleanes) canvien
+    // el CONJUNT de subpaths, no només la path activa. En sortir amb "Fet" → 1 sol commit al model;
+    // Escape cancel·la tot. Les operacions que bombollen objectes al pare (split/tisores) van a la
+    // història del MODEL, no aquí.
     const historyRef = { past: [], future: [] }
-    const snapshot = () => { const p = selectedPathRef.current; return { index: p?.data?.index ?? 0, segments: readSegs(p), closed: !!p?.closed, paint: JSON.parse(JSON.stringify(paintRef.current)) } }
+    const snapshot = () => ({
+      primary: selectedPathRef.current?.data?.index ?? null,
+      paths: allPaths().map(p => ({
+        index: p.data?.index ?? 0, segments: readSegs(p), closed: !!p.closed,
+        fill: p.fillColor ? p.fillColor.toCSS(true) : null,
+        stroke: p.strokeColor ? p.strokeColor.toCSS(true) : null,
+        strokeWidth: p.strokeWidth || 0,
+      })),
+      paint: JSON.parse(JSON.stringify(paintRef.current)),
+    })
     const pushHistory = () => { historyRef.past.push(snapshot()); if (historyRef.past.length > 100) historyRef.past.shift(); historyRef.future = [] }
-    const syncPaintLive = (p) => {
-      const ov = paintRef.current[p?.data?.index ?? 0] || {}
-      if (ov.fill != null) p.fillColor = ov.fill === 'transparent' ? null : ov.fill
-      if (ov.stroke != null) p.strokeColor = ov.stroke === 'transparent' ? null : ov.stroke
-      if (ov.strokeWidth != null) p.strokeWidth = toViewPx(ov.strokeWidth)
-    }
     const restore = (snap) => {
       if (!snap) return
-      const target = sketchLayer.getItems({ class: scope.Path }).find(p => (p.data?.index ?? 0) === snap.index)
-      if (target) selectedPathRef.current = target
+      sketchLayer.getItems({ class: scope.Path }).forEach(p => p.remove())
+      sketchLayer.activate()
+      snap.paths.forEach(sp => {
+        const p = new scope.Path({ closed: sp.closed, strokeColor: sp.stroke, strokeWidth: sp.strokeWidth, fillColor: sp.fill })
+        sp.segments.forEach(s => p.add(new scope.Segment(new scope.Point(s.x, s.y), new scope.Point(s.inX || 0, s.inY || 0), new scope.Point(s.outX || 0, s.outY || 0))))
+        p.data = { index: sp.index }
+        sketchLayer.addChild(p)
+      })
       paintRef.current = snap.paint || {}
-      rebuild(snap.segments, snap.closed)
-      if (selectedPathRef.current) syncPaintLive(selectedPathRef.current)
-      setSelection([])
+      selectedPathRef.current = (snap.primary != null ? pathByIndex(snap.primary) : null) || allPaths()[0] || null
+      selectedShapesRef.current = new Set([...selectedShapesRef.current].filter(i => pathByIndex(i) != null))
+      selectedSegsRef.current = new Set()
+      selectedSegRef.current = null
+      refresh()
+      pushState()
     }
 
     const setSelection = (indices) => {
@@ -253,9 +267,8 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       pushState()
     }
 
-    // Reconstrueix la geometria de la path activa a partir d'un array de segments (mateix espai view px).
-    const rebuild = (segs, closed) => {
-      const path = selectedPathRef.current
+    // Reconstrueix la geometria d'UN path concret a partir d'un array de segments (mateix espai view px).
+    const rebuildPath = (path, segs, closed) => {
       if (!path) return
       path.removeSegments()
       ;(segs || []).forEach(s => path.add(new scope.Segment(
@@ -263,7 +276,47 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         new scope.Point(s.inX || 0, s.inY || 0),
         new scope.Point(s.outX || 0, s.outY || 0),
       )))
-      path.closed = !!closed
+      if (closed != null) path.closed = !!closed
+    }
+    // Reconstrueix la path ACTIVA (compat amb els handlers de node existents).
+    const rebuild = (segs, closed) => rebuildPath(selectedPathRef.current, segs, closed)
+
+    // ── G2 · OPERACIONS SOBRE FORMES (mode fletxa negra) ────────────────────────────────────────
+    const toMm = (px) => (px || 0) / (toPx(1) * (zoomRef.current || 1))
+    const nextShapeIndex = () => allPaths().reduce((m, p) => Math.max(m, p.data?.index ?? 0), -1) + 1
+    // Registra l'estil viu d'un path a paintRef (fill/stroke CSS + gruix mm) perquè el commit el
+    // conservi en una forma NOVA (duplicat/booleana) sense entrada d'origen a flat.paths.
+    const registerPaint = (p) => {
+      const idx = p.data?.index ?? 0
+      paintRef.current[idx] = {
+        fill: p.fillColor ? p.fillColor.toCSS(true) : 'transparent',
+        stroke: p.strokeColor ? p.strokeColor.toCSS(true) : 'transparent',
+        strokeWidth: Math.round(toMm(p.strokeWidth) * 100) / 100,
+      }
+    }
+    // Duplica les formes seleccionades (clons amb índex nou + estil registrat). Retorna els índexs nous.
+    const duplicateSelectedShapes = () => {
+      const created = []
+      ;[...selectedShapesRef.current].forEach(idx => {
+        const src = pathByIndex(idx)
+        if (!src) return
+        const dup = src.clone({ insert: false })
+        dup.data = { index: nextShapeIndex() }
+        sketchLayer.addChild(dup)
+        registerPaint(dup)
+        created.push(dup.data.index)
+      })
+      return created
+    }
+    // Esborra les formes seleccionades (Delete en mode forma). Neteja la pintura pendent associada.
+    const deleteSelectedShapes = () => {
+      const sel = selectedShapesRef.current
+      if (!sel.size) return
+      pushHistory()
+      allPaths().forEach(p => { const i = p.data?.index ?? 0; if (sel.has(i)) { delete paintRef.current[i]; p.remove() } })
+      selectedShapesRef.current = new Set()
+      selectedPathRef.current = allPaths()[0] || null
+      drawShapeSelection(); pushState()
     }
 
     const toViewPx = (mm) => toPx(mm) * zoomRef.current
@@ -317,6 +370,10 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       imported.position = new scope.Point(toViewPx(flat.x || 0) + targetW / 2, toViewPx(flat.y || 0) + targetH / 2)
     }
     setCanCommit(true)
+    // G1/G2 — garanteix un ÍNDEX de forma estable per subpath: les importacions SVG no en porten
+    // (queden totes a 0 i col·lapsarien la selecció de forma). No afecta el commit d'SVG, que exporta
+    // la capa sencera; sí que habilita selecció/moviment/duplicat/booleanes per forma.
+    imported.getItems({ class: scope.Path }).filter(p => p.segments?.length).forEach((p, i) => { if (p.data?.index == null) p.data = { ...(p.data || {}), index: i } })
 
     const firstPath = imported.getItems({ class: scope.Path }).find(path => path.segments?.length)
     if (firstPath) {
@@ -357,9 +414,11 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       setStatus('')
     }
 
-    // Esborrat sensible al context de la selecció fina (F2/F3): si hi ha un SEGMENT seleccionat →
-    // obre el path per allà (deleteSegment); si no, treu els NODES seleccionats (removeNode).
+    // Esborrat sensible al MODE i al context de la selecció (G2/G4): mode forma → esborra la/les
+    // FORMA/ES; mode nodes → si hi ha un SEGMENT seleccionat, obre el path per allà (deleteSegment);
+    // si no, treu els NODES seleccionats (removeNode). Mai sorpreses d'abast.
     const removeSelection = () => {
+      if (isShapeMode()) { deleteSelectedShapes(); return }
       const path = selectedPathRef.current
       if (!path) return
       if (selectedSegRef.current != null) {   // F2 — esborrar segment = obrir el path per allà
@@ -383,10 +442,21 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       setFill: (c) => applyPaint('fill', c),
       setStroke: (c) => applyPaint('stroke', c),
       setStrokeWidth: (w) => applyPaint('strokeWidth', w),
-      // F6 — Cmd+A: tots els nodes del path actiu.
-      selectAll: () => { const p = selectedPathRef.current; if (p) setSelection(p.segments.map((_, i) => i)) },
-      // F6 — nudge (fletxes 1px · Shift 10px) sobre els nodes seleccionats (o el segment).
+      // F6/G4 — Cmd+A sensible al mode: forma → totes les FORMES; nodes → tots els nodes del path actiu.
+      selectAll: () => {
+        if (isShapeMode()) { setShapeSelection(allPaths().map(p => p.data?.index ?? 0), selectedPathRef.current?.data?.index); return }
+        const p = selectedPathRef.current; if (p) setSelection(p.segments.map((_, i) => i))
+      },
+      // F6/G2 — nudge (fletxes 1px · Shift 10px) sensible al mode: forma → translada la/les forma/es
+      // (translateSubpath); nodes → mou el segment o els nodes seleccionats.
       nudge: (dx, dy) => {
+        if (isShapeMode()) {
+          const sel = [...selectedShapesRef.current]
+          if (!sel.length) return
+          pushHistory()
+          sel.forEach(i => { const p = pathByIndex(i); if (p) { const r = translateSubpath(readSegs(p), dx, dy); rebuildPath(p, r.segments) } })
+          drawShapeSelection(); return
+        }
         const path = selectedPathRef.current
         if (!path) return
         if (selectedSegRef.current != null) { pushHistory(); const r = moveSegment(readSegs(path), path.closed, selectedSegRef.current, dx, dy); rebuild(r.segments, path.closed); refreshHandles(); return }
@@ -429,6 +499,8 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
           if (shift) { sel.has(idx) ? sel.delete(idx) : sel.add(idx); setShapeSelection([...sel], idx) }
           else if (!sel.has(idx)) setShapeSelection([idx], idx)
           else selectedPathRef.current = hitPath   // ja seleccionada: refixa el primari
+          // G2 — inicia el moviment de forma (Alt = duplicar en arrossegar, estàndard Illustrator).
+          dragRef.current = { kind: 'shape', alt: !!(event.modifiers?.option || event.modifiers?.alt) }
         } else if (!shift) {
           lastShapeClickRef.current = { index: null, t: 0 }
           setShapeSelection([])
@@ -494,6 +566,16 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       }
       if (!drag || !path) return
       if (!drag.pushed) { pushHistory(); drag.pushed = true }   // F6 — 1 sola instantània per gest de drag
+      if (drag.kind === 'shape') {   // G2 — mou la/les FORMA/ES seleccionada/es (translació del subpath)
+        if (drag.alt && !drag.duped) {   // Alt+arrossegar = duplica i mou la còpia (estàndard Illustrator)
+          drag.duped = true
+          const created = duplicateSelectedShapes()
+          if (created.length) { selectedShapesRef.current = new Set(created); selectedPathRef.current = pathByIndex(created[created.length - 1]) }
+        }
+        selectedShapesRef.current.forEach(i => { const p = pathByIndex(i); if (p) p.translate(event.delta) })
+        drawShapeSelection()
+        return
+      }
       if (drag.kind === 'segmentBody') {   // F2 — mou el SEGMENT (recte: translació; corb: deforma nanses)
         const r = moveSegment(readSegs(path), path.closed, drag.curveIndex, event.delta.x, event.delta.y)
         rebuild(r.segments, path.closed)

@@ -71,6 +71,16 @@ export function addNodeAt(segments, closed, curveIndex, time = 0.5) {
 // Pur i trivial; l'usa el drag de nanses en mode suau (per defecte); Alt el salta (independents).
 export function mirrorHandle(vx, vy) { return { x: -(vx || 0), y: -(vy || 0) } }
 
+// ── FORMA (subpath sencer) com a entitat de primera classe (G2) ────────────────────────────
+
+// TRANSLADA un subpath sencer (tots els nodes) per (dx,dy). Les nanses són relatives al node → no
+// canvien. Pur; l'usa el nudge i el moviment de forma en mode fletxa negra. Retorna {segments}.
+export function translateSubpath(segments, dx, dy) {
+  const segs = (segments || []).map(clone)
+  segs.forEach(s => { s.x += dx; s.y += dy })
+  return { segments: segs }
+}
+
 // ── TOPOLOGIA ──────────────────────────────────────────────────────────────────────────────
 
 // Tanca un subpath (uneix primer↔últim). Pur: només marca closed=true (Paper dibuixa la unió).
