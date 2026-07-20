@@ -35,6 +35,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   const paintRef = useRef({})                 // F5: overrides de pintura pendents per índex de subpath {fill,stroke,strokeWidth}
   const zoomRef = useRef(zoom)
   const refreshHandlesRef = useRef(null)      // dispatcher de refresc (node o forma segons el mode)
+  const pushStateRef = useRef(null)           // puja l'estat (mode/selecció/pintura) al pare fora dels handlers
   const opsRef = useRef(null)                 // accions exposades al pare via run() (close/open/split/removeSelection…)
   const onNodeStateRef = useRef(onNodeState)  // callback per pujar {selCount} al pare
   const onEnterDirectRef = useRef(onEnterDirect)  // G1: demana al pare passar a selecció directa (doble-clic forma)
@@ -46,8 +47,9 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   useEffect(() => { onNodeStateRef.current = onNodeState }, [onNodeState])
   useEffect(() => { onEnterDirectRef.current = onEnterDirect }, [onEnterDirect])
   // G1 — en canviar d'eina, si es creua la frontera forma↔nodes cal repintar la capa UI (les àncores
-  // de node i el ressaltat de forma són superfícies excloents). El dispatcher tria segons el mode.
-  useEffect(() => { nodeToolRef.current = nodeTool; refreshHandlesRef.current?.() }, [nodeTool])
+  // de node i el ressaltat de forma són superfícies excloents) I re-sincronitzar l'estat al pare (mode
+  // + comptador), perquè l'indicador i els grups d'eina de forma de la barra depenen de nodeSel.mode.
+  useEffect(() => { nodeToolRef.current = nodeTool; refreshHandlesRef.current?.(); pushStateRef.current?.() }, [nodeTool])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -74,6 +76,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       marqueeRef.current = null
       paintRef.current = {}
       refreshHandlesRef.current = null
+      pushStateRef.current = null
     }
 
     const clearHandles = () => {
@@ -185,6 +188,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         fill, stroke, strokeWidth: Math.round(swMm * 100) / 100,
       })
     }
+    pushStateRef.current = pushState
     // F5 — aplica pintura a UN path: viu al canvas Paper + registrat a paintRef per al commit.
     const applyPaintTo = (path, kind, value) => {
       const idx = path.data?.index ?? 0
