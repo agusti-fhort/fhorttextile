@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { models as modelsApi } from '../api/endpoints'
+import { models as modelsApi, commerce } from '../api/endpoints'
 import ActionsMenu, { PHASES } from '../components/model/ActionsMenu'
 import ModelsFilterPanel from '../components/model/ModelsFilterPanel'
 import { useFilterOptions, garmentTypeLabel, garmentGroupLabel } from '../components/model/filterOptions'
@@ -68,6 +68,31 @@ export default function Models() {
   }, [spStr])
   const filterKey = useMemo(() => JSON.stringify(filterParams), [filterParams])
 
+  // MODE INTENCIÓ (Sprint C): s'hi arriba amb propòsit des d'una comanda/oferta.
+  // ?select_for=<order_line|quote_line>:<id> & select_max=<N> & return=<path>. Aquests params NO
+  // són a FILTER_KEYS → no viatgen al backend de list. El prefiltre customer sí (l'injecta l'origen).
+  const intent = useMemo(() => {
+    const raw = sp.get('select_for')
+    if (!raw) return null
+    const [kind, id] = raw.split(':')
+    if (!['order_line', 'quote_line'].includes(kind) || !id) return null
+    const max = parseInt(sp.get('select_max') || '', 10)
+    return { kind, id, max: Number.isFinite(max) ? max : null, returnTo: sp.get('return') || '/models' }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spStr])
+  const intentMode = !!intent
+
+  // Per quote_line: models ja intencionats → s'exclouen de la llista (paritat E6, sense duplicats).
+  const [intentExistingIds, setIntentExistingIds] = useState(() => new Set())
+  useEffect(() => {
+    if (!intent || intent.kind !== 'quote_line') { setIntentExistingIds(new Set()); return }
+    let alive = true
+    commerce.quoteLineIntents.list({ quote_line: intent.id, page_size: 500 })
+      .then(r => { if (alive) setIntentExistingIds(new Set((r.data?.results ?? r.data ?? []).map(i => i.model))) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [intent?.kind, intent?.id])
+
   // Opcions dels selects del panell (una sola càrrega, compartida amb els chips). Panell desplegable.
   const opts = useFilterOptions()
   const [panelOpen, setPanelOpen] = useState(false)
@@ -124,8 +149,13 @@ export default function Models() {
     return () => clearTimeout(id)
   }, [searchInput])   // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Canviar qualsevol filtre invalida la selecció de conjunt (es defineix pels filtres actius).
-  useEffect(() => { setSelectAllFilter(false); setExcludeIds(new Set()); setSelected(new Set()) }, [filterKey])
+  // Canviar qualsevol filtre invalida la selecció de conjunt (es defineix pels filtres actius). En
+  // mode intenció NO es buida `selected`: la selecció individual persisteix mentre l'usuari refina
+  // filtres per trobar més models (multi-select fins a N a través del filtratge).
+  useEffect(() => {
+    setSelectAllFilter(false); setExcludeIds(new Set())
+    if (!intentMode) setSelected(new Set())
+  }, [filterKey, intentMode])
   useEffect(() => { const id = setTimeout(load, 200); return () => clearTimeout(id) }, [load])
 
   const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
@@ -136,8 +166,36 @@ export default function Models() {
   const filterCount = Math.max(0, count - (selectAllFilter ? excludeIds.size : 0))
   const selCount = selectAllFilter ? filterCount : selected.size
 
-  const toggle = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggle = (id) => setSelected(s => {
+    const n = new Set(s)
+    if (n.has(id)) { n.delete(id); return n }
+    if (intent?.max != null && n.size >= intent.max) {   // cap a select_max (feedback visual)
+      setFeedback({ type: 'err', text: t('models_intent.cap_reached', { n: intent.max }) })
+      return n
+    }
+    n.add(id); return n
+  })
   const clearConjunt = () => { setSelectAllFilter(false); setExcludeIds(new Set()); setSelected(new Set()) }
+
+  // Confirmació del mode intenció: order_line → batch d'assignació; quote_line → bulk d'intents.
+  // Èxit → torna a l'origen (els params es consumeixen en sortir). Error (p.ex. 400 de capacitat) →
+  // mostra el missatge i NO navega (l'usuari ajusta la selecció).
+  const confirmIntent = async () => {
+    const ids = [...selected]
+    if (!ids.length) return
+    try {
+      if (intent.kind === 'order_line') await commerce.orderLines.assignModels(intent.id, { model_ids: ids })
+      else await commerce.quoteLineIntents.bulk({ quote_line: intent.id, model_ids: ids })
+      navigate(intent.returnTo)
+    } catch (e) {
+      setFeedback({ type: 'err', text: e?.response?.data?.detail || t('models_intent.confirm_error') })
+    }
+  }
+  const cancelIntent = () => navigate(intent.returnTo)
+
+  // Per quote_line, exclou de la llista visible els models ja intencionats (paritat E6).
+  const visibleItems = (intentMode && intent.kind === 'quote_line')
+    ? items.filter(m => !intentExistingIds.has(m.id)) : items
 
   // Estat i acció del checkbox per fila (respecta el mode conjunt: marcat = no exclòs).
   const rowChecked = (id) => selectAllFilter ? !excludeIds.has(id) : selected.has(id)
@@ -169,17 +227,33 @@ export default function Models() {
         <div>
           <h1 style={{ fontSize: 'var(--fs-h2)', fontFamily: MONO, color: 'var(--text-main)', fontWeight: 500, margin: 0 }}>{t('models_list.title')}</h1>
           <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, marginTop: 2 }}>
-            {selCount > 0 ? t('models_list.selected', { n: selCount }) : t('models_list.count', { n: count })}
+            {intentMode
+              ? (intent.max != null
+                  ? t('models_intent.counter', { x: selected.size, n: intent.max })
+                  : t('models_intent.counter_open', { x: selected.size }))
+              : (selCount > 0 ? t('models_list.selected', { n: selCount }) : t('models_list.count', { n: count }))}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <NewModelMenu open={newOpen} setOpen={setNewOpen} navigate={navigate} t={t} />
-          <ActionsMenu
-            targets={selectAllFilter ? [] : selectedModels}
-            selectionSet={selectAllFilter ? { filters: filterParams, excludeIds: [...excludeIds], count: filterCount } : null}
-            onChanged={afterAction} onFeedback={setFeedback} />
+          {/* Mode intenció: les accions genèriques (assignar/gate/…) no apliquen → ActionsMenu ocult. */}
+          {!intentMode && (
+            <ActionsMenu
+              targets={selectAllFilter ? [] : selectedModels}
+              selectionSet={selectAllFilter ? { filters: filterParams, excludeIds: [...excludeIds], count: filterCount } : null}
+              onChanged={afterAction} onFeedback={setFeedback} />
+          )}
         </div>
       </div>
+
+      {intentMode && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', margin: '0 0 12px',
+          background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+          fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
+          <i className="ti ti-arrow-back-up" aria-hidden="true" />
+          {t('models_intent.banner')}
+        </div>
+      )}
 
       <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
@@ -204,28 +278,30 @@ export default function Models() {
           <i className={`ti ti-chevron-${panelOpen ? 'up' : 'down'}`} />
         </button>
         {Object.keys(filterParams).length > 0 && (
-          <button onClick={() => setParams(Object.fromEntries([...FILTER_KEYS, 'page'].map(k => [k, undefined])))}
+          <button onClick={() => setParams(Object.fromEntries([...FILTER_KEYS, 'page']
+            .filter(k => !(intentMode && k === 'customer')).map(k => [k, undefined])))}
             style={{ ...inp, cursor: 'pointer', color: 'var(--gray)' }}>× {t('models_list.clear')}</button>
         )}
       </div>
 
       {panelOpen && (
-        <ModelsFilterPanel sp={sp} setParams={setParams} opts={opts} garmentCounts={garmentCounts} />
+        <ModelsFilterPanel sp={sp} setParams={setParams} opts={opts} garmentCounts={garmentCounts}
+          lockedKeys={intentMode ? ['customer'] : []} />
       )}
 
-      <ActiveChips filterParams={filterParams} sp={sp} setParams={setParams} opts={opts} t={t} lang={i18n.language?.slice(0, 2) || 'ca'} FILTER_KEYS={FILTER_KEYS} />
+      <ActiveChips filterParams={filterParams} sp={sp} setParams={setParams} opts={opts} t={t} lang={i18n.language?.slice(0, 2) || 'ca'} FILTER_KEYS={FILTER_KEYS} lockedKeys={intentMode ? ['customer'] : []} />
 
-      {/* Select all (pàgina) */}
-      {items.length > 0 && (
+      {/* Select all (pàgina) — OCULT en mode intenció (selecció individual limitada, no conjunt). */}
+      {!intentMode && items.length > 0 && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: '0 0 8px 2px', cursor: 'pointer' }}>
           <input type="checkbox" checked={selectAllFilter || allOnPage} onChange={toggleAll} />
           {(selectAllFilter || allOnPage) ? '✓' : ''}
         </label>
       )}
 
-      {/* Banda "seleccionar tot el filtre" (patró Gmail): apareix quan la pàgina és plena de
-          selecció i el filtre té més resultats que la pàgina. */}
-      {(allOnPage || selectAllFilter) && hasMoreThanPage && (
+      {/* Banda "seleccionar tot el filtre" (patró Gmail): OCULTA en mode intenció (és l'oposat
+          conceptual de "limitat a N"). Apareix quan la pàgina és plena i el filtre té més resultats. */}
+      {!intentMode && (allOnPage || selectAllFilter) && hasMoreThanPage && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap',
           background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
           padding: '8px 14px', margin: '0 0 10px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-main)' }}>
@@ -250,15 +326,16 @@ export default function Models() {
       {/* Llistat */}
       {loading ? (
         <div style={{ color: 'var(--gray)', fontSize: 'var(--fs-body)', fontFamily: MONO, padding: '20px 0' }}>{t('models_list.loading')}</div>
-      ) : items.length === 0 ? (
+      ) : visibleItems.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--gray)', fontSize: 'var(--fs-body)', fontFamily: MONO }}>
           {(search || fase || temporada) ? t('models_list.empty_filtered') : t('models_list.empty')}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {items.map(m => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: intentMode ? 64 : 0 }}>
+          {visibleItems.map(m => (
             <ModelRow key={m.id} m={m} selected={rowChecked(m.id)} onToggle={() => rowToggle(m.id)}
-              onOpen={() => navigate(`/models/${m.id}`)} onDelete={(e) => remove(m, e)} t={t} locale={dateLocale} />
+              onOpen={intentMode ? () => rowToggle(m.id) : () => navigate(`/models/${m.id}`)}
+              onDelete={(e) => remove(m, e)} t={t} locale={dateLocale} intentMode={intentMode} />
           ))}
         </div>
       )}
@@ -271,13 +348,34 @@ export default function Models() {
           <button onClick={() => setParams({ page: Math.min(pages, page + 1) })} disabled={page >= pages} style={{ ...inp, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? 0.4 : 1 }}>{t('models_list.next')} →</button>
         </div>
       )}
+
+      {/* Barra de confirmació fixa del mode intenció. */}
+      {intentMode && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'wrap',
+          padding: '12px 20px', background: 'var(--white)', borderTop: '1px solid var(--gold)',
+          boxShadow: '0 -4px 16px rgba(0,0,0,0.08)', fontFamily: MONO }}>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
+            {intent.max != null
+              ? t('models_intent.counter', { x: selected.size, n: intent.max })
+              : t('models_intent.counter_open', { x: selected.size })}
+          </span>
+          <button onClick={cancelIntent}
+            style={{ ...inp, cursor: 'pointer', color: 'var(--gray)' }}>{t('models_intent.cancel')}</button>
+          <button onClick={confirmIntent} disabled={!selected.size}
+            style={{ ...inp, cursor: selected.size ? 'pointer' : 'not-allowed', opacity: selected.size ? 1 : 0.5,
+              background: 'var(--gold)', color: 'var(--white)', border: '0.5px solid var(--gold)', fontWeight: 600 }}>
+            {t('models_intent.confirm')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
 // Chips de filtres actius sota la barra: cada filtre amb esborrat individual + "netejar tot". Els
 // noms es resolen de les opcions carregades (opts), no del payload de la llista.
-function ActiveChips({ filterParams, sp, setParams, opts, t, lang, FILTER_KEYS }) {
+function ActiveChips({ filterParams, sp, setParams, opts, t, lang, FILTER_KEYS, lockedKeys = [] }) {
   const CSV = (v) => (v || '').split(',').filter(Boolean)
   const LABEL = {
     search: t('models_filters.f_search'), fase_actual: t('models_filters.f_phase'),
@@ -313,34 +411,42 @@ function ActiveChips({ filterParams, sp, setParams, opts, t, lang, FILTER_KEYS }
     if (k.startsWith('garment_')) return
     if (!LABEL[k]) return
     const bool = k === 'watchpoints_open' || k === 'in_plan'
-    chips.push({ id: k, text: bool ? LABEL[k] : `${LABEL[k]}: ${resolve(k, filterParams[k])}`, remove: () => setParams({ [k]: undefined, page: undefined }) })
+    chips.push({ id: k, text: bool ? LABEL[k] : `${LABEL[k]}: ${resolve(k, filterParams[k])}`,
+      locked: lockedKeys.includes(k), remove: () => setParams({ [k]: undefined, page: undefined }) })
   })
   CSV(sp.get('garment_group_codi__in')).forEach(c => chips.push({ id: `gg${c}`, text: garmentGroupLabel(opts, c), remove: () => removeCsv('garment_group_codi__in', c) }))
   CSV(sp.get('garment_type__in')).forEach(id => chips.push({ id: `gt${id}`, text: garmentTypeLabel(opts, id, lang), remove: () => removeCsv('garment_type__in', id) }))
   CSV(sp.get('garment_type_item__in')).forEach(id => chips.push({ id: `gti${id}`, text: `#${id}`, remove: () => removeCsv('garment_type_item__in', id) }))
 
   if (!chips.length) return null
+  const hasClearable = chips.some(c => !c.locked)
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', margin: '0 0 12px' }}>
       {chips.map(c => (
         <span key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 999,
           background: 'var(--gold-pale)', color: 'var(--gold)', border: '0.5px solid var(--gold)', fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600 }}>
+          {c.locked && <i className="ti ti-lock" style={{ fontSize: 12 }} aria-hidden="true" />}
           {c.text}
-          <button type="button" onClick={c.remove} aria-label={t('models_list.clear')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1 }}>
-            <i className="ti ti-x" style={{ fontSize: 12 }} aria-hidden="true" />
-          </button>
+          {!c.locked && (
+            <button type="button" onClick={c.remove} aria-label={t('models_list.clear')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1 }}>
+              <i className="ti ti-x" style={{ fontSize: 12 }} aria-hidden="true" />
+            </button>
+          )}
         </span>
       ))}
-      <button type="button" onClick={() => setParams(Object.fromEntries([...FILTER_KEYS, 'page'].map(k => [k, undefined])))}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray)', fontFamily: MONO, fontSize: 'var(--fs-caption)', textDecoration: 'underline' }}>
-        {t('models_filters.clear_all')}
-      </button>
+      {hasClearable && (
+        <button type="button" onClick={() => setParams(Object.fromEntries(
+          [...FILTER_KEYS, 'page'].filter(k => !lockedKeys.includes(k)).map(k => [k, undefined])))}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray)', fontFamily: MONO, fontSize: 'var(--fs-caption)', textDecoration: 'underline' }}>
+          {t('models_filters.clear_all')}
+        </button>
+      )}
     </div>
   )
 }
 
-function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale }) {
+function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale, intentMode }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'stretch', gap: 12, borderRadius: 8, background: 'var(--white)',
@@ -365,7 +471,7 @@ function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale }) {
             background: m.has_order ? 'var(--ok-bg)' : 'var(--gray-l)',
             color: m.has_order ? 'var(--ok)' : 'var(--gray)',
           }}>{t(m.has_order ? 'models_list.with_order' : 'models_list.direct')}</span>
-          <button onClick={onDelete} title={t('models_list.delete')} style={delBtn}><i className="ti ti-trash" /></button>
+          {!intentMode && <button onClick={onDelete} title={t('models_list.delete')} style={delBtn}><i className="ti ti-trash" /></button>}
         </div>
         {/* Fila 2 — operativa */}
         <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr 1.4fr', gap: 12, alignItems: 'center', fontFamily: MONO, fontSize: 'var(--fs-body)' }}>

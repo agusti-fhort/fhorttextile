@@ -12,7 +12,7 @@ import { garmentTypeLabel, garmentGroupLabel } from './filterOptions'
 const MONO = 'IBM Plex Mono, monospace'
 const CSV = (v) => (v || '').split(',').filter(Boolean)
 
-export default function ModelsFilterPanel({ sp, setParams, opts, garmentCounts }) {
+export default function ModelsFilterPanel({ sp, setParams, opts, garmentCounts, lockedKeys = [] }) {
   const { t, i18n } = useTranslation()
   const lang = (i18n.language || 'ca').slice(0, 2)
   const get = (k) => sp.get(k) || ''
@@ -51,7 +51,7 @@ export default function ModelsFilterPanel({ sp, setParams, opts, garmentCounts }
       {/* Identitat */}
       <Family title={t('models_filters.fam_identity')}>
         <Sel label={t('models_filters.customer')} value={get('customer')} onChange={v => set('customer', v)}
-          placeholder={t('models_filters.all_customers')}
+          placeholder={t('models_filters.all_customers')} disabled={lockedKeys.includes('customer')}
           options={opts.customers.map(c => ({ value: c.id, label: c.nom }))} />
         <Txt label={t('models_filters.collection')} value={get('collection')} onChange={v => set('collection', v)}
           placeholder={t('models_filters.collection_ph')} />
@@ -132,10 +132,11 @@ function Field({ label, children }) {
   )
 }
 
-function Sel({ label, value, onChange, options, placeholder }) {
+function Sel({ label, value, onChange, options, placeholder, disabled = false }) {
   return (
     <Field label={label}>
-      <select value={value} onChange={e => onChange(e.target.value)} style={inp}>
+      <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
+        style={{ ...inp, ...(disabled ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>
         <option value="">{placeholder}</option>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>

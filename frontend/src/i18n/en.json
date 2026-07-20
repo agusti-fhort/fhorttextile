@@ -3672,5 +3672,14 @@
     "loading": "Loading size systems…",
     "empty": "No size system available for this target.",
     "canonical": "canonical"
+  },
+  "models_intent": {
+    "banner": "Selection with intent — the customer is locked; pick the models and confirm.",
+    "counter": "{{x}}/{{n}} selected",
+    "counter_open": "{{x}} selected",
+    "cap_reached": "At most {{n}} models for this line.",
+    "cancel": "Cancel",
+    "confirm": "Confirm selection",
+    "confirm_error": "Could not confirm the selection."
   }
 }

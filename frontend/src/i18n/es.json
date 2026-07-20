@@ -3672,5 +3672,14 @@
     "loading": "Cargando sistemas de tallas…",
     "empty": "Ningún sistema de tallas disponible para este target.",
     "canonical": "canónico"
+  },
+  "models_intent": {
+    "banner": "Selección con intención — el cliente queda bloqueado; elige los modelos y confirma.",
+    "counter": "{{x}}/{{n}} seleccionados",
+    "counter_open": "{{x}} seleccionados",
+    "cap_reached": "Máximo {{n}} modelos para esta línea.",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar selección",
+    "confirm_error": "No se ha podido confirmar la selección."
   }
 }

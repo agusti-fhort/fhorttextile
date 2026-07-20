@@ -3672,5 +3672,14 @@
     "loading": "Carregant sistemes de talles…",
     "empty": "Cap sistema de talles disponible per a aquest target.",
     "canonical": "canònic"
+  },
+  "models_intent": {
+    "banner": "Selecció amb intenció — el client queda bloquejat; tria els models i confirma.",
+    "counter": "{{x}}/{{n}} seleccionats",
+    "counter_open": "{{x}} seleccionats",
+    "cap_reached": "Màxim {{n}} models per a aquesta línia.",
+    "cancel": "Cancel·lar",
+    "confirm": "Confirmar selecció",
+    "confirm_error": "No s'ha pogut confirmar la selecció."
   }
 }

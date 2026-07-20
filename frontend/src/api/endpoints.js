@@ -447,6 +447,8 @@ export const commerce = {
     list: (params) => client.get('/api/v1/commerce/quote-line-intents/', { params }),   // ?quote_line=
     create: (data) => client.post('/api/v1/commerce/quote-line-intents/', data),
     remove: (id) => client.delete(`/api/v1/commerce/quote-line-intents/${id}/`),
+    // Sprint C H1 — crea intents en LOT (mode intenció); ignora duplicats. {quote_line, model_ids}
+    bulk: (data) => client.post('/api/v1/commerce/quote-line-intents/bulk/', data),
   },
   // Documents comercials — SalesOrder (comanda, B3b). Neixen de la conversió d'una oferta;
   // lectura + pdf. Línies read-only (mutació només qty_allocated, control de cartera B4).
@@ -461,6 +463,8 @@ export const commerce = {
     update: (id, data) => client.patch(`/api/v1/commerce/order-lines/${id}/`, data),   // qty_allocated
     // B4b — assigna un model a la línia i crea el WO ORDER (migra el col·lector). {model_id}
     assignModel: (id, data) => client.post(`/api/v1/commerce/order-lines/${id}/assign-model/`, data),
+    // Sprint C H1 — assigna N models a la línia en UNA transacció tot-o-res. {model_ids}
+    assignModels: (id, data) => client.post(`/api/v1/commerce/order-lines/${id}/assign-models/`, data),
     // P4 — expansió read-only: models assignats (via WO), tasques amb estat, % imputat.
     allocation: (id) => client.get(`/api/v1/commerce/order-lines/${id}/allocation/`),
   },
