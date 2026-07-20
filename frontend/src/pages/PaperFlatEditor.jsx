@@ -185,11 +185,8 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         fill, stroke, strokeWidth: Math.round(swMm * 100) / 100,
       })
     }
-    // F5 — aplica pintura a la subpath ACTIVA: viu al canvas Paper + registrat a paintRef per al commit.
-    const applyPaint = (kind, value) => {
-      const path = selectedPathRef.current
-      if (!path) return
-      pushHistory()
+    // F5 — aplica pintura a UN path: viu al canvas Paper + registrat a paintRef per al commit.
+    const applyPaintTo = (path, kind, value) => {
       const idx = path.data?.index ?? 0
       const ov = (paintRef.current[idx] = paintRef.current[idx] || {})
       if (kind === 'strokeWidth') {
@@ -200,7 +197,20 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         path[kind === 'fill' ? 'fillColor' : 'strokeColor'] = none ? null : value
         ov[kind] = none ? 'transparent' : value
       }
-      scope.view.update(); pushState()
+    }
+    // F5/G4 — la pintura de la barra opera sobre la selecció del MODE ACTIU: mode forma → totes les
+    // FORMES seleccionades (multi); selecció directa → la subpath activa (comportament F5 original).
+    const applyPaint = (kind, value) => {
+      const primary = selectedPathRef.current
+      if (!primary) return
+      pushHistory()
+      const targets = isShapeMode() && selectedShapesRef.current.size
+        ? [...selectedShapesRef.current].map(pathByIndex).filter(Boolean)
+        : [primary]
+      targets.forEach(p => applyPaintTo(p, kind, value))
+      scope.view.update()
+      if (isShapeMode()) drawShapeSelection()
+      pushState()
     }
 
     // F6/G2 — HISTÒRIA INTERNA de la sessió d'edició (undo/redo sense sortir del mode). Instantània de
