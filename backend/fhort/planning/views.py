@@ -594,17 +594,37 @@ def plan_eligible_attendees_view(request):
     return Response(out, status=http_status.HTTP_200_OK)
 
 
+# Límit dur de seguretat per al camí d'IDs EXPLÍCITS: el client no pot enviar llistes
+# il·limitades. El camí `filters` NO en necessita (itera server-side per lots).
+ASSIGN_BATCH_MAX_EXPLICIT_IDS = 500
+
+
 @api_view(['POST'])
 @permission_classes([_DefineTasks])
 def plan_assign_batch_view(request):
     """POST /api/v1/plan/assign-batch/ — wizard multi-assignació. Gated `define_tasks`.
-    Body: {model_ids:[int], assignacions:[{task_type_code, assignee_profile_id,
-           planned_start?, planned_end?}]}. 400 si planned_start i planned_end alhora."""
+
+    CONTRACTE DE CONJUNT (C2) — el cos porta `assignacions` + EXACTAMENT UNA font de models:
+      A) {model_ids:[int], ...}   llista explícita del client (màx ASSIGN_BATCH_MAX_EXPLICIT_IDS).
+      B) {filters:{…params del ModelFilter canònic…}, exclude_ids:[int], ...}
+         conjunt server-side: el backend RE-AVALUA el queryset amb el ModelFilter canònic (C1)
+         + la mateixa cerca del Model list, al MOMENT d'executar, i en treu els exclude_ids.
+         Sense límit de mida (assign_batch itera per lots).
+    XOR dur: model_ids i filters no poden venir alhora (ni cap dels dos) → 400.
+
+    assignacions:[{task_type_code, assignee_profile_id, planned_start?, planned_end?}].
+    400 si planned_start i planned_end alhora (lot sencer)."""
     d = request.data
     model_ids = d.get('model_ids')
+    filters = d.get('filters')
+    exclude_ids = d.get('exclude_ids') or []
     assignacions = d.get('assignacions')
-    if not isinstance(model_ids, list) or not model_ids:
-        return Response({'error': 'model_ids (llista no buida) requerit.'},
+
+    # XOR dur de la font de models.
+    has_ids, has_filters = model_ids is not None, filters is not None
+    if has_ids == has_filters:
+        return Response({'error': 'Cal EXACTAMENT una font de models: model_ids O filters '
+                                  '(mai els dos alhora, ni cap dels dos).'},
                         status=http_status.HTTP_400_BAD_REQUEST)
     if not isinstance(assignacions, list) or not assignacions:
         return Response({'error': 'assignacions (llista no buida) requerit.'},
@@ -613,9 +633,48 @@ def plan_assign_batch_view(request):
         if not isinstance(a, dict) or not a.get('task_type_code') or not a.get('assignee_profile_id'):
             return Response({'error': 'cada assignació requereix task_type_code i assignee_profile_id.'},
                             status=http_status.HTTP_400_BAD_REQUEST)
+
+    if has_ids:
+        # Camí A — IDs explícits (límit dur).
+        if not isinstance(model_ids, list) or not model_ids:
+            return Response({'error': 'model_ids (llista no buida) requerit.'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+        if len(model_ids) > ASSIGN_BATCH_MAX_EXPLICIT_IDS:
+            return Response({'error': f'Massa models explícits ({len(model_ids)}); màxim '
+                                      f'{ASSIGN_BATCH_MAX_EXPLICIT_IDS}. Per a conjunts més grans '
+                                      f'envia `filters` (aplicació server-side per lots).'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+        model_source = model_ids
+    else:
+        # Camí B — conjunt filtrat re-avaluat server-side (mateixa lògica que el Model list:
+        # ModelFilter canònic + cerca sobre ModelViewSet.search_fields).
+        if not isinstance(filters, dict):
+            return Response({'error': 'filters ha de ser un objecte de paràmetres.'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+        if not isinstance(exclude_ids, list):
+            return Response({'error': 'exclude_ids ha de ser una llista.'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+        from django.db.models import Q
+        from django.http import QueryDict
+        from fhort.models_app.models import Model
+        from fhort.models_app.views import ModelFilter, ModelViewSet
+        qd = QueryDict('', mutable=True)
+        for k, v in filters.items():
+            qd[k] = v
+        qs = ModelFilter(qd, queryset=Model.objects.all(), request=request).qs
+        search = (filters.get('search') or '').strip()
+        if search:
+            sq = Q()
+            for f in ModelViewSet.search_fields:   # font única del conjunt de cerca del Model list
+                sq |= Q(**{f'{f}__icontains': search})
+            qs = qs.filter(sq)
+        if exclude_ids:
+            qs = qs.exclude(id__in=exclude_ids)
+        model_source = qs.values_list('id', flat=True)   # lazy: es materialitza dins assign_batch
+
     profile = getattr(request.user, 'profile', None)
     try:
-        out = plan_service.assign_batch(model_ids=model_ids, assignacions=assignacions, actor=profile)
+        out = plan_service.assign_batch(model_ids=model_source, assignacions=assignacions, actor=profile)
     except ValueError as e:
         return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
     return Response(out, status=http_status.HTTP_200_OK)
