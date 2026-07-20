@@ -25,20 +25,44 @@ from .serializers import (
 
 
 class ModelFilter(django_filters.FilterSet):
-    """Filtres del Model list. Additiu sobre els exactes històrics (estat/fase_actual/
-    garment_type/responsable/temporada/any): afegeix campanya (customer/collection) i un
-    rang de dates sobre data_objectiu per al board per-model del Dashboard (Sprint 5).
+    """FONT ÚNICA DE FILTRES de model (C1). El consumeixen els TRES punts d'entrada que
+    abans el reflectien per separat: el Model list (`ModelViewSet`), els comptadors per fase
+    (`fase-counts`) i el board per-model (`by_model`, tasks/views_b.py, via subquery d'ids).
+    Params:
+      - ?fase_actual / ?garment_type / ?temporada / ?any / ?estat / ?prioritat   exactes
       - ?customer=<id>                  exacte (FK)
       - ?collection=<text>              icontains (CharField lliure)
       - ?data_objectiu_after=YYYY-MM-DD&data_objectiu_before=YYYY-MM-DD  rang inclusiu
+      - ?responsable=<userprofile_id>   SEMPRE el DIRECTOR del model (Model.responsable, FK).
+      - ?assignee=me | <userprofile_id> tècnic amb ≥1 ModelTask assignada (càrrega real).
+        Desdoblament semàntic de C1: `assignee` és el param NOU que hereta el comportament
+        que abans `responsable` tenia a by_model/fase-counts; `responsable` queda net com a
+        director. Valors invàlids d'`assignee` s'ignoren (coherent amb la resta de filtres).
     """
     collection = django_filters.CharFilter(field_name='collection', lookup_expr='icontains')
     data_objectiu = django_filters.DateFromToRangeFilter(field_name='data_objectiu')
+    assignee = django_filters.CharFilter(method='filter_assignee')
 
     class Meta:
         model = Model
         fields = ['fase_actual', 'garment_type', 'responsable', 'temporada', 'any',
-                  'customer', 'collection', 'data_objectiu']
+                  'estat', 'prioritat', 'customer', 'collection', 'data_objectiu']
+
+    def filter_assignee(self, queryset, name, value):
+        """`me` → perfil de la request; `<id>` → aquell perfil. Filtra els models on el perfil
+        és ASSIGNEE d'≥1 ModelTask (subquery per model_id, sense tocar la resta de filtres).
+        Valor no resoluble → queryset intacte (s'ignora, com els altres filtres invàlids)."""
+        from fhort.tasks.models import ModelTask
+        if value == 'me':
+            profile = getattr(getattr(self.request, 'user', None), 'profile', None)
+            if profile is None:
+                return queryset.none()
+            model_ids = ModelTask.objects.filter(assignee=profile).values('model_id')
+        elif str(value).isdigit():
+            model_ids = ModelTask.objects.filter(assignee_id=int(value)).values('model_id')
+        else:
+            return queryset
+        return queryset.filter(id__in=model_ids)
 
 
 class ModelViewSet(viewsets.ModelViewSet):
@@ -103,32 +127,18 @@ class ModelViewSet(viewsets.ModelViewSet):
         FilterSet + search). Es calcula a la BD (values+annotate), sense carregar files,
         per escalar a 600+ models. Retorna {counts:{<fase>:n}, total}.
 
-        ABAST "els meus" (Sprint board tècnic): ?responsable=me | <profile_id> filtra els
-        models on l'usuari (o el perfil) és ASSIGNEE d'≥1 ModelTask — MATEIXA semàntica que
-        by-model (views_b.py), NO Model.responsable (director). Es treu del filterset (que el
-        llegiria com a FK director i petaria amb 'me') i s'aplica a mà, perquè els KPIs/chips
-        quadrin amb el board quan es commuta a "els meus".
+        ABAST "els meus" (board tècnic): ?assignee=me | <profile_id> filtra els models on
+        l'usuari (o el perfil) és ASSIGNEE d'≥1 ModelTask — MATEIXA semàntica que by-model
+        (C1: font única de filtres via ModelFilter). `responsable` és el DIRECTOR del model.
 
         L'acció no és 'list' → get_queryset() torna el queryset pla (sense les anotacions
         de cicle de la llista). order_by() buit abans de values() perquè un OrderingFilter
         actiu no trenqui el GROUP BY.
         """
         from django.db.models import Count
-        from fhort.tasks.models import ModelTask
-        # Treu 'responsable' del GET abans del filterset (s'aplica a mà, semàntica assignee).
-        responsable = request.query_params.get('responsable')
-        if responsable is not None:
-            mutable = request._request.GET.copy()
-            mutable.pop('responsable', None)
-            request._request.GET = mutable
+        # C1 — el filtrat (inclosos responsable=director i assignee=tècnic) el resol el
+        # ModelFilter canònic via filter_queryset; aquí només s'agrupa.
         qs = self.filter_queryset(self.get_queryset()).order_by()
-        if responsable == 'me':
-            profile = getattr(request.user, 'profile', None)
-            qs = (qs.filter(id__in=ModelTask.objects.filter(assignee=profile).values('model_id'))
-                  if profile is not None else qs.none())
-        elif responsable and responsable.isdigit():
-            qs = qs.filter(id__in=ModelTask.objects.filter(
-                assignee_id=int(responsable)).values('model_id'))
         rows = qs.values('fase_actual').annotate(n=Count('id'))
         counts = {r['fase_actual']: r['n'] for r in rows}
         return Response({'counts': counts, 'total': sum(counts.values())})
