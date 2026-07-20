@@ -16,13 +16,13 @@ from fhort.accounts.capabilities import HasCapability, CONFIGURE, DEFINE_TASKS
 
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
-    Quote, QuoteLine, PaymentTerms, SalesOrder, SalesOrderLine, WorkOrder, Expense,
-    DeliveryNote, DeliveryNoteLine,
+    Quote, QuoteLine, QuoteLineModelIntent, PaymentTerms, SalesOrder, SalesOrderLine,
+    WorkOrder, Expense, DeliveryNote, DeliveryNoteLine,
 )
 from .serializers import (
     UnitSerializer, ProductSerializer, ProductRecipeSerializer, ProductSupplierSerializer,
     ProductComponentSerializer, ProductPriceGTISerializer,
-    QuoteSerializer, QuoteLineSerializer, PaymentTermsSerializer,
+    QuoteSerializer, QuoteLineSerializer, QuoteLineModelIntentSerializer, PaymentTermsSerializer,
     SalesOrderSerializer, SalesOrderLineSerializer, WorkOrderSerializer, ExpenseSerializer,
     DeliveryNoteSerializer, DeliveryNoteLineSerializer,
 )
@@ -167,6 +167,19 @@ class QuoteLineViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
     queryset = QuoteLine.objects.select_related('quote', 'product').all()
     serializer_class = QuoteLineSerializer
     filterset_fields = ['quote', 'product']
+
+
+class QuoteLineModelIntentViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+    """Vincle preparatori model↔línia d'oferta (E2, patró satèl·lit ?quote_line=). Escriptura
+    gated CONFIGURE; els guards (estat DRAFT/SENT + coherència de client) viuen al serializer.
+    Intenció informativa: no toca WO ni cartera."""
+    queryset = QuoteLineModelIntent.objects.select_related(
+        'quote_line__quote', 'model').all()
+    serializer_class = QuoteLineModelIntentSerializer
+    filterset_fields = ['quote_line', 'model']
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=getattr(self.request.user, 'profile', None))
 
 
 # ── Documents comercials — SalesOrder (comanda, B3b) ───────────────────────────────────
