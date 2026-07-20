@@ -2699,7 +2699,11 @@
     "node_editing": "Editant nodes",
     "subpath_toggle_closed": "Tancar / obrir la subpath",
     "subpath_extract": "Extreure com a objecte independent",
-    "subpath_delete": "Esborrar la subpath"
+    "subpath_delete": "Esborrar la subpath",
+    "node_tool_scissors": "Tisores (talla el traç en un punt)",
+    "node_close": "Tancar el path",
+    "node_open": "Obrir pel node seleccionat",
+    "node_split": "Separar pel node seleccionat"
   },
   "estat_badge": {
     "pendent_inputs": "Pendent d'inputs",

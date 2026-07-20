@@ -2699,7 +2699,11 @@
     "node_editing": "Editing nodes",
     "subpath_toggle_closed": "Close / open subpath",
     "subpath_extract": "Extract as independent object",
-    "subpath_delete": "Delete subpath"
+    "subpath_delete": "Delete subpath",
+    "node_tool_scissors": "Scissors (cut the stroke at a point)",
+    "node_close": "Close the path",
+    "node_open": "Open at selected node",
+    "node_split": "Split at selected node"
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",

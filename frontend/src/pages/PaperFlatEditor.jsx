@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import paper from 'paper'
-import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle } from './ftt/paperOps'
+import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle, closeSegments, openAtNode, splitAtNode, splitAtLocation } from './ftt/paperOps'
 
 const PAPER_COL = {
   node: '#185fa5',
@@ -27,6 +27,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   const labelsRef = useRef(labels)
   const zoomRef = useRef(zoom)
   const refreshHandlesRef = useRef(null)
+  const opsRef = useRef(null)                 // accions de topologia exposades als botons (close/open/split)
   const nodeToolRef = useRef('select')        // eina activa (llegida dins els handlers de Paper)
   const [nodeTool, setNodeTool] = useState('select')
   const [selCount, setSelCount] = useState(0)  // per a l'indicador de context
@@ -217,6 +218,34 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       setStatus(labelsRef.current?.changed || '')
     }
 
+    // Conversió d'un segment de l'espai VIEW px a l'espai LOCAL del flat (mateixa matemàtica que commit),
+    // per bombollar una peça separada al pare com a objecte nou (split/tisores).
+    const invRot = -(((flat.rotation || 0) * Math.PI) / 180)
+    const icos = Math.cos(invRot), isin = Math.sin(invRot)
+    const fromViewMm = (pt) => ({ x: pt.x / toPx(1) / (zoomRef.current || 1), y: pt.y / toPx(1) / (zoomRef.current || 1) })
+    const ptToLocal = (x, y) => { const p = fromViewMm({ x, y }); const dx = p.x - (flat.x || 0), dy = p.y - (flat.y || 0); return { x: (dx * icos - dy * isin) / scaleX, y: (dx * isin + dy * icos) / scaleY } }
+    const hToLocal = (x, y) => { const p = fromViewMm({ x, y }); return { x: (p.x * icos - p.y * isin) / scaleX, y: (p.x * isin + p.y * icos) / scaleY } }
+    const segViewToLocal = (s) => {
+      const pt = ptToLocal(s.x, s.y), hin = hToLocal(s.inX, s.inY), hout = hToLocal(s.outX, s.outY)
+      return { x: pt.x, y: pt.y, inX: hin.x, inY: hin.y, outX: hout.x, outY: hout.y }
+    }
+    // Divideix la path viva en dues: la peça A es queda; la B es bombolla al pare com a objecte nou.
+    const splitInTwo = (pieces) => {
+      if (!pieces || !pieces.length) return
+      if (pieces.length === 1) { applyOp(pieces[0], []); return }
+      rebuild(pieces[0].segments, pieces[0].closed)
+      setSelection([])
+      onSplitObject?.({ segments: pieces[1].segments.map(segViewToLocal), closed: pieces[1].closed })
+      setStatus(labelsRef.current?.changed || '')
+    }
+
+    // Accions de topologia exposades als botons de la barra contextual (S2b).
+    opsRef.current = {
+      close: () => { const p = selectedPathRef.current; if (p && !p.closed) applyOp(closeSegments(readSegs(p)), [...selectedSegsRef.current]) },
+      open: () => { const p = selectedPathRef.current; const sel = [...selectedSegsRef.current]; if (p && p.closed && sel.length === 1) applyOp(openAtNode(readSegs(p), true, sel[0]), []) },
+      split: () => { const p = selectedPathRef.current; const sel = [...selectedSegsRef.current]; if (p && sel.length === 1) splitInTwo(splitAtNode(readSegs(p), p.closed, sel[0])) },
+    }
+
     const tool = new scope.Tool()
     tool.onMouseDown = (event) => {
       const path = selectedPathRef.current
@@ -254,6 +283,10 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       if (active === 'add' && strokeHit?.location && strokeHit.item === path) {
         const r = addNodeAt(readSegs(path), path.closed, strokeHit.location.curve.index, strokeHit.location.time)
         applyOp(r, r && r.index != null ? [r.index] : [])   // selecciona el node nou
+        return
+      }
+      if (active === 'scissors' && strokeHit?.location && strokeHit.item === path) {   // tisores: tall arbitrari
+        splitInTwo(splitAtLocation(readSegs(path), path.closed, strokeHit.location.curve.index, strokeHit.location.time))
         return
       }
       // Canviar de path (clic sobre una altra subpath) o iniciar marquesina.
@@ -402,6 +435,16 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       <i className={`ti ${icon}`} style={{ fontSize: 16 }} />
     </button>
   )
+  const actBtn = (icon, title, onClick) => (
+    <button key={icon} type="button" title={title} onClick={onClick}
+      style={{
+        width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        border: '1px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer', background: 'var(--white)', color: 'var(--text-muted)',
+      }}>
+      <i className={`ti ${icon}`} style={{ fontSize: 16 }} />
+    </button>
+  )
+  const sepStyle = { width: 1, height: 20, background: 'var(--gray-l)' }
 
   return (
     <div style={{ position: 'absolute', left: 0, top: 0, width: pageW * zoom, height: pageH * zoom, zIndex: 20, overflow: 'hidden' }}>
@@ -418,7 +461,12 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         {toolBtn('add', 'ti-plus', L.node_add)}
         {toolBtn('remove', 'ti-minus', L.node_remove)}
         {toolBtn('convert', 'ti-vector-bezier-2', L.node_convert)}
-        <span style={{ width: 1, height: 20, background: 'var(--gray-l)' }} />
+        {toolBtn('scissors', 'ti-scissors', L.node_scissors)}
+        <span style={sepStyle} />
+        {actBtn('ti-link', L.node_close, () => opsRef.current?.close())}
+        {actBtn('ti-link-off', L.node_open, () => opsRef.current?.open())}
+        {actBtn('ti-arrows-split', L.node_split, () => opsRef.current?.split())}
+        <span style={sepStyle} />
         <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
           {(L.node_editing || 'Editing nodes')}{selCount ? ` · ${selCount}` : ''}
         </span>

@@ -3230,6 +3230,20 @@ export default function TechSheetEditor() {
     return () => window.removeEventListener('keydown', onKey)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locked, editingText, editingFlatId, selectedIds, currentPage])
+  // S2b — el sub-editor separa/talla la path viva: la peça B arriba en espai LOCAL i es crea com a
+  // OBJECTE nou de primer nivell, heretant la transformació de l'objecte en edició (perquè quedi al lloc).
+  const handleSplitObject = (piece) => {
+    if (!editingFlatId || !piece?.segments?.length) return
+    const base = objectsOf(currentPage).find(o => o.id === editingFlatId)
+    if (!base) return
+    const newObj = {
+      id: uid(), type: 'path', layer: 'free',
+      x: base.x || 0, y: base.y || 0, rotation: base.rotation, scaleX: base.scaleX, scaleY: base.scaleY,
+      stroke: base.stroke, fill: base.fill, strokeWidth: base.strokeWidth,
+      paths: [{ closed: !!piece.closed, fill: 'transparent', fillRule: 'nonzero', strokeWidth: base.strokeWidth || 1.2, segments: piece.segments }],
+    }
+    addObject(newObj)
+  }
   const commitFlatEdit = (payload) => {
     if (!editingFlatId) return
     if (payload && typeof payload === 'object' && Array.isArray(payload.paths)) {
@@ -3773,6 +3787,10 @@ export default function TechSheetEditor() {
     node_add: t('tech_sheet.node_tool_add'),
     node_remove: t('tech_sheet.node_tool_remove'),
     node_convert: t('tech_sheet.node_tool_convert'),
+    node_scissors: t('tech_sheet.node_tool_scissors'),
+    node_close: t('tech_sheet.node_close'),
+    node_open: t('tech_sheet.node_open'),
+    node_split: t('tech_sheet.node_split'),
     node_editing: t('tech_sheet.node_editing'),
   }
 
@@ -4454,6 +4472,7 @@ export default function TechSheetEditor() {
                 toPx={toPx}
                 labels={paperFlatLabels}
                 onCommit={commitFlatEdit}
+                onSplitObject={handleSplitObject}
                 onCanCommitChange={setFlatCanCommit}
               />
             </Suspense>

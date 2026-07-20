@@ -2699,7 +2699,11 @@
     "node_editing": "Editando nodos",
     "subpath_toggle_closed": "Cerrar / abrir el subpath",
     "subpath_extract": "Extraer como objeto independiente",
-    "subpath_delete": "Eliminar el subpath"
+    "subpath_delete": "Eliminar el subpath",
+    "node_tool_scissors": "Tijeras (corta el trazo en un punto)",
+    "node_close": "Cerrar el path",
+    "node_open": "Abrir por el nodo seleccionado",
+    "node_split": "Separar por el nodo seleccionado"
   },
   "estat_badge": {
     "pendent_inputs": "Pendiente de inputs",
