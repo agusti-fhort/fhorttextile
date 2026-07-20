@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import {
   garmentTypeItems, gradingRuleSets, garmentGroups, sizeDefinitions,
 } from '../api/endpoints'
-import AxesSelector from '../components/grading/AxesSelector'
+import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
 import MeasurementBaseGrid from '../components/MeasurementBaseGrid/MeasurementBaseGrid'
 
@@ -253,7 +253,7 @@ export default function ItemAuthoring() {
             </label>
           </div>
 
-          <AxesSelector ruleSets={ruleSets} value={axes} onChange={setAxes} />
+          <CascadeSelector mode="single" maxLevel="group" ruleSets={ruleSets} value={axes} onChange={setAxes} />
 
           <div style={{ marginTop: 8 }}>
             <p style={sectionTitle}>{t('item_authoring.pick_ruleset')}</p>
