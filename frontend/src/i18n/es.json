@@ -1006,7 +1006,11 @@
     "date_from": "Fecha objetivo desde",
     "date_to": "Fecha objetivo hasta",
     "watchpoints_open": "Con watchpoints abiertos",
-    "in_plan": "En el plan"
+    "in_plan": "En el plan",
+    "f_search": "Búsqueda",
+    "f_phase": "Fase",
+    "f_season": "Temporada",
+    "clear_all": "Limpiar todo"
   },
   "garment_selector": {
     "loading_families": "Cargando familias…",

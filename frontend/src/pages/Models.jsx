@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { models as modelsApi } from '../api/endpoints'
 import ActionsMenu, { PHASES } from '../components/model/ActionsMenu'
 import ModelsFilterPanel from '../components/model/ModelsFilterPanel'
-import { useFilterOptions } from '../components/model/filterOptions'
+import { useFilterOptions, garmentTypeLabel, garmentGroupLabel } from '../components/model/filterOptions'
 import Feedback from '../components/ui/Feedback'
 
 const MONO = 'IBM Plex Mono, monospace'
@@ -213,6 +213,8 @@ export default function Models() {
         <ModelsFilterPanel sp={sp} setParams={setParams} opts={opts} garmentCounts={garmentCounts} />
       )}
 
+      <ActiveChips filterParams={filterParams} sp={sp} setParams={setParams} opts={opts} t={t} lang={i18n.language?.slice(0, 2) || 'ca'} FILTER_KEYS={FILTER_KEYS} />
+
       {/* Select all (pàgina) */}
       {items.length > 0 && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: '0 0 8px 2px', cursor: 'pointer' }}>
@@ -269,6 +271,71 @@ export default function Models() {
           <button onClick={() => setParams({ page: Math.min(pages, page + 1) })} disabled={page >= pages} style={{ ...inp, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? 0.4 : 1 }}>{t('models_list.next')} →</button>
         </div>
       )}
+    </div>
+  )
+}
+
+// Chips de filtres actius sota la barra: cada filtre amb esborrat individual + "netejar tot". Els
+// noms es resolen de les opcions carregades (opts), no del payload de la llista.
+function ActiveChips({ filterParams, sp, setParams, opts, t, lang, FILTER_KEYS }) {
+  const CSV = (v) => (v || '').split(',').filter(Boolean)
+  const LABEL = {
+    search: t('models_filters.f_search'), fase_actual: t('models_filters.f_phase'),
+    temporada: t('models_filters.f_season'), customer: t('models_filters.customer'),
+    collection: t('models_filters.collection'), any: t('models_filters.any'),
+    size_system: t('models_filters.size_system'), grading_rule_set: t('models_filters.ruleset'),
+    target: t('models_filters.target'), fit: t('models_filters.fit'),
+    construction: t('models_filters.construction'), responsable: t('models_filters.responsable'),
+    assignee: t('models_filters.assignee'), task_type: t('models_filters.task_type'),
+    task_status: t('models_filters.task_status'), data_objectiu_after: t('models_filters.date_from'),
+    data_objectiu_before: t('models_filters.date_to'), watchpoints_open: t('models_filters.watchpoints_open'),
+    in_plan: t('models_filters.in_plan'),
+  }
+  const resolve = (k, v) => {
+    const by = (list, idKey, labelKey) => list.find(x => String(x[idKey]) === String(v))?.[labelKey] || v
+    switch (k) {
+      case 'customer': return by(opts.customers, 'id', 'nom')
+      case 'size_system': return opts.sizeSystems.find(s => String(s.id) === v)?.nom || v
+      case 'grading_rule_set': return opts.rulesets.find(r => String(r.id) === v)?.nom || v
+      case 'target': return opts.targets.find(x => x.codi === v)?.nom_en || v
+      case 'fit': return opts.fits.find(x => x.codi === v)?.nom_en || v
+      case 'construction': return opts.constructions.find(x => x.codi === v)?.nom_en || v
+      case 'responsable': case 'assignee': return by(opts.users, 'profile_id', 'nom_complet')
+      case 'task_type': return opts.taskTypes.find(tt => tt.code === v)?.name || v
+      default: return v
+    }
+  }
+  const removeCsv = (key, member) =>
+    setParams({ [key]: CSV(sp.get(key)).filter(x => x !== String(member)).join(',') || undefined, page: undefined })
+
+  const chips = []
+  Object.keys(filterParams).forEach(k => {
+    if (k.startsWith('garment_')) return
+    if (!LABEL[k]) return
+    const bool = k === 'watchpoints_open' || k === 'in_plan'
+    chips.push({ id: k, text: bool ? LABEL[k] : `${LABEL[k]}: ${resolve(k, filterParams[k])}`, remove: () => setParams({ [k]: undefined, page: undefined }) })
+  })
+  CSV(sp.get('garment_group_codi__in')).forEach(c => chips.push({ id: `gg${c}`, text: garmentGroupLabel(opts, c), remove: () => removeCsv('garment_group_codi__in', c) }))
+  CSV(sp.get('garment_type__in')).forEach(id => chips.push({ id: `gt${id}`, text: garmentTypeLabel(opts, id, lang), remove: () => removeCsv('garment_type__in', id) }))
+  CSV(sp.get('garment_type_item__in')).forEach(id => chips.push({ id: `gti${id}`, text: `#${id}`, remove: () => removeCsv('garment_type_item__in', id) }))
+
+  if (!chips.length) return null
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', margin: '0 0 12px' }}>
+      {chips.map(c => (
+        <span key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 999,
+          background: 'var(--gold-pale)', color: 'var(--gold)', border: '0.5px solid var(--gold)', fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600 }}>
+          {c.text}
+          <button type="button" onClick={c.remove} aria-label={t('models_list.clear')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1 }}>
+            <i className="ti ti-x" style={{ fontSize: 12 }} aria-hidden="true" />
+          </button>
+        </span>
+      ))}
+      <button type="button" onClick={() => setParams(Object.fromEntries([...FILTER_KEYS, 'page'].map(k => [k, undefined])))}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray)', fontFamily: MONO, fontSize: 'var(--fs-caption)', textDecoration: 'underline' }}>
+        {t('models_filters.clear_all')}
+      </button>
     </div>
   )
 }

@@ -1006,7 +1006,11 @@
     "date_from": "Data objectiu des de",
     "date_to": "Data objectiu fins a",
     "watchpoints_open": "Amb watchpoints oberts",
-    "in_plan": "Dins del pla"
+    "in_plan": "Dins del pla",
+    "f_search": "Cerca",
+    "f_phase": "Fase",
+    "f_season": "Temporada",
+    "clear_all": "Netejar tot"
   },
   "garment_selector": {
     "loading_families": "Carregant famílies…",
