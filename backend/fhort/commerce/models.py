@@ -483,6 +483,12 @@ class WorkOrder(models.Model):
     order_line = models.ForeignKey('commerce.SalesOrderLine', on_delete=models.PROTECT,
                                    null=True, blank=True, related_name='work_orders',
                                    help_text="Línia de comanda origen (nullable: encàrrec sense comanda / col·lector).")
+    # Traça de la línia d'origen quan el WO es DESASSIGNA (order_line→None, orphaned_from_line→línia,
+    # mateix acte). SET_NULL i no PROTECT: no ha de tornar a bloquejar l'esborrat de la línia. Camp
+    # SEPARAT d'order_line: mai els dos plens alhora (un ORDER viu té order_line; un orfe té orphaned_from_line).
+    orphaned_from_line = models.ForeignKey('commerce.SalesOrderLine', on_delete=models.SET_NULL,
+                                           null=True, blank=True, related_name='orphaned_work_orders',
+                                           help_text="Línia de comanda d'on es va desassignar aquest WO (orfe).")
     kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='ORDER')
     origin = models.CharField(max_length=20, choices=ORIGIN_CHOICES, default='MANUAL')
     period = models.CharField(max_length=7, blank=True,
