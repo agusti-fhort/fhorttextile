@@ -465,6 +465,11 @@ export const commerce = {
     unassign: (id) => client.post(`/api/v1/commerce/work-orders/${id}/unassign/`),
     // Informe read-only dels WO desassignats (orphaned_from_line no null) — pendents de reassignar.
     orphaned: () => client.get('/api/v1/commerce/work-orders/orphaned/'),
+    // E5 — línies candidates per re-adoptar un WO orfe (comandes OPEN del mateix client, qty lliure).
+    reattachCandidates: (id) => client.get(`/api/v1/commerce/work-orders/${id}/reattach-candidates/`),
+    // E5 — re-adopta el WO orfe a una línia nova (re-congela snapshots). {order_line_id}. Gate CONFIGURE.
+    // Nom CLAR per no col·lidir amb la homonímia unassign (tècnic vs comercial).
+    reattach: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/reattach/`, data),
   },
   // Despeses d'un encàrrec (B4b) — línia externa amb proveïdor i marge. Satèl·lit ?work_order=.
   expenses: {

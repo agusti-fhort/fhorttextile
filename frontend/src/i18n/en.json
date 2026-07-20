@@ -1220,7 +1220,15 @@
     "col_order": "Source order",
     "col_total": "Order total",
     "col_status": "Status",
-    "open_order": "Open order"
+    "open_order": "Open order",
+    "reattach": "Reassign",
+    "reattach_title": "Reassign orphaned work order",
+    "reattach_help": "Choose the order line to attach the work order for model {{codi}} to. Prices will be re-frozen against the new line’s product.",
+    "reattach_loading": "Loading candidate lines…",
+    "reattach_empty": "No candidate lines (open orders for this customer with free quantity).",
+    "reattach_confirm": "Reassign",
+    "reattach_done": "Work order reassigned to the line.",
+    "reattach_error": "Could not reassign the work order."
   },
   "workorders": {
     "title": "Work orders",

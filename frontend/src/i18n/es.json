@@ -1220,7 +1220,15 @@
     "col_order": "Pedido origen",
     "col_total": "Total pedido",
     "col_status": "Estado",
-    "open_order": "Abrir pedido"
+    "open_order": "Abrir pedido",
+    "reattach": "Reasignar",
+    "reattach_title": "Reasignar encargo huérfano",
+    "reattach_help": "Elige la línea de pedido donde enganchar el encargo del modelo {{codi}}. Los precios se recongelarán contra el producto de la línea nueva.",
+    "reattach_loading": "Cargando líneas candidatas…",
+    "reattach_empty": "Ninguna línea candidata (pedidos abiertos del cliente con cantidad libre).",
+    "reattach_confirm": "Reasignar",
+    "reattach_done": "Encargo reasignado a la línea.",
+    "reattach_error": "No se ha podido reasignar el encargo."
   },
   "workorders": {
     "title": "Encargos",

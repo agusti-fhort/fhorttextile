@@ -1220,7 +1220,15 @@
     "col_order": "Comanda origen",
     "col_total": "Total comanda",
     "col_status": "Estat",
-    "open_order": "Obrir comanda"
+    "open_order": "Obrir comanda",
+    "reattach": "Reassignar",
+    "reattach_title": "Reassignar encàrrec orfe",
+    "reattach_help": "Tria la línia de comanda on enganxar l'encàrrec del model {{codi}}. Els preus es re-congelaran contra el producte de la línia nova.",
+    "reattach_loading": "Carregant línies candidates…",
+    "reattach_empty": "Cap línia candidata (comandes obertes del client amb quantitat lliure).",
+    "reattach_confirm": "Reassignar",
+    "reattach_done": "Encàrrec reassignat a la línia.",
+    "reattach_error": "No s'ha pogut reassignar l'encàrrec."
   },
   "workorders": {
     "title": "Encàrrecs",

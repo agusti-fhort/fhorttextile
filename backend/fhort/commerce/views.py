@@ -290,8 +290,9 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
             return [IsAuthenticated()]
         # El tècnic tanca (DEFINE_TASKS); el comercial revisa el preu de venda (CONFIGURE).
         p = HasCapability()
-        # review i unassign són actes COMERCIALS (preu/cartera) → CONFIGURE (com assign-model).
-        self.required_capability = CONFIGURE if self.action in ('review', 'unassign') else DEFINE_TASKS
+        # review, unassign i reattach són actes COMERCIALS (preu/cartera) → CONFIGURE (com assign-model).
+        self.required_capability = (CONFIGURE if self.action in ('review', 'unassign', 'reattach')
+                                    else DEFINE_TASKS)
         return [p]
 
     @action(detail=False, methods=['get'])
@@ -362,6 +363,47 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
         from .services import unassign_model_from_order_line
         try:
             wo = unassign_model_from_order_line(wo, user=profile)
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(wo).data)
+
+    @action(detail=True, methods=['get'], url_path='reattach-candidates')
+    def reattach_candidates(self, request, pk=None):
+        """GET commerce/work-orders/{id}/reattach-candidates/ — línies de comanda candidates per
+        re-adoptar aquest WO orfe: comandes OPEN del MATEIX client amb quantitat disponible
+        (qty_allocated < quantity). READ-ONLY, alimenta el picker de reassignació (E5)."""
+        from decimal import Decimal
+        wo = self.get_object()
+        lines = (SalesOrderLine.objects
+                 .filter(order__customer_id=wo.customer_id, order__status='OPEN')
+                 .select_related('order', 'product').order_by('-order__created_at', 'position', 'id'))
+        out = []
+        for ln in lines:
+            q, alloc = Decimal(ln.quantity or 0), Decimal(ln.qty_allocated or 0)
+            if alloc >= q:
+                continue
+            out.append({
+                'id': ln.id, 'order': ln.order_id, 'order_number': ln.order.document_number,
+                'product_code': getattr(ln.product, 'code', None),
+                'description': ln.description or getattr(ln.product, 'name', ''),
+                'quantity': str(q), 'qty_allocated': str(alloc),
+            })
+        return Response({'candidates': out})
+
+    @action(detail=True, methods=['post'])
+    def reattach(self, request, pk=None):
+        """POST commerce/work-orders/{id}/reattach/ — re-adopta el WO orfe a una línia de comanda
+        nova (order_line→línia, orphaned_from_line→null, snapshots re-congelats). Gate CONFIGURE.
+        Body: {order_line_id}. 200 amb el WO actualitzat, o 400/404 amb el missatge del guard."""
+        wo = self.get_object()
+        profile = getattr(request.user, 'profile', None)
+        line = SalesOrderLine.objects.filter(pk=request.data.get('order_line_id')).first()
+        if line is None:
+            return Response({'detail': 'Línia de comanda no trobada.'}, status=status.HTTP_404_NOT_FOUND)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import reattach_orphan_to_line
+        try:
+            wo = reattach_orphan_to_line(wo, line, user=profile)
         except DjangoValidationError as e:
             return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(wo).data)
