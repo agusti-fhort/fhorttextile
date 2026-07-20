@@ -454,6 +454,8 @@ export const commerce = {
     close: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/close/`, data || {}),
     // B4b — revisió comercial (preu de venda) d'un WO tancat. {items:[{model_task_id,kind,amount}]}
     review: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/review/`, data || {}),
+    // Desassigna el model de la línia: orfanda el WO (gate CONFIGURE). 400 si ORDER tancat/albaranat.
+    unassign: (id) => client.post(`/api/v1/commerce/work-orders/${id}/unassign/`),
   },
   // Despeses d'un encàrrec (B4b) — línia externa amb proveïdor i marge. Satèl·lit ?work_order=.
   expenses: {

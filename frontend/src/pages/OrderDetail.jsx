@@ -118,17 +118,36 @@ export default function OrderDetail() {
     return () => clearTimeout(id)
   }, [assign, pq, order?.customer])
 
+  // Carrega (o recarrega) l'expansió d'una línia. force=true reomple encara que ja hi hagi cache
+  // (p.ex. després de desassignar un WO, per refrescar els models/estat de la línia).
+  const loadAlloc = useCallback((lineId, force = false) => {
+    if (!force && alloc[lineId]?.data) return
+    setAlloc(a => ({ ...a, [lineId]: { loading: true } }))
+    commerce.orderLines.allocation(lineId)
+      .then(res => setAlloc(a => ({ ...a, [lineId]: { data: res.data } })))
+      .catch(() => setAlloc(a => ({ ...a, [lineId]: { error: true } })))
+  }, [alloc])
+
   // P4 — plega/desplega una línia; carrega l'expansió el primer cop (lazy).
   const toggleLine = (line) => {
     const id = line.id
     const isOpen = expanded.has(id)
     setExpanded(s => { const n = new Set(s); isOpen ? n.delete(id) : n.add(id); return n })
-    if (!isOpen && !alloc[id]) {
-      setAlloc(a => ({ ...a, [id]: { loading: true } }))
-      commerce.orderLines.allocation(id)
-        .then(res => setAlloc(a => ({ ...a, [id]: { data: res.data } })))
-        .catch(() => setAlloc(a => ({ ...a, [id]: { error: true } })))
-    }
+    if (!isOpen) loadAlloc(id)
+  }
+
+  // D5 — desassignar un WO d'una línia (orfandat). Confirmació prèvia (trenca vincle); en confirmar,
+  // recarrega la comanda (qty_allocated) i l'expansió de la línia afectada.
+  const [confirmUnassign, setConfirmUnassign] = useState(null)   // { woId, lineId, codi }
+  const doUnassign = () => {
+    if (!confirmUnassign) return
+    const { woId, lineId } = confirmUnassign
+    setBusy(true); setFeedback(null)
+    commerce.workOrders.unassign(woId)
+      .then(() => { setConfirmUnassign(null); return reload() })
+      .then(() => { loadAlloc(lineId, true); setFeedback({ type: 'ok', text: t('orders.unassign_done') }) })
+      .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.detail || t('orders.error') }))
+      .finally(() => setBusy(false))
   }
 
   const doAssign = () => {
@@ -219,7 +238,10 @@ export default function OrderDetail() {
         {lines.length === 0
           ? <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('orders.lines_empty')}</p>
           : <LineTable columns={orderColumns} rows={lines} renderActions={renderLineActions}
-              renderExpansion={l => expanded.has(l.id) ? <LineExpansion a={alloc[l.id]} t={t} /> : null} />}
+              renderExpansion={l => expanded.has(l.id)
+                ? <LineExpansion a={alloc[l.id]} t={t} canEdit={canEdit}
+                    onUnassign={(wo) => setConfirmUnassign({ woId: wo.id, lineId: l.id, codi: wo.model?.codi_intern || wo.number })} />
+                : null} />}
       </Section>
       <div style={{ marginBottom: 16 }}>
         <DocumentSummary lines={orderSummaryLines(order, t)} />
@@ -237,6 +259,33 @@ export default function OrderDetail() {
             </Row>
           ))}
       </Section>
+
+      {/* Modal — confirmar desassignació (orfandat del WO): trenca el vincle amb la línia */}
+      {confirmUnassign && (
+        <div onClick={() => setConfirmUnassign(null)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--white)', borderRadius: 12, padding: '1rem 1.2rem',
+            maxWidth: 440, width: '100%', border: '0.5px solid var(--gray-l)',
+          }}>
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 8, fontFamily: MONO }}>
+              {t('orders.unassign_title')}
+            </h2>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', marginBottom: 16, lineHeight: 1.4 }}>
+              {t('orders.unassign_confirm', { codi: confirmUnassign.codi })}
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmUnassign(null)} disabled={busy} style={selS}>{t('common.cancel')}</button>
+              <button onClick={doUnassign} disabled={busy}
+                style={{ ...primaryBtn, background: 'var(--err)', borderColor: 'var(--err)' }}>
+                {t('orders.unassign')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal 3 — assignar model a la línia (crea WO ORDER + migra el col·lector) */}
       {assign && (
@@ -332,7 +381,7 @@ function Row({ children }) {
 
 // P4 — panell read-only d'una línia: models assignats (via WO), tasques amb estat, % imputat.
 const TASK_COL = { Done: 'var(--ok)', InProgress: 'var(--gold)', Paused: 'var(--warn)', Pending: 'var(--gray)' }
-function LineExpansion({ a, t }) {
+function LineExpansion({ a, t, canEdit = false, onUnassign = null }) {
   if (!a || a.loading) return <div style={expBox}><span style={expMuted}>{t('orders.alloc_loading')}</span></div>
   if (a.error) return <div style={expBox}><span style={expMuted}>{t('orders.alloc_error')}</span></div>
   const d = a.data || {}
@@ -352,6 +401,15 @@ function LineExpansion({ a, t }) {
               {wo.model?.nom_prenda && <span style={{ fontSize: 'var(--fs-caption)' }}>{wo.model.nom_prenda}</span>}
               <span style={{ fontFamily: MONO, color: 'var(--gray)', fontSize: 'var(--fs-caption)' }}>· {wo.number}</span>
               <span style={{ ...woPill, borderColor: wo.status === 'CLOSED' ? 'var(--ok)' : 'var(--gold)', color: wo.status === 'CLOSED' ? 'var(--ok)' : 'var(--gold)' }}>{t(`orders.wo_${wo.status}`, wo.status)}</span>
+              {canEdit && wo.can_unassign && onUnassign && (
+                <button type="button" onClick={() => onUnassign(wo)} title={t('orders.unassign')}
+                  style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4,
+                           background: 'none', border: '0.5px solid var(--err)', borderRadius: 8,
+                           color: 'var(--err)', cursor: 'pointer', fontFamily: MONO, fontSize: 'var(--fs-caption)',
+                           padding: '1px 8px' }}>
+                  <i className="ti ti-unlink" style={{ fontSize: 12 }} />{t('orders.unassign')}
+                </button>
+              )}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingLeft: 4 }}>
               {wo.tasks.length === 0

@@ -220,8 +220,14 @@ class SalesOrderLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mix
         q, alloc = Decimal(line.quantity or 0), Decimal(line.qty_allocated or 0)
         pct = float((alloc / q * 100).quantize(Decimal('0.1'))) if q > 0 else 0.0
         wos = line.work_orders.select_related('model').prefetch_related('tasks__task_type').order_by('id')
+        # Mirall del guard de unassign_model_from_order_line: un WO ORDER OPEN i NO albaranat es pot
+        # desassignar. Precalculem els albaranats en 1 query per no fer N+1 (el frontend amaga el botó).
+        from .models import DeliveryNoteLine
+        billed_ids = set(DeliveryNoteLine.objects.filter(work_order__in=wos)
+                         .values_list('work_order_id', flat=True))
         work_orders = [{
             'id': wo.id, 'number': wo.number, 'status': wo.status, 'kind': wo.kind,
+            'can_unassign': (wo.kind == 'ORDER' and wo.status == 'OPEN' and wo.id not in billed_ids),
             'model': ({'id': wo.model.id, 'codi_intern': wo.model.codi_intern,
                        'nom_prenda': wo.model.nom_prenda} if wo.model_id else None),
             'tasks': [{
