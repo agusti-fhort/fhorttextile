@@ -20,11 +20,16 @@ const todayISO = () => new Date().toISOString().slice(0, 10)
 
 // Pas 5C · TRAM 2 — Desplegable "Accions" per a UN model (fitxa) o N (selecció a la llista).
 // Bulk = itera les crides per-model existents; cada model va a la SEVA next/prev. Feedback agregat.
-export default function ActionsMenu({ targets, model, onChanged, onFeedback, triggerLabel }) {
+// `selectionSet` (C2) = selecció de CONJUNT filtrat {filters, excludeIds, count}: no hi ha
+// llista d'objectes al client. En aquest mode NOMÉS "assignar tasques" s'escala (envia
+// filters+exclude_ids); la resta d'accions (runBulk per-element) queden deshabilitades.
+export default function ActionsMenu({ targets, model, selectionSet = null, onChanged, onFeedback, triggerLabel }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const conjunt = !!selectionSet
   const list = (targets && targets.length ? targets : (model ? [model] : []))
-  const single = list.length === 1 ? list[0] : null
+  const single = (!conjunt && list.length === 1) ? list[0] : null
+  const n = conjunt ? (selectionSet.count || 0) : list.length   // mida de la selecció (per etiquetes/estat)
 
   const [open, setOpen] = useState(false)
   const [modal, setModal] = useState(null)
@@ -193,15 +198,17 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
   // B — La creació de Watchpoints (D-12) viu ara a l'overlay flotant de la capçalera del model
   // (WatchpointDrawer → WatchpointsPanel), única porta de creació. Aquí ja no hi ha "Fer comentari".
 
+  // En mode CONJUNT, tot menys "assignar" queda deshabilitat amb el mateix motiu (i18n).
+  const conjuntHint = conjunt ? t('model_sheet.bulk_conjunt_disabled') : ''
   const items = [
-    { key: 'assign', label: t('model_sheet.assign_tasks'), icon: 'ti-users-plus', enabled: list.length > 0 },
-    { key: 'production', label: t('model_sheet.send_to_production'), icon: 'ti-send', enabled: list.length > 0 },
-    { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: list.length > 0 },
+    { key: 'assign', label: t('model_sheet.assign_tasks'), icon: 'ti-users-plus', enabled: n > 0 },
+    { key: 'production', label: t('model_sheet.send_to_production'), icon: 'ti-send', enabled: !conjunt && list.length > 0, hint: conjuntHint },
+    { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: !conjunt && list.length > 0, hint: conjuntHint },
     // Convocar fitting des del llenç (un sol model): obre la convocatòria amb el model precarregat.
-    { key: 'convene_fitting', label: t('model_sheet.convene_fitting'), icon: 'ti-shirt', enabled: !!single },
-    { key: 'assign_order', label: t('model_sheet.assign_order'), icon: 'ti-clipboard-list', enabled: list.length > 0 },
-    { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: someNext },
-    { key: 'back', label: t('model_sheet.back_phase'), icon: 'ti-arrow-left', enabled: somePrev },
+    { key: 'convene_fitting', label: t('model_sheet.convene_fitting'), icon: 'ti-shirt', enabled: !conjunt && !!single, hint: conjuntHint },
+    { key: 'assign_order', label: t('model_sheet.assign_order'), icon: 'ti-clipboard-list', enabled: !conjunt && list.length > 0, hint: conjuntHint },
+    { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: !conjunt && someNext, hint: conjuntHint },
+    { key: 'back', label: t('model_sheet.back_phase'), icon: 'ti-arrow-left', enabled: !conjunt && somePrev, hint: conjuntHint },
   ]
   const phaseSelectOptions = (withCurrent) => (
     <>
@@ -212,9 +219,9 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
 
   return (
     <div style={{ position: 'relative' }}>
-      <button type="button" onClick={() => list.length && setOpen(o => !o)} disabled={!list.length}
-        style={{ ...triggerBtn, opacity: list.length ? 1 : 0.5, cursor: list.length ? 'pointer' : 'not-allowed' }}>
-        {triggerLabel || t('model_sheet.actions')}{list.length > 1 ? ` (${list.length})` : ''} <i className="ti ti-chevron-down" aria-hidden="true" />
+      <button type="button" onClick={() => n && setOpen(o => !o)} disabled={!n}
+        style={{ ...triggerBtn, opacity: n ? 1 : 0.5, cursor: n ? 'pointer' : 'not-allowed' }}>
+        {triggerLabel || t('model_sheet.actions')}{n > 1 ? ` (${n})` : ''} <i className="ti ti-chevron-down" aria-hidden="true" />
       </button>
       {open && (
         <>
@@ -236,7 +243,9 @@ export default function ActionsMenu({ targets, model, onChanged, onFeedback, tri
 
       {modal === 'assign' && (
         <TaskAssignWizard
-          modelIds={list.map(m => m.id)}
+          {...(conjunt
+            ? { filters: selectionSet.filters, excludeIds: selectionSet.excludeIds, count: selectionSet.count }
+            : { modelIds: list.map(m => m.id) })}
           onClose={() => setModal(null)}
           onSuccess={() => { setModal(null); onChanged?.() }}
         />

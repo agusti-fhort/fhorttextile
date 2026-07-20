@@ -25,6 +25,9 @@ export default function Models() {
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState(() => new Set())
   const [newOpen, setNewOpen] = useState(false)
+  // Selecció de CONJUNT filtrat (patró Gmail, C2): "tots els N del filtre" amb exclusions.
+  const [selectAllFilter, setSelectAllFilter] = useState(false)
+  const [excludeIds, setExcludeIds] = useState(() => new Set())
 
   const load = useCallback(() => {
     setLoading(true)
@@ -42,21 +45,45 @@ export default function Models() {
       .finally(() => setLoading(false))
   }, [search, fase, temporada, page])
 
-  // Debounce de la cerca + reset de pàgina quan canvien filtres.
-  useEffect(() => { setPage(1) }, [search, fase, temporada])
+  // Debounce de la cerca + reset de pàgina i de la selecció de conjunt quan canvien els filtres
+  // (el conjunt es defineix pels filtres actius; canviar-los l'invalida).
+  useEffect(() => { setPage(1); setSelectAllFilter(false); setExcludeIds(new Set()); setSelected(new Set()) }, [search, fase, temporada])
   useEffect(() => { const id = setTimeout(load, 200); return () => clearTimeout(id) }, [load])
 
   const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
   const selectedModels = useMemo(() => items.filter(m => selected.has(m.id)), [items, selected])
   const allOnPage = items.length > 0 && items.every(m => selected.has(m.id))
+  const hasMoreThanPage = count > items.length
+
+  // Filtres actius de la URL = font única dels `filters` del payload de conjunt (contracte C2).
+  const activeFilters = useMemo(() => {
+    const f = {}
+    const s = search.trim(); if (s) f.search = s
+    if (fase) f.fase_actual = fase
+    if (temporada) f.temporada = temporada
+    return f
+  }, [search, fase, temporada])
+  const filterCount = Math.max(0, count - (selectAllFilter ? excludeIds.size : 0))
+  const selCount = selectAllFilter ? filterCount : selected.size
 
   const toggle = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
-  const toggleAll = () => setSelected(s => {
-    const n = new Set(s)
-    if (allOnPage) items.forEach(m => n.delete(m.id)); else items.forEach(m => n.add(m.id))
-    return n
-  })
-  const afterAction = () => { setSelected(new Set()); load() }
+  const clearConjunt = () => { setSelectAllFilter(false); setExcludeIds(new Set()); setSelected(new Set()) }
+
+  // Estat i acció del checkbox per fila (respecta el mode conjunt: marcat = no exclòs).
+  const rowChecked = (id) => selectAllFilter ? !excludeIds.has(id) : selected.has(id)
+  const rowToggle = (id) => {
+    if (selectAllFilter) setExcludeIds(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+    else toggle(id)
+  }
+  const toggleAll = () => {
+    if (selectAllFilter) { clearConjunt(); return }   // sortir del mode conjunt
+    setSelected(s => {
+      const n = new Set(s)
+      if (allOnPage) items.forEach(m => n.delete(m.id)); else items.forEach(m => n.add(m.id))
+      return n
+    })
+  }
+  const afterAction = () => { setSelected(new Set()); setSelectAllFilter(false); setExcludeIds(new Set()); load() }
 
   const remove = async (m, e) => {
     e.stopPropagation()
@@ -72,12 +99,15 @@ export default function Models() {
         <div>
           <h1 style={{ fontSize: 'var(--fs-h2)', fontFamily: MONO, color: 'var(--text-main)', fontWeight: 500, margin: 0 }}>{t('models_list.title')}</h1>
           <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, marginTop: 2 }}>
-            {selected.size > 0 ? t('models_list.selected', { n: selected.size }) : t('models_list.count', { n: count })}
+            {selCount > 0 ? t('models_list.selected', { n: selCount }) : t('models_list.count', { n: count })}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <NewModelMenu open={newOpen} setOpen={setNewOpen} navigate={navigate} t={t} />
-          <ActionsMenu targets={selectedModels} onChanged={afterAction} onFeedback={setFeedback} />
+          <ActionsMenu
+            targets={selectAllFilter ? [] : selectedModels}
+            selectionSet={selectAllFilter ? { filters: activeFilters, excludeIds: [...excludeIds], count: filterCount } : null}
+            onChanged={afterAction} onFeedback={setFeedback} />
         </div>
       </div>
 
@@ -100,12 +130,36 @@ export default function Models() {
         )}
       </div>
 
-      {/* Select all */}
+      {/* Select all (pàgina) */}
       {items.length > 0 && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: '0 0 8px 2px', cursor: 'pointer' }}>
-          <input type="checkbox" checked={allOnPage} onChange={toggleAll} />
-          {allOnPage ? '✓' : ''}
+          <input type="checkbox" checked={selectAllFilter || allOnPage} onChange={toggleAll} />
+          {(selectAllFilter || allOnPage) ? '✓' : ''}
         </label>
+      )}
+
+      {/* Banda "seleccionar tot el filtre" (patró Gmail): apareix quan la pàgina és plena de
+          selecció i el filtre té més resultats que la pàgina. */}
+      {(allOnPage || selectAllFilter) && hasMoreThanPage && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap',
+          background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+          padding: '8px 14px', margin: '0 0 10px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-main)' }}>
+          {selectAllFilter ? (
+            <>
+              <span>{t('models_list.selected_all_filter', { n: filterCount })}</span>
+              <button onClick={clearConjunt} style={{ ...inp, cursor: 'pointer', color: 'var(--gold)', border: '0.5px solid var(--gold)', background: 'var(--white)' }}>
+                {t('models_list.clear_selection')}
+              </button>
+            </>
+          ) : (
+            <>
+              <span>{t('models_list.selected_page', { n: selectedModels.length })}</span>
+              <button onClick={() => setSelectAllFilter(true)} style={{ ...inp, cursor: 'pointer', color: 'var(--gold)', border: '0.5px solid var(--gold)', background: 'var(--white)', fontWeight: 600 }}>
+                {t('models_list.select_all_filter', { n: count })}
+              </button>
+            </>
+          )}
+        </div>
       )}
 
       {/* Llistat */}
@@ -118,7 +172,7 @@ export default function Models() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {items.map(m => (
-            <ModelRow key={m.id} m={m} selected={selected.has(m.id)} onToggle={() => toggle(m.id)}
+            <ModelRow key={m.id} m={m} selected={rowChecked(m.id)} onToggle={() => rowToggle(m.id)}
               onOpen={() => navigate(`/models/${m.id}`)} onDelete={(e) => remove(m, e)} t={t} locale={dateLocale} />
           ))}
         </div>

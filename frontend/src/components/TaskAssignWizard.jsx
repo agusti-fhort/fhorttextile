@@ -41,9 +41,12 @@ function fmtDateTime(iso) {
 const labelS = { fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }
 const secondaryBtn = { ...selS, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }
 
-export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) {
+// Font de models: explícita (`modelIds`) o de CONJUNT filtrat (C2) — quan `filters` ve
+// informat, el backend re-avalua el queryset server-side i `count` és la mida coneguda.
+export default function TaskAssignWizard({ modelIds = [], filters = null, excludeIds = [], count = null, onClose, onSuccess }) {
   const { t } = useTranslation()
-  const nModels = modelIds.length
+  const conjunt = !!filters
+  const nModels = conjunt ? (count || 0) : modelIds.length
 
   const [taskTypes, setTaskTypes] = useState([])
   const [loadingTT, setLoadingTT] = useState(true)
@@ -76,7 +79,8 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
       .finally(() => { if (!cancelled) setLoadingTT(false) })
 
     // task_type_code que JA tenen tècnic en QUALSEVOL dels models → bloquejats al select.
-    if (modelIds.length) {
+    // En mode CONJUNT no s'enumeren els models al client (poden ser milers) → sense pre-bloqueig.
+    if (!conjunt && modelIds.length) {
       Promise.all(modelIds.map(id => modelTaskItems.list({ model: id })))
         .then(results => {
           if (cancelled) return
@@ -161,15 +165,16 @@ export default function TaskAssignWizard({ modelIds = [], onClose, onSuccess }) 
     if (!lines.length || submitting) return
     setSubmitting(true)
     setSubmitError(null)
-    const payload = {
-      model_ids: modelIds,
-      assignacions: lines.map(l => ({
-        task_type_code: l.task_type_code,
-        assignee_profile_id: l.assignee_profile_id,
-        planned_start: l.planned_start,
-        planned_end: l.planned_end,
-      })),
-    }
+    const assignacions = lines.map(l => ({
+      task_type_code: l.task_type_code,
+      assignee_profile_id: l.assignee_profile_id,
+      planned_start: l.planned_start,
+      planned_end: l.planned_end,
+    }))
+    // XOR de la font de models (contracte C2): conjunt filtrat o ids explícits, mai els dos.
+    const payload = conjunt
+      ? { filters, exclude_ids: excludeIds, assignacions }
+      : { model_ids: modelIds, assignacions }
     planApi.assignBatch(payload)
       .then(r => {
         setSubmitResult(r.data)
