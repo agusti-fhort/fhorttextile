@@ -4310,6 +4310,22 @@ export default function TechSheetEditor() {
           <button type="button" onClick={() => runNode('open')} title={t('tech_sheet.node_open')} style={nodeBarBtn(false)}><i className="ti ti-link-off" style={{ fontSize: 15 }} /></button>
           <button type="button" onClick={() => runNode('split')} title={t('tech_sheet.node_split')} style={nodeBarBtn(false)}><i className="ti ti-arrows-split" style={{ fontSize: 15 }} /></button>
           <span style={nodeBarSep} />
+          {/* G3 — BUSCATRAÇOS entre formes (mode fletxa negra, 2+ formes): unir/restar/intersecar/excloure
+              in-place dins el path compost. Subtract: la forma inferior resta les superiors. */}
+          {nodeSel.mode === 'shape' && nodeSel.shapeCount >= 2 && (
+            <>
+              {[
+                { op: 'unite', icon: 'ti-layers-union', label: 'pathfinder_unite' },
+                { op: 'subtract', icon: 'ti-layers-subtract', label: 'pathfinder_subtract_hint' },
+                { op: 'intersect', icon: 'ti-layers-intersect', label: 'pathfinder_intersect' },
+                { op: 'exclude', icon: 'ti-layers-difference', label: 'pathfinder_exclude' },
+              ].map(pf => (
+                <button key={pf.op} type="button" onClick={() => runNode('booleanShapes', pf.op)}
+                  title={t(`tech_sheet.${pf.label}`)} style={nodeBarBtn(false)}><i className={`ti ${pf.icon}`} style={{ fontSize: 15 }} /></button>
+              ))}
+              <span style={nodeBarSep} />
+            </>
+          )}
           {/* F5 — pintura de la subpath activa (viu al canvas Paper): swatch fill + stroke + gruix. */}
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={t('tech_sheet.fill')}>
             <i className="ti ti-color-swatch" style={{ fontSize: 14, color: COL.textMuted }} />

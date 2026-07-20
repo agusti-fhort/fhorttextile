@@ -81,6 +81,24 @@ export function translateSubpath(segments, dx, dy) {
   return { segments: segs }
 }
 
+// BOOLEANES entre subpaths (G3 · buscatraços dins el path compost). `subpaths` = [{segments,closed}]
+// en ordre de z (baix→dalt); `op` ∈ {unite,subtract,intersect,exclude}. Encadena l'operació (subtract:
+// la forma inferior resta les superiors — mateix criteri que el buscatraços d'objecte). Retorna
+// [{segments,closed}, …] (el resultat pot ser un compost amb diversos subpaths) o null si no aplica.
+export function booleanSubpaths(subpaths, op) {
+  return withPaperScope(scope => {
+    const paths = (subpaths || []).map(sp => segsToPath(sp.segments, sp.closed, scope))
+    if (paths.length < 2) return null
+    let result = paths[0]
+    for (let i = 1; i < paths.length; i++) result = result[op](paths[i])
+    if (!result) return null
+    const items = result.className === 'CompoundPath'
+      ? result.children.filter(c => c.className === 'Path' && c.segments?.length)
+      : (result.segments?.length ? [result] : [])
+    return items.map(p => ({ segments: segsOf(p), closed: p.closed }))
+  })
+}
+
 // ── TOPOLOGIA ──────────────────────────────────────────────────────────────────────────────
 
 // Tanca un subpath (uneix primer↔últim). Pur: només marca closed=true (Paper dibuixa la unió).

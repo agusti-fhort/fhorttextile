@@ -2574,6 +2574,7 @@
     "pathfinder_unite": "Unite",
     "pathfinder_subtract": "Subtract",
     "pathfinder_intersect": "Intersect",
+    "pathfinder_subtract_hint": "Subtract (the bottom shape subtracts the ones above)",
     "pathfinder_exclude": "Exclude",
     "pathfinder_error": "Could not combine the shapes",
     "menu_file": "File",

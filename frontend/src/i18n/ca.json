@@ -2574,6 +2574,7 @@
     "pathfinder_unite": "Unir",
     "pathfinder_subtract": "Restar",
     "pathfinder_intersect": "Intersecar",
+    "pathfinder_subtract_hint": "Restar (la forma inferior resta les superiors)",
     "pathfinder_exclude": "Excloure",
     "pathfinder_error": "No s'ha pogut combinar les formes",
     "menu_file": "Fitxer",

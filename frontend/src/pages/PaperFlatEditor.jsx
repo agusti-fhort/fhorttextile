@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import paper from 'paper'
-import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle, closeSegments, openAtNode, splitAtNode, splitAtLocation, moveSegment, deleteSegment, translateSubpath } from './ftt/paperOps'
+import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle, closeSegments, openAtNode, splitAtNode, splitAtLocation, moveSegment, deleteSegment, translateSubpath, booleanSubpaths } from './ftt/paperOps'
 
 const PAPER_COL = {
   node: '#185fa5',
@@ -318,6 +318,32 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       selectedPathRef.current = allPaths()[0] || null
       drawShapeSelection(); pushState()
     }
+    // G3 — BOOLEANA entre les formes seleccionades (2+). Substitueix in-place les formes operades pel
+    // resultat DINS el mateix path compost (el flat segueix sent un objecte; canvia la geometria
+    // interna). Ordre z baix→dalt (la forma inferior resta les superiors, com el buscatraços d'objecte).
+    const booleanSelectedShapes = (op) => {
+      const sel = selectedShapesRef.current
+      if (sel.size < 2) return
+      const ordered = allPaths().filter(p => sel.has(p.data?.index ?? 0))   // z-order baix→dalt
+      if (ordered.length < 2) return
+      const subpaths = ordered.map(p => ({ segments: readSegs(p), closed: p.closed }))
+      const res = booleanSubpaths(subpaths, op)
+      pushHistory()   // instantània amb les formes originals encara a l'escena
+      const base = ordered[0]
+      const style = { stroke: base.strokeColor ? base.strokeColor.toCSS(true) : null, fill: base.fillColor ? base.fillColor.toCSS(true) : null, sw: base.strokeWidth || 0 }
+      ordered.forEach(p => { delete paintRef.current[p.data?.index ?? 0]; p.remove() })
+      const created = []
+      ;(res || []).forEach(r => {
+        const np = new scope.Path({ closed: r.closed, strokeColor: style.stroke, strokeWidth: style.sw, fillColor: style.fill })
+        r.segments.forEach(s => np.add(new scope.Segment(new scope.Point(s.x, s.y), new scope.Point(s.inX || 0, s.inY || 0), new scope.Point(s.outX || 0, s.outY || 0))))
+        np.data = { index: nextShapeIndex() }
+        sketchLayer.addChild(np)
+        registerPaint(np)
+        created.push(np.data.index)
+      })
+      selectedPathRef.current = created.length ? pathByIndex(created[created.length - 1]) : (allPaths()[0] || null)
+      setShapeSelection(created, selectedPathRef.current?.data?.index)
+    }
 
     const toViewPx = (mm) => toPx(mm) * zoomRef.current
     const rotation = ((flat.rotation || 0) * Math.PI) / 180
@@ -439,6 +465,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       open: () => { const p = selectedPathRef.current; const sel = [...selectedSegsRef.current]; if (p && p.closed && sel.length === 1) applyOp(openAtNode(readSegs(p), true, sel[0]), []) },
       split: () => { const p = selectedPathRef.current; const sel = [...selectedSegsRef.current]; if (p && sel.length === 1) splitInTwo(splitAtNode(readSegs(p), p.closed, sel[0])) },
       removeSelection,
+      booleanShapes: (op) => booleanSelectedShapes(op),   // G3 — buscatraços entre formes seleccionades
       setFill: (c) => applyPaint('fill', c),
       setStroke: (c) => applyPaint('stroke', c),
       setStrokeWidth: (w) => applyPaint('strokeWidth', w),
