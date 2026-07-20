@@ -4265,7 +4265,7 @@ export default function TechSheetEditor() {
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, minHeight: 34, background: COL.sidebar, borderBottom: `1px solid ${COL.border}`, padding: '0 10px', fontFamily: FONT, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 'var(--fs-label)', color: COL.gold, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap' }}>
             <i className="ti ti-vector" style={{ fontSize: 14, marginRight: 4 }} />
-            {t('tech_sheet.node_editing')}{nodeSel.selCount ? ` · ${nodeSel.selCount}` : ''}
+            {t('tech_sheet.node_editing')}{nodeSel.seg ? ` · ${t('tech_sheet.node_segment')}` : nodeSel.selCount ? ` · ${nodeSel.selCount}` : ''}
           </span>
           <span style={nodeBarSep} />
           {NODE_TOOL_ITEMS.map(it => (

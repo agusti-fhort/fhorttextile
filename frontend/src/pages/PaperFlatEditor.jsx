@@ -1,12 +1,14 @@
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import paper from 'paper'
-import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle, closeSegments, openAtNode, splitAtNode, splitAtLocation } from './ftt/paperOps'
+import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle, closeSegments, openAtNode, splitAtNode, splitAtLocation, moveSegment, deleteSegment } from './ftt/paperOps'
 
 const PAPER_COL = {
   node: '#185fa5',
   nodeSel: '#c0392b',
   handle: '#c27a2a',
   helper: '#868685',
+  segSel: '#2e8b57',   // F2 — tram (segment) seleccionat: verd, diferenciat del node (vermell)
+  segHover: '#7cc0a0', // F2 — preressalt de segment en hover
   white: '#ffffff',
 }
 
@@ -25,6 +27,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   const uiLayerRef = useRef(null)
   const selectedPathRef = useRef(null)
   const selectedSegsRef = useRef(new Set())   // S1.3: multi-selecció d'índexs de node
+  const selectedSegRef = useRef(null)         // F2: índex de corba del SEGMENT (tram) seleccionat, o null
   const dragRef = useRef(null)
   const marqueeRef = useRef(null)             // {x0,y0,rect} mentre s'arrossega una marquesina
   const zoomRef = useRef(zoom)
@@ -58,6 +61,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       uiLayerRef.current = null
       selectedPathRef.current = null
       selectedSegsRef.current = new Set()
+      selectedSegRef.current = null
       dragRef.current = null
       marqueeRef.current = null
       refreshHandlesRef.current = null
@@ -124,16 +128,26 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
           outHit.data = outHandle.data
         }
       })
+      // F2 — realça el SEGMENT seleccionat (tram entre dos nodes) amb un color diferenciat del node.
+      if (selectedSegRef.current != null) drawCurveHighlight(uiLayer, scope, path, selectedSegRef.current, PAPER_COL.segSel, 3.5)
       sketchLayer.activate()
       scope.view.update()
     }
     refreshHandlesRef.current = refreshHandles
 
-    // Puja l'estat de selecció al pare (nombre de nodes seleccionats) per a la barra contextual.
-    const pushState = () => onNodeStateRef.current?.({ selCount: selectedSegsRef.current.size })
+    // Puja l'estat de selecció al pare per a la barra contextual: nodes seleccionats + si hi ha segment.
+    const pushState = () => onNodeStateRef.current?.({ selCount: selectedSegsRef.current.size, seg: selectedSegRef.current != null })
 
     const setSelection = (indices) => {
       selectedSegsRef.current = new Set(indices)
+      selectedSegRef.current = null   // seleccionar nodes esborra la selecció de segment (excloents)
+      refreshHandles()
+      pushState()
+    }
+    // F2 — selecciona un SEGMENT (tram) per índex de corba; esborra la selecció de nodes.
+    const selectSegment = (curveIndex) => {
+      selectedSegsRef.current = new Set()
+      selectedSegRef.current = curveIndex
       refreshHandles()
       pushState()
     }
@@ -242,12 +256,18 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       setStatus('')
     }
 
-    // Treu els nodes seleccionats (de gran a petit perquè els índexs no es desplacin); la corba
-    // es reconnecta sola. Compartit pel teclat i pel botó de la barra superior (F1/F3).
+    // Esborrat sensible al context de la selecció fina (F2/F3): si hi ha un SEGMENT seleccionat →
+    // obre el path per allà (deleteSegment); si no, treu els NODES seleccionats (removeNode).
     const removeSelection = () => {
       const path = selectedPathRef.current
+      if (!path) return
+      if (selectedSegRef.current != null) {   // F2 — esborrar segment = obrir el path per allà
+        splitInTwo(deleteSegment(readSegs(path), path.closed, selectedSegRef.current))
+        selectedSegRef.current = null
+        return
+      }
       const sel = [...selectedSegsRef.current].sort((a, b) => b - a)
-      if (!path || !sel.length) return
+      if (!sel.length) return
       let segs = readSegs(path), closed = path.closed, ok = true
       for (const idx of sel) { const r = removeNode(segs, closed, idx); if (!r) { ok = false; break } segs = r.segments; closed = r.closed }
       if (ok) { rebuild(segs, closed); setSelection([]) }
@@ -304,6 +324,12 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         splitInTwo(splitAtLocation(readSegs(path), path.closed, strokeHit.location.curve.index, strokeHit.location.time))
         return
       }
+      // F2 — eina moure: clic sobre el TRAÇ entre dos nodes selecciona el SEGMENT i n'inicia el drag.
+      if (active === 'select' && strokeHit?.location && strokeHit.item === path) {
+        selectSegment(strokeHit.location.curve.index)
+        dragRef.current = { kind: 'segmentBody', curveIndex: strokeHit.location.curve.index }
+        return
+      }
       // Canviar de path (clic sobre una altra subpath) o iniciar marquesina.
       const anyHit = sketchLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
       const hitPath = anyHit?.item?.className === 'Path' ? anyHit.item : anyHit?.item?.parent?.getItem?.({ class: scope.Path })
@@ -320,6 +346,12 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         return
       }
       if (!drag || !path) return
+      if (drag.kind === 'segmentBody') {   // F2 — mou el SEGMENT (recte: translació; corb: deforma nanses)
+        const r = moveSegment(readSegs(path), path.closed, drag.curveIndex, event.delta.x, event.delta.y)
+        rebuild(r.segments, path.closed)
+        refreshHandles()
+        return
+      }
       if (drag.kind === 'segment') {   // mou TOTS els nodes seleccionats
         selectedSegsRef.current.forEach(i => { const s = path.segments[i]; if (s) s.point = s.point.add(event.delta) })
       } else {   // nansa: per defecte simètrica; Alt = independent
@@ -339,17 +371,21 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
 
     // Feedback de hover: amb les eines afegir/tisores, mostra ON caurà l'acció ABANS de clicar.
     tool.onMouseMove = (event) => {
-      const prev = uiLayer.children.find(c => c.data?.hover)
-      if (prev) prev.remove()
+      uiLayer.children.filter(c => c.data?.hover || c.data?.segHover).forEach(c => c.remove())
       const active = nodeToolRef.current
       const path = selectedPathRef.current
-      if ((active === 'add' || active === 'scissors') && path) {
-        const hit = sketchLayer.hitTest(event.point, { stroke: true, tolerance: 8 })
-        if (hit?.location && hit.item === path) {
-          uiLayer.activate()
-          const dot = new scope.Path.Circle({ center: hit.location.point, radius: 5, strokeColor: PAPER_COL.handle, strokeWidth: 1.5, fillColor: PAPER_COL.white })
-          dot.data = { hover: true }
-          sketchLayer.activate()
+      if (!path) { scope.view.update(); return }
+      const hit = sketchLayer.hitTest(event.point, { stroke: true, tolerance: 8 })
+      const onCurve = hit?.location && hit.item === path
+      if ((active === 'add' || active === 'scissors') && onCurve) {   // marcador d'ON caurà l'acció
+        uiLayer.activate()
+        const dot = new scope.Path.Circle({ center: hit.location.point, radius: 5, strokeColor: PAPER_COL.handle, strokeWidth: 1.5, fillColor: PAPER_COL.white })
+        dot.data = { hover: true }
+        sketchLayer.activate()
+      } else if (active === 'select' && onCurve) {   // F2 — preressalt del SEGMENT sota el cursor
+        const uiHit = uiLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
+        if (!uiHit?.item?.data?.kind) {   // no sobre un node/nansa
+          drawCurveHighlight(uiLayer, scope, path, hit.location.curve.index, PAPER_COL.segHover, 3, 'segHover')
         }
       }
       scope.view.update()
@@ -451,6 +487,20 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     </div>
   )
 })
+
+// F2 — realça una CORBA (segment entre dos nodes) clonant-ne els anchors+handles a la capa UI.
+function drawCurveHighlight(uiLayer, scope, path, curveIndex, color, width, tag = 'segHl') {
+  const curve = path.curves?.[curveIndex]
+  if (!curve) return
+  uiLayer.activate()
+  const hl = new scope.Path()
+  hl.add(new scope.Segment(curve.segment1.point, curve.segment1.handleIn, curve.segment1.handleOut))
+  hl.add(new scope.Segment(curve.segment2.point, curve.segment2.handleIn, curve.segment2.handleOut))
+  hl.strokeColor = color
+  hl.strokeWidth = width
+  hl.data = { [tag]: true }
+  hl.sendToBack()
+}
 
 // Marquesina de selecció (rectangle discontinu) dibuixada a la capa UI durant l'arrossegament.
 function drawMarquee(uiLayer, scope, m) {

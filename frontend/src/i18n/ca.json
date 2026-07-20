@@ -2703,7 +2703,8 @@
     "node_tool_scissors": "Tisores (talla el traç en un punt)",
     "node_close": "Tancar el path",
     "node_open": "Obrir pel node seleccionat",
-    "node_split": "Separar pel node seleccionat"
+    "node_split": "Separar pel node seleccionat",
+    "node_segment": "1 tram"
   },
   "estat_badge": {
     "pendent_inputs": "Pendent d'inputs",

@@ -99,6 +99,52 @@ export function splitAtNode(segments, closed, index) {
   return [{ segments: a, closed: false }, { segments: b, closed: false }]
 }
 
+// ── SEGMENT (tram entre dos nodes) com a entitat de primera classe (F2) ────────────────────
+
+// El segment `curveIndex` és recte si els dos handles que el defineixen (out del node i, in del
+// node següent) són nuls. Determina si MOURE'l tradueix (recte) o deforma (corb).
+export function isStraightSegment(segments, closed, curveIndex) {
+  const n = (segments || []).length
+  const i = curveIndex
+  const j = closed ? (i + 1) % n : i + 1
+  const a = segments[i], b = segments[j]
+  if (!a || !b) return true
+  return (a.outX || 0) === 0 && (a.outY || 0) === 0 && (b.inX || 0) === 0 && (b.inY || 0) === 0
+}
+
+// MOURE un segment (gest Illustrator): recte → translada els dos nodes extrems; corb → desplaça
+// proporcionalment les nanses dels dos extrems (out del node i, in del node següent). Pur.
+export function moveSegment(segments, closed, curveIndex, dx, dy) {
+  const segs = (segments || []).map(clone)
+  const n = segs.length
+  const i = curveIndex
+  const j = closed ? (i + 1) % n : i + 1
+  const a = segs[i], b = segs[j]
+  if (!a || !b || j >= n) return { segments: segs }
+  if (isStraightSegment(segs, closed, curveIndex)) {
+    a.x += dx; a.y += dy; b.x += dx; b.y += dy
+  } else {
+    a.outX = (a.outX || 0) + dx; a.outY = (a.outY || 0) + dy
+    b.inX = (b.inX || 0) + dx; b.inY = (b.inY || 0) + dy
+  }
+  return { segments: segs }
+}
+
+// ESBORRAR un segment = OBRIR el path per allà. Tancat → una peça oberta (reordenada perquè el tall
+// quedi als extrems). Obert → dues peces (es treu la corba i→i+1). Retorna [{segments,closed}, ...].
+export function deleteSegment(segments, closed, curveIndex) {
+  const segs = (segments || []).map(clone)
+  const n = segs.length
+  const i = curveIndex
+  if (i < 0 || i >= n) return [{ segments: segs, closed: !!closed }]
+  if (closed) {
+    const j = (i + 1) % n
+    return [{ segments: segs.slice(j).concat(segs.slice(0, j)), closed: false }]
+  }
+  if (i >= n - 1) return [{ segments: segs, closed: false }]
+  return [{ segments: segs.slice(0, i + 1), closed: false }, { segments: segs.slice(i + 1), closed: false }]
+}
+
 // TISORES: talla per un punt ARBITRARI (curveIndex + time), no per node. Bezier (splitAt de Paper).
 // Obert → dues peces obertes. Tancat → una peça oberta pel tall. Retorna [{segments,closed}, ...].
 export function splitAtLocation(segments, closed, curveIndex, time) {

@@ -2703,7 +2703,8 @@
     "node_tool_scissors": "Scissors (cut the stroke at a point)",
     "node_close": "Close the path",
     "node_open": "Open at selected node",
-    "node_split": "Split at selected node"
+    "node_split": "Split at selected node",
+    "node_segment": "1 segment"
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",
