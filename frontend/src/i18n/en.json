@@ -387,6 +387,19 @@
     "es": "Spanish",
     "en": "English"
   },
+  "discovery": {
+    "title": "Sign in to FHORT",
+    "subtitle": "Enter your email and we'll send you the link to your workspace.",
+    "email_label": "Email",
+    "email_ph": "you@company.com",
+    "submit": "Continue",
+    "sending": "Sending…",
+    "sent_title": "Check your email",
+    "sent_body": "If the address is registered, you'll find the access link to your workspace.",
+    "retry": "Try another email",
+    "error": "Something went wrong. Please try again.",
+    "throttled": "Too many attempts. Please wait a moment and try again."
+  },
   "login": {
     "welcome": "Welcome",
     "welcome_sub": "Access your workspace",

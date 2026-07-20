@@ -38,6 +38,13 @@ export const passwordReset = {
   confirm: (data) => publicClient.post('/api/v1/password-reset/confirm/', data),   // {uid, token, new_password}
 }
 
+// Tenant-discovery (porta única). SAME-ORIGIN a posta: l'endpoint /api/discovery/ viu al schema
+// PUBLIC del host que serveix la pantalla neutra (login.*), no al tenant fhort al qual apunta
+// VITE_API_URL. Ruta relativa → cau sobre l'origen actual. Resposta SEMPRE uniforme.
+export const tenantDiscovery = {
+  submit: (email) => axios.post('/api/discovery/', { email }),
+}
+
 export const models = {
   list: (params) => client.get('/api/v1/models/', { params }),
   get: (id) => client.get(`/api/v1/models/${id}/`),

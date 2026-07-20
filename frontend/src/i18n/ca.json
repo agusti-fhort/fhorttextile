@@ -387,6 +387,19 @@
     "es": "Castellà",
     "en": "Anglès"
   },
+  "discovery": {
+    "title": "Entra a FHORT",
+    "subtitle": "Escriu el teu correu i t'enviarem l'accés al teu espai de treball.",
+    "email_label": "Correu electrònic",
+    "email_ph": "tu@empresa.com",
+    "submit": "Continua",
+    "sending": "Enviant…",
+    "sent_title": "Revisa el teu correu",
+    "sent_body": "Si l'adreça està registrada, hi trobaràs l'enllaç d'accés al teu espai.",
+    "retry": "Prova amb un altre correu",
+    "error": "No s'ha pogut completar. Torna-ho a provar.",
+    "throttled": "Massa intents. Espera una estona i torna-ho a provar."
+  },
   "login": {
     "welcome": "Benvingut/da",
     "welcome_sub": "Accedeix al teu espai de treball",

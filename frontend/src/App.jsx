@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useParams, useSearchParams, use
 import { useTranslation } from 'react-i18next'
 import useAuthStore, { AUTH_DESCONEGUT, AUTH_VALID } from './store/auth'
 import Login from './pages/Login'
+import Entrar from './pages/Entrar'
 import Shell from './components/layout/Shell'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -243,6 +244,8 @@ export default function App() {
       <Suspense fallback={<div className="p-8 text-gray-500">Carregant…</div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        {/* Porta ÚNICA (tenant-discovery): pantalla neutra, se serveix al host neutre (→public). */}
+        <Route path="/entrar" element={<Entrar />} />
         {/* Recuperació de contrasenya: pública, fora del guard (la persona no està autenticada). */}
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
         {/* Fitxa tècnica: /fitxa ja no munta l'editor TechSheet; resol/crea el .ftt i redirigeix. */}

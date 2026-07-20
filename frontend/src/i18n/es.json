@@ -387,6 +387,19 @@
     "es": "Español",
     "en": "Inglés"
   },
+  "discovery": {
+    "title": "Entra a FHORT",
+    "subtitle": "Escribe tu correo y te enviaremos el acceso a tu espacio de trabajo.",
+    "email_label": "Correo electrónico",
+    "email_ph": "tu@empresa.com",
+    "submit": "Continuar",
+    "sending": "Enviando…",
+    "sent_title": "Revisa tu correo",
+    "sent_body": "Si la dirección está registrada, encontrarás el enlace de acceso a tu espacio.",
+    "retry": "Prueba con otro correo",
+    "error": "No se ha podido completar. Inténtalo de nuevo.",
+    "throttled": "Demasiados intentos. Espera un momento e inténtalo de nuevo."
+  },
   "login": {
     "welcome": "Bienvenido/a",
     "welcome_sub": "Accede a tu espacio de trabajo",
