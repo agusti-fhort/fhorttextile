@@ -4281,6 +4281,19 @@ export default function TechSheetEditor() {
           <button type="button" onClick={() => runNode('close')} title={t('tech_sheet.node_close')} style={nodeBarBtn(false)}><i className="ti ti-link" style={{ fontSize: 15 }} /></button>
           <button type="button" onClick={() => runNode('open')} title={t('tech_sheet.node_open')} style={nodeBarBtn(false)}><i className="ti ti-link-off" style={{ fontSize: 15 }} /></button>
           <button type="button" onClick={() => runNode('split')} title={t('tech_sheet.node_split')} style={nodeBarBtn(false)}><i className="ti ti-arrows-split" style={{ fontSize: 15 }} /></button>
+          <span style={nodeBarSep} />
+          {/* F5 — pintura de la subpath activa (viu al canvas Paper): swatch fill + stroke + gruix. */}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={t('tech_sheet.fill')}>
+            <i className="ti ti-color-swatch" style={{ fontSize: 14, color: COL.textMuted }} />
+            <ColorPicker value={nodeSel.fill || 'transparent'} onChange={c => runNode('setFill', c)} />
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={t('tech_sheet.stroke_color')}>
+            <i className="ti ti-line" style={{ fontSize: 14, color: COL.textMuted }} />
+            <ColorPicker value={nodeSel.stroke || 'transparent'} onChange={c => runNode('setStroke', c)} />
+          </span>
+          <input type="number" min="0" step="0.1" value={nodeSel.strokeWidth ?? ''} title={t('tech_sheet.stroke_width')}
+            onChange={e => runNode('setStrokeWidth', e.target.value)}
+            style={{ width: 52, height: 24, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', padding: '0 6px' }} />
         </div>
       )}
 

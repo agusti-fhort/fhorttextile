@@ -30,6 +30,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   const selectedSegRef = useRef(null)         // F2: índex de corba del SEGMENT (tram) seleccionat, o null
   const dragRef = useRef(null)
   const marqueeRef = useRef(null)             // {x0,y0,rect} mentre s'arrossega una marquesina
+  const paintRef = useRef({})                 // F5: overrides de pintura pendents per índex de subpath {fill,stroke,strokeWidth}
   const zoomRef = useRef(zoom)
   const refreshHandlesRef = useRef(null)
   const opsRef = useRef(null)                 // accions exposades al pare via run() (close/open/split/removeSelection…)
@@ -64,6 +65,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       selectedSegRef.current = null
       dragRef.current = null
       marqueeRef.current = null
+      paintRef.current = {}
       refreshHandlesRef.current = null
     }
 
@@ -135,8 +137,36 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     }
     refreshHandlesRef.current = refreshHandles
 
-    // Puja l'estat de selecció al pare per a la barra contextual: nodes seleccionats + si hi ha segment.
-    const pushState = () => onNodeStateRef.current?.({ selCount: selectedSegsRef.current.size, seg: selectedSegRef.current != null })
+    // Puja l'estat al pare per a la barra contextual: selecció (nodes/segment) + PINTURA de la subpath
+    // activa (fill/stroke en CSS o null=cap; gruix en mm) perquè els swatches reflecteixin l'estat viu.
+    const pushState = () => {
+      const path = selectedPathRef.current
+      const idx = path?.data?.index ?? 0
+      const ov = paintRef.current[idx] || {}
+      const fill = ov.fill != null ? (ov.fill === 'transparent' ? null : ov.fill) : (path?.fillColor ? path.fillColor.toCSS(true) : null)
+      const stroke = ov.stroke != null ? (ov.stroke === 'transparent' ? null : ov.stroke) : (path?.strokeColor ? path.strokeColor.toCSS(true) : null)
+      const swMm = ov.strokeWidth != null ? ov.strokeWidth : ((path?.strokeWidth || 0) / (toPx(1) * (zoomRef.current || 1)))
+      onNodeStateRef.current?.({
+        selCount: selectedSegsRef.current.size, seg: selectedSegRef.current != null,
+        fill, stroke, strokeWidth: Math.round(swMm * 100) / 100,
+      })
+    }
+    // F5 — aplica pintura a la subpath ACTIVA: viu al canvas Paper + registrat a paintRef per al commit.
+    const applyPaint = (kind, value) => {
+      const path = selectedPathRef.current
+      if (!path) return
+      const idx = path.data?.index ?? 0
+      const ov = (paintRef.current[idx] = paintRef.current[idx] || {})
+      if (kind === 'strokeWidth') {
+        const wMm = Math.max(0, Number(value) || 0)
+        path.strokeWidth = toViewPx(wMm); ov.strokeWidth = wMm
+      } else {
+        const none = !value || value === 'transparent' || value === 'none'
+        path[kind === 'fill' ? 'fillColor' : 'strokeColor'] = none ? null : value
+        ov[kind] = none ? 'transparent' : value
+      }
+      scope.view.update(); pushState()
+    }
 
     const setSelection = (indices) => {
       selectedSegsRef.current = new Set(indices)
@@ -279,6 +309,9 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       open: () => { const p = selectedPathRef.current; const sel = [...selectedSegsRef.current]; if (p && p.closed && sel.length === 1) applyOp(openAtNode(readSegs(p), true, sel[0]), []) },
       split: () => { const p = selectedPathRef.current; const sel = [...selectedSegsRef.current]; if (p && sel.length === 1) splitInTwo(splitAtNode(readSegs(p), p.closed, sel[0])) },
       removeSelection,
+      setFill: (c) => applyPaint('fill', c),
+      setStroke: (c) => applyPaint('stroke', c),
+      setStrokeWidth: (w) => applyPaint('strokeWidth', w),
     }
 
     const tool = new scope.Tool()
@@ -461,11 +494,18 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         return { x: p.x, y: p.y, inX: hin.x, inY: hin.y, outX: hout.x, outY: hout.y }
       })
       const paths = sketchLayer.getItems({ class: scope.Path }).filter(path => path.segments?.length).map((path, index) => {
-        const source = flat.paths?.[path.data?.index ?? index] || {}
+        const srcIdx = path.data?.index ?? index
+        const source = flat.paths?.[srcIdx] || {}
+        // F5 — fusiona la pintura pendent (fill/stroke/strokeWidth) de la subpath a l'entrada del model.
+        const ov = paintRef.current[srcIdx] || {}
+        const paint = {}
+        if (ov.fill != null) paint.fill = ov.fill
+        if (ov.stroke != null) paint.stroke = ov.stroke
+        if (ov.strokeWidth != null) paint.strokeWidth = ov.strokeWidth
         if (source.subpaths) {
-          return { ...source, subpaths: source.subpaths.map((sp, si) => (si === 0 ? { ...sp, closed: path.closed, segments: segsOf(path) } : sp)) }
+          return { ...source, ...paint, subpaths: source.subpaths.map((sp, si) => (si === 0 ? { ...sp, closed: path.closed, segments: segsOf(path) } : sp)) }
         }
-        return { ...source, closed: path.closed, segments: segsOf(path) }
+        return { ...source, ...paint, closed: path.closed, segments: segsOf(path) }
       })
       onCommit({ paths })
       return
