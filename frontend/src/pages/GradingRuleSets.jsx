@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
-import ScopeSelector from '../components/grading/ScopeSelector'
 import SizeAuthoringDrawer from '../components/SizeAuthoringDrawer'
 import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn, matchingRuleSetsStrict } from '../components/grading/gradingAxes'
 
@@ -892,7 +891,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
             <label style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
               {t('scope.label')}
             </label>
-            <ScopeSelector value={scope} onChange={nodes => { setScope(nodes); setScopeTouched(true) }} />
+            <CascadeSelector mode="multi" value={scope} onChange={nodes => { setScope(nodes); setScopeTouched(true) }} />
           </div>
         )}
         <div style={{ marginBottom: 12 }}>
