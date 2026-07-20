@@ -1388,7 +1388,7 @@ function EndpointHandles({ obj, onEndpointDrag }) {
   return <>{mk('start', start)}{mk('end', end)}</>
 }
 
-function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSelect }) {
+function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSelect, subpathTool }) {
   const paths = obj.paths || []
   return (
     <Group {...common} onDblClick={onDblVector} onDblTap={onDblVector}>
@@ -1396,8 +1396,9 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
         const props = pathChildProps(obj, path)
         if (!props.data) return null
         // S6: objecte ja seleccionat → aquest clic activa la subpath (no bombolla fins al Group).
-        // Objecte NO seleccionat → sense handler propi: el clic puja i selecciona tot l'objecte.
-        const subClick = selected ? (e) => { e.cancelBubble = true; onSubSelect?.(i) } : undefined
+        // S1.1: amb l'eina "Selecció de subpath" activa, el clic activa la peça EN UN SOL CLIC
+        // (encara que l'objecte no estigui seleccionat) — promoció de l'antic gest de segon clic.
+        const subClick = (selected || subpathTool) ? (e) => { e.cancelBubble = true; onSubSelect?.(i) } : undefined
         // Ressalt visual (només pinta): la subpath activa es mostra amb traç daurat, sense tocar les dades.
         const highlight = i === activeSubIndex ? { stroke: KONVA_COL.gold, strokeWidth: Math.max(2, props.strokeWidth || 1) } : null
         // Fix #4: un path sense fill només capta clics sobre el traç; ampliem la zona hit
@@ -1415,7 +1416,7 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, onEndpointDrag }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, subpathTool, onEndpointDrag }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -1495,7 +1496,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     return <>{arrow}<EndpointHandles obj={obj} onEndpointDrag={onEndpointDrag} /></>
   }
   if (obj.type === 'path') {
-    return <PathObj obj={obj} common={common} onDblVector={onDblVector} selected={selected} activeSubIndex={activeSubIndex} onSubSelect={onSubSelect} />
+    return <PathObj obj={obj} common={common} onDblVector={onDblVector} selected={selected} activeSubIndex={activeSubIndex} onSubSelect={onSubSelect} subpathTool={subpathTool} />
   }
   if (obj.type === 'image') {
     return <ImageObj obj={obj} src={src} common={common} />
@@ -3730,8 +3731,8 @@ export default function TechSheetEditor() {
   const PALETTE = [
     { cat: 'select', items: [
       { kind: 'tool', k: 'select', icon: 'ti-pointer-2', label: t('tech_sheet.tool_select') },
-      { kind: 'tool', k: 'node', icon: 'ti-vector', label: t('tech_sheet.tool_node'), soon: true },
-      { kind: 'tool', k: 'subpath', icon: 'ti-vector-spline', label: t('tech_sheet.tool_subpath'), soon: true },
+      { kind: 'tool', k: 'node', icon: 'ti-vector', label: t('tech_sheet.tool_node') },
+      { kind: 'tool', k: 'subpath', icon: 'ti-vector-triangle', label: t('tech_sheet.tool_subpath') },
     ] },
     { cat: 'draw', items: [
       { kind: 'tool', k: 'draw', icon: 'ti-pencil', label: t('tech_sheet.tool_draw') },
@@ -4310,7 +4311,9 @@ export default function TechSheetEditor() {
                     selected={selectedIds.includes(o.id)}
                     selectable={locked && o.layer !== 'template' && !o.locked}
                     draggable={locked && tool === 'select' && !panActive && o.layer !== 'template' && !o.locked && activeGroup !== o.id}
-                    onSelect={(e) => handleSelectObject(e, o.id)}
+                    onSelect={(e) => (tool === 'node' && (o.type === 'path' || o.type === 'sketch_svg'))
+                      ? startVectorEdit(o)                         // S1.1: eina "Selecció directa (nodes)" → obre l'editor de nodes
+                      : handleSelectObject(e, o.id)}
                     onDragStart={handleDragStart(o)}
                     onDragMove={handleDragMove(o)}
                     onDragEnd={handleDragEnd(o)}
@@ -4323,7 +4326,8 @@ export default function TechSheetEditor() {
                     onChildDragEnd={handleChildDragEnd(o.id)}
                     selectedChildId={activeGroup === o.id ? selectedChildId : null}
                     activeSubIndex={activeSubpath?.objId === o.id ? activeSubpath.index : null}
-                    onSubSelect={(i) => setActiveSubpath({ objId: o.id, index: i })}
+                    subpathTool={tool === 'subpath'}
+                    onSubSelect={(i) => { if (!selectedIds.includes(o.id)) selectOnly(o.id); setActiveSubpath({ objId: o.id, index: i }) }}
                     onEndpointDrag={handleEndpointDrag(o)} />
                 ))}
                 {/* Forma temporal mentre es dibuixa */}
