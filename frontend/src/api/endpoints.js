@@ -1,6 +1,14 @@
 import axios from 'axios'
 import client from './client'
 
+// C4 — invalidació de les superfícies LECTORES del pla (Board + Gantt): quan una acció canvia
+// l'ordre materialitzat (reorder manual, o inici real que reancora), emetem un únic esdeveniment
+// perquè els lectors muntats es refresquin sense ordenació pròpia. Pass-through de la resposta.
+export const planChanged = (res) => {
+  try { window.dispatchEvent(new CustomEvent('plan:changed')) } catch { /* SSR/test */ }
+  return res
+}
+
 export const auth = {
   login: (username, password) => client.post('/api/token/', { username, password }),
 }
@@ -47,7 +55,8 @@ export const models = {
   // Porta-menú: obre una tasca concreta del model (crea-si-falta + auto-assign + En curs). {code}
   // Sprint Y — fittingSessionId opcional: lliga la tasca a la sessió (FK) i obre la sessió Programada.
   openTask: (id, code, fittingSessionId = null) =>
-    client.post(`/api/v1/models/${id}/open-task/`, { code, ...(fittingSessionId ? { fitting_session_id: fittingSessionId } : {}) }),
+    client.post(`/api/v1/models/${id}/open-task/`, { code, ...(fittingSessionId ? { fitting_session_id: fittingSessionId } : {}) })
+      .then(planChanged),   // C4 — l'auto-start pot reancorar el pla → invalida Board+Gantt
   // Acte lleuger de gènesi POM: base+nomenclatura+regles i tanca la tasca pom. No propaga.
   gravarPom: (id, data) => client.post(`/api/v1/models/${id}/gravar-pom/`, data),
   gate: (id, data) => client.post(`/api/v1/models/${id}/gate/`, data),                   // {to_phase} o {to_phases:[...]}
@@ -307,7 +316,7 @@ export const plan = {
   snapshots: () => client.get('/api/v1/plan/snapshots/'),
   // body: {assignee_id, model_ids:[...ordenats]} → desa l'ordre manual de la cua + recompute.
   // → {ok, assignee_id, result:{placements,warnings,models}}. Gated define_tasks.
-  reorder: (body) => client.post('/api/v1/plan/reorder/', body),
+  reorder: (body) => client.post('/api/v1/plan/reorder/', body).then(planChanged),
   // Wizard multi-assign (Peça 2/3, gated define_tasks).
   // → [{profile_id, full_name, color_avatar, disponible_des_de, models_en_cua}] (ordenat per disponibilitat).
   eligibleTechnicians: (code) =>

@@ -1557,6 +1557,7 @@
       "legend_wait": "Espera (confecció)",
       "order": {
         "label": "Ordena per",
+        "pla": "Pla",
         "lliurament": "Lliurament",
         "fita": "Pròxima fita",
         "fase": "Fase"
@@ -1564,6 +1565,7 @@
       "risk_first": "Risc primer",
       "only_risk": "Només en risc",
       "risk_flag": "En risc: la fi prevista supera la data objectiu",
+      "reanchored": "Reancorat: ha pujat al pla per un inici real",
       "color": {
         "label": "Pinta per",
         "tecnic": "Tècnic",

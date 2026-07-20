@@ -49,7 +49,7 @@ export default function ProjectGantt({ t, mine = false }) {
   const [models, setModels] = useState([])
   const [today, setToday] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [order, setOrder] = useState('lliurament')   // lliurament | fita | fase
+  const [order, setOrder] = useState('pla')   // pla (backend) | lliurament | fita | fase
   const [riskFirst, setRiskFirst] = useState(false)
   const [onlyRisk, setOnlyRisk] = useState(false)
   const [colorBy, setColorBy] = useState('tecnic')   // tecnic | fase | risc | colleccio
@@ -59,12 +59,20 @@ export default function ProjectGantt({ t, mine = false }) {
   const [horaris, setHoraris] = useState({})   // CompanyCalendar: {dia:[[a,b],...]}
   const [festius, setFestius] = useState([])   // festius_extra (dates ISO)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     plan.gantt(mine ? { mine: true } : {})
       .then(res => { setModels(res.data?.models || []); setToday(res.data?.today || null) })
       .catch(() => setModels([]))
       .finally(() => setLoading(false))
   }, [mine])
+  useEffect(() => { load() }, [load])
+  // C4 — LECTOR del pla: refresca en canvis (reorder manual / inici real que reancora) sense
+  // ordenació pròpia. Font única d'ordre = backend; aquí només tornem a llegir.
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('plan:changed', h)
+    return () => window.removeEventListener('plan:changed', h)
+  }, [load])
 
   // PEÇA 3 — calendari laboral (no-laborables): càrrega única, MATEIXA font que PlanningCalendar.
   useEffect(() => {
@@ -105,11 +113,14 @@ export default function ProjectGantt({ t, mine = false }) {
       (!filterColleccio || m.collection === filterColleccio) &&
       (!filterTemporada || m.temporada === filterTemporada))
     const cmp = {
+      // C4 — 'pla' = l'ordre del backend (pla materialitzat); el lector NO reordena. Les altres
+      // vistes queden com a alternatives EXPLÍCITES que l'usuari tria al selector.
+      pla: null,
       lliurament: (a, b) => a.end.localeCompare(b.end) || a.codi.localeCompare(b.codi),
       fita: (a, b) => nextFita(a, today).localeCompare(nextFita(b, today)) || a.codi.localeCompare(b.codi),
       fase: (a, b) => (FASE_ORDER.indexOf(a.fase) - FASE_ORDER.indexOf(b.fase)) || a.end.localeCompare(b.end),
     }[order]
-    list.sort(cmp)
+    if (cmp) list.sort(cmp)
     if (riskFirst) list.sort((a, b) => (b.en_risc === a.en_risc ? 0 : b.en_risc ? 1 : -1))
     return list
   }, [models, onlyRisk, order, riskFirst, today, filterTechs, filterColleccio, filterTemporada])
@@ -137,6 +148,19 @@ export default function ProjectGantt({ t, mine = false }) {
   }, [models, today])
 
   const scrollRef = useRef(null)
+  // C4c — SCROLL ANCORAT vertical: després de cada CÀRREGA de dades, baixa fins al primer model
+  // amb tasques vives (next_task), deixant els acabats amunt (visibles pujant, mai esborrats).
+  // pendingAnchor s'arma en (re)carregar `models` i es consumeix un cop sobre la llista pintada.
+  const pendingAnchor = useRef(false)
+  useEffect(() => { pendingAnchor.current = true }, [models])
+  useEffect(() => {
+    if (!pendingAnchor.current || !scrollRef.current || !displayed.length) return
+    pendingAnchor.current = false
+    const idx = displayed.findIndex(m => m.next_task)
+    if (idx <= 0) return
+    const id = requestAnimationFrame(() => { if (scrollRef.current) scrollRef.current.scrollTop = idx * ROW_H })
+    return () => cancelAnimationFrame(id)
+  }, [displayed])
   // Posiciona AVUI a prop de l'esquerra del viewport: track-x d'avui (la mateixa x que pinta la línia
   // daurada) menys 2 dies de marge. Idempotent; degrada net si encara no hi ha layout (guards + rAF).
   const scrollToToday = useCallback(() => {
@@ -251,6 +275,7 @@ function GanttControls({ t, order, setOrder, riskFirst, setRiskFirst, onlyRisk, 
       <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>
         {t('planning.gantt.order.label')}
         <select value={order} onChange={e => setOrder(e.target.value)} style={selS}>
+          <option value="pla">{t('planning.gantt.order.pla')}</option>
           <option value="lliurament">{t('planning.gantt.order.lliurament')}</option>
           <option value="fita">{t('planning.gantt.order.fita')}</option>
           <option value="fase">{t('planning.gantt.order.fase')}</option>
@@ -350,6 +375,7 @@ function GanttRow({ m, color, trackW, x, ticks, order, nonWorkCols, onClick, t }
                     padding: '8px 14px', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
         <div style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
           {m.en_risc && <i className="ti ti-flag" title={t('planning.gantt.risk_flag')} style={{ fontSize: 'var(--fs-label)', color: 'var(--err)', marginRight: 4 }} />}
+          {m.reanchored_by_start && <i className="ti ti-plus" title={t('planning.gantt.reanchored')} style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)', marginRight: 4 }} />}
           {m.codi}
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, overflow: 'hidden' }}>

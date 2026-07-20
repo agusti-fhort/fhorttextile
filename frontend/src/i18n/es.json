@@ -1557,6 +1557,7 @@
       "legend_wait": "Espera (confección)",
       "order": {
         "label": "Ordenar por",
+        "pla": "Plan",
         "lliurament": "Entrega",
         "fita": "Próximo hito",
         "fase": "Fase"
@@ -1564,6 +1565,7 @@
       "risk_first": "Riesgo primero",
       "only_risk": "Solo en riesgo",
       "risk_flag": "En riesgo: el fin previsto supera la fecha objetivo",
+      "reanchored": "Reanclado: ha subido en el plan por un inicio real",
       "color": {
         "label": "Pinta por",
         "tecnic": "Técnico",

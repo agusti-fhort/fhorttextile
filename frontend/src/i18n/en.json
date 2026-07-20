@@ -1557,6 +1557,7 @@
       "legend_wait": "Wait (production)",
       "order": {
         "label": "Sort by",
+        "pla": "Plan",
         "lliurament": "Delivery",
         "fita": "Next milestone",
         "fase": "Phase"
@@ -1564,6 +1565,7 @@
       "risk_first": "Risk first",
       "only_risk": "Only at risk",
       "risk_flag": "At risk: predicted end exceeds target date",
+      "reanchored": "Reanchored: moved up the plan by a real start",
       "color": {
         "label": "Color by",
         "tecnic": "Technician",
