@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { models as modelsApi } from '../api/endpoints'
 import ActionsMenu, { PHASES } from '../components/model/ActionsMenu'
@@ -19,23 +19,47 @@ export default function Models() {
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [feedback, setFeedback] = useState(null)
-  const [search, setSearch] = useState('')
-  const [fase, setFase] = useState('')
-  const [temporada, setTemporada] = useState('')
-  const [page, setPage] = useState(1)
   const [selected, setSelected] = useState(() => new Set())
   const [newOpen, setNewOpen] = useState(false)
   // Selecció de CONJUNT filtrat (patró Gmail, C2): "tots els N del filtre" amb exclusions.
   const [selectAllFilter, setSelectAllFilter] = useState(false)
   const [excludeIds, setExcludeIds] = useState(() => new Set())
 
+  // URL = FONT DE VERITAT dels filtres (useSearchParams): recarregar conserva l'estat i el contracte
+  // de conjunt (C2) llegeix la URL tal qual. `search` té un mirall local per a la resposta de teclat;
+  // se sincronitza a la URL amb debounce.
+  const [sp, setSp] = useSearchParams()
+  const search = sp.get('search') || ''
+  const fase = sp.get('fase_actual') || ''
+  const temporada = sp.get('temporada') || ''
+  const page = Math.max(1, parseInt(sp.get('page') || '1', 10))
+  const [searchInput, setSearchInput] = useState(search)
+
+  // Escriu params a la URL (replace: sense inundar l'historial). Buit/undefined → esborra el key.
+  const setParams = useCallback((patch) => {
+    setSp(prev => {
+      const next = new URLSearchParams(prev)
+      Object.entries(patch).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === '') next.delete(k)
+        else next.set(k, v)
+      })
+      return next
+    }, { replace: true })
+  }, [setSp])
+
+  // Params de filtre enviats al backend (i base del contracte C2). Deriven NOMÉS de la URL.
+  const filterParams = useMemo(() => {
+    const f = {}
+    const s = search.trim(); if (s) f.search = s
+    if (fase) f.fase_actual = fase
+    if (temporada) f.temporada = temporada
+    return f
+  }, [search, fase, temporada])
+  const filterKey = useMemo(() => JSON.stringify(filterParams), [filterParams])
+
   const load = useCallback(() => {
     setLoading(true)
-    const params = { ordering: '-data_entrada', page, page_size: PAGE_SIZE }
-    if (search) params.search = search
-    if (fase) params.fase_actual = fase
-    if (temporada) params.temporada = temporada
-    modelsApi.list(params)
+    modelsApi.list({ ...filterParams, ordering: '-data_entrada', page, page_size: PAGE_SIZE })
       .then(r => {
         const d = r.data
         setItems(Array.isArray(d) ? d : (d.results || []))
@@ -43,11 +67,17 @@ export default function Models() {
       })
       .catch(() => { setItems([]); setCount(0) })
       .finally(() => setLoading(false))
-  }, [search, fase, temporada, page])
+  }, [filterParams, page])
 
-  // Debounce de la cerca + reset de pàgina i de la selecció de conjunt quan canvien els filtres
-  // (el conjunt es defineix pels filtres actius; canviar-los l'invalida).
-  useEffect(() => { setPage(1); setSelectAllFilter(false); setExcludeIds(new Set()); setSelected(new Set()) }, [search, fase, temporada])
+  // Sincronitza l'input de cerca (mirall local) → URL amb debounce; reseteja pàgina en canviar.
+  useEffect(() => { setSearchInput(search) }, [search])
+  useEffect(() => {
+    const id = setTimeout(() => { if (searchInput !== search) setParams({ search: searchInput, page: undefined }) }, 250)
+    return () => clearTimeout(id)
+  }, [searchInput])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Canviar qualsevol filtre invalida la selecció de conjunt (es defineix pels filtres actius).
+  useEffect(() => { setSelectAllFilter(false); setExcludeIds(new Set()); setSelected(new Set()) }, [filterKey])
   useEffect(() => { const id = setTimeout(load, 200); return () => clearTimeout(id) }, [load])
 
   const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
@@ -55,14 +85,6 @@ export default function Models() {
   const allOnPage = items.length > 0 && items.every(m => selected.has(m.id))
   const hasMoreThanPage = count > items.length
 
-  // Filtres actius de la URL = font única dels `filters` del payload de conjunt (contracte C2).
-  const activeFilters = useMemo(() => {
-    const f = {}
-    const s = search.trim(); if (s) f.search = s
-    if (fase) f.fase_actual = fase
-    if (temporada) f.temporada = temporada
-    return f
-  }, [search, fase, temporada])
   const filterCount = Math.max(0, count - (selectAllFilter ? excludeIds.size : 0))
   const selCount = selectAllFilter ? filterCount : selected.size
 
@@ -106,7 +128,7 @@ export default function Models() {
           <NewModelMenu open={newOpen} setOpen={setNewOpen} navigate={navigate} t={t} />
           <ActionsMenu
             targets={selectAllFilter ? [] : selectedModels}
-            selectionSet={selectAllFilter ? { filters: activeFilters, excludeIds: [...excludeIds], count: filterCount } : null}
+            selectionSet={selectAllFilter ? { filters: filterParams, excludeIds: [...excludeIds], count: filterCount } : null}
             onChanged={afterAction} onFeedback={setFeedback} />
         </div>
       </div>
@@ -115,18 +137,18 @@ export default function Models() {
 
       {/* Toolbar de filtres */}
       <div style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap', alignItems: 'center' }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('models_list.search_ph')}
+        <input value={searchInput} onChange={e => setSearchInput(e.target.value)} placeholder={t('models_list.search_ph')}
           style={{ ...inp, flex: 1, minWidth: 220 }} />
-        <select value={fase} onChange={e => setFase(e.target.value)} style={inp}>
+        <select value={fase} onChange={e => setParams({ fase_actual: e.target.value, page: undefined })} style={inp}>
           <option value="">{t('models_list.all_phases')}</option>
           {PHASES.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
-        <select value={temporada} onChange={e => setTemporada(e.target.value)} style={inp}>
+        <select value={temporada} onChange={e => setParams({ temporada: e.target.value, page: undefined })} style={inp}>
           <option value="">{t('models_list.all_seasons')}</option>
           {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         {(search || fase || temporada) && (
-          <button onClick={() => { setSearch(''); setFase(''); setTemporada('') }} style={{ ...inp, cursor: 'pointer', color: 'var(--gray)' }}>× {t('models_list.clear')}</button>
+          <button onClick={() => setParams({ search: undefined, fase_actual: undefined, temporada: undefined, page: undefined })} style={{ ...inp, cursor: 'pointer', color: 'var(--gray)' }}>× {t('models_list.clear')}</button>
         )}
       </div>
 
@@ -181,9 +203,9 @@ export default function Models() {
       {/* Paginació */}
       {pages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 18, fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} style={{ ...inp, cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1 }}>← {t('models_list.prev')}</button>
+          <button onClick={() => setParams({ page: Math.max(1, page - 1) })} disabled={page <= 1} style={{ ...inp, cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1 }}>← {t('models_list.prev')}</button>
           <span style={{ color: 'var(--gray)' }}>{t('models_list.page_info', { page, pages })}</span>
-          <button onClick={() => setPage(p => Math.min(pages, p + 1))} disabled={page >= pages} style={{ ...inp, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? 0.4 : 1 }}>{t('models_list.next')} →</button>
+          <button onClick={() => setParams({ page: Math.min(pages, page + 1) })} disabled={page >= pages} style={{ ...inp, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? 0.4 : 1 }}>{t('models_list.next')} →</button>
         </div>
       )}
     </div>

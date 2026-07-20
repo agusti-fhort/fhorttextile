@@ -97,6 +97,10 @@ export const models = {
   // filtres que el Model list (customer/collection/data_objectiu_after|before/temporada/...).
   // → {counts:{<fase>:n}, total}.
   faseCounts: (params) => client.get('/api/v1/models/fase-counts/', { params }),
+  // Comptadors de models per garment_type i per garment_type_item del conjunt FILTRAT (mateix
+  // ModelFilter C1). Alimenta el CascadeSelector mode=multi (showCounts) del panell de filtres.
+  // → {by_type:{<id>:n}, by_item:{<id>:n}, total}.
+  garmentCounts: (params) => client.get('/api/v1/models/garment-counts/', { params }),
 }
 
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).
