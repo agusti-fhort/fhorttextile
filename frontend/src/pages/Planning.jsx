@@ -147,6 +147,7 @@ function PlanificacioPanel({ mode = 'pending' }) {
         const viab = calcViabilitat(temps, m.data_objectiu, localISODate(predEnd))
         out.push({
           id: m.model_id, codi: m.model_codi, nom: m.model_nom, prioritat: m.prioritat,
+          reanchored_by_start: m.reanchored_by_start,   // C4d — marcador "+"
           data_objectiu: m.data_objectiu, temporada: m.temporada,
           folder: techIds.length ? 'assigned' : 'pending',
           nonDoneCount: nonDone.length, techIds,
@@ -163,6 +164,14 @@ function PlanificacioPanel({ mode = 'pending' }) {
   }, [t])
 
   useEffect(() => { if (canPlan) load() }, [canPlan, load])
+  // C4 — invalidació: un inici real (auto-start) en una altra superfície pot reancorar el pla;
+  // Planificació és lectora del mateix pla → recarrega quan s'emet 'plan:changed'.
+  useEffect(() => {
+    if (!canPlan) return
+    const h = () => load()
+    window.addEventListener('plan:changed', h)
+    return () => window.removeEventListener('plan:changed', h)
+  }, [canPlan, load])
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase()
@@ -284,7 +293,9 @@ function PlanificacioPanel({ mode = 'pending' }) {
                       {filtered.map(r => (
                         <tr key={r.id}>
                           <td style={tdS}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSel(r.id)} /></td>
-                          <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600 }}>{r.codi}</td>
+                          <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600 }}>
+                            {r.reanchored_by_start && <i className="ti ti-plus" title={t('planning.gantt.reanchored')} style={{ color: 'var(--gold)', marginRight: 4 }} />}
+                            {r.codi}</td>
                           <td style={tdS}>{r.nom}</td>
                           <td style={tdS}>{r.prioritat}</td>
                           <td style={tdS}>{r.data_objectiu || '—'}</td>
@@ -378,6 +389,7 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
           <i className={`ti ti-chevron-${expanded ? 'down' : 'right'}`} style={{ fontSize: 14 }} />
         </td>
         <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600, cursor: 'pointer' }} onClick={onToggle}>
+          {r.reanchored_by_start && <i className="ti ti-plus" title={t('planning.gantt.reanchored')} style={{ color: 'var(--gold)', marginRight: 4 }} />}
           {r.codi}
           {r.viab?.semafor === 'critical' && <span style={{ marginLeft: 8, color: 'var(--err)', fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('planning.critical')}</span>}
           {r.viab?.semafor === 'at_risk' && <span style={{ marginLeft: 8, color: 'var(--warn)', fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('planning.at_risk')}</span>}

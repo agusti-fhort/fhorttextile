@@ -9,7 +9,7 @@ const linkBtn = { background: 'none', border: 'none', cursor: 'pointer', fontSiz
 // D-12 — Watchpoints: advertències de TEXT LLIURE que viatgen amb el model a través dels gates.
 // Crear (mode treball) + veure/resoldre. Origen = la tasca on es crea (`taskId`). NO van a la fitxa
 // tècnica; viuen amb el model perquè un altre tècnic entengui l'advertència.
-export default function WatchpointsPanel({ modelId, taskId = null, editable = false, showAllByDefault = false }) {
+export default function WatchpointsPanel({ modelId, taskId = null, editable = false, showAllByDefault = false, onChanged = null }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [items, setItems] = useState([])
@@ -30,12 +30,14 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
     if (!v || busy) return
     setBusy(true); setErr(false)
     watchpoints.create({ model: modelId, task: taskId || null, text: v })
-      .then(() => { setText(''); load() })
+      .then(() => { setText(''); load(); onChanged?.() })
       .catch(() => setErr(true))   // visible: ja no s'empassa el fallo (p.ex. 500)
       .finally(() => setBusy(false))
   }
-  const resolve = (id) => { setBusy(true); watchpoints.resolve(id).then(load).finally(() => setBusy(false)) }
-  const reopen = (id) => { setBusy(true); watchpoints.reopen(id).then(load).finally(() => setBusy(false)) }
+  // resolve/reopen canvien el compte d'oberts → avisem el pare (badge) perquè es refresqui
+  // EN L'ACTE, no només en tancar el drawer.
+  const resolve = (id) => { setBusy(true); watchpoints.resolve(id).then(() => { load(); onChanged?.() }).finally(() => setBusy(false)) }
+  const reopen = (id) => { setBusy(true); watchpoints.reopen(id).then(() => { load(); onChanged?.() }).finally(() => setBusy(false)) }
 
   const open = items.filter(w => w.estat === 'open')
   const resolved = items.filter(w => w.estat === 'resolved')

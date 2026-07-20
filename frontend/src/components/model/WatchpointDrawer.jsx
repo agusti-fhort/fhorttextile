@@ -8,7 +8,7 @@ import WatchpointsPanel from './WatchpointsPanel'
 // com a fil cronològic (crear + llistar -created_at + resolve/reopen).
 // CRÍTIC: NO toca l'estat del model (cap reloadModel/onChanged). El panell recarrega NOMÉS la seva
 // pròpia llista internament → obrir/escriure aquí no provoca cap re-mount de la pestanya activa.
-export default function WatchpointDrawer({ modelId, open, onClose }) {
+export default function WatchpointDrawer({ modelId, open, onClose, onChanged }) {
   const { t } = useTranslation()
 
   // ESC tanca (només mentre està obert).
@@ -48,7 +48,7 @@ export default function WatchpointDrawer({ modelId, open, onClose }) {
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: '0 1.25rem 1.25rem' }}>
-          <WatchpointsPanel modelId={modelId} taskId={null} editable={true} />
+          <WatchpointsPanel modelId={modelId} taskId={null} editable={true} onChanged={onChanged} />
         </div>
       </div>
     </>

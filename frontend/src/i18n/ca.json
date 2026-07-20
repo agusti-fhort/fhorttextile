@@ -1557,6 +1557,7 @@
       "legend_wait": "Espera (confecció)",
       "order": {
         "label": "Ordena per",
+        "pla": "Pla",
         "lliurament": "Lliurament",
         "fita": "Pròxima fita",
         "fase": "Fase"
@@ -1564,6 +1565,7 @@
       "risk_first": "Risc primer",
       "only_risk": "Només en risc",
       "risk_flag": "En risc: la fi prevista supera la data objectiu",
+      "reanchored": "Reancorat: ha pujat al pla per un inici real",
       "color": {
         "label": "Pinta per",
         "tecnic": "Tècnic",
@@ -2127,6 +2129,8 @@
   "basestage": {
     "title": "Taula base · estadis",
     "empty": "Encara no hi ha mesures base.",
+    "no_base_title": "Aquest model encara no té mesures base (POM per definir).",
+    "no_base_cta": "Definir POM",
     "current": "vigent",
     "col_nomenclatura": "Nomenclatura",
     "stage_measure": "Mesura",

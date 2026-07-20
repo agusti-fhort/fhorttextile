@@ -333,7 +333,11 @@ def create_piece_fitting(session_id: int, model_id: int, *, created_by_id: int |
 
     sf = _resolve_working_size_fitting(model)
     if sf is None:
-        raise ValueError(f"El model {model.codi_intern} no té cap SizeFitting de treball.")
+        # CAMÍ LLIURE: materialitzem l'SF EN L'ACTE (creat_per = l'usuari de la
+        # request, el responsable de facto) via la funció única de materialització,
+        # en lloc de bloquejar. Cobreix els models creats abans del fix del signal.
+        from fhort.pom.services import get_or_create_size_fitting
+        sf = get_or_create_size_fitting(model, actor_profile_id=created_by_id)
 
     version = _active_grading_version(sf)
     if version is None:

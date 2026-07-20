@@ -290,15 +290,22 @@ CLOSED_STATE = 'Tancat'
 _CLOSEABLE_FROM = ('Pendent', 'BaseOberta', 'TallesGenerades', 'BaseTancada')
 
 
-def get_or_create_size_fitting(model, user_id: int | None = None):
+def get_or_create_size_fitting(model, user_id: int | None = None, *, actor_profile_id: int | None = None):
     """
     Return the model's SizeFitting, creating one if it has none.
 
+    ÚNICA funció de materialització lazy d'SF: qualsevol superfície que necessiti
+    l'SF de treball i no en trobi (create-piece, tancar base, etc.) passa per aquí,
+    no per un creador propi.
+
     SizeFitting requires numero/codi/tipus/creat_per (creat_per is a non-null
-    PROTECT FK), so we resolve a UserProfile from user_id (falling back to any
-    profile) to satisfy it. This lets the table be closed even for models whose
-    responsible is None and that never had an SF (e.g. model 131). Mirrors the
-    get-or-create pattern in models_app generar-grading.
+    PROTECT FK), so we resolve a UserProfile from, in order:
+      actor_profile_id (l'usuari de la request — el responsable de facto)
+      → user_id (auth User id, per compat amb el cridador de close_base)
+      → model.responsable → model.created_by (metadades del propi model)
+      → any profile (last resort).
+    This lets the surface work even for models whose responsable is None and that
+    never had an SF (e.g. model 131, o el cas d'onboarding verge B2).
     """
     from fhort.fitting.models import SizeFitting
     from fhort.accounts.models import UserProfile
@@ -314,8 +321,14 @@ def get_or_create_size_fitting(model, user_id: int | None = None):
         codi = f"{model.codi_intern}-SF-{next_num}"
 
     profile = None
-    if user_id is not None:
+    if actor_profile_id is not None:
+        profile = UserProfile.objects.filter(pk=actor_profile_id).first()
+    if profile is None and user_id is not None:
         profile = UserProfile.objects.filter(user_id=user_id).first()
+    if profile is None and model.responsable_id:
+        profile = UserProfile.objects.filter(pk=model.responsable_id).first()
+    if profile is None and model.created_by_id:
+        profile = UserProfile.objects.filter(pk=model.created_by_id).first()
     if profile is None:
         profile = UserProfile.objects.first()
 

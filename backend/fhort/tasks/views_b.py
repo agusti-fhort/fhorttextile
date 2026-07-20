@@ -6,7 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.filters import SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Q, ProtectedError
+from django.db.models import Count, Q, ProtectedError, Min
+from django.db.models.functions import Coalesce
 
 from rest_framework.exceptions import ValidationError
 from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TASKS,
@@ -74,7 +75,10 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         # comptadors annotats (ordenació opcional):
         'in_progress': 'in_progress', 'pending': 'pending', 'paused': 'paused', 'done': 'done',
     }
-    _DEFAULT_ORDER = ('-in_progress', '-pending', '-paused', 'model__codi_intern')
+    # C4 — FONT ÚNICA D'ORDRE: el pla materialitzat (min planned_start de tasques vives, fallback
+    # a qualsevol tasca). Ja NO s'ordena per activitat: l'activitat (InProgress/Paused) és un eix
+    # ORTOGONAL (kanban_state) per ressaltar/enfocar, no per reordenar. Desempat estable per codi.
+    _DEFAULT_ORDER = (Coalesce('plan_start', 'plan_start_all').asc(nulls_last=True), 'model__codi_intern')
 
     @action(detail=False, methods=['get'], url_path='by-model')
     def by_model(self, request):
@@ -172,12 +176,17 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                    'model_id', 'model__codi_intern', 'model__nom_prenda', 'model__fase_actual',
                    'model__estat', 'model__temporada', 'model__prioritat', 'model__data_objectiu',
                    'model__responsable_id', 'model__any', 'model__data_entrada', 'model__data_tancament',
+                   'model__reanchored_by_start',
                )
                .annotate(
                    pending=Count('id', filter=Q(status='Pending')),
                    paused=Count('id', filter=Q(status='Paused')),
                    in_progress=Count('id', filter=Q(status='InProgress')),
                    done=Count('id', filter=Q(status='Done')),
+                   # C4 — posició al PLA MATERIALITZAT: min(planned_start) de les tasques vives
+                   # del model (fallback a qualsevol tasca, per als models tot-Done amb all=true).
+                   plan_start=Min('planned_start', filter=~Q(status='Done')),
+                   plan_start_all=Min('planned_start'),
                ))
 
         # --- Ordenació: whitelist estricta; default si res vàlid ---
@@ -191,6 +200,10 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             if mapped:
                 order_fields.append(('-' + mapped) if desc else mapped)
         agg = agg.order_by(*(order_fields or self._DEFAULT_ORDER))
+
+        # C4a — NOMÉS ELS PLANIFICATS EXISTEIXEN al Board: un model sense cap ModelTask amb
+        # planned_start encara no ha entrat al pla → fora (entra quan se li assigna/inicia tasca).
+        agg = agg.filter(plan_start_all__isnull=False)
 
         if qp.get('all') != 'true':
             # Per defecte només models amb alguna tasca no-Done (HAVING sobre els comptadors).
@@ -232,6 +245,8 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
                 'estat': row['model__estat'],
                 'data_objectiu': row['model__data_objectiu'],
                 'responsable_id': row['model__responsable_id'],
+                # C4d — marcador "+": el model s'ha mogut sol al pla per un inici real.
+                'reanchored_by_start': row['model__reanchored_by_start'],
             }
 
         page = self.paginate_queryset(agg)
@@ -554,9 +569,11 @@ def open_model_task_view(request, model_id):
                                         estimated_minutes=est)
         created = True
     # 2. En curs (reusa transition_task) o claim si ja és En curs d'un altre.
+    started = False   # C4d — True només si aquesta crida fa l'INICI real (Pending→InProgress)
     if task.status != 'InProgress':
         try:
             transition_task(task, 'InProgress', profile)
+            started = True
         except TransitionError as e:
             return Response({'error': str(e)}, status=http_status.HTTP_409_CONFLICT)
     elif task.assignee_id != profile.id:
@@ -567,6 +584,19 @@ def open_model_task_view(request, model_id):
         cleanup_queue_order([old_assignee_id, profile.id], [task.model_id])
         recompute_for_technicians([old_assignee_id, profile.id])
     task.refresh_from_db()
+
+    # LLEI "l'inici desplaça": iniciar una tasca reancora el model al present i desplaça la cua
+    # del tècnic. El recompute va DESPRÉS del refresh (transition_task pot auto-assignar l'assignee)
+    # i FORA del try/except de la transició. L'assignee es llegeix post-refresh. La branca claim
+    # (elif) ja ha recomputat per als dos tècnics; aquí es cobreix el cas Pending→InProgress.
+    if task.assignee_id:
+        from fhort.planning.plan_service import recompute_for_technicians
+        recompute_for_technicians([task.assignee_id])
+        # C4d — marca "+": el model ha entrat/pujat al pla per INICI real (no per reorder).
+        if started and not model.reanchored_by_start:
+            model.reanchored_by_start = True
+            model.save(update_fields=['reanchored_by_start'])
+        task.refresh_from_db()
 
     # Sprint Y — context de sessió de fitting: la convocatòria (contenidor) llança aquesta tasca de
     # presa de mesures. Opcional i additiu: sense `fitting_session_id`, el camí del check esporàdic

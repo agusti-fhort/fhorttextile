@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import useAuthStore from "../store/auth"
@@ -76,20 +76,24 @@ async function fetchAllPages(apiFn, baseParams = {}) {
 
 // Card de MODEL (zoom-in: clic → /models/:id). Reusa la forma de la ModelRow del Kanban,
 // adaptada a navegació directa i tokens del design system.
-function ModelCard({ model, onClick, t }) {
+function ModelCard({ model, onClick, t, highlight = false, innerRef = null }) {
   const c = model.counts || {}
   const total = (c.pending || 0) + (c.paused || 0) + (c.in_progress || 0) + (c.done || 0)
   const faseLabel = model.fase ? t(`model_sheet.dashboard.phase.${model.fase}`, model.fase) : null
+  // C4b — ressaltat de la feina ACTIVA (in_progress): anell daurat perquè destaqui dins la columna.
+  const baseBorder = highlight ? 'var(--gold)' : 'var(--gray-l)'
   return (
-    <button onClick={onClick} style={{
-      textAlign: 'left', width: '100%', border: '0.5px solid var(--gray-l)',
+    <button ref={innerRef} onClick={onClick} style={{
+      textAlign: 'left', width: '100%', border: `0.5px solid ${baseBorder}`,
+      boxShadow: highlight ? '0 0 0 1.5px var(--gold)' : 'none',
       background: 'var(--white)', borderRadius: 8, padding: '8px 10px',
       cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4,
     }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--gold)' }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--gray-l)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = baseBorder }}
     >
-      <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gold)' }}>
+      <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 4 }}>
+        {model.reanchored_by_start && <i className="ti ti-plus" title={t('planning.gantt.reanchored')} style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)' }} />}
         {model.model_codi || `#${model.model_id}`}
       </div>
       {model.model_nom && (
@@ -200,6 +204,30 @@ function ModelBoard({ scope }) {
     return groups
   }, [rows])
 
+  // C4b — auto-focus del model ACTIU en entrar: primer amb tasca InProgress (fallback Paused).
+  // NO reordena (l'ordre és el del pla); només fa scrollIntoView la seva targeta quan CANVIA
+  // (entrar, o iniciar-ne un altre via 'plan:changed'). Ressaltat visual a la pròpia targeta.
+  const firstActiveId = useMemo(() => {
+    const a = rows.find(m => (m.counts?.in_progress || 0) > 0)
+          || rows.find(m => (m.counts?.paused || 0) > 0)
+    return a?.model_id ?? null
+  }, [rows])
+  const activeCardRef = useRef(null)
+  const lastAnchored = useRef(null)
+  useEffect(() => {
+    if (firstActiveId && firstActiveId !== lastAnchored.current && activeCardRef.current) {
+      lastAnchored.current = firstActiveId
+      activeCardRef.current.scrollIntoView({ block: 'nearest' })
+    }
+  }, [firstActiveId, rows])
+
+  // C4 — LECTOR del pla: invalidació en canvis (reorder / inici real). Recarrega la pàgina 1.
+  useEffect(() => {
+    const h = () => { setPage(1); loadPage(1, true) }
+    window.addEventListener('plan:changed', h)
+    return () => window.removeEventListener('plan:changed', h)
+  }, [loadPage])
+
   return (
     <div>
       {/* Capçalera + comptadors per fase */}
@@ -283,7 +311,10 @@ function ModelBoard({ scope }) {
                 ) : items.length === 0 ? (
                   <div style={ph}>{t("dashboard.board.empty_col")}</div>
                 ) : items.map(m => (
-                  <ModelCard key={m.model_id} model={m} t={t} onClick={() => navigate(`/models/${m.model_id}`)} />
+                  <ModelCard key={m.model_id} model={m} t={t}
+                             highlight={(m.counts?.in_progress || 0) > 0}
+                             innerRef={m.model_id === firstActiveId ? activeCardRef : null}
+                             onClick={() => navigate(`/models/${m.model_id}`)} />
                 ))}
               </div>
             </div>

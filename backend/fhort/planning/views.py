@@ -531,6 +531,9 @@ def plan_reorder_view(request):
         for i, mid in enumerate(model_ids):
             TechnicianQueueOrder.objects.update_or_create(
                 profile=profile, model_id=mid, defaults={'position': i})
+        # C4d — el reorder manual és l'ACK del planificador: neteja el marcador "+" dels
+        # models reordenats (l'ordre torna a ser el seu, ja no "s'ha mogut sol per inici").
+        Model.objects.filter(pk__in=model_ids).update(reanchored_by_start=False)
     results = plan_service.recompute_for_technicians([int(assignee_id)])
     return Response({'ok': True, 'assignee_id': int(assignee_id),
                      'result': results.get(int(assignee_id))}, status=http_status.HTTP_200_OK)
@@ -692,11 +695,19 @@ def gantt_view(request):
         next_task = next_tk.task_type.code if next_tk else None
         next_task_date = (next_tk.planned_end.date().isoformat()
                           if next_tk and next_tk.planned_end else None)
-        start = m.consumption_started_at.date() if m.consumption_started_at else m.predicted_start
-        end = m.predicted_end or start
+        # C4c — barres derivades del PLA MATERIALITZAT (font única): min(planned_start) /
+        # max(planned_end) de les tasques del model, fallback consumption_started_at. NO es
+        # llegeix la columna predicted_* (queda per als altres consumidors; V2), només es deixa
+        # d'usar aquí perquè el Gantt sigui pur lector del pla.
+        planned_starts = [tk.planned_start for tk in tasks if tk.planned_start]
+        planned_ends = [tk.planned_end for tk in tasks if tk.planned_end]
+        plan_start = min(planned_starts).date() if planned_starts else None
+        plan_end = max(planned_ends).date() if planned_ends else None
+        start = plan_start or (m.consumption_started_at.date() if m.consumption_started_at else None)
+        end = plan_end or start
         start = start or end
         if not start or not end:
-            continue                                   # sense cap data ancorable → fora del Gantt
+            continue                                   # sense pla ancorable → fora del Gantt (C4a)
         resp_id, resp_nom, resp_color = _effective_responsable(tasks, m)
         objectiu = m.data_objectiu
         fites, esperes = [], []
@@ -722,6 +733,10 @@ def gantt_view(request):
             'en_risc': bool(end and objectiu and end > objectiu),
             'collection': m.collection or '', 'temporada': m.temporada,
             'fites': fites, 'esperes': esperes,
+            # C4d — marcador "+": el model s'ha mogut sol al pla per un inici real.
+            'reanchored_by_start': m.reanchored_by_start,
         })
-    out.sort(key=lambda x: x['end'])                   # default: data de fi (lliurament) asc
+    # C4c — ORDRE DE FILES = el del PLA (planned_start asc), servit pel backend. El client ja
+    # no reordena per defecte (lliurament/fita/fase queden com a vistes alternatives explícites).
+    out.sort(key=lambda x: (x['start'], x['codi']))
     return Response({'models': out, 'today': _date.today().isoformat()})
