@@ -1862,6 +1862,15 @@
       "new": "New session",
       "all": "All"
     },
+    "now": {
+      "button": "Fitting now",
+      "title": "Fitting here and now",
+      "subtitle": "Pick a model: a fitting is created right now and opened.",
+      "search_ph": "Search model by code or name…",
+      "empty": "No models.",
+      "error": "Couldn't create the fitting.",
+      "soft_conflict": "There's already a fitting for this phase in another slot. Create a new one?"
+    },
     "session": {
       "panel_title": "Fitting session",
       "expand": "Expand",

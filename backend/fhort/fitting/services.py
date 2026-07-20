@@ -124,37 +124,10 @@ def check_session_overlap(*, model_id, data, fase, start_time, duracio_minuts,
 # Open (create) + close with FUNCTIONAL versioning + brain stub. Gate is 5B.4.
 # ═════════════════════════════════════════════════════════════════════════════
 
-def create_session(
-    *,
-    fase: str,
-    data,
-    model_id: int | None = None,
-    garment_set_id: int | None = None,
-    responsable_id: int | None = None,
-    model_persona: str = '',
-    assistents: str = '',
-    lloc: str = '',
-    notes: str = '',
-    created_by_id: int | None = None,
-):
-    """Create a FittingSession for a single Model OR a GarmentSet (XOR)."""
-    from fhort.fitting.models import FittingSession
-
-    if bool(model_id) == bool(garment_set_id):
-        raise ValueError("Cal exactament un de model_id o garment_set_id (XOR).")
-
-    return FittingSession.objects.create(
-        fase=fase,
-        data=data,
-        model_id=model_id,
-        garment_set_id=garment_set_id,
-        responsable_id=responsable_id,
-        model_persona=model_persona,
-        assistents=assistents,
-        lloc=lloc,
-        notes=notes,
-        created_by_id=created_by_id,
-    )
+# C4 — create_session() (formulari lliure de fitting) JUBILAT: l'alta de fitting va sempre pel
+# camí schedule (schedule_session / schedule_now), que és un superconjunt estricte (estat
+# Programada + franja + attendees + recompute + guard de solapament). La validació XOR
+# model/garment_set queda ÚNICA a schedule_session (a sota).
 
 
 def schedule_session(*, fase, data, responsable_id, model_id=None, garment_set_id=None,

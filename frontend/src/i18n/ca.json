@@ -1862,6 +1862,15 @@
       "new": "Nova sessió",
       "all": "Totes"
     },
+    "now": {
+      "button": "Fitting ara",
+      "title": "Fitting aquí i ara",
+      "subtitle": "Tria un model: es crea un fitting ara mateix i s'obre.",
+      "search_ph": "Cerca model per codi o nom…",
+      "empty": "Cap model.",
+      "error": "No s'ha pogut crear el fitting.",
+      "soft_conflict": "Ja hi ha un fitting d'aquesta fase en una altra franja. Crear-ne un de nou?"
+    },
     "session": {
       "panel_title": "Sessió de fitting",
       "expand": "Desplegar",

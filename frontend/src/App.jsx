@@ -29,7 +29,6 @@ const CommercialKitDemo = lazy(() => import('./pages/CommercialKitDemo'))
 const FittingDetail = lazy(() => import('./pages/FittingDetail'))
 const FittingConvocatoriaSheet = lazy(() => import('./pages/FittingConvocatoriaSheet'))
 const FittingSessionList = lazy(() => import('./pages/FittingSessionList'))
-const FittingSessionNew = lazy(() => import('./pages/FittingSessionNew'))
 const GradingRuleSets = lazy(() => import('./pages/GradingRuleSets'))
 const SizeLibrary = lazy(() => import('./pages/SizeLibrary'))
 // CODI MORT (jubilat al sprint tasca-POM): GarmentPOMMapEditor.jsx — editor de pertinença per
@@ -290,7 +289,6 @@ export default function App() {
           <Route path="models/:id/size-check" element={<SizeCheckRedirect />} />
           {/* 5B.6 — capa de sessions de fitting (l'antiga SizeFitting es va jubilar al Pas 1 catàlegs) */}
           <Route path="fittings" element={<FittingSessionList />} />
-          <Route path="fittings/new" element={<FittingSessionNew />} />
           {/* P4 — fulla de convocatòria: pas intermedi llista → sessió, per a les sessions de grup. */}
           <Route path="fittings/convocatoria/:uuid" element={<FittingConvocatoriaSheet />} />
           <Route path="fittings/:id" element={<FittingDetail />} />

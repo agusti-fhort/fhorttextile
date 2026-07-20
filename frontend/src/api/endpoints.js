@@ -527,13 +527,14 @@ export const sizeFittings = {
 export const fittingSessions = {
   list: (params) => client.get('/api/v1/fitting-sessions/', { params }),   // ?estat & data & responsable & fase & model
   get: (id) => client.get(`/api/v1/fitting-sessions/${id}/`),
-  create: (data) => client.post('/api/v1/fitting-sessions/', data),
   // PATCH del context (notes/model_persona/assistents/lloc/responsable) — autosave capçalera.
   update: (id, data) => client.patch(`/api/v1/fitting-sessions/${id}/`, data),
   canAdvance: (id) => client.get(`/api/v1/fitting-sessions/${id}/can-advance/`),
   createPiece: (id, modelId) => client.post(`/api/v1/fitting-sessions/${id}/create-piece/`, { model_id: modelId }),
   // Calendari: programar (neix Programada) i obrir (Programada → Oberta).
   schedule: (data) => client.post('/api/v1/fitting-sessions/schedule/', data),
+  // C4 — "Fitting aquí i ara": un clic, cap formulari. body {model_id, fase?, force?}.
+  scheduleNow: (data) => client.post('/api/v1/fitting-sessions/schedule-now/', data),
   // Bulk: N sessions encadenades amb convocatoria UUID compartit (sessió i+1 on acaba la i).
   scheduleBulk: (data) => client.post('/api/v1/fitting-sessions/schedule-bulk/', data),
   open: (id) => client.post(`/api/v1/fitting-sessions/${id}/open/`),

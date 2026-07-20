@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan, commerce } from '../../api/endpoints'
 import Modal from '../ui/Modal'
@@ -24,7 +23,6 @@ const todayISO = () => new Date().toISOString().slice(0, 10)
 // llista d'objectes al client. En aquest mode NOMÉS "assignar tasques" s'escala (envia
 // filters+exclude_ids); la resta d'accions (runBulk per-element) queden deshabilitades.
 export default function ActionsMenu({ targets, model, selectionSet = null, onChanged, onFeedback, triggerLabel }) {
-  const navigate = useNavigate()
   const { t } = useTranslation()
   const conjunt = !!selectionSet
   const list = (targets && targets.length ? targets : (model ? [model] : []))
@@ -204,8 +202,6 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
     { key: 'assign', label: t('model_sheet.assign_tasks'), icon: 'ti-users-plus', enabled: n > 0 },
     { key: 'production', label: t('model_sheet.send_to_production'), icon: 'ti-send', enabled: !conjunt && list.length > 0, hint: conjuntHint },
     { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: !conjunt && list.length > 0, hint: conjuntHint },
-    // Convocar fitting des del llenç (un sol model): obre la convocatòria amb el model precarregat.
-    { key: 'convene_fitting', label: t('model_sheet.convene_fitting'), icon: 'ti-shirt', enabled: !conjunt && !!single, hint: conjuntHint },
     { key: 'assign_order', label: t('model_sheet.assign_order'), icon: 'ti-clipboard-list', enabled: !conjunt && list.length > 0, hint: conjuntHint },
     { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: !conjunt && someNext, hint: conjuntHint },
     { key: 'back', label: t('model_sheet.back_phase'), icon: 'ti-arrow-left', enabled: !conjunt && somePrev, hint: conjuntHint },
@@ -229,9 +225,7 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
           <div style={menuBox}>
             {items.map(it => (
               <button key={it.key} type="button" disabled={!it.enabled}
-                onClick={() => it.enabled && (it.key === 'convene_fitting'
-                  ? navigate(`/fittings/new?model=${single.id}`)
-                  : openModal(it.key))} title={it.hint || ''}
+                onClick={() => it.enabled && openModal(it.key)} title={it.hint || ''}
                 style={{ ...menuItem, opacity: it.enabled ? 1 : 0.45, cursor: it.enabled ? 'pointer' : 'not-allowed' }}>
                 <i className={`ti ${it.icon}`} aria-hidden="true" /> {it.label}
                 {it.hint && <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--gray)', marginLeft: 'auto' }}>ⓘ</span>}

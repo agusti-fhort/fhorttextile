@@ -1862,6 +1862,15 @@
       "new": "Nueva sesión",
       "all": "Todas"
     },
+    "now": {
+      "button": "Fitting ahora",
+      "title": "Fitting aquí y ahora",
+      "subtitle": "Elige un modelo: se crea un fitting ahora mismo y se abre.",
+      "search_ph": "Buscar modelo por código o nombre…",
+      "empty": "Sin modelos.",
+      "error": "No se pudo crear el fitting.",
+      "soft_conflict": "Ya hay un fitting de esta fase en otra franja. ¿Crear uno nuevo?"
+    },
     "session": {
       "panel_title": "Sesión de fitting",
       "expand": "Desplegar",
