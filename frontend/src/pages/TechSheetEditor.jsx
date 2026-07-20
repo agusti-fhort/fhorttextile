@@ -2480,14 +2480,27 @@ export default function TechSheetEditor() {
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
-      if (!selectedIds.length || !locked) return
+      if (!locked) return
+      // S1.2 — Delete SENSIBLE AL CONTEXT: si hi ha una subpath activa, esborra NOMÉS la subpath
+      // (l'entrada paths[index]); si en queda 0, cau a l'esborrat de l'objecte sencer.
+      if (activeSubpath) {
+        const o = objectsOf(currentPage).find(x => x.id === activeSubpath.objId)
+        if (o?.type === 'path' && Array.isArray(o.paths)) {
+          e.preventDefault()
+          if (o.paths.length <= 1) { deleteObject(o.id) }
+          else { updateObject(o.id, { paths: o.paths.filter((_, i) => i !== activeSubpath.index) }) }
+          setActiveSubpath(null)
+          return
+        }
+      }
+      if (!selectedIds.length) return
       const deletable = objectsOf(currentPage).filter(o => selectedIds.includes(o.id) && o.layer === 'free' && !o.locked).map(o => o.id)
       if (deletable.length) { e.preventDefault(); deleteObjects(deletable) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, currentPage, pages, locked, editingText, editingFlatId])
+  }, [selectedIds, currentPage, pages, locked, editingText, editingFlatId, activeSubpath])
 
   // ── S0 — Teclat: Cmd/Ctrl+Z desfés · Shift+Z/Ctrl+Y refés · C/V/D clipboard ─
   useEffect(() => {
