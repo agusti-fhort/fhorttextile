@@ -3221,12 +3221,16 @@ export default function TechSheetEditor() {
   const runNode = (name, ...args) => paperFlatRef.current?.run?.(name, ...args)
   // En entrar/sortir del mode edició de nodes, reinicia l'eina i l'estat de selecció.
   useEffect(() => { setNodeTool('select'); setNodeSel({ selCount: 0 }) }, [editingFlatId])
-  // F1 — dreceres d'eina de node (mode edició): V/A moure · +/- afegir/treure · B convertir · C tisores.
+  // F1/F3 — teclat del mode edició de nodes, centralitzat al PARE (finestra, independent del focus).
+  // El context GUANYA: el Delete d'objecte del nivell superior ja surt d'hora amb editingFlatId, i
+  // aquí Delete/Backspace operen SEMPRE sobre la selecció fina (node/segment), mai sobre l'objecte.
   useEffect(() => {
     if (!editingFlatId) return
     const onKey = (e) => {
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      // F3 — ESBORRAR: tant Delete (fn+delete a Mac) com Backspace (la tecla gran de Mac).
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); runNode('removeSelection'); return }
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const map = { v: 'select', a: 'select', '+': 'add', '=': 'add', '-': 'remove', _: 'remove', b: 'convert', c: 'scissors' }
       const next = map[e.key] ?? map[e.key?.toLowerCase()]
