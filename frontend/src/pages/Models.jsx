@@ -3,11 +3,22 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { models as modelsApi } from '../api/endpoints'
 import ActionsMenu, { PHASES } from '../components/model/ActionsMenu'
+import ModelsFilterPanel from '../components/model/ModelsFilterPanel'
+import { useFilterOptions } from '../components/model/filterOptions'
 import Feedback from '../components/ui/Feedback'
 
 const MONO = 'IBM Plex Mono, monospace'
 const SEASONS = ['SS', 'FW', 'CO', 'SP']
 const PAGE_SIZE = 25
+// Tots els keys de filtre que viuen a la URL (font de veritat + contracte de conjunt C2). Barra:
+// search/fase_actual/temporada. Panell avançat: la resta.
+const FILTER_KEYS = [
+  'search', 'fase_actual', 'temporada', 'customer', 'collection', 'any',
+  'garment_type__in', 'garment_type_item__in', 'garment_group_codi__in',
+  'size_system', 'grading_rule_set', 'target', 'fit', 'construction',
+  'responsable', 'assignee', 'task_type', 'task_status',
+  'data_objectiu_after', 'data_objectiu_before', 'watchpoints_open', 'in_plan',
+]
 const fmtDate = (v, locale) => v ? new Date(v).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'
 
 export default function Models() {
@@ -48,14 +59,51 @@ export default function Models() {
   }, [setSp])
 
   // Params de filtre enviats al backend (i base del contracte C2). Deriven NOMÉS de la URL.
+  const spStr = sp.toString()
   const filterParams = useMemo(() => {
     const f = {}
-    const s = search.trim(); if (s) f.search = s
-    if (fase) f.fase_actual = fase
-    if (temporada) f.temporada = temporada
+    FILTER_KEYS.forEach(k => { const v = sp.get(k); if (v && v.trim()) f[k] = v.trim() })
     return f
-  }, [search, fase, temporada])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spStr])
   const filterKey = useMemo(() => JSON.stringify(filterParams), [filterParams])
+
+  // Opcions dels selects del panell (una sola càrrega, compartida amb els chips). Panell desplegable.
+  const opts = useFilterOptions()
+  const [panelOpen, setPanelOpen] = useState(false)
+
+  // Comptador de filtres avançats actius (per al botó "Filtres · N"): agrupa els parells lligats.
+  const advancedCount = useMemo(() => {
+    const k = Object.keys(filterParams)
+    let n = 0
+    ;['customer', 'collection', 'any', 'size_system', 'grading_rule_set', 'target', 'fit',
+      'construction', 'responsable', 'assignee', 'watchpoints_open', 'in_plan'].forEach(x => { if (k.includes(x)) n++ })
+    if (k.some(x => x.startsWith('garment_'))) n++
+    if (k.includes('task_type') || k.includes('task_status')) n++
+    if (k.includes('data_objectiu_after') || k.includes('data_objectiu_before')) n++
+    return n
+  }, [filterParams])
+
+  // garment-counts (facet: exclou la pròpia Peça) — només quan el panell és obert. fase-counts
+  // (facet: exclou la fase) per anotar el select de fase amb el conjunt actiu.
+  const [garmentCounts, setGarmentCounts] = useState({ by_type: {}, by_item: {} })
+  const [faseCounts, setFaseCounts] = useState({})
+  const countsKey = useMemo(() => {
+    const p = { ...filterParams }
+    delete p.garment_type__in; delete p.garment_type_item__in; delete p.garment_group_codi__in
+    return JSON.stringify(p)
+  }, [filterParams])
+  const faseKey = useMemo(() => {
+    const p = { ...filterParams }; delete p.fase_actual; return JSON.stringify(p)
+  }, [filterParams])
+  useEffect(() => {
+    if (!panelOpen) return
+    modelsApi.garmentCounts(JSON.parse(countsKey))
+      .then(r => setGarmentCounts(r.data || { by_type: {}, by_item: {} })).catch(() => {})
+  }, [countsKey, panelOpen])
+  useEffect(() => {
+    modelsApi.faseCounts(JSON.parse(faseKey)).then(r => setFaseCounts(r.data?.counts || {})).catch(() => {})
+  }, [faseKey])
 
   const load = useCallback(() => {
     setLoading(true)
@@ -141,16 +189,29 @@ export default function Models() {
           style={{ ...inp, flex: 1, minWidth: 220 }} />
         <select value={fase} onChange={e => setParams({ fase_actual: e.target.value, page: undefined })} style={inp}>
           <option value="">{t('models_list.all_phases')}</option>
-          {PHASES.map(p => <option key={p} value={p}>{p}</option>)}
+          {PHASES.map(p => <option key={p} value={p}>{faseCounts[p] != null ? `${p} (${faseCounts[p]})` : p}</option>)}
         </select>
         <select value={temporada} onChange={e => setParams({ temporada: e.target.value, page: undefined })} style={inp}>
           <option value="">{t('models_list.all_seasons')}</option>
           {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        {(search || fase || temporada) && (
-          <button onClick={() => setParams({ search: undefined, fase_actual: undefined, temporada: undefined, page: undefined })} style={{ ...inp, cursor: 'pointer', color: 'var(--gray)' }}>× {t('models_list.clear')}</button>
+        <button onClick={() => setPanelOpen(o => !o)}
+          style={{ ...inp, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+            color: advancedCount ? 'var(--gold)' : 'var(--text-main)',
+            borderColor: advancedCount ? 'var(--gold)' : 'var(--gray-l)', fontWeight: advancedCount ? 600 : 400 }}>
+          <i className="ti ti-adjustments-horizontal" />
+          {advancedCount ? t('models_filters.button_n', { n: advancedCount }) : t('models_filters.button')}
+          <i className={`ti ti-chevron-${panelOpen ? 'up' : 'down'}`} />
+        </button>
+        {Object.keys(filterParams).length > 0 && (
+          <button onClick={() => setParams(Object.fromEntries([...FILTER_KEYS, 'page'].map(k => [k, undefined])))}
+            style={{ ...inp, cursor: 'pointer', color: 'var(--gray)' }}>× {t('models_list.clear')}</button>
         )}
       </div>
+
+      {panelOpen && (
+        <ModelsFilterPanel sp={sp} setParams={setParams} opts={opts} garmentCounts={garmentCounts} />
+      )}
 
       {/* Select all (pàgina) */}
       {items.length > 0 && (
