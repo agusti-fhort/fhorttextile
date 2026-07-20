@@ -1412,7 +1412,9 @@
     "tax_amount": "IVA",
     "total": "Total",
     "due_dates": "Vencimientos",
-    "due_dates_empty": "Ningún vencimiento."
+    "due_dates_empty": "Ningún vencimiento.",
+    "pending_lines": "{{n}} línea(s) todavía por imputar.",
+    "continue_selecting": "Continuar seleccionando"
   },
   "config_general": {
     "title": "Configuración general",
@@ -1573,7 +1575,9 @@
     "convert_conflicts_summary": "{{assigned}} asignados · {{reattached}} reasignados. Conflictos:",
     "convert_conflict_busy": "ya tiene un encargo activo en otro pedido ({{order}}).",
     "convert_conflict_generic": "no se ha podido asignar.",
-    "convert_conflicts_open": "Abrir pedido"
+    "convert_conflicts_open": "Abrir pedido",
+    "pending_lines": "{{n}} línea(s) sin ningún modelo previsto.",
+    "continue_selecting": "Continuar seleccionando"
   },
   "planning": {
     "title": "Planificación",

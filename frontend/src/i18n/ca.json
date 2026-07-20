@@ -1412,7 +1412,9 @@
     "tax_amount": "IVA",
     "total": "Total",
     "due_dates": "Venciments",
-    "due_dates_empty": "Cap venciment."
+    "due_dates_empty": "Cap venciment.",
+    "pending_lines": "{{n}} línia(es) encara pendent(s) d'imputar.",
+    "continue_selecting": "Continuar seleccionant"
   },
   "config_general": {
     "title": "Configuració general",
@@ -1573,7 +1575,9 @@
     "convert_conflicts_summary": "{{assigned}} assignats · {{reattached}} reassignats. Conflictes:",
     "convert_conflict_busy": "ja té un encàrrec actiu en una altra comanda ({{order}}).",
     "convert_conflict_generic": "no s'ha pogut assignar.",
-    "convert_conflicts_open": "Obrir comanda"
+    "convert_conflicts_open": "Obrir comanda",
+    "pending_lines": "{{n}} línia(es) sense cap model previst.",
+    "continue_selecting": "Continuar seleccionant"
   },
   "planning": {
     "title": "Planificació",

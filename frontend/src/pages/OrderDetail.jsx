@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import useAuthStore from '../store/auth'
-import { commerce, models as modelsApi } from '../api/endpoints'
+import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import PdfButton from '../components/ui/PdfButton'
@@ -17,16 +17,7 @@ const smallBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
   padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
 }
-// Picker de models (Modal 3) — input/select i files denses.
-const pInp = {
-  padding: '5px 9px', border: '0.5px solid var(--gray-l)', borderRadius: 6,
-  fontSize: 'var(--fs-caption)', fontFamily: MONO, background: 'var(--white)', color: 'var(--text-main)',
-}
-const pickMsg = { padding: '18px 10px', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-caption)', fontFamily: MONO }
-const pickFase = { fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '1px 7px', borderRadius: 10, background: 'var(--gold)', color: 'var(--white)' }
 const STATUSES = ['OPEN', 'COMPLETED', 'CANCELLED']
-const SEASONS = ['SS', 'FW', 'CO', 'SP']
-const PICK_PAGE = 40
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
 const fmtDate = (d) => d || '—'
 
@@ -47,6 +38,7 @@ export default function OrderDetail() {
   const { t } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
 
@@ -55,11 +47,6 @@ export default function OrderDetail() {
   const [order, setOrder] = useState(null)
   const [feedback, setFeedback] = useState(null)
   const [busy, setBusy] = useState(false)
-  // Modal 3 — assignar model a una línia (B4b). Picker patró pàgina Models: cerca (codi/nom) +
-  // filtres (temporada/col·lecció) + llista densa; filtre implícit pel customer de la comanda.
-  const [assign, setAssign] = useState(null)               // { line } | null
-  const [pq, setPq] = useState({ search: '', temporada: '', collection: '' })
-  const [picker, setPicker] = useState({ models: [], count: 0, loading: false, modelId: '' })
   // P4 — desplegable read-only per línia: models assignats + tasques + % imputat (lazy).
   const [expanded, setExpanded] = useState(() => new Set())
   const [alloc, setAlloc] = useState({})   // { [lineId]: { loading | error | data } }
@@ -91,32 +78,19 @@ export default function OrderDetail() {
       .finally(() => setBusy(false))
   }
 
-  // Modal 3 — obre el picker de models (filtre implícit pel client de la comanda).
-  const openAssign = (line) => {
-    setFeedback(null)
-    setPq({ search: '', temporada: '', collection: '' })
-    setPicker({ models: [], count: 0, loading: true, modelId: '' })
-    setAssign({ line })
+  // Sprint C — l'assignació de models va a la superfície universal de selecció (mode intenció):
+  // arriba a /models amb propòsit + prefiltre customer bloquejat, multi-selecciona fins a la
+  // capacitat restant (quantity − qty_allocated) i torna aquí per confirmar el batch (H1).
+  const goSelect = (line) => {
+    const remaining = Math.max(0, Math.floor(Number(line.quantity) - Number(line.qty_allocated)))
+    const params = new URLSearchParams({
+      select_for: `order_line:${line.id}`,
+      select_max: String(remaining),
+      customer: String(order.customer),
+      return: location.pathname + location.search,
+    })
+    navigate(`/models?${params.toString()}`)
   }
-  // Cerca server-side amb debounce: recarrega quan canvien cerca/filtres (mai el flat de 2000).
-  useEffect(() => {
-    if (!assign) return
-    const params = { customer: order.customer, ordering: '-data_entrada', page_size: PICK_PAGE }
-    if (pq.search) params.search = pq.search
-    if (pq.temporada) params.temporada = pq.temporada
-    if (pq.collection) params.collection = pq.collection
-    setPicker(p => ({ ...p, loading: true }))
-    const id = setTimeout(() => {
-      modelsApi.list(params)
-        .then(res => {
-          const d = res.data
-          const list = Array.isArray(d) ? d : (d.results || [])
-          setPicker(p => ({ ...p, models: list, count: d.count ?? list.length, loading: false }))
-        })
-        .catch(() => setPicker(p => ({ ...p, models: [], count: 0, loading: false })))
-    }, 200)
-    return () => clearTimeout(id)
-  }, [assign, pq, order?.customer])
 
   // Carrega (o recarrega) l'expansió d'una línia. force=true reomple encara que ja hi hagi cache
   // (p.ex. després de desassignar un WO, per refrescar els models/estat de la línia).
@@ -150,26 +124,15 @@ export default function OrderDetail() {
       .finally(() => setBusy(false))
   }
 
-  const doAssign = () => {
-    if (!picker.modelId) return
-    setBusy(true); setFeedback(null)
-    commerce.orderLines.assignModel(assign.line.id, { model_id: Number(picker.modelId) })
-      .then(res => {
-        const d = res.data
-        const msg = t('orders.assign_done', { wo: d.work_order?.number, n: d.migrated_tasks ?? 0 })
-        setAssign(null)
-        return reload().then(() => setFeedback({
-          type: 'ok', text: msg + (d.warnings?.length ? ' · ' + d.warnings.join(' ') : '') }))
-      })
-      .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.detail || t('orders.error') }))
-      .finally(() => setBusy(false))
-  }
-
   if (loading) return <Center>{t('orders.loading')}</Center>
   if (error || !order) return <Center>{t('orders.error')}</Center>
 
   const lines = order.lines || []
   const dueDates = order.due_dates || []
+  // Línies encara pendents d'imputar (qty_allocated < quantity). En tornar del mode selecció,
+  // reload() les refresca; si en queda alguna, s'ofereix continuar amb la primera (no s'imposa).
+  const pendingLines = order.status === 'OPEN'
+    ? lines.filter(l => Number(l.qty_allocated) < Number(l.quantity)) : []
 
   // Columnes de línia del sistema unificat. Read-only; l'expansió (models·tasques·%) va sota la fila.
   const orderColumns = [
@@ -188,7 +151,7 @@ export default function OrderDetail() {
         <RowBtn icon={open ? 'ti-chevron-down' : 'ti-chevron-right'} active={open}
           title={t(open ? 'orders.collapse' : 'orders.expand')} onClick={() => toggleLine(l)} />
         {canEdit && order.status === 'OPEN' && Number(l.qty_allocated) < Number(l.quantity) && (
-          <RowBtn icon="ti-link" disabled={busy} title={t('orders.assign_model')} onClick={() => openAssign(l)} />
+          <RowBtn icon="ti-link" disabled={busy} title={t('orders.assign_model')} onClick={() => goSelect(l)} />
         )}
       </>
     )
@@ -220,6 +183,19 @@ export default function OrderDetail() {
       <div style={{ marginTop: 12 }}>
         <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
       </div>
+
+      {canEdit && pendingLines.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 12px',
+          padding: '8px 14px', background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+          fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
+          <i className="ti ti-arrow-back-up" aria-hidden="true" />
+          <span>{t('orders.pending_lines', { n: pendingLines.length })}</span>
+          <button onClick={() => goSelect(pendingLines[0])}
+            style={{ ...smallBtn, cursor: 'pointer', color: 'var(--gold)', border: '0.5px solid var(--gold)', fontWeight: 600 }}>
+            {t('orders.continue_selecting')}
+          </button>
+        </div>
+      )}
 
       <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 12 }}>{t('orders.readonly_note')}</p>
 
@@ -282,82 +258,6 @@ export default function OrderDetail() {
                 style={{ ...primaryBtn, background: 'var(--err)', borderColor: 'var(--err)' }}>
                 {t('orders.unassign')}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal 3 — assignar model a la línia (crea WO ORDER + migra el col·lector) */}
-      {assign && (
-        <div onClick={() => setAssign(null)} style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
-        }}>
-          <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 12, padding: '1rem 1.2rem',
-            maxWidth: 560, width: '100%', border: '0.5px solid var(--gray-l)',
-            display: 'flex', flexDirection: 'column', maxHeight: '82vh',
-          }}>
-            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 2, fontFamily: MONO }}>
-              {t('orders.assign_title')}
-            </h2>
-            <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', marginBottom: 10 }}>
-              {assign.line.description || assign.line.product_name}
-            </p>
-
-            {/* Toolbar de cerca + filtres (patró pàgina Models) */}
-            <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-              <input value={pq.search} autoFocus onChange={e => setPq({ ...pq, search: e.target.value })}
-                placeholder={t('orders.assign_search_ph')} style={{ ...pInp, flex: 1, minWidth: 160 }} />
-              <select value={pq.temporada} onChange={e => setPq({ ...pq, temporada: e.target.value })} style={pInp}>
-                <option value="">{t('orders.assign_all_seasons')}</option>
-                {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <input value={pq.collection} onChange={e => setPq({ ...pq, collection: e.target.value })}
-                placeholder={t('orders.assign_collection_ph')} style={{ ...pInp, width: 130 }} />
-            </div>
-
-            {/* Llista densa amb scroll — clic per seleccionar */}
-            <div style={{ flex: 1, overflowY: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 8, minHeight: 120 }}>
-              {picker.loading ? (
-                <div style={pickMsg}>{t('orders.assign_loading')}</div>
-              ) : picker.models.length === 0 ? (
-                <div style={pickMsg}>{t('orders.assign_empty')}</div>
-              ) : picker.models.map(m => {
-                const sel = String(m.id) === String(picker.modelId)
-                return (
-                  <div key={m.id} onClick={() => setPicker(p => ({ ...p, modelId: m.id }))} style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', cursor: 'pointer',
-                    borderBottom: '0.5px solid var(--bg-muted)',
-                    background: sel ? 'var(--gold-pale)' : 'transparent',
-                  }}>
-                    <span style={{ fontFamily: MONO, fontWeight: 700, color: 'var(--gold)', fontSize: 'var(--fs-caption)' }}>{m.codi_intern}</span>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-caption)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.nom_prenda || '—'}</span>
-                    <span style={pickFase}>{m.fase_actual ? t(`model_sheet.dashboard.phase.${m.fase_actual}`, m.fase_actual) : '—'}</span>
-                    {sel && <i className="ti ti-check" style={{ fontSize: 13, color: 'var(--gold)' }} />}
-                  </div>
-                )
-              })}
-            </div>
-            {!picker.loading && picker.count > picker.models.length && (
-              <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--gray)', margin: '6px 0 0' }}>
-                {t('orders.assign_more', { n: picker.count })}
-              </p>
-            )}
-
-            {(() => {
-              const sel = picker.models.find(m => String(m.id) === String(picker.modelId))
-              return sel && !sel.garment_type_item_nom
-                ? <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--gold)', margin: '8px 0 0' }}>
-                    <i className="ti ti-alert-triangle" style={{ fontSize: 13, marginRight: 4 }} />{t('orders.assign_gti_warn')}</p>
-                : null
-            })()}
-            <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: '8px 0 10px' }}>
-              {t('orders.assign_migrate_note')}
-            </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={() => setAssign(null)} disabled={busy} style={smallBtn}>{t('orders.assign_cancel')}</button>
-              <button onClick={doAssign} disabled={busy || !picker.modelId} style={{ ...primaryBtn }}>{t('orders.assign_confirm')}</button>
             </div>
           </div>
         </div>

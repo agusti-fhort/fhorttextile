@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import useAuthStore from '../store/auth'
-import { commerce, models as modelsApi } from '../api/endpoints'
+import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
@@ -20,20 +20,11 @@ const smallBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
   padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
 }
-// Picker de models (patró OrderDetail) — input/select i files denses.
-const pInp = {
-  padding: '5px 9px', border: '0.5px solid var(--gray-l)', borderRadius: 6,
-  fontSize: 'var(--fs-caption)', fontFamily: MONO, background: 'var(--white)', color: 'var(--text-main)',
-}
-const pickMsg = { padding: '18px 10px', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-caption)', fontFamily: MONO }
-const pickFase = { fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '1px 7px', borderRadius: 10, background: 'var(--gold)', color: 'var(--white)' }
 const intentChip = {
   display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 12,
   border: '0.5px solid var(--gray-l)', background: 'var(--gold-pale)', fontFamily: MONO,
   fontSize: 'var(--fs-caption)', color: 'var(--gold)', fontWeight: 600,
 }
-const SEASONS = ['SS', 'FW', 'CO', 'SP']
-const PICK_PAGE = 40
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
 
 // Baixa un Blob com a fitxer (mateix helper que BulkImportWizard).
@@ -234,13 +225,13 @@ function LinesSection({ quote, editable, canIntents, products, t, reload, ok, er
   const [qty, setQty] = useState('1')
   const [price, setPrice] = useState('')
   const [busy, setBusy] = useState(false)
-  // E6 — picker d'intencions de model per línia (filtre implícit pel client de l'oferta).
-  const [intentLineId, setIntentLineId] = useState(null)
-  const [pq, setPq] = useState({ search: '', temporada: '', collection: '' })
-  const [picker, setPicker] = useState({ models: [], count: 0, loading: false, modelId: '' })
+  const navigate = useNavigate()
+  const location = useLocation()
   const lines = quote.lines || []
-  const intentLine = lines.find(l => l.id === intentLineId) || null
   const anyIntent = lines.some(l => (l.model_intents || []).length)
+  // Pendent (pressupost) = línia SENSE cap intent (decisió a). En tornar del mode selecció, reload()
+  // refresca els intents; si en queda alguna pendent, s'ofereix continuar amb la primera.
+  const pendingLines = lines.filter(l => (l.model_intents || []).length === 0)
 
   // En triar un article, precarrega el preu unitari amb el seu base_price (congelable/editable).
   const onPickProduct = (pid) => {
@@ -264,39 +255,16 @@ function LinesSection({ quote, editable, canIntents, products, t, reload, ok, er
     commerce.quoteLines.remove(lid).then(() => reload()).then(() => ok(t('quotes.line_removed'))).catch(err).finally(() => setBusy(false))
   }
 
-  // E6 — obre el picker de models per a una línia (patró OrderDetail).
-  const openIntent = (lineId) => {
-    setPq({ search: '', temporada: '', collection: '' })
-    setPicker({ models: [], count: 0, loading: true, modelId: '' })
-    setIntentLineId(lineId)
-  }
-  // Cerca server-side amb debounce (filtre pel client de l'oferta); recarrega en canviar cerca/filtres.
-  useEffect(() => {
-    if (!intentLineId) return
-    const params = { customer: quote.customer, ordering: '-data_entrada', page_size: PICK_PAGE }
-    if (pq.search) params.search = pq.search
-    if (pq.temporada) params.temporada = pq.temporada
-    if (pq.collection) params.collection = pq.collection
-    setPicker(p => ({ ...p, loading: true }))
-    const h = setTimeout(() => {
-      modelsApi.list(params)
-        .then(res => {
-          const d = res.data
-          const list = Array.isArray(d) ? d : (d.results || [])
-          setPicker(p => ({ ...p, models: list, count: d.count ?? list.length, loading: false }))
-        })
-        .catch(() => setPicker(p => ({ ...p, models: [], count: 0, loading: false })))
-    }, 200)
-    return () => clearTimeout(h)
-  }, [intentLineId, pq, quote.customer])
-
-  // Afegeix una intenció; manté el modal obert per encadenar-ne més (multi-add).
-  const addIntent = () => {
-    if (!intentLineId || !picker.modelId) return
-    setBusy(true)
-    commerce.quoteLineIntents.create({ quote_line: intentLineId, model: picker.modelId })
-      .then(() => reload()).then(() => { setPicker(p => ({ ...p, modelId: '' })); ok(t('quotes.intent_added')) })
-      .catch(err).finally(() => setBusy(false))
+  // Sprint C — vincular models va a la superfície universal de selecció (mode intenció): arriba a
+  // /models amb propòsit quote_line + prefiltre customer bloquejat, multi-selecciona SENSE sostre
+  // (el pressupost no imputa cartera) i torna aquí; el bulk d'intents (H1) ignora els duplicats.
+  const goSelect = (lineId) => {
+    const params = new URLSearchParams({
+      select_for: `quote_line:${lineId}`,
+      customer: String(quote.customer),
+      return: location.pathname + location.search,
+    })
+    navigate(`/models?${params.toString()}`)
   }
   const delIntent = (iid) => {
     setBusy(true)
@@ -315,9 +283,6 @@ function LinesSection({ quote, editable, canIntents, products, t, reload, ok, er
   const renderActions = editable ? (l) => (
     <RowBtn icon="ti-trash" danger disabled={busy} title={t('quotes.remove')} onClick={() => del(l.id)} />
   ) : undefined
-
-  // Models ja intencionats a la línia activa (exclosos del picker: unique_together no admet duplicats).
-  const existingIds = new Set((intentLine?.model_intents || []).map(mi => String(mi.model)))
 
   return (
     <Section title={t('quotes.lines')} hint={t('quotes.lines_hint')}>
@@ -343,6 +308,18 @@ function LinesSection({ quote, editable, canIntents, products, t, reload, ok, er
         <div style={{ marginTop: 16, borderTop: '0.5px solid var(--gray-l)', paddingTop: 12 }}>
           <p style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600, marginBottom: 2 }}>{t('quotes.intents_title')}</p>
           <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 10 }}>{t('quotes.intents_hint')}</p>
+          {canIntents && pendingLines.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 10px',
+              padding: '8px 14px', background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+              fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
+              <i className="ti ti-arrow-back-up" aria-hidden="true" />
+              <span>{t('quotes.pending_lines', { n: pendingLines.length })}</span>
+              <button onClick={() => goSelect(pendingLines[0].id)}
+                style={{ ...smallBtn, cursor: 'pointer', color: 'var(--gold)', border: '0.5px solid var(--gold)', fontWeight: 600 }}>
+                {t('quotes.continue_selecting')}
+              </button>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {lines.map(l => {
               const intents = l.model_intents || []
@@ -364,7 +341,7 @@ function LinesSection({ quote, editable, canIntents, products, t, reload, ok, er
                       </span>
                     ))}
                     {canIntents && (
-                      <button onClick={() => openIntent(l.id)} disabled={busy}
+                      <button onClick={() => goSelect(l.id)} disabled={busy}
                         style={{ ...smallBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>
                         <i className="ti ti-link" style={{ fontSize: 13, marginRight: 4 }} />{t('quotes.intent_add')}
                       </button>
@@ -383,61 +360,6 @@ function LinesSection({ quote, editable, canIntents, products, t, reload, ok, er
         </div>
       )}
 
-      {/* Picker de models per a la intenció (patró OrderDetail; multi-add: es manté obert). */}
-      {intentLine && (
-        <div onClick={() => setIntentLineId(null)} style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
-        }}>
-          <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 12, padding: '1rem 1.2rem', maxWidth: 560,
-            width: '100%', border: '0.5px solid var(--gray-l)', display: 'flex', flexDirection: 'column', maxHeight: '82vh',
-          }}>
-            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 2, fontFamily: MONO }}>{t('quotes.intent_title')}</h2>
-            <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', marginBottom: 10 }}>
-              {intentLine.description || intentLine.product_name}
-            </p>
-
-            <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-              <input value={pq.search} autoFocus onChange={e => setPq({ ...pq, search: e.target.value })}
-                placeholder={t('quotes.intent_search_ph')} style={{ ...pInp, flex: 1, minWidth: 160 }} />
-              <select value={pq.temporada} onChange={e => setPq({ ...pq, temporada: e.target.value })} style={pInp}>
-                <option value="">{t('quotes.intent_all_seasons')}</option>
-                {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <input value={pq.collection} onChange={e => setPq({ ...pq, collection: e.target.value })}
-                placeholder={t('quotes.intent_collection_ph')} style={{ ...pInp, width: 130 }} />
-            </div>
-
-            <div style={{ flex: 1, overflowY: 'auto', border: '0.5px solid var(--gray-l)', borderRadius: 8, minHeight: 120 }}>
-              {picker.loading ? <div style={pickMsg}>{t('quotes.intent_loading')}</div>
-                : picker.models.filter(m => !existingIds.has(String(m.id))).length === 0
-                  ? <div style={pickMsg}>{t('quotes.intent_empty')}</div>
-                  : picker.models.filter(m => !existingIds.has(String(m.id))).map(m => {
-                    const sel = String(m.id) === String(picker.modelId)
-                    return (
-                      <div key={m.id} onClick={() => setPicker(p => ({ ...p, modelId: m.id }))} style={{
-                        display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', cursor: 'pointer',
-                        borderBottom: '0.5px solid var(--bg-muted)', background: sel ? 'var(--gold-pale)' : 'transparent',
-                      }}>
-                        <span style={{ fontFamily: MONO, fontWeight: 700, color: 'var(--gold)', fontSize: 'var(--fs-caption)' }}>{m.codi_intern}</span>
-                        <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-caption)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.nom_prenda || '—'}</span>
-                        <span style={pickFase}>{m.fase_actual ? t(`model_sheet.dashboard.phase.${m.fase_actual}`, m.fase_actual) : '—'}</span>
-                        {sel && <i className="ti ti-check" style={{ fontSize: 13, color: 'var(--gold)' }} />}
-                      </div>
-                    )
-                  })}
-            </div>
-            <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: '8px 0 10px' }}>
-              {t('quotes.intent_note')}
-            </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={() => setIntentLineId(null)} disabled={busy} style={smallBtn}>{t('quotes.intent_close')}</button>
-              <button onClick={addIntent} disabled={busy || !picker.modelId} style={primaryBtn}>{t('quotes.intent_confirm')}</button>
-            </div>
-          </div>
-        </div>
-      )}
     </Section>
   )
 }

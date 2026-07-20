@@ -1412,7 +1412,9 @@
     "tax_amount": "VAT",
     "total": "Total",
     "due_dates": "Due dates",
-    "due_dates_empty": "No due dates."
+    "due_dates_empty": "No due dates.",
+    "pending_lines": "{{n}} line(s) still to allocate.",
+    "continue_selecting": "Keep selecting"
   },
   "config_general": {
     "title": "General settings",
@@ -1573,7 +1575,9 @@
     "convert_conflicts_summary": "{{assigned}} assigned · {{reattached}} reassigned. Conflicts:",
     "convert_conflict_busy": "already has an active work order in another order ({{order}}).",
     "convert_conflict_generic": "could not be assigned.",
-    "convert_conflicts_open": "Open order"
+    "convert_conflicts_open": "Open order",
+    "pending_lines": "{{n}} line(s) with no planned model.",
+    "continue_selecting": "Keep selecting"
   },
   "planning": {
     "title": "Planning",
