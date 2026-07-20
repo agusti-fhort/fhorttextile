@@ -3219,6 +3219,8 @@ export default function TechSheetEditor() {
   }
   // F1 — dispara una acció sobre el canvas viu del sub-editor (close/open/split/removeSelection…).
   const runNode = (name, ...args) => paperFlatRef.current?.run?.(name, ...args)
+  // F4 — mode edició de nodes actiu: cap acció d'abast OBJECTE (ribbon/menú/panell dret) hi és clicable.
+  const nodeMode = !!editingFlatId
   // En entrar/sortir del mode edició de nodes, reinicia l'eina i l'estat de selecció.
   useEffect(() => { setNodeTool('select'); setNodeSel({ selCount: 0 }) }, [editingFlatId])
   // F1/F3 — teclat del mode edició de nodes, centralitzat al PARE (finestra, independent del focus).
@@ -4096,29 +4098,29 @@ export default function TechSheetEditor() {
       ]
     }
     return [
-      ribbonTool({ key: 'align-left', icon: 'ti-layout-align-left', label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-center', icon: 'ti-layout-align-center', label: t('tech_sheet.align_center_short'), onClick: () => alignSelection('center'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-right', icon: 'ti-layout-align-right', label: t('tech_sheet.align_right_short'), onClick: () => alignSelection('right'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-top', icon: 'ti-layout-align-top', label: t('tech_sheet.align_top_short'), onClick: () => alignSelection('top'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-middle', icon: 'ti-layout-align-middle', label: t('tech_sheet.align_middle_short'), onClick: () => alignSelection('middle'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-bottom', icon: 'ti-layout-align-bottom', label: t('tech_sheet.align_bottom_short'), onClick: () => alignSelection('bottom'), disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'dist-h', icon: 'ti-layout-distribute-horizontal', label: t('tech_sheet.distribute_h_short'), onClick: () => distributeSelection('h'), disabled: selectedObjects.length < 3 }),
-      ribbonTool({ key: 'dist-v', icon: 'ti-layout-distribute-vertical', label: t('tech_sheet.distribute_v_short'), onClick: () => distributeSelection('v'), disabled: selectedObjects.length < 3 }),
-      ribbonTool({ key: 'group', icon: 'ti-box-multiple', label: t('tech_sheet.group'), onClick: groupSelection, disabled: selectedObjects.length < 2 }),
-      ribbonTool({ key: 'ungroup', icon: 'ti-unlink', label: t('tech_sheet.ungroup'), onClick: () => ungroupObject(selObj.id), disabled: selObj?.type !== 'group' }),
-      ribbonTool({ key: 'mirror-h', icon: 'ti-flip-horizontal', label: t('tech_sheet.mirror_h'), onClick: () => mirrorObjects(mirrorableIds, 'scaleX'), disabled: mirrorableIds.length === 0 }),
-      ribbonTool({ key: 'mirror-v', icon: 'ti-flip-vertical', label: t('tech_sheet.mirror_v'), onClick: () => mirrorObjects(mirrorableIds, 'scaleY'), disabled: mirrorableIds.length === 0 }),
-      ribbonTool({ key: 'send-back', icon: 'ti-chevrons-down', label: t('tech_sheet.send_to_back'), onClick: () => moveSelectionToFreeLayerEdge('back'), disabled: freeSelectedIds.length === 0 }),
-      ribbonTool({ key: 'backward', icon: 'ti-arrow-down', label: t('tech_sheet.send_backward'), onClick: () => moveSelectionInFreeLayer('backward'), disabled: freeSelectedIds.length === 0 }),
-      ribbonTool({ key: 'forward', icon: 'ti-arrow-up', label: t('tech_sheet.bring_forward'), onClick: () => moveSelectionInFreeLayer('forward'), disabled: freeSelectedIds.length === 0 }),
-      ribbonTool({ key: 'bring-front', icon: 'ti-chevrons-up', label: t('tech_sheet.bring_to_front'), onClick: () => moveSelectionToFreeLayerEdge('front'), disabled: freeSelectedIds.length === 0 }),
-      ribbonTool({ key: 'delete', icon: 'ti-trash', label: t('app.delete'), onClick: deleteSelection, disabled: selectedDeletableIds.length === 0 }),
+      ribbonTool({ key: 'align-left', icon: 'ti-layout-align-left', label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: nodeMode || selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-center', icon: 'ti-layout-align-center', label: t('tech_sheet.align_center_short'), onClick: () => alignSelection('center'), disabled: nodeMode || selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-right', icon: 'ti-layout-align-right', label: t('tech_sheet.align_right_short'), onClick: () => alignSelection('right'), disabled: nodeMode || selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-top', icon: 'ti-layout-align-top', label: t('tech_sheet.align_top_short'), onClick: () => alignSelection('top'), disabled: nodeMode || selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-middle', icon: 'ti-layout-align-middle', label: t('tech_sheet.align_middle_short'), onClick: () => alignSelection('middle'), disabled: nodeMode || selectedObjects.length < 2 }),
+      ribbonTool({ key: 'align-bottom', icon: 'ti-layout-align-bottom', label: t('tech_sheet.align_bottom_short'), onClick: () => alignSelection('bottom'), disabled: nodeMode || selectedObjects.length < 2 }),
+      ribbonTool({ key: 'dist-h', icon: 'ti-layout-distribute-horizontal', label: t('tech_sheet.distribute_h_short'), onClick: () => distributeSelection('h'), disabled: nodeMode || selectedObjects.length < 3 }),
+      ribbonTool({ key: 'dist-v', icon: 'ti-layout-distribute-vertical', label: t('tech_sheet.distribute_v_short'), onClick: () => distributeSelection('v'), disabled: nodeMode || selectedObjects.length < 3 }),
+      ribbonTool({ key: 'group', icon: 'ti-box-multiple', label: t('tech_sheet.group'), onClick: groupSelection, disabled: nodeMode || selectedObjects.length < 2 }),
+      ribbonTool({ key: 'ungroup', icon: 'ti-unlink', label: t('tech_sheet.ungroup'), onClick: () => ungroupObject(selObj.id), disabled: nodeMode || selObj?.type !== 'group' }),
+      ribbonTool({ key: 'mirror-h', icon: 'ti-flip-horizontal', label: t('tech_sheet.mirror_h'), onClick: () => mirrorObjects(mirrorableIds, 'scaleX'), disabled: nodeMode || mirrorableIds.length === 0 }),
+      ribbonTool({ key: 'mirror-v', icon: 'ti-flip-vertical', label: t('tech_sheet.mirror_v'), onClick: () => mirrorObjects(mirrorableIds, 'scaleY'), disabled: nodeMode || mirrorableIds.length === 0 }),
+      ribbonTool({ key: 'send-back', icon: 'ti-chevrons-down', label: t('tech_sheet.send_to_back'), onClick: () => moveSelectionToFreeLayerEdge('back'), disabled: nodeMode || freeSelectedIds.length === 0 }),
+      ribbonTool({ key: 'backward', icon: 'ti-arrow-down', label: t('tech_sheet.send_backward'), onClick: () => moveSelectionInFreeLayer('backward'), disabled: nodeMode || freeSelectedIds.length === 0 }),
+      ribbonTool({ key: 'forward', icon: 'ti-arrow-up', label: t('tech_sheet.bring_forward'), onClick: () => moveSelectionInFreeLayer('forward'), disabled: nodeMode || freeSelectedIds.length === 0 }),
+      ribbonTool({ key: 'bring-front', icon: 'ti-chevrons-up', label: t('tech_sheet.bring_to_front'), onClick: () => moveSelectionToFreeLayerEdge('front'), disabled: nodeMode || freeSelectedIds.length === 0 }),
+      ribbonTool({ key: 'delete', icon: 'ti-trash', label: t('app.delete'), onClick: deleteSelection, disabled: nodeMode || selectedDeletableIds.length === 0 }),
       // S8: buscatraços (unir/restar/intersecar/excloure) — grup separat al final de l'organize.
       <span key="sep-pathfinder" style={{ width: 1, height: 50, background: COL.border, flexShrink: 0 }} />,
-      ribbonTool({ key: 'pf-unite', icon: 'ti-layers-union', label: t('tech_sheet.pathfinder_unite'), onClick: () => applyPathfinder('unite'), disabled: !pathfinderReady }),
-      ribbonTool({ key: 'pf-subtract', icon: 'ti-layers-subtract', label: t('tech_sheet.pathfinder_subtract'), onClick: () => applyPathfinder('subtract'), disabled: !pathfinderReady }),
-      ribbonTool({ key: 'pf-intersect', icon: 'ti-layers-intersect', label: t('tech_sheet.pathfinder_intersect'), onClick: () => applyPathfinder('intersect'), disabled: !pathfinderReady }),
-      ribbonTool({ key: 'pf-exclude', icon: 'ti-layers-difference', label: t('tech_sheet.pathfinder_exclude'), onClick: () => applyPathfinder('exclude'), disabled: !pathfinderReady }),
+      ribbonTool({ key: 'pf-unite', icon: 'ti-layers-union', label: t('tech_sheet.pathfinder_unite'), onClick: () => applyPathfinder('unite'), disabled: nodeMode || !pathfinderReady }),
+      ribbonTool({ key: 'pf-subtract', icon: 'ti-layers-subtract', label: t('tech_sheet.pathfinder_subtract'), onClick: () => applyPathfinder('subtract'), disabled: nodeMode || !pathfinderReady }),
+      ribbonTool({ key: 'pf-intersect', icon: 'ti-layers-intersect', label: t('tech_sheet.pathfinder_intersect'), onClick: () => applyPathfinder('intersect'), disabled: nodeMode || !pathfinderReady }),
+      ribbonTool({ key: 'pf-exclude', icon: 'ti-layers-difference', label: t('tech_sheet.pathfinder_exclude'), onClick: () => applyPathfinder('exclude'), disabled: nodeMode || !pathfinderReady }),
     ]
   }
 
@@ -4135,7 +4137,9 @@ export default function TechSheetEditor() {
   )
   const menuSep = (key) => <div key={key} style={{ borderTop: `1px solid ${COL.border}`, margin: '4px 0' }} />
   // OBJECTE: totes les entrades, a més de la seva condició pròpia, es deshabiliten si !locked.
-  const objDisabled = (cond) => !locked || cond
+  // F4 — en mode edició de nodes, cap acció d'ABAST OBJECTE (grup, z-order, alinear, mirall,
+  // buscatraços, bloquejar…) és clicable: la barra superior contextual mana sobre node/segment/subpath.
+  const objDisabled = (cond) => !locked || !!editingFlatId || cond
   const menuFileItems = [
     menuItem('mf-export', { label: t('tech_sheet.export_pdf'), onClick: onExport, disabled: !locked }),
     menuItem('mf-save-tpl', { label: t('tech_sheet.save_as_template'), onClick: () => setSaveAsTpl({ nom: '', descripcio: '' }), disabled: !locked }),
@@ -4151,10 +4155,10 @@ export default function TechSheetEditor() {
     menuItem('me-undo', { label: t('tech_sheet.menu_undo'), shortcut: '⌘Z', onClick: undo }),
     menuItem('me-redo', { label: t('tech_sheet.menu_redo'), shortcut: '⇧⌘Z', onClick: redo }),
     menuSep('me-sep1'),
-    menuItem('me-copy', { label: t('tech_sheet.menu_copy'), shortcut: '⌘C', onClick: copySelection, disabled: freeSelectedIds.length === 0 }),
-    menuItem('me-paste', { label: t('tech_sheet.menu_paste'), shortcut: '⌘V', onClick: pasteClipboard, disabled: !clipboardRef.current.length }),
-    menuItem('me-dup', { label: t('tech_sheet.menu_duplicate'), shortcut: '⌘D', onClick: duplicateSelection, disabled: freeSelectedIds.length === 0 }),
-    menuItem('me-delete', { label: t('app.delete'), shortcut: '⌫', onClick: deleteSelection, disabled: selectedDeletableIds.length === 0 }),
+    menuItem('me-copy', { label: t('tech_sheet.menu_copy'), shortcut: '⌘C', onClick: copySelection, disabled: objDisabled(freeSelectedIds.length === 0) }),
+    menuItem('me-paste', { label: t('tech_sheet.menu_paste'), shortcut: '⌘V', onClick: pasteClipboard, disabled: objDisabled(!clipboardRef.current.length) }),
+    menuItem('me-dup', { label: t('tech_sheet.menu_duplicate'), shortcut: '⌘D', onClick: duplicateSelection, disabled: objDisabled(freeSelectedIds.length === 0) }),
+    menuItem('me-delete', { label: t('app.delete'), shortcut: '⌫', onClick: deleteSelection, disabled: objDisabled(selectedDeletableIds.length === 0) }),
   ]
   const menuObjectItems = [
     menuItem('mo-group', { label: t('tech_sheet.group'), shortcut: '⌘G', onClick: groupSelection, disabled: objDisabled(selectedObjects.length < 2) }),
@@ -4945,8 +4949,9 @@ export default function TechSheetEditor() {
                   </label>
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
-                  <button onClick={() => deleteObject(selObj.id)}
-                    style={{ width: '100%', fontSize: 'var(--fs-body)', padding: '5px 8px', marginTop: 6, border: `1px solid #e74c3c`, borderRadius: 5, background: 'transparent', color: '#e74c3c', fontFamily: FONT, cursor: 'pointer' }}>
+                  <button onClick={() => deleteObject(selObj.id)} disabled={nodeMode}
+                    title={nodeMode ? t('tech_sheet.obj_action_node_mode') : ''}
+                    style={{ width: '100%', fontSize: 'var(--fs-body)', padding: '5px 8px', marginTop: 6, border: `1px solid var(--grana)`, borderRadius: 5, background: 'transparent', color: 'var(--grana)', fontFamily: FONT, cursor: nodeMode ? 'not-allowed' : 'pointer', opacity: nodeMode ? 0.4 : 1 }}>
                     <i className="ti ti-trash" style={{ fontSize: 12, marginRight: 5 }} />{t('app.delete')}
                   </button>
                 )}

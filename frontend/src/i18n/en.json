@@ -2704,7 +2704,8 @@
     "node_close": "Close the path",
     "node_open": "Open at selected node",
     "node_split": "Split at selected node",
-    "node_segment": "1 segment"
+    "node_segment": "1 segment",
+    "obj_action_node_mode": "Not available while editing nodes"
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",
