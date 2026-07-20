@@ -1,12 +1,16 @@
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, plan } from '../api/endpoints'
+import { fittingSessions, plan, models as modelsApi } from '../api/endpoints'
 import AddModelToGroupModal from '../components/model/AddModelToGroupModal'
 import StatCard from '../components/ui/StatCard'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Modal from '../components/ui/Modal'
+import { overlayBase } from '../components/ui/overlay'
+import { selS } from '../components/ui/buttons'
+
+const MONO = 'IBM Plex Mono, monospace'
 
 // Backend enums (línia divisòria sagrada — valors en català, no es toquen).
 const FASES = ['', 'Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
@@ -75,6 +79,7 @@ export default function FittingSessionList() {
   const [rowAction, setRowAction] = useState(null)   // {id, tipus:'delete'|'discard', motiu, err}
   const [actBusy, setActBusy] = useState(false)
   const [eligibles, setEligibles] = useState([])     // assistents elegibles per attendees
+  const [nowOpen, setNowOpen] = useState(false)      // C4 — picker "Fitting aquí i ara"
 
   const load = useCallback(() => {
     setLoading(true)
@@ -278,15 +283,20 @@ export default function FittingSessionList() {
             {stats.total}
           </p>
         </div>
-        <button onClick={() => navigate('/fittings/new')} style={{
+        <button onClick={() => setNowOpen(true)} style={{
           marginLeft: 'auto',
           background: 'var(--charcoal)', color: 'var(--white)',
           border: 'none', borderRadius: 8, padding: '8px 16px',
-          fontSize: 'var(--fs-body)', cursor: 'pointer', 
+          fontSize: 'var(--fs-body)', cursor: 'pointer',
         }}>
-          + {t('fitting.sessions.new')}
+          + {t('fitting.now.button')}
         </button>
       </div>
+
+      {nowOpen && (
+        <FittingNowPicker t={t} onClose={() => setNowOpen(false)}
+          onCreated={(id) => { setNowOpen(false); navigate(`/fittings/${id}`) }} />
+      )}
 
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
@@ -520,6 +530,81 @@ export default function FittingSessionList() {
           {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginTop: 10 }}>{modalGrup.err}</div>}
         </Modal>
       )}
+    </div>
+  )
+}
+
+// C4 — "Fitting aquí i ara": UN CLIC, cap formulari. Es tria un model i es crea el fitting
+// ARA (schedule-now: data=avui, hora=ara, actor com a responsable/assistent, durada default);
+// en èxit s'obre directament l'editor de la sessió. 409 (solapament dur) → error; conflicte
+// suau → confirmació i reintent amb force.
+function FittingNowPicker({ t, onClose, onCreated }) {
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState(null)
+  const [err, setErr] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    const id = setTimeout(() => {
+      modelsApi.list({ ...(q.trim() ? { search: q.trim() } : {}), page_size: 20, ordering: '-data_entrada' })
+        .then(r => { if (alive) setResults(r.data?.results ?? r.data ?? []) })
+        .catch(() => { if (alive) setResults([]) })
+        .finally(() => { if (alive) setLoading(false) })
+    }, 200)
+    return () => { alive = false; clearTimeout(id) }
+  }, [q])
+
+  const pick = (m, force = false) => {
+    setBusyId(m.id); setErr(null)
+    fittingSessions.scheduleNow({ model_id: m.id, ...(force ? { force: true } : {}) })
+      .then(r => {
+        if (r.data?.requires_confirmation) {   // conflicte suau → confirmar i reintentar amb force
+          setBusyId(null)
+          if (window.confirm(r.data.warning || t('fitting.now.soft_conflict'))) pick(m, true)
+          return
+        }
+        onCreated(r.data.id)
+      })
+      .catch(e => { setBusyId(null); setErr(e?.response?.data?.error || t('fitting.now.error')) })
+  }
+
+  return (
+    <div onClick={onClose} style={overlayBase({ alignItems: 'center' })}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'var(--white)', borderRadius: 12, padding: 22, width: 460, maxWidth: '92vw',
+        maxHeight: '85vh', display: 'flex', flexDirection: 'column', fontFamily: MONO,
+      }}>
+        <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('fitting.now.title')}</h2>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 12 }}>{t('fitting.now.subtitle')}</p>
+        <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={t('fitting.now.search_ph')}
+          style={{ ...selS, width: '100%', marginBottom: 10 }} />
+        {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 8 }}>{err}</div>}
+        <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, minHeight: 120 }}>
+          {loading ? (
+            <div style={{ color: 'var(--gray)', fontSize: 'var(--fs-body)', padding: '10px 2px' }}>{t('common.loading')}</div>
+          ) : results.length === 0 ? (
+            <div style={{ color: 'var(--gray)', fontSize: 'var(--fs-body)', padding: '10px 2px' }}>{t('fitting.now.empty')}</div>
+          ) : results.map(m => (
+            <button key={m.id} type="button" disabled={busyId === m.id} onClick={() => pick(m)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', width: '100%',
+                border: '0.5px solid var(--gray-l)', borderRadius: 6, padding: '8px 10px',
+                background: 'var(--white)', cursor: busyId === m.id ? 'wait' : 'pointer',
+                fontFamily: MONO, fontSize: 'var(--fs-body)',
+              }}>
+              <span style={{ fontWeight: 700, color: 'var(--gold)' }}>{m.codi_intern}</span>
+              <span style={{ color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.nom_prenda}</span>
+              <span style={{ marginLeft: 'auto', color: 'var(--gray)' }}>{m.fase_actual}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+          <button onClick={onClose} style={{ ...selS, cursor: 'pointer' }}>{t('common.cancel')}</button>
+        </div>
+      </div>
     </div>
   )
 }

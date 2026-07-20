@@ -135,11 +135,12 @@ function ModelBoard({ scope }) {
   const [customerOpts, setCustomerOpts] = useState([])
 
   // Paràmetres de campanya compartits per by-model i fase-counts (mateix contracte de filtres).
-  // L'abast (scope) "els meus" hi afegeix responsable=me (assignee), de manera que board, chips i
+  // L'abast (scope) "els meus" hi afegeix assignee=me (C1: `assignee` és el param que filtra per
+  // tècnic amb tasca assignada; `responsable` ja és el director), de manera que board, chips i
   // comptadors es filtren com els KPIs en commutar l'abast.
   const buildParams = useCallback(() => {
     const p = {}
-    if (scope === 'me') p.responsable = 'me'
+    if (scope === 'me') p.assignee = 'me'
     const s = search.trim(); if (s) p.search = s
     if (fTemporada) p.temporada = fTemporada
     if (fFase) p.fase_actual = fFase
@@ -354,8 +355,8 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('home')
 
   // Abast [me|all]. null fins que arriba `me` → default per rol (view_team_tasks → tots; si no, meus).
-  // La home va SEMPRE acotada als models on l'usuari és ASSIGNEE de tasca (responsable=me →
-  // ModelTask.assignee, views_b.py:130). Mateix eix que el Gantt mine=. Sense selector d'abast.
+  // La home va SEMPRE acotada als models on l'usuari és ASSIGNEE de tasca (assignee=me →
+  // ModelTask.assignee, C1). Mateix eix que el Gantt mine=. Sense selector d'abast.
   const scope = 'me'
   const [scopeRows, setScopeRows] = useState([])     // by-model de l'abast (substrat dels KPIs)
   const [scopeLoading, setScopeLoading] = useState(true)
@@ -431,7 +432,7 @@ export default function Dashboard() {
     let alive = true
     const id = setTimeout(() => {
       setScopeLoading(true)
-      const params = { all: "true", ...(scope === "me" ? { responsable: "me" } : {}) }
+      const params = { all: "true", ...(scope === "me" ? { assignee: "me" } : {}) }
       fetchAllPages(modelTasks.byModel, params)
         .then(rows => { if (alive) setScopeRows(rows) })
         .catch(() => { if (alive) setScopeRows([]) })

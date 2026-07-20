@@ -231,12 +231,20 @@ def assign_model(*, model_id, assignee_id, task_ids=None, now=None):
             'results': results}
 
 
-@transaction.atomic
+ASSIGN_BATCH_CHUNK = 100
+
+
 def assign_batch(*, model_ids, assignacions, actor=None, now=None):
     """Wizard multi-assignació: aplica `assignacions` (task_type × persona × data opcional)
     a cada model de `model_ids`. La tasca es CREA si no existeix (via canònica de
     define_model_tasks_view) i neix amb l'assignee. Recompute ÚNIC al final per a tots els
     tècnics afectats (nous + desplaçats).
+
+    `model_ids`: llista explícita O queryset lazy d'ids (p.ex. `.values_list('id', flat=True)`
+      d'un ModelFilter re-avaluat server-side, C2). Es materialitza a ints (barat fins i tot
+      per a milers) i s'itera per LOTS de ASSIGN_BATCH_CHUNK amb **atomicitat per lot** (fora
+      la transacció monolítica única) — un lot que peti no arrossega els ja aplicats. El
+      recompute de la cua per tècnic és UN SOL COP al final (preservat de l'original).
 
     assignacions: [{task_type_code, assignee_profile_id, planned_start?, planned_end?}].
       - Mai planned_start I planned_end alhora (ValueError → 400 lot sencer).
@@ -256,25 +264,30 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
         if a.get('planned_start') and a.get('planned_end'):
             raise ValueError('Una assignació no pot portar planned_start i planned_end alhora.')
 
-    # Pas 1 — resolució d'entitats en bloc (sense N+1).
+    # Pas 1 — resolució d'entitats en bloc (sense N+1). Els task_type/perfil són fitats per
+    # `assignacions` (no per model_ids) → una sola resolució per a tot el lot.
     tt_by_code = {tt.code: tt for tt in
                   TaskType.objects.filter(code__in={a['task_type_code'] for a in assignacions})}
     prof_by_id = {p.id: p for p in
                   UserProfile.objects.filter(pk__in={a['assignee_profile_id'] for a in assignacions})
                   .select_related('user')}
-    models_by_id = {m.id: m for m in Model.objects.filter(pk__in=model_ids)}
+    # Materialitza els ids AQUÍ (re-avaluació del queryset filtrat al moment d'executar quan
+    # `model_ids` és un QS lazy). Materialitzar ints és barat; NO es carreguen objectes Model.
+    all_ids = list(model_ids)
 
     fets = creats = 0
     reassignats, omesos, warnings, touched = [], [], [], []
     needs_estimate, seen_needs = [], set()
     affected = set()
 
-    # Pas 2 — per cada (model × assignació).
-    for mid in model_ids:
+    # Pas 2 — per LOTS: cada lot carrega només els seus objectes Model i s'aplica dins la seva
+    # PRÒPIA transacció. Fora la transacció monolítica única sobre milers de models.
+    def _apply_one(mid, models_by_id):
+        nonlocal fets, creats
         model = models_by_id.get(mid)
         if model is None:
             omesos.append({'model_id': mid, 'task_type_code': None, 'motiu': 'model no trobat'})
-            continue
+            return
         for a in assignacions:
             code = a['task_type_code']
             tt = tt_by_code.get(code)
@@ -359,9 +372,20 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
             touched.append((mid, code, profile.id, mt.id))
             fets += 1
 
-    # Pas 3 — neteja d'ordre manual + recompute ÚNIC dels afectats.
-    cleanup_queue_order(affected, model_ids)
-    rec = recompute_for_technicians(affected, now=now)
+    for start in range(0, len(all_ids), ASSIGN_BATCH_CHUNK):
+        chunk = all_ids[start:start + ASSIGN_BATCH_CHUNK]
+        models_by_id = {m.id: m for m in Model.objects.filter(pk__in=chunk)}
+        with transaction.atomic():   # atomicitat PER LOT
+            for mid in chunk:
+                _apply_one(mid, models_by_id)
+
+    # Pas 3 — neteja d'ordre manual + recompute ÚNIC dels afectats (una sola transacció al
+    # final, sobre els tècnics tocats — no per model). Es neteja només els models realment
+    # assignats (touched), no tot el conjunt d'entrada.
+    touched_model_ids = {t[0] for t in touched}
+    with transaction.atomic():
+        cleanup_queue_order(affected, touched_model_ids)
+        rec = recompute_for_technicians(affected, now=now)
     # Agrega el needs_estimate del scheduler (tasques EXISTENTS que segueixen sense estimació,
     # p.ex. creades abans per open-task) al de creació, deduplicant per task_code.
     for r in (rec or {}).values():
@@ -391,6 +415,25 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
     return {'fets': fets, 'creats': creats, 'reassignats': reassignats,
             'omesos': omesos, 'warnings': warnings, 'resultats': resultats,
             'needs_estimate': needs_estimate}
+
+
+@transaction.atomic
+def cleanup_after_pending_delete(*, model_id, assignee_id, now=None):
+    """C3 — cua després d'ESBORRAR una ModelTask Pending assignada/planificada. Replica la
+    cascada d'unassign_model REUTILITZANT les mateixes funcions (no les duplica):
+      - cleanup_queue_order: treu TechnicianQueueOrder(assignee, model) si el tècnic ja no té
+        cap no-Done d'aquell model.
+      - Model.predicted_*: es neteja NOMÉS si el model queda sense cap tasca no-Done assignada
+        (si en manté alguna d'un altre tècnic, la seva previsió la manté aquell pla).
+      - recompute_for_technicians: recalcula la cua sencera del tècnic afectat, UN SOL COP.
+    (La tasca JA s'ha esborrat abans de cridar-la; aquí només es reconcilia el pla.)"""
+    from fhort.models_app.models import Model
+    cleanup_queue_order([assignee_id], [model_id])
+    still_assigned = (ModelTask.objects.filter(model_id=model_id)
+                      .exclude(status='Done').filter(assignee__isnull=False).exists())
+    if not still_assigned:
+        Model.objects.filter(pk=model_id).update(predicted_start=None, predicted_end=None)
+    return recompute_for_technicians([assignee_id], now=now)
 
 
 @transaction.atomic

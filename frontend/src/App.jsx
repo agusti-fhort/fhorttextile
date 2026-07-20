@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useParams, useSearchParams, use
 import { useTranslation } from 'react-i18next'
 import useAuthStore, { AUTH_DESCONEGUT, AUTH_VALID } from './store/auth'
 import Login from './pages/Login'
+import Entrar from './pages/Entrar'
 import Shell from './components/layout/Shell'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -21,6 +22,7 @@ const PaymentTerms = lazy(() => import('./pages/PaymentTerms'))
 const Orders = lazy(() => import('./pages/Orders'))
 const OrderDetail = lazy(() => import('./pages/OrderDetail'))
 const WorkOrders = lazy(() => import('./pages/WorkOrders'))
+const OrphanedWorkOrders = lazy(() => import('./pages/OrphanedWorkOrders'))
 const WorkOrderDetail = lazy(() => import('./pages/WorkOrderDetail'))
 const DeliveryNotes = lazy(() => import('./pages/DeliveryNotes'))
 const DeliveryNoteDetail = lazy(() => import('./pages/DeliveryNoteDetail'))
@@ -29,12 +31,8 @@ const CommercialKitDemo = lazy(() => import('./pages/CommercialKitDemo'))
 const FittingDetail = lazy(() => import('./pages/FittingDetail'))
 const FittingConvocatoriaSheet = lazy(() => import('./pages/FittingConvocatoriaSheet'))
 const FittingSessionList = lazy(() => import('./pages/FittingSessionList'))
-const FittingSessionNew = lazy(() => import('./pages/FittingSessionNew'))
 const GradingRuleSets = lazy(() => import('./pages/GradingRuleSets'))
 const SizeLibrary = lazy(() => import('./pages/SizeLibrary'))
-// CODI MORT (jubilat al sprint tasca-POM): GarmentPOMMapEditor.jsx — editor de pertinença per
-// família amb endpoints fantasma (pom-map/* → 404). Substituït per POMBrowser-assign (per item).
-// Fitxer no esborrat; netejar en passada futura. (MeasurementTable.jsx ja esborrat a P1.)
 const OnboardingWizard = lazy(() => import('./pages/OnboardingWizard'))
 const ModelWizard = lazy(() => import('./pages/ModelWizard'))
 const BulkImportWizard = lazy(() => import('./pages/BulkImportWizard'))
@@ -243,6 +241,8 @@ export default function App() {
       <Suspense fallback={<div className="p-8 text-gray-500">Carregant…</div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        {/* Porta ÚNICA (tenant-discovery): pantalla neutra, se serveix al host neutre (→public). */}
+        <Route path="/entrar" element={<Entrar />} />
         {/* Recuperació de contrasenya: pública, fora del guard (la persona no està autenticada). */}
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
         {/* Fitxa tècnica: /fitxa ja no munta l'editor TechSheet; resol/crea el .ftt i redirigeix. */}
@@ -290,7 +290,6 @@ export default function App() {
           <Route path="models/:id/size-check" element={<SizeCheckRedirect />} />
           {/* 5B.6 — capa de sessions de fitting (l'antiga SizeFitting es va jubilar al Pas 1 catàlegs) */}
           <Route path="fittings" element={<FittingSessionList />} />
-          <Route path="fittings/new" element={<FittingSessionNew />} />
           {/* P4 — fulla de convocatòria: pas intermedi llista → sessió, per a les sessions de grup. */}
           <Route path="fittings/convocatoria/:uuid" element={<FittingConvocatoriaSheet />} />
           <Route path="fittings/:id" element={<FittingDetail />} />
@@ -320,6 +319,8 @@ export default function App() {
           {/* Comercial (B4a) — encàrrecs / ordres de treball (WorkOrder). */}
           <Route path="comercial/encarrecs" element={<WorkOrders />} />
           <Route path="comercial/encarrecs/:id" element={<WorkOrderDetail />} />
+          {/* Comercial (D6) — informe d'encàrrecs orfes (desassignats, pendents de reassignar). */}
+          <Route path="comercial/orfes" element={<OrphanedWorkOrders />} />
           {/* Comercial (B4c) — albarans (DeliveryNote). */}
           <Route path="comercial/albarans" element={<DeliveryNotes />} />
           <Route path="comercial/albarans/:id" element={<DeliveryNoteDetail />} />

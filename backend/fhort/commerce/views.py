@@ -16,13 +16,13 @@ from fhort.accounts.capabilities import HasCapability, CONFIGURE, DEFINE_TASKS
 
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
-    Quote, QuoteLine, PaymentTerms, SalesOrder, SalesOrderLine, WorkOrder, Expense,
-    DeliveryNote, DeliveryNoteLine,
+    Quote, QuoteLine, QuoteLineModelIntent, PaymentTerms, SalesOrder, SalesOrderLine,
+    WorkOrder, Expense, DeliveryNote, DeliveryNoteLine,
 )
 from .serializers import (
     UnitSerializer, ProductSerializer, ProductRecipeSerializer, ProductSupplierSerializer,
     ProductComponentSerializer, ProductPriceGTISerializer,
-    QuoteSerializer, QuoteLineSerializer, PaymentTermsSerializer,
+    QuoteSerializer, QuoteLineSerializer, QuoteLineModelIntentSerializer, PaymentTermsSerializer,
     SalesOrderSerializer, SalesOrderLineSerializer, WorkOrderSerializer, ExpenseSerializer,
     DeliveryNoteSerializer, DeliveryNoteLineSerializer,
 )
@@ -100,7 +100,7 @@ class QuoteViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
     """CRUD d'ofertes + accions `send` (DRAFT→SENT) i `pdf` (descàrrega). Escriptura gated
     CONFIGURE (com el mestre B1); el `pdf` és lectura (autenticat). Rol comercial propi = B5."""
     queryset = Quote.objects.select_related('customer', 'created_by').prefetch_related(
-        'lines__product').all()
+        'lines__product', 'lines__model_intents__model').all()
     serializer_class = QuoteSerializer
     filterset_fields = ['status', 'customer']
 
@@ -155,10 +155,12 @@ class QuoteViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
         from .services import convert_quote_to_order
         quote = self.get_object()
         try:
-            order = convert_quote_to_order(quote, user=request.user)
+            order, meta = convert_quote_to_order(quote, user=request.user)
         except DjangoValidationError as e:
             return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(SalesOrderSerializer(order).data, status=status.HTTP_201_CREATED)
+        # meta.intent_conflicts: models d'intenció que no han pogut viatjar (ocupats en una altra
+        # comanda o sense quantitat) — el frontend els mostra al comercial. Mai bloqueja la conversió.
+        return Response({**SalesOrderSerializer(order).data, **meta}, status=status.HTTP_201_CREATED)
 
 
 class QuoteLineViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
@@ -167,6 +169,47 @@ class QuoteLineViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
     queryset = QuoteLine.objects.select_related('quote', 'product').all()
     serializer_class = QuoteLineSerializer
     filterset_fields = ['quote', 'product']
+
+
+class QuoteLineModelIntentViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+    """Vincle preparatori model↔línia d'oferta (E2, patró satèl·lit ?quote_line=). Escriptura
+    gated CONFIGURE; els guards (estat DRAFT/SENT + coherència de client) viuen al serializer.
+    Intenció informativa: no toca WO ni cartera."""
+    queryset = QuoteLineModelIntent.objects.select_related(
+        'quote_line__quote', 'model').all()
+    serializer_class = QuoteLineModelIntentSerializer
+    filterset_fields = ['quote_line', 'model']
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=getattr(self.request.user, 'profile', None))
+
+    @action(detail=False, methods=['post'], url_path='bulk')
+    def bulk(self, request):
+        """POST commerce/quote-line-intents/bulk/ — crea intents en LOT per a una línia d'oferta.
+        Ignora silenciosament els duplicats ja existents (unique_together). Gate CONFIGURE.
+        Body: {quote_line, model_ids:[...]}. Resposta: {created:[ids], skipped:[model_ids]}."""
+        from .models import QuoteLine
+        quote_line_id = request.data.get('quote_line')
+        model_ids = request.data.get('model_ids')
+        if not quote_line_id or not isinstance(model_ids, list) or not model_ids:
+            return Response({'detail': 'quote_line i model_ids (llista no buida) requerits.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        line = QuoteLine.objects.filter(pk=quote_line_id).select_related('quote').first()
+        if line is None:
+            return Response({'detail': "Línia d'oferta no trobada."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            model_ids = [int(x) for x in model_ids]
+        except (TypeError, ValueError):
+            return Response({'detail': "model_ids ha de ser una llista d'enters."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import create_quote_line_intents_bulk
+        try:
+            res = create_quote_line_intents_bulk(
+                line, model_ids, user=getattr(request.user, 'profile', None))
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(res, status=status.HTTP_201_CREATED)
 
 
 # ── Documents comercials — SalesOrder (comanda, B3b) ───────────────────────────────────
@@ -220,8 +263,14 @@ class SalesOrderLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mix
         q, alloc = Decimal(line.quantity or 0), Decimal(line.qty_allocated or 0)
         pct = float((alloc / q * 100).quantize(Decimal('0.1'))) if q > 0 else 0.0
         wos = line.work_orders.select_related('model').prefetch_related('tasks__task_type').order_by('id')
+        # Mirall del guard de unassign_model_from_order_line: un WO ORDER OPEN i NO albaranat es pot
+        # desassignar. Precalculem els albaranats en 1 query per no fer N+1 (el frontend amaga el botó).
+        from .models import DeliveryNoteLine
+        billed_ids = set(DeliveryNoteLine.objects.filter(work_order__in=wos)
+                         .values_list('work_order_id', flat=True))
         work_orders = [{
             'id': wo.id, 'number': wo.number, 'status': wo.status, 'kind': wo.kind,
+            'can_unassign': (wo.kind == 'ORDER' and wo.status == 'OPEN' and wo.id not in billed_ids),
             'model': ({'id': wo.model.id, 'codi_intern': wo.model.codi_intern,
                        'nom_prenda': wo.model.nom_prenda} if wo.model_id else None),
             'tasks': [{
@@ -254,6 +303,31 @@ class SalesOrderLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mix
         return Response({'work_order': WorkOrderSerializer(wo).data, **meta},
                         status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=['post'], url_path='assign-models')
+    def assign_models(self, request, pk=None):
+        """POST commerce/order-lines/{id}/assign-models/ — assigna N models a la línia en UNA
+        transacció TOT-O-RES (select_for_update + validació de capacitat conjunta abans d'assignar
+        res). Gate CONFIGURE. Body: {model_ids:[...]}. Resposta: {work_orders, warnings}."""
+        line = self.get_object()
+        model_ids = request.data.get('model_ids')
+        if not isinstance(model_ids, list) or not model_ids:
+            return Response({'detail': 'model_ids (llista no buida) requerit.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        try:
+            model_ids = [int(x) for x in model_ids]
+        except (TypeError, ValueError):
+            return Response({'detail': "model_ids ha de ser una llista d'enters."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import assign_models_to_order_line_batch
+        try:
+            wos, warnings = assign_models_to_order_line_batch(
+                line.id, model_ids, user=getattr(request.user, 'profile', None))
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'work_orders': WorkOrderSerializer(wos, many=True).data, 'warnings': warnings},
+                        status=status.HTTP_201_CREATED)
+
 
 class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     """Encàrrecs / ordres de treball (B4a). Lectura (autenticat) + acció `close` (gate
@@ -265,12 +339,40 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
     filterset_fields = ['kind', 'status', 'customer', 'period', 'model']
 
     def get_permissions(self):
-        if self.action in ('list', 'retrieve'):
+        if self.action in ('list', 'retrieve', 'orphaned'):
             return [IsAuthenticated()]
         # El tècnic tanca (DEFINE_TASKS); el comercial revisa el preu de venda (CONFIGURE).
         p = HasCapability()
-        self.required_capability = CONFIGURE if self.action == 'review' else DEFINE_TASKS
+        # review, unassign i reattach són actes COMERCIALS (preu/cartera) → CONFIGURE (com assign-model).
+        self.required_capability = (CONFIGURE if self.action in ('review', 'unassign', 'reattach')
+                                    else DEFINE_TASKS)
         return [p]
+
+    @action(detail=False, methods=['get'])
+    def orphaned(self, request):
+        """GET commerce/work-orders/orphaned/ — informe (read-only) dels WO desassignats
+        (orphaned_from_line no null): pendents de reassignar. Data, comanda i línia origen, total
+        de la comanda, estat del WO. Llistat simple, sense filtres avançats (D6)."""
+        qs = (WorkOrder.objects
+              .filter(orphaned_from_line__isnull=False)
+              .select_related('orphaned_from_line__order', 'orphaned_from_line__product',
+                              'model', 'customer')
+              .order_by('-created_at'))
+        out = []
+        for wo in qs:
+            line = wo.orphaned_from_line
+            order = line.order if line else None
+            out.append({
+                'id': wo.id, 'number': wo.number, 'status': wo.status, 'created_at': wo.created_at,
+                'customer': wo.customer.nom if wo.customer_id else None,
+                'model': ({'id': wo.model.id, 'codi_intern': wo.model.codi_intern,
+                           'nom_prenda': wo.model.nom_prenda} if wo.model_id else None),
+                'order': ({'id': order.id, 'document_number': order.document_number,
+                           'total': str(order.total), 'status': order.status} if order else None),
+                'line': ({'id': line.id, 'description': line.description or getattr(line.product, 'name', None),
+                          'quantity': str(line.quantity)} if line else None),
+            })
+        return Response({'orphaned': out})
 
     @action(detail=True, methods=['post'])
     def review(self, request, pk=None):
@@ -301,6 +403,63 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
             cancel_pending=bool(request.data.get('cancel_pending')))
         code = status.HTTP_200_OK if result['closed'] else status.HTTP_409_CONFLICT
         return Response(result, status=code)
+
+    @action(detail=True, methods=['post'])
+    def unassign(self, request, pk=None):
+        """POST commerce/work-orders/{id}/unassign/ — desassigna el model de la línia: ORFANDA el
+        WO (order_line→None, orphaned_from_line→línia origen) i allibera 1 unitat de qty_allocated.
+        Gate CONFIGURE (com assign-model). Guards durs: kind=ORDER, status=OPEN, no albaranat.
+        200 amb el WO actualitzat, o 400 amb el missatge del guard que ha fallat."""
+        wo = self.get_object()
+        profile = getattr(request.user, 'profile', None)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import unassign_model_from_order_line
+        try:
+            wo = unassign_model_from_order_line(wo, user=profile)
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(wo).data)
+
+    @action(detail=True, methods=['get'], url_path='reattach-candidates')
+    def reattach_candidates(self, request, pk=None):
+        """GET commerce/work-orders/{id}/reattach-candidates/ — línies de comanda candidates per
+        re-adoptar aquest WO orfe: comandes OPEN del MATEIX client amb quantitat disponible
+        (qty_allocated < quantity). READ-ONLY, alimenta el picker de reassignació (E5)."""
+        from decimal import Decimal
+        wo = self.get_object()
+        lines = (SalesOrderLine.objects
+                 .filter(order__customer_id=wo.customer_id, order__status='OPEN')
+                 .select_related('order', 'product').order_by('-order__created_at', 'position', 'id'))
+        out = []
+        for ln in lines:
+            q, alloc = Decimal(ln.quantity or 0), Decimal(ln.qty_allocated or 0)
+            if alloc >= q:
+                continue
+            out.append({
+                'id': ln.id, 'order': ln.order_id, 'order_number': ln.order.document_number,
+                'product_code': getattr(ln.product, 'code', None),
+                'description': ln.description or getattr(ln.product, 'name', ''),
+                'quantity': str(q), 'qty_allocated': str(alloc),
+            })
+        return Response({'candidates': out})
+
+    @action(detail=True, methods=['post'])
+    def reattach(self, request, pk=None):
+        """POST commerce/work-orders/{id}/reattach/ — re-adopta el WO orfe a una línia de comanda
+        nova (order_line→línia, orphaned_from_line→null, snapshots re-congelats). Gate CONFIGURE.
+        Body: {order_line_id}. 200 amb el WO actualitzat, o 400/404 amb el missatge del guard."""
+        wo = self.get_object()
+        profile = getattr(request.user, 'profile', None)
+        line = SalesOrderLine.objects.filter(pk=request.data.get('order_line_id')).first()
+        if line is None:
+            return Response({'detail': 'Línia de comanda no trobada.'}, status=status.HTTP_404_NOT_FOUND)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import reattach_orphan_to_line
+        try:
+            wo = reattach_orphan_to_line(wo, line, user=profile)
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(wo).data)
 
 
 class ExpenseViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):

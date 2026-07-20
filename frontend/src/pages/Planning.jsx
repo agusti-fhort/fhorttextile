@@ -253,6 +253,16 @@ function PlanificacioPanel({ mode = 'pending' }) {
       .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.assignee?.[0] || e?.response?.data?.error || t('planning.error') }))
       .finally(() => setSaving(false))
   }
+  // C3 — esborrar una tasca PENDING (el backend només ho permet en Pending; 409 altrament).
+  // La cascada de pla (recompute + cua + predicted_*) la fa el backend; aquí només recarreguem.
+  const doDeleteTask = (taskId) => {
+    if (!window.confirm(t('planning.confirm_delete_task'))) return
+    setSaving(true); setFeedback(null)
+    modelTaskItems.remove(taskId)
+      .then(() => { setFeedback({ type: 'ok', text: t('planning.deleted_task') }); load() })
+      .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.error || t('planning.error') }))
+      .finally(() => setSaving(false))
+  }
 
   return (
     <div style={{ minWidth: 0, maxWidth: '100%' }}>
@@ -317,7 +327,7 @@ function PlanificacioPanel({ mode = 'pending' }) {
                     <TechGroup key={g.techId} g={g} t={t} usersById={usersById} techOptions={techOptions}
                                sensors={sensors} expanded={expanded} onToggle={toggleExp}
                                onDragEnd={onGroupReorder(g.techId, g.rows)}
-                               onUnassign={doUnassign} onReassign={doReassign} saving={saving} />
+                               onUnassign={doUnassign} onReassign={doReassign} onDeleteTask={doDeleteTask} saving={saving} />
                   ))}
                 </div>
               )
@@ -336,7 +346,7 @@ function PlanificacioPanel({ mode = 'pending' }) {
 
 // Grup d'una cua de tècnic: capçalera + taula amb DnD (un SortableContext aïllat → drag NOMÉS
 // dins el grup). Reaprofita el patró @dnd-kit d'EditableTable.
-function TechGroup({ g, t, usersById, techOptions, sensors, expanded, onToggle, onDragEnd, onUnassign, onReassign, saving }) {
+function TechGroup({ g, t, usersById, techOptions, sensors, expanded, onToggle, onDragEnd, onUnassign, onReassign, onDeleteTask, saving }) {
   return (
     <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '0.5px solid var(--gray-l)' }}>
@@ -361,7 +371,7 @@ function TechGroup({ g, t, usersById, techOptions, sensors, expanded, onToggle, 
               {g.rows.map(r => (
                 <SortableRowAssigned key={r.id} r={r} t={t} usersById={usersById} techOptions={techOptions}
                   expanded={expanded.has(r.id)} onToggle={() => onToggle(r.id)}
-                  onUnassign={() => onUnassign(r.id)} onReassign={onReassign} saving={saving} />
+                  onUnassign={() => onUnassign(r.id)} onReassign={onReassign} onDeleteTask={onDeleteTask} saving={saving} />
               ))}
             </tbody>
           </SortableContext>
@@ -371,7 +381,7 @@ function TechGroup({ g, t, usersById, techOptions, sensors, expanded, onToggle, 
   )
 }
 
-function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle, onUnassign, onReassign, saving }) {
+function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle, onUnassign, onReassign, onDeleteTask, saving }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: r.id })
   const style = {
     transform: CSS.Transform.toString(transform), transition,
@@ -431,6 +441,15 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
                     <td style={tdS}>
                       {done ? `${t('planning.done_at')}: ${localDate(tk.finished_at)}`
                         : `${localDateTime(tk.planned_start)} → ${localDateTime(tk.planned_end)}`}
+                    </td>
+                    <td style={{ ...tdS, width: 36, textAlign: 'right' }}>
+                      {/* Esborrar només visible/actiu en tasques Pending (C3). */}
+                      {tk.status === 'Pending' && (
+                        <button onClick={() => onDeleteTask(tk.id)} disabled={saving} title={t('planning.delete_task')}
+                          style={{ background: 'none', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', color: 'var(--text-muted)', padding: 2, fontSize: 'var(--fs-h3)', lineHeight: 1 }}>
+                          <i className="ti ti-trash" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

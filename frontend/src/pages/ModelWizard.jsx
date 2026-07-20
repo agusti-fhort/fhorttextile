@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { IconBulb } from '@tabler/icons-react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import GarmentTypeSelector from '../components/GarmentTypeSelector/GarmentTypeSelector'
+import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
 import CustomerSelector from '../components/CustomerSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
 import { availableFitsStrict, matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS } from '../components/grading/gradingAxes'
@@ -53,6 +53,9 @@ export default function ModelWizard() {
   const [family, setFamily] = useState(null)
   const [item, setItem] = useState(null)
   const [picking, setPicking] = useState(false)
+  // Navegació controlada del picker de peça (CascadeSelector single, grup→ítem). Es sembra des de
+  // family/item en reobrir; onConfirm (triar ítem) commita a family/item i tanca.
+  const [pickAxes, setPickAxes] = useState({})
   const [construction, setConstruction] = useState(null)
   // Bloc 3 — talles (LLEI 5 CAPES: ESCALA PURA — SizeSystem, sense fit ni graduació)
   const [systems, setSystems] = useState([])
@@ -404,14 +407,22 @@ export default function ModelWizard() {
                         {(family?.nom_en || '—')} · {item.name}
                       </div>
                     </div>
-                    <button type="button" onClick={() => setPicking(true)} style={ghostBtn}>{t('model_wizard.change')}</button>
+                    <button type="button" onClick={() => {
+                      setPickAxes({ target, garmentGroup: family?.grup ?? null, garmentTypeId: family?.id ?? null, garmentTypeItemId: item?.id ?? null })
+                      setPicking(true)
+                    }} style={ghostBtn}>{t('model_wizard.change')}</button>
                   </div>
                 ) : (
-                  <div style={{ height: 460, border: '0.5px solid var(--gray-l)', borderRadius: 8, overflow: 'hidden' }}>
-                    <GarmentTypeSelector
+                  <div style={{ maxHeight: 460, border: '0.5px solid var(--gray-l)', borderRadius: 8, overflowY: 'auto', padding: 14 }}>
+                    <CascadeSelector
+                      mode="single"
+                      minLevel="group"
+                      maxLevel="item"
+                      stopPolicy="require-item"
                       target={target}
-                      selectedItemId={item?.id}
-                      onSelect={({ family: fam, item: it }) => { setFamily(fam); setItem(it); setPicking(false); resetGrading() }}
+                      value={pickAxes}
+                      onChange={setPickAxes}
+                      onConfirm={({ family: fam, item: it }) => { setFamily(fam); setItem(it); setPicking(false); resetGrading() }}
                     />
                   </div>
                 )}

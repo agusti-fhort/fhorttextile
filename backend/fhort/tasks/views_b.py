@@ -63,6 +63,25 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         perm = HasCapability(); self.required_capability = DEFINE_TASKS
         return [perm]
 
+    def destroy(self, request, *args, **kwargs):
+        """C3 — esborrat NOMÉS de tasques Pending (les altres → 409, per no destruir història:
+        timers/transicions pengen en CASCADE d'una tasca ja treballada). Gate DEFINE_TASKS i
+        row-level scope ja aplicats (get_permissions/get_queryset). Si la Pending estava
+        assignada/planificada, es replica la cascada d'unassign (recompute + cleanup_queue_order
+        + neteja predicted_*) reutilitzant plan_service, perquè la cua no quedi incoherent."""
+        instance = self.get_object()
+        if instance.status != 'Pending':
+            return Response(
+                {'error': 'Només es poden esborrar tasques pendents (Pending). Una tasca '
+                          'iniciada, pausada o feta conserva la seva història i no s\'esborra.'},
+                status=status.HTTP_409_CONFLICT)
+        model_id, assignee_id = instance.model_id, instance.assignee_id
+        instance.delete()
+        if assignee_id is not None:
+            from fhort.planning.plan_service import cleanup_after_pending_delete
+            cleanup_after_pending_delete(model_id=model_id, assignee_id=assignee_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     # Whitelist d'ordenació pública → camp real del queryset agrupat. Qualsevol valor fora
     # d'aquí s'ignora (mai es passa el valor cru a .order_by() → cap injecció d'ordering).
     # Tots els camps de Model referenciats han d'estar a values() perquè order_by no alteri el GROUP BY.
@@ -93,10 +112,12 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
           ?search=         icontains sobre codi_intern OR nom_prenda (OR).
           ?ordering=       camp de la whitelist _ORDERING (prefix '-' = desc; coma = multi).
                            Valors fora de la whitelist s'ignoren → es manté l'ordre per defecte.
-          Filtres exactes (additius, AND; valors invàlids ignorats silenciosament):
+          Filtres de model (font única = ModelFilter canònic, C1; additius AND, invàlids
+          ignorats silenciosament):
             ?temporada= (SS/FW/CO/SP)  ?estat= (Nou/EnCurs/EnRevisio/Tancat)
             ?fase_actual= (Proto/Fit/SizeSet/PP/TOP)  ?garment_type=<id>  ?any=<int>
-            ?prioritat=<int>  ?responsable=<userprofile_id> | me (perfil de request.user)
+            ?prioritat=<int>  ?responsable=<userprofile_id> (DIRECTOR del model)
+            ?assignee=me | <userprofile_id> (tècnic amb ≥1 tasca assignada — abans era `responsable`)
             ?customer=<id>  ?collection=<text icontains>  (campanya del board, Sprint 5)
             ?data_objectiu_after=YYYY-MM-DD  ?data_objectiu_before=YYYY-MM-DD (rang inclusiu)
 
@@ -117,60 +138,17 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
             q = Q(model__codi_intern__icontains=search) | Q(model__nom_prenda__icontains=search)
             qs = qs.filter(q)
 
-        # --- Filtres exactes opcionals (sobre el queryset abans d'agrupar) ---
-        def _choice_set(choices):
-            return {c[0] for c in choices}
-
-        temporada = qp.get('temporada')
-        if temporada in _choice_set(Model.TEMPORADA_CHOICES):
-            qs = qs.filter(model__temporada=temporada)
-        estat = qp.get('estat')
-        if estat in _choice_set(Model.ESTAT_CHOICES):
-            qs = qs.filter(model__estat=estat)
-        fase = qp.get('fase_actual')
-        if fase in _choice_set(Model.FASE_CHOICES):
-            qs = qs.filter(model__fase_actual=fase)
-
-        responsable = qp.get('responsable')
-        if responsable == 'me':
-            # FIX 2 — "jo" = models on sóc ASSIGNEE d'alguna tasca (no Model.responsable, sovint null).
-            # qs és un queryset de ModelTask → subquery per model_id (manté els comptadors complets).
-            profile = getattr(request.user, 'profile', None)
-            qs = (qs.filter(model_id__in=ModelTask.objects.filter(assignee=profile).values('model_id'))
-                  if profile is not None else qs.none())
-        elif responsable and responsable.isdigit():
-            # Coherent amb 'me': filtra per models on aquest PERFIL és assignee d'alguna tasca
-            # (la seva càrrega real), no per model__responsable_id (director del model).
-            qs = qs.filter(model_id__in=ModelTask.objects.filter(
-                assignee_id=int(responsable)).values('model_id'))
-
-        garment_type = qp.get('garment_type')
-        if garment_type and garment_type.isdigit():
-            qs = qs.filter(model__garment_type_id=int(garment_type))
-        any_ = qp.get('any')
-        if any_ and any_.isdigit():
-            qs = qs.filter(model__any=int(any_))
-        prioritat = qp.get('prioritat')
-        if prioritat and prioritat.isdigit():
-            qs = qs.filter(model__prioritat=int(prioritat))
-
-        # --- Filtres de campanya del board (Sprint 5): mirall additiu del filterset del Model
-        # list, perquè el board del Dashboard pugui acotar per client/col·lecció/data-objectiu
-        # igual que els comptadors per fase. Valors invàlids ignorats silenciosament. ---
-        customer = qp.get('customer')
-        if customer and customer.isdigit():
-            qs = qs.filter(model__customer_id=int(customer))
-        collection = (qp.get('collection') or '').strip()
-        if collection:
-            qs = qs.filter(model__collection__icontains=collection)
-        from datetime import date as _date
-        for param, lookup in (('data_objectiu_after', 'gte'), ('data_objectiu_before', 'lte')):
-            raw = qp.get(param)
-            if raw:
-                try:
-                    qs = qs.filter(**{f'model__data_objectiu__{lookup}': _date.fromisoformat(raw)})
-                except ValueError:
-                    pass   # data mal formada → s'ignora (no trenca la consulta)
+        # --- C1: FONT ÚNICA DE FILTRES DE MODEL ---
+        # Deixa de reflectir el filterset del Model list a mà: aplica el MATEIX ModelFilter
+        # canònic (fase_actual/estat/garment_type/any/prioritat/customer/collection/
+        # data_objectiu + responsable=DIRECTOR + assignee=tècnic) sobre Model i acota el
+        # queryset de tasques als seus ids. `search`, `all` i `ordering` són propis del board
+        # (no formen part del contracte de filtres de model) i es resolen a part.
+        # NB: `.qs` d'un ModelFilter instanciat directament és lenient (valors invàlids
+        # s'ignoren, no peta) — es preserva el comportament històric de by_model.
+        from fhort.models_app.views import ModelFilter
+        model_ids = ModelFilter(qp, queryset=Model.objects.all(), request=request).qs.values('id')
+        qs = qs.filter(model_id__in=model_ids)
 
         agg = (qs.values(
                    'model_id', 'model__codi_intern', 'model__nom_prenda', 'model__fase_actual',

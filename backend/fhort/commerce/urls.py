@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     UnitViewSet, ProductViewSet, ProductRecipeViewSet, ProductSupplierViewSet,
     ProductComponentViewSet, ProductPriceGTIViewSet,
-    QuoteViewSet, QuoteLineViewSet, PaymentTermsViewSet,
+    QuoteViewSet, QuoteLineViewSet, QuoteLineModelIntentViewSet, PaymentTermsViewSet,
     SalesOrderViewSet, SalesOrderLineViewSet, WorkOrderViewSet, ExpenseViewSet,
     DeliveryNoteViewSet, DeliveryNoteLineViewSet,
 )
@@ -20,6 +20,9 @@ router.register(r'commerce/payment-terms', PaymentTermsViewSet, basename='commer
 # Documents comercials — Quote (B2). send/pdf/convert són @action sota quotes/{pk}/.
 router.register(r'commerce/quotes', QuoteViewSet, basename='commerce-quote')
 router.register(r'commerce/quote-lines', QuoteLineViewSet, basename='commerce-quote-line')
+# Vincle preparatori model↔línia d'oferta (E2), satèl·lit filtrat per ?quote_line=.
+router.register(r'commerce/quote-line-intents', QuoteLineModelIntentViewSet,
+                basename='commerce-quote-line-intent')
 # Documents comercials — SalesOrder (comanda, B3b). pdf és @action sota orders/{pk}/.
 router.register(r'commerce/orders', SalesOrderViewSet, basename='commerce-order')
 router.register(r'commerce/order-lines', SalesOrderLineViewSet, basename='commerce-order-line')

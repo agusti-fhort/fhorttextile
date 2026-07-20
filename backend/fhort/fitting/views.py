@@ -171,26 +171,11 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
         return FittingSessionDetailSerializer
 
     def create(self, request, *args, **kwargs):
-        ser = FittingSessionCreateSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        d = ser.validated_data
-        try:
-            session = services.create_session(
-                fase=d['fase'],
-                data=d['data'],
-                model_id=d.get('model'),
-                garment_set_id=d.get('garment_set'),
-                responsable_id=d.get('responsable'),
-                model_persona=d.get('model_persona', ''),
-                assistents=d.get('assistents', ''),
-                lloc=d.get('lloc', ''),
-                notes=d.get('notes', ''),
-                created_by_id=_profile_id(request),
-            )
-        except ValueError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        out = FittingSessionDetailSerializer(session, context={'request': request})
-        return Response(out.data, status=status.HTTP_201_CREATED)
+        # C4 — alta lliure de fitting (POST /fitting-sessions/) JUBILADA amb create_session.
+        # L'alta va per schedule/ (programat) o schedule-now/ ("aquí i ara"). Cap consumidor.
+        from rest_framework.exceptions import MethodNotAllowed
+        raise MethodNotAllowed(
+            'POST', detail="Alta de fitting retirada: usa /schedule/ o /schedule-now/.")
 
     @action(detail=True, methods=['get'], url_path='can-advance')
     def can_advance(self, request, pk=None):
@@ -296,6 +281,42 @@ class FittingSessionViewSet(viewsets.ModelViewSet):
                 logger.warning(
                     "schedule: via adaptativa Production fallida (model_id=%s, fase=%s)",
                     model_id, fase, exc_info=True)
+        return Response(FittingSessionDetailSerializer(s, context={'request': request}).data,
+                        status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], url_path='schedule-now',
+            permission_classes=[_ScheduleFittingsPerm])
+    def schedule_now(self, request):
+        """POST /api/v1/fitting-sessions/schedule-now/ — "Fitting AQUÍ I ARA" (C4, deute S15).
+        UN CLIC, cap formulari: programa un fitting del model ARA mateix amb tot el camí normal
+        de schedule_session (estat Programada, guard solapament, recompute, calendari).
+        Defaults server-side: data=avui, start_time=ara, responsable=attendee=actor de la
+        request, durada 10×N. Body: {model_id, fase?(→ fase_actual del model), force?}."""
+        from django.utils import timezone
+        from fhort.models_app.models import Model
+        model_id = request.data.get('model_id')
+        if not model_id:
+            return Response({'error': 'model_id requerit.'}, status=status.HTTP_400_BAD_REQUEST)
+        model = Model.objects.filter(pk=model_id).first()
+        if model is None:
+            return Response({'error': 'Model no trobat.'}, status=status.HTTP_404_NOT_FOUND)
+        actor_id = _profile_id(request)
+        now = timezone.localtime()
+        try:
+            s = services.schedule_session(
+                fase=request.data.get('fase') or model.fase_actual,
+                data=now.date(), responsable_id=actor_id, model_id=int(model_id),
+                start_time=now.time().replace(microsecond=0),
+                attendee_ids=[actor_id] if actor_id else [],
+                created_by_id=actor_id, force=bool(request.data.get('force')))
+        except services.SessionOverlapError as e:
+            return Response({'error': str(e), 'conflicts': e.conflicts},
+                            status=status.HTTP_409_CONFLICT)
+        except services.SessionSoftConflict as e:
+            return Response({'warning': str(e), 'requires_confirmation': True,
+                             'sessions': e.sessions}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(FittingSessionDetailSerializer(s, context={'request': request}).data,
                         status=status.HTTP_201_CREATED)
 

@@ -5,8 +5,8 @@ import { GARMENT_GROUPS } from './gradingAxes'
 // garmentCatalog — FONT ÚNICA de la cascada de catàleg del wizard (sprint Wizard unificat · Onada 1).
 // Donat un `target` OPCIONAL retorna els GRUPS de peça disponibles (registre de BD /garment-groups/,
 // retallats als que tenen famílies COMPATIBLES amb el target) i les FAMÍLIES. Sense target → catàleg
-// complet (no bloqueja). Consumit per AxesSelector i GarmentTypeSelector (i, a l'Onada 2, ScopeSelector),
-// perquè totes les pantalles es comportin IGUAL.
+// complet (no bloqueja). Consumit per CascadeSelector (component unic dels selectors de cascada) i
+// per la pagina Garment Types, perquè totes les pantalles es comportin IGUAL.
 //
 // Compatibilitat target↔família: SizingProfile via el backend `?target` (vegeu
 // docs/diagnosis/DIAGNOSI_WIZARD_CASCADA_TARGET.md). Els items segueixen carregant-se per família

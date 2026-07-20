@@ -18,6 +18,8 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 
+from fhort.tenants.views_discovery import TenantDiscoveryView
+
 urlpatterns = [
     path('admin/', admin.site.urls),
 
@@ -25,6 +27,9 @@ urlpatterns = [
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+
+    # Tenant-discovery (porta única): email → correu amb els accessos. Públic, resposta uniforme.
+    path('api/discovery/', TenantDiscoveryView.as_view(), name='tenant-discovery'),
 
     # OpenAPI schema + docs
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

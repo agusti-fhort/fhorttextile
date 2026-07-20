@@ -10,8 +10,9 @@ from fhort.i18n_content.serializers import TranslationsSerializerMixin
 
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
-    Quote, QuoteLine, PaymentTerms, PaymentTermLine, SalesOrder, SalesOrderLine,
-    DocumentDueDate, WorkOrder, WorkOrderAdjustment, Expense, DeliveryNote, DeliveryNoteLine,
+    Quote, QuoteLine, QuoteLineModelIntent, PaymentTerms, PaymentTermLine, SalesOrder,
+    SalesOrderLine, DocumentDueDate, WorkOrder, WorkOrderAdjustment, Expense, DeliveryNote,
+    DeliveryNoteLine,
 )
 
 
@@ -156,12 +157,20 @@ class QuoteLineSerializer(serializers.ModelSerializer):
     sense unit_price s'hi copia el base_price del Product."""
     product_code = serializers.CharField(source='product.code', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
+    # Vincle preparatori (E6): intencions de model d'aquesta línia, read-only nested (s'editen pel
+    # QuoteLineModelIntentViewSet, ?quote_line=). Alimenta el picker de models de la fitxa d'oferta.
+    model_intents = serializers.SerializerMethodField()
 
     class Meta:
         model = QuoteLine
         fields = ['id', 'quote', 'product', 'product_code', 'product_name', 'description',
-                  'quantity', 'unit_price', 'line_total', 'position']
+                  'quantity', 'unit_price', 'line_total', 'position', 'model_intents']
         read_only_fields = ['line_total']
+
+    def get_model_intents(self, obj):
+        return [{'id': mi.id, 'model': mi.model_id, 'model_codi': mi.model.codi_intern,
+                 'model_nom': mi.model.nom_prenda, 'qty': str(mi.qty), 'position': mi.position}
+                for mi in obj.model_intents.all()]
 
     def validate(self, data):
         quote = data.get('quote') or getattr(self.instance, 'quote', None)
@@ -195,6 +204,36 @@ class QuoteSerializer(serializers.ModelSerializer):
         # és el desglossament calculat, només lectura.
         read_only_fields = ['document_number', 'doc_type', 'status', 'subtotal', 'tax_amount',
                             'total', 'tax_breakdown', 'created_at', 'updated_at']
+
+
+class QuoteLineModelIntentSerializer(serializers.ModelSerializer):
+    """Vincle preparatori model↔línia d'oferta (E2). Intenció informativa: editable mentre
+    l'oferta encara negocia models (DRAFT o SENT), bloquejada en ACCEPTED (ja convertida).
+    Guard de coherència: el model ha de ser del mateix client que l'oferta (mirall de
+    l'assignació real, assign_model_to_order_line)."""
+    model_codi = serializers.CharField(source='model.codi_intern', read_only=True)
+    model_nom = serializers.CharField(source='model.nom_prenda', read_only=True, default=None)
+
+    class Meta:
+        model = QuoteLineModelIntent
+        fields = ['id', 'quote_line', 'model', 'model_codi', 'model_nom', 'qty', 'position',
+                  'created_at']
+        read_only_fields = ['created_at']
+
+    def validate(self, data):
+        line = data.get('quote_line') or getattr(self.instance, 'quote_line', None)
+        model = data.get('model') or getattr(self.instance, 'model', None)
+        if line is not None:
+            # La intenció es negocia en DRAFT i SENT; un cop l'oferta és ACCEPTED (convertida i
+            # segellada) ja no s'hi toca (mirall del guard DRAFT-only de les línies, però més laxe).
+            if line.quote.status not in ('DRAFT', 'SENT'):
+                raise serializers.ValidationError(
+                    "Només es poden editar intencions de models mentre l'oferta negocia (DRAFT o SENT).")
+            # Coherència de client (mirall d'assign_model_to_order_line).
+            if model is not None and model.customer_id != line.quote.customer_id:
+                raise serializers.ValidationError(
+                    "El model i l'oferta han de ser del mateix client.")
+        return data
 
 
 # ── Documents comercials — SalesOrder (comanda, B3b) ───────────────────────────────────

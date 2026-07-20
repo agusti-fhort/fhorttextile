@@ -281,6 +281,40 @@ class QuoteLine(AbstractDocumentLine):
         return f'{self.quote_id}: {self.description or self.product_id} ×{self.quantity}'
 
 
+class QuoteLineModelIntent(models.Model):
+    """Vincle PREPARATORI (informatiu) model↔línia d'oferta: quins models es pensen produir
+    per a cada línia mentre l'oferta encara es negocia (E1). NO és execució: NO crea WorkOrder,
+    NO toca qty_allocated (que ni existeix a QuoteLine), NO congela snapshots. És intenció pura.
+
+    En convertir l'oferta a comanda (convert_quote_to_order, E3) aquestes intencions es
+    PROPAGUEN com a assignació real sobre la SalesOrderLine clonada (model lliure → assign;
+    orfe → reattach; ocupat en una altra comanda → conflicte informat, mai bloqueja).
+
+    `on_delete=CASCADE` a `model` és deliberat (decisió Agus 2026-07-20): si el model s'esborra,
+    la intenció s'esborra amb ell (model fora → intenció fora). SET_NULL perdria la intenció en
+    silenci; PROTECT faria que una intenció informativa bloquegés esborrar un model — cap dels
+    dos és correcte per a un registre d'intenció.
+    """
+    quote_line = models.ForeignKey(QuoteLine, on_delete=models.CASCADE, related_name='model_intents')
+    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE,
+                              related_name='quote_line_intents')
+    qty = models.DecimalField(max_digits=12, decimal_places=2, default=1,
+                              help_text="Quantitat d'aquest model que es pensa produir per a la línia (informatiu).")
+    position = models.PositiveIntegerField(default=0, help_text="Ordre manual dins la línia.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='quote_line_intents_created')
+
+    class Meta:
+        ordering = ['quote_line', 'position', 'id']
+        unique_together = [('quote_line', 'model')]
+        verbose_name = 'Quote line model intent'
+        verbose_name_plural = 'Quote line model intents'
+
+    def __str__(self):
+        return f'{self.quote_line_id} → model {self.model_id} ×{self.qty}'
+
+
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # DOCUMENTS COMERCIALS — SalesOrder (comanda), B3b. Segona subclasse de les abstractes.
 # ═══════════════════════════════════════════════════════════════════════════════════════
@@ -483,6 +517,12 @@ class WorkOrder(models.Model):
     order_line = models.ForeignKey('commerce.SalesOrderLine', on_delete=models.PROTECT,
                                    null=True, blank=True, related_name='work_orders',
                                    help_text="Línia de comanda origen (nullable: encàrrec sense comanda / col·lector).")
+    # Traça de la línia d'origen quan el WO es DESASSIGNA (order_line→None, orphaned_from_line→línia,
+    # mateix acte). SET_NULL i no PROTECT: no ha de tornar a bloquejar l'esborrat de la línia. Camp
+    # SEPARAT d'order_line: mai els dos plens alhora (un ORDER viu té order_line; un orfe té orphaned_from_line).
+    orphaned_from_line = models.ForeignKey('commerce.SalesOrderLine', on_delete=models.SET_NULL,
+                                           null=True, blank=True, related_name='orphaned_work_orders',
+                                           help_text="Línia de comanda d'on es va desassignar aquest WO (orfe).")
     kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='ORDER')
     origin = models.CharField(max_length=20, choices=ORIGIN_CHOICES, default='MANUAL')
     period = models.CharField(max_length=7, blank=True,
@@ -668,7 +708,7 @@ class DeliveryNote(AbstractDocument):
         # v2 — els totals es calculen SOBRE LÍNIES VISIBLES. Les amagades (visible=False) existeixen
         # a BD per traçabilitat/cost però no compten al document ni al PDF.
         self.subtotal, self.tax_amount, self.total, self.tax_breakdown = compute_document_totals(
-            self, self.lines.filter(visible=True))
+            self, self.lines.filter(visible=True).select_related('product', 'work_order'))
         self.save(update_fields=['subtotal', 'tax_amount', 'total', 'tax_breakdown', 'updated_at'])
 
     def delete(self, *args, **kwargs):

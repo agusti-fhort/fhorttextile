@@ -38,6 +38,13 @@ export const passwordReset = {
   confirm: (data) => publicClient.post('/api/v1/password-reset/confirm/', data),   // {uid, token, new_password}
 }
 
+// Tenant-discovery (porta única). SAME-ORIGIN a posta: l'endpoint /api/discovery/ viu al schema
+// PUBLIC del host que serveix la pantalla neutra (login.*), no al tenant fhort al qual apunta
+// VITE_API_URL. Ruta relativa → cau sobre l'origen actual. Resposta SEMPRE uniforme.
+export const tenantDiscovery = {
+  submit: (email) => axios.post('/api/discovery/', { email }),
+}
+
 export const models = {
   list: (params) => client.get('/api/v1/models/', { params }),
   get: (id) => client.get(`/api/v1/models/${id}/`),
@@ -90,6 +97,10 @@ export const models = {
   // filtres que el Model list (customer/collection/data_objectiu_after|before/temporada/...).
   // → {counts:{<fase>:n}, total}.
   faseCounts: (params) => client.get('/api/v1/models/fase-counts/', { params }),
+  // Comptadors de models per garment_type i per garment_type_item del conjunt FILTRAT (mateix
+  // ModelFilter C1). Alimenta el CascadeSelector mode=multi (showCounts) del panell de filtres.
+  // → {by_type:{<id>:n}, by_item:{<id>:n}, total}.
+  garmentCounts: (params) => client.get('/api/v1/models/garment-counts/', { params }),
 }
 
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).
@@ -431,6 +442,14 @@ export const commerce = {
     update: (id, data) => client.patch(`/api/v1/commerce/quote-lines/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/commerce/quote-lines/${id}/`),
   },
+  // E6 — vincle preparatori model↔línia d'oferta (intenció informativa, editable en DRAFT/SENT).
+  quoteLineIntents: {
+    list: (params) => client.get('/api/v1/commerce/quote-line-intents/', { params }),   // ?quote_line=
+    create: (data) => client.post('/api/v1/commerce/quote-line-intents/', data),
+    remove: (id) => client.delete(`/api/v1/commerce/quote-line-intents/${id}/`),
+    // Sprint C H1 — crea intents en LOT (mode intenció); ignora duplicats. {quote_line, model_ids}
+    bulk: (data) => client.post('/api/v1/commerce/quote-line-intents/bulk/', data),
+  },
   // Documents comercials — SalesOrder (comanda, B3b). Neixen de la conversió d'una oferta;
   // lectura + pdf. Línies read-only (mutació només qty_allocated, control de cartera B4).
   orders: {
@@ -444,6 +463,8 @@ export const commerce = {
     update: (id, data) => client.patch(`/api/v1/commerce/order-lines/${id}/`, data),   // qty_allocated
     // B4b — assigna un model a la línia i crea el WO ORDER (migra el col·lector). {model_id}
     assignModel: (id, data) => client.post(`/api/v1/commerce/order-lines/${id}/assign-model/`, data),
+    // Sprint C H1 — assigna N models a la línia en UNA transacció tot-o-res. {model_ids}
+    assignModels: (id, data) => client.post(`/api/v1/commerce/order-lines/${id}/assign-models/`, data),
     // P4 — expansió read-only: models assignats (via WO), tasques amb estat, % imputat.
     allocation: (id) => client.get(`/api/v1/commerce/order-lines/${id}/allocation/`),
   },
@@ -454,6 +475,15 @@ export const commerce = {
     close: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/close/`, data || {}),
     // B4b — revisió comercial (preu de venda) d'un WO tancat. {items:[{model_task_id,kind,amount}]}
     review: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/review/`, data || {}),
+    // Desassigna el model de la línia: orfanda el WO (gate CONFIGURE). 400 si ORDER tancat/albaranat.
+    unassign: (id) => client.post(`/api/v1/commerce/work-orders/${id}/unassign/`),
+    // Informe read-only dels WO desassignats (orphaned_from_line no null) — pendents de reassignar.
+    orphaned: () => client.get('/api/v1/commerce/work-orders/orphaned/'),
+    // E5 — línies candidates per re-adoptar un WO orfe (comandes OPEN del mateix client, qty lliure).
+    reattachCandidates: (id) => client.get(`/api/v1/commerce/work-orders/${id}/reattach-candidates/`),
+    // E5 — re-adopta el WO orfe a una línia nova (re-congela snapshots). {order_line_id}. Gate CONFIGURE.
+    // Nom CLAR per no col·lidir amb la homonímia unassign (tècnic vs comercial).
+    reattach: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/reattach/`, data),
   },
   // Despeses d'un encàrrec (B4b) — línia externa amb proveïdor i marge. Satèl·lit ?work_order=.
   expenses: {
@@ -527,13 +557,14 @@ export const sizeFittings = {
 export const fittingSessions = {
   list: (params) => client.get('/api/v1/fitting-sessions/', { params }),   // ?estat & data & responsable & fase & model
   get: (id) => client.get(`/api/v1/fitting-sessions/${id}/`),
-  create: (data) => client.post('/api/v1/fitting-sessions/', data),
   // PATCH del context (notes/model_persona/assistents/lloc/responsable) — autosave capçalera.
   update: (id, data) => client.patch(`/api/v1/fitting-sessions/${id}/`, data),
   canAdvance: (id) => client.get(`/api/v1/fitting-sessions/${id}/can-advance/`),
   createPiece: (id, modelId) => client.post(`/api/v1/fitting-sessions/${id}/create-piece/`, { model_id: modelId }),
   // Calendari: programar (neix Programada) i obrir (Programada → Oberta).
   schedule: (data) => client.post('/api/v1/fitting-sessions/schedule/', data),
+  // C4 — "Fitting aquí i ara": un clic, cap formulari. body {model_id, fase?, force?}.
+  scheduleNow: (data) => client.post('/api/v1/fitting-sessions/schedule-now/', data),
   // Bulk: N sessions encadenades amb convocatoria UUID compartit (sessió i+1 on acaba la i).
   scheduleBulk: (data) => client.post('/api/v1/fitting-sessions/schedule-bulk/', data),
   open: (id) => client.post(`/api/v1/fitting-sessions/${id}/open/`),

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import useAuthStore from '../store/auth'
 import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
@@ -13,10 +13,17 @@ import { StatusBadge } from './Quotes'
 
 // Mòdul Comercial Studio — B2 · fitxa d'oferta: capçalera + línies + totals + PDF.
 // Les línies i els detalls només s'editen en DRAFT (segellat en enviar). Plantilla ProductDetail.jsx.
+// E6 — vincle preparatori: intencions de model per línia, editables en DRAFT i SENT (l'oferta enviada
+// encara negocia models), read-only en ACCEPTED. Picker de models replicat d'OrderDetail.
 const MONO = 'IBM Plex Mono, monospace'
 const smallBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
   padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
+}
+const intentChip = {
+  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 12,
+  border: '0.5px solid var(--gray-l)', background: 'var(--gold-pale)', fontFamily: MONO,
+  fontSize: 'var(--fs-caption)', color: 'var(--gold)', fontWeight: 600,
 }
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
 
@@ -49,6 +56,8 @@ export default function QuoteDetail() {
   const [feedback, setFeedback] = useState(null)
   const [busy, setBusy] = useState(false)
   const [confirmConvert, setConfirmConvert] = useState(false)
+  // E3/E6 — resultat de la conversió amb conflictes d'intenció (models que no han viatjat).
+  const [convertResult, setConvertResult] = useState(null)   // { orderId, conflicts, assigned, reattached } | null
 
   const reload = useCallback(() => commerce.quotes.get(id)
     .then(res => setQuote(res.data))
@@ -89,7 +98,17 @@ export default function QuoteDetail() {
   const doConvert = () => {
     setBusy(true); setFeedback(null)
     commerce.quotes.convert(id)
-      .then(res => { setConfirmConvert(false); navigate(`/comercial/comandes/${res.data.id}`) })
+      .then(res => {
+        setConfirmConvert(false)
+        const d = res.data
+        const conflicts = d.intent_conflicts || []
+        // Amb conflictes d'intenció, informem el comercial abans de navegar; sense, anem a la comanda.
+        if (conflicts.length) {
+          setConvertResult({ orderId: d.id, conflicts, assigned: d.assigned || 0, reattached: d.reattached || 0 })
+        } else {
+          navigate(`/comercial/comandes/${d.id}`)
+        }
+      })
       .catch(e => { setConfirmConvert(false); err(e) })
       .finally(() => setBusy(false))
   }
@@ -101,6 +120,8 @@ export default function QuoteDetail() {
   const editable = canEdit && isDraft
   const hasLines = (quote.lines || []).length > 0
   const canConvert = canEdit && quote.status === 'SENT'
+  // E6 — les intencions de model es negocien en DRAFT i SENT; read-only en ACCEPTED.
+  const canIntents = canEdit && (quote.status === 'DRAFT' || quote.status === 'SENT')
 
   return (
     <div style={{ minWidth: 0, maxWidth: 900 }}>
@@ -132,7 +153,8 @@ export default function QuoteDetail() {
 
       {!isDraft && <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 12 }}>{t('quotes.locked_note')}</p>}
 
-      <LinesSection quote={quote} editable={editable} products={products} t={t} reload={reload} ok={ok} err={err} />
+      <LinesSection quote={quote} editable={editable} canIntents={canIntents} products={products}
+        t={t} reload={reload} ok={ok} err={err} />
       <div style={{ marginBottom: 16 }}>
         <DocumentSummary lines={quoteSummaryLines(quote, t)} />
       </div>
@@ -143,6 +165,29 @@ export default function QuoteDetail() {
           cancelLabel={t('quotes.cancel')} confirmLabel={t('quotes.convert_confirm')}
           onCancel={() => setConfirmConvert(false)} onConfirm={doConvert} confirmDisabled={busy}>
           <p style={{ fontSize: 'var(--fs-body)', lineHeight: 1.5 }}>{t('quotes.convert_body')}</p>
+        </Modal>
+      )}
+
+      {/* E3/E6 — resultat de la conversió amb conflictes: models d'intenció que no han viatjat. */}
+      {convertResult && (
+        <Modal title={t('quotes.convert_conflicts_title')} subtitle={t('quotes.convert_conflicts_subtitle')}
+          cancelLabel={t('common.close')} confirmLabel={t('quotes.convert_conflicts_open')}
+          onCancel={() => setConvertResult(null)}
+          onConfirm={() => navigate(`/comercial/comandes/${convertResult.orderId}`)}>
+          <p style={{ fontSize: 'var(--fs-body)', marginBottom: 10 }}>
+            {t('quotes.convert_conflicts_summary', { assigned: convertResult.assigned, reattached: convertResult.reattached })}
+          </p>
+          <ul style={{ fontSize: 'var(--fs-body)', margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
+            {convertResult.conflicts.map((c, i) => (
+              <li key={i}>
+                <span style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--gold)' }}>{c.model_codi}</span>
+                {' — '}
+                {c.reason === 'busy'
+                  ? t('quotes.convert_conflict_busy', { order: c.order || '—' })
+                  : (c.detail || t('quotes.convert_conflict_generic'))}
+              </li>
+            ))}
+          </ul>
         </Modal>
       )}
     </div>
@@ -173,14 +218,20 @@ function quoteSummaryLines(quote, t) {
   return rows
 }
 
-// --- Línies de l'oferta: afegir/treure (només DRAFT) + totals ---
-function LinesSection({ quote, editable, products, t, reload, ok, err }) {
+// --- Línies de l'oferta: afegir/treure (només DRAFT) + intencions de model (DRAFT/SENT) + totals ---
+function LinesSection({ quote, editable, canIntents, products, t, reload, ok, err }) {
   const [product, setProduct] = useState('')
   const [description, setDescription] = useState('')
   const [qty, setQty] = useState('1')
   const [price, setPrice] = useState('')
   const [busy, setBusy] = useState(false)
+  const navigate = useNavigate()
+  const location = useLocation()
   const lines = quote.lines || []
+  const anyIntent = lines.some(l => (l.model_intents || []).length)
+  // Pendent (pressupost) = línia SENSE cap intent (decisió a). En tornar del mode selecció, reload()
+  // refresca els intents; si en queda alguna pendent, s'ofereix continuar amb la primera.
+  const pendingLines = lines.filter(l => (l.model_intents || []).length === 0)
 
   // En triar un article, precarrega el preu unitari amb el seu base_price (congelable/editable).
   const onPickProduct = (pid) => {
@@ -202,6 +253,22 @@ function LinesSection({ quote, editable, products, t, reload, ok, err }) {
   const del = (lid) => {
     setBusy(true)
     commerce.quoteLines.remove(lid).then(() => reload()).then(() => ok(t('quotes.line_removed'))).catch(err).finally(() => setBusy(false))
+  }
+
+  // Sprint C — vincular models va a la superfície universal de selecció (mode intenció): arriba a
+  // /models amb propòsit quote_line + prefiltre customer bloquejat, multi-selecciona SENSE sostre
+  // (el pressupost no imputa cartera) i torna aquí; el bulk d'intents (H1) ignora els duplicats.
+  const goSelect = (lineId) => {
+    const params = new URLSearchParams({
+      select_for: `quote_line:${lineId}`,
+      customer: String(quote.customer),
+      return: location.pathname + location.search,
+    })
+    navigate(`/models?${params.toString()}`)
+  }
+  const delIntent = (iid) => {
+    setBusy(true)
+    commerce.quoteLineIntents.remove(iid).then(() => reload()).then(() => ok(t('quotes.intent_removed'))).catch(err).finally(() => setBusy(false))
   }
 
   const columns = [
@@ -235,6 +302,64 @@ function LinesSection({ quote, editable, products, t, reload, ok, err }) {
           <button onClick={add} disabled={busy || !product} style={primaryBtn}>{t('quotes.add')}</button>
         </div>
       )}
+
+      {/* E6 — vincle preparatori: models previstos per línia. Editable en DRAFT/SENT; read-only en ACCEPTED. */}
+      {lines.length > 0 && (canIntents || anyIntent) && (
+        <div style={{ marginTop: 16, borderTop: '0.5px solid var(--gray-l)', paddingTop: 12 }}>
+          <p style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600, marginBottom: 2 }}>{t('quotes.intents_title')}</p>
+          <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 10 }}>{t('quotes.intents_hint')}</p>
+          {canIntents && pendingLines.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 10px',
+              padding: '8px 14px', background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+              fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
+              <i className="ti ti-arrow-back-up" aria-hidden="true" />
+              <span>{t('quotes.pending_lines', { n: pendingLines.length })}</span>
+              <button onClick={() => goSelect(pendingLines[0].id)}
+                style={{ ...smallBtn, cursor: 'pointer', color: 'var(--gold)', border: '0.5px solid var(--gold)', fontWeight: 600 }}>
+                {t('quotes.continue_selecting')}
+              </button>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {lines.map(l => {
+              const intents = l.model_intents || []
+              const over = intents.length > Number(l.quantity || 0)
+              return (
+                <div key={l.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 'var(--fs-body)', minWidth: 140, flexShrink: 0 }}>
+                    {l.description || l.product_name}
+                    <span style={{ fontFamily: MONO, color: 'var(--text-muted)', marginLeft: 6 }}>×{Number(l.quantity).toFixed(0)}</span>
+                  </span>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {intents.length === 0 && !canIntents &&
+                      <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--gray)' }}>{t('quotes.intents_none')}</span>}
+                    {intents.map(mi => (
+                      <span key={mi.id} style={intentChip} title={mi.model_nom || ''}>
+                        {mi.model_codi}
+                        {canIntents && <i className="ti ti-x" title={t('quotes.intent_remove')}
+                          onClick={() => !busy && delIntent(mi.id)} style={{ cursor: 'pointer', fontSize: 12 }} />}
+                      </span>
+                    ))}
+                    {canIntents && (
+                      <button onClick={() => goSelect(l.id)} disabled={busy}
+                        style={{ ...smallBtn, color: 'var(--gold)', borderColor: 'var(--gold)' }}>
+                        <i className="ti ti-link" style={{ fontSize: 13, marginRight: 4 }} />{t('quotes.intent_add')}
+                      </button>
+                    )}
+                    {over && (
+                      <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--gold)' }}>
+                        <i className="ti ti-alert-triangle" style={{ fontSize: 12, marginRight: 3 }} />
+                        {t('quotes.intents_over', { n: intents.length, q: Number(l.quantity).toFixed(0) })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
     </Section>
   )
 }

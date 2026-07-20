@@ -2,6 +2,7 @@ import datetime
 from decimal import Decimal, InvalidOperation
 
 from django.db import connection, transaction
+from django.db.models import Exists, OuterRef
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import api_view, parser_classes, permission_classes, action
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -25,20 +26,101 @@ from .serializers import (
 
 
 class ModelFilter(django_filters.FilterSet):
-    """Filtres del Model list. Additiu sobre els exactes històrics (estat/fase_actual/
-    garment_type/responsable/temporada/any): afegeix campanya (customer/collection) i un
-    rang de dates sobre data_objectiu per al board per-model del Dashboard (Sprint 5).
+    """FONT ÚNICA DE FILTRES de model (C1). El consumeixen els TRES punts d'entrada que
+    abans el reflectien per separat: el Model list (`ModelViewSet`), els comptadors per fase
+    (`fase-counts`) i el board per-model (`by_model`, tasks/views_b.py, via subquery d'ids).
+    Params:
+      - ?fase_actual / ?garment_type / ?temporada / ?any / ?estat / ?prioritat   exactes
       - ?customer=<id>                  exacte (FK)
       - ?collection=<text>              icontains (CharField lliure)
       - ?data_objectiu_after=YYYY-MM-DD&data_objectiu_before=YYYY-MM-DD  rang inclusiu
+      - ?responsable=<userprofile_id>   SEMPRE el DIRECTOR del model (Model.responsable, FK).
+      - ?assignee=me | <userprofile_id> tècnic amb ≥1 ModelTask assignada (càrrega real).
+        Desdoblament semàntic de C1: `assignee` és el param NOU que hereta el comportament
+        que abans `responsable` tenia a by_model/fase-counts; `responsable` queda net com a
+        director. Valors invàlids d'`assignee` s'ignoren (coherent amb la resta de filtres).
     """
     collection = django_filters.CharFilter(field_name='collection', lookup_expr='icontains')
     data_objectiu = django_filters.DateFromToRangeFilter(field_name='data_objectiu')
+    assignee = django_filters.CharFilter(method='filter_assignee')
+
+    # Capes del ruleset (S16: target = M2M `targets` autoritatiu; construction/fit_type = FK). Filtrem
+    # per CODI travessant la relació — NO dupliquem l'eix al Model (els CharField target/fit_type/
+    # construction del Model són legacy). Ref DIAGNOSI_UNIFICACIO_SELECTORS_CASCADE.
+    # Peça (multi-node del CascadeSelector) → OR dins de cada nivell. Conviuen amb els filtres exactes
+    # (garment_type/garment_type_item de Meta.fields, que usen fase-counts/garment-counts). GROUP node
+    # filtra pel grup del garment_type del model (garment_type__grup, camí autoritatiu de l'arbre únic).
+    garment_type__in = django_filters.BaseInFilter(field_name='garment_type', lookup_expr='in')
+    garment_type_item__in = django_filters.BaseInFilter(field_name='garment_type_item', lookup_expr='in')
+    garment_group_codi__in = django_filters.BaseInFilter(field_name='garment_type__grup', lookup_expr='in')
+
+    target = django_filters.CharFilter(field_name='grading_rule_set__targets__codi', lookup_expr='exact')
+    fit = django_filters.CharFilter(field_name='grading_rule_set__fit_type__codi', lookup_expr='exact')
+    construction = django_filters.CharFilter(field_name='grading_rule_set__construction__codi', lookup_expr='exact')
+
+    # Eixos operatius per Exists (sense N+1, sense duplicar files): watchpoints oberts, dins del pla
+    # (scheduler S15 = planned_start no nul), i l'estat d'una tasca d'un tipus (task_type per CODE, llei G9).
+    watchpoints_open = django_filters.BooleanFilter(method='filter_watchpoints_open')
+    in_plan = django_filters.BooleanFilter(method='filter_in_plan')
+    task_type = django_filters.CharFilter(method='filter_task_state')
+    task_status = django_filters.CharFilter(method='_noop_task_status')
 
     class Meta:
         model = Model
-        fields = ['fase_actual', 'garment_type', 'responsable', 'temporada', 'any',
-                  'customer', 'collection', 'data_objectiu']
+        fields = ['fase_actual', 'garment_type', 'garment_type_item', 'garment_group',
+                  'size_system', 'grading_rule_set',
+                  'responsable', 'temporada', 'any',
+                  'estat', 'prioritat', 'customer', 'collection', 'data_objectiu']
+
+    def filter_assignee(self, queryset, name, value):
+        """`me` → perfil de la request; `<id>` → aquell perfil. Filtra els models on el perfil
+        és ASSIGNEE d'≥1 ModelTask (subquery per model_id, sense tocar la resta de filtres).
+        Valor no resoluble → queryset intacte (s'ignora, com els altres filtres invàlids)."""
+        from fhort.tasks.models import ModelTask
+        if value == 'me':
+            profile = getattr(getattr(self.request, 'user', None), 'profile', None)
+            if profile is None:
+                return queryset.none()
+            model_ids = ModelTask.objects.filter(assignee=profile).values('model_id')
+        elif str(value).isdigit():
+            model_ids = ModelTask.objects.filter(assignee_id=int(value)).values('model_id')
+        else:
+            return queryset
+        return queryset.filter(id__in=model_ids)
+
+    def filter_watchpoints_open(self, queryset, name, value):
+        """?watchpoints_open=true → models amb ≥1 Watchpoint estat='open'; =false → cap.
+        Exists correlat (sense N+1, sense duplicar files)."""
+        if value is None:
+            return queryset
+        has_open = Exists(Watchpoint.objects.filter(model=OuterRef('pk'), estat='open'))
+        return queryset.filter(has_open) if value else queryset.exclude(has_open)
+
+    def filter_in_plan(self, queryset, name, value):
+        """?in_plan=true → models amb ≥1 ModelTask planificada (scheduler S15: planned_start no nul)."""
+        if value is None:
+            return queryset
+        from fhort.tasks.models import ModelTask
+        planned = Exists(ModelTask.objects.filter(model=OuterRef('pk'), planned_start__isnull=False))
+        return queryset.filter(planned) if value else queryset.exclude(planned)
+
+    def filter_task_state(self, queryset, name, value):
+        """Parell (task_type, task_status): ?task_type=<code>[&task_status=<status>] → models amb ≥1
+        ModelTask d'aquell tipus (per CODE slug, llei G9) i, si es dona, en aquell status. task_type és
+        l'àncora; task_status refina (es llegeix del querystring, no filtra sol → veure _noop_task_status)."""
+        if not value:
+            return queryset
+        from fhort.tasks.models import ModelTask
+        crit = {'task_type__code': value}
+        status = self.data.get('task_status')
+        if status:
+            crit['status'] = status
+        return queryset.filter(Exists(ModelTask.objects.filter(model=OuterRef('pk'), **crit)))
+
+    def _noop_task_status(self, queryset, name, value):
+        """task_status es consumeix DINS filter_task_state (parell lligat); com a filtre propi és no-op
+        perquè el param sigui vàlid al contracte de conjunt (C2) sense doblar el filtratge."""
+        return queryset
 
 
 class ModelViewSet(viewsets.ModelViewSet):
@@ -103,35 +185,51 @@ class ModelViewSet(viewsets.ModelViewSet):
         FilterSet + search). Es calcula a la BD (values+annotate), sense carregar files,
         per escalar a 600+ models. Retorna {counts:{<fase>:n}, total}.
 
-        ABAST "els meus" (Sprint board tècnic): ?responsable=me | <profile_id> filtra els
-        models on l'usuari (o el perfil) és ASSIGNEE d'≥1 ModelTask — MATEIXA semàntica que
-        by-model (views_b.py), NO Model.responsable (director). Es treu del filterset (que el
-        llegiria com a FK director i petaria amb 'me') i s'aplica a mà, perquè els KPIs/chips
-        quadrin amb el board quan es commuta a "els meus".
+        ABAST "els meus" (board tècnic): ?assignee=me | <profile_id> filtra els models on
+        l'usuari (o el perfil) és ASSIGNEE d'≥1 ModelTask — MATEIXA semàntica que by-model
+        (C1: font única de filtres via ModelFilter). `responsable` és el DIRECTOR del model.
 
         L'acció no és 'list' → get_queryset() torna el queryset pla (sense les anotacions
         de cicle de la llista). order_by() buit abans de values() perquè un OrderingFilter
         actiu no trenqui el GROUP BY.
         """
         from django.db.models import Count
-        from fhort.tasks.models import ModelTask
-        # Treu 'responsable' del GET abans del filterset (s'aplica a mà, semàntica assignee).
-        responsable = request.query_params.get('responsable')
-        if responsable is not None:
-            mutable = request._request.GET.copy()
-            mutable.pop('responsable', None)
-            request._request.GET = mutable
+        # C1 — el filtrat (inclosos responsable=director i assignee=tècnic) el resol el
+        # ModelFilter canònic via filter_queryset; aquí només s'agrupa.
         qs = self.filter_queryset(self.get_queryset()).order_by()
-        if responsable == 'me':
-            profile = getattr(request.user, 'profile', None)
-            qs = (qs.filter(id__in=ModelTask.objects.filter(assignee=profile).values('model_id'))
-                  if profile is not None else qs.none())
-        elif responsable and responsable.isdigit():
-            qs = qs.filter(id__in=ModelTask.objects.filter(
-                assignee_id=int(responsable)).values('model_id'))
         rows = qs.values('fase_actual').annotate(n=Count('id'))
         counts = {r['fase_actual']: r['n'] for r in rows}
         return Response({'counts': counts, 'total': sum(counts.values())})
+
+    @action(detail=False, methods=['get'], url_path='garment-counts')
+    def garment_counts(self, request):
+        """GET /api/v1/models/garment-counts/ — comptadors de models per garment_type i per
+        garment_type_item del conjunt FILTRAT.
+
+        Respecta EXACTAMENT els filtres actius (mateix ModelFilter C1 via filter_queryset),
+        igual que fase-counts. Alimenta els comptadors per node del CascadeSelector en mode
+        filtre (el consumidor demana aquest endpoint i injecta els counts; el component NO fa
+        fetch propi, i el wizard/grading no paguen mai aquestes queries).
+
+        DOS GROUP BY independents (un per eix): el GROUP BY del PARELL (garment_type,
+        garment_type_item) NO equival als dos subtotals per nivell (veure
+        docs/diagnosis/DIAGNOSI_UNIFICACIO_SELECTORS_CASCADE.md · P5). Cada eix agrupa sobre el
+        mateix queryset ja filtrat i amb order_by() buit (com fase-counts) perquè un
+        OrderingFilter actiu no injecti columnes al GROUP BY. Els nodes NULL (models sense
+        garment_type / garment_type_item) s'exclouen dels mapes; `total` és el recompte honest
+        del conjunt filtrat sencer (inclou els models sense node). Sense N+1: comptat a la BD.
+
+        Retorna {by_type:{<id>:n}, by_item:{<id>:n}, total:n}.
+        """
+        from django.db.models import Count
+        qs = self.filter_queryset(self.get_queryset()).order_by()
+        by_type = {r['garment_type']: r['n']
+                   for r in qs.values('garment_type').annotate(n=Count('id'))
+                   if r['garment_type'] is not None}
+        by_item = {r['garment_type_item']: r['n']
+                   for r in qs.values('garment_type_item').annotate(n=Count('id'))
+                   if r['garment_type_item'] is not None}
+        return Response({'by_type': by_type, 'by_item': by_item, 'total': qs.count()})
 
 
 class ModelFitxerFilter(django_filters.FilterSet):
