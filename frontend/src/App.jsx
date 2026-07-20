@@ -21,6 +21,7 @@ const PaymentTerms = lazy(() => import('./pages/PaymentTerms'))
 const Orders = lazy(() => import('./pages/Orders'))
 const OrderDetail = lazy(() => import('./pages/OrderDetail'))
 const WorkOrders = lazy(() => import('./pages/WorkOrders'))
+const OrphanedWorkOrders = lazy(() => import('./pages/OrphanedWorkOrders'))
 const WorkOrderDetail = lazy(() => import('./pages/WorkOrderDetail'))
 const DeliveryNotes = lazy(() => import('./pages/DeliveryNotes'))
 const DeliveryNoteDetail = lazy(() => import('./pages/DeliveryNoteDetail'))
@@ -318,6 +319,8 @@ export default function App() {
           {/* Comercial (B4a) — encàrrecs / ordres de treball (WorkOrder). */}
           <Route path="comercial/encarrecs" element={<WorkOrders />} />
           <Route path="comercial/encarrecs/:id" element={<WorkOrderDetail />} />
+          {/* Comercial (D6) — informe d'encàrrecs orfes (desassignats, pendents de reassignar). */}
+          <Route path="comercial/orfes" element={<OrphanedWorkOrders />} />
           {/* Comercial (B4c) — albarans (DeliveryNote). */}
           <Route path="comercial/albarans" element={<DeliveryNotes />} />
           <Route path="comercial/albarans/:id" element={<DeliveryNoteDetail />} />

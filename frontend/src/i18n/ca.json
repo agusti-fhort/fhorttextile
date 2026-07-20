@@ -457,6 +457,7 @@
     "quotes": "Ofertes",
     "orders": "Comandes",
     "workorders": "Encàrrecs",
+    "orphans": "Orfes",
     "deliverynotes": "Albarans",
     "payment_terms": "Condicions de pagament",
     "clients": "Clients",
@@ -1192,6 +1193,21 @@
     "exc_removed": "Excepció treta.",
     "exc_gti_ph": "— Tipus de peça (GTI) —",
     "exc_filter_ph": "Filtrar per tipus de peça…"
+  },
+  "orphans": {
+    "title": "Encàrrecs orfes",
+    "subtitle": "Encàrrecs desassignats d'una línia de comanda, pendents de reassignar.",
+    "loading": "Carregant…",
+    "error": "No s'ha pogut carregar.",
+    "empty": "Cap encàrrec orfe.",
+    "col_date": "Data",
+    "col_wo": "Encàrrec",
+    "col_model": "Model",
+    "col_customer": "Client",
+    "col_order": "Comanda origen",
+    "col_total": "Total comanda",
+    "col_status": "Estat",
+    "open_order": "Obrir comanda"
   },
   "workorders": {
     "title": "Encàrrecs",

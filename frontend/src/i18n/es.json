@@ -457,6 +457,7 @@
     "quotes": "Ofertas",
     "orders": "Pedidos",
     "workorders": "Encargos",
+    "orphans": "Huérfanos",
     "deliverynotes": "Albaranes",
     "payment_terms": "Condiciones de pago",
     "clients": "Clientes",
@@ -1192,6 +1193,21 @@
     "exc_removed": "Excepción quitada.",
     "exc_gti_ph": "— Tipo de prenda (GTI) —",
     "exc_filter_ph": "Filtrar por tipo de prenda…"
+  },
+  "orphans": {
+    "title": "Encargos huérfanos",
+    "subtitle": "Encargos desasignados de una línea de pedido, pendientes de reasignar.",
+    "loading": "Cargando…",
+    "error": "No se pudo cargar.",
+    "empty": "Ningún encargo huérfano.",
+    "col_date": "Fecha",
+    "col_wo": "Encargo",
+    "col_model": "Modelo",
+    "col_customer": "Cliente",
+    "col_order": "Pedido origen",
+    "col_total": "Total pedido",
+    "col_status": "Estado",
+    "open_order": "Abrir pedido"
   },
   "workorders": {
     "title": "Encargos",

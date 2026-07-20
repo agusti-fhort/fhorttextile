@@ -457,6 +457,7 @@
     "quotes": "Quotes",
     "orders": "Orders",
     "workorders": "Work orders",
+    "orphans": "Orphans",
     "deliverynotes": "Delivery notes",
     "payment_terms": "Payment terms",
     "clients": "Clients",
@@ -1192,6 +1193,21 @@
     "exc_removed": "Exception removed.",
     "exc_gti_ph": "— Garment type (GTI) —",
     "exc_filter_ph": "Filter by garment type…"
+  },
+  "orphans": {
+    "title": "Orphaned work orders",
+    "subtitle": "Work orders unassigned from an order line, pending reassignment.",
+    "loading": "Loading…",
+    "error": "Could not load.",
+    "empty": "No orphaned work orders.",
+    "col_date": "Date",
+    "col_wo": "Work order",
+    "col_model": "Model",
+    "col_customer": "Customer",
+    "col_order": "Source order",
+    "col_total": "Order total",
+    "col_status": "Status",
+    "open_order": "Open order"
   },
   "workorders": {
     "title": "Work orders",

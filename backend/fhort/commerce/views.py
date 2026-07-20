@@ -271,13 +271,39 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
     filterset_fields = ['kind', 'status', 'customer', 'period', 'model']
 
     def get_permissions(self):
-        if self.action in ('list', 'retrieve'):
+        if self.action in ('list', 'retrieve', 'orphaned'):
             return [IsAuthenticated()]
         # El tècnic tanca (DEFINE_TASKS); el comercial revisa el preu de venda (CONFIGURE).
         p = HasCapability()
         # review i unassign són actes COMERCIALS (preu/cartera) → CONFIGURE (com assign-model).
         self.required_capability = CONFIGURE if self.action in ('review', 'unassign') else DEFINE_TASKS
         return [p]
+
+    @action(detail=False, methods=['get'])
+    def orphaned(self, request):
+        """GET commerce/work-orders/orphaned/ — informe (read-only) dels WO desassignats
+        (orphaned_from_line no null): pendents de reassignar. Data, comanda i línia origen, total
+        de la comanda, estat del WO. Llistat simple, sense filtres avançats (D6)."""
+        qs = (WorkOrder.objects
+              .filter(orphaned_from_line__isnull=False)
+              .select_related('orphaned_from_line__order', 'orphaned_from_line__product',
+                              'model', 'customer')
+              .order_by('-created_at'))
+        out = []
+        for wo in qs:
+            line = wo.orphaned_from_line
+            order = line.order if line else None
+            out.append({
+                'id': wo.id, 'number': wo.number, 'status': wo.status, 'created_at': wo.created_at,
+                'customer': wo.customer.nom if wo.customer_id else None,
+                'model': ({'id': wo.model.id, 'codi_intern': wo.model.codi_intern,
+                           'nom_prenda': wo.model.nom_prenda} if wo.model_id else None),
+                'order': ({'id': order.id, 'document_number': order.document_number,
+                           'total': str(order.total), 'status': order.status} if order else None),
+                'line': ({'id': line.id, 'description': line.description or getattr(line.product, 'name', None),
+                          'quantity': str(line.quantity)} if line else None),
+            })
+        return Response({'orphaned': out})
 
     @action(detail=True, methods=['post'])
     def review(self, request, pk=None):

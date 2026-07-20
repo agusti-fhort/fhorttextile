@@ -456,6 +456,8 @@ export const commerce = {
     review: (id, data) => client.post(`/api/v1/commerce/work-orders/${id}/review/`, data || {}),
     // Desassigna el model de la línia: orfanda el WO (gate CONFIGURE). 400 si ORDER tancat/albaranat.
     unassign: (id) => client.post(`/api/v1/commerce/work-orders/${id}/unassign/`),
+    // Informe read-only dels WO desassignats (orphaned_from_line no null) — pendents de reassignar.
+    orphaned: () => client.get('/api/v1/commerce/work-orders/orphaned/'),
   },
   // Despeses d'un encàrrec (B4b) — línia externa amb proveïdor i marge. Satèl·lit ?work_order=.
   expenses: {
