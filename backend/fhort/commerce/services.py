@@ -289,6 +289,43 @@ def assign_model_to_order_line(model, order_line, user=None):
     return wo, {'warnings': warnings, 'migrated_tasks': migrated}
 
 
+def unassign_model_from_order_line(work_order, user=None):
+    """Desassigna un model d'una línia de comanda: ORFANDA el WorkOrder ORDER (simètric a
+    assign_model_to_order_line). Allibera una unitat de cartera de la línia, mou la referència
+    d'order_line a orphaned_from_line (traça) i deixa order_line=None. Retorna el WorkOrder.
+
+    Llança ValidationError als guards durs (abans de la transacció).
+    """
+    from django.core.exceptions import ValidationError
+    from .models import DeliveryNoteLine
+
+    if work_order.kind != 'ORDER':
+        raise ValidationError("Només es pot desassignar un WorkOrder ORDER (el col·lector no té línia).")
+    if work_order.status != 'OPEN':
+        raise ValidationError("El WorkOrder ja està tancat (CLOSED): no es pot desassignar.")
+    if work_order.order_line_id is None:
+        raise ValidationError("Aquest WorkOrder no té cap línia de comanda assignada.")
+    if DeliveryNoteLine.objects.filter(work_order=work_order).exists():
+        raise ValidationError("Aquest WorkOrder ja està albaranat: no es pot desassignar per API.")
+
+    with transaction.atomic():
+        line = work_order.order_line
+        # Allibera 1 unitat de cartera (clamp a 0, mai negatiu; mateix quantize que l'assignació).
+        line.qty_allocated = max(
+            Decimal('0'), Decimal(line.qty_allocated or 0) - Decimal('1')).quantize(_CENT)
+        line.save(update_fields=['qty_allocated'])
+
+        # Orfandat: mou la traça a orphaned_from_line i buida order_line (mateix acte).
+        work_order.orphaned_from_line = line
+        work_order.order_line = None
+        # Les ModelTask migrades NO es toquen: es queden intactes al WO orfe. Decisió conscient
+        # (D3) — la feina real ja executada no s'ha de revertir al col·lector; el WO orfe segueix
+        # sent el seu contenidor d'execució fins que es reassigni o es tanqui. NO és un oblit.
+        work_order.save(update_fields=['orphaned_from_line', 'order_line', 'updated_at'])
+
+    return work_order
+
+
 def generate_delivery_note(work_orders, user=None):
     """Genera un albarà DRAFT amb línies PROPOSADES a partir d'1..N WorkOrder CLOSED del MATEIX
     customer (B4c, el cor del cas Brownie). El sistema PROPOSA; el comercial edita en DRAFT.
