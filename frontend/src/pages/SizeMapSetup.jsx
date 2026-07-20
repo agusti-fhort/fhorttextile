@@ -5,7 +5,7 @@ import useAuthStore from '../store/auth'
 import { sizeMap, poms, customers } from '../api/endpoints'
 import CustomerSelector from '../components/CustomerSelector'
 import SizeSystemSelector from '../components/SizeSystem/SizeSystemSelector'
-import ScopeSelector from '../components/grading/ScopeSelector'
+import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Table from '../components/ui/Table'
@@ -546,7 +546,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           </Field>
           {/* ÀMBIT — l'item ja no és «buit»: és l'àmbit d'aplicabilitat, multi-node i obligatori (≥1). */}
           <Field label={t('scope.label')} hint={t('scope.hint')}>
-            <ScopeSelector value={wiz.applies_to} onChange={(nodes) => set({ applies_to: nodes })} />
+            <CascadeSelector mode="multi" value={wiz.applies_to} onChange={(nodes) => set({ applies_to: nodes })} />
           </Field>
           <button onClick={goMatch}
             disabled={busy || !wiz.target_codi || labels().length === 0 || !wiz.base_size || wiz.applies_to.length === 0}
