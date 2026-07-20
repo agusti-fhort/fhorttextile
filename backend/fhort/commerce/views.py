@@ -155,10 +155,12 @@ class QuoteViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
         from .services import convert_quote_to_order
         quote = self.get_object()
         try:
-            order = convert_quote_to_order(quote, user=request.user)
+            order, meta = convert_quote_to_order(quote, user=request.user)
         except DjangoValidationError as e:
             return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(SalesOrderSerializer(order).data, status=status.HTTP_201_CREATED)
+        # meta.intent_conflicts: models d'intenció que no han pogut viatjar (ocupats en una altra
+        # comanda o sense quantitat) — el frontend els mostra al comercial. Mai bloqueja la conversió.
+        return Response({**SalesOrderSerializer(order).data, **meta}, status=status.HTTP_201_CREATED)
 
 
 class QuoteLineViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):

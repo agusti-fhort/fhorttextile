@@ -141,10 +141,21 @@ def convert_quote_to_order(quote, user=None):
       4. SEGELLA l'oferta (status=ACCEPTED; el guard DRAFT-only de QuoteLine bloqueja tota edició
          posterior de línies).
     NO hi ha reversió per disseny: l'única sortida és status=CANCELLED de la comanda (que NO
-    reobre l'oferta). Retorna la SalesOrder creada.
+    reobre l'oferta).
+
+    PROPAGACIÓ DEL VINCLE PREPARATORI (E3): després de clonar les línies, cada
+    QuoteLineModelIntent es projecta sobre la SalesOrderLine clonada corresponent, en ordre:
+      - model LLIURE (cap WO ORDER OPEN) → assign_model_to_order_line normal,
+      - model amb WO ORFE (order_line null, orphaned_from_line no null) → reattach_orphan_to_line,
+      - model OCUPAT (WO ORDER OPEN lligat a una ALTRA comanda) → NO viatja; s'informa a
+        'intent_conflicts'. La conversió NO es bloqueja MAI per conflictes: es completa i informa.
+    Els intents es queden a la Quote com a registre (queda ACCEPTED i segellada).
+
+    Retorna (SalesOrder creada, meta) on meta = {'intent_conflicts': [...], 'assigned': N,
+    'reattached': N}.
     """
     from django.core.exceptions import ValidationError
-    from .models import SalesOrder, SalesOrderLine
+    from .models import SalesOrder, SalesOrderLine, WorkOrder
     if quote.status != 'SENT':
         raise ValidationError("Només es pot convertir en comanda una oferta enviada (SENT).")
     lines = list(quote.lines.all())
@@ -152,23 +163,60 @@ def convert_quote_to_order(quote, user=None):
         raise ValidationError("L'oferta no té cap línia; no es pot convertir en comanda.")
     if SalesOrder.objects.filter(source_quote=quote).exists():
         raise ValidationError("Aquesta oferta ja s'ha convertit en comanda.")
+    profile = getattr(user, 'profile', None) if user is not None else None
+    conflicts, assigned, reattached = [], 0, 0
     with transaction.atomic():
         order = SalesOrder.objects.create(
             customer=quote.customer,
             payment_terms=effective_payment_terms(quote),
             issued_at=timezone.now().date(),
             source_quote=quote,
-            created_by=getattr(user, 'profile', None) if user is not None else None,
+            created_by=profile,
         )
+        # Clona cada línia guardant el parell (QuoteLine origen → SalesOrderLine clonada) per
+        # poder projectar-hi després les intencions de model.
+        clone_pairs = []
         for ln in lines:
-            SalesOrderLine.objects.create(
+            sol = SalesOrderLine.objects.create(
                 order=order, product=ln.product, description=ln.description,
                 quantity=ln.quantity, unit_price=ln.unit_price)
+            clone_pairs.append((ln, sol))
         order.recalculate_totals()   # compute_document_totals + generate_due_dates sobre la comanda
+
+        # Propagació de les intencions: cada model d'una línia d'oferta cap a la línia clonada.
+        for ln, sol in clone_pairs:
+            for intent in ln.model_intents.select_related('model').order_by('position', 'id'):
+                model = intent.model
+                open_order_wos = WorkOrder.objects.filter(model=model, kind='ORDER', status='OPEN')
+                orphan = open_order_wos.filter(order_line__isnull=True).first()
+                active = open_order_wos.filter(order_line__isnull=False).first()
+                try:
+                    if orphan is not None:
+                        reattach_orphan_to_line(orphan, sol, user=profile)
+                        reattached += 1
+                    elif active is not None:
+                        # Model ocupat per un encàrrec viu d'una ALTRA comanda: no viatja, s'informa.
+                        conflicts.append({
+                            'model': model.id, 'model_codi': model.codi_intern,
+                            'reason': 'busy',
+                            'work_order': active.number,
+                            'order': getattr(active.order_line.order, 'document_number', None),
+                        })
+                    else:
+                        assign_model_to_order_line(model, sol, user=profile)
+                        assigned += 1
+                except ValidationError as e:
+                    # Un guard d'assign/reattach ha fallat (p.ex. línia sense quantitat disponible):
+                    # la conversió NO es bloqueja; es registra com a conflicte i continua.
+                    conflicts.append({
+                        'model': model.id, 'model_codi': model.codi_intern,
+                        'reason': 'guard', 'detail': '; '.join(e.messages),
+                    })
+
         quote.status = 'ACCEPTED'
         quote.save(update_fields=['status', 'updated_at'])
     order.refresh_from_db()
-    return order
+    return order, {'intent_conflicts': conflicts, 'assigned': assigned, 'reattached': reattached}
 
 
 def close_work_order(work_order, user=None, cancel_pending=False):
