@@ -326,6 +326,64 @@ def unassign_model_from_order_line(work_order, user=None):
     return work_order
 
 
+def reattach_orphan_to_line(work_order, new_line, user=None):
+    """Re-adopta un WorkOrder ORFE enganxant-lo a una línia de comanda NOVA (camí invers de
+    unassign_model_from_order_line, E4). Simetria estricta amb els 7 guards espill de la diagnosi
+    (P4). Imputa +1 de cartera a la línia nova, neteja la traça d'orfandat i RE-CONGELA els
+    snapshots contra el product de la línia NOVA (decisió Agus: opció 2). Retorna el WorkOrder.
+
+    Llança ValidationError als guards durs (abans de la transacció).
+    """
+    from django.core.exceptions import ValidationError
+    from .models import DeliveryNoteLine
+
+    order = new_line.order
+    # 7 guards espill (P4): mirall d'assign_model_to_order_line + unassign_model_from_order_line.
+    if work_order.kind != 'ORDER':
+        raise ValidationError("Només es pot re-adoptar un WorkOrder ORDER (el col·lector no té línia).")
+    if work_order.status != 'OPEN':
+        raise ValidationError("El WorkOrder ja està tancat (CLOSED): no es pot re-adoptar.")
+    if work_order.order_line_id is not None:
+        raise ValidationError("Aquest WorkOrder ja té una línia assignada: no és orfe.")
+    if order.status != 'OPEN':
+        raise ValidationError("La comanda de destí no està oberta (OPEN): no s'hi pot re-adoptar.")
+    if work_order.customer_id != order.customer_id:
+        raise ValidationError("El WorkOrder i la comanda de destí han de ser del mateix client.")
+    if Decimal(new_line.qty_allocated or 0) >= Decimal(new_line.quantity or 0):
+        raise ValidationError("La línia de destí ja té tota la quantitat imputada (qty_allocated = quantity).")
+    if DeliveryNoteLine.objects.filter(work_order=work_order).exists():
+        raise ValidationError("Aquest WorkOrder ja està albaranat: no es pot re-adoptar per API.")
+
+    with transaction.atomic():
+        product = new_line.product
+        recipe_codes = list(product.recipe_lines.values_list('task_code', flat=True))
+
+        # Imputació de cartera a la línia NOVA: +1 unitat (mirall exacte d'assign).
+        new_line.qty_allocated = (Decimal(new_line.qty_allocated or 0) + Decimal('1')).quantize(_CENT)
+        new_line.save(update_fields=['qty_allocated'])
+
+        # Re-adopció: enganxa a la línia nova i NETEJA la traça d'orfandat (torna a null — l'orfandat
+        # és transitòria, no història; decisió Agus 2026-07-20).
+        work_order.order_line = new_line
+        work_order.orphaned_from_line = None
+        # RE-CONGELA els snapshots contra el product de la línia NOVA (opció 2, decisió Agus): el
+        # preu contractat, el tipus d'IVA i la recepta queden alineats amb la comanda a què s'enganxa.
+        # Idèntic a assign_model_to_order_line (cap FK viva; l'albarà llegirà aquests valors congelats).
+        work_order.price_snapshot = {
+            'unit_price': str(new_line.unit_price or '0'),
+            'product_code': getattr(product, 'code', None),
+            'tax_rate': str(getattr(product, 'tax_rate', '0')),
+        }
+        work_order.recipe_snapshot = {'task_codes': recipe_codes}
+        # Els WorkOrderAdjustment ja registrats NO es re-valoren: són fets històrics contra el preu
+        # del seu moment (decisió Agus 2026-07-20). El re-congelat només afecta les línies d'albarà
+        # que es proposin d'ara endavant, no els ajustos ja resolts.
+        work_order.save(update_fields=['order_line', 'orphaned_from_line',
+                                       'price_snapshot', 'recipe_snapshot', 'updated_at'])
+
+    return work_order
+
+
 def generate_delivery_note(work_orders, user=None):
     """Genera un albarà DRAFT amb línies PROPOSADES a partir d'1..N WorkOrder CLOSED del MATEIX
     customer (B4c, el cor del cas Brownie). El sistema PROPOSA; el comercial edita en DRAFT.
