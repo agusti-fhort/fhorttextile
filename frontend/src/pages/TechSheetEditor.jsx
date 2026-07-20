@@ -3694,6 +3694,40 @@ export default function TechSheetEditor() {
     updatePageObjects(currentPage, objs => [...objs.filter(o => !ids.has(o.id)), result])
     setSelectedIds([result.id])
   }
+  // ── S2.3 — TOPOLOGIA de subpath al nivell superior (sobre la subpath activa) ────────────
+  const activeSubObj = activeSubpath ? curObjs.find(o => o.id === activeSubpath.objId && o.type === 'path') : null
+  // Extreu la subpath activa (entrada paths[index]) com a OBJECTE independent de primer nivell.
+  const extractActiveSubpath = () => {
+    if (!activeSubObj || !Array.isArray(activeSubObj.paths) || activeSubObj.paths.length <= 1) return
+    const entry = activeSubObj.paths[activeSubpath.index]
+    const newObj = {
+      id: uid(), type: 'path', layer: 'free', x: activeSubObj.x || 0, y: activeSubObj.y || 0,
+      rotation: activeSubObj.rotation, scaleX: activeSubObj.scaleX, scaleY: activeSubObj.scaleY,
+      stroke: activeSubObj.stroke, fill: activeSubObj.fill, strokeWidth: activeSubObj.strokeWidth,
+      paths: [entry],
+    }
+    updatePageObjects(currentPage, objs => [
+      ...objs.map(x => x.id === activeSubObj.id ? { ...x, paths: x.paths.filter((_, i) => i !== activeSubpath.index) } : x),
+      newObj,
+    ])
+    setActiveSubpath(null)
+    setSelectedIds([newObj.id])
+  }
+  // Tanca/obre la subpath activa (commuta el flag closed de l'entrada; simple o compost exterior).
+  const toggleActiveSubpathClosed = () => {
+    if (!activeSubObj) return
+    const flip = (e) => e.subpaths
+      ? { ...e, subpaths: e.subpaths.map((sp, i) => (i === 0 ? { ...sp, closed: !sp.closed } : sp)) }
+      : { ...e, closed: !e.closed }
+    updateObject(activeSubObj.id, { paths: activeSubObj.paths.map((p, i) => (i === activeSubpath.index ? flip(p) : p)) })
+  }
+  // Esborra la subpath activa (mateixa lògica que el Delete sensible al context; botó descobrible).
+  const deleteActiveSubpath = () => {
+    if (!activeSubObj) return
+    if (activeSubObj.paths.length <= 1) deleteObject(activeSubObj.id)
+    else updateObject(activeSubObj.id, { paths: activeSubObj.paths.filter((_, i) => i !== activeSubpath.index) })
+    setActiveSubpath(null)
+  }
   // E3: pre-extracció — mateixa lògica exacta que abans vivia dins el keydown c/v/d; ara
   // teclat i menú "Edició" criden les mateixes funcions (zero canvi de comportament).
   const copySelection = () => {
@@ -4715,6 +4749,17 @@ export default function TechSheetEditor() {
                         </button>
                       </div>
                     )}
+                    {/* S2.3 — accions de topologia de la subpath activa (descobribilitat per botó) */}
+                    {shapeObj.type === 'path' && subActive != null && (
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                        <button type="button" onClick={toggleActiveSubpathClosed} title={t('tech_sheet.subpath_toggle_closed')}
+                          style={miniBtn}><i className="ti ti-link" style={{ fontSize: 14 }} /></button>
+                        <button type="button" onClick={extractActiveSubpath} disabled={(shapeObj.paths?.length || 0) <= 1}
+                          title={t('tech_sheet.subpath_extract')} style={miniBtn}><i className="ti ti-arrows-split" style={{ fontSize: 14 }} /></button>
+                        <button type="button" onClick={deleteActiveSubpath} title={t('tech_sheet.subpath_delete')}
+                          style={{ ...miniBtn, color: 'var(--grana)' }}><i className="ti ti-trash" style={{ fontSize: 14 }} /></button>
+                      </div>
+                    )}
                     {shapeGroupId && <div style={{ fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>{t('tech_sheet.group_shape')}</div>}
                     <div style={propLabel}>{t('tech_sheet.stroke_color')}
                       <ColorPicker
@@ -5093,4 +5138,6 @@ export function SectionTitle({ children }) {
   return <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
 }
 export const propLabel = { display: 'block', fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 8 }
+// S2.3 — botó compacte per a accions de topologia de subpath (icona Tabler outline).
+const miniBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 26, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMuted, cursor: 'pointer' }
 export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: COL.field, color: COL.textMain, boxSizing: 'border-box' }

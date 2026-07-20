@@ -2696,7 +2696,10 @@
     "consultation_badge": "Consulta",
     "consultation_hint": "Consulta — sense registre de temps. Els canvis es desen igual, però no s'imputa temps a cap tasca.",
     "tool_files": "Fitxers",
-    "node_editing": "Editant nodes"
+    "node_editing": "Editant nodes",
+    "subpath_toggle_closed": "Tancar / obrir la subpath",
+    "subpath_extract": "Extreure com a objecte independent",
+    "subpath_delete": "Esborrar la subpath"
   },
   "estat_badge": {
     "pendent_inputs": "Pendent d'inputs",

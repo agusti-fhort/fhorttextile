@@ -2696,7 +2696,10 @@
     "consultation_badge": "Consulta",
     "consultation_hint": "Consulta — sin registro de tiempo. Los cambios se guardan igualmente, pero no se imputa tiempo a ninguna tarea.",
     "tool_files": "Archivos",
-    "node_editing": "Editando nodos"
+    "node_editing": "Editando nodos",
+    "subpath_toggle_closed": "Cerrar / abrir el subpath",
+    "subpath_extract": "Extraer como objeto independiente",
+    "subpath_delete": "Eliminar el subpath"
   },
   "estat_badge": {
     "pendent_inputs": "Pendiente de inputs",

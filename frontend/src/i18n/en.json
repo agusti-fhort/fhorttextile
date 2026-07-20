@@ -2696,7 +2696,10 @@
     "consultation_badge": "No time tracking",
     "consultation_hint": "Consultation — no time tracking. Changes are still saved, but no time is logged against any task.",
     "tool_files": "Files",
-    "node_editing": "Editing nodes"
+    "node_editing": "Editing nodes",
+    "subpath_toggle_closed": "Close / open subpath",
+    "subpath_extract": "Extract as independent object",
+    "subpath_delete": "Delete subpath"
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",
