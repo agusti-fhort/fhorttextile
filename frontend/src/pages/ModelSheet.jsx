@@ -778,7 +778,9 @@ function WatchpointTrigger({ modelId, onClosed }) {
 
   const fetchCount = useCallback(() => {
     if (!modelId) return
-    watchpoints.list({ model: modelId })
+    // El badge compta NOMÉS els oberts (resoldre'n un l'ha de decrementar). El backend
+    // ja filtra per `estat` (filterset_fields), així que demanem només els open.
+    watchpoints.list({ model: modelId, estat: 'open' })
       .then(r => {
         const total = typeof r.data?.count === 'number'
           ? r.data.count
@@ -822,7 +824,7 @@ function WatchpointTrigger({ modelId, onClosed }) {
           }}>{count}</span>
         )}
       </button>
-      <WatchpointDrawer modelId={modelId} open={open} onClose={handleClose} />
+      <WatchpointDrawer modelId={modelId} open={open} onClose={handleClose} onChanged={fetchCount} />
     </div>
   )
 }
