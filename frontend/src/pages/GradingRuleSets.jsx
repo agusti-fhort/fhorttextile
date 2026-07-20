@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
-import AxesSelector from '../components/grading/AxesSelector'
+import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
 import ScopeSelector from '../components/grading/ScopeSelector'
 import SizeAuthoringDrawer from '../components/SizeAuthoringDrawer'
 import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn, matchingRuleSetsStrict } from '../components/grading/gradingAxes'
@@ -228,7 +228,7 @@ export default function GradingRuleSets() {
       )}
 
       {/* Cascada ÚNICA (compartida amb el wizard): target → construcció/fit → grup → família → item. */}
-      <AxesSelector ruleSets={enrichedRuleSets} value={axes} onChange={onAxesChange} />
+      <CascadeSelector mode="single" ruleSets={enrichedRuleSets} value={axes} onChange={onAxesChange} />
 
       {/* RuleSet cards — only with the 4 filters selected */}
       {selectedGarmentGroup && matchingRuleSets.length > 0 && (
