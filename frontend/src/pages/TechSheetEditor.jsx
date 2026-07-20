@@ -104,7 +104,9 @@ const RULER_SIZE = 18   // S2: gruix (px) de les regles superior/esquerra
 const RECT_TOOLS = ['rect', 'rect_round', 'ellipse']   // drag = bounding box
 const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
 // Peça C: eines que mostren cursor de creu (dibuix + nodes). 'select' → fletxa; 'pan' → grab.
-const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, 'draw', 'pen', 'arrow_curve', 'node', 'subpath', 'polygon', 'note', 'cota_pom']
+const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, 'draw', 'pen', 'arrow_curve', 'polygon', 'note', 'cota_pom']
+// S3b — dreceres de teclat de les eines (mostrades al tooltip de la paleta per a la descobribilitat).
+const TOOL_SHORTCUT = { select: 'V', node: 'A', text: 'T', rect: 'R', ellipse: 'E', line: 'L', pen: 'P' }
 // S8: tipus convertibles a Paper.js (objectToPaperPath) — únics vàlids per al pathfinder.
 const PATHFINDER_TYPES = ['path', 'rect', 'rect_round', 'ellipse']
 // S7c2: polígon regular de N costats inscrit al bbox de drag → punts (px de contingut).
@@ -4179,6 +4181,7 @@ export default function TechSheetEditor() {
   const panActive = locked && (tool === 'pan' || spaceHeld)
   const viewportCursor = !locked ? 'default'
     : panActive ? (panning ? 'grabbing' : 'grab')
+    : (tool === 'node' || tool === 'subpath') ? 'pointer'   // S3b: eines de selecció, no de dibuix
     : CROSSHAIR_TOOLS.includes(tool) ? 'crosshair'
     : 'default'
 
@@ -4283,7 +4286,7 @@ export default function TechSheetEditor() {
                 if (it.kind === 'tool') {
                   return (
                     <button key={key} disabled={it.soon} onClick={() => !it.soon && setTool(it.k)}
-                      title={it.soon ? `${it.label} · ${t('tech_sheet.coming_soon')}` : it.label}
+                      title={it.soon ? `${it.label} · ${t('tech_sheet.coming_soon')}` : (TOOL_SHORTCUT[it.k] ? `${it.label} · ${TOOL_SHORTCUT[it.k]}` : it.label)}
                       style={{ ...paletteBtn, ...(tool === it.k ? paletteBtnOn : {}), ...(it.soon ? paletteBtnSoon : {}) }}>
                       <i className={`ti ${it.icon}`} style={{ fontSize: 17 }} />
                     </button>
