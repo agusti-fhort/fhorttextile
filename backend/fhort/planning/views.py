@@ -531,6 +531,9 @@ def plan_reorder_view(request):
         for i, mid in enumerate(model_ids):
             TechnicianQueueOrder.objects.update_or_create(
                 profile=profile, model_id=mid, defaults={'position': i})
+        # C4d — el reorder manual és l'ACK del planificador: neteja el marcador "+" dels
+        # models reordenats (l'ordre torna a ser el seu, ja no "s'ha mogut sol per inici").
+        Model.objects.filter(pk__in=model_ids).update(reanchored_by_start=False)
     results = plan_service.recompute_for_technicians([int(assignee_id)])
     return Response({'ok': True, 'assignee_id': int(assignee_id),
                      'result': results.get(int(assignee_id))}, status=http_status.HTTP_200_OK)

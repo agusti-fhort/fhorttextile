@@ -554,9 +554,11 @@ def open_model_task_view(request, model_id):
                                         estimated_minutes=est)
         created = True
     # 2. En curs (reusa transition_task) o claim si ja és En curs d'un altre.
+    started = False   # C4d — True només si aquesta crida fa l'INICI real (Pending→InProgress)
     if task.status != 'InProgress':
         try:
             transition_task(task, 'InProgress', profile)
+            started = True
         except TransitionError as e:
             return Response({'error': str(e)}, status=http_status.HTTP_409_CONFLICT)
     elif task.assignee_id != profile.id:
@@ -575,6 +577,10 @@ def open_model_task_view(request, model_id):
     if task.assignee_id:
         from fhort.planning.plan_service import recompute_for_technicians
         recompute_for_technicians([task.assignee_id])
+        # C4d — marca "+": el model ha entrat/pujat al pla per INICI real (no per reorder).
+        if started and not model.reanchored_by_start:
+            model.reanchored_by_start = True
+            model.save(update_fields=['reanchored_by_start'])
         task.refresh_from_db()
 
     # Sprint Y — context de sessió de fitting: la convocatòria (contenidor) llança aquesta tasca de

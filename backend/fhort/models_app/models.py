@@ -227,6 +227,11 @@ class Model(models.Model):
     data_tancament = models.DateField(null=True, blank=True)
     predicted_start = models.DateField(null=True, blank=True)
     predicted_end = models.DateField(null=True, blank=True)
+    # C4d — marcador "+": el model ha entrat/pujat al pla per INICI REAL d'una tasca (no per
+    # reorder del planificador). Efímer: s'activa a l'auto-start (open_model_task_view) i es
+    # neteja al següent reorder manual (plan/reorder). Perquè el planificador entengui per què
+    # la llista de Planificació/Board/Gantt s'ha reordenat sola.
+    reanchored_by_start = models.BooleanField(default=False)
 
     contracte = models.ForeignKey(
         Contracte,
