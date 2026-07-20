@@ -182,3 +182,78 @@ class RecomputeReresolutionTest(TenantTestCase):
         self.assertEqual(pending.estimated_minutes, 40)
         self.assertEqual(inprog.estimated_minutes, 10)
         self.assertEqual(paused.estimated_minutes, 10)
+
+
+class DestroyPendingOnlyTest(TenantTestCase):
+    """C3 — DELETE de ModelTask NOMÉS quan status='Pending'. Les altres → 409 (no es destrueix
+    història). Una Pending assignada/planificada replica la cascada d'unassign en esborrar-se."""
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Tenant'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TST'
+        tenant.vat_number = 'X0000000X'
+        tenant.tipus_client = 'STANDARD'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        from fhort.accounts.models import UserProfile
+        from fhort.models_app.models import Model
+        self.user = get_user_model().objects.create(username='pm')
+        self.prof, _ = UserProfile.objects.get_or_create(user=self.user)
+        self.prof.rol_nom = 'admin'
+        self.prof.permisos = {'grant': ['define_tasks', 'view_team_tasks']}
+        self.prof.save()
+        self.user = get_user_model().objects.get(pk=self.user.pk)
+        self.tt = TaskType.objects.create(code='task_del', name='Del', fase='Dev. tècnic')
+        self.model = Model.objects.create(codi_intern='D1', codi_tenant='TST', any=2026,
+                                          temporada='SS', sequencial=1)
+
+    def _mt(self, status='Pending', assignee=None, planned_start=None, tt=None):
+        from fhort.tasks.models import ModelTask
+        return ModelTask.objects.create(model=self.model, task_type=tt or self.tt, order=0,
+                                        status=status, assignee=assignee,
+                                        planned_start=planned_start, estimated_minutes=20)
+
+    def _delete(self, pk):
+        from fhort.tasks.views_b import ModelTaskViewSet
+        req = APIRequestFactory().delete(f'/api/v1/model-task-items/{pk}/')
+        force_authenticate(req, user=self.user)
+        return ModelTaskViewSet.as_view({'delete': 'destroy'})(req, pk=pk)
+
+    def test_pending_pura_sesborra(self):
+        from fhort.tasks.models import ModelTask
+        mt = self._mt(status='Pending')
+        resp = self._delete(mt.id)
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(ModelTask.objects.filter(pk=mt.id).exists())
+
+    def test_no_pending_retorna_409(self):
+        from fhort.tasks.models import ModelTask
+        for st in ('InProgress', 'Paused', 'Done'):
+            tt = TaskType.objects.create(code=f'task_{st}', name=st, fase='Dev. tècnic')
+            mt = self._mt(status=st, tt=tt)   # tt distint: la unicitat prevista és per (model,tasktype)
+            resp = self._delete(mt.id)
+            self.assertEqual(resp.status_code, 409, st)
+            self.assertTrue(ModelTask.objects.filter(pk=mt.id).exists(), st)
+
+    def test_pending_planificada_replica_cascada(self):
+        from fhort.tasks.models import ModelTask
+        from fhort.models_app.models import Model
+        from fhort.planning.models import TechnicianQueueOrder
+        import django.utils.timezone as tz
+        mt = self._mt(status='Pending', assignee=self.prof, planned_start=tz.now())
+        TechnicianQueueOrder.objects.create(profile=self.prof, model=self.model, position=0)
+        Model.objects.filter(pk=self.model.id).update(
+            predicted_start=datetime.date(2026, 7, 1), predicted_end=datetime.date(2026, 7, 2))
+        resp = self._delete(mt.id)
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(ModelTask.objects.filter(pk=mt.id).exists())
+        # Cascada: l'ordre manual de cua del model s'ha netejat i predicted_* també (cap no-Done
+        # assignada resta al model).
+        self.assertFalse(TechnicianQueueOrder.objects.filter(profile=self.prof, model=self.model).exists())
+        self.model.refresh_from_db()
+        self.assertIsNone(self.model.predicted_start)
+        self.assertIsNone(self.model.predicted_end)

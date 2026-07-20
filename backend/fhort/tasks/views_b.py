@@ -63,6 +63,25 @@ class ModelTaskViewSet(viewsets.ModelViewSet):
         perm = HasCapability(); self.required_capability = DEFINE_TASKS
         return [perm]
 
+    def destroy(self, request, *args, **kwargs):
+        """C3 — esborrat NOMÉS de tasques Pending (les altres → 409, per no destruir història:
+        timers/transicions pengen en CASCADE d'una tasca ja treballada). Gate DEFINE_TASKS i
+        row-level scope ja aplicats (get_permissions/get_queryset). Si la Pending estava
+        assignada/planificada, es replica la cascada d'unassign (recompute + cleanup_queue_order
+        + neteja predicted_*) reutilitzant plan_service, perquè la cua no quedi incoherent."""
+        instance = self.get_object()
+        if instance.status != 'Pending':
+            return Response(
+                {'error': 'Només es poden esborrar tasques pendents (Pending). Una tasca '
+                          'iniciada, pausada o feta conserva la seva història i no s\'esborra.'},
+                status=status.HTTP_409_CONFLICT)
+        model_id, assignee_id = instance.model_id, instance.assignee_id
+        instance.delete()
+        if assignee_id is not None:
+            from fhort.planning.plan_service import cleanup_after_pending_delete
+            cleanup_after_pending_delete(model_id=model_id, assignee_id=assignee_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     # Whitelist d'ordenació pública → camp real del queryset agrupat. Qualsevol valor fora
     # d'aquí s'ignora (mai es passa el valor cru a .order_by() → cap injecció d'ordering).
     # Tots els camps de Model referenciats han d'estar a values() perquè order_by no alteri el GROUP BY.

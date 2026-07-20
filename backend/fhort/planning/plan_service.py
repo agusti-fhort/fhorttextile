@@ -418,6 +418,25 @@ def assign_batch(*, model_ids, assignacions, actor=None, now=None):
 
 
 @transaction.atomic
+def cleanup_after_pending_delete(*, model_id, assignee_id, now=None):
+    """C3 — cua després d'ESBORRAR una ModelTask Pending assignada/planificada. Replica la
+    cascada d'unassign_model REUTILITZANT les mateixes funcions (no les duplica):
+      - cleanup_queue_order: treu TechnicianQueueOrder(assignee, model) si el tècnic ja no té
+        cap no-Done d'aquell model.
+      - Model.predicted_*: es neteja NOMÉS si el model queda sense cap tasca no-Done assignada
+        (si en manté alguna d'un altre tècnic, la seva previsió la manté aquell pla).
+      - recompute_for_technicians: recalcula la cua sencera del tècnic afectat, UN SOL COP.
+    (La tasca JA s'ha esborrat abans de cridar-la; aquí només es reconcilia el pla.)"""
+    from fhort.models_app.models import Model
+    cleanup_queue_order([assignee_id], [model_id])
+    still_assigned = (ModelTask.objects.filter(model_id=model_id)
+                      .exclude(status='Done').filter(assignee__isnull=False).exists())
+    if not still_assigned:
+        Model.objects.filter(pk=model_id).update(predicted_start=None, predicted_end=None)
+    return recompute_for_technicians([assignee_id], now=now)
+
+
+@transaction.atomic
 def unassign_model(*, model_id, now=None):
     """Treu el tècnic i buida planned_* de TOTES les tasques no-Done assignades del model
     (endpoint de servidor: planned_* són read-only al serializer). Recalcula la cua dels tècnics
