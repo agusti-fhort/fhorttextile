@@ -97,7 +97,7 @@ const PIECE_BOX_H = 78
 
 const LAYER_ORDER = { template: 0, data: 1, free: 2 }
 const ZOOM_MIN = 0.25
-const ZOOM_MAX = 4
+const ZOOM_MAX = 8   // F6 — més zoom per a la precisió de l'edició de nodes (abans 4)
 const ZOOM_STEP = 0.1
 const RULER_SIZE = 18   // S2: gruix (px) de les regles superior/esquerra
 // TS-4c — eines per "família" de creació (mateixa mecànica de drag).
@@ -3233,7 +3233,20 @@ export default function TechSheetEditor() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       // F3 — ESBORRAR: tant Delete (fn+delete a Mac) com Backspace (la tecla gran de Mac).
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); runNode('removeSelection'); return }
-      if (e.metaKey || e.ctrlKey || e.altKey) return
+      // F6 — undo/redo INTERN + Cmd+A (tots els nodes) SENSE sortir del mode.
+      if (e.metaKey || e.ctrlKey) {
+        const k = e.key.toLowerCase()
+        if (k === 'z') { e.preventDefault(); runNode(e.shiftKey ? 'redo' : 'undo'); return }
+        if (k === 'a') { e.preventDefault(); runNode('selectAll'); return }
+        return
+      }
+      if (e.altKey) return
+      // F6 — nudge: fletxes = 1px, Shift+fletxes = 10px sobre la selecció de nodes/segment.
+      if (e.key.startsWith('Arrow')) {
+        const s = e.shiftKey ? 10 : 1
+        const d = { ArrowLeft: [-s, 0], ArrowRight: [s, 0], ArrowUp: [0, -s], ArrowDown: [0, s] }[e.key]
+        if (d) { e.preventDefault(); runNode('nudge', d[0], d[1]); return }
+      }
       const map = { v: 'select', a: 'select', '+': 'add', '=': 'add', '-': 'remove', _: 'remove', b: 'convert', c: 'scissors' }
       const next = map[e.key] ?? map[e.key?.toLowerCase()]
       if (next) { e.preventDefault(); setNodeTool(next) }

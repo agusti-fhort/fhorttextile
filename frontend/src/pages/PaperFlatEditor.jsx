@@ -155,6 +155,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const applyPaint = (kind, value) => {
       const path = selectedPathRef.current
       if (!path) return
+      pushHistory()
       const idx = path.data?.index ?? 0
       const ov = (paintRef.current[idx] = paintRef.current[idx] || {})
       if (kind === 'strokeWidth') {
@@ -166,6 +167,29 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         ov[kind] = none ? 'transparent' : value
       }
       scope.view.update(); pushState()
+    }
+
+    // F6 — HISTÒRIA INTERNA de la sessió d'edició (undo/redo sense sortir del mode). Instantànies de
+    // la path activa (segments view px + closed) + pintura pendent. En sortir amb "Fet" → 1 sol commit
+    // al model; Escape cancel·la tot (sense aplicar). Les operacions que creen objectes nous al pare
+    // (split/tisores obertes) van a la història del MODEL, no aquí.
+    const historyRef = { past: [], future: [] }
+    const snapshot = () => { const p = selectedPathRef.current; return { index: p?.data?.index ?? 0, segments: readSegs(p), closed: !!p?.closed, paint: JSON.parse(JSON.stringify(paintRef.current)) } }
+    const pushHistory = () => { historyRef.past.push(snapshot()); if (historyRef.past.length > 100) historyRef.past.shift(); historyRef.future = [] }
+    const syncPaintLive = (p) => {
+      const ov = paintRef.current[p?.data?.index ?? 0] || {}
+      if (ov.fill != null) p.fillColor = ov.fill === 'transparent' ? null : ov.fill
+      if (ov.stroke != null) p.strokeColor = ov.stroke === 'transparent' ? null : ov.stroke
+      if (ov.strokeWidth != null) p.strokeWidth = toViewPx(ov.strokeWidth)
+    }
+    const restore = (snap) => {
+      if (!snap) return
+      const target = sketchLayer.getItems({ class: scope.Path }).find(p => (p.data?.index ?? 0) === snap.index)
+      if (target) selectedPathRef.current = target
+      paintRef.current = snap.paint || {}
+      rebuild(snap.segments, snap.closed)
+      if (selectedPathRef.current) syncPaintLive(selectedPathRef.current)
+      setSelection([])
     }
 
     const setSelection = (indices) => {
@@ -260,6 +284,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const applyOp = (result, nextSel) => {
       if (!result) return
       const path = selectedPathRef.current
+      pushHistory()
       rebuild(result.segments, result.closed != null ? result.closed : path.closed)
       setSelection(nextSel != null ? nextSel : [])
       setStatus('')
@@ -312,6 +337,22 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       setFill: (c) => applyPaint('fill', c),
       setStroke: (c) => applyPaint('stroke', c),
       setStrokeWidth: (w) => applyPaint('strokeWidth', w),
+      // F6 — Cmd+A: tots els nodes del path actiu.
+      selectAll: () => { const p = selectedPathRef.current; if (p) setSelection(p.segments.map((_, i) => i)) },
+      // F6 — nudge (fletxes 1px · Shift 10px) sobre els nodes seleccionats (o el segment).
+      nudge: (dx, dy) => {
+        const path = selectedPathRef.current
+        if (!path) return
+        if (selectedSegRef.current != null) { pushHistory(); const r = moveSegment(readSegs(path), path.closed, selectedSegRef.current, dx, dy); rebuild(r.segments, path.closed); refreshHandles(); return }
+        const sel = [...selectedSegsRef.current]
+        if (!sel.length) return
+        pushHistory()
+        sel.forEach(i => { const s = path.segments[i]; if (s) s.point = s.point.add(new scope.Point(dx, dy)) })
+        refreshHandles()
+      },
+      // F6 — undo/redo INTERN (no surt del mode). Escape segueix cancel·lant tot.
+      undo: () => { if (!historyRef.past.length) return; historyRef.future.push(snapshot()); restore(historyRef.past.pop()) },
+      redo: () => { if (!historyRef.future.length) return; historyRef.past.push(snapshot()); restore(historyRef.future.pop()) },
     }
 
     const tool = new scope.Tool()
@@ -379,6 +420,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         return
       }
       if (!drag || !path) return
+      if (!drag.pushed) { pushHistory(); drag.pushed = true }   // F6 — 1 sola instantània per gest de drag
       if (drag.kind === 'segmentBody') {   // F2 — mou el SEGMENT (recte: translació; corb: deforma nanses)
         const r = moveSegment(readSegs(path), path.closed, drag.curveIndex, event.delta.x, event.delta.y)
         rebuild(r.segments, path.closed)
