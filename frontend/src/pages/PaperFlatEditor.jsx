@@ -15,7 +15,10 @@ const HANDLE_SIZE = 6
 const HIT_SIZE = 18
 const DEFAULT_HANDLE_OFFSET = 22
 
-const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onSplitObject, labels, onCanCommitChange }, ref) {
+// F1 — el sub-editor NO té UI pròpia: les eines viuen a la barra superior del pare. Aquí només el
+// canvas Paper + la lògica. El pare controla l'eina activa (prop `nodeTool`), rep l'estat de selecció
+// (`onNodeState`) i dispara accions per l'API imperativa `run(name, ...args)` (ref).
+const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onSplitObject, onNodeState, nodeTool = 'select', onCanCommitChange }, ref) {
   const canvasRef = useRef(null)
   const scopeRef = useRef(null)
   const sketchLayerRef = useRef(null)
@@ -24,18 +27,16 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   const selectedSegsRef = useRef(new Set())   // S1.3: multi-selecció d'índexs de node
   const dragRef = useRef(null)
   const marqueeRef = useRef(null)             // {x0,y0,rect} mentre s'arrossega una marquesina
-  const labelsRef = useRef(labels)
   const zoomRef = useRef(zoom)
   const refreshHandlesRef = useRef(null)
-  const opsRef = useRef(null)                 // accions de topologia exposades als botons (close/open/split)
-  const nodeToolRef = useRef('select')        // eina activa (llegida dins els handlers de Paper)
-  const [nodeTool, setNodeTool] = useState('select')
-  const [selCount, setSelCount] = useState(0)  // per a l'indicador de context
-  const [, setStatus] = useState(labels?.loading || '')
+  const opsRef = useRef(null)                 // accions exposades al pare via run() (close/open/split/removeSelection…)
+  const onNodeStateRef = useRef(onNodeState)  // callback per pujar {selCount} al pare
+  const nodeToolRef = useRef(nodeTool)        // eina activa (llegida dins els handlers de Paper)
+  const [, setStatus] = useState('')
   const [canCommit, setCanCommit] = useState(false)
   const isStructuredPath = flat?.type === 'path'
 
-  useEffect(() => { labelsRef.current = labels }, [labels])
+  useEffect(() => { onNodeStateRef.current = onNodeState }, [onNodeState])
   useEffect(() => { nodeToolRef.current = nodeTool }, [nodeTool])
 
   useEffect(() => {
@@ -128,16 +129,18 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     }
     refreshHandlesRef.current = refreshHandles
 
+    // Puja l'estat de selecció al pare (nombre de nodes seleccionats) per a la barra contextual.
+    const pushState = () => onNodeStateRef.current?.({ selCount: selectedSegsRef.current.size })
+
     const setSelection = (indices) => {
       selectedSegsRef.current = new Set(indices)
-      setSelCount(selectedSegsRef.current.size)
       refreshHandles()
+      pushState()
     }
 
     const selectPath = (item) => {
       selectedPathRef.current = item
       setSelection(item ? [0] : [])
-      setStatus(labelsRef.current?.pathSelected || '')
     }
 
     // Reconstrueix la geometria de la path activa a partir d'un array de segments (mateix espai view px).
@@ -192,7 +195,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       try {
         imported = scope.project.importSVG(flat.svg, { insert: true, expandShapes: true })
       } catch {
-        setStatus(labelsRef.current?.importError || '')
+        setStatus('')
         sketchLayerRef.current = null
         return cleanup
       }
@@ -207,7 +210,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
 
     const firstPath = imported.getItems({ class: scope.Path }).find(path => path.segments?.length)
     if (firstPath) selectPath(firstPath)
-    else setStatus(labelsRef.current?.noPath || '')
+    else setStatus('')
 
     // Aplica una operació de paperOps (retorna {segments,closed?}) i refresca; nextSel = índexs a seleccionar.
     const applyOp = (result, nextSel) => {
@@ -215,7 +218,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       const path = selectedPathRef.current
       rebuild(result.segments, result.closed != null ? result.closed : path.closed)
       setSelection(nextSel != null ? nextSel : [])
-      setStatus(labelsRef.current?.changed || '')
+      setStatus('')
     }
 
     // Conversió d'un segment de l'espai VIEW px a l'espai LOCAL del flat (mateixa matemàtica que commit),
@@ -236,14 +239,26 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       rebuild(pieces[0].segments, pieces[0].closed)
       setSelection([])
       onSplitObject?.({ segments: pieces[1].segments.map(segViewToLocal), closed: pieces[1].closed })
-      setStatus(labelsRef.current?.changed || '')
+      setStatus('')
     }
 
-    // Accions de topologia exposades als botons de la barra contextual (S2b).
+    // Treu els nodes seleccionats (de gran a petit perquè els índexs no es desplacin); la corba
+    // es reconnecta sola. Compartit pel teclat i pel botó de la barra superior (F1/F3).
+    const removeSelection = () => {
+      const path = selectedPathRef.current
+      const sel = [...selectedSegsRef.current].sort((a, b) => b - a)
+      if (!path || !sel.length) return
+      let segs = readSegs(path), closed = path.closed, ok = true
+      for (const idx of sel) { const r = removeNode(segs, closed, idx); if (!r) { ok = false; break } segs = r.segments; closed = r.closed }
+      if (ok) { rebuild(segs, closed); setSelection([]) }
+    }
+
+    // Accions exposades al pare (barra superior contextual) via run(name). (S2b + F1)
     opsRef.current = {
       close: () => { const p = selectedPathRef.current; if (p && !p.closed) applyOp(closeSegments(readSegs(p)), [...selectedSegsRef.current]) },
       open: () => { const p = selectedPathRef.current; const sel = [...selectedSegsRef.current]; if (p && p.closed && sel.length === 1) applyOp(openAtNode(readSegs(p), true, sel[0]), []) },
       split: () => { const p = selectedPathRef.current; const sel = [...selectedSegsRef.current]; if (p && sel.length === 1) splitInTwo(splitAtNode(readSegs(p), p.closed, sel[0])) },
+      removeSelection,
     }
 
     const tool = new scope.Tool()
@@ -318,7 +333,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
           seg[opp] = new scope.Point(m.x, m.y)
         }
       }
-      setStatus(labelsRef.current?.changed || '')
+      setStatus('')
       refreshHandles()
     }
 
@@ -363,33 +378,9 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       }))
     }
 
-    // Teclat del sub-editor: dreceres d'eina (Illustrator) + Delete/Backspace treu els nodes.
-    const onKey = (e) => {
-      if (!e.metaKey && !e.ctrlKey && !e.altKey) {
-        const k = e.key.toLowerCase()
-        if (k === 'v') { setNodeTool('select'); return }
-        if (e.key === '+' || e.key === '=') { setNodeTool('add'); return }
-        if (e.key === '-' || e.key === '_') { setNodeTool('remove'); return }
-        if (k === 'b') { setNodeTool('convert'); return }   // B = corba/vèrtex (A i P estan agafades a dalt)
-        if (k === 'c') { setNodeTool('scissors'); return }   // C = tisores (cut)
-      }
-      if (e.key !== 'Delete' && e.key !== 'Backspace') return
-      const path = selectedPathRef.current
-      const sel = [...selectedSegsRef.current].sort((a, b) => b - a)
-      if (!path || !sel.length) return
-      e.preventDefault(); e.stopPropagation()
-      let segs = readSegs(path); let closed = path.closed; let ok = true
-      for (const idx of sel) {   // esborra de gran a petit perquè els índexs no es desplacin
-        const r = removeNode(segs, closed, idx)
-        if (!r) { ok = false; break }
-        segs = r.segments; closed = r.closed
-      }
-      if (ok) { rebuild(segs, closed); setSelection([]); setStatus(labelsRef.current?.changed || '') }
-    }
-    window.addEventListener('keydown', onKey, true)
-
-    const finalCleanup = () => { window.removeEventListener('keydown', onKey, true); cleanup() }
-    return finalCleanup
+    // F1/F3 — el teclat (dreceres d'eina, Delete, nudge, Cmd+A, undo/redo) viu ARA al pare (barra
+    // superior), que crida run(...) sobre aquest ref. Un sol lloc de teclat → context sempre guanya.
+    return cleanup
   }, [flat, pageW, pageH, toPx, isStructuredPath])
 
   useEffect(() => {
@@ -446,57 +437,17 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const svg = sketchLayer.exportSVG({ asString: true, bounds: 'content' })
     onCommit(svg)
   }
-  useImperativeHandle(ref, () => ({ commit }))
+  // API imperativa per al pare: commit + run(name,...args) que delega a les accions del scope viu.
+  useImperativeHandle(ref, () => ({ commit, run: (name, ...args) => opsRef.current?.[name]?.(...args) }))
   useEffect(() => { onCanCommitChange?.(canCommit) }, [canCommit, onCanCommitChange])
 
-  const L = labels || {}
-  const toolBtn = (k, icon, title) => (
-    <button key={k} type="button" title={title} onClick={() => setNodeTool(k)}
-      style={{
-        width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        border: `1px solid ${nodeTool === k ? 'var(--gold)' : 'var(--gray-l)'}`,
-        borderRadius: 6, cursor: 'pointer', background: nodeTool === k ? 'var(--gold-pale)' : 'var(--white)',
-        color: nodeTool === k ? 'var(--gold)' : 'var(--text-muted)',
-      }}>
-      <i className={`ti ${icon}`} style={{ fontSize: 16 }} />
-    </button>
-  )
-  const actBtn = (icon, title, onClick) => (
-    <button key={icon} type="button" title={title} onClick={onClick}
-      style={{
-        width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        border: '1px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer', background: 'var(--white)', color: 'var(--text-muted)',
-      }}>
-      <i className={`ti ${icon}`} style={{ fontSize: 16 }} />
-    </button>
-  )
-  const sepStyle = { width: 1, height: 20, background: 'var(--gray-l)' }
-
+  // F1 — cap UI pròpia: només el canvas (les eines viuen a la barra superior del pare). Cursor per eina.
+  const cursor = nodeTool === 'add' ? 'copy' : nodeTool === 'remove' ? 'not-allowed'
+    : nodeTool === 'convert' ? 'cell' : nodeTool === 'scissors' ? 'crosshair' : 'default'
   return (
     <div style={{ position: 'absolute', left: 0, top: 0, width: pageW * zoom, height: pageH * zoom, zIndex: 20, overflow: 'hidden' }}>
       <canvas ref={canvasRef} width={pageW * zoom} height={pageH * zoom}
-        style={{ position: 'absolute', left: 0, top: 0, width: pageW * zoom, height: pageH * zoom, touchAction: 'none',
-          cursor: nodeTool === 'add' ? 'copy' : nodeTool === 'remove' ? 'not-allowed' : nodeTool === 'convert' ? 'cell' : nodeTool === 'scissors' ? 'crosshair' : 'default' }} />
-      {/* Barra contextual d'edició de nodes (descobribilitat primer): eines + indicador de context. */}
-      <div style={{
-        position: 'absolute', left: 8, top: 8, display: 'flex', gap: 6, alignItems: 'center',
-        background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, padding: 6,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.12)', fontFamily: 'IBM Plex Mono, monospace',
-      }}>
-        {toolBtn('select', 'ti-pointer', L.node_select)}
-        {toolBtn('add', 'ti-plus', L.node_add)}
-        {toolBtn('remove', 'ti-minus', L.node_remove)}
-        {toolBtn('convert', 'ti-vector-bezier-2', L.node_convert)}
-        {toolBtn('scissors', 'ti-scissors', L.node_scissors)}
-        <span style={sepStyle} />
-        {actBtn('ti-link', L.node_close, () => opsRef.current?.close())}
-        {actBtn('ti-link-off', L.node_open, () => opsRef.current?.open())}
-        {actBtn('ti-arrows-split', L.node_split, () => opsRef.current?.split())}
-        <span style={sepStyle} />
-        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-          {(L.node_editing || 'Editing nodes')}{selCount ? ` · ${selCount}` : ''}
-        </span>
-      </div>
+        style={{ position: 'absolute', left: 0, top: 0, width: pageW * zoom, height: pageH * zoom, touchAction: 'none', cursor }} />
     </div>
   )
 })

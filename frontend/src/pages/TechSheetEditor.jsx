@@ -1761,6 +1761,10 @@ export default function TechSheetEditor() {
   const [saveAsTpl, setSaveAsTpl] = useState(null)
   const [editingText, setEditingText] = useState(null)  // {id, value, x, y, w}
   const [editingFlatId, setEditingFlatId] = useState(null)
+  // F1 — l'eina de node activa i l'estat de selecció viuen AQUÍ (barra superior contextual); el
+  // sub-editor rep `nodeTool` i puja `onNodeState`. runNode() dispara accions sobre el canvas viu.
+  const [nodeTool, setNodeTool] = useState('select')
+  const [nodeSel, setNodeSel] = useState({ selCount: 0 })
   const [flatCanCommit, setFlatCanCommit] = useState(false)   // PEÇA 2: estat "es pot desar" de l'editor de nodes
   const [spaceHeld, setSpaceHeld] = useState(false)           // PEÇA P: barra espaiadora premuda (pan temporal)
   const [panning, setPanning] = useState(false)              // PEÇA P: arrossegant amb pan actiu
@@ -3213,6 +3217,24 @@ export default function TechSheetEditor() {
     selectOnly(obj.id)
     setEditingFlatId(obj.id)
   }
+  // F1 — dispara una acció sobre el canvas viu del sub-editor (close/open/split/removeSelection…).
+  const runNode = (name, ...args) => paperFlatRef.current?.run?.(name, ...args)
+  // En entrar/sortir del mode edició de nodes, reinicia l'eina i l'estat de selecció.
+  useEffect(() => { setNodeTool('select'); setNodeSel({ selCount: 0 }) }, [editingFlatId])
+  // F1 — dreceres d'eina de node (mode edició): V/A moure · +/- afegir/treure · B convertir · C tisores.
+  useEffect(() => {
+    if (!editingFlatId) return
+    const onKey = (e) => {
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const map = { v: 'select', a: 'select', '+': 'add', '=': 'add', '-': 'remove', _: 'remove', b: 'convert', c: 'scissors' }
+      const next = map[e.key] ?? map[e.key?.toLowerCase()]
+      if (next) { e.preventDefault(); setNodeTool(next) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [editingFlatId])
   // ── S7 — Teclat: A obre l'editor de nodes (PaperFlatEditor) del path sol seleccionat ──
   useEffect(() => {
     const onKey = (e) => {
@@ -4234,6 +4256,26 @@ export default function TechSheetEditor() {
         ))}
       </div>
 
+      {/* ── F1 · Barra superior CONTEXTUAL del mode edició de nodes (única superfície d'eines de node) ── */}
+      {editingFlatId && (
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, minHeight: 34, background: COL.sidebar, borderBottom: `1px solid ${COL.border}`, padding: '0 10px', fontFamily: FONT, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 'var(--fs-label)', color: COL.gold, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap' }}>
+            <i className="ti ti-vector" style={{ fontSize: 14, marginRight: 4 }} />
+            {t('tech_sheet.node_editing')}{nodeSel.selCount ? ` · ${nodeSel.selCount}` : ''}
+          </span>
+          <span style={nodeBarSep} />
+          {NODE_TOOL_ITEMS.map(it => (
+            <button key={it.k} type="button" onClick={() => setNodeTool(it.k)}
+              title={`${paperFlatLabels[it.label]} · ${it.sc}`}
+              style={nodeBarBtn(nodeTool === it.k)}><i className={`ti ${it.icon}`} style={{ fontSize: 15 }} /></button>
+          ))}
+          <span style={nodeBarSep} />
+          <button type="button" onClick={() => runNode('close')} title={t('tech_sheet.node_close')} style={nodeBarBtn(false)}><i className="ti ti-link" style={{ fontSize: 15 }} /></button>
+          <button type="button" onClick={() => runNode('open')} title={t('tech_sheet.node_open')} style={nodeBarBtn(false)}><i className="ti ti-link-off" style={{ fontSize: 15 }} /></button>
+          <button type="button" onClick={() => runNode('split')} title={t('tech_sheet.node_split')} style={nodeBarBtn(false)}><i className="ti ti-arrows-split" style={{ fontSize: 15 }} /></button>
+        </div>
+      )}
+
       {/* ── Ribbon SolidWorks: fila 1 grups, fila 2 comandaments ── */}
       <div style={{ flexShrink: 0, background: CTX_BG, borderBottom: `1px solid ${CTX_BORDER}`, color: CTX_TEXT }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, minHeight: 31, padding: '3px 12px 0' }}>
@@ -4473,7 +4515,8 @@ export default function TechSheetEditor() {
                 pageH={pageH}
                 zoom={zoom}
                 toPx={toPx}
-                labels={paperFlatLabels}
+                nodeTool={nodeTool}
+                onNodeState={setNodeSel}
                 onCommit={commitFlatEdit}
                 onSplitObject={handleSplitObject}
                 onCanCommitChange={setFlatCanCommit}
@@ -5162,4 +5205,14 @@ export function SectionTitle({ children }) {
 export const propLabel = { display: 'block', fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 8 }
 // S2.3 — botó compacte per a accions de topologia de subpath (icona Tabler outline).
 const miniBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 26, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMuted, cursor: 'pointer' }
+// F1 — barra superior contextual del mode edició de nodes: eines + estil de botó.
+const NODE_TOOL_ITEMS = [
+  { k: 'select', icon: 'ti-pointer', label: 'node_select', sc: 'V' },
+  { k: 'add', icon: 'ti-plus', label: 'node_add', sc: '+' },
+  { k: 'remove', icon: 'ti-minus', label: 'node_remove', sc: '-' },
+  { k: 'convert', icon: 'ti-vector-bezier-2', label: 'node_convert', sc: 'B' },
+  { k: 'scissors', icon: 'ti-scissors', label: 'node_scissors', sc: 'C' },
+]
+const nodeBarBtn = (on) => ({ width: 28, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? COL.gold : COL.border}`, borderRadius: 6, cursor: 'pointer', background: on ? COL.goldPale : COL.field, color: on ? COL.gold : COL.textMuted })
+const nodeBarSep = { width: 1, height: 18, background: COL.border, flexShrink: 0 }
 export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: COL.field, color: COL.textMain, boxSizing: 'border-box' }
