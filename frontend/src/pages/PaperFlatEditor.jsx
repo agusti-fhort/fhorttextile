@@ -72,6 +72,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       selectedSegsRef.current = new Set()
       selectedSegRef.current = null
       selectedShapesRef.current = new Set()
+      lastShapeClickRef.current = { index: null, t: 0 }
       dragRef.current = null
       marqueeRef.current = null
       paintRef.current = {}
@@ -172,14 +173,18 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const refresh = () => { if (isShapeMode()) drawShapeSelection(); else refreshHandles() }
     refreshHandlesRef.current = refresh
 
+    // Extreu un color CSS sòlid d'un Paper.Color de forma SEGURA: null si és nul, gradient o si toCSS
+    // llança (SVG importat amb degradats). Evita petar el snapshot/pushState i degrada a "sense color".
+    const cssColor = (c) => { try { return c && c.type !== 'gradient' ? c.toCSS(true) : null } catch { return null } }
+
     // Puja l'estat al pare per a la barra contextual: MODE (forma/nodes) + selecció + PINTURA de la
     // superfície activa (fill/stroke en CSS o null=cap; gruix en mm) perquè els swatches reflecteixin l'estat viu.
     const pushState = () => {
       const path = selectedPathRef.current
       const idx = path?.data?.index ?? 0
       const ov = paintRef.current[idx] || {}
-      const fill = ov.fill != null ? (ov.fill === 'transparent' ? null : ov.fill) : (path?.fillColor ? path.fillColor.toCSS(true) : null)
-      const stroke = ov.stroke != null ? (ov.stroke === 'transparent' ? null : ov.stroke) : (path?.strokeColor ? path.strokeColor.toCSS(true) : null)
+      const fill = ov.fill != null ? (ov.fill === 'transparent' ? null : ov.fill) : cssColor(path?.fillColor)
+      const stroke = ov.stroke != null ? (ov.stroke === 'transparent' ? null : ov.stroke) : cssColor(path?.strokeColor)
       const swMm = ov.strokeWidth != null ? ov.strokeWidth : ((path?.strokeWidth || 0) / (toPx(1) * (zoomRef.current || 1)))
       onNodeStateRef.current?.({
         mode: isShapeMode() ? 'shape' : 'nodes',
@@ -228,8 +233,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       primary: selectedPathRef.current?.data?.index ?? null,
       paths: allPaths().map(p => ({
         index: p.data?.index ?? 0, segments: readSegs(p), closed: !!p.closed,
-        fill: p.fillColor ? p.fillColor.toCSS(true) : null,
-        stroke: p.strokeColor ? p.strokeColor.toCSS(true) : null,
+        fill: cssColor(p.fillColor), stroke: cssColor(p.strokeColor),
         strokeWidth: p.strokeWidth || 0,
       })),
       paint: JSON.parse(JSON.stringify(paintRef.current)),
@@ -303,8 +307,8 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const registerPaint = (p) => {
       const idx = p.data?.index ?? 0
       paintRef.current[idx] = {
-        fill: p.fillColor ? p.fillColor.toCSS(true) : 'transparent',
-        stroke: p.strokeColor ? p.strokeColor.toCSS(true) : 'transparent',
+        fill: cssColor(p.fillColor) || 'transparent',
+        stroke: cssColor(p.strokeColor) || 'transparent',
         strokeWidth: Math.round(toMm(p.strokeWidth) * 100) / 100,
       }
     }
@@ -342,9 +346,12 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       if (ordered.length < 2) return
       const subpaths = ordered.map(p => ({ segments: readSegs(p), closed: p.closed }))
       const res = booleanSubpaths(subpaths, op)
+      // M1 — si el resultat és buit (formes obertes o disjuntes: intersecar sense solapament, restar que
+      // s'anul·la…) NO esborris les formes font: seria una desaparició silenciosa. No-op segur.
+      if (!res || !res.length) return
       pushHistory()   // instantània amb les formes originals encara a l'escena
       const base = ordered[0]
-      const style = { stroke: base.strokeColor ? base.strokeColor.toCSS(true) : null, fill: base.fillColor ? base.fillColor.toCSS(true) : null, sw: base.strokeWidth || 0 }
+      const style = { stroke: cssColor(base.strokeColor), fill: cssColor(base.fillColor), sw: base.strokeWidth || 0 }
       ordered.forEach(p => { delete paintRef.current[p.data?.index ?? 0]; p.remove() })
       const created = []
       ;(res || []).forEach(r => {
