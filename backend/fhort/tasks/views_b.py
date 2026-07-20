@@ -568,6 +568,15 @@ def open_model_task_view(request, model_id):
         recompute_for_technicians([old_assignee_id, profile.id])
     task.refresh_from_db()
 
+    # LLEI "l'inici desplaça": iniciar una tasca reancora el model al present i desplaça la cua
+    # del tècnic. El recompute va DESPRÉS del refresh (transition_task pot auto-assignar l'assignee)
+    # i FORA del try/except de la transició. L'assignee es llegeix post-refresh. La branca claim
+    # (elif) ja ha recomputat per als dos tècnics; aquí es cobreix el cas Pending→InProgress.
+    if task.assignee_id:
+        from fhort.planning.plan_service import recompute_for_technicians
+        recompute_for_technicians([task.assignee_id])
+        task.refresh_from_db()
+
     # Sprint Y — context de sessió de fitting: la convocatòria (contenidor) llança aquesta tasca de
     # presa de mesures. Opcional i additiu: sense `fitting_session_id`, el camí del check esporàdic
     # queda idèntic. Amb ell: valida pertinença al model, escriu el FK (punter MUTABLE: reapunta si ja
