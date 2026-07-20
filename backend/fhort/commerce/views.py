@@ -183,6 +183,34 @@ class QuoteLineModelIntentViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=getattr(self.request.user, 'profile', None))
 
+    @action(detail=False, methods=['post'], url_path='bulk')
+    def bulk(self, request):
+        """POST commerce/quote-line-intents/bulk/ — crea intents en LOT per a una línia d'oferta.
+        Ignora silenciosament els duplicats ja existents (unique_together). Gate CONFIGURE.
+        Body: {quote_line, model_ids:[...]}. Resposta: {created:[ids], skipped:[model_ids]}."""
+        from .models import QuoteLine
+        quote_line_id = request.data.get('quote_line')
+        model_ids = request.data.get('model_ids')
+        if not quote_line_id or not isinstance(model_ids, list) or not model_ids:
+            return Response({'detail': 'quote_line i model_ids (llista no buida) requerits.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        line = QuoteLine.objects.filter(pk=quote_line_id).select_related('quote').first()
+        if line is None:
+            return Response({'detail': "Línia d'oferta no trobada."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            model_ids = [int(x) for x in model_ids]
+        except (TypeError, ValueError):
+            return Response({'detail': "model_ids ha de ser una llista d'enters."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import create_quote_line_intents_bulk
+        try:
+            res = create_quote_line_intents_bulk(
+                line, model_ids, user=getattr(request.user, 'profile', None))
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(res, status=status.HTTP_201_CREATED)
+
 
 # ── Documents comercials — SalesOrder (comanda, B3b) ───────────────────────────────────
 
@@ -273,6 +301,31 @@ class SalesOrderLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mix
         except DjangoValidationError as e:
             return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'work_order': WorkOrderSerializer(wo).data, **meta},
+                        status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='assign-models')
+    def assign_models(self, request, pk=None):
+        """POST commerce/order-lines/{id}/assign-models/ — assigna N models a la línia en UNA
+        transacció TOT-O-RES (select_for_update + validació de capacitat conjunta abans d'assignar
+        res). Gate CONFIGURE. Body: {model_ids:[...]}. Resposta: {work_orders, warnings}."""
+        line = self.get_object()
+        model_ids = request.data.get('model_ids')
+        if not isinstance(model_ids, list) or not model_ids:
+            return Response({'detail': 'model_ids (llista no buida) requerit.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        try:
+            model_ids = [int(x) for x in model_ids]
+        except (TypeError, ValueError):
+            return Response({'detail': "model_ids ha de ser una llista d'enters."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import assign_models_to_order_line_batch
+        try:
+            wos, warnings = assign_models_to_order_line_batch(
+                line.id, model_ids, user=getattr(request.user, 'profile', None))
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'work_orders': WorkOrderSerializer(wos, many=True).data, 'warnings': warnings},
                         status=status.HTTP_201_CREATED)
 
 

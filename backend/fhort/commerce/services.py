@@ -278,13 +278,14 @@ def close_work_order(work_order, user=None, cancel_pending=False):
     return {'closed': True, 'blockers': [], 'pending_proposals': []}
 
 
-def assign_model_to_order_line(model, order_line, user=None):
-    """Assigna un model a una línia de comanda i crea el seu WorkOrder ORDER (B4b). Congela
-    price_snapshot i recipe_snapshot del Product de la línia (cap FK viva). MIGRA les tasques
-    del model que avui pengen d'un COLLECTOR al nou ORDER (cap albarà existeix encara, B4c: la
-    feina contractada no s'ha de facturar al calaix mensual). Retorna (work_order, warnings).
+def _assign_model_core(model, order_line, user=None):
+    """NUCLI d'assignació d'UN model a una línia: guards durs + creació del WorkOrder ORDER
+    (snapshots congelats) + imputació +1 a qty_allocated + migració de les tasques del col·lector.
+    NO obre transacció: el CALLER n'és responsable (wrapper single o batch), perquè el batch pugui
+    ser tot-o-res en UNA sola transacció sense niar-ne. Muta `order_line` en memòria (qty_allocated)
+    perquè el batch acumuli correctament entre models. Retorna (work_order, meta).
 
-    Llança ValidationError als guards durs. `warnings` = avisos no bloquejants (p.ex. GTI).
+    Llança ValidationError als guards durs. `meta.warnings` = avisos no bloquejants (p.ex. GTI).
     """
     from django.core.exceptions import ValidationError
     from .models import WorkOrder
@@ -305,36 +306,124 @@ def assign_model_to_order_line(model, order_line, user=None):
     if model.garment_type_item_id is None:
         warnings.append("El model no té garment_type_item: no es pot comprovar la compatibilitat.")
 
-    with transaction.atomic():
-        product = order_line.product
-        recipe_codes = list(product.recipe_lines.values_list('task_code', flat=True))
-        wo = WorkOrder.objects.create(
-            customer_id=model.customer_id, model=model, order_line=order_line,
-            kind='ORDER', origin='MANUAL', created_by=user,
-            price_snapshot={'unit_price': str(order_line.unit_price or '0'),
-                            'product_code': getattr(product, 'code', None),
-                            # Congelem també el tipus d'IVA: si el WO es desassigna (order_line→None),
-                            # la línia d'albarà perd el product viu i el seu tipus; el snapshot el
-                            # conserva perquè compute_document_totals no caigui a 0% (D2).
-                            'tax_rate': str(getattr(product, 'tax_rate', '0'))},
-            recipe_snapshot={'task_codes': recipe_codes})
+    product = order_line.product
+    recipe_codes = list(product.recipe_lines.values_list('task_code', flat=True))
+    wo = WorkOrder.objects.create(
+        customer_id=model.customer_id, model=model, order_line=order_line,
+        kind='ORDER', origin='MANUAL', created_by=user,
+        price_snapshot={'unit_price': str(order_line.unit_price or '0'),
+                        'product_code': getattr(product, 'code', None),
+                        # Congelem també el tipus d'IVA: si el WO es desassigna (order_line→None),
+                        # la línia d'albarà perd el product viu i el seu tipus; el snapshot el
+                        # conserva perquè compute_document_totals no caigui a 0% (D2).
+                        'tax_rate': str(getattr(product, 'tax_rate', '0'))},
+        recipe_snapshot={'task_codes': recipe_codes})
 
-        # Imputació de cartera: +1 unitat (quantize 0.01).
-        order_line.qty_allocated = (Decimal(order_line.qty_allocated or 0) + Decimal('1')).quantize(_CENT)
-        order_line.save(update_fields=['qty_allocated'])
+    # Imputació de cartera: +1 unitat (quantize 0.01).
+    order_line.qty_allocated = (Decimal(order_line.qty_allocated or 0) + Decimal('1')).quantize(_CENT)
+    order_line.save(update_fields=['qty_allocated'])
 
-        # Migració del col·lector: les tasques del model que pengen d'un COLLECTOR (i encara no
-        # s'han albaranat — cap albarà existeix a B4b) es mouen al nou ORDER, amb off_recipe
-        # recalculat contra la recepta congelada. TODO B4c: excloure aquí les tasques albaranades.
-        migrated = 0
-        for task in ModelTask.objects.filter(
-                model=model, work_order__kind='COLLECTOR').select_related('task_type'):
-            task.work_order = wo
-            task.off_recipe = _is_off_recipe(task, wo)
-            task.save(update_fields=['work_order', 'off_recipe', 'updated_at'])
-            migrated += 1
+    # Migració del col·lector: les tasques del model que pengen d'un COLLECTOR (i encara no
+    # s'han albaranat — cap albarà existeix a B4b) es mouen al nou ORDER, amb off_recipe
+    # recalculat contra la recepta congelada. TODO B4c: excloure aquí les tasques albaranades.
+    migrated = 0
+    for task in ModelTask.objects.filter(
+            model=model, work_order__kind='COLLECTOR').select_related('task_type'):
+        task.work_order = wo
+        task.off_recipe = _is_off_recipe(task, wo)
+        task.save(update_fields=['work_order', 'off_recipe', 'updated_at'])
+        migrated += 1
 
     return wo, {'warnings': warnings, 'migrated_tasks': migrated}
+
+
+def assign_model_to_order_line(model, order_line, user=None):
+    """Assigna UN model a una línia de comanda i crea el seu WorkOrder ORDER (B4b). Wrapper
+    transaccional del nucli (`_assign_model_core`); manté el contracte públic existent. Retorna
+    (work_order, meta). Llança ValidationError als guards durs.
+    """
+    with transaction.atomic():
+        return _assign_model_core(model, order_line, user=user)
+
+
+def assign_models_to_order_line_batch(order_line_id, model_ids, user=None):
+    """Assigna N models a UNA línia de comanda en UNA sola transacció, TOT-O-RES (Sprint C · H1).
+
+    - `select_for_update` sobre la SalesOrderLine → serialitza els batches concurrents i evita el
+      lost-update de qty_allocated (read-modify-write per model).
+    - Valida la capacitat CONJUNTA ABANS d'assignar res: len(model_ids) ≤ quantity − qty_allocated;
+      si no, ValidationError amb el màxim disponible (el caller → 400).
+    - Si QUALSEVOL model del lot viola un guard dur (client, dualitat WO obert, no trobat…), CAP
+      s'assigna (rollback de tota la transacció) i l'error identifica el model conflictiu.
+
+    Retorna (work_orders, warnings_agregats).
+    """
+    from django.core.exceptions import ValidationError
+    from .models import SalesOrderLine
+    from fhort.models_app.models import Model
+
+    with transaction.atomic():
+        line = (SalesOrderLine.objects
+                .select_for_update()
+                .select_related('order', 'product')
+                .get(pk=order_line_id))
+        available = Decimal(line.quantity or 0) - Decimal(line.qty_allocated or 0)
+        if Decimal(len(model_ids)) > available:
+            raise ValidationError(
+                f"Capacitat insuficient: la línia admet {int(available)} model(s) més "
+                f"(n'has demanat {len(model_ids)}).")
+
+        work_orders, warnings = [], []
+        for mid in model_ids:
+            model = Model.objects.filter(pk=mid).first()
+            if model is None:
+                raise ValidationError(f"Model {mid} no trobat.")
+            try:
+                wo, meta = _assign_model_core(model, line, user=user)
+            except ValidationError as e:
+                # Tot-o-res: identifica el model conflictiu i deixa que el rollback ho desfaci tot.
+                raise ValidationError(f"Model {model.codi_intern or mid}: {'; '.join(e.messages)}")
+            work_orders.append(wo)
+            warnings.extend(meta['warnings'])
+        return work_orders, warnings
+
+
+def create_quote_line_intents_bulk(quote_line, model_ids, user=None):
+    """Crea intents model↔línia d'oferta en LOT (Sprint C · H1). Simètric al batch de comanda però
+    barat (intenció pura: no toca WO ni cartera). IGNORA silenciosament els duplicats ja existents
+    (unique_together quote_line+model). Guards mirall del serializer: oferta DRAFT/SENT + coherència
+    de client. Retorna {created:[ids], skipped:[model_ids]}.
+    """
+    from django.core.exceptions import ValidationError
+    from .models import QuoteLineModelIntent
+    from fhort.models_app.models import Model
+
+    quote = quote_line.quote
+    if quote.status not in ('DRAFT', 'SENT'):
+        raise ValidationError(
+            "Només es poden editar intencions de models mentre l'oferta negocia (DRAFT o SENT).")
+
+    existing = set(QuoteLineModelIntent.objects
+                   .filter(quote_line=quote_line).values_list('model_id', flat=True))
+
+    created, skipped = [], []
+    with transaction.atomic():
+        for mid in model_ids:
+            mid = int(mid)
+            if mid in existing:
+                skipped.append(mid)
+                continue
+            model = Model.objects.filter(pk=mid).first()
+            if model is None:
+                raise ValidationError(f"Model {mid} no trobat.")
+            if model.customer_id != quote.customer_id:
+                raise ValidationError(
+                    f"Model {model.codi_intern or mid}: el model i l'oferta han de ser del mateix client.")
+            intent = QuoteLineModelIntent.objects.create(
+                quote_line=quote_line, model=model, created_by=user)
+            created.append(intent.id)
+            existing.add(mid)
+    return {'created': created, 'skipped': skipped}
 
 
 def unassign_model_from_order_line(work_order, user=None):
