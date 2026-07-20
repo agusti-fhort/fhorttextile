@@ -2681,11 +2681,11 @@
     "flat_done": "Fet",
     "flat_cancel": "Cancel·lar",
     "node_edit_mode": "Edició de nodes",
-    "node_tool_select": "Seleccionar node",
+    "node_tool_select": "Moure nodes",
     "node_tool_convert": "Convertir vèrtex ↔ corba",
     "node_tool_handles": "Nanses simètriques / independents",
-    "node_tool_add": "Afegir node",
-    "node_tool_remove": "Treure node",
+    "node_tool_add": "Afegir node (clic al traç)",
+    "node_tool_remove": "Treure node (clic al node)",
     "zoom_level": "Zoom",
     "zoom_in": "Apropar",
     "zoom_out": "Allunyar",
@@ -2695,7 +2695,8 @@
     "more_colors": "Més colors",
     "consultation_badge": "Consulta",
     "consultation_hint": "Consulta — sense registre de temps. Els canvis es desen igual, però no s'imputa temps a cap tasca.",
-    "tool_files": "Fitxers"
+    "tool_files": "Fitxers",
+    "node_editing": "Editant nodes"
   },
   "estat_badge": {
     "pendent_inputs": "Pendent d'inputs",

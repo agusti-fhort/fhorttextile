@@ -2681,11 +2681,11 @@
     "flat_done": "Hecho",
     "flat_cancel": "Cancelar",
     "node_edit_mode": "Edición de nodos",
-    "node_tool_select": "Seleccionar nodo",
+    "node_tool_select": "Mover nodos",
     "node_tool_convert": "Convertir vértice ↔ curva",
     "node_tool_handles": "Manejadores simétricos / independientes",
-    "node_tool_add": "Añadir nodo",
-    "node_tool_remove": "Quitar nodo",
+    "node_tool_add": "Añadir nodo (clic en el trazo)",
+    "node_tool_remove": "Quitar nodo (clic en el nodo)",
     "zoom_level": "Zoom",
     "zoom_in": "Acercar",
     "zoom_out": "Alejar",
@@ -2695,7 +2695,8 @@
     "more_colors": "Más colores",
     "consultation_badge": "Consulta",
     "consultation_hint": "Consulta — sin registro de tiempo. Los cambios se guardan igualmente, pero no se imputa tiempo a ninguna tarea.",
-    "tool_files": "Archivos"
+    "tool_files": "Archivos",
+    "node_editing": "Editando nodos"
   },
   "estat_badge": {
     "pendent_inputs": "Pendiente de inputs",

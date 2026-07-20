@@ -3721,6 +3721,12 @@ export default function TechSheetEditor() {
     importError: t('tech_sheet.flat_import_error'),
     done: t('tech_sheet.flat_done'),
     cancel: t('tech_sheet.flat_cancel'),
+    // S1.3 — barra contextual d'edició de nodes del sub-editor.
+    node_select: t('tech_sheet.node_tool_select'),
+    node_add: t('tech_sheet.node_tool_add'),
+    node_remove: t('tech_sheet.node_tool_remove'),
+    node_convert: t('tech_sheet.node_tool_convert'),
+    node_editing: t('tech_sheet.node_editing'),
   }
 
   // PAL-1: PALETA D'EINES (estil Adobe) — 6 categories amb separadors; els grups amb múltiples

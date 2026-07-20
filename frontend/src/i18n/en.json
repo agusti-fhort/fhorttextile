@@ -2681,11 +2681,11 @@
     "flat_done": "Done",
     "flat_cancel": "Cancel",
     "node_edit_mode": "Node editing",
-    "node_tool_select": "Select node",
-    "node_tool_convert": "Convert corner ↔ smooth",
+    "node_tool_select": "Move nodes",
+    "node_tool_convert": "Convert corner ↔ curve",
     "node_tool_handles": "Symmetric / independent handles",
-    "node_tool_add": "Add node",
-    "node_tool_remove": "Remove node",
+    "node_tool_add": "Add node (click the stroke)",
+    "node_tool_remove": "Remove node (click the node)",
     "zoom_level": "Zoom",
     "zoom_in": "Zoom in",
     "zoom_out": "Zoom out",
@@ -2695,7 +2695,8 @@
     "more_colors": "More colors",
     "consultation_badge": "No time tracking",
     "consultation_hint": "Consultation — no time tracking. Changes are still saved, but no time is logged against any task.",
-    "tool_files": "Files"
+    "tool_files": "Files",
+    "node_editing": "Editing nodes"
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",

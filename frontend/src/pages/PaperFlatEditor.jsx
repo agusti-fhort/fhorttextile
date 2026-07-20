@@ -1,8 +1,10 @@
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import paper from 'paper'
+import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle } from './ftt/paperOps'
 
 const PAPER_COL = {
   node: '#185fa5',
+  nodeSel: '#c0392b',
   handle: '#c27a2a',
   helper: '#868685',
   white: '#ffffff',
@@ -13,24 +15,27 @@ const HANDLE_SIZE = 6
 const HIT_SIZE = 18
 const DEFAULT_HANDLE_OFFSET = 22
 
-const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, labels, onCanCommitChange }, ref) {
+const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onSplitObject, labels, onCanCommitChange }, ref) {
   const canvasRef = useRef(null)
   const scopeRef = useRef(null)
   const sketchLayerRef = useRef(null)
   const uiLayerRef = useRef(null)
   const selectedPathRef = useRef(null)
-  const selectedSegmentRef = useRef(0)
+  const selectedSegsRef = useRef(new Set())   // S1.3: multi-selecció d'índexs de node
   const dragRef = useRef(null)
+  const marqueeRef = useRef(null)             // {x0,y0,rect} mentre s'arrossega una marquesina
   const labelsRef = useRef(labels)
   const zoomRef = useRef(zoom)
   const refreshHandlesRef = useRef(null)
+  const nodeToolRef = useRef('select')        // eina activa (llegida dins els handlers de Paper)
+  const [nodeTool, setNodeTool] = useState('select')
+  const [selCount, setSelCount] = useState(0)  // per a l'indicador de context
   const [, setStatus] = useState(labels?.loading || '')
   const [canCommit, setCanCommit] = useState(false)
   const isStructuredPath = flat?.type === 'path'
 
-  useEffect(() => {
-    labelsRef.current = labels
-  }, [labels])
+  useEffect(() => { labelsRef.current = labels }, [labels])
+  useEffect(() => { nodeToolRef.current = nodeTool }, [nodeTool])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -50,8 +55,9 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       sketchLayerRef.current = null
       uiLayerRef.current = null
       selectedPathRef.current = null
-      selectedSegmentRef.current = 0
+      selectedSegsRef.current = new Set()
       dragRef.current = null
+      marqueeRef.current = null
       refreshHandlesRef.current = null
     }
 
@@ -60,76 +66,58 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       scope.project.getItems({ selected: true }).forEach(item => { item.selected = false })
     }
 
+    // Dibuixa àncores de TOTS els nodes + nanses dels nodes SELECCIONATS (multi-selecció).
     const refreshHandles = () => {
       clearHandles()
       const path = selectedPathRef.current
-      if (!path) {
-        scope.view.update()
-        return
-      }
+      if (!path) { scope.view.update(); return }
       path.selected = true
       uiLayer.activate()
-      const selectedIndex = Math.min(selectedSegmentRef.current, Math.max(0, path.segments.length - 1))
+      const sel = selectedSegsRef.current
       path.segments.forEach((segment, index) => {
         const point = segment.point
-        const selected = index === selectedIndex
-        const handleInVector = segment.handleIn.isZero() && selected
-          ? new scope.Point(-DEFAULT_HANDLE_OFFSET, 0)
-          : segment.handleIn
-        const handleOutVector = segment.handleOut.isZero() && selected
-          ? new scope.Point(DEFAULT_HANDLE_OFFSET, 0)
-          : segment.handleOut
-        const handleInPoint = point.add(handleInVector)
-        const handleOutPoint = point.add(handleOutVector)
+        const selected = sel.has(index)
         const anchor = new scope.Path.Rectangle({
           point: point.subtract(new scope.Point(NODE_SIZE / 2, NODE_SIZE / 2)),
           size: new scope.Size(NODE_SIZE, NODE_SIZE),
-          fillColor: selected ? PAPER_COL.node : PAPER_COL.white,
-          strokeColor: PAPER_COL.node,
+          fillColor: selected ? PAPER_COL.nodeSel : PAPER_COL.white,
+          strokeColor: selected ? PAPER_COL.nodeSel : PAPER_COL.node,
           strokeWidth: 1.2,
         })
         anchor.data = { kind: 'segment', index }
+        const hit = new scope.Path.Rectangle({
+          point: point.subtract(new scope.Point(HIT_SIZE / 2, HIT_SIZE / 2)),
+          size: new scope.Size(HIT_SIZE, HIT_SIZE),
+          fillColor: PAPER_COL.white, opacity: 0.001,
+        })
+        hit.data = { kind: 'segment', index }; hit.sendToBack()
         if (selected) {
-          const hit = new scope.Path.Rectangle({
-            point: point.subtract(new scope.Point(HIT_SIZE / 2, HIT_SIZE / 2)),
-            size: new scope.Size(HIT_SIZE, HIT_SIZE),
-            fillColor: PAPER_COL.white,
-            opacity: 0.001,
-          })
-          hit.data = { kind: 'segment', index }
-          hit.sendToBack()
-        }
-        if (selected) {
-          new scope.Path.Line({ from: point, to: handleInPoint, strokeColor: PAPER_COL.helper, strokeWidth: 1, dashArray: [4, 4] })
+          const handleInVector = segment.handleIn.isZero() ? new scope.Point(-DEFAULT_HANDLE_OFFSET, 0) : segment.handleIn
+          const handleOutVector = segment.handleOut.isZero() ? new scope.Point(DEFAULT_HANDLE_OFFSET, 0) : segment.handleOut
+          const inPt = point.add(handleInVector)
+          const outPt = point.add(handleOutVector)
+          new scope.Path.Line({ from: point, to: inPt, strokeColor: PAPER_COL.helper, strokeWidth: 1, dashArray: [4, 4] })
           const inHandle = new scope.Path.Rectangle({
-            point: handleInPoint.subtract(new scope.Point(HANDLE_SIZE / 2, HANDLE_SIZE / 2)),
+            point: inPt.subtract(new scope.Point(HANDLE_SIZE / 2, HANDLE_SIZE / 2)),
             size: new scope.Size(HANDLE_SIZE, HANDLE_SIZE),
-            fillColor: PAPER_COL.white,
-            strokeColor: PAPER_COL.handle,
-            strokeWidth: 1.2,
+            fillColor: PAPER_COL.white, strokeColor: PAPER_COL.handle, strokeWidth: 1.2,
           })
-          inHandle.data = { kind: 'handleIn', index, x: handleInVector.x, y: handleInVector.y }
+          inHandle.data = { kind: 'handleIn', index }
           const inHit = new scope.Path.Rectangle({
-            point: handleInPoint.subtract(new scope.Point(HIT_SIZE / 2, HIT_SIZE / 2)),
-            size: new scope.Size(HIT_SIZE, HIT_SIZE),
-            fillColor: PAPER_COL.white,
-            opacity: 0.001,
+            point: inPt.subtract(new scope.Point(HIT_SIZE / 2, HIT_SIZE / 2)),
+            size: new scope.Size(HIT_SIZE, HIT_SIZE), fillColor: PAPER_COL.white, opacity: 0.001,
           })
           inHit.data = inHandle.data
-          new scope.Path.Line({ from: point, to: handleOutPoint, strokeColor: PAPER_COL.helper, strokeWidth: 1, dashArray: [4, 4] })
+          new scope.Path.Line({ from: point, to: outPt, strokeColor: PAPER_COL.helper, strokeWidth: 1, dashArray: [4, 4] })
           const outHandle = new scope.Path.Rectangle({
-            point: handleOutPoint.subtract(new scope.Point(HANDLE_SIZE / 2, HANDLE_SIZE / 2)),
+            point: outPt.subtract(new scope.Point(HANDLE_SIZE / 2, HANDLE_SIZE / 2)),
             size: new scope.Size(HANDLE_SIZE, HANDLE_SIZE),
-            fillColor: PAPER_COL.white,
-            strokeColor: PAPER_COL.handle,
-            strokeWidth: 1.2,
+            fillColor: PAPER_COL.white, strokeColor: PAPER_COL.handle, strokeWidth: 1.2,
           })
-          outHandle.data = { kind: 'handleOut', index, x: handleOutVector.x, y: handleOutVector.y }
+          outHandle.data = { kind: 'handleOut', index }
           const outHit = new scope.Path.Rectangle({
-            point: handleOutPoint.subtract(new scope.Point(HIT_SIZE / 2, HIT_SIZE / 2)),
-            size: new scope.Size(HIT_SIZE, HIT_SIZE),
-            fillColor: PAPER_COL.white,
-            opacity: 0.001,
+            point: outPt.subtract(new scope.Point(HIT_SIZE / 2, HIT_SIZE / 2)),
+            size: new scope.Size(HIT_SIZE, HIT_SIZE), fillColor: PAPER_COL.white, opacity: 0.001,
           })
           outHit.data = outHandle.data
         }
@@ -139,11 +127,29 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     }
     refreshHandlesRef.current = refreshHandles
 
+    const setSelection = (indices) => {
+      selectedSegsRef.current = new Set(indices)
+      setSelCount(selectedSegsRef.current.size)
+      refreshHandles()
+    }
+
     const selectPath = (item) => {
       selectedPathRef.current = item
-      selectedSegmentRef.current = 0
-      refreshHandles()
+      setSelection(item ? [0] : [])
       setStatus(labelsRef.current?.pathSelected || '')
+    }
+
+    // Reconstrueix la geometria de la path activa a partir d'un array de segments (mateix espai view px).
+    const rebuild = (segs, closed) => {
+      const path = selectedPathRef.current
+      if (!path) return
+      path.removeSegments()
+      ;(segs || []).forEach(s => path.add(new scope.Segment(
+        new scope.Point(s.x, s.y),
+        new scope.Point(s.inX || 0, s.inY || 0),
+        new scope.Point(s.outX || 0, s.outY || 0),
+      )))
+      path.closed = !!closed
     }
 
     const toViewPx = (mm) => toPx(mm) * zoomRef.current
@@ -153,8 +159,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const cos = Math.cos(rotation)
     const sin = Math.sin(rotation)
     const transformVector = (x = 0, y = 0) => {
-      const sx = x * scaleX
-      const sy = y * scaleY
+      const sx = x * scaleX, sy = y * scaleY
       return { x: sx * cos - sy * sin, y: sx * sin + sy * cos }
     }
     const localToView = (x = 0, y = 0) => {
@@ -178,15 +183,8 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
           fillColor: (flat.fill ?? pathData.fill) && (flat.fill ?? pathData.fill) !== 'transparent' ? (flat.fill ?? pathData.fill) : null,
         })
         path.data = { index }
-        // Compost: s'edita només l'exterior (subpaths[0]); els forats es preserven al commit sense mostrar-se aquí.
         const segs = pathData.subpaths ? (pathData.subpaths[0]?.segments || []) : (pathData.segments || [])
-        segs.forEach(seg => {
-          path.add(new scope.Segment(
-            localToView(seg.x, seg.y),
-            handleToView(seg.inX, seg.inY),
-            handleToView(seg.outX, seg.outY),
-          ))
-        })
+        segs.forEach(seg => path.add(new scope.Segment(localToView(seg.x, seg.y), handleToView(seg.inX, seg.inY), handleToView(seg.outX, seg.outY))))
         imported.addChild(path)
       })
     } else {
@@ -202,10 +200,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       const targetH = Math.max(1, toViewPx(flat.height || 60))
       const scale = Math.min(targetW / bounds.width, targetH / bounds.height)
       if (Number.isFinite(scale) && scale > 0) imported.scale(scale)
-      imported.position = new scope.Point(
-        toViewPx(flat.x || 0) + targetW / 2,
-        toViewPx(flat.y || 0) + targetH / 2,
-      )
+      imported.position = new scope.Point(toViewPx(flat.x || 0) + targetW / 2, toViewPx(flat.y || 0) + targetH / 2)
     }
     setCanCommit(true)
 
@@ -213,56 +208,139 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     if (firstPath) selectPath(firstPath)
     else setStatus(labelsRef.current?.noPath || '')
 
+    // Aplica una operació de paperOps (retorna {segments,closed?}) i refresca; nextSel = índexs a seleccionar.
+    const applyOp = (result, nextSel) => {
+      if (!result) return
+      const path = selectedPathRef.current
+      rebuild(result.segments, result.closed != null ? result.closed : path.closed)
+      setSelection(nextSel != null ? nextSel : [])
+      setStatus(labelsRef.current?.changed || '')
+    }
+
     const tool = new scope.Tool()
     tool.onMouseDown = (event) => {
+      const path = selectedPathRef.current
+      const active = nodeToolRef.current
       const uiHit = uiLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
-      if (uiHit?.item?.data?.kind) {
-        const data = uiHit.item.data
-        selectedSegmentRef.current = data.index
-        dragRef.current = { ...data }
-        refreshHandles()
+      const data = uiHit?.item?.data
+      const shift = !!event.modifiers?.shift
+
+      // ── Sobre un NODE (àncora) ──────────────────────────────────────────────
+      if (data?.kind === 'segment') {
+        if (active === 'remove') {   // eina treure: clic directe elimina el node
+          applyOp(removeNode(readSegs(path), path.closed, data.index), [])
+          return
+        }
+        if (active === 'convert') {  // eina convertir: cantonada↔suau
+          const seg = path.segments[data.index]
+          const hasHandles = !seg.handleIn.isZero() || !seg.handleOut.isZero()
+          applyOp(hasHandles ? toCorner(readSegs(path), data.index) : toSmooth(readSegs(path), path.closed, data.index), [data.index])
+          return
+        }
+        // eina select (o qualsevol): gestiona selecció + inici de drag.
+        const sel = selectedSegsRef.current
+        if (shift) { sel.has(data.index) ? sel.delete(data.index) : sel.add(data.index); setSelection([...sel]) }
+        else if (!sel.has(data.index)) setSelection([data.index])
+        dragRef.current = { kind: 'segment' }
         return
       }
-      const hit = sketchLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
-      const hitItem = hit?.item
-      const path = hitItem?.className === 'Path' && hitItem.layer === sketchLayer
-        ? hitItem
-        : hitItem?.parent?.getItem?.({ class: scope.Path })
-      if (path) selectPath(path)
+      // ── Sobre una NANSA ─────────────────────────────────────────────────────
+      if (data?.kind === 'handleIn' || data?.kind === 'handleOut') {
+        dragRef.current = { kind: data.kind, index: data.index }
+        return
+      }
+      // ── Sobre el TRAÇ (corba) ───────────────────────────────────────────────
+      const strokeHit = sketchLayer.hitTest(event.point, { stroke: true, tolerance: 8 })
+      if (active === 'add' && strokeHit?.location && strokeHit.item === path) {
+        const r = addNodeAt(readSegs(path), path.closed, strokeHit.location.curve.index, strokeHit.location.time)
+        applyOp(r, r && r.index != null ? [r.index] : [])   // selecciona el node nou
+        return
+      }
+      // Canviar de path (clic sobre una altra subpath) o iniciar marquesina.
+      const anyHit = sketchLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
+      const hitPath = anyHit?.item?.className === 'Path' ? anyHit.item : anyHit?.item?.parent?.getItem?.({ class: scope.Path })
+      if (hitPath && hitPath !== path) { selectPath(hitPath); return }
+      if (active === 'select') { marqueeRef.current = { x0: event.point.x, y0: event.point.y }; if (!shift) setSelection([]) }
     }
+
     tool.onMouseDrag = (event) => {
-      const drag = dragRef.current
       const path = selectedPathRef.current
+      const drag = dragRef.current
+      if (marqueeRef.current) {   // marquesina de selecció
+        marqueeRef.current.now = event.point
+        drawMarquee(uiLayer, scope, marqueeRef.current)
+        return
+      }
       if (!drag || !path) return
-      const segment = path.segments[drag.index]
-      if (!segment) return
-      if (drag.kind === 'segment') segment.point = segment.point.add(event.delta)
-      if (drag.kind === 'handleIn' || drag.kind === 'handleOut') {
-        drag.x = (drag.x || 0) + event.delta.x
-        drag.y = (drag.y || 0) + event.delta.y
-        segment[drag.kind] = new scope.Point(drag.x, drag.y)
+      if (drag.kind === 'segment') {   // mou TOTS els nodes seleccionats
+        selectedSegsRef.current.forEach(i => { const s = path.segments[i]; if (s) s.point = s.point.add(event.delta) })
+      } else {   // nansa: per defecte simètrica; Alt = independent
+        const seg = path.segments[drag.index]
+        if (!seg) return
+        const alt = !!event.modifiers?.option || !!event.modifiers?.alt
+        seg[drag.kind] = seg[drag.kind].add(event.delta)
+        if (!alt) {
+          const opp = drag.kind === 'handleIn' ? 'handleOut' : 'handleIn'
+          const m = mirrorHandle(seg[drag.kind].x, seg[drag.kind].y)
+          seg[opp] = new scope.Point(m.x, m.y)
+        }
       }
       setStatus(labelsRef.current?.changed || '')
       refreshHandles()
     }
+
     tool.onMouseUp = () => {
+      if (marqueeRef.current?.now) {   // tanca la marquesina: selecciona els nodes dins el rectangle
+        const path = selectedPathRef.current
+        const m = marqueeRef.current
+        const r = new scope.Rectangle(new scope.Point(m.x0, m.y0), new scope.Point(m.now.x, m.now.y))
+        const picked = []
+        path?.segments.forEach((s, i) => { if (r.contains(s.point)) picked.push(i) })
+        setSelection(picked)
+      }
+      marqueeRef.current = null
       dragRef.current = null
     }
     tool.activate()
 
-    return cleanup
+    // Utilitats internes (readSegs llegeix la path viva en espai view px per passar a paperOps).
+    function readSegs(p) {
+      return (p?.segments || []).map(seg => ({
+        x: seg.point.x, y: seg.point.y,
+        inX: seg.handleIn.x, inY: seg.handleIn.y,
+        outX: seg.handleOut.x, outY: seg.handleOut.y,
+      }))
+    }
+
+    // Teclat del sub-editor: Delete/Backspace treu els nodes seleccionats (la corba es reconnecta).
+    const onKey = (e) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      const path = selectedPathRef.current
+      const sel = [...selectedSegsRef.current].sort((a, b) => b - a)
+      if (!path || !sel.length) return
+      e.preventDefault(); e.stopPropagation()
+      let segs = readSegs(path); let closed = path.closed; let ok = true
+      for (const idx of sel) {   // esborra de gran a petit perquè els índexs no es desplacin
+        const r = removeNode(segs, closed, idx)
+        if (!r) { ok = false; break }
+        segs = r.segments; closed = r.closed
+      }
+      if (ok) { rebuild(segs, closed); setSelection([]); setStatus(labelsRef.current?.changed || '') }
+    }
+    window.addEventListener('keydown', onKey, true)
+
+    const finalCleanup = () => { window.removeEventListener('keydown', onKey, true); cleanup() }
+    return finalCleanup
   }, [flat, pageW, pageH, toPx, isStructuredPath])
 
   useEffect(() => {
     const previousZoom = zoomRef.current
     if (previousZoom === zoom) return
     zoomRef.current = zoom
-
     const scope = scopeRef.current
     const sketchLayer = sketchLayerRef.current
     const canvas = canvasRef.current
     if (!scope || !sketchLayer || !canvas) return
-
     const ratio = zoom / previousZoom
     canvas.width = pageW * zoom
     canvas.height = pageH * zoom
@@ -280,15 +358,12 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       if (!scope) return
       const z = zoomRef.current || 1
       const rotation = -(((flat.rotation || 0) * Math.PI) / 180)
-      const scaleX = flat.scaleX || 1
-      const scaleY = flat.scaleY || 1
-      const cos = Math.cos(rotation)
-      const sin = Math.sin(rotation)
+      const scaleX = flat.scaleX || 1, scaleY = flat.scaleY || 1
+      const cos = Math.cos(rotation), sin = Math.sin(rotation)
       const fromViewMm = (point) => ({ x: point.x / toPx(1) / z, y: point.y / toPx(1) / z })
       const pointToLocal = (point) => {
         const p = fromViewMm(point)
-        const dx = p.x - (flat.x || 0)
-        const dy = p.y - (flat.y || 0)
+        const dx = p.x - (flat.x || 0), dy = p.y - (flat.y || 0)
         return { x: (dx * cos - dy * sin) / scaleX, y: (dx * sin + dy * cos) / scaleY }
       }
       const handleToLocal = (point) => {
@@ -296,19 +371,13 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         return { x: (p.x * cos - p.y * sin) / scaleX, y: (p.x * sin + p.y * cos) / scaleY }
       }
       const segsOf = (pp) => pp.segments.map(seg => {
-        const p = pointToLocal(seg.point)
-        const hin = handleToLocal(seg.handleIn)
-        const hout = handleToLocal(seg.handleOut)
+        const p = pointToLocal(seg.point), hin = handleToLocal(seg.handleIn), hout = handleToLocal(seg.handleOut)
         return { x: p.x, y: p.y, inX: hin.x, inY: hin.y, outX: hout.x, outY: hout.y }
       })
       const paths = sketchLayer.getItems({ class: scope.Path }).filter(path => path.segments?.length).map((path, index) => {
         const source = flat.paths?.[path.data?.index ?? index] || {}
         if (source.subpaths) {
-          // Compost: només l'exterior (subpaths[0]) s'edita aquí; els forats es conserven intactes.
-          return {
-            ...source,
-            subpaths: source.subpaths.map((sp, si) => (si === 0 ? { ...sp, closed: path.closed, segments: segsOf(path) } : sp)),
-          }
+          return { ...source, subpaths: source.subpaths.map((sp, si) => (si === 0 ? { ...sp, closed: path.closed, segments: segsOf(path) } : sp)) }
         }
         return { ...source, closed: path.closed, segments: segsOf(path) }
       })
@@ -318,23 +387,58 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const svg = sketchLayer.exportSVG({ asString: true, bounds: 'content' })
     onCommit(svg)
   }
-  // PEÇA 2: Fet/Cancel·lar viuen ara a la barra contextual del ribbon. Exposem commit() via ref i
-  // informem el pare de l'estat canCommit (perquè habiliti/deshabiliti el botó Fet).
   useImperativeHandle(ref, () => ({ commit }))
   useEffect(() => { onCanCommitChange?.(canCommit) }, [canCommit, onCanCommitChange])
 
+  const L = labels || {}
+  const toolBtn = (k, icon, title) => (
+    <button key={k} type="button" title={title} onClick={() => setNodeTool(k)}
+      style={{
+        width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        border: `1px solid ${nodeTool === k ? 'var(--gold)' : 'var(--gray-l)'}`,
+        borderRadius: 6, cursor: 'pointer', background: nodeTool === k ? 'var(--gold-pale)' : 'var(--white)',
+        color: nodeTool === k ? 'var(--gold)' : 'var(--text-muted)',
+      }}>
+      <i className={`ti ${icon}`} style={{ fontSize: 16 }} />
+    </button>
+  )
+
   return (
-    // Contenidor = pàgina sencera (no clampat als bounds inicials del flat) perquè el vector
-    // no es talli en escalar-lo; el canvas ja dibuixa en coords de pàgina sencera.
     <div style={{ position: 'absolute', left: 0, top: 0, width: pageW * zoom, height: pageH * zoom, zIndex: 20, overflow: 'hidden' }}>
-      <canvas
-        ref={canvasRef}
-        width={pageW * zoom}
-        height={pageH * zoom}
-        style={{ position: 'absolute', left: 0, top: 0, width: pageW * zoom, height: pageH * zoom, touchAction: 'none', cursor: 'crosshair' }}
-      />
+      <canvas ref={canvasRef} width={pageW * zoom} height={pageH * zoom}
+        style={{ position: 'absolute', left: 0, top: 0, width: pageW * zoom, height: pageH * zoom, touchAction: 'none',
+          cursor: nodeTool === 'add' ? 'copy' : nodeTool === 'remove' ? 'not-allowed' : nodeTool === 'convert' ? 'cell' : nodeTool === 'scissors' ? 'crosshair' : 'default' }} />
+      {/* Barra contextual d'edició de nodes (descobribilitat primer): eines + indicador de context. */}
+      <div style={{
+        position: 'absolute', left: 8, top: 8, display: 'flex', gap: 6, alignItems: 'center',
+        background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, padding: 6,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.12)', fontFamily: 'IBM Plex Mono, monospace',
+      }}>
+        {toolBtn('select', 'ti-pointer', L.node_select)}
+        {toolBtn('add', 'ti-plus', L.node_add)}
+        {toolBtn('remove', 'ti-minus', L.node_remove)}
+        {toolBtn('convert', 'ti-vector-bezier-2', L.node_convert)}
+        <span style={{ width: 1, height: 20, background: 'var(--gray-l)' }} />
+        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+          {(L.node_editing || 'Editing nodes')}{selCount ? ` · ${selCount}` : ''}
+        </span>
+      </div>
     </div>
   )
 })
+
+// Marquesina de selecció (rectangle discontinu) dibuixada a la capa UI durant l'arrossegament.
+function drawMarquee(uiLayer, scope, m) {
+  const existing = uiLayer.children.find(c => c.data?.marquee)
+  if (existing) existing.remove()
+  if (!m.now) return
+  uiLayer.activate()
+  const rect = new scope.Path.Rectangle(new scope.Rectangle(new scope.Point(m.x0, m.y0), new scope.Point(m.now.x, m.now.y)))
+  rect.strokeColor = PAPER_COL.node
+  rect.strokeWidth = 1
+  rect.dashArray = [3, 3]
+  rect.data = { marquee: true }
+  scope.view.update()
+}
 
 export default PaperFlatEditor
