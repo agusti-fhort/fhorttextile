@@ -10,7 +10,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
 import i18n from '../../i18n'
-import GarmentTypeSelector from '../GarmentTypeSelector/GarmentTypeSelector'
+import CascadeSelector from '../CascadeSelector/CascadeSelector'
 import { groupLabel } from '../grading/gradingAxes'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -87,6 +87,7 @@ export default function POMBrowser({
   // selectedItem = el GarmentTypeItem real sobre el qual es llegeixen/escriuen els mapes.
   const [selectedFamily, setSelectedFamily] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null)
+  const [pickAxes, setPickAxes] = useState({})   // navegació controlada del picker de peça (grup→ítem)
   const [poms, setPoms] = useState([])
   const [orderedPoms, setOrderedPoms] = useState([])   // còpia ordenable local (assign drag)
   const [search, setSearch] = useState('')
@@ -213,10 +214,15 @@ export default function POMBrowser({
   // ── Step 'select-type' (família → ITEM, dos nivells) ──────────────────────
   if (!selectedItem) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <GarmentTypeSelector
-          lang={lang}
-          onSelect={(sel) => { setSelectedFamily(sel.family); setSelectedItem(sel.item) }}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', padding: 16 }}>
+        <CascadeSelector
+          mode="single"
+          minLevel="group"
+          maxLevel="item"
+          stopPolicy="require-item"
+          value={pickAxes}
+          onChange={setPickAxes}
+          onConfirm={({ family, item }) => { setSelectedFamily(family); setSelectedItem(item) }}
         />
       </div>
     )
