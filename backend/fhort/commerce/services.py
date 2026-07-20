@@ -41,7 +41,17 @@ def compute_document_totals(document, lines):
     # Agrupar les bases (Σ line_total) per tipus impositiu de l'article.
     groups = {}
     for line in lines:
-        rate = Decimal(line.product.tax_rate).quantize(_CENT) if line.product_id else Decimal('0.00')
+        if line.product_id:
+            rate = Decimal(line.product.tax_rate).quantize(_CENT)
+        else:
+            # Línia sense article de catàleg: si ve d'un WorkOrder amb tax_rate congelat al
+            # price_snapshot (cas del WO orfe, order_line buida → product None), usem aquell tipus
+            # en lloc de caure a 0% (D2). Quote/SalesOrderLine no tenen work_order → cap canvi.
+            snap_rate = None
+            wo = getattr(line, 'work_order', None) if getattr(line, 'work_order_id', None) else None
+            if wo is not None:
+                snap_rate = (wo.price_snapshot or {}).get('tax_rate')
+            rate = Decimal(str(snap_rate)).quantize(_CENT) if snap_rate is not None else Decimal('0.00')
         groups[rate] = groups.get(rate, Decimal('0')) + Decimal(line.line_total or 0)
     breakdown, subtotal, tax_total = [], Decimal('0'), Decimal('0')
     for rate in sorted(groups, reverse=True):
@@ -254,7 +264,11 @@ def assign_model_to_order_line(model, order_line, user=None):
             customer_id=model.customer_id, model=model, order_line=order_line,
             kind='ORDER', origin='MANUAL', created_by=user,
             price_snapshot={'unit_price': str(order_line.unit_price or '0'),
-                            'product_code': getattr(product, 'code', None)},
+                            'product_code': getattr(product, 'code', None),
+                            # Congelem també el tipus d'IVA: si el WO es desassigna (order_line→None),
+                            # la línia d'albarà perd el product viu i el seu tipus; el snapshot el
+                            # conserva perquè compute_document_totals no caigui a 0% (D2).
+                            'tax_rate': str(getattr(product, 'tax_rate', '0'))},
             recipe_snapshot={'task_codes': recipe_codes})
 
         # Imputació de cartera: +1 unitat (quantize 0.01).

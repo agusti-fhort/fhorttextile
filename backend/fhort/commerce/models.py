@@ -674,7 +674,7 @@ class DeliveryNote(AbstractDocument):
         # v2 — els totals es calculen SOBRE LÍNIES VISIBLES. Les amagades (visible=False) existeixen
         # a BD per traçabilitat/cost però no compten al document ni al PDF.
         self.subtotal, self.tax_amount, self.total, self.tax_breakdown = compute_document_totals(
-            self, self.lines.filter(visible=True))
+            self, self.lines.filter(visible=True).select_related('product', 'work_order'))
         self.save(update_fields=['subtotal', 'tax_amount', 'total', 'tax_breakdown', 'updated_at'])
 
     def delete(self, *args, **kwargs):
