@@ -45,7 +45,8 @@ class ModelFilter(django_filters.FilterSet):
 
     class Meta:
         model = Model
-        fields = ['fase_actual', 'garment_type', 'responsable', 'temporada', 'any',
+        fields = ['fase_actual', 'garment_type', 'garment_type_item', 'garment_group',
+                  'responsable', 'temporada', 'any',
                   'estat', 'prioritat', 'customer', 'collection', 'data_objectiu']
 
     def filter_assignee(self, queryset, name, value):
@@ -142,6 +143,36 @@ class ModelViewSet(viewsets.ModelViewSet):
         rows = qs.values('fase_actual').annotate(n=Count('id'))
         counts = {r['fase_actual']: r['n'] for r in rows}
         return Response({'counts': counts, 'total': sum(counts.values())})
+
+    @action(detail=False, methods=['get'], url_path='garment-counts')
+    def garment_counts(self, request):
+        """GET /api/v1/models/garment-counts/ — comptadors de models per garment_type i per
+        garment_type_item del conjunt FILTRAT.
+
+        Respecta EXACTAMENT els filtres actius (mateix ModelFilter C1 via filter_queryset),
+        igual que fase-counts. Alimenta els comptadors per node del CascadeSelector en mode
+        filtre (el consumidor demana aquest endpoint i injecta els counts; el component NO fa
+        fetch propi, i el wizard/grading no paguen mai aquestes queries).
+
+        DOS GROUP BY independents (un per eix): el GROUP BY del PARELL (garment_type,
+        garment_type_item) NO equival als dos subtotals per nivell (veure
+        docs/diagnosis/DIAGNOSI_UNIFICACIO_SELECTORS_CASCADE.md · P5). Cada eix agrupa sobre el
+        mateix queryset ja filtrat i amb order_by() buit (com fase-counts) perquè un
+        OrderingFilter actiu no injecti columnes al GROUP BY. Els nodes NULL (models sense
+        garment_type / garment_type_item) s'exclouen dels mapes; `total` és el recompte honest
+        del conjunt filtrat sencer (inclou els models sense node). Sense N+1: comptat a la BD.
+
+        Retorna {by_type:{<id>:n}, by_item:{<id>:n}, total:n}.
+        """
+        from django.db.models import Count
+        qs = self.filter_queryset(self.get_queryset()).order_by()
+        by_type = {r['garment_type']: r['n']
+                   for r in qs.values('garment_type').annotate(n=Count('id'))
+                   if r['garment_type'] is not None}
+        by_item = {r['garment_type_item']: r['n']
+                   for r in qs.values('garment_type_item').annotate(n=Count('id'))
+                   if r['garment_type_item'] is not None}
+        return Response({'by_type': by_type, 'by_item': by_item, 'total': qs.count()})
 
 
 class ModelFitxerFilter(django_filters.FilterSet):
