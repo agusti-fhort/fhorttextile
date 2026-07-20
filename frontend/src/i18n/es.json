@@ -2705,6 +2705,10 @@
     "node_open": "Abrir por el nodo seleccionado",
     "node_split": "Separar por el nodo seleccionado",
     "node_segment": "1 tramo",
+    "node_tool_shape": "Selección de forma",
+    "node_tool_direct": "Selección directa (nodos)",
+    "node_mode_shapes": "Formas",
+    "node_mode_nodes": "Nodos",
     "obj_action_node_mode": "No disponible mientras se editan nodos"
   },
   "estat_badge": {

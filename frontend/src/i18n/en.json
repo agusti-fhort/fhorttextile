@@ -2705,6 +2705,10 @@
     "node_open": "Open at selected node",
     "node_split": "Split at selected node",
     "node_segment": "1 segment",
+    "node_tool_shape": "Shape selection",
+    "node_tool_direct": "Direct selection (nodes)",
+    "node_mode_shapes": "Shapes",
+    "node_mode_nodes": "Nodes",
     "obj_action_node_mode": "Not available while editing nodes"
   },
   "estat_badge": {

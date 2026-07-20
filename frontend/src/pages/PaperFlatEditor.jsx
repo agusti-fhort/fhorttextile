@@ -20,7 +20,7 @@ const DEFAULT_HANDLE_OFFSET = 22
 // F1 — el sub-editor NO té UI pròpia: les eines viuen a la barra superior del pare. Aquí només el
 // canvas Paper + la lògica. El pare controla l'eina activa (prop `nodeTool`), rep l'estat de selecció
 // (`onNodeState`) i dispara accions per l'API imperativa `run(name, ...args)` (ref).
-const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onSplitObject, onNodeState, nodeTool = 'select', onCanCommitChange }, ref) {
+const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onSplitObject, onNodeState, nodeTool = 'shape', onCanCommitChange, onEnterDirect }, ref) {
   const canvasRef = useRef(null)
   const scopeRef = useRef(null)
   const sketchLayerRef = useRef(null)
@@ -28,20 +28,26 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   const selectedPathRef = useRef(null)
   const selectedSegsRef = useRef(new Set())   // S1.3: multi-selecció d'índexs de node
   const selectedSegRef = useRef(null)         // F2: índex de corba del SEGMENT (tram) seleccionat, o null
+  const selectedShapesRef = useRef(new Set()) // G1: multi-selecció de FORMES (data.index de subpath) — fletxa negra
+  const lastShapeClickRef = useRef({ index: null, t: 0 })  // G1: detecció de doble-clic per entrar a selecció directa
   const dragRef = useRef(null)
   const marqueeRef = useRef(null)             // {x0,y0,rect} mentre s'arrossega una marquesina
   const paintRef = useRef({})                 // F5: overrides de pintura pendents per índex de subpath {fill,stroke,strokeWidth}
   const zoomRef = useRef(zoom)
-  const refreshHandlesRef = useRef(null)
+  const refreshHandlesRef = useRef(null)      // dispatcher de refresc (node o forma segons el mode)
   const opsRef = useRef(null)                 // accions exposades al pare via run() (close/open/split/removeSelection…)
   const onNodeStateRef = useRef(onNodeState)  // callback per pujar {selCount} al pare
+  const onEnterDirectRef = useRef(onEnterDirect)  // G1: demana al pare passar a selecció directa (doble-clic forma)
   const nodeToolRef = useRef(nodeTool)        // eina activa (llegida dins els handlers de Paper)
   const [, setStatus] = useState('')
   const [canCommit, setCanCommit] = useState(false)
   const isStructuredPath = flat?.type === 'path'
 
   useEffect(() => { onNodeStateRef.current = onNodeState }, [onNodeState])
-  useEffect(() => { nodeToolRef.current = nodeTool }, [nodeTool])
+  useEffect(() => { onEnterDirectRef.current = onEnterDirect }, [onEnterDirect])
+  // G1 — en canviar d'eina, si es creua la frontera forma↔nodes cal repintar la capa UI (les àncores
+  // de node i el ressaltat de forma són superfícies excloents). El dispatcher tria segons el mode.
+  useEffect(() => { nodeToolRef.current = nodeTool; refreshHandlesRef.current?.() }, [nodeTool])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -63,6 +69,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       selectedPathRef.current = null
       selectedSegsRef.current = new Set()
       selectedSegRef.current = null
+      selectedShapesRef.current = new Set()
       dragRef.current = null
       marqueeRef.current = null
       paintRef.current = {}
@@ -135,10 +142,35 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       sketchLayer.activate()
       scope.view.update()
     }
-    refreshHandlesRef.current = refreshHandles
+    // ── G1 · MODE FORMA (fletxa negra) ────────────────────────────────────────────────────────
+    const isShapeMode = () => nodeToolRef.current === 'shape'
+    const allPaths = () => sketchLayer.getItems({ class: scope.Path }).filter(p => p.segments?.length)
+    const pathByIndex = (idx) => allPaths().find(p => (p.data?.index ?? 0) === idx)
+    // Ressalta les FORMES seleccionades (subpaths sencers) clonant-ne el traç a la capa UI en color
+    // de selecció. No dibuixa àncores de node (superfície excloent de la selecció directa).
+    const drawShapeSelection = () => {
+      clearHandles()
+      uiLayer.activate()
+      const sel = selectedShapesRef.current
+      allPaths().forEach(p => {
+        if (!sel.has(p.data?.index ?? 0)) return
+        const hl = p.clone({ insert: false })
+        hl.strokeColor = PAPER_COL.nodeSel
+        hl.strokeWidth = Math.max(2, (p.strokeWidth || 1) + 1)
+        hl.fillColor = null
+        hl.dashArray = null
+        hl.data = { shapeHl: true }
+        uiLayer.addChild(hl)
+      })
+      sketchLayer.activate()
+      scope.view.update()
+    }
+    // Dispatcher de refresc: mode forma → ressaltat de forma; mode nodes → àncores/nanses.
+    const refresh = () => { if (isShapeMode()) drawShapeSelection(); else refreshHandles() }
+    refreshHandlesRef.current = refresh
 
-    // Puja l'estat al pare per a la barra contextual: selecció (nodes/segment) + PINTURA de la subpath
-    // activa (fill/stroke en CSS o null=cap; gruix en mm) perquè els swatches reflecteixin l'estat viu.
+    // Puja l'estat al pare per a la barra contextual: MODE (forma/nodes) + selecció + PINTURA de la
+    // superfície activa (fill/stroke en CSS o null=cap; gruix en mm) perquè els swatches reflecteixin l'estat viu.
     const pushState = () => {
       const path = selectedPathRef.current
       const idx = path?.data?.index ?? 0
@@ -147,6 +179,8 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       const stroke = ov.stroke != null ? (ov.stroke === 'transparent' ? null : ov.stroke) : (path?.strokeColor ? path.strokeColor.toCSS(true) : null)
       const swMm = ov.strokeWidth != null ? ov.strokeWidth : ((path?.strokeWidth || 0) / (toPx(1) * (zoomRef.current || 1)))
       onNodeStateRef.current?.({
+        mode: isShapeMode() ? 'shape' : 'nodes',
+        shapeCount: selectedShapesRef.current.size,
         selCount: selectedSegsRef.current.size, seg: selectedSegRef.current != null,
         fill, stroke, strokeWidth: Math.round(swMm * 100) / 100,
       })
@@ -209,6 +243,14 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const selectPath = (item) => {
       selectedPathRef.current = item
       setSelection(item ? [0] : [])
+    }
+    // G1 — selecció de FORMES (mode fletxa negra): fixa el conjunt de subpaths seleccionats i el path
+    // primari (l'últim tocat), sobre el qual operen pintura/transformacions d'una sola forma.
+    const setShapeSelection = (indices, primaryIndex) => {
+      selectedShapesRef.current = new Set(indices)
+      if (primaryIndex != null) { const p = pathByIndex(primaryIndex); if (p) selectedPathRef.current = p }
+      drawShapeSelection()
+      pushState()
     }
 
     // Reconstrueix la geometria de la path activa a partir d'un array de segments (mateix espai view px).
@@ -277,8 +319,12 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     setCanCommit(true)
 
     const firstPath = imported.getItems({ class: scope.Path }).find(path => path.segments?.length)
-    if (firstPath) selectPath(firstPath)
-    else setStatus('')
+    if (firstPath) {
+      selectPath(firstPath)
+      // G1 — el mode per defecte en entrar al sub-editor és FORMA: el primer gest natural és agafar una
+      // forma, no un node. Sembra la primera forma seleccionada i pinta el ressaltat de forma.
+      if (isShapeMode()) setShapeSelection([firstPath.data?.index ?? 0], firstPath.data?.index ?? 0)
+    } else setStatus('')
 
     // Aplica una operació de paperOps (retorna {segments,closed?}) i refresca; nextSel = índexs a seleccionar.
     const applyOp = (result, nextSel) => {
@@ -362,6 +408,33 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       const uiHit = uiLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
       const data = uiHit?.item?.data
       const shift = !!event.modifiers?.shift
+
+      // ── G1 · MODE FORMA (fletxa negra): clic = selecciona la forma sencera; shift = multi;
+      // doble-clic sobre una forma = entra a selecció directa amb aquella forma activa. ──────────
+      if (active === 'shape') {
+        const hit = sketchLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
+        const hitPath = hit?.item?.className === 'Path' ? hit.item : hit?.item?.parent?.getItem?.({ class: scope.Path })
+        if (hitPath && hitPath.segments?.length) {
+          const idx = hitPath.data?.index ?? 0
+          const now = Date.now()
+          const last = lastShapeClickRef.current
+          if (!shift && last.index === idx && (now - last.t) < 350) {   // doble-clic → selecció directa
+            lastShapeClickRef.current = { index: null, t: 0 }
+            selectPath(hitPath)
+            onEnterDirectRef.current?.()
+            return
+          }
+          lastShapeClickRef.current = { index: idx, t: now }
+          const sel = selectedShapesRef.current
+          if (shift) { sel.has(idx) ? sel.delete(idx) : sel.add(idx); setShapeSelection([...sel], idx) }
+          else if (!sel.has(idx)) setShapeSelection([idx], idx)
+          else selectedPathRef.current = hitPath   // ja seleccionada: refixa el primari
+        } else if (!shift) {
+          lastShapeClickRef.current = { index: null, t: 0 }
+          setShapeSelection([])
+        }
+        return
+      }
 
       // ── Sobre un NODE (àncora) ──────────────────────────────────────────────
       if (data?.kind === 'segment') {
@@ -448,6 +521,20 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     tool.onMouseMove = (event) => {
       uiLayer.children.filter(c => c.data?.hover || c.data?.segHover).forEach(c => c.remove())
       const active = nodeToolRef.current
+      // G1 — mode forma: preressalt de la FORMA sencera sota el cursor (si no ja seleccionada).
+      if (active === 'shape') {
+        const h = sketchLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
+        const hp = h?.item?.className === 'Path' ? h.item : h?.item?.parent?.getItem?.({ class: scope.Path })
+        if (hp && hp.segments?.length && !selectedShapesRef.current.has(hp.data?.index ?? 0)) {
+          uiLayer.activate()
+          const hl = hp.clone({ insert: false })
+          hl.strokeColor = PAPER_COL.segHover; hl.strokeWidth = Math.max(2, (hp.strokeWidth || 1) + 1); hl.fillColor = null; hl.dashArray = null
+          hl.data = { hover: true }
+          uiLayer.addChild(hl)
+          sketchLayer.activate()
+        }
+        scope.view.update(); return
+      }
       const path = selectedPathRef.current
       if (!path) { scope.view.update(); return }
       const hit = sketchLayer.hitTest(event.point, { stroke: true, tolerance: 8 })

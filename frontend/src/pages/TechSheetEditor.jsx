@@ -3221,8 +3221,9 @@ export default function TechSheetEditor() {
   const runNode = (name, ...args) => paperFlatRef.current?.run?.(name, ...args)
   // F4 — mode edició de nodes actiu: cap acció d'abast OBJECTE (ribbon/menú/panell dret) hi és clicable.
   const nodeMode = !!editingFlatId
-  // En entrar/sortir del mode edició de nodes, reinicia l'eina i l'estat de selecció.
-  useEffect(() => { setNodeTool('select'); setNodeSel({ selCount: 0 }) }, [editingFlatId])
+  // G1 — en entrar/sortir del mode edició, el mode per defecte és FORMA (fletxa negra): el primer gest
+  // natural és agafar una forma, no un node. Reinicia també l'estat de selecció.
+  useEffect(() => { setNodeTool('shape'); setNodeSel({ mode: 'shape', shapeCount: 0, selCount: 0 }) }, [editingFlatId])
   // F1/F3 — teclat del mode edició de nodes, centralitzat al PARE (finestra, independent del focus).
   // El context GUANYA: el Delete d'objecte del nivell superior ja surt d'hora amb editingFlatId, i
   // aquí Delete/Backspace operen SEMPRE sobre la selecció fina (node/segment), mai sobre l'objecte.
@@ -3247,7 +3248,8 @@ export default function TechSheetEditor() {
         const d = { ArrowLeft: [-s, 0], ArrowRight: [s, 0], ArrowUp: [0, -s], ArrowDown: [0, s] }[e.key]
         if (d) { e.preventDefault(); runNode('nudge', d[0], d[1]); return }
       }
-      const map = { v: 'select', a: 'select', '+': 'add', '=': 'add', '-': 'remove', _: 'remove', b: 'convert', c: 'scissors' }
+      // G1 — V = fletxa negra (selecció de FORMA) · A = fletxa blanca (selecció DIRECTA de nodes).
+      const map = { v: 'shape', a: 'select', '+': 'add', '=': 'add', '-': 'remove', _: 'remove', b: 'convert', c: 'scissors' }
       const next = map[e.key] ?? map[e.key?.toLowerCase()]
       if (next) { e.preventDefault(); setNodeTool(next) }
     }
@@ -3825,6 +3827,9 @@ export default function TechSheetEditor() {
     importError: t('tech_sheet.flat_import_error'),
     done: t('tech_sheet.flat_done'),
     cancel: t('tech_sheet.flat_cancel'),
+    // G1 — els dos cursors (selecció de forma / selecció directa).
+    shape_select: t('tech_sheet.node_tool_shape'),
+    direct_select: t('tech_sheet.node_tool_direct'),
     // S1.3 — barra contextual d'edició de nodes del sub-editor.
     node_select: t('tech_sheet.node_tool_select'),
     node_add: t('tech_sheet.node_tool_add'),
@@ -4280,10 +4285,20 @@ export default function TechSheetEditor() {
       {/* ── F1 · Barra superior CONTEXTUAL del mode edició de nodes (única superfície d'eines de node) ── */}
       {editingFlatId && (
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, minHeight: 34, background: COL.sidebar, borderBottom: `1px solid ${COL.border}`, padding: '0 10px', fontFamily: FONT, flexWrap: 'wrap' }}>
+          {/* G1 — indicador de CONTEXT sensible al mode: "Formes · N" (fletxa negra) o "Nodes · …" (directa). */}
           <span style={{ fontSize: 'var(--fs-label)', color: COL.gold, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap' }}>
-            <i className="ti ti-vector" style={{ fontSize: 14, marginRight: 4 }} />
-            {t('tech_sheet.node_editing')}{nodeSel.seg ? ` · ${t('tech_sheet.node_segment')}` : nodeSel.selCount ? ` · ${nodeSel.selCount}` : ''}
+            <i className={`ti ${nodeSel.mode === 'shape' ? 'ti-pointer' : 'ti-vector-triangle'}`} style={{ fontSize: 14, marginRight: 4 }} />
+            {nodeSel.mode === 'shape'
+              ? `${t('tech_sheet.node_mode_shapes')}${nodeSel.shapeCount ? ` · ${nodeSel.shapeCount}` : ''}`
+              : `${t('tech_sheet.node_mode_nodes')}${nodeSel.seg ? ` · ${t('tech_sheet.node_segment')}` : nodeSel.selCount ? ` · ${nodeSel.selCount}` : ''}`}
           </span>
+          <span style={nodeBarSep} />
+          {/* G1 — els DOS CURSORS (fletxa negra = forma · fletxa blanca = directa), primers del grup. */}
+          {SHAPE_TOOL_ITEMS.map(it => (
+            <button key={it.k} type="button" onClick={() => setNodeTool(it.k)}
+              title={`${paperFlatLabels[it.label]} · ${it.sc}`}
+              style={nodeBarBtn(nodeTool === it.k)}><i className={`ti ${it.icon}`} style={{ fontSize: 15 }} /></button>
+          ))}
           <span style={nodeBarSep} />
           {NODE_TOOL_ITEMS.map(it => (
             <button key={it.k} type="button" onClick={() => setNodeTool(it.k)}
@@ -4554,6 +4569,7 @@ export default function TechSheetEditor() {
                 onCommit={commitFlatEdit}
                 onSplitObject={handleSplitObject}
                 onCanCommitChange={setFlatCanCommit}
+                onEnterDirect={() => setNodeTool('select')}
               />
             </Suspense>
           )}
@@ -5241,8 +5257,14 @@ export const propLabel = { display: 'block', fontSize: 'var(--fs-label)', color:
 // S2.3 — botó compacte per a accions de topologia de subpath (icona Tabler outline).
 const miniBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 26, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMuted, cursor: 'pointer' }
 // F1 — barra superior contextual del mode edició de nodes: eines + estil de botó.
+// G1 — els DOS CURSORS (jerarquia Illustrator), primers del grup: fletxa negra = selecció de FORMA
+// (subpath sencer), fletxa blanca = selecció DIRECTA (nodes/segments/nanses, tot el ja construït).
+const SHAPE_TOOL_ITEMS = [
+  { k: 'shape', icon: 'ti-pointer', label: 'shape_select', sc: 'V' },
+  { k: 'select', icon: 'ti-vector-triangle', label: 'direct_select', sc: 'A' },
+]
+// Sub-eines de la selecció DIRECTA (afegir/treure/convertir node, tisores).
 const NODE_TOOL_ITEMS = [
-  { k: 'select', icon: 'ti-pointer', label: 'node_select', sc: 'V' },
   { k: 'add', icon: 'ti-plus', label: 'node_add', sc: '+' },
   { k: 'remove', icon: 'ti-minus', label: 'node_remove', sc: '-' },
   { k: 'convert', icon: 'ti-vector-bezier-2', label: 'node_convert', sc: 'B' },
