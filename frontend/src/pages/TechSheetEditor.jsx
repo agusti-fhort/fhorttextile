@@ -4348,6 +4348,21 @@ export default function TechSheetEditor() {
               <span style={nodeBarSep} />
             </>
           )}
+          {/* G5 — TRANSFORMAR forma (mirall H/V · rotar graus · escalar %). Accions de barra (les nanses
+              de bbox dins Paper tenen cost alt). Cada forma es transforma respecte del seu centre. */}
+          {nodeSel.mode === 'shape' && nodeSel.shapeCount >= 1 && (
+            <>
+              <button type="button" onClick={() => runNode('mirrorShapes', 'h')} title={t('tech_sheet.mirror_h')} style={nodeBarBtn(false)}><i className="ti ti-flip-horizontal" style={{ fontSize: 15 }} /></button>
+              <button type="button" onClick={() => runNode('mirrorShapes', 'v')} title={t('tech_sheet.mirror_v')} style={nodeBarBtn(false)}><i className="ti ti-flip-vertical" style={{ fontSize: 15 }} /></button>
+              <input type="number" step="1" placeholder="°" title={t('tech_sheet.shape_rotate')}
+                onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) { runNode('rotateShapes', v); e.target.value = '' } } }}
+                style={{ width: 44, height: 24, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', padding: '0 6px' }} />
+              <input type="number" step="1" min="1" placeholder="%" title={t('tech_sheet.shape_scale')}
+                onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(e.target.value); if (!Number.isNaN(v) && v > 0) { runNode('scaleShapes', v); e.target.value = '' } } }}
+                style={{ width: 48, height: 24, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', padding: '0 6px' }} />
+              <span style={nodeBarSep} />
+            </>
+          )}
           {/* F5 — pintura de la subpath activa (viu al canvas Paper): swatch fill + stroke + gruix. */}
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={t('tech_sheet.fill')}>
             <i className="ti ti-color-swatch" style={{ fontSize: 14, color: COL.textMuted }} />

@@ -2706,6 +2706,8 @@
     "node_open": "Obrir pel node seleccionat",
     "node_split": "Separar pel node seleccionat",
     "node_segment": "1 tram",
+    "shape_rotate": "Rotar (graus)",
+    "shape_scale": "Escalar (%)",
     "node_tool_shape": "Selecció de forma",
     "node_tool_direct": "Selecció directa (nodes)",
     "node_mode_shapes": "Formes",

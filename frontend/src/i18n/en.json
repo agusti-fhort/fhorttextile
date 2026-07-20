@@ -2706,6 +2706,8 @@
     "node_open": "Open at selected node",
     "node_split": "Split at selected node",
     "node_segment": "1 segment",
+    "shape_rotate": "Rotate (degrees)",
+    "shape_scale": "Scale (%)",
     "node_tool_shape": "Shape selection",
     "node_tool_direct": "Direct selection (nodes)",
     "node_mode_shapes": "Shapes",

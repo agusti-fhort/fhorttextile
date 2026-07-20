@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import paper from 'paper'
-import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle, closeSegments, openAtNode, splitAtNode, splitAtLocation, moveSegment, deleteSegment, translateSubpath, booleanSubpaths } from './ftt/paperOps'
+import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle, closeSegments, openAtNode, splitAtNode, splitAtLocation, moveSegment, deleteSegment, translateSubpath, booleanSubpaths, mirrorSubpath, scaleSubpath, rotateSubpath } from './ftt/paperOps'
 
 const PAPER_COL = {
   node: '#185fa5',
@@ -395,6 +395,16 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       })
       drawShapeSelection(); pushState()
     }
+    // G5 — TRANSFORMA cada forma seleccionada respecte del SEU centre (mirall/escalar/rotar). `fn` és
+    // una funció pura de paperOps que rep (segments, cx, cy) i retorna {segments}. Bounds via Paper
+    // (inclou extrems bezier). S'ha triat accions de barra en lloc de nanses de bbox dins Paper (cost alt).
+    const transformShapes = (fn) => {
+      const paths = [...selectedShapesRef.current].map(pathByIndex).filter(Boolean)
+      if (!paths.length) return
+      pushHistory()
+      paths.forEach(p => { const c = p.bounds.center; const r = fn(readSegs(p), c.x, c.y); rebuildPath(p, r.segments) })
+      drawShapeSelection(); pushState()
+    }
 
     const toViewPx = (mm) => toPx(mm) * zoomRef.current
     const rotation = ((flat.rotation || 0) * Math.PI) / 180
@@ -519,6 +529,9 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       booleanShapes: (op) => booleanSelectedShapes(op),   // G3 — buscatraços entre formes seleccionades
       alignShapes: (mode) => alignShapes(mode),           // G5 — alinear formes seleccionades
       distributeShapes: (axis) => distributeShapes(axis), // G5 — distribuir formes seleccionades
+      mirrorShapes: (axis) => transformShapes((s, cx, cy) => mirrorSubpath(s, axis, cx, cy)),   // G5 — mirall H/V
+      scaleShapes: (pct) => { const f = (Number(pct) || 0) / 100; if (f > 0) transformShapes((s, cx, cy) => scaleSubpath(s, f, f, cx, cy)) },  // G5 — escalar %
+      rotateShapes: (deg) => { const d = Number(deg) || 0; if (d) transformShapes((s, cx, cy) => rotateSubpath(s, d, cx, cy)) },   // G5 — rotar angle
       setFill: (c) => applyPaint('fill', c),
       setStroke: (c) => applyPaint('stroke', c),
       setStrokeWidth: (w) => applyPaint('strokeWidth', w),

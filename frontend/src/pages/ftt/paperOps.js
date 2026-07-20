@@ -81,6 +81,40 @@ export function translateSubpath(segments, dx, dy) {
   return { segments: segs }
 }
 
+// MIRALL d'un subpath sobre el seu centre (cx,cy). axis 'h' = reflexió horitzontal (x); 'v' = vertical (y).
+// Reflecteix el punt i el component corresponent de les nanses (relatives). Cas d'ús: simetria de peces.
+export function mirrorSubpath(segments, axis, cx, cy) {
+  const segs = (segments || []).map(clone)
+  segs.forEach(s => {
+    if (axis === 'v') { s.y = 2 * cy - s.y; s.inY = -s.inY; s.outY = -s.outY }
+    else { s.x = 2 * cx - s.x; s.inX = -s.inX; s.outX = -s.outX }
+  })
+  return { segments: segs }
+}
+
+// ESCALA un subpath per (fx,fy) respecte del centre (cx,cy). Escala punts i nanses (relatives). Pur.
+export function scaleSubpath(segments, fx, fy, cx, cy) {
+  const segs = (segments || []).map(clone)
+  segs.forEach(s => {
+    s.x = cx + (s.x - cx) * fx; s.y = cy + (s.y - cy) * fy
+    s.inX *= fx; s.inY *= fy; s.outX *= fx; s.outY *= fy
+  })
+  return { segments: segs }
+}
+
+// ROTA un subpath `deg` graus respecte del centre (cx,cy). Rota punts i nanses (vectors). Pur.
+export function rotateSubpath(segments, deg, cx, cy) {
+  const a = (deg || 0) * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a)
+  const rot = (x, y) => ({ x: x * cos - y * sin, y: x * sin + y * cos })
+  const segs = (segments || []).map(clone)
+  segs.forEach(s => {
+    const p = rot(s.x - cx, s.y - cy); s.x = cx + p.x; s.y = cy + p.y
+    const hi = rot(s.inX, s.inY); s.inX = hi.x; s.inY = hi.y
+    const ho = rot(s.outX, s.outY); s.outX = ho.x; s.outY = ho.y
+  })
+  return { segments: segs }
+}
+
 // BOOLEANES entre subpaths (G3 · buscatraços dins el path compost). `subpaths` = [{segments,closed}]
 // en ordre de z (baix→dalt); `op` ∈ {unite,subtract,intersect,exclude}. Encadena l'operació (subtract:
 // la forma inferior resta les superiors — mateix criteri que el buscatraços d'objecte). Retorna
