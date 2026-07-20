@@ -13,8 +13,9 @@ from django_tenants.test.cases import TenantTestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from fhort.accounts.models import UserProfile
-from fhort.models_app.models import Model
-from fhort.tasks.models import TaskType, TimeSeed, ModelTask
+from fhort.models_app.models import Model, Watchpoint
+from fhort.tasks.models import TaskType, TimeSeed, ModelTask, GarmentTypeItem
+from fhort.pom.models import GarmentType
 from fhort.planning.views import plan_assign_batch_view, ASSIGN_BATCH_MAX_EXPLICIT_IDS
 
 
@@ -89,6 +90,25 @@ class AssignBatchContractTest(TenantTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['fets'], 0)
         self.assertFalse(ModelTask.objects.filter(task_type=self.tt).exists())
+
+    # ── G3: el conjunt C2 captura els params NOUS del panell avançat (garment + operatiu) ────
+    def test_filters_path_captures_new_advanced_params(self):
+        """Filtrar per garment_type_item__in + watchpoints_open i assignar per conjunt: el backend
+        re-avalua amb el MATEIX ModelFilter (C1), així que els params nous de la URL viatgen sols."""
+        gt = GarmentType.objects.create(codi_client='GTA', nom_client='Família A', grup='TOPS')
+        item = GarmentTypeItem.objects.create(garment_type=gt, code='a1', name='Item A1')
+        # m_ss encaixa (item + watchpoint obert); m_fw no.
+        self.m_ss.garment_type = gt
+        self.m_ss.garment_type_item = item
+        self.m_ss.save()
+        Watchpoint.objects.create(model=self.m_ss, text='wp', estat='open')
+
+        resp = self._post({'filters': {'garment_type_item__in': str(item.id), 'watchpoints_open': 'true'},
+                           'assignacions': self._assignacio()})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['fets'], 1)
+        self.assertTrue(ModelTask.objects.filter(model=self.m_ss, task_type=self.tt).exists())
+        self.assertFalse(ModelTask.objects.filter(model=self.m_fw).exists())
 
     def test_explicit_ids_path_still_works(self):
         resp = self._post({'model_ids': [self.m_fw.id], 'assignacions': self._assignacio()})
