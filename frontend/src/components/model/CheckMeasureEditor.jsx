@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { models, sizeChecks, sizeCheckLines, baseMeasurements } from '../../api/endpoints'
 import MeasureGrid from './MeasureGrid'
 import EditorHeader from './EditorHeader'
@@ -274,6 +275,7 @@ const checkSource = {
 
 export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false, taskId = null, source = null, sourceCtx = null, lockRules = false, onSessionSaved = null }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const src = source || checkSource
   const [raw, setRaw] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -377,7 +379,23 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
         onSave={readOnly ? undefined : onSave} onNomSave={canEditNom ? onNomSave : undefined}
         editCodi reorderable={canReorder} onReorder={canReorder ? onReorder : undefined}
-        empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>} />
+        empty={
+          // Estat buit GUIAT: un model sense BaseMeasurement (POM per definir) no pot ser un
+          // cul-de-sac. En mode treball sobre la superfície de mesures (font check) expliquem
+          // el pas que falta i oferim la CTA a Definició POM (mode entrada). Fora d'això, el text pla.
+          (src.kind === 'check' && !readOnly) ? (
+            <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2, padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+              <span>{t('basestage.no_base_title')}</span>
+              <button type="button" onClick={() => navigate(`/models/${model.id}?tab=Mesures&mode=entry`)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 4, border: '0.5px solid var(--gold)', background: 'var(--white)', color: 'var(--gold)', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
+                <i className="ti ti-ruler-2" aria-hidden="true" style={{ fontSize: 16 }} />
+                {t('basestage.no_base_cta')}
+              </button>
+            </div>
+          ) : (
+            <p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>
+          )
+        } />
 
       {src.supportsResolve && !readOnly && check && rows.length > 0 && (
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>

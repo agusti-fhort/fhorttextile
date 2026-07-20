@@ -2127,6 +2127,8 @@
   "basestage": {
     "title": "Taula base · estadis",
     "empty": "Encara no hi ha mesures base.",
+    "no_base_title": "Aquest model encara no té mesures base (POM per definir).",
+    "no_base_cta": "Definir POM",
     "current": "vigent",
     "col_nomenclatura": "Nomenclatura",
     "stage_measure": "Mesura",

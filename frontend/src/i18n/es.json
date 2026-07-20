@@ -2127,6 +2127,8 @@
   "basestage": {
     "title": "Tabla base · estadios",
     "empty": "Aún no hay medidas base.",
+    "no_base_title": "Este modelo aún no tiene medidas base (POM por definir).",
+    "no_base_cta": "Definir POM",
     "current": "vigente",
     "col_nomenclatura": "Nomenclatura",
     "stage_measure": "Medida",

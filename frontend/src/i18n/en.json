@@ -2127,6 +2127,8 @@
   "basestage": {
     "title": "Base table · stages",
     "empty": "No base measurements yet.",
+    "no_base_title": "This model has no base measurements yet (POM to define).",
+    "no_base_cta": "Define POM",
     "current": "current",
     "col_nomenclatura": "Nomenclature",
     "stage_measure": "Measure",
