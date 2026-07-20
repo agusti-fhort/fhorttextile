@@ -4363,6 +4363,17 @@ export default function TechSheetEditor() {
               <span style={nodeBarSep} />
             </>
           )}
+          {/* G5 — Z-ORDRE de la forma dins el compost (darrere/enrere/endavant/davant). Reordena els
+              subpaths — el subtract de G3 en depèn. Opera sobre la forma primària. */}
+          {nodeSel.mode === 'shape' && nodeSel.shapeCount >= 1 && (
+            <>
+              <button type="button" onClick={() => runNode('reorderShape', 'back')} title={t('tech_sheet.send_to_back')} style={nodeBarBtn(false)}><i className="ti ti-chevrons-down" style={{ fontSize: 15 }} /></button>
+              <button type="button" onClick={() => runNode('reorderShape', 'backward')} title={t('tech_sheet.send_backward')} style={nodeBarBtn(false)}><i className="ti ti-arrow-down" style={{ fontSize: 15 }} /></button>
+              <button type="button" onClick={() => runNode('reorderShape', 'forward')} title={t('tech_sheet.bring_forward')} style={nodeBarBtn(false)}><i className="ti ti-arrow-up" style={{ fontSize: 15 }} /></button>
+              <button type="button" onClick={() => runNode('reorderShape', 'front')} title={t('tech_sheet.bring_to_front')} style={nodeBarBtn(false)}><i className="ti ti-chevrons-up" style={{ fontSize: 15 }} /></button>
+              <span style={nodeBarSep} />
+            </>
+          )}
           {/* F5 — pintura de la subpath activa (viu al canvas Paper): swatch fill + stroke + gruix. */}
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={t('tech_sheet.fill')}>
             <i className="ti ti-color-swatch" style={{ fontSize: 14, color: COL.textMuted }} />

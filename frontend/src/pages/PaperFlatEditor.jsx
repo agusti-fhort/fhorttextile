@@ -405,6 +405,21 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       paths.forEach(p => { const c = p.bounds.center; const r = fn(readSegs(p), c.x, c.y); rebuildPath(p, r.segments) })
       drawShapeSelection(); pushState()
     }
+    // G5 — Z-ORDRE de la forma primària dins el compost (reordena l'ordre de subpaths, que és el que
+    // llegeix el commit i el que fa servir el subtract de G3). insertAbove/insertBelow ordenen segons
+    // la seqüència de getItems (allPaths), robust encara que les formes tinguin pares diferents.
+    const reorderShape = (dir) => {
+      const p = selectedPathRef.current
+      const order = allPaths()
+      const pos = order.indexOf(p)
+      if (!p || pos < 0 || order.length < 2) return
+      pushHistory()
+      if (dir === 'front') { const top = order[order.length - 1]; if (top !== p) p.insertAbove(top) }
+      else if (dir === 'back') { const bot = order[0]; if (bot !== p) p.insertBelow(bot) }
+      else if (dir === 'forward') { const nx = order[pos + 1]; if (nx) p.insertAbove(nx) }
+      else if (dir === 'backward') { const pv = order[pos - 1]; if (pv) p.insertBelow(pv) }
+      drawShapeSelection(); pushState()
+    }
 
     const toViewPx = (mm) => toPx(mm) * zoomRef.current
     const rotation = ((flat.rotation || 0) * Math.PI) / 180
@@ -532,6 +547,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       mirrorShapes: (axis) => transformShapes((s, cx, cy) => mirrorSubpath(s, axis, cx, cy)),   // G5 — mirall H/V
       scaleShapes: (pct) => { const f = (Number(pct) || 0) / 100; if (f > 0) transformShapes((s, cx, cy) => scaleSubpath(s, f, f, cx, cy)) },  // G5 — escalar %
       rotateShapes: (deg) => { const d = Number(deg) || 0; if (d) transformShapes((s, cx, cy) => rotateSubpath(s, d, cx, cy)) },   // G5 — rotar angle
+      reorderShape: (dir) => reorderShape(dir),   // G5 — z-ordre de la forma dins el compost (front/back/forward/backward)
       setFill: (c) => applyPaint('fill', c),
       setStroke: (c) => applyPaint('stroke', c),
       setStrokeWidth: (w) => applyPaint('strokeWidth', w),
