@@ -269,7 +269,8 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
             return [IsAuthenticated()]
         # El tècnic tanca (DEFINE_TASKS); el comercial revisa el preu de venda (CONFIGURE).
         p = HasCapability()
-        self.required_capability = CONFIGURE if self.action == 'review' else DEFINE_TASKS
+        # review i unassign són actes COMERCIALS (preu/cartera) → CONFIGURE (com assign-model).
+        self.required_capability = CONFIGURE if self.action in ('review', 'unassign') else DEFINE_TASKS
         return [p]
 
     @action(detail=True, methods=['post'])
@@ -301,6 +302,22 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
             cancel_pending=bool(request.data.get('cancel_pending')))
         code = status.HTTP_200_OK if result['closed'] else status.HTTP_409_CONFLICT
         return Response(result, status=code)
+
+    @action(detail=True, methods=['post'])
+    def unassign(self, request, pk=None):
+        """POST commerce/work-orders/{id}/unassign/ — desassigna el model de la línia: ORFANDA el
+        WO (order_line→None, orphaned_from_line→línia origen) i allibera 1 unitat de qty_allocated.
+        Gate CONFIGURE (com assign-model). Guards durs: kind=ORDER, status=OPEN, no albaranat.
+        200 amb el WO actualitzat, o 400 amb el missatge del guard que ha fallat."""
+        wo = self.get_object()
+        profile = getattr(request.user, 'profile', None)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import unassign_model_from_order_line
+        try:
+            wo = unassign_model_from_order_line(wo, user=profile)
+        except DjangoValidationError as e:
+            return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(wo).data)
 
 
 class ExpenseViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
