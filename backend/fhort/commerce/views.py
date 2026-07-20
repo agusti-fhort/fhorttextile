@@ -100,7 +100,7 @@ class QuoteViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
     """CRUD d'ofertes + accions `send` (DRAFT→SENT) i `pdf` (descàrrega). Escriptura gated
     CONFIGURE (com el mestre B1); el `pdf` és lectura (autenticat). Rol comercial propi = B5."""
     queryset = Quote.objects.select_related('customer', 'created_by').prefetch_related(
-        'lines__product').all()
+        'lines__product', 'lines__model_intents__model').all()
     serializer_class = QuoteSerializer
     filterset_fields = ['status', 'customer']
 

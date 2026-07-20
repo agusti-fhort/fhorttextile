@@ -157,12 +157,20 @@ class QuoteLineSerializer(serializers.ModelSerializer):
     sense unit_price s'hi copia el base_price del Product."""
     product_code = serializers.CharField(source='product.code', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
+    # Vincle preparatori (E6): intencions de model d'aquesta línia, read-only nested (s'editen pel
+    # QuoteLineModelIntentViewSet, ?quote_line=). Alimenta el picker de models de la fitxa d'oferta.
+    model_intents = serializers.SerializerMethodField()
 
     class Meta:
         model = QuoteLine
         fields = ['id', 'quote', 'product', 'product_code', 'product_name', 'description',
-                  'quantity', 'unit_price', 'line_total', 'position']
+                  'quantity', 'unit_price', 'line_total', 'position', 'model_intents']
         read_only_fields = ['line_total']
+
+    def get_model_intents(self, obj):
+        return [{'id': mi.id, 'model': mi.model_id, 'model_codi': mi.model.codi_intern,
+                 'model_nom': mi.model.nom_prenda, 'qty': str(mi.qty), 'position': mi.position}
+                for mi in obj.model_intents.all()]
 
     def validate(self, data):
         quote = data.get('quote') or getattr(self.instance, 'quote', None)

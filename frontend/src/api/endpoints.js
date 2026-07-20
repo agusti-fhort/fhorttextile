@@ -438,6 +438,12 @@ export const commerce = {
     update: (id, data) => client.patch(`/api/v1/commerce/quote-lines/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/commerce/quote-lines/${id}/`),
   },
+  // E6 — vincle preparatori model↔línia d'oferta (intenció informativa, editable en DRAFT/SENT).
+  quoteLineIntents: {
+    list: (params) => client.get('/api/v1/commerce/quote-line-intents/', { params }),   // ?quote_line=
+    create: (data) => client.post('/api/v1/commerce/quote-line-intents/', data),
+    remove: (id) => client.delete(`/api/v1/commerce/quote-line-intents/${id}/`),
+  },
   // Documents comercials — SalesOrder (comanda, B3b). Neixen de la conversió d'una oferta;
   // lectura + pdf. Línies read-only (mutació només qty_allocated, control de cartera B4).
   orders: {
