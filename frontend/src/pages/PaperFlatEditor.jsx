@@ -322,6 +322,24 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       refreshHandles()
     }
 
+    // Feedback de hover: amb les eines afegir/tisores, mostra ON caurà l'acció ABANS de clicar.
+    tool.onMouseMove = (event) => {
+      const prev = uiLayer.children.find(c => c.data?.hover)
+      if (prev) prev.remove()
+      const active = nodeToolRef.current
+      const path = selectedPathRef.current
+      if ((active === 'add' || active === 'scissors') && path) {
+        const hit = sketchLayer.hitTest(event.point, { stroke: true, tolerance: 8 })
+        if (hit?.location && hit.item === path) {
+          uiLayer.activate()
+          const dot = new scope.Path.Circle({ center: hit.location.point, radius: 5, strokeColor: PAPER_COL.handle, strokeWidth: 1.5, fillColor: PAPER_COL.white })
+          dot.data = { hover: true }
+          sketchLayer.activate()
+        }
+      }
+      scope.view.update()
+    }
+
     tool.onMouseUp = () => {
       if (marqueeRef.current?.now) {   // tanca la marquesina: selecciona els nodes dins el rectangle
         const path = selectedPathRef.current
@@ -345,8 +363,16 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       }))
     }
 
-    // Teclat del sub-editor: Delete/Backspace treu els nodes seleccionats (la corba es reconnecta).
+    // Teclat del sub-editor: dreceres d'eina (Illustrator) + Delete/Backspace treu els nodes.
     const onKey = (e) => {
+      if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+        const k = e.key.toLowerCase()
+        if (k === 'v') { setNodeTool('select'); return }
+        if (e.key === '+' || e.key === '=') { setNodeTool('add'); return }
+        if (e.key === '-' || e.key === '_') { setNodeTool('remove'); return }
+        if (k === 'b') { setNodeTool('convert'); return }   // B = corba/vèrtex (A i P estan agafades a dalt)
+        if (k === 'c') { setNodeTool('scissors'); return }   // C = tisores (cut)
+      }
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
       const path = selectedPathRef.current
       const sel = [...selectedSegsRef.current].sort((a, b) => b - a)
