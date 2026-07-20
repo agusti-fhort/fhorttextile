@@ -4042,20 +4042,12 @@ export default function TechSheetEditor() {
     </button>
   )
   // PEÇA 2: en mode edició de nodes, la barra contextual del ribbon mostra eines de node + Fet/Cancel.
-  const nodeToolBtn = (icon, labelKey, { active = false, disabled = false, onClick } = {}) => (
-    <button key={labelKey} type="button" onClick={onClick} disabled={disabled}
-      title={disabled ? `${t(`tech_sheet.${labelKey}`)} · ${t('tech_sheet.coming_soon')}` : t(`tech_sheet.${labelKey}`)}
-      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, border: `1px solid ${active ? COL.gold : COL.border}`, borderRadius: 6, background: active ? COL.goldPale : COL.field, color: active ? COL.gold : COL.textMain, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1 }}>
-      <i className={`ti ${icon}`} style={{ fontSize: 18 }} />
-    </button>
-  )
+  // G4 — la ROW de la ribbon en mode edició porta NOMÉS Fet/Cancel: totes les eines (dos cursors,
+  // sub-eines, buscatraços, alinear, transformar, z-ordre, pintura) viuen a la barra contextual F1,
+  // superfície única. Abans hi havia una fila d'eines redundant (select actiu + "properament" per a
+  // eines que ja funcionen a la F1) — retirada per coherència.
   const renderNodeEditTools = () => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
-      {nodeToolBtn('ti-pointer', 'node_tool_select', { active: true })}
-      {nodeToolBtn('ti-vector-bezier', 'node_tool_convert', { disabled: true })}
-      {nodeToolBtn('ti-line-dashed', 'node_tool_handles', { disabled: true })}
-      {nodeToolBtn('ti-plus', 'node_tool_add', { disabled: true })}
-      {nodeToolBtn('ti-minus', 'node_tool_remove', { disabled: true })}
       <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
         <button type="button" onClick={() => paperFlatRef.current?.commit()} disabled={!flatCanCommit}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', border: 'none', borderRadius: 6, background: COL.gold, color: 'var(--white)', fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: flatCanCommit ? 'pointer' : 'default', opacity: flatCanCommit ? 1 : 0.45 }}>
