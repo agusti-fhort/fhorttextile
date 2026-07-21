@@ -581,18 +581,29 @@ def pom_specs(pattern_file) -> tuple[tuple[POMSpec, ...], list[str]]:
     return tuple(specs), problemes
 
 
-def sew_specs(pattern_file) -> tuple[SewSpec, ...]:
-    """Les `SewRelation` del MODEL del fitxer → `SewSpec` de l'engine.
+def sew_specs(pattern_file) -> tuple[tuple[SewSpec, ...], list[str]]:
+    """Les `SewRelation` del MODEL del fitxer → `SewSpec` de l'engine. → (specs, problemes).
 
     Les costures pengen del Model (cosir és muntatge: hi intervenen dues peces i cap no
     n'és propietària), així que es busquen pel model i es filtren als segments de les peces
     d'AQUEST fitxer: una costura declarada sobre una versió anterior del patró pot tenir
     trams que aquí ja no existeixen.
+
+    Cap d'aquestes dues omissions es fa en silenci (mateixa llei que `pom_specs`): ni el patró
+    ancorat a un ITEM —branca XOR, sense model i per tant sense costures possibles— ni les
+    costures d'una versió anterior del patró. Qui exporti ha de saber què NO hi ha entrat.
     """
     from .models import SewRelation
 
+    problemes: list[str] = []
+
     if pattern_file.model_id is None:
-        return ()
+        problemes.append(
+            'Aquest patró penja d\'un ITEM (garment_type_item), no d\'un model. Les costures '
+            'pengen del model, així que la projecció no en portarà cap: cap tram cosit entrarà '
+            'a la niada.'
+        )
+        return (), problemes
 
     peces = {p.id: p.nom_block for p in pattern_file.pieces.all()}
     fora: list[SewSpec] = []
@@ -603,7 +614,12 @@ def sew_specs(pattern_file) -> tuple[SewSpec, ...]:
         costat_a = _seg_refs(rel.segments_a.all(), peces)
         costat_b = _seg_refs(rel.segments_b.all(), peces)
         if not costat_a or not costat_b:
-            continue  # la costura no és d'aquesta versió del patró
+            # la costura no és d'aquesta versió del patró — s'omet, però es diu
+            problemes.append(
+                f'La costura #{rel.id} ({rel.tipus}) declara trams que no són a cap peça '
+                f'd\'aquesta versió del patró: ha quedat òrfena i no entrarà a la niada.'
+            )
+            continue
         fora.append(SewSpec(
             sew_id=rel.id,
             tipus=rel.tipus,
@@ -612,7 +628,7 @@ def sew_specs(pattern_file) -> tuple[SewSpec, ...]:
             costat_b=costat_b,
         ))
 
-    return tuple(fora)
+    return tuple(fora), problemes
 
 
 def _seg_refs(segments, peces: dict[int, str]) -> tuple[SegRef, ...]:

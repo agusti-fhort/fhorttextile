@@ -229,6 +229,7 @@ def _preview_payload(resultat) -> dict:
             for o in proj.omissions
         ],
         'problemes_poms': list(resultat.problemes_poms),
+        'problemes_costures': list(resultat.problemes_costures),
         'regles': proj.regles_actives,
         'autovalidacio': {
             'ok': resultat.autovalidacio.ok,
