@@ -941,7 +941,8 @@
     "grading_needs_run": "Choose the sizes of the run (step 3) to be able to pick grading.",
     "grading_needs_base": "The BASE SIZE is missing: pick it in step 3 (it must be one of the run sizes).",
     "grading_missing_axes": "Grading cannot be searched yet: {{eixos}} missing.",
-    "model_size_system": "Model’s system"
+    "model_size_system": "Model’s system",
+    "grading_dropped": "The grading the model had no longer matches the chosen axes (garment, construction or size system). It has been unassigned: pick another one or tick “No grading”."
   },
   "models_list": {
     "title": "Models",

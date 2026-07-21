@@ -941,7 +941,8 @@
     "grading_needs_run": "Tria les talles del run (pas 3) per poder triar la graduació.",
     "grading_needs_base": "Falta la TALLA BASE: tria-la al pas 3 (ha de ser una de les talles del run).",
     "grading_missing_axes": "Encara no es pot buscar graduació: falta {{eixos}}.",
-    "model_size_system": "Sistema del model"
+    "model_size_system": "Sistema del model",
+    "grading_dropped": "La graduació que tenia el model ja no casa amb els eixos triats (peça, construcció o sistema de talles). S'ha desassignat: torna a triar-ne una o marca «Sense graduació»."
   },
   "models_list": {
     "title": "Models",

@@ -7,7 +7,7 @@ import CustomerSelector from '../components/CustomerSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
 import { availableFitsStrict, matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS } from '../components/grading/gradingAxes'
 import useAuthStore from '../store/auth'
-import { models, sizeSystems, customers, gradingRuleSets, garmentGroups, garmentTypes } from '../api/endpoints'
+import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles + GRADUACIÓ.
@@ -47,7 +47,6 @@ export default function ModelWizard() {
   // Customer (selector) i referència/SKU del client (camp de text) són DOS camps diferents:
   // el primer mana el prefix del codi; el segon (codi_client) és la referència pròpia del client.
   const [customerId, setCustomerId] = useState(null)
-  const [customerCodi, setCustomerCodi] = useState('')   // codi (3 chars) per ordenar sizing profiles
   const [refClient, setRefClient] = useState('')
   const [nomPrenda, setNomPrenda] = useState('')
   const [descripcio, setDescripcio] = useState('')
@@ -84,12 +83,13 @@ export default function ModelWizard() {
   const [gradingRuleSetId, setGradingRuleSetId] = useState(null)  // ruleset triat (null = cap)
   const [noGrading, setNoGrading] = useState(false)  // «Sense graduació» explícit
   const [autoProposed, setAutoProposed] = useState(false)  // B1: ruleset preseleccionat per única coincidència
+  const [gradingDropped, setGradingDropped] = useState(false)  // F1.5: el ruleset previ ja no casa amb els eixos
   const [modelGarmentGrup, setModelGarmentGrup] = useState(null)  // grup del model en edició (prefill)
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const resetGrading = () => { setFit(null); setGradingRuleSetId(null); setNoGrading(false); setAutoProposed(false) }
+  const resetGrading = () => { setFit(null); setGradingRuleSetId(null); setNoGrading(false); setAutoProposed(false); setGradingDropped(false) }
 
   // LLEI 5 CAPES: el pas Talles retorna NOMÉS escala (sistema/run/base). La graduació (capa 4) es
   // tria per separat a la fitxa (RuleSetCard→update-step2). Aquí NO s'arrossega grading_rule_set_id.
@@ -169,16 +169,6 @@ export default function ModelWizard() {
     }).catch(() => setError(t('model_wizard.conn_error')))
     return () => { alive = false }
   }, [id, isEditMode])
-
-  // Resol el codi (3 chars) del customer triat, per ordenar els sizing profiles.
-  useEffect(() => {
-    if (!customerId) { setCustomerCodi(''); return }
-    let alive = true
-    customers.get(customerId)
-      .then(r => { if (alive) setCustomerCodi(r.data?.codi || '') })
-      .catch(() => { if (alive) setCustomerCodi('') })
-    return () => { alive = false }
-  }, [customerId])
 
   // Bloc 3 (LLEI 5 CAPES) — carrega SizeSystems PURS quan hi ha target i estem al bloc 3.
   // Filtra pel target de la peça (target_codis, buit = universal) i descarta systems sense talles.
@@ -316,6 +306,20 @@ export default function ModelWizard() {
       setAutoProposed(true)
     }
   }, [strictMatches, fit, noGrading, sizingResult, gradingRuleSetId])
+
+  // F1.5 — el ruleset hidratat en edició no es netejava mai encara que deixés de casar amb els eixos
+  // triats, i skeletonPayload seguia enviant l'id antic (risc #8). Es neteja, i es DIU (mai en silenci).
+  useEffect(() => {
+    if (noGrading || gradingRuleSetId == null) return
+    if (!gradingRuleSets_.length || !fit || !sizingResult) return
+    // Només si el ruleset és a la llista carregada: si no hi és (p.ex. sense regles actives, filtrat
+    // per amb_regles=1) no l'hem de jutjar aquí — D1 el bloqueja a la porta del backend.
+    if (!gradingRuleSets_.some(rs => rs.id === gradingRuleSetId)) return
+    if (strictMatches.some(rs => rs.id === gradingRuleSetId)) return
+    setGradingRuleSetId(null)
+    setAutoProposed(false)
+    setGradingDropped(true)
+  }, [strictMatches, gradingRuleSets_, fit, sizingResult, gradingRuleSetId, noGrading])
 
   const skeletonPayload = () => {
     // Sprint WIZARD-COMPLET: la graduació torna al payload. `undefined` = no tocar (creació sense
@@ -651,6 +655,12 @@ export default function ModelWizard() {
                     </div>
                   )}
                 </Field>
+                {gradingDropped && gradingRuleSetId == null && (
+                  <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--warn)', background: 'var(--warn-bg)',
+                                border: '0.5px solid var(--warn)', borderRadius: 6, padding: '8px 12px' }}>
+                    {t('model_wizard.grading_dropped')}
+                  </div>
+                )}
                 {fit && autoProposed && gradingRuleSetId != null && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gold)', background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 6, padding: '8px 12px' }}>
                     <IconBulb size={16} stroke={1.5} />
