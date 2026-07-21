@@ -4448,7 +4448,12 @@ export default function TechSheetEditor() {
   const inserirPeca = async (peca) => {
     if (!locked || !patternFile) return
     try {
-      const url = `${API}/api/v1/patterns/pattern-files/${patternFile.id}/render.svg/?piece=${encodeURIComponent(peca.nom_block)}`
+      // `fons=0` — X1. El render porta un rectangle de fons de sagnat complet (200000×200000)
+      // que, com a IMATGE, el viewBox retallava i ningú veia. Vectoritzat ja no hi ha retall:
+      // entrava com una forma BLANCA OPACA que tapava la pàgina sencera i feia semblar que
+      // inserir una peça havia esborrat el document. Sobre la fitxa, una peça hi va
+      // transparent; el fons només el vol qui l'ensenya com a imatge.
+      const url = `${API}/api/v1/patterns/pattern-files/${patternFile.id}/render.svg/?piece=${encodeURIComponent(peca.nom_block)}&fons=0`
       const r = await fetch(url, { headers: uploadHeaders })
       if (!r.ok) throw new Error('http')
       const svgText = await r.text()

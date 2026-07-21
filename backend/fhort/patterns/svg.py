@@ -45,11 +45,15 @@ RADI_PUNT = 1.6
 MARGE_MM = 20.0
 
 
-def render_document(doc: PatternDocument, piece_name: str = '') -> str:
+def render_document(doc: PatternDocument, piece_name: str = '', fons: bool = True) -> str:
     """SVG del conjunt, o d'una sola peça si es demana.
 
     Les coordenades van en mil·límetres i l'eix Y es capgira: al DXF creix cap amunt i a
     l'SVG cap avall. Sense això, el patró surt del revés i no ho sembla.
+
+    `fons=False` treu el rectangle de fons. Qui ensenya el render com a IMATGE el vol (un
+    patró sobre transparent no es llegeix); qui el VECTORITZA, no: aquell rectangle deixa de
+    ser fons i passa a ser una forma opaca més (v. `_svg_wrapper`).
     """
     peces = [p for p in doc.pieces if not piece_name or p.nom_block == piece_name]
     if not peces:
@@ -69,6 +73,7 @@ def render_document(doc: PatternDocument, piece_name: str = '') -> str:
         viewbox=f'{minx - MARGE_MM:.2f} {-maxy - MARGE_MM:.2f} {ample:.2f} {alt:.2f}',
         ample=ample,
         alt=alt,
+        fons=fons,
     )
 
 
@@ -150,12 +155,17 @@ def _bounding_box(peces) -> tuple[float, float, float, float]:
     return (min(xs), min(ys), max(xs), max(ys))
 
 
-def _svg_wrapper(contingut: str, viewbox: str, ample: float, alt: float) -> str:
+def _svg_wrapper(contingut: str, viewbox: str, ample: float, alt: float, fons: bool = True) -> str:
+    # El fons és un rectangle de sagnat complet: com a IMATGE, el viewBox el retalla i només
+    # se'n veu el marc del dibuix. Vectoritzat, en canvi, el retall desapareix i queda una
+    # forma blanca opaca de 200000×200000 — per això qui vectoritza demana `fons=False`.
+    rect = (f'<rect x="-100000" y="-100000" width="200000" height="200000" '
+            f'fill="{COLOR_FONS}"/>\n' if fons else '')
     return (
         f'<?xml version="1.0" encoding="UTF-8"?>\n'
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{viewbox}" '
         f'width="{ample:.0f}mm" height="{alt:.0f}mm">\n'
-        f'<rect x="-100000" y="-100000" width="200000" height="200000" fill="{COLOR_FONS}"/>\n'
+        f'{rect}'
         f'{contingut}\n'
         f'</svg>\n'
     )
