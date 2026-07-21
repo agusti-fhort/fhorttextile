@@ -174,6 +174,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     # Generate specs
     created = 0
     warnings: list[str] = []
+    sense_regla: set[int] = set()   # D2: POMs amb base i sense regla → no emeten cap cel·la
     for pom_id, base_val in base_measurements.items():
         rule = rules.get(pom_id)
 
@@ -189,8 +190,14 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 graded_val = override
                 gt_applied = 'EXCEPTION'
             elif rule is None:
-                graded_val = base_val  # no rule = FIXED
-                gt_applied = 'FIXED'
+                # D2 — LLEI DE CEL·LA ABSENT: regla absent → CAP CEL·LA. Mai un FIXED fabricat.
+                # Abans aquí hi havia `graded_val = base_val; gt_applied = 'FIXED'`, que davant
+                # d'un POM amb base i sense regla emetia el valor base repetit a totes les talles
+                # i el reportava com a graduació legítima. És el que va deixar el model 163 amb
+                # 225 specs 100% FIXED i delta 0 retornant 200 OK (DIAGNOSI_REFACTOR_GRADING
+                # 2026-07-21, R3). Una regla que no existeix no gradua: no emet.
+                sense_regla.add(pom_id)
+                continue
             else:
                 graded_val, gt_applied = _apply_rule(
                     rule, base_val, steps, i, base_idx,
@@ -214,6 +221,30 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 generated_from_version=current_version,
             )
             created += 1
+
+    # D2 — una propagació que no produeix cap cel·la NO és un èxit buit: és un error.
+    # Es llança ABANS de marcar l'SF, perquè un SF a 'TallesGenerades' amb 0 specs és
+    # exactament l'estat mentider que descriu la diagnosi (R3/R5). Diu també PER QUÈ.
+    if created == 0:
+        if sense_regla:
+            raise ValueError(
+                f"Propagació avortada per al model {model.codi_intern}: cap de les "
+                f"{len(sense_regla)} mesures base té regla de grading. Revisa el Grading "
+                f"Rule Set assignat (pot estar buit o no correspondre a aquest model)."
+            )
+        raise ValueError(
+            f"Propagació avortada per al model {model.codi_intern}: no s'ha pogut "
+            f"calcular cap cel·la de grading."
+        )
+
+    # D2 — cobertura parcial: hi ha graduació, però alguns POMs no emeten. No és un error
+    # (la cel·la absent és legítima), però ha de deixar rastre: el silenci era el bug.
+    if sense_regla:
+        logger.warning(
+            f"Grading SF {size_fitting_id}: {len(sense_regla)} POM(s) amb mesura base i "
+            f"sense regla → cap cel·la emesa (llei D2 de cel·la absent). POMs: "
+            f"{sorted(sense_regla)}"
+        )
 
     # Mark SF
     SizeFitting.objects.filter(pk=size_fitting_id).update(
@@ -257,7 +288,10 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
 
     out = {}
     for pom_id, base_val in base_values.items():
-        if base_val is None:
+        # D2 — base absent O A ZERO: el POM no existeix per a aquest model → cap cel·la.
+        # Mateix criteri que _load_base_measurements, perquè el preview no pot prometre
+        # una taula que el generador després no emetrà.
+        if base_val is None or float(base_val) == 0.0:
             continue
         base_val = float(base_val)
         rule = rules.get(pom_id)
@@ -268,7 +302,8 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
             if override is not None:
                 graded_val = float(override)
             elif rule is None:
-                graded_val = base_val  # sense regla = FIXED
+                # D2 — regla absent → cel·la absent (mateixa llei que generate_graded_specs).
+                continue
             else:
                 graded_val, _ = _apply_rule(
                     rule, base_val, steps, i, base_idx,
@@ -278,7 +313,10 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
                 # Validació dura STEP fallida: deixa la cel·la buida (sense fallback).
                 continue
             row[size_label] = round(graded_val, 2)
-        out[pom_id] = row
+        # D2 — POM que no emet cap cel·la no apareix a la taula (fila ABSENT, no fila buida):
+        # el generador tampoc no en crearà cap GradedSpec.
+        if row:
+            out[pom_id] = row
     return out
 
 
@@ -594,11 +632,14 @@ def _load_base_measurements(model_id: int) -> dict:
     try:
         from fhort.models_app.models import BaseMeasurement
         # Ignora files materialitzades sense valor (base_value_cm=None) → no es graden.
+        # D2: i també les de valor 0 — una talla base a zero és físicament impossible, o
+        # sigui que el POM no existeix per a aquest model. No gradua, no emet cel·la. Que
+        # un 0 no arribi mai a la base és feina de la validació d'entrada (autoria/import).
         return {
             bm.pom_id: bm.base_value_cm
             for bm in BaseMeasurement.objects.filter(
                 model_id=model_id, is_active=True, base_value_cm__isnull=False
-            ).order_by('ordre')
+            ).exclude(base_value_cm=0).order_by('ordre')
         }
     except Exception as e:
         logger.warning(f"Could not load BaseMeasurements: {e}")
