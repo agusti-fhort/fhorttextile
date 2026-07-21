@@ -1808,7 +1808,6 @@ export default function TechSheetEditor() {
   // sub-editor rep `nodeTool` i puja `onNodeState`. runNode() dispara accions sobre el canvas viu.
   const [nodeTool, setNodeTool] = useState('select')
   const [nodeSel, setNodeSel] = useState({ selCount: 0 })
-  const [flatCanCommit, setFlatCanCommit] = useState(false)   // PEÇA 2: estat "es pot desar" de l'editor de nodes
   const [spaceHeld, setSpaceHeld] = useState(false)           // PEÇA P: barra espaiadora premuda (pan temporal)
   const [panning, setPanning] = useState(false)              // PEÇA P: arrossegant amb pan actiu
   const [zoom, setZoom] = useState(1)
@@ -1879,7 +1878,7 @@ export default function TechSheetEditor() {
   }, [menuOpen])
   const flatFileRef = useRef(null)
   const importInputRef = useRef(null)   // IMP-2: file input del panell d'importació
-  const paperFlatRef = useRef(null)     // PEÇA 2: handle imperatiu de PaperFlatEditor (commit)
+  const paperFlatRef = useRef(null)     // handle imperatiu de PaperFlatEditor: run(name, ...)
   const panDrag = useRef(null)          // PEÇA P: estat de l'arrossegament de pan
   const saveTimer = useRef(null)
   const skipSave = useRef(true)        // salta l'autosave del primer load
@@ -2584,7 +2583,7 @@ export default function TechSheetEditor() {
   // ── S0 — Teclat: Cmd/Ctrl+Z desfés · Shift+Z/Ctrl+Y refés · C/V/D clipboard ─
   useEffect(() => {
     const onKey = (e) => {
-      if (editingFlatId) return
+      // Ja no surt d'hora amb editingFlatId: ⌘Z és un de sol per a tot el document.
       if (editingText) return
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
@@ -3340,10 +3339,10 @@ export default function TechSheetEditor() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       // F3 — ESBORRAR: tant Delete (fn+delete a Mac) com Backspace (la tecla gran de Mac).
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); runNode('removeSelection'); return }
-      // F6 — undo/redo INTERN + Cmd+A (tots els nodes) SENSE sortir del mode.
+      // ⌘Z NO s'intercepta: amb l'edició contínua l'undo és el del document i ha de funcionar
+      // igual dins i fora del mode nodes. Només Cmd+A segueix sent contextual (tots els nodes).
       if (e.metaKey || e.ctrlKey) {
         const k = e.key.toLowerCase()
-        if (k === 'z') { e.preventDefault(); runNode(e.shiftKey ? 'redo' : 'undo'); return }
         if (k === 'a') { e.preventDefault(); runNode('selectAll'); return }
         return
       }
@@ -3398,9 +3397,10 @@ export default function TechSheetEditor() {
   const commitFlatEdit = (payload) => {
     if (!editingFlatId) return
     if (payload && typeof payload === 'object' && Array.isArray(payload.paths)) {
+      // Escriu i NO tanca: l'edició és contínua. Cada escriptura entra a la història del
+      // document com qualsevol altra acció (mateix debounce, mateix límit).
       if (editingFlatGroupId) updateChild(editingFlatGroupId, editingFlatId, { paths: payload.paths })
       else updateObject(editingFlatId, { paths: payload.paths })
-      setEditingFlatId(null); setEditingFlatGroupId(null)
       return
     }
     const svg = payload
@@ -3419,7 +3419,6 @@ export default function TechSheetEditor() {
       }
     }
     updateObject(editingFlatId, patch)
-    setEditingFlatId(null)
   }
   const addModelFitxer = async (f) => {
     if (!locked) return
@@ -4205,30 +4204,10 @@ export default function TechSheetEditor() {
       <span style={ribbonLabelStyle}>{label}</span>
     </button>
   )
-  // PEÇA 2: en mode edició de nodes, la barra contextual del ribbon mostra eines de node + Fet/Cancel.
-  // G4 — la ROW de la ribbon en mode edició porta NOMÉS Fet/Cancel: totes les eines (dos cursors,
-  // sub-eines, buscatraços, alinear, transformar, z-ordre, pintura) viuen a la barra contextual F1,
-  // superfície única. Abans hi havia una fila d'eines redundant (select actiu + "properament" per a
-  // eines que ja funcionen a la F1) — retirada per coherència.
-  const renderNodeEditTools = () => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-        <button type="button" onClick={() => paperFlatRef.current?.commit()} disabled={!flatCanCommit}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', border: 'none', borderRadius: 6, background: COL.gold, color: 'var(--white)', fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: flatCanCommit ? 'pointer' : 'default', opacity: flatCanCommit ? 1 : 0.45 }}>
-          <i className="ti ti-check" /> {t('tech_sheet.flat_done')}
-        </button>
-        <button type="button" onClick={() => setEditingFlatId(null)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
-          <i className="ti ti-x" /> {t('tech_sheet.flat_cancel')}
-        </button>
-      </div>
-    </div>
-  )
   const renderRibbonContent = () => {
     if (!locked) {
       return <span style={{ color: COL.textMuted, padding: '0 8px' }}><i className="ti ti-eye" aria-hidden="true" style={{ marginRight: 5 }} />{t('tech_sheet.readonly_overlay')}</span>
     }
-    if (editingFlatId) return renderNodeEditTools()
     if (ribbonGroup === 'file') {
       return [
         ribbonTool({ key: 'export', icon: 'ti-file-download', label: t('tech_sheet.export_pdf'), onClick: onExport, disabled: exporting }),
@@ -4800,7 +4779,6 @@ export default function TechSheetEditor() {
                 onNodeState={setNodeSel}
                 onCommit={commitFlatEdit}
                 onSplitObject={handleSplitObject}
-                onCanCommitChange={setFlatCanCommit}
                 onEnterDirect={() => setNodeTool('select')}
               />
             </Suspense>

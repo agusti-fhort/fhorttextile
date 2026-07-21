@@ -20,7 +20,7 @@ const DEFAULT_HANDLE_OFFSET = 22
 // F1 — el sub-editor NO té UI pròpia: les eines viuen a la barra superior del pare. Aquí només el
 // canvas Paper + la lògica. El pare controla l'eina activa (prop `nodeTool`), rep l'estat de selecció
 // (`onNodeState`) i dispara accions per l'API imperativa `run(name, ...args)` (ref).
-const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onSplitObject, onNodeState, nodeTool = 'shape', onCanCommitChange, onEnterDirect }, ref) {
+const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onSplitObject, onNodeState, nodeTool = 'shape', onEnterDirect }, ref) {
   const canvasRef = useRef(null)
   const scopeRef = useRef(null)
   const sketchLayerRef = useRef(null)
@@ -37,11 +37,14 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   const refreshHandlesRef = useRef(null)      // dispatcher de refresc (node o forma segons el mode)
   const pushStateRef = useRef(null)           // puja l'estat (mode/selecció/pintura) al pare fora dels handlers
   const opsRef = useRef(null)                 // accions exposades al pare via run() (close/open/split/removeSelection…)
+  const markDirtyRef = useRef(null)           // demana escriure la geometria al document (edició contínua)
+  const emitRef = useRef(null)                // l'escriptura en si; viu a l'àmbit de render (llegeix `flat` viu)
+  const flatIdRef = useRef(null)
   const onNodeStateRef = useRef(onNodeState)  // callback per pujar {selCount} al pare
   const onEnterDirectRef = useRef(onEnterDirect)  // G1: demana al pare passar a selecció directa (doble-clic forma)
   const nodeToolRef = useRef(nodeTool)        // eina activa (llegida dins els handlers de Paper)
   const [, setStatus] = useState('')
-  const [canCommit, setCanCommit] = useState(false)
+  const [canCommit, setCanCommit] = useState(false)   // l'escena de Paper està muntada i és segura d'escriure
   const isStructuredPath = flat?.type === 'path'
 
   useEffect(() => { onNodeStateRef.current = onNodeState }, [onNodeState])
@@ -224,7 +227,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const applyPaint = (kind, value) => {
       const primary = selectedPathRef.current
       if (!primary) return
-      pushHistory()
+      markDirty()
       const targets = isShapeMode() && selectedShapesRef.current.size
         ? [...selectedShapesRef.current].map(pathByIndex).filter(Boolean)
         : [primary]
@@ -234,41 +237,19 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       pushState()
     }
 
-    // F6/G2 — HISTÒRIA INTERNA de la sessió d'edició (undo/redo sense sortir del mode). Instantània de
-    // TOTA l'escena (totes les formes: segments view px + closed + estil) + pintura pendent + forma
-    // primària. Full-scene perquè les operacions de FORMA (moure/esborrar/duplicar/booleanes) canvien
-    // el CONJUNT de subpaths, no només la path activa. En sortir amb "Fet" → 1 sol commit al model;
-    // Escape cancel·la tot. Les operacions que bombollen objectes al pare (split/tisores) van a la
-    // història del MODEL, no aquí.
-    const historyRef = { past: [], future: [] }
-    const snapshot = () => ({
-      primary: selectedPathRef.current?.data?.index ?? null,
-      paths: allPaths().map(p => ({
-        index: p.data?.index ?? 0, segments: readSegs(p), closed: !!p.closed,
-        fill: cssColor(p.fillColor), stroke: cssColor(p.strokeColor),
-        strokeWidth: p.strokeWidth || 0,
-      })),
-      paint: JSON.parse(JSON.stringify(paintRef.current)),
-    })
-    const pushHistory = () => { historyRef.past.push(snapshot()); if (historyRef.past.length > 100) historyRef.past.shift(); historyRef.future = [] }
-    const restore = (snap) => {
-      if (!snap) return
-      sketchLayer.getItems({ class: scope.Path }).forEach(p => p.remove())
-      sketchLayer.activate()
-      snap.paths.forEach(sp => {
-        const p = new scope.Path({ closed: sp.closed, strokeColor: sp.stroke, strokeWidth: sp.strokeWidth, fillColor: sp.fill })
-        sp.segments.forEach(s => p.add(new scope.Segment(new scope.Point(s.x, s.y), new scope.Point(s.inX || 0, s.inY || 0), new scope.Point(s.outX || 0, s.outY || 0))))
-        p.data = { index: sp.index }
-        sketchLayer.addChild(p)
-      })
-      paintRef.current = snap.paint || {}
-      selectedPathRef.current = (snap.primary != null ? pathByIndex(snap.primary) : null) || allPaths()[0] || null
-      selectedShapesRef.current = new Set([...selectedShapesRef.current].filter(i => pathByIndex(i) != null))
-      selectedSegsRef.current = new Set()
-      selectedSegRef.current = null
-      refresh()
-      pushState()
+    // EDICIÓ CONTÍNUA — ja no hi ha sessió ni història paral·lela. Cada gest que canvia la
+    // geometria marca el treball com a brut i, en acabar el tick, escriu DIRECTAMENT al
+    // document del pare, que és qui té l'undo (ftt/history.js, debounce 500ms i límit 50).
+    // Abans hi havia una segona història en view px que moria al tancar: dos rellotges per a
+    // la mateixa mà. El rAF fa dues feines: emet DESPRÉS de la mutació (les marques es posen
+    // abans, com feien les instantànies) i col·lapsa les ràfegues d'un drag en una escriptura
+    // per frame.
+    let dirtyRaf = 0
+    const markDirty = () => {
+      if (dirtyRaf) return
+      dirtyRaf = requestAnimationFrame(() => { dirtyRaf = 0; emitRef.current?.() })
     }
+    markDirtyRef.current = markDirty
 
     const setSelection = (indices) => {
       selectedSegsRef.current = new Set(indices)
@@ -342,7 +323,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const deleteSelectedShapes = () => {
       const sel = selectedShapesRef.current
       if (!sel.size) return
-      pushHistory()
+      markDirty()
       allPaths().forEach(p => { const i = p.data?.index ?? 0; if (sel.has(i)) { delete paintRef.current[i]; p.remove() } })
       selectedShapesRef.current = new Set()
       selectedPathRef.current = allPaths()[0] || null
@@ -361,7 +342,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       // M1 — si el resultat és buit (formes obertes o disjuntes: intersecar sense solapament, restar que
       // s'anul·la…) NO esborris les formes font: seria una desaparició silenciosa. No-op segur.
       if (!res || !res.length) return
-      pushHistory()   // instantània amb les formes originals encara a l'escena
+      markDirty()
       const base = ordered[0]
       const style = { stroke: cssColor(base.strokeColor), fill: cssColor(base.fillColor), sw: base.strokeWidth || 0 }
       ordered.forEach(p => { delete paintRef.current[p.data?.index ?? 0]; p.remove() })
@@ -382,7 +363,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const alignShapes = (mode) => {
       const paths = [...selectedShapesRef.current].map(pathByIndex).filter(Boolean)
       if (paths.length < 2) return
-      pushHistory()
+      markDirty()
       const bs = paths.map(p => p.bounds)
       const minX = Math.min(...bs.map(b => b.left)), maxX = Math.max(...bs.map(b => b.right))
       const minY = Math.min(...bs.map(b => b.top)), maxY = Math.max(...bs.map(b => b.bottom))
@@ -403,7 +384,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const distributeShapes = (axis) => {
       const paths = [...selectedShapesRef.current].map(pathByIndex).filter(Boolean)
       if (paths.length < 3) return
-      pushHistory()
+      markDirty()
       const entries = paths.map(p => ({ p, b: p.bounds })).sort((a, b) => axis === 'h' ? a.b.left - b.b.left : a.b.top - b.b.top)
       const start = axis === 'h' ? entries[0].b.left : entries[0].b.top
       const end = axis === 'h' ? entries[entries.length - 1].b.right : entries[entries.length - 1].b.bottom
@@ -424,7 +405,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const transformShapes = (fn) => {
       const paths = [...selectedShapesRef.current].map(pathByIndex).filter(Boolean)
       if (!paths.length) return
-      pushHistory()
+      markDirty()
       paths.forEach(p => { const c = p.bounds.center; const r = fn(readSegs(p), c.x, c.y); rebuildPath(p, r.segments) })
       drawShapeSelection(); pushState()
     }
@@ -436,7 +417,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       const order = allPaths()
       const pos = order.indexOf(p)
       if (!p || pos < 0 || order.length < 2) return
-      pushHistory()
+      markDirty()
       if (dir === 'front') { const top = order[order.length - 1]; if (top !== p) p.insertAbove(top) }
       else if (dir === 'back') { const bot = order[0]; if (bot !== p) p.insertBelow(bot) }
       else if (dir === 'forward') { const nx = order[pos + 1]; if (nx) p.insertAbove(nx) }
@@ -512,7 +493,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const applyOp = (result, nextSel) => {
       if (!result) return
       const path = selectedPathRef.current
-      pushHistory()
+      markDirty()
       rebuild(result.segments, result.closed != null ? result.closed : path.closed)
       setSelection(nextSel != null ? nextSel : [])
       setStatus('')
@@ -585,22 +566,19 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         if (isShapeMode()) {
           const sel = [...selectedShapesRef.current]
           if (!sel.length) return
-          pushHistory()
+          markDirty()
           sel.forEach(i => { const p = pathByIndex(i); if (p) { const r = translateSubpath(readSegs(p), dx, dy); rebuildPath(p, r.segments) } })
           drawShapeSelection(); return
         }
         const path = selectedPathRef.current
         if (!path) return
-        if (selectedSegRef.current != null) { pushHistory(); const r = moveSegment(readSegs(path), path.closed, selectedSegRef.current, dx, dy); rebuild(r.segments, path.closed); refreshHandles(); return }
+        if (selectedSegRef.current != null) { markDirty(); const r = moveSegment(readSegs(path), path.closed, selectedSegRef.current, dx, dy); rebuild(r.segments, path.closed); refreshHandles(); return }
         const sel = [...selectedSegsRef.current]
         if (!sel.length) return
-        pushHistory()
+        markDirty()
         sel.forEach(i => { const s = path.segments[i]; if (s) s.point = s.point.add(new scope.Point(dx, dy)) })
         refreshHandles()
       },
-      // F6 — undo/redo INTERN (no surt del mode). Escape segueix cancel·lant tot.
-      undo: () => { if (!historyRef.past.length) return; historyRef.future.push(snapshot()); restore(historyRef.past.pop()) },
-      redo: () => { if (!historyRef.future.length) return; historyRef.past.push(snapshot()); restore(historyRef.future.pop()) },
     }
 
     const tool = new scope.Tool()
@@ -697,7 +675,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         return
       }
       if (!drag || !path) return
-      if (!drag.pushed) { pushHistory(); drag.pushed = true }   // F6 — 1 sola instantània per gest de drag
+      if (!drag.pushed) { markDirty(); drag.pushed = true }   // el rAF ja col·lapsa el gest
       if (drag.kind === 'shape') {   // G2 — mou la/les FORMA/ES seleccionada/es (translació del subpath)
         if (drag.alt && !drag.duped) {   // Alt+arrossegar = duplica i mou la còpia (estàndard Illustrator)
           drag.duped = true
@@ -765,6 +743,8 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     }
 
     tool.onMouseUp = () => {
+      // Final de gest: si s'estava arrossegant, la posició definitiva ha d'arribar al document.
+      if (dragRef.current?.pushed) markDirty()
       if (marqueeRef.current?.now) {   // tanca la marquesina: selecciona els nodes dins el rectangle
         const path = selectedPathRef.current
         const m = marqueeRef.current
@@ -787,10 +767,16 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       }))
     }
 
-    // F1/F3 — el teclat (dreceres d'eina, Delete, nudge, Cmd+A, undo/redo) viu ARA al pare (barra
-    // superior), que crida run(...) sobre aquest ref. Un sol lloc de teclat → context sempre guanya.
+    // F1/F3 — el teclat (dreceres d'eina, Delete, nudge, Cmd+A) viu ARA al pare, que crida
+    // run(...) sobre aquest ref. L'undo ja no és cas a part: ⌘Z és el del document, com sempre.
     return cleanup
-  }, [flat, pageW, pageH, toPx, isStructuredPath])
+  // DEPENDÈNCIA PER ID, NO PER OBJECTE. Amb l'edició contínua, `flat` és una referència nova a
+  // cada gest (l'escrivim nosaltres): dependre'n reconstruiria l'escena de Paper a cada
+  // moviment de node. L'escena es munta un cop per objecte editat. El que sí ha de quedar
+  // quiet mentre dura l'edició són la posició, la rotació i l'escala de l'objecte — i és
+  // exactament el que garanteix el gate B3 del panell dret.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flat?.id, pageW, pageH, toPx, isStructuredPath])
 
   useEffect(() => {
     const previousZoom = zoomRef.current
@@ -809,7 +795,10 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     scope.view.update()
   }, [pageH, pageW, zoom])
 
-  const commit = () => {
+  // ESCRIPTURA AL DOCUMENT. Abans es deia `commit` i només corria en clicar "Fet"; ara corre a
+  // cada gest. El càlcul és exactament el mateix (view px → mm locals, desfent rotació i escala
+  // de l'objecte) — l'únic que canvia és qui el dispara i quantes vegades.
+  const emit = () => {
     const sketchLayer = sketchLayerRef.current
     if (!sketchLayer || !canCommit) return
     if (isStructuredPath) {
@@ -853,9 +842,10 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const svg = sketchLayer.exportSVG({ asString: true, bounds: 'content' })
     onCommit(svg)
   }
-  // API imperativa per al pare: commit + run(name,...args) que delega a les accions del scope viu.
-  useImperativeHandle(ref, () => ({ commit, run: (name, ...args) => opsRef.current?.[name]?.(...args) }))
-  useEffect(() => { onCanCommitChange?.(canCommit) }, [canCommit, onCanCommitChange])
+  emitRef.current = emit
+  // API imperativa per al pare: només run(name,...args). `commit` ha desaparegut amb la
+  // transacció — no hi ha res a confirmar perquè ja està tot escrit.
+  useImperativeHandle(ref, () => ({ run: (name, ...args) => opsRef.current?.[name]?.(...args) }))
 
   // F1 — cap UI pròpia: només el canvas (les eines viuen a la barra superior del pare). Cursor per eina.
   const cursor = nodeTool === 'add' ? 'copy' : nodeTool === 'remove' ? 'not-allowed'
