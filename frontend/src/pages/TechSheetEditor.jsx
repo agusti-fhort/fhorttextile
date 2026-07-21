@@ -17,6 +17,7 @@ import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/histo
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 import { booleanOp } from './ftt/paperbool'
 import { scaleSubpath, rotateSubpath, translateSubpath } from './ftt/paperOps'
+import { useUnit, fmtMeasure } from './fittingShared'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -434,6 +435,12 @@ const TBL = {
   BASE_BG: '#e5e7eb', BASE_HDR: '#dc2626', BREAK: '#dc2626', DELTA: '#185fa5',
 }
 
+// R4 — una cel·la és NUMÈRICA si tot el que hi ha és un nombre, amb el signe i els decimals
+// que el domini hi posa: '+1', '−0.5' (menys tipogràfic de rowDelta), '37.5', o buida amb '—'.
+// No s'hi val un heurístic per tipus: les cel·les viatgen com a string des de la inserció.
+const NUM_RE = /^[+\-−]?\d+(?:[.,]\d+)?$/
+const esNumeric = (v) => NUM_RE.test(String(v ?? '').trim())
+
 // Delta de fila = increment de la GradingRule: primer increment no-zero de talla no-base.
 // Tots 0 (grading FIXED) → '—'. Signe explícit (+1 / −0.5).
 function rowDelta(row, baseSize, sizes) {
@@ -524,7 +531,16 @@ function buildTableCellPrimitives(obj) {
   const norm = (c) => (c && typeof c === 'object') ? c : { text: String(c ?? '') }
   const hasSub = rows.some(row => row.some(c => norm(c).sub))
   const rowH = hasSub ? fontPx * 2 + T_CELL_PAD_Y * 3 : fontPx + T_CELL_PAD_Y * 2
-  const hdrH = fontPx + T_CELL_PAD_Y * 2
+  // R4 · LA CAPÇALERA NO ES TALLA MAI. Un títol de columna amb ellipsi no es pot endevinar
+  // (i en una taula de mesures, endevinar què mesura una columna és exactament el que no pot
+  // passar). Si no hi cap, parteix en línies i la fila creix. La font és monoespaiada, així
+  // que comptar caràcters n'és una mesura exacta, no una estimació.
+  const charW = fontPx * 0.6
+  const hdrLines = cols.map((c, i) => {
+    const cabenPerLinia = Math.max(1, Math.floor((cw[i] - 2 * T_PAD) / charW))
+    return Math.max(1, Math.ceil(String(c.label ?? '').length / cabenPerLinia))
+  })
+  const hdrH = Math.max(...hdrLines, 1) * fontPx + T_CELL_PAD_Y * 2
   const totalH = hdrH + rows.length * rowH
   // Offsets x acumulats per columna: els necessiten la capçalera, el contingut i el realçat
   // de la talla base (que és una franja vertical, no una cel·la).
@@ -537,7 +553,7 @@ function buildTableCellPrimitives(obj) {
   prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: hdrH, fill: st.headerFill || TBL.HDR_BG })
   if (baseIdx >= 0) prims.push({ t: 'r', x: cx0[baseIdx], y: 0, w: cw[baseIdx], h: hdrH, fill: TBL.BASE_HDR })
   cols.forEach((c, i) => {
-    prims.push({ t: 't', x: cx0[i] + T_PAD, y: 0, w: cw[i] - 2 * T_PAD, h: hdrH, text: String(c.label ?? ''), fill: TBL.HDR_TEXT, size: fontPx, bold: true, mid: true })
+    prims.push({ t: 't', x: cx0[i] + T_PAD, y: 0, w: cw[i] - 2 * T_PAD, h: hdrH, text: String(c.label ?? ''), fill: TBL.HDR_TEXT, size: fontPx, bold: true, mid: true, align: 'center', wrap: true })
   })
 
   // Fons de files (zebra opcional) en passada pròpia: la franja de la talla base ha de quedar
@@ -564,11 +580,15 @@ function buildTableCellPrimitives(obj) {
       const isBreak = !!cell.bold
       const bold = isBreak || i === 0
       const fill = isBreak ? TBL.BREAK : TBL.VAL
+      // R4 · les XIFRES van centrades a la cel·la. Alineades a l'esquerra, una columna de
+      // talles es llegeix com un serrell; centrades, la columna es llegeix d'un cop d'ull.
+      // El text (nomenclatura, nom de POM, material) es queda a l'esquerra, que és on es llegeix.
+      const align = esNumeric(cell.text) ? 'center' : 'left'
       if (cell.sub) {
-        prims.push({ t: 't', x: cxR + T_PAD, y: y + T_CELL_PAD_Y, w: wCell, h: fontPx + 2, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: false })
+        prims.push({ t: 't', x: cxR + T_PAD, y: y + T_CELL_PAD_Y, w: wCell, h: fontPx + 2, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: false, align })
         prims.push({ t: 't', x: cxR + T_PAD, y: y + T_CELL_PAD_Y * 2 + fontPx, w: wCell, h: subPx + 2, text: cell.sub, fill: TBL.NOM, size: subPx, italic: true, mid: false })
       } else {
-        prims.push({ t: 't', x: cxR + T_PAD, y, w: wCell, h: rowH, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: true })
+        prims.push({ t: 't', x: cxR + T_PAD, y, w: wCell, h: rowH, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: true, align })
       }
       cxR += cw[i]
     })
@@ -906,11 +926,14 @@ function PrimNode({ p }) {
   if (p.t === 'l') {
     return <Line points={p.points} stroke={p.stroke} strokeWidth={p.sw} listening={false} />
   }
+  // R4 — `p.wrap` deixa que una prim demani salt de línia en lloc d'ellipsi. Per defecte es
+  // manté el comportament de sempre (una línia, ellipsi): només les capçaleres de taula ho
+  // demanen, perquè un títol de columna tallat no es pot endevinar.
   return <Text x={p.x} y={p.y} width={p.w} height={p.h} text={p.text} fill={p.fill}
     fontSize={p.size} fontFamily={FONT} fontStyle={p.bold ? 'bold' : p.italic ? 'italic' : 'normal'}
     textDecoration={p.underline ? 'underline' : ''}
     align={p.align || 'left'} verticalAlign={p.mid ? 'middle' : 'top'}
-    ellipsis wrap="none" listening={false} />
+    ellipsis={!p.wrap} wrap={p.wrap ? 'word' : 'none'} listening={false} />
 }
 
 // Primitiva → node Konva imperatiu (render offscreen per a export/miniatures).
@@ -918,7 +941,7 @@ function addPrimsToGroup(group, prims) {
   for (const p of prims) {
     if (p.t === 'r') group.add(new Konva.Rect({ x: p.x, y: p.y, width: p.w, height: p.h, fill: p.fill, stroke: p.stroke, strokeWidth: p.sw, dash: p.dash }))
     else if (p.t === 'l') group.add(new Konva.Line({ points: p.points, stroke: p.stroke, strokeWidth: p.sw }))
-    else group.add(new Konva.Text({ x: p.x, y: p.y, width: p.w, height: p.h, text: p.text, fill: p.fill, fontSize: p.size, fontFamily: FONT, fontStyle: p.bold ? 'bold' : p.italic ? 'italic' : 'normal', textDecoration: p.underline ? 'underline' : '', align: p.align || 'left', verticalAlign: p.mid ? 'middle' : 'top', ellipsis: true, wrap: 'none' }))
+    else group.add(new Konva.Text({ x: p.x, y: p.y, width: p.w, height: p.h, text: p.text, fill: p.fill, fontSize: p.size, fontFamily: FONT, fontStyle: p.bold ? 'bold' : p.italic ? 'italic' : 'normal', textDecoration: p.underline ? 'underline' : '', align: p.align || 'left', verticalAlign: p.mid ? 'middle' : 'top', ellipsis: !p.wrap, wrap: p.wrap ? 'word' : 'none' }))
   }
 }
 
@@ -1850,6 +1873,11 @@ export default function TechSheetEditor() {
   // S3: picker de variant de taula (T1a/T1b/T2/custom) — null | { variant?: 't1a'|'t1b'|'t2'|'custom' }.
   // Obert des del ribbon (botó "Taula", commit 4).
   const [tablePicker, setTablePicker] = useState(null)
+  // R4 — unitat del tenant (CM|INCH). Les taules són SNAPSHOTS: el valor es formata quan es
+  // congela, no a cada render. Formatar-lo al builder el convertiria en un binding viu i
+  // contradiria la llei de la taula congelada; llegir el toggle a la inserció, en canvi, és
+  // respectar-lo. Mateixa font que la resta del sistema (utils/format via fittingShared).
+  const unit = useUnit()
   // B3 — menú contextual del bloc capçalera mestra ancorat: {x, y} en coords de pantalla.
   const [headerMenu, setHeaderMenu] = useState(null)
   // S4: modal "Desar com a plantilla" — null | { nom, descripcio }
@@ -3737,8 +3765,8 @@ export default function TechSheetEditor() {
       return [
         bm.nom_fitxa || bm.pom_abbreviation || '',
         { text: rule?.pom_nom_en || bm.nom_client || bm.pom_code_global || '', sub: bm.nom_ca || '' },
-        bm.base_value_cm != null ? String(bm.base_value_cm) : '',
-        rule?.increment_base != null ? String(rule.increment_base) : '',
+        fmtMeasure(bm.base_value_cm, unit) ?? '',
+        fmtMeasure(rule?.increment_base, unit) ?? '',
         rule?.talla_break_label || '',
         '', '', '',
       ]
@@ -3779,7 +3807,7 @@ export default function TechSheetEditor() {
     // Break = talla on el delta CANVIA respecte a la talla anterior (ordre de size_labels).
     const cellForSize = (row, sl, prevSl) => {
       const v = row.valors?.[sl]
-      const text = v != null ? String(v) : '–'
+      const text = fmtMeasure(v, unit) ?? '–'
       const d = row.deltas?.[sl]
       const dPrev = prevSl != null ? row.deltas?.[prevSl] : undefined
       const isBreak = prevSl != null && d != null && dPrev != null && d !== dPrev
