@@ -4404,10 +4404,15 @@ export default function TechSheetEditor() {
     }
   }
 
+  // C4 — set tabs. `insert` portava 27 botons i `organize` 21: cap dels dos cabia en una fila
+  // i tots dos barrejaven famílies. Es parteixen per allò que fa l'eina, no per omplir.
   const ribbonTabs = [
     { id: 'file', label: t('tech_sheet.ribbon_file') },
     { id: 'page', label: t('tech_sheet.ribbon_page') },
+    { id: 'draw', label: t('tech_sheet.ribbon_draw') },
+    { id: 'annot', label: t('tech_sheet.ribbon_annot') },
     { id: 'insert', label: t('tech_sheet.ribbon_insert') },
+    { id: 'transform', label: t('tech_sheet.ribbon_transform') },
     { id: 'organize', label: t('tech_sheet.ribbon_organize') },
     { id: 'editar', label: t('tech_sheet.ribbon_edit') },
   ]
@@ -4481,15 +4486,14 @@ export default function TechSheetEditor() {
         ribbonTool({ key: 'zoom-fit', icon: 'ti-arrows-maximize', label: t('tech_sheet.zoom_fit'), onClick: fitZoomToViewport }),
       ]
     }
-    // TAB "INSERIR" — C1. Rep les EINES DE CREACIÓ que fins ara vivien a la paleta vertical
-    // (dibuixar, ploma, formes, línies, fletxes, text, cota, nota, presets, pan). Allà eren
-    // icones de 30 px sense etiqueta, amb flyouts de press-and-hold que amagaven dues de cada
-    // tres eines; aquí són botons de 72×50 amb el nom escrit i totes visibles alhora. Els
-    // flyouts s'aplanen: el ribbon té amplada de sobres i un flyout és un lloc on amagar coses.
-    if (ribbonGroup === 'insert') {
-      const eina = (k, icon, label) => ribbonTool({
-        key: `t-${k}`, icon, label, onClick: () => setTool(k), active: tool === k, disabled: !locked,
-      })
+    // C1+C4 — les eines de creació que vivien a la paleta vertical es reparteixen en tres
+    // tabs per FAMÍLIA (dibuixar · anotar · inserir), no en una llista de 27. Allà eren icones
+    // de 30 px sense etiqueta, amb flyouts de press-and-hold que n'amagaven dues de cada tres;
+    // aquí són botons de 72×50 amb el nom escrit i totes visibles alhora.
+    const eina = (k, icon, label) => ribbonTool({
+      key: `t-${k}`, icon, label, onClick: () => setTool(k), active: tool === k, disabled: !locked,
+    })
+    if (ribbonGroup === 'draw') {
       return [
         eina('select', 'ti-pointer-2', t('tech_sheet.tool_select')),
         eina('pan', 'ti-hand-stop', t('tech_sheet.tool_pan')),
@@ -4500,26 +4504,53 @@ export default function TechSheetEditor() {
         eina('rect_round', 'ti-square-rounded', t('tech_sheet.tool_rect_round')),
         eina('ellipse', 'ti-circle', t('tech_sheet.tool_ellipse')),
         eina('polygon', 'ti-hexagon', t('tech_sheet.tool_polygon')),
+        <span key="sep-lin" style={ribbonSep} />,
         eina('line', 'ti-line', t('tech_sheet.tool_line')),
         eina('line_dot', 'ti-line-dashed', t('tech_sheet.tool_line_dot')),
         eina('arrow', 'ti-arrow-right', t('tech_sheet.tool_arrow')),
         eina('arrow2', 'ti-arrows-horizontal', t('tech_sheet.tool_arrow2')),
         eina('arrow_curve', 'ti-vector-spline', t('tech_sheet.tool_arrow_curve')),
-        <span key="sep-text" style={ribbonSep} />,
+      ]
+    }
+    if (ribbonGroup === 'annot') {
+      return [
         eina('text', 'ti-text-recognition', t('tech_sheet.tool_text')),
         eina('text_box', 'ti-text-scan-2', t('tech_sheet.tool_text_box')),
+        <span key="sep-cota" style={ribbonSep} />,
         eina('cota_pom', 'ti-ruler-measure', t('tech_sheet.tool_cota_pom')),
         eina('note', 'ti-arrow-guide', t('tech_sheet.tool_note')),
+        <span key="sep-pre" style={ribbonSep} />,
         eina('preset_callout', 'ti-message-2-share', t('tech_sheet.preset_callout')),
         eina('preset_detail_circle', 'ti-circle-dashed', t('tech_sheet.preset_detail_circle')),
         eina('preset_legend', 'ti-list-details', t('tech_sheet.preset_legend')),
-        <span key="sep-blocs" style={ribbonSep} />,
+      ]
+    }
+    // INSERIR es queda amb el que posa BLOCS al document (no eines de dibuix).
+    if (ribbonGroup === 'insert') {
+      return [
         ribbonTool({ key: 'header', icon: 'ti-layout-navbar', label: t('tech_sheet.model_header'), onClick: insertHeader }),
         ribbonTool({ key: 'logo', icon: 'ti-photo', label: t('tech_sheet.client_logo'), onClick: insertLogo, title: customerLogoUrl ? t('tech_sheet.insert_logo_title') : t('tech_sheet.no_logo_title') }),
         ribbonTool({ key: 'flat', icon: 'ti-vector', label: t('tech_sheet.flat_insert'), onClick: insertFlatSketch }),
         ribbonTool({ key: 'import-flat', icon: 'ti-file-import', label: t('tech_sheet.flat_import'), onClick: () => openImport('garment') }),
         ribbonTool({ key: 'image', icon: 'ti-photo-plus', label: t('tech_sheet.tool_image'), onClick: () => openImport('image') }),
         ribbonTool({ key: 'files', icon: 'ti-folder', label: t('tech_sheet.tool_files'), onClick: () => setFilePicker(true), disabled: !locked }),
+      ]
+    }
+    // TRANSFORMAR — el que canvia la POSICIÓ RELATIVA d'objectes entre ells (alinear,
+    // distribuir, mirall). Organitzar es queda amb el que canvia l'ESTRUCTURA (agrupar,
+    // z-ordre, booleanes, eliminar). Abans eren 21 botons a la mateixa fila.
+    if (ribbonGroup === 'transform') {
+      return [
+        ribbonTool({ key: 'align-left', icon: 'ti-layout-align-left', label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: nodeMode || selectedObjects.length < 2 }),
+        ribbonTool({ key: 'align-center', icon: 'ti-layout-align-center', label: t('tech_sheet.align_center_short'), onClick: () => alignSelection('center'), disabled: nodeMode || selectedObjects.length < 2 }),
+        ribbonTool({ key: 'align-right', icon: 'ti-layout-align-right', label: t('tech_sheet.align_right_short'), onClick: () => alignSelection('right'), disabled: nodeMode || selectedObjects.length < 2 }),
+        ribbonTool({ key: 'align-top', icon: 'ti-layout-align-top', label: t('tech_sheet.align_top_short'), onClick: () => alignSelection('top'), disabled: nodeMode || selectedObjects.length < 2 }),
+        ribbonTool({ key: 'align-middle', icon: 'ti-layout-align-middle', label: t('tech_sheet.align_middle_short'), onClick: () => alignSelection('middle'), disabled: nodeMode || selectedObjects.length < 2 }),
+        ribbonTool({ key: 'align-bottom', icon: 'ti-layout-align-bottom', label: t('tech_sheet.align_bottom_short'), onClick: () => alignSelection('bottom'), disabled: nodeMode || selectedObjects.length < 2 }),
+        <span key="sep-dist" style={ribbonSep} />,
+        ribbonTool({ key: 'dist-h', icon: 'ti-layout-distribute-horizontal', label: t('tech_sheet.distribute_h_short'), onClick: () => distributeSelection('h'), disabled: nodeMode || selectedObjects.length < 3 }),
+        ribbonTool({ key: 'dist-v', icon: 'ti-layout-distribute-vertical', label: t('tech_sheet.distribute_v_short'), onClick: () => distributeSelection('v'), disabled: nodeMode || selectedObjects.length < 3 }),
+        <span key="sep-mir" style={ribbonSep} />,
       ]
     }
     // TAB "EDITAR" — superfície única de l'edició fina. Substitueix la barra contextual F1 (que
@@ -4604,15 +4635,9 @@ export default function TechSheetEditor() {
       // duplicada al ribbon era la quarta superfície per a la mateixa acció.
       return out
     }
+    // ORGANITZAR — el que canvia l'ESTRUCTURA del document. Alinear, distribuir i mirall han
+    // marxat a Transformar (C4): allà canvien la posició relativa, aquí l'estructura.
     return [
-      ribbonTool({ key: 'align-left', icon: 'ti-layout-align-left', label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: nodeMode || selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-center', icon: 'ti-layout-align-center', label: t('tech_sheet.align_center_short'), onClick: () => alignSelection('center'), disabled: nodeMode || selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-right', icon: 'ti-layout-align-right', label: t('tech_sheet.align_right_short'), onClick: () => alignSelection('right'), disabled: nodeMode || selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-top', icon: 'ti-layout-align-top', label: t('tech_sheet.align_top_short'), onClick: () => alignSelection('top'), disabled: nodeMode || selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-middle', icon: 'ti-layout-align-middle', label: t('tech_sheet.align_middle_short'), onClick: () => alignSelection('middle'), disabled: nodeMode || selectedObjects.length < 2 }),
-      ribbonTool({ key: 'align-bottom', icon: 'ti-layout-align-bottom', label: t('tech_sheet.align_bottom_short'), onClick: () => alignSelection('bottom'), disabled: nodeMode || selectedObjects.length < 2 }),
-      ribbonTool({ key: 'dist-h', icon: 'ti-layout-distribute-horizontal', label: t('tech_sheet.distribute_h_short'), onClick: () => distributeSelection('h'), disabled: nodeMode || selectedObjects.length < 3 }),
-      ribbonTool({ key: 'dist-v', icon: 'ti-layout-distribute-vertical', label: t('tech_sheet.distribute_v_short'), onClick: () => distributeSelection('v'), disabled: nodeMode || selectedObjects.length < 3 }),
       ribbonTool({ key: 'group', icon: 'ti-box-multiple', label: t('tech_sheet.group'), onClick: doGroup, disabled: nodeMode || !canGroup, title: canGroupCompound ? t('tech_sheet.group_compound_title') : t('tech_sheet.group') }),
       ribbonTool({ key: 'ungroup', icon: 'ti-unlink', label: t('tech_sheet.ungroup'), onClick: doUngroup, disabled: nodeMode || !ungroupKind, title: ungroupTitle }),
       ribbonTool({ key: 'mirror-h', icon: 'ti-flip-horizontal', label: t('tech_sheet.mirror_h'), onClick: () => mirrorObjects(mirrorableIds, 'scaleX'), disabled: nodeMode || mirrorableIds.length === 0 }),
@@ -4623,7 +4648,7 @@ export default function TechSheetEditor() {
       ribbonTool({ key: 'bring-front', icon: 'ti-chevrons-up', label: t('tech_sheet.bring_to_front'), onClick: () => moveSelectionToFreeLayerEdge('front'), disabled: nodeMode || freeSelectedIds.length === 0 }),
       ribbonTool({ key: 'delete', icon: 'ti-trash', label: t('app.delete'), onClick: deleteSelection, disabled: nodeMode || selectedDeletableIds.length === 0 }),
       // S8: buscatraços (unir/restar/intersecar/excloure) — grup separat al final de l'organize.
-      <span key="sep-pathfinder" style={{ width: 1, height: 50, background: COL.border, flexShrink: 0 }} />,
+      <span key="sep-pathfinder" style={ribbonSep} />,
       ribbonTool({ key: 'pf-unite', icon: 'ti-layers-union', label: t('tech_sheet.pathfinder_unite'), onClick: () => applyPathfinder('unite'), disabled: nodeMode || !pathfinderReady }),
       ribbonTool({ key: 'pf-subtract', icon: 'ti-layers-subtract', label: t('tech_sheet.pathfinder_subtract'), onClick: () => applyPathfinder('subtract'), disabled: nodeMode || !pathfinderReady }),
       ribbonTool({ key: 'pf-intersect', icon: 'ti-layers-intersect', label: t('tech_sheet.pathfinder_intersect'), onClick: () => applyPathfinder('intersect'), disabled: nodeMode || !pathfinderReady }),
@@ -4743,7 +4768,10 @@ export default function TechSheetEditor() {
             {editingFlatId ? t('tech_sheet.node_edit_mode') : multiSelected ? t('tech_sheet.selected_objects', { n: selectedObjects.length }) : selObj ? `${t('tech_sheet.element')} · ${selObj.type}` : tool !== 'select' ? t('tech_sheet.ctx_tool', { tool: activeToolDef.label }) : t('tech_sheet.ctx_idle')}
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 64, padding: '6px 12px 8px', overflowX: 'auto' }}>
+        {/* C4 · les eines MAI fan scroll: si no caben, la fila creix. Un scroll horitzontal
+            amaga eines darrere d'un gest que ningú fa, i el ribbon existeix justament per
+            no haver d'anar a buscar res. Amb els tabs partits, el cas normal és una fila. */}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, minHeight: 64, padding: '6px 12px 8px' }}>
           {renderRibbonContent()}
         </div>
       </div>
