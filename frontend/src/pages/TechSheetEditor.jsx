@@ -382,6 +382,11 @@ const T_FONT = Math.round(3.175 * MM_TO_PX)   // ~8px (9pt)
 const T_FONT_CA = Math.round(2.8222 * MM_TO_PX)  // ~7px (8pt) — subtítol nom_ca (terra de domini 8pt)
 // TS-4c: alçada de fila derivada del contingut (2 línies + padding), no fixa.
 const T_ROW_PAD = 3   // px de padding vertical per línia
+// T3 — padding vertical de la taula VIVA (buildTableCellPrimitives): mínim llegible, per
+// guanyar densitat a les taules llargues (T1b amb moltes talles). Punt d'ajust únic: cau a
+// totes les variants (T1a/T1b/T2/custom), que comparteixen aquest builder. El builder legacy
+// (buildTablePrimitives) conserva T_ROW_PAD: no es toca la geometria d'una superfície morta.
+const T_CELL_PAD_Y = 2
 const T_ROW_H = T_FONT + T_FONT_CA + T_ROW_PAD * 3   // dalt nom_en + entre + baix nom_ca
 const T_HDR_H = T_FONT + T_ROW_PAD * 2               // capçalera d'una línia
 const T_REF_W = 22 * MM_TO_PX     // nomenclatura del croquis (nom_fitxa)
@@ -487,8 +492,8 @@ function buildTableCellPrimitives(obj) {
   // que buildTablePrimitives amb nom_en/nom_ca).
   const norm = (c) => (c && typeof c === 'object') ? c : { text: String(c ?? '') }
   const hasSub = rows.some(row => row.some(c => norm(c).sub))
-  const rowH = hasSub ? fontPx * 2 + T_ROW_PAD * 3 : fontPx + T_ROW_PAD * 2
-  const hdrH = fontPx + T_ROW_PAD * 2
+  const rowH = hasSub ? fontPx * 2 + T_CELL_PAD_Y * 3 : fontPx + T_CELL_PAD_Y * 2
+  const hdrH = fontPx + T_CELL_PAD_Y * 2
   const totalH = hdrH + rows.length * rowH
   // Offsets x acumulats per columna: els necessiten la capçalera, el contingut i el realçat
   // de la talla base (que és una franja vertical, no una cel·la).
@@ -529,8 +534,8 @@ function buildTableCellPrimitives(obj) {
       const bold = isBreak || i === 0
       const fill = isBreak ? TBL.BREAK : TBL.VAL
       if (cell.sub) {
-        prims.push({ t: 't', x: cxR + T_PAD, y: y + T_ROW_PAD, w: wCell, h: fontPx + 2, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: false })
-        prims.push({ t: 't', x: cxR + T_PAD, y: y + T_ROW_PAD * 2 + fontPx, w: wCell, h: subPx + 2, text: cell.sub, fill: TBL.NOM, size: subPx, italic: true, mid: false })
+        prims.push({ t: 't', x: cxR + T_PAD, y: y + T_CELL_PAD_Y, w: wCell, h: fontPx + 2, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: false })
+        prims.push({ t: 't', x: cxR + T_PAD, y: y + T_CELL_PAD_Y * 2 + fontPx, w: wCell, h: subPx + 2, text: cell.sub, fill: TBL.NOM, size: subPx, italic: true, mid: false })
       } else {
         prims.push({ t: 't', x: cxR + T_PAD, y, w: wCell, h: rowH, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: true })
       }
