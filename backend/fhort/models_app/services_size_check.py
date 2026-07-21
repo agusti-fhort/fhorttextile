@@ -99,14 +99,21 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
                        *, user_profile_id: int | None = None, data_represa=None,
                        allow_reopen_sealed: bool = False) -> dict:
     """Resol un SizeCheck Pendent. L'acció sol·licitada (`estat`) i les decisions de línia
-    determinen l'estat FINAL i si es propaga al grading:
+    determinen l'estat FINAL.
+
+    D4 (2026-07-21): resoldre un size check JA NO PROPAGA. Consolida la base i prou; propagar
+    és acte conscient amb una sola porta (botó «Propagar a grading»). `regradat` i
+    `nova_version` es retornen sempre False/None i es conserven per contracte d'API.
+    ⚠️ `allow_reopen_sealed` queda INERT en aquesta funció (ja no hi ha cap escriptura de
+    grading que un segell pugui refusar). Es conserva a la signatura perquè hi ha tests que
+    el passen; candidat a retirar quan es netegi la signatura.
 
     GRAVAR (estat='Acceptat'):
       · cap línia 'valor_descartat' → estat='Acceptat': promou None→'tolerancia_acceptada',
-        escriu CHECKED (NOMÉS base, abs<1e-6 skip), regradua si base canvia i té deltes
-        (mirror close_piece_fitting; NO toca ModelGradingRule), finalitza tasca → Done.
-      · alguna línia 'valor_descartat' → estat='Rebutjat': NO promou, NO CHECKED, NO regrade,
-        NO Done (proto a refer). Es grava la constància de decisions.
+        escriu CHECKED (NOMÉS base, abs<1e-6 skip), incrementa measurements_version si la base
+        canvia (perquè l'estalitud ho vegi), finalitza tasca → Done.
+      · alguna línia 'valor_descartat' → estat='Rebutjat': NO promou, NO CHECKED, NO Done
+        (proto a refer). Es grava la constància de decisions.
     DESCARTAR (estat='Descartat'): NO toca línies, NO propaga, tasca viva.
 
     REAGENDAR: quan la tasca queda viva (Rebutjat o Descartat) i ve `data_represa` (date o
@@ -186,27 +193,24 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
 
         base_changed = written > 0
 
-        # Propagació: regradua les talles des de la base nova (mirror de close_piece_fitting).
-        # Només si hi ha canvi de base I el model té deltes. NO toca ModelGradingRule.
-        if base_changed and te_deltes:
-            from fhort.fitting.services import _resolve_working_size_fitting
-            from fhort.pom.services import bump_grading_version_and_generate
-
-            sf = _resolve_working_size_fitting(model)
-            if sf is not None:
-                # PEÇA 1: mateix helper que close_piece_fitting (guard D-1 + desactiva actives +
-                # crea v+1 + measurements_version++ si base_changed + re-propaga). Comportament
-                # idèntic al bloc inline anterior; NO toca ModelGradingRule.
-                nv = bump_grading_version_and_generate(
-                    sf.pk,
-                    base_changed=base_changed,
-                    profile_id=user_profile_id,
-                    allow_reopen_sealed=allow_reopen_sealed,
-                    nom=f'Size check {sc.pk}',
-                    reopen_context=f'SizeCheck {sc.pk}',
-                )
-                nova_version = nv.version_number
-                regradat = True
+        # D4 (2026-07-21) — AQUÍ hi havia una crida a bump_grading_version_and_generate.
+        # Resoldre un size check ja NO propaga: consolida la BASE i prou (BaseMeasurement +
+        # MeasurementChangeLog + Welford). Propagar és acte conscient i té una sola porta
+        # (botó «Propagar a grading» → generar-grading). Llei de domini DECISIONS.md §2.
+        #
+        # EL QUE NO ES PERD: measurements_version++ el feia NOMÉS el helper. Sense ell, una base
+        # moguda sota una versió segellada deixaria de detectar-se com a estal
+        # (fitting/staleness.py). Es conserva aquí; el que marxa és la propagació.
+        #
+        # `regradat`/`nova_version` queden False/None per contracte: el front ja només ensenya
+        # el missatge «grading regradat» quan són certs (CheckMeasureEditor.jsx:335), o sigui
+        # que deixa d'ensenyar-lo tot sol — que és exactament el que ara és veritat.
+        if base_changed:
+            from django.db.models import F
+            from fhort.models_app.models import Model as _Model
+            _Model.objects.filter(pk=model.pk).update(
+                measurements_version=F('measurements_version') + 1
+            )
 
         # Finalitza la tasca Kanban size_check → Done. Gate TOU: si no existeix la tasca
         # o la transició no és vàlida, NO peta.

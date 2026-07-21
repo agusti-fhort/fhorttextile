@@ -447,28 +447,31 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
 
         new_version_number = None
         if changed:
-            # PEÇA 1: versionat funcional centralitzat al helper (guard D-1 + desactiva actives +
-            # crea v+1 + measurements_version++ si base_changed + re-propaga). Mateix comportament
-            # que el bloc inline anterior; ara compartit amb resolve_size_check i la propagació
-            # conscient (PEÇA 2).
-            from fhort.pom.services import bump_grading_version_and_generate
-            new_version = bump_grading_version_and_generate(
-                sf.pk,
-                base_changed=base_changed,
-                profile_id=user_profile_id,
-                allow_reopen_sealed=allow_reopen_sealed,
-                nom=f'Fitting sessió {pf.session_id}',
-                reopen_context=f'PieceFitting {pf.pk}',
-            )
-            new_version_number = new_version.version_number
+            # D4 (2026-07-21) — AQUÍ hi havia una crida a bump_grading_version_and_generate.
+            # Tancar una peça de fitting ja NO propaga: consolida la BASE i prou. Propagar és
+            # un acte conscient de la tècnica i té una sola porta (el botó «Propagar a grading»
+            # → generar-grading). Llei de domini DECISIONS.md §2, que declarava aquesta
+            # auto-propagació codi a jubilar; fins avui seguia viva.
+            #
+            # EL QUE NO ES PERD: measurements_version++ el feia NOMÉS el helper. Sense ell, una
+            # base que es mou sota una versió segellada deixaria de detectar-se com a estal
+            # (fitting/staleness.py compara amb generated_from_version). La consolidació de base
+            # segueix, doncs, incrementant-lo; el que desapareix és la propagació, no el rastre.
+            if base_changed:
+                from django.db.models import F
+                from fhort.models_app.models import Model
+                Model.objects.filter(pk=model.pk).update(
+                    measurements_version=F('measurements_version') + 1
+                )
 
-            # Brain stub (decoupled; no propagation yet).
+            # Brain stub (decoupled; no propagation yet). Ja no hi ha versió nova que passar-li:
+            # el hook segueix disparant-se perquè la MESURA ha canviat, que és el que li importa.
             from fhort.fitting.brain import on_fitting_measurement_changed
             on_fitting_measurement_changed(
                 piece_fitting_id=pf.pk,
                 model_id=model.pk,
                 base_changed=base_changed,
-                new_grading_version_id=new_version.pk,
+                new_grading_version_id=None,
             )
 
         # Segellat correcte: single-model tanca en gravar; GarmentSet espera que totes les
