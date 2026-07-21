@@ -992,13 +992,21 @@ function textBoxParts(obj) {
   const pad = obj.bgPadding || 4
   const fs = obj.fontSize || 11
   const w = toPx(obj.width || 120)
+  // R2 — CENTRAT VERTICAL REAL. La caixa feia `fs * 1.6 + pad * 2` d'alt però el text es
+  // pintava des de dalt (sense height ni verticalAlign): quedava `pad` de marge a sobre i
+  // `0.6 * fs + pad` a sota, és a dir tota la sobra avall. Es veia sobretot a l'etiqueta de
+  // la cota de POM, que és petita i té el fons pintat.
+  // Ara la caixa de línia és explícita i el text s'hi centra: mateixa alçada per als dos i
+  // una sola font de veritat. `height` i `verticalAlign` viatgen dins `text`, que és el que
+  // el llenç i l'export a PDF fan servir tots dos → la paritat es manté per construcció.
+  const lineH = fs * 1.2
   return {
     group: { x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1 },
-    bg: { x: -pad, y: -pad, width: w + pad * 2, height: fs * 1.6 + pad * 2, fill: obj.bgFill, cornerRadius: 3 },
+    bg: { x: -pad, y: -pad, width: w + pad * 2, height: lineH + pad * 2, fill: obj.bgFill, cornerRadius: 3 },
     text: {
-      text: obj.text || '', width: w, fontSize: fs, fontFamily: obj.fontFamily || FONT,
+      text: obj.text || '', width: w, height: lineH, fontSize: fs, fontFamily: obj.fontFamily || FONT,
       fontStyle: obj.fontStyle || 'normal', fill: obj.fill || KONVA_COL.textMain,
-      align: obj.align || 'left', textDecoration: obj.textDecoration || '',
+      align: obj.align || 'left', verticalAlign: 'middle', textDecoration: obj.textDecoration || '',
     },
   }
 }
