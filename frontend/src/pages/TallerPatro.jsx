@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { patterns, models, modelTasks } from '../api/endpoints'
-import PatternViewer from '../components/pattern/PatternViewer'
+import PatternViewer, { METRICA_EINA } from '../components/pattern/PatternViewer'
 import {
   arcDirigit, longitudTram, puntsDelSegment, puntsEntreIndexs, situaPunt,
 } from '../components/pattern/patternGeometry'
@@ -66,6 +66,10 @@ export default function TallerPatro() {
   const [pincaPropRessaltada, setPincaPropRessaltada] = useState(null)
 
   // ── eines d'anotació (venen del tab: es TRASLLADEN, no es reescriuen) ─────
+  // El node de la barra on el visor deixa anar els seus controls. És ESTAT i no un ref
+  // perquè el portal s'ha de tornar a pintar quan el node existeix: amb un ref, el primer
+  // render passaria `null` i els controls no arribarien mai.
+  const [slotVisor, setSlotVisor] = useState(null)
   const [mode, setMode] = useState('view')     // 'view' | 'pom' | 'seg' | 'pinca' | 'sew'
   // Els punts clicats (imantats). El fan servir els TRES modes de punts: marcar un POM (2),
   // definir un tram (2) i marcar una pinça (3). El gest és el mateix; el que canvia és quants
@@ -1162,6 +1166,7 @@ export default function TallerPatro() {
           <BarraEines
             t={t} mode={mode} onMode={triarMode}
             tascaId={tascaId} errTasca={errTasca}
+            slotVisor={setSlotVisor}
           />
 
           {errEina && (
@@ -1275,6 +1280,7 @@ export default function TallerPatro() {
               pincaProposadaRessaltada={pincaPropRessaltada}
               unit={unit}
               omplirAlcada
+              contenidorEines={slotVisor}
             />
           )}
 
@@ -1351,15 +1357,15 @@ function Contenidor({ titol, icona, pes = 1, children }) {
  * taller. Aquí només es tria QUÈ s'està fent — i si no hi ha rellotge (403 de perfil),
  * les eines no s'ofereixen: el patró es pot mirar, però no anotar sense comptar el temps.
  */
-function BarraEines({ t, mode, onMode, tascaId, errTasca }) {
+function BarraEines({ t, mode, onMode, tascaId, errTasca, slotVisor }) {
   const boto = (actiu) => ({
     background: actiu ? 'var(--gold)' : 'var(--white)',
     color: actiu ? 'var(--white)' : 'var(--text-main)',
     border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
-    borderRadius: 4, padding: '0.35rem 0.8rem',
     cursor: tascaId ? 'pointer' : 'not-allowed',
     opacity: tascaId ? 1 : 0.5,
-    fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: '0.35rem',
+    display: 'flex', alignItems: 'center',
+    ...METRICA_EINA,
   })
 
   return (
@@ -1399,6 +1405,13 @@ function BarraEines({ t, mode, onMode, tascaId, errTasca }) {
         <i className="ti ti-needle-thread" />
         {t('pattern.mode_sew')}
       </button>
+
+      {/* Els controls del visor (zoom · encaixar · capes) aterren AQUÍ per portal, seguits de
+          Cosir i amb la mateixa mida: una sola barra, no dues. `display: contents` treu aquest
+          contenidor de la maquetació perquè els botons siguin fills flex de la barra i hi
+          facin `wrap` un a un, com els de dalt. Si el fitxer no ha carregat encara, el visor
+          no es pinta i aquí no hi arriba res: la barra queda amb les eines de mode i prou. */}
+      <span ref={slotVisor} style={{ display: 'contents' }} />
 
       <span style={{ flex: 1 }} />
 
