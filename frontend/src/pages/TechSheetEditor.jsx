@@ -1865,7 +1865,8 @@ export default function TechSheetEditor() {
   const [filePicker, setFilePicker] = useState(false)   // S03b · P7
   // F1 — el patró VIGENT del model (o null si no en té) i el selector de peces.
   const [patternFile, setPatternFile] = useState(null)
-  const [piecePicker, setPiecePicker] = useState(null)  // null | {loading} | {pieces} | {error}
+  // Y1 — les peces del patró viuen a la PERSIANA, no en un popup: {loading}|{pieces}|{error}.
+  const [peces, setPeces] = useState({ loading: true })
   const [sizeFittings, setSizeFittings] = useState([])
   const [tableData, setTableData] = useState({})    // {objId: jsonData|null} fora del JSON
   const [notice, setNotice] = useState(null)        // toast efímer (p.ex. "ja hi ha capçalera")
@@ -2547,10 +2548,20 @@ export default function TechSheetEditor() {
     fetch(`${API}/api/v1/patterns/pattern-files/?model=${id}`, { headers: authHeaders })
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
-        if (cancelled || !d) return
+        if (cancelled || !d) return null
         const list = d.results || d || []
-        setPatternFile(list.find(f => f.is_current) || null)
-      }).catch(() => {})
+        const vigent = list.find(f => f.is_current) || null
+        setPatternFile(vigent)
+        if (!vigent) { setPeces({ pieces: [] }); return null }
+        // Y1 — i tot seguit les seves PECES. El llistat no les porta (el serializer de llista
+        // les treu a posta), així que cal el detall; però és el detall amb RECOMPTES, no amb
+        // els milers de punts, i n'hi ha un per model. Es demanen ara i no en obrir res
+        // perquè la persiana ha de poder llistar-les —o dir que no n'hi ha— sense que
+        // ningú l'hagi hagut de destapar abans, igual que la de taules i la d'arxius.
+        return fetch(`${API}/api/v1/patterns/pattern-files/${vigent.id}/`, { headers: authHeaders })
+          .then(r => (r.ok ? r.json() : null))
+          .then(det => { if (!cancelled) setPeces(det ? { pieces: det.pieces || [] } : { error: true }) })
+      }).catch(() => { if (!cancelled) setPeces({ error: true }) })
 
     if (fttMode) {
       // Mode .ftt (F1): carrega el document des de ftt-documents/<fitxerId>/ i el porta a v2.
@@ -4462,19 +4473,6 @@ export default function TechSheetEditor() {
     }
   }
   // ── F1 — Peces del patró vigent ────────────────────────────────────────────
-  // El llistat no porta les peces (el serializer de llista les treu a posta: un llistat no ha
-  // d'arrossegar milers de punts), o sigui que el detall es demana en obrir el selector.
-  const obrirPeces = async () => {
-    if (!locked || !patternFile) return
-    setPiecePicker({ loading: true })
-    try {
-      const r = await fetch(`${API}/api/v1/patterns/pattern-files/${patternFile.id}/`, { headers: authHeaders })
-      if (!r.ok) throw new Error('http')
-      const d = await r.json()
-      setPiecePicker({ pieces: d.pieces || [] })
-    } catch { setPiecePicker({ error: true }) }
-  }
-
   // El render del motor NO es pot clavar a `src`: l'endpoint va gated per Authorization i un
   // <img> no pot portar capçaleres (el mateix mur que els assets del .ftt). Es baixa amb
   // capçalera i s'encasta com a dataURL — exactament el que ja fa importarDelTenant.
@@ -4518,7 +4516,6 @@ export default function TechSheetEditor() {
       // `piece_name` i `pattern_file_id` es conserven: són la traça de d'on ve el dibuix, i
       // el descongelat de plantilla ja els sap despenjar (`_unfreeze_pattern_piece`).
       addObject({ ...vector, piece_name: peca.nom_block, pattern_file_id: patternFile.id })
-      setPiecePicker(null)
     } catch {
       flash(t('tech_sheet.piece_insert_error'))
     }
@@ -5024,16 +5021,27 @@ export default function TechSheetEditor() {
               </button>
             </Contenidor>
 
-            {/* Peces de patró: es reutilitza l'endpoint que el ribbon ja demanava en carregar
-                (patternFile), així que la persiana no obre cap consumidor nou. Sense patró es
-                veu igualment i diu per què no s'obre, com feia el botó del ribbon. */}
+            {/* Y1 — les peces es llisten AQUÍ, com les taules i els arxius: un ítem per peça,
+                amb el seu nom i la seva mida, i el clic la insereix. El popup que hi havia al
+                mig no decidia res —ensenyava la mateixa llista i el mateix clic—, només
+                afegia un pas. Sense patró, o amb un patró sense peces, la persiana s'obre
+                igualment i diu per què és buida. */}
             <Contenidor titol={t('tech_sheet.lib_pieces')} icona="ti-shirt" defaultOpen={false} pes={1}>
-              <button type="button" onClick={obrirPeces} disabled={!patternFile}
-                title={patternFile ? t('tech_sheet.piece_insert_title') : t('tech_sheet.piece_no_pattern')}
-                style={{ ...libRow, opacity: patternFile ? 1 : 0.45, cursor: patternFile ? 'pointer' : 'default' }}>
-                <i className="ti ti-shirt" style={libIcon} />
-                <span style={libName}>{t('tech_sheet.piece_insert')}</span>
-              </button>
+              {!patternFile ? <p style={libEmpty}>{t('tech_sheet.piece_no_pattern')}</p>
+                : peces.loading ? <p style={libEmpty}>{t('app.loading')}</p>
+                  : peces.error ? <p style={libEmpty}>{t('tech_sheet.piece_insert_error')}</p>
+                    : !peces.pieces?.length ? <p style={libEmpty}>{t('tech_sheet.lib_pieces_none')}</p>
+                      : peces.pieces.map(p => (
+                        <button key={p.id} type="button" onClick={() => inserirPeca(p)} title={p.nom_block} style={libRow}>
+                          <i className="ti ti-shirt" style={libIcon} />
+                          <span style={libName}>{p.nom_block}</span>
+                          {p.bounding_box_mm && (
+                            <span style={libMeta}>
+                              {Math.round(p.bounding_box_mm.ample)} × {Math.round(p.bounding_box_mm.alt)} mm
+                            </span>
+                          )}
+                        </button>
+                      ))}
             </Contenidor>
           </aside>
         )}
@@ -5738,32 +5746,6 @@ export default function TechSheetEditor() {
           sense size-fittings, T2/Custom sempre disponibles. */}
       {/* F1 — selector de peces del patró vigent. La peça hi entra encaixada; el nom del
           block és el que en dirà el peu i el panell de capes. */}
-      {piecePicker && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setPiecePicker(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 380, width: '90%', maxHeight: '70vh', overflowY: 'auto', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
-            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 4 }}>{t('tech_sheet.piece_picker_title')}</h2>
-            <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 12 }}>{patternFile?.nom_fitxer}</p>
-            {piecePicker.loading && <p style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('app.loading')}</p>}
-            {piecePicker.error && <p style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.piece_insert_error')}</p>}
-            {piecePicker.pieces && !piecePicker.pieces.length && (
-              <p style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>{t('tech_sheet.piece_none')}</p>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(piecePicker.pieces || []).map(p => (
-                <button key={p.id} type="button" onClick={() => inserirPeca(p)}
-                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
-                  {p.nom_block}
-                  {p.bounding_box_mm && (
-                    <div style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>
-                      {Math.round(p.bounding_box_mm.ample)} × {Math.round(p.bounding_box_mm.alt)} mm
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
       {/* R3 — d'aquest modal només en queda el TRIA-FITTING: apareix quan el model té més d'un
           SizeFitting i cal saber de quin es fa la taula. El menú de variants ha marxat a la
           persiana TAULES de la biblioteca, i la personalitzada s'insereix directament. */}
@@ -5892,5 +5874,7 @@ const NODE_TOOL_ITEMS = [
 const libRow = { display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '0.3rem 0.5rem', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 4, background: 'var(--bg-card)', color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', cursor: 'pointer' }
 const libIcon = { fontSize: 14, color: COL.gold, flexShrink: 0 }
 const libName = { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+// Y1 — la mida de la peça: dada secundària a la mateixa fila, sense robar-li el nom.
+const libMeta = { flexShrink: 0, color: COL.textMuted, fontSize: 'var(--fs-caption)' }
 const libEmpty = { fontSize: 'var(--fs-caption)', color: COL.textMuted, margin: '0 0 6px' }
 export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, boxSizing: 'border-box' }
