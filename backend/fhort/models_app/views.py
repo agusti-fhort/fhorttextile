@@ -1174,6 +1174,16 @@ def gravar_pom_view(request, model_id):
         if not pom_id or value is None:
             errors.append('pom_id i base_value_cm obligatoris')
             continue
+        # D2 — una talla base a 0 és físicament impossible. O el POM no aplica a aquest model
+        # (i llavors no s'entra, no s'entra a zero), o és un error de teclat. El motor tracta
+        # el 0 com a "el POM no existeix" i no en gradua cap cel·la: si es deixés entrar, la
+        # mesura desapareixeria de la taula sense dir-ho a ningú.
+        if value == 0:
+            errors.append(
+                f"POM {pom_id}: la mesura base no pot ser 0 cm. Si aquesta mesura no aplica "
+                f"a aquest model, deixa-la buida o desactiva-la; no la posis a zero."
+            )
+            continue
         prepared.append((m, value))
 
     if not prepared:
@@ -2701,6 +2711,22 @@ def set_pom_regim_view(request, model_id, pom_id):
                 run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
                 if tbl in run:
                     rule.talla_break_pos = run.index(tbl)
+        # D2 — una regla LINEAR amb delta 0 és INVÀLIDA: no gradua res, i el que expressa
+        # («aquesta mesura no canvia entre talles») ja té forma pròpia i honesta, que és
+        # FIXED. Deixar-la passar torna a fabricar una taula plana que sembla graduada.
+        # El delta efectiu és increment_base si està poblat (forma canònica); si no, increment.
+        if rule.logica == 'LINEAR':
+            _ib = rule.increment_base
+            _delta = float(_ib) if _ib is not None else float(rule.increment or 0)
+            _brk = float(rule.increment_break) if rule.increment_break is not None else _delta
+            if _delta == 0.0 and _brk == 0.0:
+                return Response({
+                    'detail': ("Una regla LINEAR amb increment 0 no gradua res. Si aquesta "
+                               "mesura no ha de canviar entre talles, fes-la FIXED; si no "
+                               "aplica a aquest model, esborra-la."),
+                    'codi': 'LINEAR_INCREMENT_ZERO',
+                }, status=400)
+
         rule.origen = 'MANUAL'
         rule.save()
 
