@@ -5,6 +5,10 @@
   --bg-main:    #ffffff;
   --bg-sidebar: #f0dfc0;
   --bg-card:    #fafafa;
+  /* --bg-page: fons de contenidor de pàgina (panells laterals de treball). S'usava a
+     App.jsx/Entrar.jsx/TallerPatro.jsx SENSE definició → var() invàlid i fons heretat.
+     Es defineix amb el MATEIX valor que --bg-card per no introduir cap salt visual. */
+  --bg-page:    #fafafa;
   --bg-muted:   #f5f0e8;
   --text-main:  #1d1d1b;
   --text-muted: #868685;

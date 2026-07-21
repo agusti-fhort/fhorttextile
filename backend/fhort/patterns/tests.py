@@ -1067,6 +1067,31 @@ class RenderSVGTest(PatternsAPITestBase):
         self.assertEqual(resp.status_code, 200)
         ElementTree.fromstring(resp.content)
 
+    # ── X1 — el fons, que com a imatge no es veu, vectoritzat tapava la fitxa sencera ──
+    def _rects_de_fons(self, resp):
+        ns = '{http://www.w3.org/2000/svg}'
+        return ElementTree.fromstring(resp.content).findall(f'{ns}rect')
+
+    def test_per_defecte_el_fons_hi_es(self):
+        """Qui l'ensenya com a IMATGE el necessita: un patró sobre transparent no es llegeix."""
+        self.assertEqual(len(self._rects_de_fons(self._get_svg(self._fp()))), 1)
+
+    def test_amb_fons_0_no_hi_ha_rectangle_de_fons(self):
+        """Vectoritzat no hi ha viewBox que retalli: el fons deixaria de ser fons i seria una
+        forma blanca opaca de 200000×200000 mm sobre la pàgina."""
+        resp = self._get_svg(self._fp(), fons='0')
+        self.assertEqual(self._rects_de_fons(resp), [])
+        arrel = ElementTree.fromstring(resp.content)
+        ns = '{http://www.w3.org/2000/svg}'
+        # El dibuix hi és sencer: es treu el fons, no la peça.
+        self.assertTrue(arrel.findall(f'.//{ns}path'))
+
+    def test_el_viewbox_no_depen_del_fons(self):
+        """El marc (i per tant l'aspecte amb què entra a la fitxa) ha de ser idèntic."""
+        amb = ElementTree.fromstring(self._get_svg(self._fp(), piece='BACK').content)
+        sense = ElementTree.fromstring(self._get_svg(self._fp(), piece='BACK', fons='0').content)
+        self.assertEqual(amb.get('viewBox'), sense.get('viewBox'))
+
 
 class GeometryEndpointTest(PatternsAPITestBase):
     """El que el visor Konva dibuixa. A diferència del detall (que dona RECOMPTES),

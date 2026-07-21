@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { patterns, models, modelTasks } from '../api/endpoints'
-import PatternViewer from '../components/pattern/PatternViewer'
+import PatternViewer, { METRICA_EINA } from '../components/pattern/PatternViewer'
 import {
   arcDirigit, longitudTram, puntsDelSegment, puntsEntreIndexs, situaPunt,
 } from '../components/pattern/patternGeometry'
@@ -12,6 +12,7 @@ import RelationsPanel from '../components/pattern/RelationsPanel'
 import POMPicker from '../components/pattern/POMPicker'
 import SewEditor from '../components/pattern/SewEditor'
 import SegmentEditor from '../components/pattern/SegmentEditor'
+import Contenidor from '../components/ui/Contenidor'
 import { grauVisual, textCobertura, textEstat } from '../components/pattern/sewText'
 import { formatLen } from '../utils/format'
 import { useUnit } from './fittingShared'
@@ -66,6 +67,10 @@ export default function TallerPatro() {
   const [pincaPropRessaltada, setPincaPropRessaltada] = useState(null)
 
   // ── eines d'anotació (venen del tab: es TRASLLADEN, no es reescriuen) ─────
+  // El node de la barra on el visor deixa anar els seus controls. És ESTAT i no un ref
+  // perquè el portal s'ha de tornar a pintar quan el node existeix: amb un ref, el primer
+  // render passaria `null` i els controls no arribarien mai.
+  const [slotVisor, setSlotVisor] = useState(null)
   const [mode, setMode] = useState('view')     // 'view' | 'pom' | 'seg' | 'pinca' | 'sew'
   // Els punts clicats (imantats). El fan servir els TRES modes de punts: marcar un POM (2),
   // definir un tram (2) i marcar una pinça (3). El gest és el mateix; el que canvia és quants
@@ -1162,6 +1167,7 @@ export default function TallerPatro() {
           <BarraEines
             t={t} mode={mode} onMode={triarMode}
             tascaId={tascaId} errTasca={errTasca}
+            slotVisor={setSlotVisor}
           />
 
           {errEina && (
@@ -1275,6 +1281,7 @@ export default function TallerPatro() {
               pincaProposadaRessaltada={pincaPropRessaltada}
               unit={unit}
               omplirAlcada
+              contenidorEines={slotVisor}
             />
           )}
 
@@ -1295,71 +1302,19 @@ const round2 = (v) => Math.round(v * 100) / 100
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Contenidor de la columna: capçalera fixa i cos amb scroll PROPI. Els tres desborden per
- * dins — mai la pàgina.
- *
- * El repartiment és amb PES, no a parts iguals: la llista de treball és on es passa l'estona
- * i necessita ensenyar files, no dues i mitja. I la capçalera es plega: qui està col·locant
- * POMs pot tancar Peces i Relacions i quedar-se la columna sencera per a la feina.
- *
- * La capçalera va en FOSC (QA-TALLER E · T1). Abans era gris clar sobre card gris clar: un
- * títol que pesa el mateix que el seu contingut no separa res, i la columna es llegia com una
- * llista sola de 40 files. El contrast no és estètica —és el que fa que «on sóc» es respongui
- * sense llegir.
- */
-function Contenidor({ titol, icona, pes = 1, children }) {
-  const { t } = useTranslation()
-  const [plegat, setPlegat] = useState(false)
-
-  return (
-    <div style={{
-      // Plegat NO creix: deixa tota la seva alçada als altres, que és per això que es plega.
-      flex: plegat ? '0 0 auto' : `${pes} 1 0`,
-      minHeight: 0, display: 'flex', flexDirection: 'column',
-      borderBottom: '1px solid var(--border)',
-    }}>
-      <button
-        onClick={() => setPlegat(p => !p)}
-        aria-expanded={!plegat}
-        style={{
-          flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.4rem',
-          padding: '0.45rem 0.7rem', background: 'var(--charcoal)',
-          border: 'none', borderBottom: '1px solid var(--border)',
-          cursor: 'pointer', textAlign: 'left', width: '100%',
-          fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
-          letterSpacing: '0.03em', color: 'var(--white)',
-        }}
-      >
-        <i className={`ti ${icona}`} />
-        <span style={{ flex: 1 }}>{titol}</span>
-        <i
-          className={`ti ${plegat ? 'ti-chevron-down' : 'ti-chevron-up'}`}
-          title={plegat ? t('pattern.taller.expand') : t('pattern.taller.collapse')}
-        />
-      </button>
-      {!plegat && (
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0.5rem 0.6rem' }}>
-          {children}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/**
  * Barra d'eines. Els botons NO obren ni pausen la tasca: això ho fa entrar i sortir del
  * taller. Aquí només es tria QUÈ s'està fent — i si no hi ha rellotge (403 de perfil),
  * les eines no s'ofereixen: el patró es pot mirar, però no anotar sense comptar el temps.
  */
-function BarraEines({ t, mode, onMode, tascaId, errTasca }) {
+function BarraEines({ t, mode, onMode, tascaId, errTasca, slotVisor }) {
   const boto = (actiu) => ({
     background: actiu ? 'var(--gold)' : 'var(--white)',
     color: actiu ? 'var(--white)' : 'var(--text-main)',
     border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
-    borderRadius: 4, padding: '0.35rem 0.8rem',
     cursor: tascaId ? 'pointer' : 'not-allowed',
     opacity: tascaId ? 1 : 0.5,
-    fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: '0.35rem',
+    display: 'flex', alignItems: 'center',
+    ...METRICA_EINA,
   })
 
   return (
@@ -1399,6 +1354,13 @@ function BarraEines({ t, mode, onMode, tascaId, errTasca }) {
         <i className="ti ti-needle-thread" />
         {t('pattern.mode_sew')}
       </button>
+
+      {/* Els controls del visor (zoom · encaixar · capes) aterren AQUÍ per portal, seguits de
+          Cosir i amb la mateixa mida: una sola barra, no dues. `display: contents` treu aquest
+          contenidor de la maquetació perquè els botons siguin fills flex de la barra i hi
+          facin `wrap` un a un, com els de dalt. Si el fitxer no ha carregat encara, el visor
+          no es pinta i aquí no hi arriba res: la barra queda amb les eines de mode i prou. */}
+      <span ref={slotVisor} style={{ display: 'contents' }} />
 
       <span style={{ flex: 1 }} />
 

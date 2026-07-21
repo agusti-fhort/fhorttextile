@@ -4,6 +4,9 @@
 // cicles d'importació, `makeId` i `style` s'accepten com a paràmetres).
 
 import paper from 'paper'
+// X2 — el buscatraços no s'inventa cap color: `style` ja arriba RESOLT del contracte de
+// pintura, i si allà no hi havia color aquí tampoc n'hi ha d'haver.
+import { TRAC_PER_DEFECTE } from './paint'
 
 /**
  * Executa `fn(scope)` dins d'un PaperScope offscreen (sense adjuntar-lo al
@@ -119,10 +122,10 @@ export function paperPathToPathObject(item, style, makeId) {
   let entry
   if (item.className === 'CompoundPath') {
     entry = {
-      fill: style?.fill ?? 'transparent',
+      fill: style?.fill ?? null,
       fillRule: 'evenodd',
-      stroke: style?.stroke ?? '#1d1d1b',
-      strokeWidth: style?.strokeWidth ?? 1.2,
+      stroke: style?.stroke ?? null,
+      strokeWidth: style?.strokeWidth ?? TRAC_PER_DEFECTE,
       subpaths: item.children
         .filter(c => c.className === 'Path' && c.segments?.length)
         .map(c => ({ closed: !!c.closed, segments: segsOf(c) })),
@@ -130,10 +133,10 @@ export function paperPathToPathObject(item, style, makeId) {
   } else {
     entry = {
       closed: !!item.closed,
-      fill: style?.fill ?? 'transparent',
+      fill: style?.fill ?? null,
       fillRule: 'nonzero',
-      stroke: style?.stroke ?? '#1d1d1b',
-      strokeWidth: style?.strokeWidth ?? 1.2,
+      stroke: style?.stroke ?? null,
+      strokeWidth: style?.strokeWidth ?? TRAC_PER_DEFECTE,
       segments: segsOf(item),
     }
   }

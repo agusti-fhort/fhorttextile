@@ -320,6 +320,10 @@ def base_measurements_view(request, model_id):
             'codi_client': bm.pom.codi_client,
             'nom_client': bm.pom.nom_client,
             'nom_ca': bm.pom.pom_global.nom_ca if bm.pom.pom_global_id else '',
+            # `nom_en` és el nom CANÒNIC del sector: el parell "anglès primari + local al
+            # costat" (PomNamePair) no es pot muntar sense ell, i fins ara els consumidors
+            # d'aquest endpoint se l'havien d'anar a buscar a la GradingRule.
+            'nom_en': bm.pom.pom_global.nom_en if bm.pom.pom_global_id else '',
             'categoria_nom': bm.pom.categoria.nom_ca if bm.pom.categoria_id else '',
             'base_value_cm': bm.base_value_cm,
             'notes': bm.notes or '',

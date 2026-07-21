@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Stage, Layer, Line, Rect, Group, Arrow, Circle, Text } from 'react-konva'
 import { useTranslation } from 'react-i18next'
 import {
@@ -60,6 +61,17 @@ const ZOOM_STEP = 1.15
 
 const ALCADA = 560
 
+// Mètrica del botó d'eina, en un sol lloc. La barra del Taller i els controls del visor són
+// UNA fila: dues mides de botó a la mateixa fila es llegeixen com dues barres, que és
+// exactament el que s'ha vingut a treure. La compacta és la del visor dins el tab del model,
+// on els controls són de vora i no han de pesar com una barra d'eines.
+export const METRICA_EINA = {
+  borderRadius: 4, padding: '0.35rem 0.8rem', fontSize: 'var(--fs-body)', gap: '0.35rem',
+}
+const METRICA_EINA_COMPACTA = {
+  borderRadius: 4, padding: '0.2rem 0.5rem', fontSize: 'var(--fs-caption)', gap: '0.25rem',
+}
+
 const clampZoom = (v) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v))
 
 /**
@@ -115,6 +127,16 @@ export default function PatternViewer({
   // ── W2. Al Taller el canvas no té una alçada de maqueta: ocupa el que li deixa el
   // pare. Al tab (la porta) segueix valent ALCADA, que és el que sempre ha valgut.
   omplirAlcada = false,
+  // ── El node DOM on el pare vol els controls (zoom/encaixar/capes). Sense això es pinten
+  // aquí mateix, com sempre. Amb això viatgen per PORTAL a la barra del pare i les eines del
+  // Taller i les del visor formen UNA sola fila.
+  //
+  // Per què un portal i no pujar els botons al pare: l'estat que mouen (zoom, pos, capes) viu
+  // aquí i està lligat al viewport i a la roda del ratolí; pujar-lo seria moure el motor de
+  // pan/zoom fora del component que el fa servir. I al revés tampoc: la barra del Taller es
+  // pinta encara que el fitxer no carregui (el visor, no) — baixar-la aquí la faria
+  // desaparèixer en el moment que més fa falta, el de l'error.
+  contenidorEines = null,
 }) {
   const { t } = useTranslation()
   const viewportRef = useRef(null)
@@ -360,11 +382,19 @@ export default function PatternViewer({
       display: 'flex', flexDirection: 'column', gap: '0.5rem',
       ...(omplirAlcada ? { height: '100%', minHeight: 0 } : null),
     }}>
-      <Controls
-        t={t} zoom={zoom} capes={capes} presents={presents}
-        onZoom={zoomBoto} onEncaixa={encaixar}
-        onToggle={(c) => setCapes(prev => ({ ...prev, [c]: !prev[c] }))}
-      />
+      {(() => {
+        // `gran` va lligat al portal a posta: si els controls van a la barra del pare, són
+        // part d'aquella barra i han de pesar com els seus botons. Dins del visor, en canvi,
+        // són controls de vora i es queden compactes (és el que veu el tab del model).
+        const controls = (
+          <Controls
+            t={t} zoom={zoom} capes={capes} presents={presents} gran={!!contenidorEines}
+            onZoom={zoomBoto} onEncaixa={encaixar}
+            onToggle={(c) => setCapes(prev => ({ ...prev, [c]: !prev[c] }))}
+          />
+        )
+        return contenidorEines ? createPortal(controls, contenidorEines) : controls
+      })()}
 
       <div
         ref={viewportRef}
@@ -833,7 +863,7 @@ function PecaKonva({ piece, zoom, sel, atenuada, visible, mostraPunts, anotant, 
   )
 }
 
-function Controls({ t, zoom, capes, presents, onZoom, onEncaixa, onToggle }) {
+function Controls({ t, zoom, capes, presents, gran = false, onZoom, onEncaixa, onToggle }) {
   // Les capes que el fitxer NO porta no s'ofereixen: un toggle que no fa res és pitjor
   // que no tenir-lo, perquè fa pensar que la capa hi és i està amagada.
   const TOGGLES = [
@@ -841,15 +871,19 @@ function Controls({ t, zoom, capes, presents, onZoom, onEncaixa, onToggle }) {
     ['mirror', 'ti-flip-horizontal'], ['notch', 'ti-scissors'], ['grain', 'ti-arrow-narrow-up'],
   ]
   const boto = {
-    background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 4,
-    padding: '0.2rem 0.5rem', cursor: 'pointer', fontSize: 'var(--fs-caption)',
-    display: 'flex', alignItems: 'center', gap: '0.25rem',
+    background: 'var(--white)', border: '1px solid var(--border)',
+    cursor: 'pointer', display: 'flex', alignItems: 'center',
+    ...(gran ? METRICA_EINA : METRICA_EINA_COMPACTA),
   }
+  const encesa = (on) => ({
+    ...boto,
+    background: on ? 'var(--gold-pale)' : 'var(--white)',
+    borderColor: on ? 'var(--gold)' : 'var(--border)',
+    opacity: on ? 1 : 0.55,
+  })
 
-  return (
-    <div style={{
-      display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0,
-    }}>
+  const contingut = (
+    <>
       <button onClick={() => onZoom(1 / ZOOM_STEP)} style={boto} aria-label={t('pattern.zoom_out')}>
         <i className="ti ti-zoom-out" />
       </button>
@@ -861,25 +895,22 @@ function Controls({ t, zoom, capes, presents, onZoom, onEncaixa, onToggle }) {
         {t('pattern.fit')}
       </button>
       <span style={{
-        fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+        fontSize: gran ? 'var(--fs-body)' : 'var(--fs-caption)', color: 'var(--text-muted)',
         fontFamily: 'var(--mono)', minWidth: 52,
       }}>
         {(zoom * 100).toFixed(0)}%
       </span>
 
-      <span style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 0.2rem' }} />
+      <span style={{
+        width: 1, height: gran ? 22 : 18, background: 'var(--border)', margin: '0 0.2rem',
+      }} />
 
       {TOGGLES.filter(([capa]) => presents.has(capa)).map(([capa, icona]) => (
         <button
           key={capa}
           onClick={() => onToggle(capa)}
           aria-pressed={capes[capa]}
-          style={{
-            ...boto,
-            background: capes[capa] ? 'var(--gold-pale)' : 'var(--white)',
-            borderColor: capes[capa] ? 'var(--gold)' : 'var(--border)',
-            opacity: capes[capa] ? 1 : 0.55,
-          }}
+          style={encesa(capes[capa])}
         >
           <i className={`ti ${icona}`} />
           {t(`pattern.layer.${capa}`)}
@@ -888,16 +919,24 @@ function Controls({ t, zoom, capes, presents, onZoom, onEncaixa, onToggle }) {
       <button
         onClick={() => onToggle('punts')}
         aria-pressed={capes.punts}
-        style={{
-          ...boto,
-          background: capes.punts ? 'var(--gold-pale)' : 'var(--white)',
-          borderColor: capes.punts ? 'var(--gold)' : 'var(--border)',
-          opacity: capes.punts ? 1 : 0.55,
-        }}
+        style={encesa(capes.punts)}
       >
         <i className="ti ti-point" />
         {t('pattern.layer.points')}
       </button>
+    </>
+  )
+
+  // Portalat a la barra del pare: SENSE contenidor propi, perquè els botons siguin fills
+  // directes d'aquella fila flex i hi facin `wrap` un a un com els del pare. Un div enmig
+  // els convertiria en un sol bloc que salta de línia tot junt.
+  if (gran) return contingut
+
+  return (
+    <div style={{
+      display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0,
+    }}>
+      {contingut}
     </div>
   )
 }

@@ -119,7 +119,15 @@ class FttDocumentDetailView(APIView):
                 {"detail": "Falta document_json."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        new_head = svc.save_document(head, document_json)
+        # `kind` opcional: l'interruptor de mode plantilla de l'editor l'envia per marcar el
+        # document com a plantilla en construcció. Si no ve, save_document l'hereta.
+        kind = request.data.get("kind")
+        if kind is not None and kind not in (services_ftt.FTT_KIND_DOCUMENT, services_ftt.FTT_KIND_TEMPLATE):
+            return Response(
+                {"detail": "kind ha de ser 'document' o 'template'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        new_head = svc.save_document(head, document_json, kind=kind)
         # Arreglo del timer-gap: desar renova locked_at → editar >TTL no perd el lock.
         svc.renew_lock(new_head, request.user)
         return Response(ModelFitxerSerializer(new_head).data, status=status.HTTP_200_OK)
@@ -198,14 +206,27 @@ class FttSaveAsTemplateView(APIView):
         # Cap de cadena actual (l'autosave del client el manté al dia).
         fitxer = get_object_or_404(ModelFitxer, pk=fitxer_id)
         data = svc.load_document(fitxer)
+        # DESCONGELAR ABANS D'EMPAQUETAR. El document del qual sortim és una INSTÀNCIA: els seus
+        # `field` ja estan congelats a text amb els valors del model host (codi, client, logo,
+        # taules de mesures). Empaquetar-lo tal qual —el que es feia fins ara— fabricava
+        # plantilles que arrossegaven les dades d'aquell model com a text literal a tots els
+        # documents que en naixessin. `unfreeze_document` és l'invers exacte i ja existia.
+        document_json, assets, report = svc.unfreeze_document(
+            data['document_json'], data.get('assets') or {}
+        )
         blob = services_ftt.pack(
-            data['document_json'], assets=data.get('assets'), kind=services_ftt.FTT_KIND_TEMPLATE
+            document_json, assets=assets, kind=services_ftt.FTT_KIND_TEMPLATE
         )
         tpl = DocumentTemplate(nom=nom, descripcio=descripcio, created_by=request.user, origen='tenant')
         safe_nom = nom[:60].replace('/', '_').replace('\\', '_').replace(' ', '_')
         tpl.fitxer_template.save(f"{safe_nom}.fttpt", ContentFile(blob), save=False)
         tpl.save()
-        return Response(DocumentTemplateSerializer(tpl).data, status=status.HTTP_201_CREATED)
+        # El report viatja perquè l'editor pugui dir QUÈ s'ha desmaterialitzat: sense això
+        # l'usuari no sap que les taules li han quedat buides i a punt de re-vincular.
+        return Response(
+            {**DocumentTemplateSerializer(tpl).data, 'unfreeze_report': report},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class FttDocumentAssetView(APIView):

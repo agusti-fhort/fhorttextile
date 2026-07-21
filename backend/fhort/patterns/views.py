@@ -434,10 +434,18 @@ class PatternFileViewSet(mixins.CreateModelMixin,
 
     @action(detail=True, methods=['get'], url_path='render.svg')
     def render_svg(self, request, pk=None):
-        """SVG del conjunt, o d'una peça (`?piece=BACK`). Render propi, no matplotlib."""
+        """SVG del conjunt, o d'una peça (`?piece=BACK`). Render propi, no matplotlib.
+
+        `?fons=0` el serveix sense el rectangle de fons, per a qui el vectoritza en comptes
+        d'ensenyar-lo com a imatge (l'editor de fitxa, en inserir una peça).
+        """
         fp = self.get_object()
         doc = DjangoGeometryStore().load_from(fp)
-        svg = render_document(doc, piece_name=request.query_params.get('piece', ''))
+        svg = render_document(
+            doc,
+            piece_name=request.query_params.get('piece', ''),
+            fons=request.query_params.get('fons', '1') not in ('0', 'false'),
+        )
         return HttpResponse(svg, content_type='image/svg+xml')
 
     # ── La llista de treball del taller ──────────────────────────────────────

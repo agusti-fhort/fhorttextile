@@ -51,7 +51,6 @@ const GeneralConfig = lazy(() => import('./pages/GeneralConfig'))
 const Planning = lazy(() => import('./pages/Planning'))
 const PlanningCalendar = lazy(() => import('./pages/PlanningCalendar'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
-const PaperKonvaPoc = lazy(() => import('./pages/PaperKonvaPoc'))
 
 /**
  * El guard de ruta (D10).
@@ -338,7 +337,6 @@ export default function App() {
               La ruta "disseny/patro-dxf" s'ha retirat a S5: era un placeholder buit i el
               motor de patrons ja viu al tab "Patró" de la fitxa del model. */}
           <Route path="disseny/documents" element={<DissenyPlaceholder titleKey="nav.documents" icon="ti-file-text" />} />
-          <Route path="disseny/poc-paper" element={<PaperKonvaPoc />} />
           <Route path="onboarding" element={<OnboardingWizard />} />
           <Route path="configuracio/general" element={<GeneralConfig />} />
           <Route path="configuracio/usuaris" element={<UsersRoles />} />
