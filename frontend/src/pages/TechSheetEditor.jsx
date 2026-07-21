@@ -134,6 +134,23 @@ const polygonPoints = (x, y, w, h, n) => {
 }
 const PRESET_TOOLS = ['preset_callout', 'preset_detail_circle', 'preset_legend', 'preset_cota_pom', 'preset_annotation']
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.round(performance.now())}-${Math.floor(Math.random() * 1e9)}`)
+// A4 — AMPLADA REAL D'UN TEXT, en mm. Konva sap mesurar (mesura amb la mateixa família i
+// mida que pintarà), però enlloc del fitxer se li demanava: per això l'etiqueta de la cota
+// tenia una amplada fixa i "A" ocupava el mateix que "1/2 CHEST WIDTH".
+// Es mesura FORA de textBoxParts, a la inserció i en editar el text, i el resultat es desa a
+// obj.width — que és el que textBoxParts ja consumeix. Així el descriptor segueix sent una
+// funció pura de l'objecte i la paritat pantalla=PDF es manté per construcció.
+const TEXT_PAD_X_PX = 7    // marge lateral del fons, en px de pàgina
+const TEXT_PAD_Y_PX = 4    // marge vertical (l'aplica textBoxParts via bgPadding)
+export function measureTextWidthMm({ text, fontSize, fontFamily, fontStyle }) {
+  const node = new Konva.Text({
+    text: text || '', fontSize: fontSize || 11, fontFamily: fontFamily || FONT,
+    fontStyle: fontStyle || 'normal',
+  })
+  const w = node.getTextWidth()
+  node.destroy()
+  return toMm(w + TEXT_PAD_X_PX * 2)
+}
 export const toPx = (mm) => mm * MM_TO_PX
 export const toMm = (px) => px / MM_TO_PX
 
@@ -2975,11 +2992,14 @@ export default function TechSheetEditor() {
       ? { id: uid(), type: 'path', layer: 'free', x: 0, y: 0, headStart: true, headEnd: true, stroke: col, fill: null, strokeWidth: 1,
           paths: [{ closed: false, segments: [{ x: 0, y: 0, inX: 0, inY: 0, outX: 0, outY: 0 }, { x: dx, y: dy, inX: 0, inY: 0, outX: 0, outY: 0 }], stroke: col, strokeWidth: 1, fill: null }] }
       : { id: uid(), type: 'arrow', layer: 'free', x: 0, y: 0, x2: dx, y2: dy, stroke: col, fill: col, strokeWidth: 1, arrow2: true }
-    const TW = 24
+    // A4 — l'amplada surt de MESURAR el text, no d'un literal: una cota de POM pot dir "A" o
+    // "1/2 CHEST WIDTH" i el fons vermell s'hi ha d'ajustar. Es mesura un cop, aquí, i es desa.
+    const etiqueta = pom ? pom.text : t('tech_sheet.preset_cota_text')
+    const TW = measureTextWidthMm({ text: etiqueta, fontSize: 9, fontFamily: FONT, fontStyle: pom ? 'bold' : 'normal' })
     const mx = dx / 2 + px * 3, my = dy / 2 + py * 3   // punt mig desplaçat 3mm perpendicular
     const text = pom
-      ? { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: pom.text, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.white, fontStyle: 'bold', align: 'center', bgFill: KONVA_COL.pom, bgPadding: 2 }
-      : { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: t('tech_sheet.preset_cota_text'), fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
+      ? { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.white, fontStyle: 'bold', align: 'center', bgFill: KONVA_COL.pom, bgPadding: toMm(TEXT_PAD_Y_PX) }
+      : { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
     addObject({ id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0, children: [linia, text] })
     setCotaPreset(null)
   }
@@ -3855,7 +3875,24 @@ export default function TechSheetEditor() {
   })()
   const textObj = selObj?.type === 'text' ? selObj : groupTextChild
   const textGroupId = selObj?.type === 'group' ? selObj.id : null
-  const updateText = (patch) => (textObj && (textGroupId ? updateChild(textGroupId, textObj.id, patch) : updateObject(textObj.id, patch)))
+  // A4 — si el que canvia és el CONTINGUT (o la tipografia) d'un text amb fons, l'amplada es
+  // torna a mesurar: si no, editar l'etiqueta d'una cota deixaria el fons de la mida antiga.
+  // Els texts SENSE fons no s'hi toquen: allà l'amplada és la caixa de composició que ha triat
+  // l'usuari (i on el text ha d'ajustar-se o partir), no un ajust al contingut.
+  const updateText = (patch) => {
+    if (!textObj) return
+    const p = { ...patch }
+    const tocaMida = 'text' in p || 'fontSize' in p || 'fontFamily' in p || 'fontStyle' in p
+    if (tocaMida && (textObj.bgFill || p.bgFill)) {
+      p.width = measureTextWidthMm({
+        text: p.text ?? textObj.text,
+        fontSize: p.fontSize ?? textObj.fontSize,
+        fontFamily: p.fontFamily ?? textObj.fontFamily,
+        fontStyle: p.fontStyle ?? textObj.fontStyle,
+      })
+    }
+    return textGroupId ? updateChild(textGroupId, textObj.id, p) : updateObject(textObj.id, p)
+  }
   // Fix #3: forma amb traç editable — el propi objecte (rect/ellipse/line/arrow/path) o bé el
   // fill 'arrow'/'path' d'un grup (cas cota: conviu amb textObj, tots dos blocs alhora).
   const STROKE_TYPES = ['rect', 'ellipse', 'line', 'arrow', 'path']
