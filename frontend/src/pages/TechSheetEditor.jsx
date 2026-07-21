@@ -4112,9 +4112,18 @@ export default function TechSheetEditor() {
   // vol tocar mentre s'edita una forma. Segueix disponible, però enrutada per mode: amb el
   // canvas obert, el color va al canvas viu (runNode, que el fusiona al desat) i no al model,
   // que és el motor que la Fase 6 ja havia construït.
-  const pintaFill = (c) => (panelLockedForEdit ? runNode('setFill', c) : null)
-  const pintaStroke = (c) => (panelLockedForEdit ? runNode('setStroke', c) : null)
-  const pintaStrokeWidth = (w) => (panelLockedForEdit ? runNode('setStrokeWidth', w) : null)
+  // Retornen TRUE si se n'han fet càrrec (i llavors el model no s'ha de tocar). Abans
+  // retornaven el resultat de runNode —que és undefined— i el `??` del cridador deixava passar
+  // TAMBÉ l'escriptura al model: es pintava dues vegades, i el valor del model competia amb la
+  // pintura pendent que el desat fusiona des del canvas.
+  const pintaEnCanvas = (accio, valor) => {
+    if (!panelLockedForEdit) return false
+    runNode(accio, valor)
+    return true
+  }
+  const pintaFill = (c) => pintaEnCanvas('setFill', c)
+  const pintaStroke = (c) => pintaEnCanvas('setStroke', c)
+  const pintaStrokeWidth = (w) => pintaEnCanvas('setStrokeWidth', w)
   const multiSelected = selectedObjects.length > 1
   const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
   const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse', 'path'].includes(o.type))
@@ -5354,13 +5363,14 @@ export default function TechSheetEditor() {
                     <div style={propLabel}>{t('tech_sheet.stroke_color')}
                       <ColorPicker
                         value={subActive != null ? (shapeObj.paths[subActive]?.stroke || shapeObj.stroke || KONVA_COL.textMain) : (shapeObj.stroke || KONVA_COL.textMain)}
-                        onChange={c => pintaStroke(c) ?? (subActive != null
-                          ? updateShape({ paths: shapeObj.paths.map((p, i) => i === subActive ? { ...p, stroke: c } : p) })
-                          : updateShape({ stroke: c, ...(shapeObj.type === 'arrow' ? { fill: c } : {}) }))} />
+                        onChange={c => { if (pintaStroke(c)) return
+                          if (subActive != null) updateShape({ paths: shapeObj.paths.map((p, i) => i === subActive ? { ...p, stroke: c } : p) })
+                          else updateShape({ stroke: c, ...(shapeObj.type === 'arrow' ? { fill: c } : {}) }) }} />
                     </div>
                     <label style={propLabel}>{t('tech_sheet.stroke_width')}
                       <input type="number" min={0.5} max={5} step={0.5} value={shapeObj.strokeWidth || (shapeObj.type === 'arrow' ? 1.5 : 1)}
-                        onChange={e => pintaStrokeWidth(e.target.value) ?? updateShape({ strokeWidth: Number(e.target.value) || 1 })} style={propInput} />
+                        onChange={e => { if (pintaStrokeWidth(e.target.value)) return
+                          updateShape({ strokeWidth: Number(e.target.value) || 1 }) }} style={propInput} />
                     </label>
                     {/* COMMIT 4: puntes per element (arrow i path). Escriu ambdós camps perquè
                         prevalguin sobre el legacy arrow2 (retrocompat via headConfig). */}
@@ -5383,9 +5393,9 @@ export default function TechSheetEditor() {
                     <div style={propLabel}>{t('tech_sheet.fill')}
                       <ColorPicker
                         value={subActive != null ? (selObj.paths[subActive]?.fill || selObj.fill || KONVA_COL.white) : (selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : KONVA_COL.white)}
-                        onChange={c => pintaFill(c) ?? (subActive != null
-                          ? updateObject(selObj.id, { paths: selObj.paths.map((p, i) => i === subActive ? { ...p, fill: c } : p) })
-                          : updateObject(selObj.id, { fill: c }))} />
+                        onChange={c => { if (pintaFill(c)) return
+                          if (subActive != null) updateObject(selObj.id, { paths: selObj.paths.map((p, i) => i === subActive ? { ...p, fill: c } : p) })
+                          else updateObject(selObj.id, { fill: c }) }} />
                     </div>
                   </Contenidor>
                 )}

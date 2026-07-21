@@ -89,6 +89,9 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
 
     const clearHandles = () => {
       uiLayer.removeChildren()
+      // Escombrada de seguretat: cap item ha de quedar amb l'overlay de selecció de Paper
+      // engegat (vegeu R1 a refreshHandles). Ja no se n'engega cap, però un .ftt obert amb
+      // una versió anterior del component podria arribar-hi amb algun de viu.
       scope.project.getItems({ selected: true }).forEach(item => { item.selected = false })
     }
 
@@ -97,7 +100,13 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       clearHandles()
       const path = selectedPathRef.current
       if (!path) { scope.view.update(); return }
-      path.selected = true
+      // R1 — AQUÍ NO ES POSA `path.selected = true`. L'overlay de selecció integrat de Paper
+      // repinta el traç del path amb el seu color de selecció i, com que segueix la MATEIXA
+      // geometria, tapa el stroke real: canviar-ne el color o el gruix des del panell no es
+      // veia fins a sortir del mode (el fill sí, perquè aquell overlay no porta fill).
+      // És el mateix mal que el cue de forma ja va corregir; aquest era el bessó del mode
+      // de selecció directa. Les àncores i les nanses les dibuixem nosaltres a la capa UI,
+      // així que d'aquell `selected` no en depenia res més que el problema.
       uiLayer.activate()
       const sel = selectedSegsRef.current
       path.segments.forEach((segment, index) => {
