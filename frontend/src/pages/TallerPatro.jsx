@@ -12,6 +12,7 @@ import RelationsPanel from '../components/pattern/RelationsPanel'
 import POMPicker from '../components/pattern/POMPicker'
 import SewEditor from '../components/pattern/SewEditor'
 import SegmentEditor from '../components/pattern/SegmentEditor'
+import Contenidor from '../components/ui/Contenidor'
 import { grauVisual, textCobertura, textEstat } from '../components/pattern/sewText'
 import { formatLen } from '../utils/format'
 import { useUnit } from './fittingShared'
@@ -1299,58 +1300,6 @@ export default function TallerPatro() {
 const round2 = (v) => Math.round(v * 100) / 100
 
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Contenidor de la columna: capçalera fixa i cos amb scroll PROPI. Els tres desborden per
- * dins — mai la pàgina.
- *
- * El repartiment és amb PES, no a parts iguals: la llista de treball és on es passa l'estona
- * i necessita ensenyar files, no dues i mitja. I la capçalera es plega: qui està col·locant
- * POMs pot tancar Peces i Relacions i quedar-se la columna sencera per a la feina.
- *
- * La capçalera va en FOSC (QA-TALLER E · T1). Abans era gris clar sobre card gris clar: un
- * títol que pesa el mateix que el seu contingut no separa res, i la columna es llegia com una
- * llista sola de 40 files. El contrast no és estètica —és el que fa que «on sóc» es respongui
- * sense llegir.
- */
-function Contenidor({ titol, icona, pes = 1, children }) {
-  const { t } = useTranslation()
-  const [plegat, setPlegat] = useState(false)
-
-  return (
-    <div style={{
-      // Plegat NO creix: deixa tota la seva alçada als altres, que és per això que es plega.
-      flex: plegat ? '0 0 auto' : `${pes} 1 0`,
-      minHeight: 0, display: 'flex', flexDirection: 'column',
-      borderBottom: '1px solid var(--border)',
-    }}>
-      <button
-        onClick={() => setPlegat(p => !p)}
-        aria-expanded={!plegat}
-        style={{
-          flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.4rem',
-          padding: '0.45rem 0.7rem', background: 'var(--charcoal)',
-          border: 'none', borderBottom: '1px solid var(--border)',
-          cursor: 'pointer', textAlign: 'left', width: '100%',
-          fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
-          letterSpacing: '0.03em', color: 'var(--white)',
-        }}
-      >
-        <i className={`ti ${icona}`} />
-        <span style={{ flex: 1 }}>{titol}</span>
-        <i
-          className={`ti ${plegat ? 'ti-chevron-down' : 'ti-chevron-up'}`}
-          title={plegat ? t('pattern.taller.expand') : t('pattern.taller.collapse')}
-        />
-      </button>
-      {!plegat && (
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0.5rem 0.6rem' }}>
-          {children}
-        </div>
-      )}
-    </div>
-  )
-}
 
 /**
  * Barra d'eines. Els botons NO obren ni pausen la tasca: això ho fa entrar i sortir del
