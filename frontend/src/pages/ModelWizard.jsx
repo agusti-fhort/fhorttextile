@@ -276,6 +276,19 @@ export default function ModelWizard() {
     }
   }
 
+  // D1 — el backend valida el grading ABANS d'assignar-lo i parla en clar: `message` és per a
+  // la tècnica, no per al log. Abans es feia JSON.stringify(data) i el motiu quedava enterrat.
+  const errMsg = (e) => e.response?.data?.message
+    || (e.response?.data ? JSON.stringify(e.response.data) : t('model_wizard.conn_error'))
+
+  // D1 — grading d'un ALTRE client: 409 que NO bloqueja. És un flux de taller legítim (aplicar
+  // la forma d'un altre client), però ha de ser un acte conscient → es confirma i es reintenta.
+  const confirmaAltreClient = (e) => {
+    const d = e.response?.data
+    if (e.response?.status !== 409 || d?.tipus !== 'ruleset_altre_client') return false
+    return window.confirm(`${d.message}\n\n${t('model_wizard.grading_other_customer_confirm')}`)
+  }
+
   const handleCreate = async () => {
     if (!season) { setError(t('model_wizard.season_required')); setBlock(1); return }
     if (!customerId) { setError(t('model_wizard.customer_required')); setBlock(1); return }
@@ -285,15 +298,22 @@ export default function ModelWizard() {
     setSaving(true); setError('')
     try {
       // El selector mana customer_id; ref_client (text) segueix sent codi_client (SKU del client).
-      const r = await models.createWizard({
+      const payload = {
         year, season, customer_id: customerId, ref_client: refClient,
         nom_prenda: nomPrenda, descripcio, collection,
         data_objectiu: dataObjectiu || null,
         ...skeletonPayload(),
-      })
+      }
+      let r
+      try {
+        r = await models.createWizard(payload)
+      } catch (e) {
+        if (!confirmaAltreClient(e)) throw e
+        r = await models.createWizard({ ...payload, confirmar_altre_client: true })
+      }
       navigate(`/models/${r.data.id}`)
     } catch (e) {
-      setError(e.response?.data ? JSON.stringify(e.response.data) : t('model_wizard.conn_error'))
+      setError(errMsg(e))
     } finally { setSaving(false) }
   }
 
@@ -303,10 +323,16 @@ export default function ModelWizard() {
     try {
       // Edit: el camp FK del serializer és `customer` (rep l'id); codi_client = el camp de text.
       await models.update(id, { customer: customerId, codi_client: refClient, nom_prenda: nomPrenda, descripcio, collection, data_objectiu: dataObjectiu || null })
-      await models.updateStep2(id, skeletonPayload())
+      const payload = skeletonPayload()
+      try {
+        await models.updateStep2(id, payload)
+      } catch (e) {
+        if (!confirmaAltreClient(e)) throw e
+        await models.updateStep2(id, { ...payload, confirmar_altre_client: true })
+      }
       navigate(`/models/${id}`)
     } catch (e) {
-      setError(e.response?.data ? JSON.stringify(e.response.data) : t('model_wizard.conn_error'))
+      setError(errMsg(e))
     } finally { setSaving(false) }
   }
 

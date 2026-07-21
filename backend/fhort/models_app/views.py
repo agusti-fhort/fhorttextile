@@ -611,6 +611,22 @@ def create_model_wizard(request):
     garment_fields, gerr = _resolve_garment_def(request.data)
     if gerr:
         return Response({'error': gerr}, status=400)
+
+    # D1 — mateixa porta que a update_model_step2: el wizard pot arrossegar graduació ja des de
+    # la creació, i un ruleset buit o d'un altre run faria néixer el model sense regles útils.
+    _rs = garment_fields.get('grading_rule_set')
+    if _rs is not None:
+        _ss = garment_fields.get('size_system')
+        _err = _validar_ruleset_assignable(
+            _rs,
+            size_system_id=(_ss.id if _ss is not None else None),
+            customer_id=request.data.get('customer_id') or None,
+            confirmat=bool(request.data.get('confirmar_altre_client')),
+        )
+        if _err is not None:
+            payload, status_code = _err
+            return Response(payload, status=status_code)
+
     creator = getattr(request.user, 'profile', None)
 
     if not year or not season:

@@ -885,6 +885,7 @@
     "save": "Save",
     "creating": "Creating…",
     "saving": "Saving…",
+    "grading_other_customer_confirm": "Do you want to apply it to this model anyway?",
     "conn_error": "Connection error",
     "season_required": "Select a season",
     "created_ok": "Model created.",

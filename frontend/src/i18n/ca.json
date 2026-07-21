@@ -885,6 +885,7 @@
     "save": "Guardar",
     "creating": "Creant…",
     "saving": "Guardant…",
+    "grading_other_customer_confirm": "Vols aplicar-lo igualment a aquest model?",
     "conn_error": "Error de connexió",
     "season_required": "Selecciona una temporada",
     "created_ok": "Model creat.",
