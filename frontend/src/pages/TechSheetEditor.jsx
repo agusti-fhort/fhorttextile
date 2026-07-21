@@ -3338,6 +3338,9 @@ export default function TechSheetEditor() {
   // natural és agafar una forma, no un node. Reinicia també l'estat de selecció.
   useEffect(() => {
     setNodeTool('shape'); setNodeSel({ mode: 'shape', shapeCount: 0, selCount: 0 })
+    // En entrar a editar nodes, el ribbon es planta a "Editar": abans la barra contextual
+    // apareixia sola, ara les eines viuen a la tab i cal portar-hi l'usuari.
+    if (editingFlatId) setRibbonGroup('editar')
     // Sortir de l'edició (Escape, Cancel·lar, esborrar l'objecte…) també deixa anar el grup
     // contenidor: així no cal recordar-ho a cadascuna de les sortides.
     if (!editingFlatId) setEditingFlatGroupId(null)
@@ -4030,10 +4033,11 @@ export default function TechSheetEditor() {
   // onStageMouseDown…): això és només presentació + agrupació. Les eines sense handler avui es
   // marquen `soon` (placeholder deshabilitat) i NO s'hi cabla cap comportament (són tandes futures).
   const PALETTE = [
+    // `node` i `subpath` han marxat a la tab "Editar" del ribbon: són les úniques dues eines de
+    // la paleta que no creen res —seleccionen més fi dins d'un objecte que ja existeix— i el
+    // seu lloc és al costat de la resta d'eines d'edició, no entre les de dibuix.
     { cat: 'select', items: [
       { kind: 'tool', k: 'select', icon: 'ti-pointer-2', label: t('tech_sheet.tool_select') },
-      { kind: 'tool', k: 'node', icon: 'ti-vector', label: t('tech_sheet.tool_node') },
-      { kind: 'tool', k: 'subpath', icon: 'ti-vector-triangle', label: t('tech_sheet.tool_subpath') },
     ] },
     { cat: 'draw', items: [
       { kind: 'tool', k: 'draw', icon: 'ti-pencil', label: t('tech_sheet.tool_draw') },
@@ -4194,6 +4198,7 @@ export default function TechSheetEditor() {
     { id: 'page', label: t('tech_sheet.ribbon_page') },
     { id: 'insert', label: t('tech_sheet.ribbon_insert') },
     { id: 'organize', label: t('tech_sheet.ribbon_organize') },
+    { id: 'editar', label: t('tech_sheet.ribbon_edit') },
   ]
   const ribbonTabStyle = (active) => ({
     minWidth: 86, height: 28, border: `1px solid ${active ? COL.gold : 'transparent'}`,
@@ -4213,6 +4218,18 @@ export default function TechSheetEditor() {
   })
   // Peça 4: etiqueta del botó del ribbon — màx 2 línies, trunca amb ellipsis (títol complet al hover).
   const ribbonLabelStyle = { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', width: '100%', wordBreak: 'break-word' }
+  // Separador de grup i camp etiquetat del ribbon: fins ara el separador era un literal inline
+  // usat una sola vegada; amb la tab Editar passen a ser cinc grups i mereix un nom.
+  const ribbonSep = { width: 1, height: 50, background: COL.border, flexShrink: 0, alignSelf: 'center' }
+  const ribbonFieldStyle = {
+    display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    gap: 3, minHeight: 50, flexShrink: 0, padding: '5px 3px',
+    fontSize: 'var(--fs-caption)', color: COL.textMain, fontFamily: FONT,
+  }
+  const ribbonMiniInput = {
+    width: 56, height: 24, border: `1px solid ${COL.border}`, borderRadius: 6,
+    background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', padding: '0 6px',
+  }
   const ribbonSelectStyle = {
     height: 50, minWidth: 86, border: `1px solid ${COL.border}`, borderRadius: 6,
     background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)',
@@ -4273,6 +4290,101 @@ export default function TechSheetEditor() {
         // el FilePicker (Model / Catàleg / Importar), en lloc dels N botons de fitxer d'abans.
         ribbonTool({ key: 'files', icon: 'ti-folder', label: t('tech_sheet.tool_files'), onClick: () => setFilePicker(true), disabled: !locked }),
       ]
+    }
+    // TAB "EDITAR" — superfície única de l'edició fina. Substitueix la barra contextual F1 (que
+    // vivia entre els menús i el ribbon, apareixia i desapareixia, i feia wrap a dues files amb
+    // els nou grups oberts). Les eines es reindexen per ABAST, no per superfície d'origen:
+    //   ENTRADA  → les dues eines que venien de la paleta (node, subpath)
+    //   NODE     → dos cursors + afegir/treure/convertir/tisores + topologia
+    //   FORMA    → booleanes · alinear · distribuir · mirall · rotar · escalar · z-ordre
+    //   APARENÇA → emplenat · traç · gruix (transversal)
+    // Els grups de FORMA només es pinten quan hi ha formes seleccionades, com abans; el que
+    // canvia és que ara viuen sempre al mateix lloc i amb etiqueta llegible (72×50).
+    if (ribbonGroup === 'editar') {
+      const shapeMode = nodeSel.mode === 'shape'
+      const nShapes = nodeSel.shapeCount || 0
+      const out = [
+        ribbonTool({ key: 'tool-node', icon: 'ti-vector', label: t('tech_sheet.tool_node'), onClick: () => setTool('node'), active: tool === 'node', disabled: !locked }),
+        ribbonTool({ key: 'tool-subpath', icon: 'ti-vector-triangle', label: t('tech_sheet.tool_subpath'), onClick: () => setTool('subpath'), active: tool === 'subpath', disabled: !locked }),
+        <span key="sep-entrada" style={ribbonSep} />,
+      ]
+      if (!editingFlatId) {
+        out.push(<span key="hint" style={{ color: COL.textMuted, fontSize: 'var(--fs-label)', padding: '0 8px', alignSelf: 'center' }}>{t('tech_sheet.edit_tab_hint')}</span>)
+        return out
+      }
+      SHAPE_TOOL_ITEMS.forEach(it => out.push(ribbonTool({
+        key: `nt-${it.k}`, icon: it.icon, label: paperFlatLabels[it.label],
+        onClick: () => setNodeTool(it.k), active: nodeTool === it.k, title: `${paperFlatLabels[it.label]} · ${it.sc}`,
+      })))
+      NODE_TOOL_ITEMS.forEach(it => out.push(ribbonTool({
+        key: `nt-${it.k}`, icon: it.icon, label: paperFlatLabels[it.label],
+        onClick: () => setNodeTool(it.k), active: nodeTool === it.k, title: `${paperFlatLabels[it.label]} · ${it.sc}`,
+      })))
+      out.push(<span key="sep-topo" style={ribbonSep} />)
+      out.push(ribbonTool({ key: 'n-close', icon: 'ti-link', label: t('tech_sheet.node_close'), onClick: () => runNode('close') }))
+      out.push(ribbonTool({ key: 'n-open', icon: 'ti-link-off', label: t('tech_sheet.node_open'), onClick: () => runNode('open') }))
+      out.push(ribbonTool({ key: 'n-split', icon: 'ti-arrows-split', label: t('tech_sheet.node_split'), onClick: () => runNode('split') }))
+      if (shapeMode && nShapes >= 2) {
+        out.push(<span key="sep-bool" style={ribbonSep} />)
+        ;[
+          { op: 'unite', icon: 'ti-layers-union', label: 'pathfinder_unite' },
+          { op: 'subtract', icon: 'ti-layers-subtract', label: 'pathfinder_subtract_hint' },
+          { op: 'intersect', icon: 'ti-layers-intersect', label: 'pathfinder_intersect' },
+          { op: 'exclude', icon: 'ti-layers-difference', label: 'pathfinder_exclude' },
+        ].forEach(pf => out.push(ribbonTool({ key: `pf-${pf.op}`, icon: pf.icon, label: t(`tech_sheet.${pf.label}`), onClick: () => runNode('booleanShapes', pf.op) })))
+        out.push(<span key="sep-align" style={ribbonSep} />)
+        ;[
+          { m: 'left', icon: 'ti-layout-align-left', label: 'align_left_short' },
+          { m: 'center', icon: 'ti-layout-align-center', label: 'align_center_short' },
+          { m: 'right', icon: 'ti-layout-align-right', label: 'align_right_short' },
+          { m: 'top', icon: 'ti-layout-align-top', label: 'align_top_short' },
+          { m: 'middle', icon: 'ti-layout-align-middle', label: 'align_middle_short' },
+          { m: 'bottom', icon: 'ti-layout-align-bottom', label: 'align_bottom_short' },
+        ].forEach(a => out.push(ribbonTool({ key: `al-${a.m}`, icon: a.icon, label: t(`tech_sheet.${a.label}`), onClick: () => runNode('alignShapes', a.m) })))
+        out.push(ribbonTool({ key: 'sh-dist-h', icon: 'ti-layout-distribute-horizontal', label: t('tech_sheet.distribute_h_short'), onClick: () => runNode('distributeShapes', 'h'), disabled: nShapes < 3 }))
+        out.push(ribbonTool({ key: 'sh-dist-v', icon: 'ti-layout-distribute-vertical', label: t('tech_sheet.distribute_v_short'), onClick: () => runNode('distributeShapes', 'v'), disabled: nShapes < 3 }))
+      }
+      if (shapeMode && nShapes >= 1) {
+        out.push(<span key="sep-tr" style={ribbonSep} />)
+        out.push(ribbonTool({ key: 'sh-mir-h', icon: 'ti-flip-horizontal', label: t('tech_sheet.mirror_h'), onClick: () => runNode('mirrorShapes', 'h') }))
+        out.push(ribbonTool({ key: 'sh-mir-v', icon: 'ti-flip-vertical', label: t('tech_sheet.mirror_v'), onClick: () => runNode('mirrorShapes', 'v') }))
+        out.push(
+          <label key="sh-rot" style={ribbonFieldStyle} title={t('tech_sheet.shape_rotate')}>
+            <span>{t('tech_sheet.shape_rotate')}</span>
+            <input type="number" step="1" placeholder="°"
+              onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) { runNode('rotateShapes', v); e.target.value = '' } } }}
+              style={ribbonMiniInput} />
+          </label>,
+          <label key="sh-sc" style={ribbonFieldStyle} title={t('tech_sheet.shape_scale')}>
+            <span>{t('tech_sheet.shape_scale')}</span>
+            <input type="number" step="1" min="1" placeholder="%"
+              onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(e.target.value); if (!Number.isNaN(v) && v > 0) { runNode('scaleShapes', v); e.target.value = '' } } }}
+              style={ribbonMiniInput} />
+          </label>,
+        )
+        out.push(<span key="sep-z" style={ribbonSep} />)
+        out.push(ribbonTool({ key: 'sh-z-back', icon: 'ti-chevrons-down', label: t('tech_sheet.send_to_back'), onClick: () => runNode('reorderShape', 'back') }))
+        out.push(ribbonTool({ key: 'sh-z-bwd', icon: 'ti-arrow-down', label: t('tech_sheet.send_backward'), onClick: () => runNode('reorderShape', 'backward') }))
+        out.push(ribbonTool({ key: 'sh-z-fwd', icon: 'ti-arrow-up', label: t('tech_sheet.bring_forward'), onClick: () => runNode('reorderShape', 'forward') }))
+        out.push(ribbonTool({ key: 'sh-z-front', icon: 'ti-chevrons-up', label: t('tech_sheet.bring_to_front'), onClick: () => runNode('reorderShape', 'front') }))
+      }
+      out.push(<span key="sep-paint" style={ribbonSep} />)
+      out.push(
+        <label key="pt-fill" style={ribbonFieldStyle} title={t('tech_sheet.fill')}>
+          <span>{t('tech_sheet.fill')}</span>
+          <ColorPicker value={nodeSel.fill || 'transparent'} onChange={c => runNode('setFill', c)} />
+        </label>,
+        <label key="pt-stroke" style={ribbonFieldStyle} title={t('tech_sheet.stroke_color')}>
+          <span>{t('tech_sheet.stroke_color')}</span>
+          <ColorPicker value={nodeSel.stroke || 'transparent'} onChange={c => runNode('setStroke', c)} />
+        </label>,
+        <label key="pt-sw" style={ribbonFieldStyle} title={t('tech_sheet.stroke_width')}>
+          <span>{t('tech_sheet.stroke_width')}</span>
+          <input type="number" min="0" step="0.1" value={nodeSel.strokeWidth ?? ''}
+            onChange={e => runNode('setStrokeWidth', e.target.value)} style={ribbonMiniInput} />
+        </label>,
+      )
+      return out
     }
     return [
       ribbonTool({ key: 'align-left', icon: 'ti-layout-align-left', label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: nodeMode || selectedObjects.length < 2 }),
@@ -4447,113 +4559,6 @@ export default function TechSheetEditor() {
           </div>
         ))}
       </div>
-
-      {/* ── F1 · Barra superior CONTEXTUAL del mode edició de nodes (única superfície d'eines de node) ── */}
-      {editingFlatId && (
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, minHeight: 34, background: COL.sidebar, borderBottom: `1px solid ${COL.border}`, padding: '0 10px', fontFamily: FONT, flexWrap: 'wrap' }}>
-          {/* G1 — indicador de CONTEXT sensible al mode: "Formes · N" (fletxa negra) o "Nodes · …" (directa). */}
-          <span style={{ fontSize: 'var(--fs-label)', color: COL.gold, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap' }}>
-            <i className={`ti ${nodeSel.mode === 'shape' ? 'ti-pointer' : 'ti-vector-triangle'}`} style={{ fontSize: 14, marginRight: 4 }} />
-            {nodeSel.mode === 'shape'
-              ? `${t('tech_sheet.node_mode_shapes')}${nodeSel.shapeCount ? ` · ${nodeSel.shapeCount}` : ''}`
-              : `${t('tech_sheet.node_mode_nodes')}${nodeSel.seg ? ` · ${t('tech_sheet.node_segment')}` : nodeSel.selCount ? ` · ${nodeSel.selCount}` : ''}`}
-          </span>
-          <span style={nodeBarSep} />
-          {/* G1 — els DOS CURSORS (fletxa negra = forma · fletxa blanca = directa), primers del grup. */}
-          {SHAPE_TOOL_ITEMS.map(it => (
-            <button key={it.k} type="button" onClick={() => setNodeTool(it.k)}
-              title={`${paperFlatLabels[it.label]} · ${it.sc}`}
-              style={nodeBarBtn(nodeTool === it.k)}><i className={`ti ${it.icon}`} style={{ fontSize: 15 }} /></button>
-          ))}
-          <span style={nodeBarSep} />
-          {NODE_TOOL_ITEMS.map(it => (
-            <button key={it.k} type="button" onClick={() => setNodeTool(it.k)}
-              title={`${paperFlatLabels[it.label]} · ${it.sc}`}
-              style={nodeBarBtn(nodeTool === it.k)}><i className={`ti ${it.icon}`} style={{ fontSize: 15 }} /></button>
-          ))}
-          <span style={nodeBarSep} />
-          <button type="button" onClick={() => runNode('close')} title={t('tech_sheet.node_close')} style={nodeBarBtn(false)}><i className="ti ti-link" style={{ fontSize: 15 }} /></button>
-          <button type="button" onClick={() => runNode('open')} title={t('tech_sheet.node_open')} style={nodeBarBtn(false)}><i className="ti ti-link-off" style={{ fontSize: 15 }} /></button>
-          <button type="button" onClick={() => runNode('split')} title={t('tech_sheet.node_split')} style={nodeBarBtn(false)}><i className="ti ti-arrows-split" style={{ fontSize: 15 }} /></button>
-          <span style={nodeBarSep} />
-          {/* G3 — BUSCATRAÇOS entre formes (mode fletxa negra, 2+ formes): unir/restar/intersecar/excloure
-              in-place dins el path compost. Subtract: la forma inferior resta les superiors. */}
-          {nodeSel.mode === 'shape' && nodeSel.shapeCount >= 2 && (
-            <>
-              {[
-                { op: 'unite', icon: 'ti-layers-union', label: 'pathfinder_unite' },
-                { op: 'subtract', icon: 'ti-layers-subtract', label: 'pathfinder_subtract_hint' },
-                { op: 'intersect', icon: 'ti-layers-intersect', label: 'pathfinder_intersect' },
-                { op: 'exclude', icon: 'ti-layers-difference', label: 'pathfinder_exclude' },
-              ].map(pf => (
-                <button key={pf.op} type="button" onClick={() => runNode('booleanShapes', pf.op)}
-                  title={t(`tech_sheet.${pf.label}`)} style={nodeBarBtn(false)}><i className={`ti ${pf.icon}`} style={{ fontSize: 15 }} /></button>
-              ))}
-              <span style={nodeBarSep} />
-            </>
-          )}
-          {/* G5 — ALINEAR/DISTRIBUIR formes (mode fletxa negra): alinear amb 2+, distribuir amb 3+.
-              Mateixa lògica que l'alinear d'objectes, aplicada a bounds de subpath. */}
-          {nodeSel.mode === 'shape' && nodeSel.shapeCount >= 2 && (
-            <>
-              {[
-                { m: 'left', icon: 'ti-layout-align-left', label: 'align_left_short' },
-                { m: 'center', icon: 'ti-layout-align-center', label: 'align_center_short' },
-                { m: 'right', icon: 'ti-layout-align-right', label: 'align_right_short' },
-                { m: 'top', icon: 'ti-layout-align-top', label: 'align_top_short' },
-                { m: 'middle', icon: 'ti-layout-align-middle', label: 'align_middle_short' },
-                { m: 'bottom', icon: 'ti-layout-align-bottom', label: 'align_bottom_short' },
-              ].map(a => (
-                <button key={a.m} type="button" onClick={() => runNode('alignShapes', a.m)}
-                  title={t(`tech_sheet.${a.label}`)} style={nodeBarBtn(false)}><i className={`ti ${a.icon}`} style={{ fontSize: 15 }} /></button>
-              ))}
-              <button type="button" onClick={() => runNode('distributeShapes', 'h')} disabled={nodeSel.shapeCount < 3}
-                title={t('tech_sheet.distribute_h_short')} style={{ ...nodeBarBtn(false), opacity: nodeSel.shapeCount < 3 ? 0.4 : 1 }}><i className="ti ti-layout-distribute-horizontal" style={{ fontSize: 15 }} /></button>
-              <button type="button" onClick={() => runNode('distributeShapes', 'v')} disabled={nodeSel.shapeCount < 3}
-                title={t('tech_sheet.distribute_v_short')} style={{ ...nodeBarBtn(false), opacity: nodeSel.shapeCount < 3 ? 0.4 : 1 }}><i className="ti ti-layout-distribute-vertical" style={{ fontSize: 15 }} /></button>
-              <span style={nodeBarSep} />
-            </>
-          )}
-          {/* G5 — TRANSFORMAR forma (mirall H/V · rotar graus · escalar %). Accions de barra (les nanses
-              de bbox dins Paper tenen cost alt). Cada forma es transforma respecte del seu centre. */}
-          {nodeSel.mode === 'shape' && nodeSel.shapeCount >= 1 && (
-            <>
-              <button type="button" onClick={() => runNode('mirrorShapes', 'h')} title={t('tech_sheet.mirror_h')} style={nodeBarBtn(false)}><i className="ti ti-flip-horizontal" style={{ fontSize: 15 }} /></button>
-              <button type="button" onClick={() => runNode('mirrorShapes', 'v')} title={t('tech_sheet.mirror_v')} style={nodeBarBtn(false)}><i className="ti ti-flip-vertical" style={{ fontSize: 15 }} /></button>
-              <input type="number" step="1" placeholder="°" title={t('tech_sheet.shape_rotate')}
-                onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) { runNode('rotateShapes', v); e.target.value = '' } } }}
-                style={{ width: 44, height: 24, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', padding: '0 6px' }} />
-              <input type="number" step="1" min="1" placeholder="%" title={t('tech_sheet.shape_scale')}
-                onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(e.target.value); if (!Number.isNaN(v) && v > 0) { runNode('scaleShapes', v); e.target.value = '' } } }}
-                style={{ width: 48, height: 24, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', padding: '0 6px' }} />
-              <span style={nodeBarSep} />
-            </>
-          )}
-          {/* G5 — Z-ORDRE de la forma dins el compost (darrere/enrere/endavant/davant). Reordena els
-              subpaths — el subtract de G3 en depèn. Opera sobre la forma primària. */}
-          {nodeSel.mode === 'shape' && nodeSel.shapeCount >= 1 && (
-            <>
-              <button type="button" onClick={() => runNode('reorderShape', 'back')} title={t('tech_sheet.send_to_back')} style={nodeBarBtn(false)}><i className="ti ti-chevrons-down" style={{ fontSize: 15 }} /></button>
-              <button type="button" onClick={() => runNode('reorderShape', 'backward')} title={t('tech_sheet.send_backward')} style={nodeBarBtn(false)}><i className="ti ti-arrow-down" style={{ fontSize: 15 }} /></button>
-              <button type="button" onClick={() => runNode('reorderShape', 'forward')} title={t('tech_sheet.bring_forward')} style={nodeBarBtn(false)}><i className="ti ti-arrow-up" style={{ fontSize: 15 }} /></button>
-              <button type="button" onClick={() => runNode('reorderShape', 'front')} title={t('tech_sheet.bring_to_front')} style={nodeBarBtn(false)}><i className="ti ti-chevrons-up" style={{ fontSize: 15 }} /></button>
-              <span style={nodeBarSep} />
-            </>
-          )}
-          {/* F5 — pintura de la subpath activa (viu al canvas Paper): swatch fill + stroke + gruix. */}
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={t('tech_sheet.fill')}>
-            <i className="ti ti-color-swatch" style={{ fontSize: 14, color: COL.textMuted }} />
-            <ColorPicker value={nodeSel.fill || 'transparent'} onChange={c => runNode('setFill', c)} />
-          </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} title={t('tech_sheet.stroke_color')}>
-            <i className="ti ti-line" style={{ fontSize: 14, color: COL.textMuted }} />
-            <ColorPicker value={nodeSel.stroke || 'transparent'} onChange={c => runNode('setStroke', c)} />
-          </span>
-          <input type="number" min="0" step="0.1" value={nodeSel.strokeWidth ?? ''} title={t('tech_sheet.stroke_width')}
-            onChange={e => runNode('setStrokeWidth', e.target.value)}
-            style={{ width: 52, height: 24, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', padding: '0 6px' }} />
-        </div>
-      )}
 
       {/* ── Ribbon SolidWorks: fila 1 grups, fila 2 comandaments ── */}
       <div style={{ flexShrink: 0, background: CTX_BG, borderBottom: `1px solid ${CTX_BORDER}`, color: CTX_TEXT }}>
@@ -5293,6 +5298,9 @@ export default function TechSheetEditor() {
                   </Contenidor>
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
+                  // Coherència d'abast: amb una selecció fina viva (forma, node o segment), el
+                  // botó d'esborrar ELEMENT no pot estar clicable — el que la mà toca és una part
+                  // de l'objecte, no l'objecte. Es diu per què (tooltip), no s'amaga.
                   <button onClick={() => deleteObject(selObj.id)} disabled={nodeMode}
                     title={nodeMode ? t('tech_sheet.obj_action_node_mode') : ''}
                     style={{ width: '100%', fontSize: 'var(--fs-body)', padding: '5px 8px', marginTop: 6, border: `1px solid var(--grana)`, borderRadius: 5, background: 'transparent', color: 'var(--grana)', fontFamily: FONT, cursor: nodeMode ? 'not-allowed' : 'pointer', opacity: nodeMode ? 0.4 : 1 }}>
@@ -5585,8 +5593,4 @@ const NODE_TOOL_ITEMS = [
   { k: 'convert', icon: 'ti-vector-bezier-2', label: 'node_convert', sc: 'B' },
   { k: 'scissors', icon: 'ti-scissors', label: 'node_scissors', sc: 'C' },
 ]
-// `on` només s'activa per als CURSORS i sub-eines (mai per a comandaments) → és "eina activa":
-// gold ple + blanc (P-C). Mida unificada amb miniBtn (30×26).
-const nodeBarBtn = (on) => ({ width: 30, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? COL.gold : COL.border}`, borderRadius: 6, cursor: 'pointer', background: on ? COL.gold : COL.field, color: on ? 'var(--white)' : COL.textMuted })
-const nodeBarSep = { width: 1, height: 18, background: COL.border, flexShrink: 0 }
 export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, boxSizing: 'border-box' }

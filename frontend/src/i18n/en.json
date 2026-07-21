@@ -2466,6 +2466,8 @@
     "ribbon_page": "Page",
     "ribbon_insert": "Insert",
     "ribbon_organize": "Organize",
+    "ribbon_edit": "Edit",
+    "edit_tab_hint": "Pick a path and enter it with the node tool to edit it.",
     "flyout_hint": "Hold or click ▸ for more tools",
     "tool_group_shapes": "Shapes",
     "tool_rect": "Rectangle",

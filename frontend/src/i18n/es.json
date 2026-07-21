@@ -2466,6 +2466,8 @@
     "ribbon_page": "Página",
     "ribbon_insert": "Insertar",
     "ribbon_organize": "Organizar",
+    "ribbon_edit": "Editar",
+    "edit_tab_hint": "Elige un trazo y entra con la herramienta de nodos para editarlo.",
     "flyout_hint": "Mantén pulsado o pulsa ▸ para más herramientas",
     "tool_group_shapes": "Formas",
     "tool_rect": "Rectángulo",
