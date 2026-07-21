@@ -70,6 +70,17 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const scope = new paper.PaperScope()
     scope.setup(canvas)
     scopeRef.current = scope
+    // X2 — EL GRUIX DE TRAÇ NO ES MESURA EN MIL·LÍMETRES. La geometria del document sí
+    // (per això `toViewPx` hi passa `toPx`), però `strokeWidth` és el número que Konva
+    // pinta com a píxels al llenç, i el llenç va escalat pel zoom i prou. Aquí es
+    // convertia amb `toViewPx`, o sigui 2,4 vegades més gruixut a dins del mode d'edició
+    // que a fora — i encara més quan hi havia zoom. `zoomBase` és el zoom amb què s'ha
+    // muntat l'escena: tot el que hi entra va en aquesta escala, i els zooms posteriors
+    // els reescala l'efecte de zoom de sota, path per path: `layer.scale()` cou l'escala
+    // dins les COORDENADES dels fills però deixa el `strokeWidth` tal com estava, i el
+    // llenç Konva, en canvi, engreixa el traç amb el zoom perquè escala tot l'escenari.
+    const gruixAVista = (w) => (Number(w) || 0) * (zoomRef.current || 1)
+    const gruixDeVista = (px) => (Number(px) || 0) / (zoomRef.current || 1)
     const sketchLayer = new scope.Layer({ name: 'flat-sketch' })
     const uiLayer = new scope.Layer({ name: 'flat-ui' })
     sketchLayerRef.current = sketchLayer
@@ -212,12 +223,12 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       const ov = paintRef.current[idx] || {}
       const fill = ov.fill != null ? (ov.fill === 'transparent' ? null : ov.fill) : cssColor(path?.fillColor)
       const stroke = ov.stroke != null ? (ov.stroke === 'transparent' ? null : ov.stroke) : cssColor(path?.strokeColor)
-      const swMm = ov.strokeWidth != null ? ov.strokeWidth : ((path?.strokeWidth || 0) / (toPx(1) * (zoomRef.current || 1)))
+      const sw = ov.strokeWidth != null ? ov.strokeWidth : gruixDeVista(path?.strokeWidth)
       onNodeStateRef.current?.({
         mode: isShapeMode() ? 'shape' : 'nodes',
         shapeCount: selectedShapesRef.current.size,
         selCount: selectedSegsRef.current.size, seg: selectedSegRef.current != null,
-        fill, stroke, strokeWidth: Math.round(swMm * 100) / 100,
+        fill, stroke, strokeWidth: Math.round(sw * 100) / 100,
       })
     }
     pushStateRef.current = pushState
@@ -231,8 +242,8 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         // Camp buit/no numèric = cap canvi; un 0 EXPLÍCIT segueix sent vàlid (= sense traç).
         const n = Number(value)
         if (value === '' || value == null || Number.isNaN(n)) return
-        const wMm = Math.max(0, n)
-        path.strokeWidth = toViewPx(wMm); ov.strokeWidth = wMm
+        const w = Math.max(0, n)
+        path.strokeWidth = gruixAVista(w); ov.strokeWidth = w
       } else {
         const none = !value || value === 'transparent' || value === 'none'
         path[kind === 'fill' ? 'fillColor' : 'strokeColor'] = none ? null : value
@@ -310,7 +321,6 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const rebuild = (segs, closed) => rebuildPath(selectedPathRef.current, segs, closed)
 
     // ── G2 · OPERACIONS SOBRE FORMES (mode fletxa negra) ────────────────────────────────────────
-    const toMm = (px) => (px || 0) / (toPx(1) * (zoomRef.current || 1))
     const nextShapeIndex = () => allPaths().reduce((m, p) => Math.max(m, p.data?.index ?? 0), -1) + 1
     // Registra l'estil viu d'un path a paintRef (fill/stroke CSS + gruix mm) perquè el commit el
     // conservi en una forma NOVA (duplicat/booleana) sense entrada d'origen a flat.paths.
@@ -319,7 +329,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       paintRef.current[idx] = {
         fill: cssColor(p.fillColor) || 'transparent',
         stroke: cssColor(p.strokeColor) || 'transparent',
-        strokeWidth: Math.round(toMm(p.strokeWidth) * 100) / 100,
+        strokeWidth: Math.round(gruixDeVista(p.strokeWidth) * 100) / 100,
       }
     }
     // Duplica les formes seleccionades (clons amb índex nou + estil registrat). Retorna els índexs nous.
@@ -478,7 +488,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
           // portava el color al subpath i aquesta lectura buscava el de l'objecte: el traç
           // no es tornava negre, és que mai s'havia arribat a llegir.
           strokeColor: stroke,
-          strokeWidth: stroke ? toViewPx(resolStrokeWidth(flat, pathData)) : 0,
+          strokeWidth: stroke ? gruixAVista(resolStrokeWidth(flat, pathData)) : 0,
           fillColor: resolFill(flat, pathData),
         })
         path.data = { index }
@@ -849,6 +859,10 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     canvas.height = pageH * zoom
     scope.view.viewSize = new scope.Size(pageW * zoom, pageH * zoom)
     sketchLayer.scale(ratio, new scope.Point(0, 0))
+    // `scale()` cou el factor a les coordenades dels fills però NO al seu gruix de traç
+    // (comprovat: segments ×2, strokeWidth intacte). El traç s'ha d'escalar a mà o el
+    // dibuix s'aprimaria en apropar-s'hi, al revés del que fa el llenç de fora.
+    sketchLayer.getItems({ class: scope.Path }).forEach(path => { path.strokeWidth *= ratio })
     refreshHandlesRef.current?.()
     scope.view.update()
   }, [pageH, pageW, zoom])
