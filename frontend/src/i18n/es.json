@@ -2699,6 +2699,7 @@
     "zoom_fit": "Ajustar a pantalla",
     "no_color": "Sin color",
     "more_colors": "Más colores",
+    "doc_palette": "Colores del documento",
     "consultation_badge": "Consulta",
     "consultation_hint": "Consulta — sin registro de tiempo. Los cambios se guardan igualmente, pero no se imputa tiempo a ninguna tarea.",
     "tool_files": "Archivos",

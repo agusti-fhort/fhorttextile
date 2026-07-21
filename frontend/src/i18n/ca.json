@@ -2699,6 +2699,7 @@
     "zoom_fit": "Ajustar a pantalla",
     "no_color": "Cap color",
     "more_colors": "Més colors",
+    "doc_palette": "Colors del document",
     "consultation_badge": "Consulta",
     "consultation_hint": "Consulta — sense registre de temps. Els canvis es desen igual, però no s'imputa temps a cap tasca.",
     "tool_files": "Fitxers",

@@ -4009,6 +4009,30 @@ export default function TechSheetEditor() {
   // possible és la que veu l'ull: hi ha un text amb aquell `nom_fitxa`. És exacte per al cas
   // real (els nom_fitxa són curts i únics dins un model) i no obliga a inventar cap binding.
   // Es mira TOT el document, no la pàgina activa: una cota a la pàgina 2 també és col·locada.
+  // C3 · PALETA DEL DOCUMENT — els colors que ja es fan servir en aquesta fitxa, en ordre
+  // d'aparició i sense repetits. Es recorren els objectes de totes les pàgines i, dins d'un
+  // path, també cada entrada de paths[] i cada subpath: en un croquis importat el color viu
+  // allà, no a l'objecte. No es persisteix res: és una lectura del document, no una
+  // preferència, i es recalcula sola quan el document canvia.
+  const docPalette = useMemo(() => {
+    const vist = []
+    const afegeix = (c) => {
+      if (!c || c === 'transparent' || c === 'none') return
+      const k = String(c).toLowerCase()
+      if (!vist.includes(k)) vist.push(k)
+    }
+    for (const pg of pages) {
+      for (const o of flattenObjects(pg.objects || [])) {
+        afegeix(o.fill); afegeix(o.stroke); afegeix(o.bgFill)
+        for (const e of (o.paths || [])) {
+          afegeix(e.fill); afegeix(e.stroke)
+          for (const sp of (e.subpaths || [])) { afegeix(sp.fill); afegeix(sp.stroke) }
+        }
+      }
+    }
+    return vist
+  }, [pages])
+
   const cotesColocades = useMemo(() => {
     const noms = new Set()
     for (const p of pages) {
@@ -4591,22 +4615,9 @@ export default function TechSheetEditor() {
         out.push(ribbonTool({ key: 'sh-z-fwd', icon: 'ti-arrow-up', label: t('tech_sheet.bring_forward'), onClick: () => runNode('reorderShape', 'forward') }))
         out.push(ribbonTool({ key: 'sh-z-front', icon: 'ti-chevrons-up', label: t('tech_sheet.bring_to_front'), onClick: () => runNode('reorderShape', 'front') }))
       }
-      out.push(<span key="sep-paint" style={ribbonSep} />)
-      out.push(
-        <label key="pt-fill" style={ribbonFieldStyle} title={t('tech_sheet.fill')}>
-          <span>{t('tech_sheet.fill')}</span>
-          <ColorPicker value={nodeSel.fill || 'transparent'} onChange={c => runNode('setFill', c)} />
-        </label>,
-        <label key="pt-stroke" style={ribbonFieldStyle} title={t('tech_sheet.stroke_color')}>
-          <span>{t('tech_sheet.stroke_color')}</span>
-          <ColorPicker value={nodeSel.stroke || 'transparent'} onChange={c => runNode('setStroke', c)} />
-        </label>,
-        <label key="pt-sw" style={ribbonFieldStyle} title={t('tech_sheet.stroke_width')}>
-          <span>{t('tech_sheet.stroke_width')}</span>
-          <input type="number" min="0" step="0.1" value={nodeSel.strokeWidth ?? ''}
-            onChange={e => runNode('setStrokeWidth', e.target.value)} style={ribbonMiniInput} />
-        </label>,
-      )
+      // C3 — la pintura NO és aquí. El bloc "Color i traç" del panell dret opera sempre sobre
+      // la selecció activa (objecte, forma o subpath), també durant l'edició de nodes: tenir-la
+      // duplicada al ribbon era la quarta superfície per a la mateixa acció.
       return out
     }
     return [
@@ -5181,14 +5192,14 @@ export default function TechSheetEditor() {
                 {multiStroke.length > 0 && (
                   <div style={propLabel}>{t('tech_sheet.stroke_color')}
                     {!multiStrokeValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
-                    <ColorPicker value={multiStrokeValue || KONVA_COL.textMain}
+                    <ColorPicker docColors={docPalette} value={multiStrokeValue || KONVA_COL.textMain}
                       onChange={c => updateObjects(multiStroke.map(o => o.id), o => ({ stroke: c, ...(o.type === 'arrow' ? { fill: c } : {}) }))} />
                   </div>
                 )}
                 {multiFill.length > 0 && (
                   <div style={propLabel}>{t('tech_sheet.fill')}
                     {!multiFillValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
-                    <ColorPicker value={multiFillValue || KONVA_COL.white}
+                    <ColorPicker docColors={docPalette} value={multiFillValue || KONVA_COL.white}
                       onChange={c => updateObjects(multiFill.map(o => o.id), { fill: c })} />
                   </div>
                 )}
@@ -5288,7 +5299,7 @@ export default function TechSheetEditor() {
                         </div>
                       </div>
                       <div style={propLabel}>{t('tech_sheet.text_color')}
-                        <ColorPicker value={textObj.fill || KONVA_COL.textMain} onChange={c => updateText({ fill: c })} />
+                        <ColorPicker docColors={docPalette} value={textObj.fill || KONVA_COL.textMain} onChange={c => updateText({ fill: c })} />
                       </div>
                       {/* A3(d): fons blanc darrere el text (tapa la línia de la cota) + color de fons. */}
                       <div style={propLabel}>{t('tech_sheet.text_bg')}
@@ -5300,7 +5311,7 @@ export default function TechSheetEditor() {
                       </div>
                       {hasBg && (
                         <div style={propLabel}>{t('tech_sheet.text_bg_color')}
-                          <ColorPicker value={textObj.bgFill && textObj.bgFill !== 'transparent' ? textObj.bgFill : KONVA_COL.white}
+                          <ColorPicker docColors={docPalette} value={textObj.bgFill && textObj.bgFill !== 'transparent' ? textObj.bgFill : KONVA_COL.white}
                             onChange={c => updateText({ bgFill: c })} />
                         </div>
                       )}
@@ -5703,9 +5714,13 @@ export default function TechSheetEditor() {
 // Selector de color ràpid (TS-4c): swatches de marca + color natiu ("Més colors").
 // Literals: el color triat s'escriu a obj.fill/stroke i el pinta Konva (no resol var()).
 const QUICK_COLORS = [KONVA_COL.textMain, '#185fa5', '#1d9e75', '#dc2626', KONVA_COL.gold, '#ca8a04']
-export function ColorPicker({ value, onChange }) {
+export function ColorPicker({ value, onChange, docColors }) {
   const { t } = useTranslation()
   const isNone = value == null || value === 'transparent' || value === 'none'
+  // C3 — la PALETA DEL DOCUMENT va en una fila pròpia, sota els colors ràpids: són els colors
+  // que ja s'han fet servir en aquesta fitxa. És el que fa que la segona peça d'un croquis
+  // surti del mateix color que la primera sense haver de recordar cap hex.
+  const propis = (docColors || []).filter(c => !QUICK_COLORS.includes(c))
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginTop: 3 }}>
       {/* Fix #3-5: swatch "cap color" (transparent) — compartit a traç/emplenat/text/fons/puntes. */}
@@ -5719,6 +5734,15 @@ export function ColorPicker({ value, onChange }) {
       ))}
       <input type="color" value={value || KONVA_COL.textMain} onChange={e => onChange(e.target.value)} title={t('tech_sheet.more_colors')}
         style={{ width: 22, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} />
+      {propis.length > 0 && (
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', width: '100%', marginTop: 4, paddingTop: 4, borderTop: `1px solid ${COL.border}` }}>
+          <span style={{ fontSize: 'var(--fs-caption)', color: COL.textMuted, width: '100%' }}>{t('tech_sheet.doc_palette')}</span>
+          {propis.map(c => (
+            <button key={c} type="button" onClick={() => onChange(c)} title={c}
+              style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: value === c ? `2px solid ${COL.textMain}` : `1px solid ${COL.border}`, cursor: 'pointer', padding: 0 }} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

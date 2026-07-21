@@ -2699,6 +2699,7 @@
     "zoom_fit": "Fit to screen",
     "no_color": "No color",
     "more_colors": "More colors",
+    "doc_palette": "Document colours",
     "consultation_badge": "No time tracking",
     "consultation_hint": "Consultation — no time tracking. Changes are still saved, but no time is logged against any task.",
     "tool_files": "Files",
