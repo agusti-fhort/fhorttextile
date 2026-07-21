@@ -51,7 +51,7 @@ export default function ModelPomList({ files, pomActiu, onColocar, onAfegirFora,
         onClick={onAfegirFora}
         style={{
           marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.35rem',
-          background: 'none', border: '1px dashed var(--border)', borderRadius: 4,
+          background: 'none', border: '1.5px dashed var(--border)', borderRadius: 4,
           padding: '0.35rem 0.6rem', cursor: 'pointer',
           fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
         }}

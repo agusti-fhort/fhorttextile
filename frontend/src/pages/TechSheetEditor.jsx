@@ -82,12 +82,23 @@ export const COL = {
   // no --bg-muted (que és beix càlid i reintroduiria el to taronjós). Així el paper blanc destaca.
   work: 'var(--gray-l)',
   field: 'var(--white)',         // interior de controls: blanc net
+  // Tokens compartits amb el Taller de Patró (llenguatge visual únic, diagnosi
+  // DIAGNOSI_UNIFICACIO_LAYOUT_TALLER_FITXA §P4′.1): capçalera fosca de secció i semàfor
+  // de veredicte. Cap hex nou — són els mateixos var() ja definits a index.css.
+  charcoal: 'var(--charcoal)',   // fons de capçalera de contenidor col·lapsable
+  ok: 'var(--ok)',               // verd de validació (semàfor "col·locat")
+  okBg: 'var(--ok-bg)',
+  err: 'var(--err)',             // vermell de marca (xip de veredicte fora de tolerància)
+  errBg: 'var(--err-bg)',
 }
 // Paleta LITERAL del canvas: Konva pinta sobre <canvas> via ctx.fillStyle i NO resol
 // CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
 // build*Primitives, Rects de fons/selecció, text_box, previews) DEUEN usar aquests literals,
 // no COL (que és per al DOM, on var() sí resol). Valors = mateixos hex que els tokens de :root.
-const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', labelGray: '#777776' }
+// `pom` = vermell saturat de la COTA DE POM al croquis (fletxa + fons de l'etiqueta). Reusa el
+// literal que ja fa servir la columna de nomenclatura de les taules snapshot (TBL.REF, més avall)
+// per no introduir un segon vermell al mateix llenç.
+const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', labelGray: '#777776', pom: '#dc2626' }
 
 // F1 — la caixa on entra una peça de patró. Una peça és MOLT més gran que la pàgina (el
 // TATE_FRONT fa 588×502 mm i un A4 apaïsat en fa 297×210): entra encaixada a aquesta caixa,
@@ -3682,18 +3693,21 @@ export default function TechSheetEditor() {
 
   const headerBtn = {
     display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '5px 10px',
-    borderRadius: 5, border: `1px solid ${COL.border}`, background: COL.field,
+    borderRadius: 6, border: `1px solid ${COL.border}`, background: COL.field,
     cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
   // Botó de la paleta d'eines vertical (C2): icona quadrada; eina activa ressaltada amb accent gold.
   const paletteBtn = {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
-    borderRadius: 5, border: `1px solid transparent`, background: 'transparent',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30,
+    borderRadius: 6, border: `1px solid transparent`, background: 'transparent',
     cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
-  const paletteBtnOn = { borderColor: COL.gold, background: COL.goldPale, color: COL.gold }
+  // Doble intensitat d'actiu (P-C): la paleta fixa una EINA, no selecciona un element →
+  // gold PLE + text blanc (mateix tractament que el botó de mode del Taller). El goldPale
+  // queda reservat per a "element seleccionat" (fila de POM, forma activa).
+  const paletteBtnOn = { borderColor: COL.gold, background: COL.gold, color: 'var(--white)' }
   // PAL-1: eina futura sense handler — placeholder visible però deshabilitat.
-  const paletteBtnSoon = { color: COL.textMuted, opacity: 0.4, cursor: 'default' }
+  const paletteBtnSoon = { color: COL.textMuted, opacity: 0.45, cursor: 'default' }
   // Barra contextual (C4): mateixa pell que la resta de la closca (tokens globals, T1), discreta,
   // separada de la topbar i del viewport per un filet molt fi (1px COL.border) — com el peu d'estat.
   const CTX_BG = COL.sidebar, CTX_BORDER = COL.border, CTX_TEXT = COL.textMain
@@ -4048,7 +4062,8 @@ export default function TechSheetEditor() {
   ]
   const ribbonTabStyle = (active) => ({
     minWidth: 86, height: 28, border: `1px solid ${active ? COL.gold : 'transparent'}`,
-    borderBottomColor: active ? COL.gold : COL.border, borderRadius: '5px 5px 0 0',
+    // Una tab és una superfície SELECCIONADA, no una eina activa → goldPale (P-C).
+    borderBottomColor: active ? COL.gold : COL.border, borderRadius: '6px 6px 0 0',
     background: active ? COL.goldPale : 'transparent', color: active ? COL.gold : COL.textMain,
     fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: active ? 700 : 500,
     cursor: 'pointer',
@@ -4056,14 +4071,15 @@ export default function TechSheetEditor() {
   const ribbonToolStyle = (disabled = false, active = false) => ({
     width: 72, flexShrink: 0, minHeight: 50, display: 'flex', flexDirection: 'column', alignItems: 'center',
     justifyContent: 'center', gap: 3, padding: '5px 3px', border: `1px solid ${active ? COL.gold : COL.border}`,
-    borderRadius: 5, background: active ? COL.goldPale : COL.field, color: active ? COL.gold : COL.textMain,
+    // `active` al ribbon marca EINA/MODE engegat (no element seleccionat) → gold ple + blanc (P-C).
+    borderRadius: 6, background: active ? COL.gold : COL.field, color: active ? 'var(--white)' : COL.textMain,
     fontFamily: FONT, fontSize: 'var(--fs-caption)', lineHeight: 1.1, textAlign: 'center', overflow: 'hidden',
-    cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.42 : 1,
+    cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.45 : 1,
   })
   // Peça 4: etiqueta del botó del ribbon — màx 2 línies, trunca amb ellipsis (títol complet al hover).
   const ribbonLabelStyle = { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', width: '100%', wordBreak: 'break-word' }
   const ribbonSelectStyle = {
-    height: 50, minWidth: 86, border: `1px solid ${COL.border}`, borderRadius: 5,
+    height: 50, minWidth: 86, border: `1px solid ${COL.border}`, borderRadius: 6,
     background: COL.field, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)',
     padding: '0 6px',
   }
@@ -4682,7 +4698,7 @@ export default function TechSheetEditor() {
               </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px 64px' }}>
                 {/* D'ON? — origen del fitxer */}
-                <div style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t('tech_sheet.import_source')}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 6 }}>{t('tech_sheet.import_source')}</div>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
                   <button type="button"
                     style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 6px', border: `1px solid ${COL.gold}`, borderRadius: 6, background: COL.goldPale, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'default' }}>
@@ -4697,7 +4713,7 @@ export default function TechSheetEditor() {
                     </button>
                   ) : (
                     <button type="button" disabled title={t('tech_sheet.import_soon')}
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 6px', border: `1px solid ${COL.border}`, borderRadius: 6, background: 'transparent', color: COL.textMuted, fontFamily: FONT, fontSize: 'var(--fs-body)', opacity: 0.5, cursor: 'default' }}>
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 6px', border: `1px solid ${COL.border}`, borderRadius: 6, background: 'transparent', color: COL.textMuted, fontFamily: FONT, fontSize: 'var(--fs-body)', opacity: 0.45, cursor: 'default' }}>
                       <i className="ti ti-building-warehouse" /> {t('tech_sheet.import_from_ftt')} ({t('tech_sheet.import_soon')})
                     </button>
                   )}
@@ -5340,7 +5356,7 @@ export function ColorPicker({ value, onChange }) {
 }
 
 export function SectionTitle({ children }) {
-  return <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '12px 0 6px' }}>{children}</div>
+  return <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: COL.gold, textTransform: 'uppercase', letterSpacing: '0.03em', margin: '12px 0 6px' }}>{children}</div>
 }
 export const propLabel = { display: 'block', fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 8 }
 // S2.3 — botó compacte per a accions de topologia de subpath (icona Tabler outline).
@@ -5359,6 +5375,8 @@ const NODE_TOOL_ITEMS = [
   { k: 'convert', icon: 'ti-vector-bezier-2', label: 'node_convert', sc: 'B' },
   { k: 'scissors', icon: 'ti-scissors', label: 'node_scissors', sc: 'C' },
 ]
-const nodeBarBtn = (on) => ({ width: 28, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? COL.gold : COL.border}`, borderRadius: 6, cursor: 'pointer', background: on ? COL.goldPale : COL.field, color: on ? COL.gold : COL.textMuted })
+// `on` només s'activa per als CURSORS i sub-eines (mai per a comandaments) → és "eina activa":
+// gold ple + blanc (P-C). Mida unificada amb miniBtn (30×26).
+const nodeBarBtn = (on) => ({ width: 30, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? COL.gold : COL.border}`, borderRadius: 6, cursor: 'pointer', background: on ? COL.gold : COL.field, color: on ? 'var(--white)' : COL.textMuted })
 const nodeBarSep = { width: 1, height: 18, background: COL.border, flexShrink: 0 }
-export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 5, background: COL.field, color: COL.textMain, boxSizing: 'border-box' }
+export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, boxSizing: 'border-box' }
