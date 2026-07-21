@@ -12,6 +12,7 @@ import FhortLogo from '../components/brand/FhortLogo'
 import FilePicker from '../components/model/FilePicker'
 import AssetNavigator from '../components/assets/AssetNavigator'
 import Contenidor from '../components/ui/Contenidor'
+import { PomNamePair } from '../components/POMBrowser/POMBrowser'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 import { booleanOp } from './ftt/paperbool'
@@ -1458,7 +1459,7 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, subpathTool, onEndpointDrag }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, subpathTool, onEndpointDrag, hideTextChildren }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -1552,7 +1553,9 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   if (obj.type === 'group') {
     const orderedChildren = [...(obj.children || [])].sort(
       (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
-      .filter(child => child.visible !== false)
+      // Mentre es corba la fletxa d'una cota, l'etiqueta s'aparta: taparia els nodes que
+      // s'estan tocant, justament al mig del traç. Torna sola en sortir de l'edició.
+      .filter(child => child.visible !== false && !(hideTextChildren && child.type === 'text'))
     return (
       <Group {...common} onDblClick={onDblGroup} onDblTap={onDblGroup}>
         {orderedChildren.map(child => (
@@ -1822,6 +1825,11 @@ export default function TechSheetEditor() {
   // s'engega el mecanisme de render de placeholders (`placeholderMode`), que també estava
   // construït i mort. Sobreviu al desat i al reobrir perquè viu al document, no a la pàgina.
   const [templateMode, setTemplateMode] = useState(false)
+  // POMs del model, per al contenidor del panell dret. FRONTERA G1: aquesta llista serveix per
+  // DECIDIR què s'escriu; el que arriba al document és només el string. Cap id hi viatja.
+  const [pomRows, setPomRows] = useState([])
+  // Cota pre-carregada: {text} mentre l'usuari té un POM triat i encara no ha fet els dos clics.
+  const [cotaPreset, setCotaPreset] = useState(null)
   const [importMode, setImportMode] = useState(null)     // IMP-1: null | 'image' | 'garment' (panell d'import al dock)
   const [importFile, setImportFile] = useState(null)     // IMP-2: fitxer triat (no s'insereix fins a "Inserir")
   const [importNavOpen, setImportNavOpen] = useState(false)   // C5.3: AssetNavigator com a font "FTT"
@@ -1829,6 +1837,9 @@ export default function TechSheetEditor() {
   const [importDrag, setImportDrag] = useState(false)    // IMP-2: ressaltat de la drop zone
   const [ratioLocked, setRatioLocked] = useState(true)
   const [shiftHeld, setShiftHeld] = useState(false)   // S1: Shift premuda → resize proporcional
+  // Grup contenidor quan el que s'edita per nodes és un FILL (cas cota de POM). null = el
+  // que s'edita és un objecte de nivell superior, el cas de sempre.
+  const [editingFlatGroupId, setEditingFlatGroupId] = useState(null)
   const [activeGroup, setActiveGroup] = useState(null)        // S1: id del grup on s'ha entrat (doble clic)
   const [selectedChildId, setSelectedChildId] = useState(null) // S1: fill seleccionat dins el grup entrat
   const [activeSubpath, setActiveSubpath] = useState(null)   // S6: subpath activa dins un path { objId, index } | null
@@ -2395,6 +2406,20 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, fitxerId])
 
+  // ── POMs del model per al contenidor del panell dret ──────────────────────
+  // Mateix endpoint que ja alimenta les taules snapshot (ara amb `nom_en`, F5-backend): no
+  // s'obre cap segon consumidor de dades de POM des de l'editor.
+  useEffect(() => {
+    if (!id) return undefined
+    let cancelled = false
+    fetch(`${API}/api/v1/models/${id}/base-measurements/`, { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d) setPomRows(d.results || d || []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
   // ── Heartbeat del lock: renova locked_at cada 10min independent de l'autosave ──
   // (tanca el forat "obert però inactiu >30min → lock caduca"; TTL backend = 30min).
   useEffect(() => {
@@ -2681,6 +2706,8 @@ export default function TechSheetEditor() {
     setPenTemp(null)
     twoClickRef.current = null
     setTwoClickTemp(null)
+    // El POM pre-carregat viu MENTRE l'eina cota és activa: canviar d'eina és desdir-se'n.
+    if (tool !== 'cota_pom') setCotaPreset(null)
   }, [tool])
 
   // ── E2 — Teclat de nota-fletxa/cota: Escape cancel·la el 1r clic pendent ──
@@ -2923,11 +2950,27 @@ export default function TechSheetEditor() {
     const dx = toMm(p2.x) - ax, dy = toMm(p2.y) - ay
     const len = Math.hypot(dx, dy) || 1
     const px = -dy / len, py = dx / len   // perpendicular unitari (per desplaçar el text)
-    const linia = { id: uid(), type: 'arrow', layer: 'free', x: 0, y: 0, x2: dx, y2: dy, stroke: KONVA_COL.textMain, fill: KONVA_COL.textMain, strokeWidth: 1, arrow2: true }
+    // Cota PRE-CARREGADA des del contenidor de POMs: la fletxa i l'etiqueta van en vermell
+    // saturat i el text és el `nom_fitxa` del POM — la nomenclatura amb què el patronista
+    // anomena aquesta mesura al croquis. FRONTERA G1: entra com a STRING LITERAL, sense cap
+    // pom_id ni bm_id a l'objecte. La cota no és un binding viu; és un dibuix.
+    const pom = cotaPreset
+    const col = pom ? KONVA_COL.pom : KONVA_COL.textMain
+    // La fletxa de la cota de POM és un `path` de dos nodes amb punta als dos extrems, no un
+    // `arrow`: es veu igual, però un path SÍ es pot corbar (l'editor de nodes només sap
+    // treballar amb paths). Corbar la cota per esquivar el croquis és el gest que demanava.
+    // La cota lliure segueix sent `arrow`, per no canviar res dels documents ja fets.
+    const linia = pom
+      ? { id: uid(), type: 'path', layer: 'free', x: 0, y: 0, headStart: true, headEnd: true, stroke: col, fill: null, strokeWidth: 1,
+          paths: [{ closed: false, segments: [{ x: 0, y: 0, inX: 0, inY: 0, outX: 0, outY: 0 }, { x: dx, y: dy, inX: 0, inY: 0, outX: 0, outY: 0 }], stroke: col, strokeWidth: 1, fill: null }] }
+      : { id: uid(), type: 'arrow', layer: 'free', x: 0, y: 0, x2: dx, y2: dy, stroke: col, fill: col, strokeWidth: 1, arrow2: true }
     const TW = 24
     const mx = dx / 2 + px * 3, my = dy / 2 + py * 3   // punt mig desplaçat 3mm perpendicular
-    const text = { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: t('tech_sheet.preset_cota_text'), fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
+    const text = pom
+      ? { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: pom.text, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.white, fontStyle: 'bold', align: 'center', bgFill: KONVA_COL.pom, bgPadding: 2 }
+      : { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: t('tech_sheet.preset_cota_text'), fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
     addObject({ id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0, children: [linia, text] })
+    setCotaPreset(null)
   }
   const onStageMouseDown = (e) => {
     if (editingFlatId) return
@@ -3253,16 +3296,26 @@ export default function TechSheetEditor() {
     fr.readAsText(file)
   }
   const editSelectedFlat = () => {
-    if (!locked || !['sketch_svg', 'path'].includes(selObj?.type)) return
-    setEditingText(null)
-    setTool('select')
-    setEditingFlatId(selObj.id)
+    if (!locked) return
+    // Cas normal: un path/sketch de nivell superior.
+    if (['sketch_svg', 'path'].includes(selObj?.type)) {
+      setEditingText(null); setTool('select')
+      setEditingFlatGroupId(null); setEditingFlatId(selObj.id)
+      return
+    }
+    // Cas cota: el path viu DINS d'un grup. S'hi entra igual, recordant el grup contenidor
+    // perquè el commit sàpiga a qui torna la geometria.
+    if (selObj?.type === 'group' && groupPathChild) {
+      setEditingText(null); setTool('select')
+      setEditingFlatGroupId(selObj.id); setEditingFlatId(groupPathChild.id)
+    }
   }
   const startVectorEdit = (obj) => {
     if (!locked || !['sketch_svg', 'path'].includes(obj?.type)) return
     setEditingText(null)
     setTool('select')
     selectOnly(obj.id)
+    setEditingFlatGroupId(null)
     setEditingFlatId(obj.id)
   }
   // F1 — dispara una acció sobre el canvas viu del sub-editor (close/open/split/removeSelection…).
@@ -3271,7 +3324,12 @@ export default function TechSheetEditor() {
   const nodeMode = !!editingFlatId
   // G1 — en entrar/sortir del mode edició, el mode per defecte és FORMA (fletxa negra): el primer gest
   // natural és agafar una forma, no un node. Reinicia també l'estat de selecció.
-  useEffect(() => { setNodeTool('shape'); setNodeSel({ mode: 'shape', shapeCount: 0, selCount: 0 }) }, [editingFlatId])
+  useEffect(() => {
+    setNodeTool('shape'); setNodeSel({ mode: 'shape', shapeCount: 0, selCount: 0 })
+    // Sortir de l'edició (Escape, Cancel·lar, esborrar l'objecte…) també deixa anar el grup
+    // contenidor: així no cal recordar-ho a cadascuna de les sortides.
+    if (!editingFlatId) setEditingFlatGroupId(null)
+  }, [editingFlatId])
   // F1/F3 — teclat del mode edició de nodes, centralitzat al PARE (finestra, independent del focus).
   // El context GUANYA: el Delete d'objecte del nivell superior ja surt d'hora amb editingFlatId, i
   // aquí Delete/Backspace operen SEMPRE sobre la selecció fina (node/segment), mai sobre l'objecte.
@@ -3340,8 +3398,9 @@ export default function TechSheetEditor() {
   const commitFlatEdit = (payload) => {
     if (!editingFlatId) return
     if (payload && typeof payload === 'object' && Array.isArray(payload.paths)) {
-      updateObject(editingFlatId, { paths: payload.paths })
-      setEditingFlatId(null)
+      if (editingFlatGroupId) updateChild(editingFlatGroupId, editingFlatId, { paths: payload.paths })
+      else updateObject(editingFlatId, { paths: payload.paths })
+      setEditingFlatId(null); setEditingFlatGroupId(null)
       return
     }
     const svg = payload
@@ -3733,6 +3792,20 @@ export default function TechSheetEditor() {
   // separada de la topbar i del viewport per un filet molt fi (1px COL.border) — com el peu d'estat.
   const CTX_BG = COL.sidebar, CTX_BORDER = COL.border, CTX_TEXT = COL.textMain
   const curObjs = objectsOf(currentPage)
+
+  // Quins POMs ja tenen cota al document. Sense cap referència desada (G1), l'única prova
+  // possible és la que veu l'ull: hi ha un text amb aquell `nom_fitxa`. És exacte per al cas
+  // real (els nom_fitxa són curts i únics dins un model) i no obliga a inventar cap binding.
+  // Es mira TOT el document, no la pàgina activa: una cota a la pàgina 2 també és col·locada.
+  const cotesColocades = useMemo(() => {
+    const noms = new Set()
+    for (const p of pages) {
+      for (const o of flattenObjects(p.objects || [])) {
+        if (o.type === 'text' && o.text) noms.add(String(o.text).trim())
+      }
+    }
+    return noms
+  }, [pages])
   const curGuides = pages[currentPage]?.guides || []   // S2: guies de la pàgina activa
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   const selectedSet = new Set(selectedIds)
@@ -3766,10 +3839,27 @@ export default function TechSheetEditor() {
     const shapes = kids.filter(k => k.type === 'arrow' || k.type === 'path')
     return shapes.length === 1 ? shapes[0] : null
   })()
+  // El fill PATH d'un grup: l'únic que l'editor de nodes sap corbar (una `arrow` no té nodes).
+  const groupPathChild = (() => {
+    if (!selObj || selObj.type !== 'group') return null
+    const kids = (selObj.children || []).filter(k => k.type === 'path')
+    if (activeGroup === selObj.id && selectedChildId) return kids.find(k => k.id === selectedChildId) || null
+    return kids.length === 1 ? kids[0] : null
+  })()
   const shapeObj = STROKE_TYPES.includes(selObj?.type) ? selObj : groupShapeChild
   const shapeGroupId = (selObj?.type === 'group' && groupShapeChild) ? selObj.id : null
   const updateShape = (patch) => (shapeObj && (shapeGroupId ? updateChild(shapeGroupId, shapeObj.id, patch) : updateObject(shapeObj.id, patch)))
   const subActive = shapeObj?.type === 'path' && activeSubpath?.objId === shapeObj.id ? activeSubpath.index : null   // S6
+  // ROTAR UN FILL DINS D'UN GRUP (deute SPRINT_EDITOR_ESTAT §260). Fins ara els fills d'un
+  // grup entrat es podien seleccionar i moure, però no girar: la rotació sempre anava a
+  // l'objecte de nivell superior. El cas que ho demana és la cota de POM — separar l'etiqueta
+  // de la fletxa i posar-la a l'angle de la mesura. El render ja ho sabia fer (`common` aplica
+  // obj.rotation a qualsevol node, fills inclosos): només faltava encaminar-hi el panell.
+  const rotChildId = (selObj?.type === 'group' && activeGroup === selObj.id && selectedChildId) ? selectedChildId : null
+  const rotObj = (rotChildId && (selObj.children || []).find(c => c.id === rotChildId)) || selObj
+  const updateRotation = (deg) => (rotChildId
+    ? updateChild(selObj.id, rotChildId, { rotation: deg })
+    : updateObject(selObj.id, { rotation: deg }))
   const multiSelected = selectedObjects.length > 1
   const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
   const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse', 'path'].includes(o.type))
@@ -3802,7 +3892,11 @@ export default function TechSheetEditor() {
   const multiFillValue = commonValue(multiFill, 'fill')
   const multiX = commonValue(multiPosition, 'x')
   const multiY = commonValue(multiPosition, 'y')
-  const editingFlat = editingFlatId ? curObjs.find(o => o.id === editingFlatId && ['sketch_svg', 'path'].includes(o.type)) : null
+  const editingFlat = editingFlatId
+    ? (editingFlatGroupId
+        ? (curObjs.find(o => o.id === editingFlatGroupId)?.children || []).find(c => c.id === editingFlatId && c.type === 'path')
+        : curObjs.find(o => o.id === editingFlatId && ['sketch_svg', 'path'].includes(o.type)))
+    : null
   const selectedDeletableIds = selectedObjects.filter(o => o.layer === 'free' || o.type === 'data_block').map(o => o.id)
   const deleteSelection = () => {
     if (!selectedDeletableIds.length) return
@@ -4608,6 +4702,7 @@ export default function TechSheetEditor() {
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
                     placeholderMode={templateMode}
+                    hideTextChildren={editingFlatGroupId === o.id}
                     pageCtx={{ index: currentPage, total: pages.length }}
                     onHeaderContextMenu={locked ? ((e, ho) => { e.evt.preventDefault(); setHeaderMenu(ho.detached ? null : { x: e.evt.clientX, y: e.evt.clientY }) }) : undefined}
                     selected={selectedIds.includes(o.id)}
@@ -4845,6 +4940,60 @@ export default function TechSheetEditor() {
             <input ref={flatFileRef} type="file" accept=".svg,image/svg+xml" hidden
               onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFlatSvgFile(f) }} />
 
+            {/* CONTENIDOR DE POMS. Calca la fila del Taller de Patró (ModelPomList): semàfor
+                de borderLeft, codi de client en mono manant, nom canònic EN al costat, badge
+                amb el nom_fitxa. Ve plegat per defecte perquè el dock és per a propietats;
+                s'obre quan toca acotar. Un clic arma l'eina de cota amb el text ja resolt. */}
+            {dockTab === 'properties' && locked && pomRows.length > 0 && (
+              <Contenidor
+                titol={t('tech_sheet.poms_of_model', { n: pomRows.length })}
+                icona="ti-ruler-measure" defaultOpen={false} fitContent
+              >
+                <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.poms_hint')}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {pomRows.map(bm => {
+                    const etiqueta = bm.nom_fitxa || bm.pom_abbreviation || bm.codi_client || ''
+                    const colocat = !!etiqueta && cotesColocades.has(etiqueta)
+                    const armat = cotaPreset?.text === etiqueta && tool === 'cota_pom'
+                    return (
+                      <button key={bm.id} type="button"
+                        onClick={() => { setCotaPreset({ text: etiqueta }); setTool('cota_pom') }}
+                        aria-pressed={armat}
+                        title={t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
+                        style={{
+                          textAlign: 'left', width: '100%', cursor: 'pointer',
+                          background: armat ? 'var(--gold-pale)' : 'var(--bg-card)',
+                          border: `1px solid ${armat ? COL.gold : COL.border}`,
+                          borderLeft: `3px solid ${colocat ? COL.ok : armat ? COL.gold : COL.border}`,
+                          borderRadius: 4, padding: '0.3rem 0.5rem',
+                          display: 'flex', alignItems: 'center', gap: '0.4rem',
+                          fontFamily: FONT,
+                        }}>
+                        <i className={`ti ${colocat ? 'ti-circle-check' : armat ? 'ti-crosshair' : 'ti-circle-dashed'}`}
+                          style={{ color: colocat ? COL.ok : armat ? COL.gold : COL.textMuted, flexShrink: 0, fontSize: 14 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
+                            <span>{bm.codi_client}</span>
+                            <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <PomNamePair en={bm.nom_en} local={bm.nom_ca || bm.nom_client} />
+                            </span>
+                            {bm.nom_fitxa && (
+                              <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: COL.textMuted, border: `1px solid ${COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
+                                {bm.nom_fitxa}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {/* La xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
+                        {bm.base_value_cm != null && (
+                          <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0 }}>{bm.base_value_cm}</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </Contenidor>
+            )}
             {/* TAB PROPIETATS: propietats de la selecció (W/H/X/Y, stroke/fill, …). Els blocs
                 d'inserció i de fitxers del model viuen ara al ribbon (pestanya Inserir). */}
             {dockTab === 'properties' && !multiSelected && !selObj && (
@@ -5110,7 +5259,9 @@ export default function TechSheetEditor() {
                     </>
                   )
                 })()}
-                {(selObj.type === 'sketch_svg' || selObj.type === 'path') && (
+                {/* `groupPathChild` afegeix el cas de la cota de POM: la fletxa és un path
+                    dins un grup i s'ha de poder corbar sense desagrupar res. */}
+                {(selObj.type === 'sketch_svg' || selObj.type === 'path' || groupPathChild) && (
                   <>
                     <button type="button" onClick={editSelectedFlat}
                       style={{ ...propInput, cursor: 'pointer', marginTop: 0, marginBottom: 8 }}>
@@ -5124,11 +5275,12 @@ export default function TechSheetEditor() {
                     )}
                   </>
                 )}
-                {!blocksTransform(selObj) && (
+                {!blocksTransform(rotObj) && (
                   <Contenidor titol={t('tech_sheet.sec_rotation')} icona="ti-rotate" fitContent>
+                    {rotChildId && <div style={{ fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>{t('tech_sheet.rotation_of_child')}</div>}
                     <label style={propLabel}>{t('tech_sheet.rotation_deg')}
-                      <input type="number" min={0} max={360} step={1} value={Math.round(selObj.rotation || 0)}
-                        onChange={e => updateObject(selObj.id, { rotation: ((Number(e.target.value) || 0) % 360 + 360) % 360 })} style={propInput} />
+                      <input type="number" min={0} max={360} step={1} value={Math.round(rotObj.rotation || 0)}
+                        onChange={e => updateRotation(((Number(e.target.value) || 0) % 360 + 360) % 360)} style={propInput} />
                     </label>
                   </Contenidor>
                 )}
