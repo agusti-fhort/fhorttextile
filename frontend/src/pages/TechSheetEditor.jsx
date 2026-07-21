@@ -395,7 +395,7 @@ const T_PAD = 2 * MM_TO_PX
 const TBL = {
   HDR_BG: '#111827', HDR_TEXT: KONVA_COL.white, ROW_EVEN: KONVA_COL.white, ROW_ODD: '#f7f7f7',
   ROW_BORDER: KONVA_COL.border, OUTER: KONVA_COL.gold, REF: '#dc2626', NOM: '#6b7280', VAL: KONVA_COL.textMain,
-  BASE_BG: '#e5e7eb', BASE_HDR: '#dc2626', DELTA: '#185fa5',
+  BASE_BG: '#e5e7eb', BASE_HDR: '#dc2626', BREAK: '#dc2626', DELTA: '#185fa5',
 }
 
 // Delta de fila = increment de la GradingRule: primer increment no-zero de talla no-base.
@@ -501,7 +501,7 @@ function buildTableCellPrimitives(obj) {
   prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: hdrH, fill: st.headerFill || TBL.HDR_BG })
   if (baseIdx >= 0) prims.push({ t: 'r', x: cx0[baseIdx], y: 0, w: cw[baseIdx], h: hdrH, fill: TBL.BASE_HDR })
   cols.forEach((c, i) => {
-    prims.push({ t: 't', x: cx0[i] + T_PAD, y: 0, w: cw[i] - 2 * T_PAD, h: hdrH, text: String(c.label ?? ''), fill: TBL.HDR_TEXT, size: fontPx, mid: true })
+    prims.push({ t: 't', x: cx0[i] + T_PAD, y: 0, w: cw[i] - 2 * T_PAD, h: hdrH, text: String(c.label ?? ''), fill: TBL.HDR_TEXT, size: fontPx, bold: true, mid: true })
   })
 
   // Fons de files (zebra opcional) en passada pròpia: la franja de la talla base ha de quedar
@@ -520,11 +520,19 @@ function buildTableCellPrimitives(obj) {
     cols.forEach((c, i) => {
       const cell = norm(row[i])
       const wCell = cw[i] - 2 * T_PAD
+      // T2 — dues senyals que MAI comparteixen codificació:
+      //  · ESTRUCTURAL (jerarquia de taula): capçalera i primera columna, sempre en negreta.
+      //  · BREAK de grading (domini, `cell.bold` de cellForSize a T1b): negreta + subratllat
+      //    + vermell. El segon tret és el que el distingeix de l'estructural; el patró és el
+      //    mateix bold+underline amb què la capçalera marca la talla base al size run.
+      const isBreak = !!cell.bold
+      const bold = isBreak || i === 0
+      const fill = isBreak ? TBL.BREAK : TBL.VAL
       if (cell.sub) {
-        prims.push({ t: 't', x: cxR + T_PAD, y: y + T_ROW_PAD, w: wCell, h: fontPx + 2, text: cell.text || '', fill: TBL.VAL, size: fontPx, bold: !!cell.bold, mid: false })
+        prims.push({ t: 't', x: cxR + T_PAD, y: y + T_ROW_PAD, w: wCell, h: fontPx + 2, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: false })
         prims.push({ t: 't', x: cxR + T_PAD, y: y + T_ROW_PAD * 2 + fontPx, w: wCell, h: subPx + 2, text: cell.sub, fill: TBL.NOM, size: subPx, italic: true, mid: false })
       } else {
-        prims.push({ t: 't', x: cxR + T_PAD, y, w: wCell, h: rowH, text: cell.text || '', fill: TBL.VAL, size: fontPx, bold: !!cell.bold, mid: true })
+        prims.push({ t: 't', x: cxR + T_PAD, y, w: wCell, h: rowH, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: true })
       }
       cxR += cw[i]
     })
