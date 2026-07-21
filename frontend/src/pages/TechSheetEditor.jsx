@@ -2107,8 +2107,12 @@ export default function TechSheetEditor() {
       ],
     }
   }, [t])
-  const moveSelectionInFreeLayer = useCallback((direction) => {
-    const ids = new Set(selectedIds)
+  // `explicitIds` existeix pel panell Capes: allà el z-ordre és PER FILA i la fila clicada pot no
+  // ser la que hi ha seleccionada. Cridar-hi selectOnly() abans no serveix —és un setState
+  // asíncron i aquest useCallback captura `selectedIds` per closure—, de manera que el botó
+  // movia la selecció ANTERIOR, o res si no n'hi havia cap. Ara la fila diu qui és.
+  const moveSelectionInFreeLayer = useCallback((direction, explicitIds) => {
+    const ids = new Set(explicitIds || selectedIds)
     updatePageObjects(currentPage, objs => {
       const next = [...objs]
       if (direction === 'forward') {
@@ -3801,8 +3805,6 @@ export default function TechSheetEditor() {
   // gold PLE + text blanc (mateix tractament que el botó de mode del Taller). El goldPale
   // queda reservat per a "element seleccionat" (fila de POM, forma activa).
   const paletteBtnOn = { borderColor: COL.gold, background: COL.gold, color: 'var(--white)' }
-  // PAL-1: eina futura sense handler — placeholder visible però deshabilitat.
-  const paletteBtnSoon = { color: COL.textMuted, opacity: 0.45, cursor: 'default' }
   // Barra contextual (C4): mateixa pell que la resta de la closca (tokens globals, T1), discreta,
   // separada de la topbar i del viewport per un filet molt fi (1px COL.border) — com el peu d'estat.
   const CTX_BG = COL.sidebar, CTX_BORDER = COL.border, CTX_TEXT = COL.textMain
@@ -4010,8 +4012,6 @@ export default function TechSheetEditor() {
     noPath: t('tech_sheet.flat_no_path'),
     changed: t('tech_sheet.flat_changed'),
     importError: t('tech_sheet.flat_import_error'),
-    done: t('tech_sheet.flat_done'),
-    cancel: t('tech_sheet.flat_cancel'),
     // G1 — els dos cursors (selecció de forma / selecció directa).
     shape_select: t('tech_sheet.node_tool_shape'),
     direct_select: t('tech_sheet.node_tool_direct'),
@@ -4030,8 +4030,8 @@ export default function TechSheetEditor() {
   // PAL-1: PALETA D'EINES (estil Adobe) — 6 categories amb separadors; els grups amb múltiples
   // eines són FLYOUTS (icona + ▸; clic al triangle o press-and-hold desplega; l'última usada queda
   // visible). Es conserven els tool keys i TOTS els handlers (RECT_TOOLS/LINE_TOOLS/PRESET_TOOLS,
-  // onStageMouseDown…): això és només presentació + agrupació. Les eines sense handler avui es
-  // marquen `soon` (placeholder deshabilitat) i NO s'hi cabla cap comportament (són tandes futures).
+  // onStageMouseDown…): això és només presentació + agrupació. Cap eina de la paleta és un
+  // placeholder: totes tenen handler (el suport de `soon` era codi mort, retirat a F7).
   const PALETTE = [
     // `node` i `subpath` han marxat a la tab "Editar" del ribbon: són les úniques dues eines de
     // la paleta que no creen res —seleccionen més fi dins d'un objecte que ja existeix— i el
@@ -4077,12 +4077,6 @@ export default function TechSheetEditor() {
       // PEÇA P: pan funcional (arrossega el llenç). També s'activa amb la barra espaiadora.
       { kind: 'tool', k: 'pan', icon: 'ti-hand-stop', label: t('tech_sheet.tool_pan') },
     ] },
-  ]
-  // PEU de la paleta — swatches (sense estat de color global avui → placeholders marcats `soon`).
-  const PALETTE_SWATCHES = [
-    { id: 'fill', icon: 'ti-square-filled', label: t('tech_sheet.swatch_fill') },
-    { id: 'stroke', icon: 'ti-border-style', label: t('tech_sheet.swatch_stroke') },
-    { id: 'swap', icon: 'ti-arrows-exchange', label: t('tech_sheet.swatch_swap') },
   ]
   // Eines funcionals planes (per resoldre icona/etiqueta de l'eina activa a la barra contextual).
   const flatTools = PALETTE.flatMap(c => c.items.flatMap(it => it.kind === 'flyout' ? it.tools : (it.kind === 'tool' ? [it] : [])))
@@ -4284,7 +4278,6 @@ export default function TechSheetEditor() {
         }),
         ribbonTool({ key: 'import-flat', icon: 'ti-file-import', label: t('tech_sheet.flat_import'), onClick: () => openImport('garment') }),
         // R1: placeholder — el flux d'import de mesures es dissenyarà més endavant (sense handler).
-        ribbonTool({ key: 'import-measures', icon: 'ti-ruler', label: t('tech_sheet.import_measurements'), disabled: true, title: `${t('tech_sheet.import_measurements')} · ${t('tech_sheet.coming_soon')}` }),
         ribbonTool({ key: 'image', icon: 'ti-photo-plus', label: t('tech_sheet.tool_image'), onClick: () => openImport('image') }),
         // S03b · P7 — el "futur tab Components" que anunciava la NOTA (R1): un sol botó que obre
         // el FilePicker (Model / Catàleg / Importar), en lloc dels N botons de fitxer d'abans.
@@ -4429,17 +4422,6 @@ export default function TechSheetEditor() {
   // F4 — en mode edició de nodes, cap acció d'ABAST OBJECTE (grup, z-order, alinear, mirall,
   // buscatraços, bloquejar…) és clicable: la barra superior contextual mana sobre node/segment/subpath.
   const objDisabled = (cond) => !locked || !!editingFlatId || cond
-  const menuFileItems = [
-    menuItem('mf-export', { label: t('tech_sheet.export_pdf'), onClick: onExport, disabled: !locked }),
-    menuItem('mf-save-tpl', { label: t('tech_sheet.save_as_template'), onClick: () => setSaveAsTpl({ nom: '', descripcio: '' }), disabled: !locked }),
-    menuItem('mf-import', { label: t('tech_sheet.flat_import'), onClick: () => openImport('garment'), disabled: !locked }),
-  ]
-  // S12-QA1-B: estat de la capçalera de la pàgina actual per a les accions del menú "Objecte".
-  // El guard de màx 1 header/pàgina fa que no calgui selecció prèvia. `detached` (post-detach)
-  // → només accionable pel camí normal d'objectes lliures. Menú i clic dret criden els MATEIXOS
-  // handlers (deleteHeaderOnPage / detachHeaderOnPage): cap tercer camí.
-  const pageHeaderObj = objectsOf(currentPage).find(o => o.type === 'data_block' && o.kind === 'header')
-  const headerAnchored = !!pageHeaderObj && !pageHeaderObj.detached
   const menuEditItems = [
     menuItem('me-undo', { label: t('tech_sheet.menu_undo'), shortcut: '⌘Z', onClick: undo }),
     menuItem('me-redo', { label: t('tech_sheet.menu_redo'), shortcut: '⇧⌘Z', onClick: redo }),
@@ -4449,51 +4431,14 @@ export default function TechSheetEditor() {
     menuItem('me-dup', { label: t('tech_sheet.menu_duplicate'), shortcut: '⌘D', onClick: duplicateSelection, disabled: objDisabled(freeSelectedIds.length === 0) }),
     menuItem('me-delete', { label: t('app.delete'), shortcut: '⌫', onClick: deleteSelection, disabled: objDisabled(selectedDeletableIds.length === 0) }),
   ]
-  const menuObjectItems = [
-    menuItem('mo-group', { label: t('tech_sheet.group'), shortcut: '⌘G', onClick: groupSelection, disabled: objDisabled(selectedObjects.length < 2) }),
-    menuItem('mo-ungroup', { label: t('tech_sheet.ungroup'), onClick: () => ungroupObject(selObj?.id), disabled: objDisabled(selObj?.type !== 'group') }),
-    menuSep('mo-sep1'),
-    menuItem('mo-fwd', { label: t('tech_sheet.bring_forward'), onClick: () => moveSelectionInFreeLayer('forward'), disabled: objDisabled(freeSelectedIds.length === 0) }),
-    menuItem('mo-bwd', { label: t('tech_sheet.send_backward'), onClick: () => moveSelectionInFreeLayer('backward'), disabled: objDisabled(freeSelectedIds.length === 0) }),
-    menuItem('mo-front', { label: t('tech_sheet.bring_to_front'), onClick: () => moveSelectionToFreeLayerEdge('front'), disabled: objDisabled(freeSelectedIds.length === 0) }),
-    menuItem('mo-back', { label: t('tech_sheet.send_to_back'), onClick: () => moveSelectionToFreeLayerEdge('back'), disabled: objDisabled(freeSelectedIds.length === 0) }),
-    menuSep('mo-sep2'),
-    menuItem('mo-align-l', { label: t('tech_sheet.align_left_short'), onClick: () => alignSelection('left'), disabled: objDisabled(selectedObjects.length < 2) }),
-    menuItem('mo-align-c', { label: t('tech_sheet.align_center_short'), onClick: () => alignSelection('center'), disabled: objDisabled(selectedObjects.length < 2) }),
-    menuItem('mo-align-r', { label: t('tech_sheet.align_right_short'), onClick: () => alignSelection('right'), disabled: objDisabled(selectedObjects.length < 2) }),
-    menuItem('mo-align-t', { label: t('tech_sheet.align_top_short'), onClick: () => alignSelection('top'), disabled: objDisabled(selectedObjects.length < 2) }),
-    menuItem('mo-align-m', { label: t('tech_sheet.align_middle_short'), onClick: () => alignSelection('middle'), disabled: objDisabled(selectedObjects.length < 2) }),
-    menuItem('mo-align-b', { label: t('tech_sheet.align_bottom_short'), onClick: () => alignSelection('bottom'), disabled: objDisabled(selectedObjects.length < 2) }),
-    menuItem('mo-dist-h', { label: t('tech_sheet.distribute_h_short'), onClick: () => distributeSelection('h'), disabled: objDisabled(selectedObjects.length < 2) }),
-    menuItem('mo-dist-v', { label: t('tech_sheet.distribute_v_short'), onClick: () => distributeSelection('v'), disabled: objDisabled(selectedObjects.length < 2) }),
-    menuSep('mo-sep3'),
-    menuItem('mo-mirror-h', { label: t('tech_sheet.mirror_h'), onClick: () => mirrorObjects(selectedIds, 'scaleX'), disabled: objDisabled(selectedIds.length === 0) }),
-    menuItem('mo-mirror-v', { label: t('tech_sheet.mirror_v'), onClick: () => mirrorObjects(selectedIds, 'scaleY'), disabled: objDisabled(selectedIds.length === 0) }),
-    menuSep('mo-sep4'),
-    menuItem('mo-pf-unite', { label: t('tech_sheet.pathfinder_unite'), onClick: () => applyPathfinder('unite'), disabled: objDisabled(!pathfinderReady) }),
-    menuItem('mo-pf-subtract', { label: t('tech_sheet.pathfinder_subtract'), onClick: () => applyPathfinder('subtract'), disabled: objDisabled(!pathfinderReady) }),
-    menuItem('mo-pf-intersect', { label: t('tech_sheet.pathfinder_intersect'), onClick: () => applyPathfinder('intersect'), disabled: objDisabled(!pathfinderReady) }),
-    menuItem('mo-pf-exclude', { label: t('tech_sheet.pathfinder_exclude'), onClick: () => applyPathfinder('exclude'), disabled: objDisabled(!pathfinderReady) }),
-    menuSep('mo-sep5'),
-    menuItem('mo-lock-sel', { label: t('tech_sheet.menu_lock_sel'), onClick: () => selectedIds.forEach(toggleLock), disabled: objDisabled(selectedIds.length === 0) }),
-    menuItem('mo-hide-sel', { label: t('tech_sheet.menu_hide_sel'), onClick: () => selectedIds.forEach(toggleVisible), disabled: objDisabled(selectedIds.length === 0) }),
-    menuSep('mo-sep6'),
-    // Capçalera ancorada (Template FTT): mateixos handlers que el clic dret. Habilitades només
-    // amb un header ANCORAT a la pàgina; un cop desancorat, l'esborrat va pel camí normal.
-    menuItem('mo-hdr-delete', { label: t('tech_sheet.menu_delete_header_page'), onClick: () => deleteHeaderOnPage(currentPage), disabled: objDisabled(!headerAnchored) }),
-    menuItem('mo-hdr-detach', { label: t('tech_sheet.menu_detach_header'), onClick: () => detachHeaderOnPage(currentPage), disabled: objDisabled(!headerAnchored) }),
-  ]
-  const menuViewItems = [
-    menuItem('mv-in', { label: t('tech_sheet.zoom_in'), onClick: () => setZoomClamped(z => z + ZOOM_STEP) }),
-    menuItem('mv-out', { label: t('tech_sheet.zoom_out'), onClick: () => setZoomClamped(z => z - ZOOM_STEP) }),
-    menuItem('mv-100', { label: '100%', onClick: () => setZoomClamped(1) }),
-    menuItem('mv-fit', { label: t('tech_sheet.zoom_fit'), onClick: fitZoomToViewport }),
-  ]
+  // BARRA DE MENÚS — només EDICIÓ (F7). Dels 33 comandaments que hi havia, 28 eren duplicats
+  // exactes del ribbon, del panell Capes o de la barra d'estat; el menú no hi aportava ni icona
+  // (menuItem no en sap pintar). Els menús Fitxer, Objecte i Visualització desapareixen sencers.
+  // Es conserva EDICIÓ perquè les seves 5 entrades —desfés, refés, copia, enganxa, duplica— són
+  // l'ÚNICA superfície visible d'aquestes accions: a tot arreu més només existeixen com a
+  // drecera de teclat, i una drecera que ningú anuncia no existeix per a qui no la sap.
   const menuBar = [
-    { id: 'file', label: t('tech_sheet.menu_file'), items: menuFileItems },
     { id: 'edit', label: t('tech_sheet.menu_edit'), items: menuEditItems },
-    { id: 'object', label: t('tech_sheet.menu_object'), items: menuObjectItems },
-    { id: 'view', label: t('tech_sheet.menu_view'), items: menuViewItems },
   ]
 
   // PEÇA P/C: pan actiu (eina 'pan' o espai) i cursor del viewport segons l'eina activa.
@@ -4611,9 +4556,9 @@ export default function TechSheetEditor() {
                 const key = `${cat.cat}-${ii}`
                 if (it.kind === 'tool') {
                   return (
-                    <button key={key} disabled={it.soon} onClick={() => !it.soon && setTool(it.k)}
-                      title={it.soon ? `${it.label} · ${t('tech_sheet.coming_soon')}` : (TOOL_SHORTCUT[it.k] ? `${it.label} · ${TOOL_SHORTCUT[it.k]}` : it.label)}
-                      style={{ ...paletteBtn, ...(tool === it.k ? paletteBtnOn : {}), ...(it.soon ? paletteBtnSoon : {}) }}>
+                    <button key={key} onClick={() => setTool(it.k)}
+                      title={TOOL_SHORTCUT[it.k] ? `${it.label} · ${TOOL_SHORTCUT[it.k]}` : it.label}
+                      style={{ ...paletteBtn, ...(tool === it.k ? paletteBtnOn : {}) }}>
                       <i className={`ti ${it.icon}`} style={{ fontSize: 17 }} />
                     </button>
                   )
@@ -4623,26 +4568,26 @@ export default function TechSheetEditor() {
                 const groupActive = it.tools.some(tl => tl.k === tool)
                 return (
                   <div key={key} data-flyout={it.id} style={{ position: 'relative' }}>
-                    <button disabled={it.soon}
-                      onMouseDown={e => !it.soon && startHold(it.id, e.currentTarget.getBoundingClientRect())}
+                    <button
+                      onMouseDown={e => startHold(it.id, e.currentTarget.getBoundingClientRect())}
                       onMouseUp={cancelHold} onMouseLeave={cancelHold}
-                      onClick={() => { if (suppressClick.current) { suppressClick.current = false; return } if (it.soon) return; pickFlyoutTool(it, vis.k) }}
-                      title={it.soon ? `${it.label} · ${t('tech_sheet.coming_soon')}` : `${it.label} — ${vis.label}`}
-                      style={{ ...paletteBtn, ...(groupActive ? paletteBtnOn : {}), ...(it.soon ? paletteBtnSoon : {}) }}>
+                      onClick={() => { if (suppressClick.current) { suppressClick.current = false; return } pickFlyoutTool(it, vis.k) }}
+                      title={`${it.label} — ${vis.label}`}
+                      style={{ ...paletteBtn, ...(groupActive ? paletteBtnOn : {}) }}>
                       <i className={`ti ${vis.icon}`} style={{ fontSize: 17 }} />
                       {/* triangle ▸ indicador de flyout — visible per descobribilitat (E1a) */}
                       {it.tools && it.tools.length > 1 && (
                         <i className="ti ti-caret-right-filled" title={t('tech_sheet.flyout_hint')}
-                          onClick={e => { e.stopPropagation(); cancelHold(); suppressClick.current = false; if (!it.soon) openFlyout(it.id, e.currentTarget.parentElement.getBoundingClientRect()) }}
-                          style={{ position: 'absolute', right: 0, bottom: 0, fontSize: 11, lineHeight: 1, color: COL.gold, opacity: it.soon ? 0.35 : 0.9 }} />
+                          onClick={e => { e.stopPropagation(); cancelHold(); suppressClick.current = false; openFlyout(it.id, e.currentTarget.parentElement.getBoundingClientRect()) }}
+                          style={{ position: 'absolute', right: 0, bottom: 0, fontSize: 11, lineHeight: 1, color: COL.gold, opacity: 0.9 }} />
                       )}
                     </button>
                     {flyoutOpen === it.id && flyoutRect && (
                       <div data-flyout={it.id} style={{ position: 'fixed', left: flyoutRect.right + 4, top: flyoutRect.top, zIndex: 60, display: 'flex', gap: 2, padding: 4, background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
                         {it.tools.map(tl => (
-                          <button key={tl.k} disabled={it.soon} onClick={() => !it.soon && pickFlyoutTool(it, tl.k)}
-                            title={it.soon ? `${tl.label} · ${t('tech_sheet.coming_soon')}` : tl.label}
-                            style={{ ...paletteBtn, ...(tool === tl.k ? paletteBtnOn : {}), ...(it.soon ? paletteBtnSoon : {}) }}>
+                          <button key={tl.k} onClick={() => pickFlyoutTool(it, tl.k)}
+                            title={tl.label}
+                            style={{ ...paletteBtn, ...(tool === tl.k ? paletteBtnOn : {}) }}>
                             <i className={`ti ${tl.icon}`} style={{ fontSize: 17 }} />
                           </button>
                         ))}
@@ -4652,20 +4597,6 @@ export default function TechSheetEditor() {
                 )
               }),
             ])}
-            <div style={{ width: 26, height: 1, background: COL.border, margin: '3px 0' }} />
-            <button onClick={() => fileRef.current?.click()} title={t('tech_sheet.tool_image')} style={paletteBtn}>
-              <i className="ti ti-photo" style={{ fontSize: 17 }} />
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" hidden
-              onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFile(f) }} />
-            {/* PEU: swatches (placeholders sense estat de color global — PAL-1) */}
-            <div style={{ width: 26, height: 1, background: COL.border, margin: '3px 0' }} />
-            {PALETTE_SWATCHES.map(sw => (
-              <button key={sw.id} disabled title={`${sw.label} · ${t('tech_sheet.coming_soon')}`}
-                style={{ ...paletteBtn, ...paletteBtnSoon }}>
-                <i className={`ti ${sw.icon}`} style={{ fontSize: 17 }} />
-              </button>
-            ))}
           </div>
         )}
 
@@ -4929,9 +4860,9 @@ export default function TechSheetEditor() {
                           <button onClick={(e) => { e.stopPropagation(); toggleLock(o.id) }}
                             title={o.locked === true ? t('tech_sheet.layer_unlock') : t('tech_sheet.layer_lock')}
                             style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className={`ti ${o.locked === true ? 'ti-lock' : 'ti-lock-open'}`} style={{ fontSize: 13 }} /></button>
-                          <button onClick={(e) => { e.stopPropagation(); selectOnly(o.id); moveSelectionInFreeLayer('forward') }} title={t('tech_sheet.bring_forward')}
+                          <button disabled={nodeMode} onClick={(e) => { e.stopPropagation(); selectOnly(o.id); moveSelectionInFreeLayer('forward', [o.id]) }} title={nodeMode ? t('tech_sheet.obj_action_node_mode') : t('tech_sheet.bring_forward')}
                             style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className="ti ti-arrow-up" style={{ fontSize: 13 }} /></button>
-                          <button onClick={(e) => { e.stopPropagation(); selectOnly(o.id); moveSelectionInFreeLayer('backward') }} title={t('tech_sheet.send_backward')}
+                          <button disabled={nodeMode} onClick={(e) => { e.stopPropagation(); selectOnly(o.id); moveSelectionInFreeLayer('backward', [o.id]) }} title={nodeMode ? t('tech_sheet.obj_action_node_mode') : t('tech_sheet.send_backward')}
                             style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className="ti ti-arrow-down" style={{ fontSize: 13 }} /></button>
                         </>
                       )}
