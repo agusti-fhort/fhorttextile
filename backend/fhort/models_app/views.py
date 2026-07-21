@@ -884,7 +884,11 @@ def materialize_poms_view(request, model_id):
 
     SOBIRANIA DEL MODEL (idempotent): NOMÉS sembra on no hi ha res o on hi ha un TEMPLATE BUIT.
     Una fila amb origen més específic (MANUAL/IMPORTED/FITTED) o amb valor ja posat NO es trepitja:
-    a partir del primer valor, el Model és sobirà. Re-executar no clobera res."""
+    a partir del primer valor, el Model és sobirà. Re-executar no clobera res.
+
+    F2.2 — `pom_ids` (llista opcional al body): sembra NOMÉS aquests POMs, sempre que pertanyin al
+    GarmentPOMMap de l'item. Sense el paràmetre, es sembra tot el mapa (comportament de sempre, cap
+    caller trencat). Un `pom_ids` present i buit és una petició sense feina, no "sembra-ho tot"."""
     from django.db import transaction
     try:
         model = Model.objects.get(id=model_id)
@@ -898,9 +902,26 @@ def materialize_poms_view(request, model_id):
     from fhort.pom.models import GarmentPOMMap, ItemBaseMeasurement
     from fhort.models_app.models import BaseMeasurement
 
+    subconjunt = None
+    if 'pom_ids' in request.data:
+        crus = request.data.get('pom_ids')
+        if not isinstance(crus, list):
+            return Response({'error': "pom_ids ha de ser una llista d'ids de POM"}, status=400)
+        try:
+            subconjunt = {int(x) for x in crus}
+        except (TypeError, ValueError):
+            return Response({'error': "pom_ids ha de contenir només ids numèrics"}, status=400)
+
     maps = (GarmentPOMMap.objects
             .filter(garment_type_item=model.garment_type_item)
             .select_related('pom').order_by('ordre'))
+    total_template = maps.count()
+    if subconjunt is not None:
+        maps = maps.filter(pom_id__in=subconjunt)
+        # Els ids que no són del mapa de l'item no es sembren en silenci: es reporten.
+        desconeguts = sorted(subconjunt - {m.pom_id for m in maps})
+    else:
+        desconeguts = []
     # Valors base de l'item per pom (plantilla → instància).
     ibms = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(
         garment_type_item=model.garment_type_item)}
@@ -947,8 +968,15 @@ def materialize_poms_view(request, model_id):
             else:
                 skipped += 1   # res a sembrar, o fila sobirana (MANUAL/IMPORTED/FITTED/amb valor)
 
-    return Response({'materialized': materialized, 'seeded': seeded, 'skipped': skipped,
-                     'total_template': maps.count()})
+    resposta = {'materialized': materialized, 'seeded': seeded, 'skipped': skipped,
+                'total_template': total_template}
+    if subconjunt is not None:
+        resposta['requested'] = len(subconjunt)
+        if desconeguts:
+            resposta['pom_ids_desconeguts'] = desconeguts
+            resposta['warning'] = ('Aquests POMs no pertanyen al GarmentPOMMap de '
+                                   f"l'item i no s'han sembrat: {desconeguts}")
+    return Response(resposta)
 
 
 @api_view(['POST'])

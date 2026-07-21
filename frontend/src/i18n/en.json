@@ -2397,7 +2397,7 @@
     "seed_subtitle_empty": "The item has no standard base measurements: the POM list will be created without values.",
     "seed_body_empty": "The rows for the POMs the item declares will be created, empty (to fill in by hand or by import). Measurements you already touched on the model are not overwritten.",
     "seed_confirm_empty": "Create the list",
-    "seed_count": "POMs of the item: {{total}}."
+    "seed_count": "POMs of the item: {{total}} · selected to seed: {{tria}}. Remove the ones you don’t want."
   },
   "model_fabric": {
     "err_close_table": "Could not close the table.",

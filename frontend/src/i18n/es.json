@@ -2397,7 +2397,7 @@
     "seed_subtitle_empty": "El item no tiene medidas base estándar: se creará la lista de POMs sin valores.",
     "seed_body_empty": "Se crearán las filas de los POMs que el item declara, vacías (para rellenar a mano o por importación). Las medidas que ya hayas tocado en el modelo no se pisan.",
     "seed_confirm_empty": "Crear la lista",
-    "seed_count": "POMs del item: {{total}}."
+    "seed_count": "POMs del item: {{total}} · seleccionados para sembrar: {{tria}}. Quita los que no quieras."
   },
   "model_fabric": {
     "err_close_table": "No se ha podido cerrar la tabla.",

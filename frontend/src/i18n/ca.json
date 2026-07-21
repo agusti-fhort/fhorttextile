@@ -2397,7 +2397,7 @@
     "seed_subtitle_empty": "L'item no té mides base estàndard: es crearà la llista de POMs sense valors.",
     "seed_body_empty": "Es crearan les files dels POMs que l'item declara, buides (per omplir a mà o per import). Les mides que ja hagis tocat al model no es trepitgen.",
     "seed_confirm_empty": "Crear la llista",
-    "seed_count": "POMs de l'item: {{total}}."
+    "seed_count": "POMs de l'item: {{total}} · seleccionats per sembrar: {{tria}}. Treu els que no vulguis."
   },
   "model_fabric": {
     "err_close_table": "No s'ha pogut tancar la taula.",
