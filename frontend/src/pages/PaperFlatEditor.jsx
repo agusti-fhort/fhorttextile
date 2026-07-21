@@ -1,5 +1,9 @@
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import paper from 'paper'
+// X2 — el sub-editor llegeix la pintura amb la MATEIXA llei que el llenç i el PDF
+// (subpath > objecte). Abans la tenia invertida i amb fallbacks propis, i per això un
+// mateix dibuix es veia d'una manera aquí dins i d'una altra a fora.
+import { resolStroke, resolFill, resolStrokeWidth } from './ftt/paint'
 import { removeNode, toCorner, toSmooth, addNodeAt, mirrorHandle, closeSegments, openAtNode, splitAtNode, splitAtLocation, moveSegment, deleteSegment, translateSubpath, booleanSubpaths, mirrorSubpath, scaleSubpath, rotateSubpath } from './ftt/paperOps'
 
 const PAPER_COL = {
@@ -466,11 +470,16 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     if (isStructuredPath) {
       imported = new scope.Group()
       ;(flat.paths || []).forEach((pathData, index) => {
+        const stroke = resolStroke(flat, pathData)
         const path = new scope.Path({
           closed: !!(pathData.subpaths ? pathData.subpaths[0]?.closed : pathData.closed),
-          strokeColor: flat.stroke || pathData.stroke || '#1f2937',
-          strokeWidth: toViewPx(flat.strokeWidth || pathData.strokeWidth || 1.2),
-          fillColor: (flat.fill ?? pathData.fill) && (flat.fill ?? pathData.fill) !== 'transparent' ? (flat.fill ?? pathData.fill) : null,
+          // Sense color no es pinta traç. El negre `#1f2937` que hi havia aquí era l'ÚNIC
+          // negre d'aquest color de tot el programa, i era el que sortia quan un dibuix
+          // portava el color al subpath i aquesta lectura buscava el de l'objecte: el traç
+          // no es tornava negre, és que mai s'havia arribat a llegir.
+          strokeColor: stroke,
+          strokeWidth: stroke ? toViewPx(resolStrokeWidth(flat, pathData)) : 0,
+          fillColor: resolFill(flat, pathData),
         })
         path.data = { index }
         const segs = pathData.subpaths ? (pathData.subpaths[0]?.segments || []) : (pathData.segments || [])

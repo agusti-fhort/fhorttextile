@@ -17,6 +17,9 @@ import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/histo
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 import { booleanOp } from './ftt/paperbool'
 import { scaleSubpath, rotateSubpath, translateSubpath } from './ftt/paperOps'
+// X2 — el contracte de pintura d'un `path` (qui mana entre objecte i subpath) viu en un sol
+// lloc, perquè el llenç, el PDF i el sub-editor de Paper l'han de llegir IGUAL.
+import { normalizePaint, normalizeFillRule, resolStroke, resolFill, resolStrokeWidth, sensePintura } from './ftt/paint'
 import { useUnit, fmtMeasure } from './fittingShared'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
@@ -1157,18 +1160,22 @@ function headTriPoints(tipX, tipY, angle, len = 8, wid = 6) {
   const nx = -Math.sin(angle) * (wid / 2), ny = Math.cos(angle) * (wid / 2)
   return [tipX, tipY, bx + nx, by + ny, bx - nx, by - ny]
 }
+// La punta d'una fletxa curva es pinta del color del traç que remata: la seva PRIMERA
+// subpath, resolta amb la llei de sempre. Si aquell traç no pinta res, la punta tampoc
+// (abans queia a negre, que era inventar-se un color que ningú havia demanat).
 function pathHeadColor(obj) {
-  return normalizePaint((obj.paths?.[0]?.stroke) ?? obj.stroke) || KONVA_COL.textMain
+  return resolStroke(obj, obj.paths?.[0])
 }
 
 function pathChildProps(obj, path) {
-  const fill = normalizePaint(path.fill ?? obj.fill)
-  const stroke = normalizePaint(path.stroke ?? obj.stroke)
+  const stroke = resolStroke(obj, path)
+  const fill = resolFill(obj, path)
   return {
     data: pathToData(path),
     fill: fill || undefined,
     stroke: stroke || undefined,
-    strokeWidth: path.strokeWidth ?? obj.strokeWidth ?? 1.2,
+    // Sense color de traç no hi ha traç: el gruix no s'ha ni de mirar.
+    strokeWidth: stroke ? resolStrokeWidth(obj, path) : undefined,
     fillRule: normalizeFillRule(path.fillRule),
     lineCap: 'round',
     lineJoin: 'round',
@@ -1665,16 +1672,6 @@ function paperColorToCss(color, fallback) {
   } catch {
     return fallback
   }
-}
-
-function normalizePaint(value) {
-  if (value == null || value === '' || value === 'none' || value === 'transparent') return null
-  if (typeof value === 'string' && value.startsWith('url(')) return null
-  return value
-}
-
-function normalizeFillRule(value) {
-  return value === 'evenodd' ? 'evenodd' : 'nonzero'
 }
 
 function parseStyleDeclarations(body) {
@@ -4254,7 +4251,15 @@ export default function TechSheetEditor() {
   const applyPathfinder = (op) => {
     if (!pathfinderReady) return
     const ordered = curObjs.filter(o => selectedIds.includes(o.id))   // z-order (baix→dalt) per a 'subtract'
-    const style = ordered[0]
+    // X2 — el resultat hereta la pintura del de sota, i s'ha de RESOLDRE amb la llei del
+    // contracte: el color d'un dibuix vingut d'SVG viu al subpath, no a l'objecte. Mirar
+    // només `ordered[0].stroke` el trobava buit i el buscatraços tornava el resultat negre.
+    const base = ordered[0]
+    const style = {
+      stroke: resolStroke(base, base?.paths?.[0]),
+      fill: resolFill(base, base?.paths?.[0]),
+      strokeWidth: resolStrokeWidth(base, base?.paths?.[0]),
+    }
     const result = booleanOp(ordered, op, style, uid)
     if (!result) { flash(t('tech_sheet.pathfinder_error')); return }
     const ids = new Set(selectedIds)
