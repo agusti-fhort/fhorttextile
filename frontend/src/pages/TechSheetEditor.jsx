@@ -1857,7 +1857,6 @@ export default function TechSheetEditor() {
   const [zoom, setZoom] = useState(1)
   const [pageFormat, setPageFormat] = useState('A4L')   // TS-4b: format del document sencer
   const [ribbonGroup, setRibbonGroup] = useState('file')
-  const [dockTab, setDockTab] = useState('properties')   // D2: pestanya activa del dock dret
   // MODE PLANTILLA — no és un estat nou de React inventat per a la sessió: és el `kind` del
   // manifest del .ftt, que el format ja escrivia des del primer dia i que ningú llegia. Amb ell
   // s'engega el mecanisme de render de placeholders (`placeholderMode`), que també estava
@@ -4107,6 +4106,15 @@ export default function TechSheetEditor() {
   // deshabiliten amb un <fieldset disabled> i s'expliquen, en lloc d'ignorar el clic en silenci.
   const panelLockedForEdit = !!editingFlatId && !!selObj
     && (selObj.id === editingFlatId || selObj.id === editingFlatGroupId)
+  // C2 · EL GATE ES FA SELECTIU. Bloquejar-ho tot era massa: el conflicte de dues mans només
+  // existeix a la GEOMETRIA (W/H/X/Y i rotació escriuen el mateix que el canvas està movent).
+  // La PINTURA no hi té cap conflicte —el color no és geometria— i és justament el que més es
+  // vol tocar mentre s'edita una forma. Segueix disponible, però enrutada per mode: amb el
+  // canvas obert, el color va al canvas viu (runNode, que el fusiona al desat) i no al model,
+  // que és el motor que la Fase 6 ja havia construït.
+  const pintaFill = (c) => (panelLockedForEdit ? runNode('setFill', c) : null)
+  const pintaStroke = (c) => (panelLockedForEdit ? runNode('setStroke', c) : null)
+  const pintaStrokeWidth = (w) => (panelLockedForEdit ? runNode('setStrokeWidth', w) : null)
   const multiSelected = selectedObjects.length > 1
   const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
   const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse', 'path'].includes(o.type))
@@ -4455,7 +4463,7 @@ export default function TechSheetEditor() {
         ribbonTool({ key: 'save-template', icon: 'ti-template', label: t('tech_sheet.save_as_template'), onClick: () => setSaveAsTpl({ nom: '', descripcio: '' }), disabled: !locked }),
         // Interruptor del MODE PLANTILLA: canvia el `kind` del document (es desa al proper
         // autosave) i, amb ell, el render de placeholders i la disponibilitat del tab Camps.
-        ribbonTool({ key: 'template-mode', icon: 'ti-forms', label: t('tech_sheet.template_mode'), onClick: () => setTemplateMode(v => { if (v) setDockTab(d => (d === 'fields' ? 'properties' : d)); return !v }), active: templateMode, title: t('tech_sheet.template_mode_title'), disabled: !locked }),
+        ribbonTool({ key: 'template-mode', icon: 'ti-forms', label: t('tech_sheet.template_mode'), onClick: () => setTemplateMode(v => !v), active: templateMode, title: t('tech_sheet.template_mode_title'), disabled: !locked }),
         ribbonTool({ key: 'autosave', icon: saveState === 'error' ? 'ti-alert-triangle' : 'ti-device-floppy', label: saveLabel || t('tech_sheet.autosave'), disabled: true, title: t('tech_sheet.autosave_title') }),
         ribbonTool({ key: 'version', icon: 'ti-history', label: `v${sheet?.versio ?? 1}`, disabled: true, title: t('tech_sheet.version_current') }),
       ]
@@ -5098,24 +5106,15 @@ export default function TechSheetEditor() {
             </div>
           )}
           {!importMode && (<>
-          {/* D2: pestanyes del dock. Arquitectura oberta: afegir aquí un futur tab 'components'. */}
-          <div style={{ display: 'flex', flexShrink: 0, borderBottom: `1px solid ${COL.border}` }}>
-            {/* El tab Camps només existeix en mode plantilla: un xip {camp} dins un document
-                normal no té cap significat i el PDF l'imprimiria literalment. */}
-            {[{ id: 'properties', icon: 'ti-adjustments', label: t('tech_sheet.dock_properties') }, { id: 'layers', icon: 'ti-stack-2', label: t('tech_sheet.dock_layers') }, ...(templateMode ? [{ id: 'fields', icon: 'ti-forms', label: t('tech_sheet.dock_fields') }] : [])].map(tb => {
-              const on = dockTab === tb.id
-              return (
-                <button key={tb.id} type="button" onClick={() => setDockTab(tb.id)}
-                  style={{ flex: 1, padding: '8px 6px', border: 'none', borderBottom: `2px solid ${on ? COL.gold : 'transparent'}`, background: on ? COL.goldPale : 'transparent', color: on ? COL.gold : COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: on ? 700 : 500, cursor: 'pointer' }}>
-                  <i className={`ti ${tb.icon}`} style={{ marginRight: 5, fontSize: 14 }} />{tb.label}
-                </button>
-              )
-            })}
-          </div>
+          {/* C2 — CAP TAB INTERN. El dock tenia una tira de pestanyes (Propietats · Capes ·
+              Camps) que amagava dues terceres parts del panell darrere d'un clic i obligava a
+              recordar on era cada cosa. Ara tot són PERSIANES del mateix Contenidor compartit,
+              com a l'esquerra i com al Taller: una gramàtica de zones, no tres. */}
           {/* padding inferior extra: clearança per als botons flotants de Chrome (IA/cerca) */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px 64px' }}>
-            {/* TAB CAPES: llista d'objectes de la pàgina (front a dalt) + z-order. */}
-            {dockTab === 'layers' && (ordered.length === 0 ? (
+            {/* CAPES — llista d'objectes de la pàgina (front a dalt) + z-order. */}
+            <Contenidor titol={t('tech_sheet.dock_layers')} icona="ti-stack-2" defaultOpen={false} fitContent>
+            {(ordered.length === 0 ? (
               <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.layers_empty')}</p>
             ) : (
               <div style={{ marginBottom: 8, border: `1px solid ${COL.border}`, borderRadius: 5, overflow: 'hidden' }}>
@@ -5147,6 +5146,7 @@ export default function TechSheetEditor() {
                 })}
               </div>
             ))}
+            </Contenidor>
 
             {/* input SVG sempre muntat: el referencien el ribbon (Inserir) i el panell de selecció */}
             <input ref={flatFileRef} type="file" accept=".svg,image/svg+xml" hidden
@@ -5154,7 +5154,7 @@ export default function TechSheetEditor() {
 
             {/* TAB PROPIETATS: propietats de la selecció (W/H/X/Y, stroke/fill, …). Els blocs
                 d'inserció i de fitxers del model viuen ara al ribbon (pestanya Inserir). */}
-            {dockTab === 'properties' && !multiSelected && !selObj && (
+            {!multiSelected && !selObj && (
               <>
                 <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>{t('tech_sheet.dock_no_selection')}</p>
                 {tool === 'polygon' && (
@@ -5166,7 +5166,7 @@ export default function TechSheetEditor() {
                 )}
               </>
             )}
-            {dockTab === 'properties' && multiSelected && locked && (
+            {multiSelected && locked && (
               <>
                 <SectionTitle>{t('tech_sheet.selected_objects', { n: selectedObjects.length })}</SectionTitle>
                 {multiStroke.length > 0 && (
@@ -5199,7 +5199,7 @@ export default function TechSheetEditor() {
                 )}
               </>
             )}
-            {dockTab === 'properties' && selObj && locked && (
+            {selObj && locked && (
               <>
                 <SectionTitle>{t('tech_sheet.element')} · {selObj.type}</SectionTitle>
                 {selDim && (
@@ -5302,7 +5302,6 @@ export default function TechSheetEditor() {
                     superior o el fill arrow/path d'un grup (cota) — i muta via updateShape. */}
                 {shapeObj && (
                   <Contenidor titol={t('tech_sheet.sec_stroke')} icona="ti-line" fitContent>
-                    <BlocEnPausa pausa={panelLockedForEdit} motiu={t('tech_sheet.panel_paused_editing')}>
                     {shapeObj.type === 'path' && subActive != null && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>
                         <span>{t('tech_sheet.subpath_active', { n: subActive + 1 })}</span>
@@ -5327,13 +5326,13 @@ export default function TechSheetEditor() {
                     <div style={propLabel}>{t('tech_sheet.stroke_color')}
                       <ColorPicker
                         value={subActive != null ? (shapeObj.paths[subActive]?.stroke || shapeObj.stroke || KONVA_COL.textMain) : (shapeObj.stroke || KONVA_COL.textMain)}
-                        onChange={c => subActive != null
+                        onChange={c => pintaStroke(c) ?? (subActive != null
                           ? updateShape({ paths: shapeObj.paths.map((p, i) => i === subActive ? { ...p, stroke: c } : p) })
-                          : updateShape({ stroke: c, ...(shapeObj.type === 'arrow' ? { fill: c } : {}) })} />
+                          : updateShape({ stroke: c, ...(shapeObj.type === 'arrow' ? { fill: c } : {}) }))} />
                     </div>
                     <label style={propLabel}>{t('tech_sheet.stroke_width')}
                       <input type="number" min={0.5} max={5} step={0.5} value={shapeObj.strokeWidth || (shapeObj.type === 'arrow' ? 1.5 : 1)}
-                        onChange={e => updateShape({ strokeWidth: Number(e.target.value) || 1 })} style={propInput} />
+                        onChange={e => pintaStrokeWidth(e.target.value) ?? updateShape({ strokeWidth: Number(e.target.value) || 1 })} style={propInput} />
                     </label>
                     {/* COMMIT 4: puntes per element (arrow i path). Escriu ambdós camps perquè
                         prevalguin sobre el legacy arrow2 (retrocompat via headConfig). */}
@@ -5349,20 +5348,17 @@ export default function TechSheetEditor() {
                         </div>
                       )
                     })()}
-                    </BlocEnPausa>
                   </Contenidor>
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'path') && (
                   <Contenidor titol={t('tech_sheet.sec_fill')} icona="ti-color-swatch" fitContent>
-                    <BlocEnPausa pausa={panelLockedForEdit} motiu={t('tech_sheet.panel_paused_editing')}>
                     <div style={propLabel}>{t('tech_sheet.fill')}
                       <ColorPicker
                         value={subActive != null ? (selObj.paths[subActive]?.fill || selObj.fill || KONVA_COL.white) : (selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : KONVA_COL.white)}
-                        onChange={c => subActive != null
+                        onChange={c => pintaFill(c) ?? (subActive != null
                           ? updateObject(selObj.id, { paths: selObj.paths.map((p, i) => i === subActive ? { ...p, fill: c } : p) })
-                          : updateObject(selObj.id, { fill: c })} />
+                          : updateObject(selObj.id, { fill: c }))} />
                     </div>
-                    </BlocEnPausa>
                   </Contenidor>
                 )}
                 {selObj.type === 'data_block' && (
@@ -5462,10 +5458,12 @@ export default function TechSheetEditor() {
                 )}
               </>
             )}
-            {/* TAB CAMPS (S5-1): catàleg clicable → insereix un xip {label} a (20,20)mm.
-                Es resol server-side en instanciar un document des de la plantilla. */}
-            {dockTab === 'fields' && locked && templateMode && (
-              <>
+            {/* CAMPS (S5-1): catàleg clicable → insereix un xip {label} a (20,20)mm. Es resol
+                server-side en instanciar un document des de la plantilla. Només en mode
+                plantilla: un xip {camp} dins un document normal no significa res i el PDF
+                l'imprimiria literalment. */}
+            {locked && templateMode && (
+              <Contenidor titol={t('tech_sheet.dock_fields')} icona="ti-forms" defaultOpen={false} fitContent>
                 <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.fields_hint')}</p>
                 <div style={{ border: `1px solid ${COL.border}`, borderRadius: 5, overflow: 'hidden' }}>
                   {FIELD_CATALOG.map(f => (
@@ -5477,7 +5475,7 @@ export default function TechSheetEditor() {
                     </button>
                   ))}
                 </div>
-              </>
+              </Contenidor>
             )}
           </div>
           </>)}
