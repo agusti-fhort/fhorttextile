@@ -2568,7 +2568,7 @@
     "lib_table_insert": "Inserir «{{nom}}»",
     "lib_table_no_fitting": "El model no té cap sessió de mesures: no hi ha dades per omplir la taula.",
     "lib_files": "Arxius del model ({{n}})",
-    "lib_files_empty": "El model no té cap altre arxiu.",
+    "lib_files_none_insertable": "Cap imatge inserible al model.",
     "lib_pieces": "Peces de patró",
     "pom_cota_hint": "Acotar «{{nom}}»: dos clics al llenç (A → B)",
     "keep_ratio": "Mantenir proporció",

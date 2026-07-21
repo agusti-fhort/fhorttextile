@@ -4042,12 +4042,21 @@ export default function TechSheetEditor() {
     { k: 'custom', icon: 'ti-table-plus', label: t('tech_sheet.table_variant_custom'), ok: true, motiu: '' },
   ]
 
+  // R5 — a la biblioteca NOMÉS hi entra el que es pot inserir de veritat. `addModelFitxer`
+  // fabrica un objecte `image` a partir dels bytes del fitxer: oferir-hi un PDF, un XLSX o un
+  // .ftt no era una llista incompleta, era un botó que no podia funcionar. El sedàs és
+  // l'extensió (svg/png/jpg/jpeg/webp/gif), el mateix que ja fa servir l'AssetNavigator.
+  const fitxersInseribles = useMemo(
+    () => (fitxers || []).filter(f => GEOMETRIA_INSERIBLE.test(f.nom_fitxer || '')),
+    [fitxers])
+  // Dins dels inseribles, els marcats com a geometria van a la seva persiana i la resta
+  // (fotos, referències) a Arxius. Cap fitxer pot sortir a les dues ni a cap.
   const fitxersSketch = useMemo(
-    () => (fitxers || []).filter(f => TIPUS_GEOMETRIA.includes(f.tipus) || GEOMETRIA_INSERIBLE.test(f.nom_fitxer || '')),
-    [fitxers])
+    () => fitxersInseribles.filter(f => TIPUS_GEOMETRIA.includes(f.tipus)),
+    [fitxersInseribles])
   const fitxersAltres = useMemo(
-    () => (fitxers || []).filter(f => !(TIPUS_GEOMETRIA.includes(f.tipus) || GEOMETRIA_INSERIBLE.test(f.nom_fitxer || ''))),
-    [fitxers])
+    () => fitxersInseribles.filter(f => !TIPUS_GEOMETRIA.includes(f.tipus)),
+    [fitxersInseribles])
 
   const docPalette = useMemo(() => {
     const vist = []
@@ -4950,7 +4959,7 @@ export default function TechSheetEditor() {
 
             <Contenidor titol={t('tech_sheet.lib_files', { n: fitxersAltres.length })} icona="ti-folder" defaultOpen={false} pes={1}>
               {fitxersAltres.length === 0
-                ? <p style={libEmpty}>{t('tech_sheet.lib_files_empty')}</p>
+                ? <p style={libEmpty}>{t('tech_sheet.lib_files_none_insertable')}</p>
                 : fitxersAltres.map(f => (
                   <button key={f.id} type="button" onClick={() => addModelFitxer(f)} title={f.nom_fitxer} style={libRow}>
                     <i className="ti ti-file" style={libIcon} />

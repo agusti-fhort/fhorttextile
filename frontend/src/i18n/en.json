@@ -2568,7 +2568,7 @@
     "lib_table_insert": "Insert \"{{nom}}\"",
     "lib_table_no_fitting": "This model has no fitting session: there is no data to fill the table.",
     "lib_files": "Model files ({{n}})",
-    "lib_files_empty": "This model has no other file.",
+    "lib_files_none_insertable": "No insertable image in this model.",
     "lib_pieces": "Pattern pieces",
     "pom_cota_hint": "Dimension \"{{nom}}\": two clicks on the canvas (A → B)",
     "keep_ratio": "Keep ratio",

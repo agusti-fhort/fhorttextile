@@ -2568,7 +2568,7 @@
     "lib_table_insert": "Insertar «{{nom}}»",
     "lib_table_no_fitting": "El modelo no tiene ninguna sesión de medidas: no hay datos para rellenar la tabla.",
     "lib_files": "Archivos del modelo ({{n}})",
-    "lib_files_empty": "El modelo no tiene ningún otro archivo.",
+    "lib_files_none_insertable": "Ninguna imagen insertable en el modelo.",
     "lib_pieces": "Piezas de patrón",
     "pom_cota_hint": "Acotar «{{nom}}»: dos clics en el lienzo (A → B)",
     "keep_ratio": "Mantener proporción",
