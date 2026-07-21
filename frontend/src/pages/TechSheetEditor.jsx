@@ -431,7 +431,13 @@ const T_PAD = 2 * MM_TO_PX
 // vora del bloc i confondria "columna de referència" amb "objecte seleccionat".
 const TBL = {
   HDR_BG: '#111827', HDR_TEXT: KONVA_COL.white, ROW_EVEN: KONVA_COL.white, ROW_ODD: '#f7f7f7',
-  ROW_BORDER: KONVA_COL.border, OUTER: KONVA_COL.gold, REF: '#dc2626', NOM: '#6b7280', VAL: KONVA_COL.textMain,
+  ROW_BORDER: KONVA_COL.border, REF: '#dc2626', NOM: '#6b7280', VAL: KONVA_COL.textMain,
+  // X3 — el marc exterior de la taula era gold i cridava més que la taula: el gold és el
+  // color de SELECCIÓ de l'editor, i una taula sempre emmarcada en gold semblava sempre
+  // seleccionada. Passa a la tinta discreta de la taula (la mateixa negra de la capçalera),
+  // amb el gruix mínim dels filets interiors: el marc tanca, no decora.
+  FRAME: '#111827', FRAME_SW: 0.5,
+  BASE_HDR_BG: KONVA_COL.gold,
   BASE_BG: '#e5e7eb', BASE_HDR: '#dc2626', BREAK: '#dc2626', DELTA: '#185fa5',
 }
 
@@ -473,7 +479,7 @@ function buildTablePrimitives(d) {
   sizes.forEach((sl, si) => {
     const isBase = sl === baseSize
     // Cel·la de capçalera de la talla base: fons gold + text blanc.
-    if (isBase) prims.push({ t: 'r', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, fill: TBL.OUTER })
+    if (isBase) prims.push({ t: 'r', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, fill: TBL.BASE_HDR_BG })
     prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y: 0, w: T_VAL_W, h: T_HDR_H, text: isBase ? `${sl}*` : sl, fill: isBase ? KONVA_COL.white : TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
   })
   prims.push({ t: 't', x: deltaX0, y: 0, w: T_DELTA_W, h: T_HDR_H, text: 'Δ', fill: TBL.HDR_TEXT, size: T_FONT, align: 'center', mid: true })
@@ -509,7 +515,7 @@ function buildTablePrimitives(d) {
   ;[T_NOM_W, ...sizes.map(() => T_VAL_W), T_DELTA_W].forEach(w => {
     prims.push({ t: 'l', points: [cx, 0, cx, totalH], stroke: TBL.ROW_BORDER, sw: 0.5 }); cx += w
   })
-  prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: totalH, stroke: TBL.OUTER, sw: 1.5 })
+  prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: totalH, stroke: TBL.FRAME, sw: TBL.FRAME_SW })
   return { prims, totalW, totalH }
 }
 
@@ -598,7 +604,7 @@ function buildTableCellPrimitives(obj) {
   // Separadors verticals (interns) + vora exterior
   let cxV = cw[0] || 0
   cw.slice(1).forEach(w => { prims.push({ t: 'l', points: [cxV, 0, cxV, totalH], stroke: TBL.ROW_BORDER, sw: 0.5 }); cxV += w })
-  prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: totalH, stroke: TBL.OUTER, sw: 1.5 })
+  prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: totalH, stroke: TBL.FRAME, sw: TBL.FRAME_SW })
   return { prims, totalW, totalH }
 }
 
@@ -951,7 +957,7 @@ function GradedTableNode({ tableData, groupProps, isSelected }) {
   return (
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
-      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={TBL.OUTER} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
+      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={KONVA_COL.gold} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
   )
 }
@@ -967,7 +973,7 @@ function TableNode({ obj, groupProps, isSelected }) {
     <Group {...groupProps}>
       {prims.map((p, i) => <PrimNode key={i} p={p} />)}
       {pending.map((p, i) => <PrimNode key={`pv${i}`} p={p} />)}
-      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={TBL.OUTER} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
+      {isSelected && <Rect x={0} y={0} width={totalW} height={totalH} stroke={KONVA_COL.gold} strokeWidth={2} dash={[4, 3]} fill="transparent" listening={false} />}
     </Group>
   )
 }
