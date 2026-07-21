@@ -32,6 +32,10 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [seedOffer, setSeedOffer] = useState(false)
+  // F2.1 — quina sembra s'ofereix: 'values' (l'item porta mides base → ITEM_STANDARD) o 'empty'
+  // (l'item no en porta → llista de POMs buida, origen TEMPLATE). Les dues escriuen a BD, i per
+  // tant les dues es CONFIRMEN. Entrar a mirar no escriu res.
+  const [seedKind, setSeedKind] = useState('values')
   const [seedBusy, setSeedBusy] = useState(false)
   const [savingPom, setSavingPom] = useState(false)
   // Confirmació de Gravar POM (paral·lel a "Propagar"): missatge SIMPLE la 1a vegada; ADVERTÈNCIA si
@@ -130,11 +134,13 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
         } catch { /* sense oferta */ }
 
         if (!alive) return
+        // F2.1 — la sembra és un ACTE DEL TÈCNIC, mai un efecte de muntatge. Abans, entrar al tab
+        // amb la taula buida feia el POST materialitzar-poms sol: mirar escrivia a BD. Ara el panell
+        // OFEREIX la sembra (amb els POMs proposats a la vista) i espera la confirmació.
         if (hasValues) {
-          setMode('selector'); setSeedOffer(true)
+          setSeedKind('values'); setMode('selector'); setSeedOffer(true)
         } else if (rows.length === 0) {
-          fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders })
-            .then(() => reloadTable('selector')).catch(() => reloadTable('selector'))
+          setSeedKind('empty'); setMode('selector'); setSeedOffer(true)
         } else {
           setMode('selector')
         }
@@ -201,16 +207,21 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
 
       {seedOffer && (
         <Modal
-          title={t('model_measurements.seed_title')}
-          subtitle={t('model_measurements.seed_subtitle')}
+          title={t(`model_measurements.seed_title${seedKind === 'empty' ? '_empty' : ''}`)}
+          subtitle={t(`model_measurements.seed_subtitle${seedKind === 'empty' ? '_empty' : ''}`)}
           cancelLabel={t('model_measurements.seed_cancel')}
-          confirmLabel={seedBusy ? t('common.saving') : t('model_measurements.seed_confirm')}
+          confirmLabel={seedBusy
+            ? t('common.saving')
+            : t(`model_measurements.seed_confirm${seedKind === 'empty' ? '_empty' : ''}`)}
           onCancel={cancelSeed}
           onConfirm={confirmSeed}
           confirmDisabled={seedBusy}
         >
           <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: 0 }}>
-            {t('model_measurements.seed_body')}
+            {t(`model_measurements.seed_body${seedKind === 'empty' ? '_empty' : ''}`)}
+          </p>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+            {t('model_measurements.seed_count', { total: pomsSuggerits.length })}
           </p>
         </Modal>
       )}

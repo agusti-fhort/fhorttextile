@@ -2392,7 +2392,12 @@
     "sealed_title": "Grading version v{{v}} is approved (sealed for production).",
     "sealed_hint": "What has been approved does not change: to edit it, create a new version.",
     "sealed_new_version": "Create new version",
-    "sealed_bump_err": "The new version could not be created."
+    "sealed_bump_err": "The new version could not be created.",
+    "seed_title_empty": "Create the item’s POM list?",
+    "seed_subtitle_empty": "The item has no standard base measurements: the POM list will be created without values.",
+    "seed_body_empty": "The rows for the POMs the item declares will be created, empty (to fill in by hand or by import). Measurements you already touched on the model are not overwritten.",
+    "seed_confirm_empty": "Create the list",
+    "seed_count": "POMs of the item: {{total}}."
   },
   "model_fabric": {
     "err_close_table": "Could not close the table.",

@@ -2392,7 +2392,12 @@
     "sealed_title": "La versión v{{v}} del escalado está aprobada (sellada en producción).",
     "sealed_hint": "Lo que ya se ha aprobado no cambia: para editarlo, crea una versión nueva.",
     "sealed_new_version": "Crear versión nueva",
-    "sealed_bump_err": "No se ha podido crear la versión nueva."
+    "sealed_bump_err": "No se ha podido crear la versión nueva.",
+    "seed_title_empty": "¿Crear la lista de POMs del item?",
+    "seed_subtitle_empty": "El item no tiene medidas base estándar: se creará la lista de POMs sin valores.",
+    "seed_body_empty": "Se crearán las filas de los POMs que el item declara, vacías (para rellenar a mano o por importación). Las medidas que ya hayas tocado en el modelo no se pisan.",
+    "seed_confirm_empty": "Crear la lista",
+    "seed_count": "POMs del item: {{total}}."
   },
   "model_fabric": {
     "err_close_table": "No se ha podido cerrar la tabla.",

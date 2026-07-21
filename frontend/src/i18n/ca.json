@@ -2392,7 +2392,12 @@
     "sealed_title": "La versió v{{v}} de l'escalat està aprovada (segellada a producció).",
     "sealed_hint": "El que ja s'ha aprovat no canvia: per editar-lo, crea'n una versió nova.",
     "sealed_new_version": "Crear nova versió",
-    "sealed_bump_err": "No s'ha pogut crear la versió nova."
+    "sealed_bump_err": "No s'ha pogut crear la versió nova.",
+    "seed_title_empty": "Crear la llista de POMs de l'item?",
+    "seed_subtitle_empty": "L'item no té mides base estàndard: es crearà la llista de POMs sense valors.",
+    "seed_body_empty": "Es crearan les files dels POMs que l'item declara, buides (per omplir a mà o per import). Les mides que ja hagis tocat al model no es trepitgen.",
+    "seed_confirm_empty": "Crear la llista",
+    "seed_count": "POMs de l'item: {{total}}."
   },
   "model_fabric": {
     "err_close_table": "No s'ha pogut tancar la taula.",
