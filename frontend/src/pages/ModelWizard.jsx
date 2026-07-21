@@ -559,6 +559,15 @@ export default function ModelWizard() {
                                            background: 'var(--gray-l)', color: 'var(--gray)' }}>
                               {t('model_wizard.canonical')}
                             </span>}
+                        {/* F1.4 — quin d'aquests sistemes és EL DEL MODEL. No es filtra per client
+                            (D1: les eines del tècnic s'ofereixen senceres i s'acoten amb informació,
+                            no amb ocultació); es marca, que és el que evitava el parany del 174. */}
+                        {isEditMode && modelSizeSystemId === s.id && (
+                          <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '1px 6px', borderRadius: 999,
+                                         background: 'var(--warn-bg)', color: 'var(--warn)', border: '0.5px solid var(--warn)' }}>
+                            {t('model_wizard.model_size_system')}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{s.codi}</div>
                       {ageMin != null && ageMax != null && ageMax > 0 && (

@@ -940,7 +940,8 @@
     "grading_needs_system": "Elige primero un sistema de tallas (paso 3) para poder elegir la graduación.",
     "grading_needs_run": "Elige las tallas del run (paso 3) para poder elegir la graduación.",
     "grading_needs_base": "Falta la TALLA BASE: elígela en el paso 3 (debe ser una de las tallas del run).",
-    "grading_missing_axes": "Todavía no se puede buscar graduación: falta {{eixos}}."
+    "grading_missing_axes": "Todavía no se puede buscar graduación: falta {{eixos}}.",
+    "model_size_system": "Sistema del modelo"
   },
   "models_list": {
     "title": "Modelos",

@@ -940,7 +940,8 @@
     "grading_needs_system": "Tria primer un sistema de talles (pas 3) per poder triar la graduació.",
     "grading_needs_run": "Tria les talles del run (pas 3) per poder triar la graduació.",
     "grading_needs_base": "Falta la TALLA BASE: tria-la al pas 3 (ha de ser una de les talles del run).",
-    "grading_missing_axes": "Encara no es pot buscar graduació: falta {{eixos}}."
+    "grading_missing_axes": "Encara no es pot buscar graduació: falta {{eixos}}.",
+    "model_size_system": "Sistema del model"
   },
   "models_list": {
     "title": "Models",
