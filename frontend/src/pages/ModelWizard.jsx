@@ -74,6 +74,7 @@ export default function ModelWizard() {
   const [modelSizeSystemId, setModelSizeSystemId] = useState(null)
   const [modelSizeRun, setModelSizeRun] = useState('')
   const [modelBaseSize, setModelBaseSize] = useState(null)
+  const [modelSizeSystemNom, setModelSizeSystemNom] = useState('')
   const [sizingHydrated, setSizingHydrated] = useState(false)
   // Bloc 4 — GRADUACIÓ (sprint WIZARD-COMPLET). Eixos target/construction/grup + size_system venen
   // fixats dels passos 2-3 (arbre únic: el grup el mana l'item, no es re-tria); l'usuari només tria FIT.
@@ -93,7 +94,9 @@ export default function ModelWizard() {
   // LLEI 5 CAPES: el pas Talles retorna NOMÉS escala (sistema/run/base). La graduació (capa 4) es
   // tria per separat a la fitxa (RuleSetCard→update-step2). Aquí NO s'arrossega grading_rule_set_id.
   const sizingResult = useMemo(() => (
-    (selSystem && selectedSizes.length > 0 && baseSize) ? {
+    // F1.3 — la base ha de ser DINS el run: una base fora del run no és una escala vàlida
+    // (abans passava el filtre i el pas 4 s'obria amb un Guardar gris i cap motiu visible).
+    (selSystem && selectedSizes.length > 0 && baseSize && selectedSizes.includes(baseSize)) ? {
       size_system_id: selSystem.id,
       size_run: selectedSizes.join('·'),
       base_size: baseSize,
@@ -102,6 +105,11 @@ export default function ModelWizard() {
   ), [selSystem, selectedSizes, baseSize])
 
   const resetSizing = () => { setSelSystem(null); setSelectedSizes([]); setBaseSize(null); setSizeDefs([]) }
+
+  // F1.3 — quina de les tres peces del pas 3 falta (l'ordre és el del flux: sistema → run → base).
+  const sizingMissing = !selSystem ? 'system'
+    : (selectedSizes.length === 0 ? 'run'
+      : ((!baseSize || !selectedSizes.includes(baseSize)) ? 'base' : null))
 
   // Coherència Onada 1+2: en CANVIAR el target, si la família seleccionada ja no és al catàleg filtrat
   // pel nou target, es neteja família+item (+graduació, que en depèn del garment). Si SÍ hi és, es
@@ -151,6 +159,7 @@ export default function ModelWizard() {
       setModelSizeSystemId(d.size_system ?? null)
       setModelSizeRun(d.size_run_model || '')
       setModelBaseSize(d.base_size_label || null)
+      setModelSizeSystemNom(d.size_system_nom || '')
       // Bloc 4 — graduació vigent (edició): grup canònic (sempre present via garment_type.grup) i
       // ruleset actual, perquè el pas 4 mostri la selecció i permeti canviar-la (cas Regular→Slim).
       setModelGarmentGrup(d.garment_type_grup || null)
@@ -277,6 +286,15 @@ export default function ModelWizard() {
   )
 
   const gradingAxes = { ...nodeAxes, fit }
+
+  // F1.3 — eixos del matching estricte que encara no estan resolts. Sense això, qualsevol eix a null
+  // buidava la llista i la UI ho reportava com «no hi ha cap joc de regles» (motiu fals).
+  const eixosGradingMancants = [
+    !target && t('grading.axis_target'),
+    !construction && t('grading.axis_construction'),
+    !garmentGroupCodi && t('grading.axis_group'),
+    !sizingResult && t('grading.axis_size_system'),
+  ].filter(Boolean)
 
   // B1 — coincidències estrictes per als eixos FIXATS (incloent el fit triat). Consumeix el matcher
   // canònic de gradingAxes.js (no es duplica cap lògica aquí).
@@ -586,7 +604,9 @@ export default function ModelWizard() {
               <ReadChip label={t('model_wizard.target')} value={target ? t(`model_wizard.target_${target}`) : '—'} />
               <ReadChip label={t('model_wizard.construction')} value={construction ? t(`model_wizard.construction_${construction}`) : '—'} />
               <ReadChip label={t('model_wizard.grading_group')} value={garmentGroupCodi || '—'} />
-              <ReadChip label={t('model_wizard.grading_system')} value={sizingResult?.size_system_nom || '—'} />
+              {/* F1.3 — fallback al sistema DEL MODEL (com fa la fitxa, ModelSheet): un model que en té
+                  un no pot pintar '—'. El guió queda per als models que de debò no en tenen. */}
+              <ReadChip label={t('model_wizard.grading_system')} value={sizingResult?.size_system_nom || modelSizeSystemNom || '—'} />
             </div>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', cursor: 'pointer', color: 'var(--text-main)' }}>
@@ -595,15 +615,25 @@ export default function ModelWizard() {
               {t('model_wizard.no_grading')}
             </label>
 
+            {/* F1.3 — el missatge diu QUÈ falta de veritat. Abans deia sempre «defineix les talles»
+                encara que el que faltés fos només la talla base (risc #2 de la diagnosi 174). */}
             {!noGrading && !sizingResult && (
-              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>{t('model_wizard.grading_needs_sizes')}</p>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>
+                {t(`model_wizard.grading_needs_${sizingMissing}`)}
+              </p>
             )}
 
             {!noGrading && sizingResult && (
               <>
                 <Field label={t('model_wizard.pick_fit')}>
                   {fitOptions.length === 0 ? (
-                    <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>{t('model_wizard.no_grading_available')}</p>
+                    <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>
+                      {/* F1.3 — «cap graduació disponible» era el motiu FALS quan el que faltava era un
+                          eix (matchers que tornen [] en silenci, risc #4). Es diu quin eix falta. */}
+                      {eixosGradingMancants.length > 0
+                        ? t('model_wizard.grading_missing_axes', { eixos: eixosGradingMancants.join(' · ') })
+                        : t('model_wizard.no_grading_available')}
+                    </p>
                   ) : (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {fitOptions.map(f => (

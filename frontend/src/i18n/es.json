@@ -936,7 +936,11 @@
     "grading_needs_sizes": "Define primero las tallas (paso 3) para poder elegir la graduación.",
     "no_grading_available": "No hay ningún juego de reglas que coincida con esta combinación de prenda y tallas. Puedes continuar sin graduación y añadirla más tarde.",
     "grading_auto_proposed": "Propuesto automáticamente (única coincidencia). Puedes cambiarlo o elegir «Sin graduación».",
-    "size_run_replace_confirm": "El sistema «{{sistema}}» no contiene todas las tallas del run actual. Esto sustituirá el run de {{from}} tallas por {{to}} tallas y reasignará la talla base. ¿Quieres continuar?"
+    "size_run_replace_confirm": "El sistema «{{sistema}}» no contiene todas las tallas del run actual. Esto sustituirá el run de {{from}} tallas por {{to}} tallas y reasignará la talla base. ¿Quieres continuar?",
+    "grading_needs_system": "Elige primero un sistema de tallas (paso 3) para poder elegir la graduación.",
+    "grading_needs_run": "Elige las tallas del run (paso 3) para poder elegir la graduación.",
+    "grading_needs_base": "Falta la TALLA BASE: elígela en el paso 3 (debe ser una de las tallas del run).",
+    "grading_missing_axes": "Todavía no se puede buscar graduación: falta {{eixos}}."
   },
   "models_list": {
     "title": "Modelos",
@@ -3093,7 +3097,13 @@
     "origen_IMPORT": "Importado",
     "origen_none": "No clasificado",
     "step_family": "Familia",
-    "step_item": "Ítem"
+    "step_item": "Ítem",
+    "axis_target": "el target",
+    "axis_construction": "la construcción",
+    "axis_group": "el grupo de prenda",
+    "axis_fit": "el fit",
+    "axis_size_system": "el sistema de tallas",
+    "picker_missing_axes": "Para listar juegos de reglas falta {{eixos}}."
   },
   "model_phases": {
     "Nou": "Nuevo",

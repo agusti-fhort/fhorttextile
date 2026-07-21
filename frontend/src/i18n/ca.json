@@ -936,7 +936,11 @@
     "grading_needs_sizes": "Defineix primer les talles (pas 3) per poder triar la graduació.",
     "no_grading_available": "No hi ha cap joc de regles que casi amb aquesta combinació de peça i talles. Pots continuar sense graduació i afegir-la més tard.",
     "grading_auto_proposed": "Proposat automàticament (única coincidència). Pots canviar-lo o triar «Sense graduació».",
-    "size_run_replace_confirm": "El sistema «{{sistema}}» no conté totes les talles del run actual. Això substituirà el run de {{from}} talles per {{to}} talles i reassignarà la talla base. Vols continuar?"
+    "size_run_replace_confirm": "El sistema «{{sistema}}» no conté totes les talles del run actual. Això substituirà el run de {{from}} talles per {{to}} talles i reassignarà la talla base. Vols continuar?",
+    "grading_needs_system": "Tria primer un sistema de talles (pas 3) per poder triar la graduació.",
+    "grading_needs_run": "Tria les talles del run (pas 3) per poder triar la graduació.",
+    "grading_needs_base": "Falta la TALLA BASE: tria-la al pas 3 (ha de ser una de les talles del run).",
+    "grading_missing_axes": "Encara no es pot buscar graduació: falta {{eixos}}."
   },
   "models_list": {
     "title": "Models",
@@ -3093,7 +3097,13 @@
     "origen_IMPORT": "Importat",
     "origen_none": "No classificat",
     "step_family": "Família",
-    "step_item": "Item"
+    "step_item": "Item",
+    "axis_target": "el target",
+    "axis_construction": "la construcció",
+    "axis_group": "el grup de peça",
+    "axis_fit": "el fit",
+    "axis_size_system": "el sistema de talles",
+    "picker_missing_axes": "Per llistar jocs de regles falta {{eixos}}."
   },
   "model_phases": {
     "Nou": "Nou",

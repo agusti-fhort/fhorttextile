@@ -31,16 +31,27 @@ export default function RuleSetPicker({
     [ruleSets, axes, garmentGroupCodiById, strict, sizeSystemId],
   )
 
-  const ready = axes && axes.target && axes.construction && axes.fit && axes.garmentGroup
-    && (!strict || sizeSystemId != null)
-  if (!ready) return null
+  // F1.3 — quan falta un eix, el picker JA NO desapareix en silenci (DIAGNOSI_MODEL_174, risc #5):
+  // pinta un estat buit dient QUINS eixos li falten. El silenci absolut es llegia com «el botó no respon».
+  const missing = [
+    !axes?.target && t('grading.axis_target'),
+    !axes?.construction && t('grading.axis_construction'),
+    !axes?.garmentGroup && t('grading.axis_group'),
+    !axes?.fit && t('grading.axis_fit'),
+    strict && sizeSystemId == null && t('grading.axis_size_system'),
+  ].filter(Boolean)
+
+  if (missing.length > 0) {
+    return (
+      <div style={emptyBox}>
+        {t('grading.picker_missing_axes', { eixos: missing.join(' · ') })}
+      </div>
+    )
+  }
 
   if (matches.length === 0) {
     return (
-      <div style={{
-        marginTop: 8, padding: '2rem', border: '1px dashed var(--border)', borderRadius: 8,
-        textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
-      }}>
+      <div style={emptyBox}>
         {t('grading.no_match')}
         <div style={{ marginTop: 8 }}>
           {onEmptyAction
@@ -72,6 +83,11 @@ export default function RuleSetPicker({
       ))}
     </div>
   )
+}
+
+const emptyBox = {
+  marginTop: 8, padding: '2rem', border: '1px dashed var(--border)', borderRadius: 8,
+  textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
 }
 
 function PickCard({ rs, selected, actionLabel, onPick }) {
