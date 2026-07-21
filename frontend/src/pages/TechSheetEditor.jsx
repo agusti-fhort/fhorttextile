@@ -11,6 +11,7 @@ import { PDFDocument } from 'pdf-lib'
 import FhortLogo from '../components/brand/FhortLogo'
 import FilePicker from '../components/model/FilePicker'
 import AssetNavigator from '../components/assets/AssetNavigator'
+import Contenidor from '../components/ui/Contenidor'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 import { booleanOp } from './ftt/paperbool'
@@ -4895,9 +4896,8 @@ export default function TechSheetEditor() {
               <>
                 <SectionTitle>{t('tech_sheet.element')} · {selObj.type}</SectionTitle>
                 {selDim && (
-                  <div style={{ border: `1px solid ${COL.border}`, borderRadius: 5, background: 'var(--bg-card)', padding: 8, marginBottom: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <span style={{ color: COL.gold, fontSize: 'var(--fs-label)', fontWeight: 700, textTransform: 'uppercase' }}>{t('tech_sheet.dimensions_position')}</span>
+                  <Contenidor titol={t('tech_sheet.dimensions_position')} icona="ti-ruler-2" fitContent>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 6 }}>
                       <button type="button" onClick={() => setRatioLocked(v => !v)} title={t('tech_sheet.keep_ratio')}
                         style={{ width: 24, height: 22, border: `1px solid ${ratioLocked ? COL.gold : COL.border}`, borderRadius: 4, background: ratioLocked ? COL.goldPale : COL.field, color: ratioLocked ? COL.gold : COL.textMuted, cursor: 'pointer' }}>
                         <i className={`ti ${ratioLocked ? 'ti-lock' : 'ti-lock-open'}`} aria-hidden="true" />
@@ -4925,7 +4925,7 @@ export default function TechSheetEditor() {
                           onChange={e => moveObjectTo(selObj, 'y', e.target.value)} style={propInput} />
                       </label>
                     </div>
-                  </div>
+                  </Contenidor>
                 )}
                 {textObj && (() => {
                   // Peça 3 / A3: tipografia completa. Opera sobre textObj (pot ser el fill 'text'
@@ -4939,7 +4939,7 @@ export default function TechSheetEditor() {
                   const setStyle = (bold, italic) => updateText({ fontStyle: [bold && 'bold', italic && 'italic'].filter(Boolean).join(' ') || 'normal' })
                   const tbtn = (on) => ({ flex: 1, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? COL.gold : COL.border}`, borderRadius: 5, background: on ? COL.goldPale : COL.field, color: on ? COL.gold : COL.textMain, cursor: 'pointer', fontFamily: FONT, fontSize: 'var(--fs-body)' })
                   return (
-                    <>
+                    <Contenidor titol={t('tech_sheet.sec_typography')} icona="ti-typography" fitContent>
                       {textGroupId && <div style={{ fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>{t('tech_sheet.group_text')}</div>}
                       {/* Fix #2: contingut del text editable des del panell (via updateText → història). */}
                       <label style={propLabel}>{t('tech_sheet.group_text_content')}
@@ -4986,13 +4986,13 @@ export default function TechSheetEditor() {
                             onChange={c => updateText({ bgFill: c })} />
                         </div>
                       )}
-                    </>
+                    </Contenidor>
                   )
                 })()}
                 {/* Fix #3: un sol bloc de traç/puntes que apunta a shapeObj — l'objecte de nivell
                     superior o el fill arrow/path d'un grup (cota) — i muta via updateShape. */}
                 {shapeObj && (
-                  <>
+                  <Contenidor titol={t('tech_sheet.sec_stroke')} icona="ti-line" fitContent>
                     {shapeObj.type === 'path' && subActive != null && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>
                         <span>{t('tech_sheet.subpath_active', { n: subActive + 1 })}</span>
@@ -5039,16 +5039,18 @@ export default function TechSheetEditor() {
                         </div>
                       )
                     })()}
-                  </>
+                  </Contenidor>
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'path') && (
-                  <div style={propLabel}>{t('tech_sheet.fill')}
-                    <ColorPicker
-                      value={subActive != null ? (selObj.paths[subActive]?.fill || selObj.fill || KONVA_COL.white) : (selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : KONVA_COL.white)}
-                      onChange={c => subActive != null
-                        ? updateObject(selObj.id, { paths: selObj.paths.map((p, i) => i === subActive ? { ...p, fill: c } : p) })
-                        : updateObject(selObj.id, { fill: c })} />
-                  </div>
+                  <Contenidor titol={t('tech_sheet.sec_fill')} icona="ti-color-swatch" fitContent>
+                    <div style={propLabel}>{t('tech_sheet.fill')}
+                      <ColorPicker
+                        value={subActive != null ? (selObj.paths[subActive]?.fill || selObj.fill || KONVA_COL.white) : (selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : KONVA_COL.white)}
+                        onChange={c => subActive != null
+                          ? updateObject(selObj.id, { paths: selObj.paths.map((p, i) => i === subActive ? { ...p, fill: c } : p) })
+                          : updateObject(selObj.id, { fill: c })} />
+                    </div>
+                  </Contenidor>
                 )}
                 {selObj.type === 'data_block' && (
                   <label style={propLabel}>{t('tech_sheet.scale_pct')}
@@ -5123,10 +5125,12 @@ export default function TechSheetEditor() {
                   </>
                 )}
                 {!blocksTransform(selObj) && (
-                  <label style={propLabel}>{t('tech_sheet.rotation_deg')}
-                    <input type="number" min={0} max={360} step={1} value={Math.round(selObj.rotation || 0)}
-                      onChange={e => updateObject(selObj.id, { rotation: ((Number(e.target.value) || 0) % 360 + 360) % 360 })} style={propInput} />
-                  </label>
+                  <Contenidor titol={t('tech_sheet.sec_rotation')} icona="ti-rotate" fitContent>
+                    <label style={propLabel}>{t('tech_sheet.rotation_deg')}
+                      <input type="number" min={0} max={360} step={1} value={Math.round(selObj.rotation || 0)}
+                        onChange={e => updateObject(selObj.id, { rotation: ((Number(e.target.value) || 0) % 360 + 360) % 360 })} style={propInput} />
+                    </label>
+                  </Contenidor>
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
                   <button onClick={() => deleteObject(selObj.id)} disabled={nodeMode}
