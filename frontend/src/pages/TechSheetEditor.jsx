@@ -1816,6 +1816,11 @@ export default function TechSheetEditor() {
   const [flyoutRect, setFlyoutRect] = useState(null)   // rect del botó (popover en position:fixed)
   const [ribbonGroup, setRibbonGroup] = useState('file')
   const [dockTab, setDockTab] = useState('properties')   // D2: pestanya activa del dock dret
+  // MODE PLANTILLA — no és un estat nou de React inventat per a la sessió: és el `kind` del
+  // manifest del .ftt, que el format ja escrivia des del primer dia i que ningú llegia. Amb ell
+  // s'engega el mecanisme de render de placeholders (`placeholderMode`), que també estava
+  // construït i mort. Sobreviu al desat i al reobrir perquè viu al document, no a la pàgina.
+  const [templateMode, setTemplateMode] = useState(false)
   const [importMode, setImportMode] = useState(null)     // IMP-1: null | 'image' | 'garment' (panell d'import al dock)
   const [importFile, setImportFile] = useState(null)     // IMP-2: fitxer triat (no s'insereix fins a "Inserir")
   const [importNavOpen, setImportNavOpen] = useState(false)   // C5.3: AssetNavigator com a font "FTT"
@@ -2355,6 +2360,7 @@ export default function TechSheetEditor() {
           fttUrlToName.current = Object.fromEntries(Object.entries(assets).map(([n, u]) => [u, n]))
           fttMeta.current = data.document_json?.metadata || {}
           fttHeadId.current = data.fitxer?.id || fitxerId
+          setTemplateMode(data.manifest?.kind === 'template')
           setSheet(data.fitxer)   // versio ve de ModelFitxer.versio
           hydrate({ template_json: documentToV2(data.document_json, assets) })
           docCarregat.current = true   // a partir d'ara, i no abans, es pot desar
@@ -2469,7 +2475,9 @@ export default function TechSheetEditor() {
         // és el nou cap de cadena → s'hi reapunta per als propers desats i per a la versió mostrada.
         const documentJson = v2ToDocument(serializePages(pages), pageFormat, fttMeta.current, fttUrlToName.current)
         const r = await fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/`, {
-          method: 'PATCH', headers, body: JSON.stringify({ document_json: documentJson }),
+          // `kind` viatja a cada desat: és el que fa que el mode plantilla sobrevisqui al
+          // tancar l'editor (abans, cada desat el tornava a "document" en silenci).
+          method: 'PATCH', headers, body: JSON.stringify({ document_json: documentJson, kind: templateMode ? 'template' : 'document' }),
         })
         if (r.ok) { const nh = await r.json(); fttHeadId.current = nh.id; setSheet(nh); setSaveState('saved') }
         else setSaveState('error')
@@ -3675,7 +3683,19 @@ export default function TechSheetEditor() {
         method: 'POST', headers: authHeaders,
         body: JSON.stringify({ nom: saveAsTpl.nom.trim(), descripcio: saveAsTpl.descripcio || '' }),
       })
-      if (r.ok) { flash(t('tech_sheet.saved_as_template_ok')); setSaveAsTpl(null) }
+      if (r.ok) {
+        // El backend descongela abans d'empaquetar; el seu report diu QUÈ ha desmaterialitzat.
+        // Es diu, no es calla: si les taules han quedat buides, l'usuari ho ha de saber ara.
+        const rep = (await r.json())?.unfreeze_report
+        const parts = []
+        if (rep?.camps_descongelats) parts.push(t('tech_sheet.tpl_unfroze_fields', { n: rep.camps_descongelats }))
+        if (rep?.taules_desvinculades) parts.push(t('tech_sheet.tpl_unfroze_tables', { n: rep.taules_desvinculades }))
+        if (rep?.peces_despenjades) parts.push(t('tech_sheet.tpl_unfroze_pieces', { n: rep.peces_despenjades }))
+        flash(parts.length
+          ? `${t('tech_sheet.saved_as_template_ok')} · ${parts.join(' · ')}`
+          : t('tech_sheet.saved_as_template_ok'))
+        setSaveAsTpl(null)
+      }
       else flash(t('tech_sheet.save_as_template_error'))
     } catch { flash(t('tech_sheet.save_as_template_error')) }
   }
@@ -4118,6 +4138,9 @@ export default function TechSheetEditor() {
       return [
         ribbonTool({ key: 'export', icon: 'ti-file-download', label: t('tech_sheet.export_pdf'), onClick: onExport, disabled: exporting }),
         ribbonTool({ key: 'save-template', icon: 'ti-template', label: t('tech_sheet.save_as_template'), onClick: () => setSaveAsTpl({ nom: '', descripcio: '' }), disabled: !locked }),
+        // Interruptor del MODE PLANTILLA: canvia el `kind` del document (es desa al proper
+        // autosave) i, amb ell, el render de placeholders i la disponibilitat del tab Camps.
+        ribbonTool({ key: 'template-mode', icon: 'ti-forms', label: t('tech_sheet.template_mode'), onClick: () => setTemplateMode(v => { if (v) setDockTab(d => (d === 'fields' ? 'properties' : d)); return !v }), active: templateMode, title: t('tech_sheet.template_mode_title'), disabled: !locked }),
         ribbonTool({ key: 'autosave', icon: saveState === 'error' ? 'ti-alert-triangle' : 'ti-device-floppy', label: saveLabel || t('tech_sheet.autosave'), disabled: true, title: t('tech_sheet.autosave_title') }),
         ribbonTool({ key: 'version', icon: 'ti-history', label: `v${sheet?.versio ?? 1}`, disabled: true, title: t('tech_sheet.version_current') }),
       ]
@@ -4292,6 +4315,13 @@ export default function TechSheetEditor() {
           </span>
           <i className="ti ti-chevron-right" style={{ fontSize: 14 }} />
           <strong style={{ color: COL.textMain, fontWeight: 600, whiteSpace: 'nowrap' }}>{t('tech_sheet.doc_editor')}</strong>
+          {/* En mode plantilla el llenç menteix a posta (mostra {codi} en lloc del codi real):
+              cal dir-ho a la barra, o algú pensarà que la fitxa ha perdut les dades. */}
+          {templateMode && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '2px 8px', borderRadius: 6, background: COL.goldPale, border: `1px solid ${COL.gold}`, color: COL.gold, fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+              <i className="ti ti-forms" aria-hidden="true" style={{ fontSize: 12 }} />{t('tech_sheet.template_mode_badge')}
+            </span>
+          )}
         </div>
         {/* Dreta: context reaprofitat (pàgina, versió, save) + acció principal gold */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -4576,6 +4606,7 @@ export default function TechSheetEditor() {
                 {ordered.filter(o => o.id !== editingFlatId && o.visible !== false).map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
+                    placeholderMode={templateMode}
                     pageCtx={{ index: currentPage, total: pages.length }}
                     onHeaderContextMenu={locked ? ((e, ho) => { e.evt.preventDefault(); setHeaderMenu(ho.detached ? null : { x: e.evt.clientX, y: e.evt.clientY }) }) : undefined}
                     selected={selectedIds.includes(o.id)}
@@ -4761,7 +4792,9 @@ export default function TechSheetEditor() {
           {!importMode && (<>
           {/* D2: pestanyes del dock. Arquitectura oberta: afegir aquí un futur tab 'components'. */}
           <div style={{ display: 'flex', flexShrink: 0, borderBottom: `1px solid ${COL.border}` }}>
-            {[{ id: 'properties', icon: 'ti-adjustments', label: t('tech_sheet.dock_properties') }, { id: 'layers', icon: 'ti-stack-2', label: t('tech_sheet.dock_layers') }, { id: 'fields', icon: 'ti-forms', label: t('tech_sheet.dock_fields') }].map(tb => {
+            {/* El tab Camps només existeix en mode plantilla: un xip {camp} dins un document
+                normal no té cap significat i el PDF l'imprimiria literalment. */}
+            {[{ id: 'properties', icon: 'ti-adjustments', label: t('tech_sheet.dock_properties') }, { id: 'layers', icon: 'ti-stack-2', label: t('tech_sheet.dock_layers') }, ...(templateMode ? [{ id: 'fields', icon: 'ti-forms', label: t('tech_sheet.dock_fields') }] : [])].map(tb => {
               const on = dockTab === tb.id
               return (
                 <button key={tb.id} type="button" onClick={() => setDockTab(tb.id)}
@@ -5106,7 +5139,7 @@ export default function TechSheetEditor() {
             )}
             {/* TAB CAMPS (S5-1): catàleg clicable → insereix un xip {label} a (20,20)mm.
                 Es resol server-side en instanciar un document des de la plantilla. */}
-            {dockTab === 'fields' && locked && (
+            {dockTab === 'fields' && locked && templateMode && (
               <>
                 <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>{t('tech_sheet.fields_hint')}</p>
                 <div style={{ border: `1px solid ${COL.border}`, borderRadius: 5, overflow: 'hidden' }}>

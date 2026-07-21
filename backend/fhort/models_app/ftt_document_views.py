@@ -119,7 +119,15 @@ class FttDocumentDetailView(APIView):
                 {"detail": "Falta document_json."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        new_head = svc.save_document(head, document_json)
+        # `kind` opcional: l'interruptor de mode plantilla de l'editor l'envia per marcar el
+        # document com a plantilla en construcció. Si no ve, save_document l'hereta.
+        kind = request.data.get("kind")
+        if kind is not None and kind not in (services_ftt.FTT_KIND_DOCUMENT, services_ftt.FTT_KIND_TEMPLATE):
+            return Response(
+                {"detail": "kind ha de ser 'document' o 'template'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        new_head = svc.save_document(head, document_json, kind=kind)
         # Arreglo del timer-gap: desar renova locked_at → editar >TTL no perd el lock.
         svc.renew_lock(new_head, request.user)
         return Response(ModelFitxerSerializer(new_head).data, status=status.HTTP_200_OK)

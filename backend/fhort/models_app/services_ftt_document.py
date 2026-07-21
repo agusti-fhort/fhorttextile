@@ -457,7 +457,7 @@ def load_document(fitxer):
     return services_ftt.unpack(blob)
 
 
-def save_document(head_fitxer, document_json, *, assets=None, preview=None):
+def save_document(head_fitxer, document_json, *, assets=None, preview=None, kind=None):
     """Desa una versió nova encadenada del document.
 
     Els assets existents es conserven (es fusionen amb els nous) perquè el document.json
@@ -470,11 +470,17 @@ def save_document(head_fitxer, document_json, *, assets=None, preview=None):
     cap migració de dades. Idempotent (sha del contingut → re-desar no fa créixer res).
     """
     document_json, inline_assets = services_ftt.extract_document_assets(document_json)
-    existing = load_document(head_fitxer).get("assets", {})
+    anterior = load_document(head_fitxer)
+    existing = anterior.get("assets", {})
     if assets:
         existing.update(assets)
     existing.update(inline_assets)
-    blob = services_ftt.pack(document_json, assets=existing, preview=preview)
+    # `kind` del manifest: fins ara cada desat el tornava al valor per defecte ("document"),
+    # de manera que un document marcat com a plantilla ho perdia al primer autosave. Ara
+    # s'HERETA del predecessor si el caller no en diu res, i el caller el pot canviar
+    # explícitament (és el que fa l'interruptor de mode plantilla de l'editor).
+    kind_final = kind or anterior.get("kind") or services_ftt.FTT_KIND_DOCUMENT
+    blob = services_ftt.pack(document_json, assets=existing, preview=preview, kind=kind_final)
     return save_model_file(
         head_fitxer.model,
         ContentFile(blob, name=head_fitxer.nom_fitxer),
