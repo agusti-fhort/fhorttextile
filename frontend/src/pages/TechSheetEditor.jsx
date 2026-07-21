@@ -105,6 +105,18 @@ export const COL = {
 // `pom` = vermell saturat de la COTA DE POM al croquis (fletxa + fons de l'etiqueta). Reusa el
 // literal que ja fa servir la columna de nomenclatura de les taules snapshot (TBL.REF, més avall)
 // per no introduir un segon vermell al mateix llenç.
+// Y2 — SNAP DE ROTACIÓ A 45° AMB SHIFT, el gest d'Illustrator/Figma: sense Shift, l'angle és
+// lliure; amb Shift, discret. El Transformer de Konva ja sap ancorar angles (`rotationSnaps`);
+// el que no sabia és fer-ho NOMÉS mentre la tecla està premuda, i per això la llista de snaps
+// entra i surt amb `shiftHeld` en comptes de posar-s'hi fixa.
+// La tolerància és mitja passa i UNA MICA MÉS. Konva compara amb `dif < tol` (estricte), o sigui
+// que amb 22,5 clavats els vuit punts mitjos —22,5°, 67,5°…— no ancoraven a res i es quedaven
+// lliures enmig d'un gest que l'usuari ha demanat que sigui discret. Comprovat fora del
+// navegador replicant `getSnap`: amb 22,5 queden 8 angles lliures; amb 22,5001, cap. L'empat
+// exacte del punt mig el resol l'ordre de la llista (guanya l'últim, el de dalt).
+const ROT_SNAPS = [0, 45, 90, 135, 180, 225, 270, 315]
+const ROT_SNAP_TOL = 22.5001
+const SENSE_SNAP = []
 const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', labelGray: '#777776', pom: '#dc2626' }
 
 // F1 — la caixa on entra una peça de patró. Una peça és MOLT més gran que la pàgina (el
@@ -5151,6 +5163,7 @@ export default function TechSheetEditor() {
                     : <Line x={0} y={toPx(creatingGuide.pos)} points={[0, 0, pageW, 0]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
                 )}
                 <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && (selObj?.type === 'data_block' || selObj?.type === 'table' || selObj?.type === 'pattern_piece'))}
+                  rotationSnaps={shiftHeld ? ROT_SNAPS : SENSE_SNAP} rotationSnapTolerance={ROT_SNAP_TOL}
                   padding={5}
                   borderStroke={KONVA_COL.textMuted} borderStrokeWidth={0.5} borderDash={[4, 4]}
                   anchorSize={6} anchorStroke={KONVA_COL.textMuted} anchorStrokeWidth={1} anchorFill={KONVA_COL.white} anchorCornerRadius={2}
