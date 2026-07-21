@@ -389,10 +389,13 @@ const T_NOM_W = 58 * MM_TO_PX     // Nom EN + CA en dues línies a la mateixa ce
 const T_VAL_W = 18 * MM_TO_PX     // valor per talla
 const T_DELTA_W = 16 * MM_TO_PX   // delta (Δ) — UNA sola columna (valor de GradingRule)
 const T_PAD = 2 * MM_TO_PX
+// T1 — la talla base es marca amb la paleta discreta de domini (grisos + el vermell que ja
+// identifica la nomenclatura POM), NO amb el gold d'interfície: dins la taula el gold és la
+// vora del bloc i confondria "columna de referència" amb "objecte seleccionat".
 const TBL = {
   HDR_BG: '#111827', HDR_TEXT: KONVA_COL.white, ROW_EVEN: KONVA_COL.white, ROW_ODD: '#f7f7f7',
   ROW_BORDER: KONVA_COL.border, OUTER: KONVA_COL.gold, REF: '#dc2626', NOM: '#6b7280', VAL: KONVA_COL.textMain,
-  BASE_BG: '#fdf6ee', DELTA: '#185fa5',
+  BASE_BG: '#e5e7eb', BASE_HDR: '#dc2626', DELTA: '#185fa5',
 }
 
 // Delta de fila = increment de la GradingRule: primer increment no-zero de talla no-base.
@@ -487,20 +490,32 @@ function buildTableCellPrimitives(obj) {
   const rowH = hasSub ? fontPx * 2 + T_ROW_PAD * 3 : fontPx + T_ROW_PAD * 2
   const hdrH = fontPx + T_ROW_PAD * 2
   const totalH = hdrH + rows.length * rowH
+  // Offsets x acumulats per columna: els necessiten la capçalera, el contingut i el realçat
+  // de la talla base (que és una franja vertical, no una cel·la).
+  const cx0 = []
+  cw.reduce((acc, w) => { cx0.push(acc); return acc + w }, 0)
+  const baseIdx = cols.findIndex(c => c.base)   // T1 — columna de la talla base (T1b); -1 si no n'hi ha
   const prims = []
 
   // Capçalera
   prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: hdrH, fill: st.headerFill || TBL.HDR_BG })
-  let cxH = 0
+  if (baseIdx >= 0) prims.push({ t: 'r', x: cx0[baseIdx], y: 0, w: cw[baseIdx], h: hdrH, fill: TBL.BASE_HDR })
   cols.forEach((c, i) => {
-    prims.push({ t: 't', x: cxH + T_PAD, y: 0, w: cw[i] - 2 * T_PAD, h: hdrH, text: String(c.label ?? ''), fill: TBL.HDR_TEXT, size: fontPx, mid: true })
-    cxH += cw[i]
+    prims.push({ t: 't', x: cx0[i] + T_PAD, y: 0, w: cw[i] - 2 * T_PAD, h: hdrH, text: String(c.label ?? ''), fill: TBL.HDR_TEXT, size: fontPx, mid: true })
   })
 
-  // Files (zebra opcional) + contingut
+  // Fons de files (zebra opcional) en passada pròpia: la franja de la talla base ha de quedar
+  // PER SOBRE dels fons i PER SOTA del text (mateix ordre que buildTablePrimitives).
+  if (st.zebra) rows.forEach((row, ri) => {
+    prims.push({ t: 'r', x: 0, y: hdrH + ri * rowH, w: totalW, h: rowH, fill: ri % 2 === 0 ? TBL.ROW_EVEN : TBL.ROW_ODD })
+  })
+  if (baseIdx >= 0 && rows.length) {
+    prims.push({ t: 'r', x: cx0[baseIdx], y: hdrH, w: cw[baseIdx], h: rows.length * rowH, fill: TBL.BASE_BG })
+  }
+
+  // Contingut
   rows.forEach((row, ri) => {
     const y = hdrH + ri * rowH
-    if (st.zebra) prims.push({ t: 'r', x: 0, y, w: totalW, h: rowH, fill: ri % 2 === 0 ? TBL.ROW_EVEN : TBL.ROW_ODD })
     let cxR = 0
     cols.forEach((c, i) => {
       const cell = norm(row[i])
@@ -3442,7 +3457,12 @@ export default function TechSheetEditor() {
     const columns = [
       { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
       { key: 'nom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
-      ...sizeLabels.map(sl => ({ key: sl, label: sl === data.base_size ? `${sl}*` : sl, width: 16 })),
+      // T1 — la columna de la talla base porta marca al MODEL (`base`), no només el sufix `*`:
+      // el builder la necessita per pintar-hi la franja de realçat. El `*` es manté perquè
+      // sobreviu a l'imprès en blanc i negre.
+      ...sizeLabels.map(sl => (sl === data.base_size
+        ? { key: sl, label: `${sl}*`, width: 16, base: true }
+        : { key: sl, label: sl, width: 16 })),
       { key: 'delta', label: 'Δ', width: 16 },
     ]
     // Break = talla on el delta CANVIA respecte a la talla anterior (ordre de size_labels).
