@@ -1825,7 +1825,9 @@ export default function TechSheetEditor() {
   const [lockState, setLockState] = useState((isEditMode || fttMode) ? 'loading' : 'readonly')
   const [conflict, setConflict] = useState(null)
   const [saveState, setSaveState] = useState(null)  // null|'saving'|'saved'|'error'
-  const [, setFitxers] = useState([])
+  // Fitxers del model. Es demanaven i es llençaven (l'estat era `[, setFitxers]`): ara els
+  // llegeix la biblioteca de l'esquerra (C1), que és qui els ofereix per inserir.
+  const [fitxers, setFitxers] = useState([])
   const [filePicker, setFilePicker] = useState(false)   // S03b · P7
   // F1 — el patró VIGENT del model (o null si no en té) i el selector de peces.
   const [patternFile, setPatternFile] = useState(null)
@@ -4014,6 +4016,16 @@ export default function TechSheetEditor() {
   // path, també cada entrada de paths[] i cada subpath: en un croquis importat el color viu
   // allà, no a l'objecte. No es persisteix res: és una lectura del document, no una
   // preferència, i es recalcula sola quan el document canvia.
+  // C1 · Partició dels fitxers del model per a la biblioteca: el que és geometria inserible
+  // (croquis/flats) va a la seva persiana; la resta, a Arxius. Mateix criteri que ja fa servir
+  // l'AssetNavigator de l'import, no un de nou.
+  const fitxersSketch = useMemo(
+    () => (fitxers || []).filter(f => TIPUS_GEOMETRIA.includes(f.tipus) || GEOMETRIA_INSERIBLE.test(f.nom_fitxer || '')),
+    [fitxers])
+  const fitxersAltres = useMemo(
+    () => (fitxers || []).filter(f => !(TIPUS_GEOMETRIA.includes(f.tipus) || GEOMETRIA_INSERIBLE.test(f.nom_fitxer || ''))),
+    [fitxers])
+
   const docPalette = useMemo(() => {
     const vist = []
     const afegeix = (c) => {
@@ -4518,23 +4530,44 @@ export default function TechSheetEditor() {
         ribbonTool({ key: 'zoom-fit', icon: 'ti-arrows-maximize', label: t('tech_sheet.zoom_fit'), onClick: fitZoomToViewport }),
       ]
     }
+    // TAB "INSERIR" — C1. Rep les EINES DE CREACIÓ que fins ara vivien a la paleta vertical
+    // (dibuixar, ploma, formes, línies, fletxes, text, cota, nota, presets, pan). Allà eren
+    // icones de 30 px sense etiqueta, amb flyouts de press-and-hold que amagaven dues de cada
+    // tres eines; aquí són botons de 72×50 amb el nom escrit i totes visibles alhora. Els
+    // flyouts s'aplanen: el ribbon té amplada de sobres i un flyout és un lloc on amagar coses.
     if (ribbonGroup === 'insert') {
+      const eina = (k, icon, label) => ribbonTool({
+        key: `t-${k}`, icon, label, onClick: () => setTool(k), active: tool === k, disabled: !locked,
+      })
       return [
+        eina('select', 'ti-pointer-2', t('tech_sheet.tool_select')),
+        eina('pan', 'ti-hand-stop', t('tech_sheet.tool_pan')),
+        <span key="sep-crea" style={ribbonSep} />,
+        eina('draw', 'ti-pencil', t('tech_sheet.tool_draw')),
+        eina('pen', 'ti-vector-bezier', t('tech_sheet.tool_pen')),
+        eina('rect', 'ti-square', t('tech_sheet.tool_rect')),
+        eina('rect_round', 'ti-square-rounded', t('tech_sheet.tool_rect_round')),
+        eina('ellipse', 'ti-circle', t('tech_sheet.tool_ellipse')),
+        eina('polygon', 'ti-hexagon', t('tech_sheet.tool_polygon')),
+        eina('line', 'ti-line', t('tech_sheet.tool_line')),
+        eina('line_dot', 'ti-line-dashed', t('tech_sheet.tool_line_dot')),
+        eina('arrow', 'ti-arrow-right', t('tech_sheet.tool_arrow')),
+        eina('arrow2', 'ti-arrows-horizontal', t('tech_sheet.tool_arrow2')),
+        eina('arrow_curve', 'ti-vector-spline', t('tech_sheet.tool_arrow_curve')),
+        <span key="sep-text" style={ribbonSep} />,
+        eina('text', 'ti-text-recognition', t('tech_sheet.tool_text')),
+        eina('text_box', 'ti-text-scan-2', t('tech_sheet.tool_text_box')),
+        eina('cota_pom', 'ti-ruler-measure', t('tech_sheet.tool_cota_pom')),
+        eina('note', 'ti-arrow-guide', t('tech_sheet.tool_note')),
+        eina('preset_callout', 'ti-message-2-share', t('tech_sheet.preset_callout')),
+        eina('preset_detail_circle', 'ti-circle-dashed', t('tech_sheet.preset_detail_circle')),
+        eina('preset_legend', 'ti-list-details', t('tech_sheet.preset_legend')),
+        <span key="sep-blocs" style={ribbonSep} />,
         ribbonTool({ key: 'header', icon: 'ti-layout-navbar', label: t('tech_sheet.model_header'), onClick: insertHeader }),
         ribbonTool({ key: 'logo', icon: 'ti-photo', label: t('tech_sheet.client_logo'), onClick: insertLogo, title: customerLogoUrl ? t('tech_sheet.insert_logo_title') : t('tech_sheet.no_logo_title') }),
-        ribbonTool({ key: 'table', icon: 'ti-table', label: t('tech_sheet.ribbon_table'), onClick: () => setTablePicker({}), disabled: !locked }),
         ribbonTool({ key: 'flat', icon: 'ti-vector', label: t('tech_sheet.flat_insert'), onClick: insertFlatSketch }),
-        // F1: si el model no té patró, l'eina es veu però no s'obre — i diu per què.
-        ribbonTool({
-          key: 'pattern-piece', icon: 'ti-shirt', label: t('tech_sheet.piece_insert'),
-          onClick: obrirPeces, disabled: !locked || !patternFile,
-          title: patternFile ? t('tech_sheet.piece_insert_title') : t('tech_sheet.piece_no_pattern'),
-        }),
         ribbonTool({ key: 'import-flat', icon: 'ti-file-import', label: t('tech_sheet.flat_import'), onClick: () => openImport('garment') }),
-        // R1: placeholder — el flux d'import de mesures es dissenyarà més endavant (sense handler).
         ribbonTool({ key: 'image', icon: 'ti-photo-plus', label: t('tech_sheet.tool_image'), onClick: () => openImport('image') }),
-        // S03b · P7 — el "futur tab Components" que anunciava la NOTA (R1): un sol botó que obre
-        // el FilePicker (Model / Catàleg / Importar), en lloc dels N botons de fitxer d'abans.
         ribbonTool({ key: 'files', icon: 'ti-folder', label: t('tech_sheet.tool_files'), onClick: () => setFilePicker(true), disabled: !locked }),
       ]
     }
@@ -4788,57 +4821,115 @@ export default function TechSheetEditor() {
             actionLabel={t('tech_sheet.import_btn_insert')}
           />
         )}
-        {/* ── Paleta d'eines vertical (C2) — 6 categories + flyouts estil Adobe (PAL-1) ── */}
+        {/* ── C1 · ESQUERRA = BIBLIOTECA D'INSERCIÓ ──────────────────────────────────────────
+            La paleta vertical d'eines ha desaparegut: eren icones de 30 px sense etiqueta amb
+            flyouts que n'amagaven dues de cada tres, i les seves eines de creació viuen ara al
+            tab Inserir del ribbon, totes visibles i amb el nom escrit.
+            Aquesta columna passa a ser el que el llenç necessita a mà: QUÈ es pot posar al
+            document. Mateixes persianes que el Taller de Patró (Contenidor compartit, capçalera
+            fosca), perquè les dues pantalles s'assemblin de veritat i no per casualitat. */}
         {locked && (
-          <div style={{ width: 46, flexShrink: 0, background: COL.bg, borderRight: `1px solid ${COL.border}`, overflowY: 'auto', overflowX: 'visible', padding: '8px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-            {PALETTE.flatMap((cat, ci) => [
-              ci > 0 ? <div key={`sep-${cat.cat}`} style={{ width: 26, height: 1, background: COL.border, margin: '3px 0' }} /> : null,
-              ...cat.items.map((it, ii) => {
-                const key = `${cat.cat}-${ii}`
-                if (it.kind === 'tool') {
+          <aside style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: `1px solid ${COL.border}`, background: 'var(--bg-page)' }}>
+          {/* CONTENIDOR DE POMS. Calca la fila del Taller de Patró (ModelPomList): semàfor
+              de borderLeft, codi de client en mono manant, nom canònic EN al costat, badge
+              amb el nom_fitxa. És la primera persiana de la biblioteca i ve
+              OBERTA: acotar és la feina que porta algú a obrir aquesta fitxa. Un clic arma l'eina de cota amb el text ja resolt. */}
+          {pomRows.length > 0 && (
+            <Contenidor
+              titol={t('tech_sheet.poms_of_model', { n: pomRows.length })}
+              icona="ti-ruler-measure" pes={2}
+            >
+              <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.poms_hint')}</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {pomRows.map(bm => {
+                  const etiqueta = bm.nom_fitxa || bm.pom_abbreviation || bm.codi_client || ''
+                  const colocat = !!etiqueta && cotesColocades.has(etiqueta)
+                  const armat = cotaPreset?.text === etiqueta && tool === 'cota_pom'
                   return (
-                    <button key={key} onClick={() => setTool(it.k)}
-                      title={TOOL_SHORTCUT[it.k] ? `${it.label} · ${TOOL_SHORTCUT[it.k]}` : it.label}
-                      style={{ ...paletteBtn, ...(tool === it.k ? paletteBtnOn : {}) }}>
-                      <i className={`ti ${it.icon}`} style={{ fontSize: 17 }} />
-                    </button>
-                  )
-                }
-                // flyout
-                const vis = flyoutVisible(it)
-                const groupActive = it.tools.some(tl => tl.k === tool)
-                return (
-                  <div key={key} data-flyout={it.id} style={{ position: 'relative' }}>
-                    <button
-                      onMouseDown={e => startHold(it.id, e.currentTarget.getBoundingClientRect())}
-                      onMouseUp={cancelHold} onMouseLeave={cancelHold}
-                      onClick={() => { if (suppressClick.current) { suppressClick.current = false; return } pickFlyoutTool(it, vis.k) }}
-                      title={`${it.label} — ${vis.label}`}
-                      style={{ ...paletteBtn, ...(groupActive ? paletteBtnOn : {}) }}>
-                      <i className={`ti ${vis.icon}`} style={{ fontSize: 17 }} />
-                      {/* triangle ▸ indicador de flyout — visible per descobribilitat (E1a) */}
-                      {it.tools && it.tools.length > 1 && (
-                        <i className="ti ti-caret-right-filled" title={t('tech_sheet.flyout_hint')}
-                          onClick={e => { e.stopPropagation(); cancelHold(); suppressClick.current = false; openFlyout(it.id, e.currentTarget.parentElement.getBoundingClientRect()) }}
-                          style={{ position: 'absolute', right: 0, bottom: 0, fontSize: 11, lineHeight: 1, color: COL.gold, opacity: 0.9 }} />
+                    <button key={bm.id} type="button"
+                      onClick={() => { setCotaPreset({ text: etiqueta }); setTool('cota_pom') }}
+                      aria-pressed={armat}
+                      title={t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
+                      style={{
+                        textAlign: 'left', width: '100%', cursor: 'pointer',
+                        background: armat ? 'var(--gold-pale)' : 'var(--bg-card)',
+                        border: `1px solid ${armat ? COL.gold : COL.border}`,
+                        borderLeft: `3px solid ${colocat ? COL.ok : armat ? COL.gold : COL.border}`,
+                        borderRadius: 4, padding: '0.3rem 0.5rem',
+                        display: 'flex', alignItems: 'center', gap: '0.4rem',
+                        fontFamily: FONT,
+                      }}>
+                      <i className={`ti ${colocat ? 'ti-circle-check' : armat ? 'ti-crosshair' : 'ti-circle-dashed'}`}
+                        style={{ color: colocat ? COL.ok : armat ? COL.gold : COL.textMuted, flexShrink: 0, fontSize: 14 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
+                          <span>{bm.codi_client}</span>
+                          <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <PomNamePair en={bm.nom_en} local={bm.nom_ca || bm.nom_client} />
+                          </span>
+                          {bm.nom_fitxa && (
+                            <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: COL.textMuted, border: `1px solid ${COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
+                              {bm.nom_fitxa}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {/* La xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
+                      {bm.base_value_cm != null && (
+                        <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0 }}>{bm.base_value_cm}</span>
                       )}
                     </button>
-                    {flyoutOpen === it.id && flyoutRect && (
-                      <div data-flyout={it.id} style={{ position: 'fixed', left: flyoutRect.right + 4, top: flyoutRect.top, zIndex: 60, display: 'flex', gap: 2, padding: 4, background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
-                        {it.tools.map(tl => (
-                          <button key={tl.k} onClick={() => pickFlyoutTool(it, tl.k)}
-                            title={tl.label}
-                            style={{ ...paletteBtn, ...(tool === tl.k ? paletteBtnOn : {}) }}>
-                            <i className={`ti ${tl.icon}`} style={{ fontSize: 17 }} />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              }),
-            ])}
-          </div>
+                  )
+                })}
+              </div>
+            </Contenidor>
+          )}
+            <Contenidor titol={t('tech_sheet.lib_sketches', { n: fitxersSketch.length })} icona="ti-vector" defaultOpen={false} pes={1}>
+              {fitxersSketch.length === 0
+                ? <p style={libEmpty}>{t('tech_sheet.lib_sketches_empty')}</p>
+                : fitxersSketch.map(f => (
+                  <button key={f.id} type="button" onClick={() => addModelFitxer(f)} title={f.nom_fitxer} style={libRow}>
+                    <i className="ti ti-vector" style={libIcon} />
+                    <span style={libName}>{f.nom_fitxer}</span>
+                  </button>
+                ))}
+            </Contenidor>
+
+            <Contenidor titol={t('tech_sheet.lib_tables')} icona="ti-table" defaultOpen={false} pes={1}>
+              <p style={libEmpty}>{t('tech_sheet.lib_tables_hint')}</p>
+              <button type="button" onClick={() => setTablePicker({})} style={libRow}>
+                <i className="ti ti-table-plus" style={libIcon} />
+                <span style={libName}>{t('tech_sheet.ribbon_table')}</span>
+              </button>
+            </Contenidor>
+
+            <Contenidor titol={t('tech_sheet.lib_files', { n: fitxersAltres.length })} icona="ti-folder" defaultOpen={false} pes={1}>
+              {fitxersAltres.length === 0
+                ? <p style={libEmpty}>{t('tech_sheet.lib_files_empty')}</p>
+                : fitxersAltres.map(f => (
+                  <button key={f.id} type="button" onClick={() => addModelFitxer(f)} title={f.nom_fitxer} style={libRow}>
+                    <i className="ti ti-file" style={libIcon} />
+                    <span style={libName}>{f.nom_fitxer}</span>
+                  </button>
+                ))}
+              <button type="button" onClick={() => setFilePicker(true)} style={{ ...libRow, border: `1.5px dashed ${COL.border}`, marginTop: 4 }}>
+                <i className="ti ti-folder-search" style={libIcon} />
+                <span style={libName}>{t('tech_sheet.tool_files')}</span>
+              </button>
+            </Contenidor>
+
+            {/* Peces de patró: es reutilitza l'endpoint que el ribbon ja demanava en carregar
+                (patternFile), així que la persiana no obre cap consumidor nou. Sense patró es
+                veu igualment i diu per què no s'obre, com feia el botó del ribbon. */}
+            <Contenidor titol={t('tech_sheet.lib_pieces')} icona="ti-shirt" defaultOpen={false} pes={1}>
+              <button type="button" onClick={obrirPeces} disabled={!patternFile}
+                title={patternFile ? t('tech_sheet.piece_insert_title') : t('tech_sheet.piece_no_pattern')}
+                style={{ ...libRow, opacity: patternFile ? 1 : 0.45, cursor: patternFile ? 'pointer' : 'default' }}>
+                <i className="ti ti-shirt" style={libIcon} />
+                <span style={libName}>{t('tech_sheet.piece_insert')}</span>
+              </button>
+            </Contenidor>
+          </aside>
         )}
 
         {/* ── Centre: Stage Konva, envoltat per un marc amb regles en mm (S2) ── */}
@@ -5118,60 +5209,6 @@ export default function TechSheetEditor() {
             <input ref={flatFileRef} type="file" accept=".svg,image/svg+xml" hidden
               onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFlatSvgFile(f) }} />
 
-            {/* CONTENIDOR DE POMS. Calca la fila del Taller de Patró (ModelPomList): semàfor
-                de borderLeft, codi de client en mono manant, nom canònic EN al costat, badge
-                amb el nom_fitxa. Ve plegat per defecte perquè el dock és per a propietats;
-                s'obre quan toca acotar. Un clic arma l'eina de cota amb el text ja resolt. */}
-            {dockTab === 'properties' && locked && pomRows.length > 0 && (
-              <Contenidor
-                titol={t('tech_sheet.poms_of_model', { n: pomRows.length })}
-                icona="ti-ruler-measure" defaultOpen={false} fitContent
-              >
-                <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.poms_hint')}</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {pomRows.map(bm => {
-                    const etiqueta = bm.nom_fitxa || bm.pom_abbreviation || bm.codi_client || ''
-                    const colocat = !!etiqueta && cotesColocades.has(etiqueta)
-                    const armat = cotaPreset?.text === etiqueta && tool === 'cota_pom'
-                    return (
-                      <button key={bm.id} type="button"
-                        onClick={() => { setCotaPreset({ text: etiqueta }); setTool('cota_pom') }}
-                        aria-pressed={armat}
-                        title={t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
-                        style={{
-                          textAlign: 'left', width: '100%', cursor: 'pointer',
-                          background: armat ? 'var(--gold-pale)' : 'var(--bg-card)',
-                          border: `1px solid ${armat ? COL.gold : COL.border}`,
-                          borderLeft: `3px solid ${colocat ? COL.ok : armat ? COL.gold : COL.border}`,
-                          borderRadius: 4, padding: '0.3rem 0.5rem',
-                          display: 'flex', alignItems: 'center', gap: '0.4rem',
-                          fontFamily: FONT,
-                        }}>
-                        <i className={`ti ${colocat ? 'ti-circle-check' : armat ? 'ti-crosshair' : 'ti-circle-dashed'}`}
-                          style={{ color: colocat ? COL.ok : armat ? COL.gold : COL.textMuted, flexShrink: 0, fontSize: 14 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
-                            <span>{bm.codi_client}</span>
-                            <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              <PomNamePair en={bm.nom_en} local={bm.nom_ca || bm.nom_client} />
-                            </span>
-                            {bm.nom_fitxa && (
-                              <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: COL.textMuted, border: `1px solid ${COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
-                                {bm.nom_fitxa}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {/* La xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
-                        {bm.base_value_cm != null && (
-                          <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0 }}>{bm.base_value_cm}</span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </Contenidor>
-            )}
             {/* TAB PROPIETATS: propietats de la selecció (W/H/X/Y, stroke/fill, …). Els blocs
                 d'inserció i de fitxers del model viuen ara al ribbon (pestanya Inserir). */}
             {dockTab === 'properties' && !multiSelected && !selObj && (
@@ -5780,4 +5817,10 @@ const NODE_TOOL_ITEMS = [
   { k: 'convert', icon: 'ti-vector-bezier-2', label: 'node_convert', sc: 'B' },
   { k: 'scissors', icon: 'ti-scissors', label: 'node_scissors', sc: 'C' },
 ]
+// C1 — fila de la biblioteca d'inserció: mateixa geometria que la fila de POM (radi 4, filet
+// subtil) perquè les cinc persianes es llegeixin com una sola llista i no com cinc widgets.
+const libRow = { display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '0.3rem 0.5rem', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 4, background: 'var(--bg-card)', color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', cursor: 'pointer' }
+const libIcon = { fontSize: 14, color: COL.gold, flexShrink: 0 }
+const libName = { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+const libEmpty = { fontSize: 'var(--fs-caption)', color: COL.textMuted, margin: '0 0 6px' }
 export const propInput = { width: '100%', fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '4px 6px', marginTop: 3, border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, boxSizing: 'border-box' }
