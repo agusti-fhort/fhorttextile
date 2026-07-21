@@ -935,7 +935,8 @@
     "pick_fit": "Tria el fit",
     "grading_needs_sizes": "Defineix primer les talles (pas 3) per poder triar la graduació.",
     "no_grading_available": "No hi ha cap joc de regles que casi amb aquesta combinació de peça i talles. Pots continuar sense graduació i afegir-la més tard.",
-    "grading_auto_proposed": "Proposat automàticament (única coincidència). Pots canviar-lo o triar «Sense graduació»."
+    "grading_auto_proposed": "Proposat automàticament (única coincidència). Pots canviar-lo o triar «Sense graduació».",
+    "size_run_replace_confirm": "El sistema «{{sistema}}» no conté totes les talles del run actual. Això substituirà el run de {{from}} talles per {{to}} talles i reassignarà la talla base. Vols continuar?"
   },
   "models_list": {
     "title": "Models",

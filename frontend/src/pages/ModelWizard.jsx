@@ -21,6 +21,12 @@ const YEARS = [currentYear, currentYear + 1, currentYear + 2, currentYear + 3]
 // Temporades ALINEADES amb Model.TEMPORADA_CHOICES (SS/FW/CO/SP). Corregeix el mismatch RE/PRE.
 // Només l'identificador (codi); l'etiqueta visible es resol amb t('model_wizard.<tipus>_<codi>').
 const SEASONS = ['SS', 'FW', 'CO', 'SP']
+
+// Etiquetes de talla d'un SizeSystem (les tres formes que retorna l'API, en ordre de preferència).
+const labelsOf = (sys) => (sys?.talles || []).map(s => s.etiqueta || s.size_label || s.label).filter(Boolean)
+// Un run és VÀLID dins un sistema si totes les seves talles hi són (subconjunt legítim, forma normal
+// i massiva al tenant: 218 models — DIAGNOSI_MODEL_174 §B0.4).
+const runCapDins = (run, labels) => run.length > 0 && run.every(l => labels.includes(l))
 // TARGETS i CONSTRUCTIONS: vocabulari ÚNIC de gradingAxes (fora la còpia privada — Onada 1). Objectes
 // {codi, nom_*}; aquí només en fem servir el `codi` (l'etiqueta la resol t('model_wizard.*')).
 
@@ -63,9 +69,12 @@ export default function ModelWizard() {
   const [sizeDefs, setSizeDefs] = useState([])
   const [selectedSizes, setSelectedSizes] = useState([])
   const [baseSize, setBaseSize] = useState(null)
-  // Peça 4 — sistema/run que ja tenia el model (edició), per detectar canvi de sistema de talles.
+  // Peça 4 — sistema/run/base que ja té el model (edició). NO és només memòria: és la FONT de la
+  // rehidratació del pas 3 (F1.1). Sense ella el pas 4 neix cec en edició (DIAGNOSI_MODEL_174, risc #1).
   const [modelSizeSystemId, setModelSizeSystemId] = useState(null)
   const [modelSizeRun, setModelSizeRun] = useState('')
+  const [modelBaseSize, setModelBaseSize] = useState(null)
+  const [sizingHydrated, setSizingHydrated] = useState(false)
   // Bloc 4 — GRADUACIÓ (sprint WIZARD-COMPLET). Eixos target/construction/grup + size_system venen
   // fixats dels passos 2-3 (arbre únic: el grup el mana l'item, no es re-tria); l'usuari només tria FIT.
   const [gradingRuleSets_, setGradingRuleSets_] = useState([])
@@ -110,13 +119,10 @@ export default function ModelWizard() {
       .catch(() => {})
   }
 
-  // Peça 4 — en edició, si el model ja tenia run i el sistema de talles del perfil triat
-  // és DIFERENT del que té el model, la talla base no s'autoassigna i és obligatòria.
-  const systemChanged = !!(
-    isEditMode && modelSizeRun && selSystem &&
-    modelSizeSystemId != null && modelSizeSystemId !== selSystem.id
-  )
-  const baseSizeInvalid = systemChanged && (!baseSize || !selectedSizes.includes(baseSize))
+  // Un cop hi ha sistema i run, la talla base és obligatòria i ha de ser DINS el run. Abans això
+  // només es demanava quan el sistema canviava respecte al model (`systemChanged`), i el pas 4 podia
+  // quedar cec sense dir-ho. Ara la condició és la real, valgui per a creació o edició.
+  const baseSizeInvalid = !!(selSystem && selectedSizes.length > 0 && (!baseSize || !selectedSizes.includes(baseSize)))
 
   // Preview de referència (només create). El prefix surt del customer triat (fallback self-customer).
   useEffect(() => {
@@ -144,6 +150,7 @@ export default function ModelWizard() {
       setTarget(d.target || null); setConstruction(d.construction || null)
       setModelSizeSystemId(d.size_system ?? null)
       setModelSizeRun(d.size_run_model || '')
+      setModelBaseSize(d.base_size_label || null)
       // Bloc 4 — graduació vigent (edició): grup canònic (sempre present via garment_type.grup) i
       // ruleset actual, perquè el pas 4 mostri la selecció i permeti canviar-la (cas Regular→Slim).
       setModelGarmentGrup(d.garment_type_grup || null)
@@ -167,8 +174,10 @@ export default function ModelWizard() {
   // Bloc 3 (LLEI 5 CAPES) — carrega SizeSystems PURS quan hi ha target i estem al bloc 3.
   // Filtra pel target de la peça (target_codis, buit = universal) i descarta systems sense talles.
   // Escala pura: SENSE fit, SENSE construcció, SENSE graduació. Pre-selecciona el primer en creació.
+  // F1.1 — també al pas 4: entrant per «Canviar graduació» (?block=4) els sistemes no es carregaven
+  // mai i la rehidratació no tenia de què estirar (DIAGNOSI_MODEL_174, risc #7).
   useEffect(() => {
-    if (!target || block !== 3) return
+    if (!target || (block !== 3 && block !== 4)) return
     let alive = true
     sizeSystems.list({ actiu: true, page_size: 100 })
       .then(r => {
@@ -183,17 +192,48 @@ export default function ModelWizard() {
     return () => { alive = false }
   }, [target, block])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Bloc 3 — carrega talles del sistema triat (venen amb el propi SizeSystem, sense crida extra).
+  // F1.1 — REHIDRATACIÓ del pas 3 en edició: el que el model ja té desat (size_system + run + base)
+  // torna a ser la selecció viva. Sense això `sizingResult` era null i tot el pas 4 naixia cec.
+  // Corre un sol cop (`sizingHydrated`) perquè no trepitgi mai una tria posterior de la tècnica.
+  useEffect(() => {
+    if (!isEditMode || sizingHydrated) return
+    if (!systems.length || modelSizeSystemId == null) return
+    const sys = systems.find(s => s.id === modelSizeSystemId)
+    if (!sys) return   // el sistema del model no és a l'oferta (inactiu o d'un altre target): no forcem res
+    const labels = labelsOf(sys)
+    // El run es desa amb '·' (skeletonPayload); tolerem ','/';' d'imports antics.
+    const run = modelSizeRun.split(/[·,;]/).map(x => x.trim()).filter(Boolean).filter(l => labels.includes(l))
+    const vius = run.length ? run : labels
+    setSelSystem(sys)
+    setSizeDefs(sys.talles || [])
+    setSelectedSizes(vius)
+    setBaseSize(modelBaseSize && vius.includes(modelBaseSize) ? modelBaseSize : null)
+    setSizingHydrated(true)
+  }, [systems, isEditMode, sizingHydrated, modelSizeSystemId, modelSizeRun, modelBaseSize])
+
+  // Bloc 3 — talles del sistema triat (venen amb el propi SizeSystem, sense crida extra).
+  // F1.2 — aquest efecte JA NO substitueix el run: si el que hi ha cap dins el sistema, es conserva.
+  // Substituir un run és un acte conscient i viu a `pickSystem` (confirmació explícita), mai aquí.
   useEffect(() => {
     if (!selSystem) return
     const defs = selSystem.talles || []
     setSizeDefs(defs)
-    const labels = defs.map(s => s.etiqueta || s.size_label || s.label).filter(Boolean)
+    const labels = labelsOf(selSystem)
+    if (runCapDins(selectedSizes, labels)) return
     setSelectedSizes(labels)
-    // Peça 4 — si en edició el sistema canvia respecte al model, NO autoassignis la base.
-    const changed = isEditMode && modelSizeRun && modelSizeSystemId != null && modelSizeSystemId !== selSystem.id
-    setBaseSize(changed ? null : (labels[Math.floor(labels.length / 2)] || labels[0] || null))
+    setBaseSize(labels[Math.floor(labels.length / 2)] || labels[0] || null)
   }, [selSystem])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // F1.2 — GUARD DEL RUN. Triar un sistema no substitueix mai el run en silenci:
+  //  · el run existent cap dins el sistema nou → es CONSERVA (amb la seva talla base);
+  //  · no hi cap (canvi real de sistema) → avís conscient amb el cost exacte (D1: mai en silenci).
+  const pickSystem = (s) => {
+    if (selSystem?.id === s.id) return
+    const labels = labelsOf(s)
+    if (selectedSizes.length > 0 && !runCapDins(selectedSizes, labels)
+      && !window.confirm(t('model_wizard.size_run_replace_confirm', { from: selectedSizes.length, to: labels.length, sistema: s.nom || s.codi }))) return
+    setSelSystem(s)
+  }
 
   // Bloc 4 — el grup canònic de la peça (eix fix del matching). Prové de l'ITEM (arbre únic):
   // family.grup en creació; garment_type.grup del model en edició. Mai es re-tria a mà.
@@ -485,7 +525,7 @@ export default function ModelWizard() {
                   const ageMin = ageMins.length ? Math.min(...ageMins) : null
                   const ageMax = ageMaxs.length ? Math.max(...ageMaxs) : null
                   return (
-                    <div key={s.id} onClick={() => setSelSystem(s)} style={{
+                    <div key={s.id} onClick={() => pickSystem(s)} style={{
                       padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: MONO,
                       border: `0.5px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
                       background: active ? 'var(--warn-bg)' : 'var(--white)',
