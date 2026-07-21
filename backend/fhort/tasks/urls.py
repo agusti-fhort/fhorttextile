@@ -120,9 +120,13 @@ except Exception:
 try:
     from fhort.pom.grading_views import close_base_view, regenerate_sizes_view, measurements_table_view
     from django.urls import path as _path3
+    # D5 (2026-07-21) — `tancar-base/` i `regenerar-talles/` JUBILADES: cap consumidor a
+    # frontend/src (grep exhaustiu), i totes dues podien escriure GradedSpec i crear una v1
+    # silenciosa. El SERVEI close_base es conserva: té ús real des de models_app/views.py:977
+    # (tancar la taula de mesures). Les vistes es conserven importables perquè
+    # pom/test_g6_segell.py (integritat del segell, "els sis camins") les exercita directament;
+    # sense ruta ja no són abastables per cap client.
     _sprint3_paths = [
-        _path3('size-fittings/<int:sf_id>/tancar-base/', close_base_view),
-        _path3('size-fittings/<int:sf_id>/regenerar-talles/', regenerate_sizes_view),
         _path3('size-fittings/<int:sf_id>/taula-mesures/', measurements_table_view),
     ]
     urlpatterns = _sprint3_paths + urlpatterns

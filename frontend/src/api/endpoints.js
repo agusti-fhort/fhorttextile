@@ -77,9 +77,9 @@ export const models = {
   // P3 — autoria de la REGLA viva del model per POM: delta + break (+ règim). Patrimoni del model
   // (origen MANUAL). payload: {logica?, increment_base?, increment_break?, talla_break_label?}.
   setPomRule: (modelId, pomId, payload) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, payload),
-  // Edita una talla NO-base com a ModelGradingOverride i re-propaga (editor propagat del model).
-  setSizeOverride: (modelId, pomId, sizeLabel, valor) =>
-    client.post(`/api/v1/models/${modelId}/set-size-override/`, { pom_id: pomId, size_label: sizeLabel, valor }),
+  // D5 (2026-07-21) — `setSizeOverride` JUBILAT: estava declarat aquí però cap component el
+  // cridava mai; l'editor real fa servir `escalatAjustarTalla`. La ruta del backend també s'ha
+  // retirat. Si algun dia cal editar una talla no-base per API, es reobre conscientment.
   // Taula base amb estadis (històric per presa + tolerància + base vigent). Read-only.
   baseStages: (modelId) => client.get(`/api/v1/models/${modelId}/base-stages/`),
   // Peça 2 — propagació conscient (origen Mesures): {new_version:true} crea v+1 sobre la vigent. Sobre
