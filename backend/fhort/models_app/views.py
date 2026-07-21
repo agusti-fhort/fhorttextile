@@ -706,10 +706,12 @@ def create_model_wizard(request):
         # fallback PG-1 (ruleset extern). Degradació gràcil INTENCIONAL, no descuit.
         if model.grading_rule_set_id:
             from django.db import transaction
-            from fhort.models_app.services import materialize_model_grading_rules
+            from fhort.models_app.services import (materialize_model_grading_rules,
+                                               origen_mgr_des_de_ruleset)
             with transaction.atomic():
                 materialize_model_grading_rules(
-                    model, model.grading_rule_set.regles.all(), origen='CANONICAL')
+                    model, model.grading_rule_set.regles.all(),
+                    origen=origen_mgr_des_de_ruleset(model.grading_rule_set))
         return Response({'id': model.id, 'codi_intern': model.codi_intern}, status=201)
 
     # Multi-piece: one GarmentSet + N piece Models, codi_intern = codi_base-NN.
@@ -743,9 +745,11 @@ def create_model_wizard(request):
             # materialitza les seves regles residents. Dins l'atomic del set: una fallada
             # avorta tot el conjunt (atòmic per disseny del multi-peça).
             if piece.grading_rule_set_id:
-                from fhort.models_app.services import materialize_model_grading_rules
+                from fhort.models_app.services import (materialize_model_grading_rules,
+                                               origen_mgr_des_de_ruleset)
                 materialize_model_grading_rules(
-                    piece, piece.grading_rule_set.regles.all(), origen='CANONICAL')
+                    piece, piece.grading_rule_set.regles.all(),
+                    origen=origen_mgr_des_de_ruleset(piece.grading_rule_set))
             pieces.append({
                 'id': piece.id,
                 'codi_intern': piece.codi_intern,
@@ -807,10 +811,12 @@ def update_model_step2(request, model_id):
     n_regles = None
     if model.grading_rule_set_id:
         from django.db import transaction
-        from fhort.models_app.services import materialize_model_grading_rules
+        from fhort.models_app.services import (materialize_model_grading_rules,
+                                               origen_mgr_des_de_ruleset)
         with transaction.atomic():
             n_regles = materialize_model_grading_rules(
-                model, model.grading_rule_set.regles.all(), origen='CANONICAL')
+                model, model.grading_rule_set.regles.all(),
+                origen=origen_mgr_des_de_ruleset(model.grading_rule_set))
         # R1 — el retorn d'aquesta funció es DESCARTAVA. Materialitzar 0 regles (ruleset buit)
         # esborrava les residents i tornava un 200 mut: exactament el que va buidar el 163.
         # Amb la validació D1 això ja no hauria de poder passar per l'endpoint; si passa igual

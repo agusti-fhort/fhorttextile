@@ -144,6 +144,27 @@ def config_missing_text(missing):
     return f'Completa la configuració del model abans de definir POMs: {labels}.'
 
 
+#: R8 — traducció entre els dos vocabularis de provinença. `GradingRuleSet.origen` diu
+#: CANONICAL/CLIENT_RUN/IMPORT (o NULL, no classificat); `ModelGradingRule.origen` diu
+#: IMPORTED/CANONICAL/CLIENT_RUN/MANUAL. Abans el wizard resolia la diferència escrivint
+#: sempre el literal 'CANONICAL', que és el que va fer que 104 regles de client es
+#: presentessin com a canòniques.
+_ORIGEN_RS_A_MGR = {
+    'CANONICAL': 'CANONICAL',
+    'CLIENT_RUN': 'CLIENT_RUN',
+    'IMPORT': 'IMPORTED',
+}
+
+
+def origen_mgr_des_de_ruleset(rule_set) -> str:
+    """Provinença que han de dur les regles residents materialitzades des de `rule_set`.
+
+    Ruleset sense origen classificat (NULL) → 'MANUAL': la provinença no està establerta, i
+    afirmar que és canònica seria tornar a mentir (decisió Agus, 2026-07-21).
+    """
+    return _ORIGEN_RS_A_MGR.get(getattr(rule_set, 'origen', None) or '', 'MANUAL')
+
+
 def materialize_model_grading_rules(model, source_rules, origen):
     """Materialitza regles de grading residents al model des d'un iterable de
     GradingRule. Wipe-and-recreate: el set resultant és EXACTAMENT source_rules.
