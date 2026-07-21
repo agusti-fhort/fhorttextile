@@ -396,3 +396,40 @@ class FttSaveAsTemplateTest(SimpleTestCase):
         """La vista retorna aquest report: és el que deixa dir «t'he buidat 1 taula»."""
         _, report = self._desa_com_a_plantilla(FIXTURE_188)
         self.assertIn('PER VINCULAR', avis_de_copia(report))
+
+
+class FttUnfreezePathPieceTest(SimpleTestCase):
+    """R6 — la peça de patró vectoritzada segueix despenjant-se del host.
+
+    En passar la peça de DXF a `type:'path'`, el descongelat, que discriminava pel TIPUS,
+    l'hauria deixada passar amb el `pattern_file_id` viu: un document copiat a un altre
+    model s'hauria endut el punter al patró del model d'origen. Ara la regla mira el camp,
+    que és el que identifica de veritat una peça, i val per als dos formats.
+    """
+
+    def _doc(self, obj):
+        return {'pages': [{'objects': [obj]}]}
+
+    def test_path_amb_pattern_file_id_es_despenja(self):
+        doc = self._doc({'id': 'p1', 'type': 'path', 'pattern_file_id': 7,
+                         'piece_name': 'BACK', 'paths': [{'closed': True, 'segments': []}]})
+        net, _, report = unfreeze_document(doc, {})
+        obj = next(_tots_els_objectes(net))
+        self.assertIsNone(obj['pattern_file_id'])
+        self.assertEqual(report['peces_despenjades'], 1)
+
+    def test_el_dibuix_i_la_traca_de_nom_es_conserven(self):
+        """Es despenja el punter, no la peça: el dibuix és estructura auto-continguda."""
+        doc = self._doc({'id': 'p1', 'type': 'path', 'pattern_file_id': 7, 'piece_name': 'BACK',
+                         'paths': [{'closed': True, 'segments': [{'x': 1, 'y': 2}]}]})
+        net, _, _ = unfreeze_document(doc, {})
+        obj = next(_tots_els_objectes(net))
+        self.assertEqual(obj['piece_name'], 'BACK')
+        self.assertEqual(obj['paths'][0]['segments'], [{'x': 1, 'y': 2}])
+
+    def test_un_path_normal_no_es_toca(self):
+        """Un vector qualsevol no té res del host: no ha d'entrar per aquesta porta."""
+        doc = self._doc({'id': 'p1', 'type': 'path', 'paths': [{'closed': False, 'segments': []}]})
+        net, _, report = unfreeze_document(doc, {})
+        self.assertEqual(report['peces_despenjades'], 0)
+        self.assertNotIn('pattern_file_id', next(_tots_els_objectes(net)))

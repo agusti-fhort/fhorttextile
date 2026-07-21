@@ -4457,15 +4457,26 @@ export default function TechSheetEditor() {
       const width = ratio >= PIECE_BOX_W / PIECE_BOX_H ? PIECE_BOX_W : PIECE_BOX_H * ratio
       // Blob → readAsDataURL dona un dataURL BASE64, que és el que el backend sap extreure a
       // asset (un dataURL amb `charset=utf-8` no li casa el patró i es quedaria inline).
-      const src = await blobToDataURL(new Blob([svgText], { type: 'image/svg+xml' }))
+      // R6 — LA PEÇA ENTRA COM A VECTOR, no com a imatge. El render del backend
+      // (`patterns/svg.py:_path_data`) escriu NOMÉS `M … L … Z`: el DXF ja arriba aplanat a
+      // punts i no hi ha ni una corba de Bézier per triangular. Per tant el pas a `path` és el
+      // convertidor d'SVG que l'editor ja tenia, sense res a inventar: el color de traç per
+      // capa DXF (tall, costura, piquets, fil) viatja sol perquè el conversor llegeix el
+      // stroke de cada subpath, i els punts de gir/corba i els piquets, que a l'SVG són
+      // circles i rects, els aplana `expandShapes`.
+      // Guany: la peça es pot desagrupar, editar per nodes, pintar i escalar amb bake, com
+      // qualsevol altre vector. Abans era un PNG dins un rectangle.
       // En cascada: dues peces seguides a la mateixa cantonada es tapen l'una a l'altra, i qui
       // n'insereix dues creu que n'hi ha una. Cada peça nova entra una mica més avall.
-      const n = objectsOf(currentPage).filter(o => o.type === 'pattern_piece').length
-      addObject({
-        id: uid(), type: 'pattern_piece', layer: 'free',
-        x: 20 + (n % 5) * 10, y: 20 + (n % 5) * 10, width, height: width / ratio,
-        src, piece_name: peca.nom_block, pattern_file_id: patternFile.id, caption: true,
+      const n = objectsOf(currentPage).filter(o => o.type === 'path' && o.piece_name).length
+      const x = 20 + (n % 5) * 10, y = 20 + (n % 5) * 10
+      const vector = await convertLegacySketchSvgObject({
+        id: uid(), type: 'sketch_svg', layer: 'free', x, y, width, height: width / ratio, svg: svgText,
       })
+      if (vector.type !== 'path') { flash(t('tech_sheet.piece_insert_error')); return }
+      // `piece_name` i `pattern_file_id` es conserven: són la traça de d'on ve el dibuix, i
+      // el descongelat de plantilla ja els sap despenjar (`_unfreeze_pattern_piece`).
+      addObject({ ...vector, piece_name: peca.nom_block, pattern_file_id: patternFile.id })
       setPiecePicker(null)
     } catch {
       flash(t('tech_sheet.piece_insert_error'))
@@ -5223,8 +5234,9 @@ export default function TechSheetEditor() {
               <div style={{ marginBottom: 8, border: `1px solid ${COL.border}`, borderRadius: 5, overflow: 'hidden' }}>
                 {[...ordered].reverse().map(o => {
                   const on = selectedIds.includes(o.id)
-                  const icon = { text: 'ti-cursor-text', rect: 'ti-square', ellipse: 'ti-circle', line: 'ti-minus', arrow: 'ti-arrow-right', image: 'ti-photo', path: 'ti-vector', sketch_svg: 'ti-vector', pattern_piece: 'ti-shirt', data_block: 'ti-table', group: 'ti-box-multiple', field: 'ti-forms' }[o.type] || 'ti-shape'
-                  const label = o.type === 'text' ? (o.text || t('tech_sheet.tool_text')) : o.type === 'field' ? (o.label || o.type) : o.type === 'pattern_piece' ? (o.piece_name || o.type) : o.type
+                  const icon = (o.piece_name ? 'ti-shirt' : { text: 'ti-cursor-text', rect: 'ti-square', ellipse: 'ti-circle', line: 'ti-minus', arrow: 'ti-arrow-right', image: 'ti-photo', path: 'ti-vector', sketch_svg: 'ti-vector', pattern_piece: 'ti-shirt', data_block: 'ti-table', group: 'ti-box-multiple', field: 'ti-forms' }[o.type] || 'ti-shape')
+                  // R6 — una peça vectoritzada és un `path` amb `piece_name`: la llista ha de dir com es diu la peça, no "path".
+                  const label = o.type === 'text' ? (o.text || t('tech_sheet.tool_text')) : o.type === 'field' ? (o.label || o.type) : (o.piece_name || o.type)
                   return (
                     <div key={o.id} onClick={() => selectOnly(o.id)}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', cursor: 'pointer', background: on ? COL.goldPale : 'transparent', color: on ? COL.gold : COL.textMain, borderBottom: `1px solid ${COL.border}`, opacity: o.visible === false ? 0.45 : 1 }}>

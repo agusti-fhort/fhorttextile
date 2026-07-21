@@ -279,7 +279,10 @@ def _unfreeze_mapper(o, report):
             return _unfreeze_table(o, report)
         if tipus == 'data_block':
             return _unfreeze_data_block(o, report)
-        if tipus == 'pattern_piece':
+        # R6 — la peça de patró s'insereix ara com a `path` vectorial, no com a imatge; el que
+        # la identifica és el punter de traçabilitat, no el tipus. Es mira el camp perquè la
+        # regla valgui per als dos: els documents antics (pattern_piece) i els nous (path).
+        if tipus == 'pattern_piece' or (tipus == 'path' and o.get('pattern_file_id') is not None):
             return _unfreeze_pattern_piece(o, report)
         return o
     report['camps_descongelats'] += 1
