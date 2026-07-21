@@ -16,7 +16,7 @@ import { PomNamePair } from '../components/POMBrowser/POMBrowser'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 import { booleanOp } from './ftt/paperbool'
-import { scaleSubpath, rotateSubpath } from './ftt/paperOps'
+import { scaleSubpath, rotateSubpath, translateSubpath } from './ftt/paperOps'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -788,33 +788,37 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
     prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: (rightPt - HDR_M.PAD - sx) * P, h: f + 2, text, fill: GRAY, size: f })
   }
   // Valor 9pt (baixa a 8pt si no cap; el·lipsi via PrimNode). MAI desborda ni trenca línia.
+  // B2 — `fk` (field key) marca les prims de VALOR que tenen una clau exacta a FIELD_CATALOG.
+  // No canvia res del render (PrimNode l'ignora): serveix perquè, en materialitzar la
+  // capçalera, aquell text pugui néixer com a `type:'field'` i seguir resolent-se sol en
+  // instanciar una plantilla, en lloc de quedar congelat amb les dades d'aquest model.
   const value = (sx, by, text, rightPt, opts = {}) => {
     if (!text) return
     const availPt = rightPt - HDR_M.PAD - sx
     const fpt = (text.length * 9 * 0.6 > availPt) ? 8 : 9   // 9→8 = sòl de la llei
     const f = fpt * P
-    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold })
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, fk: opts.fk })
   }
 
   // ── CAIXA 1 ── logo (files 1-2) · DATE+PAGE (fila 3) · TECHNICIAN (fila 4). DATE alineat amb MODEL.
   label(34.6, 92.5, 'DATE', HDR_M.SUB1)
-  value(34.6, 102.5, placeholderMode ? '{date}' : _hdrDate(new Date()), HDR_M.SUB1)
+  value(34.6, 102.5, placeholderMode ? '{date}' : _hdrDate(new Date()), HDR_M.SUB1, { fk: 'data_avui' })
   label(HDR_M.SUB1, 92.5, 'PAGE', HDR_M.R1)
   value(HDR_M.SUB1, 102.5, placeholderMode ? '{page}' : `${(pageCtx?.index ?? 0) + 1} / ${pageCtx?.total ?? 1}`, HDR_M.R1)
   label(34.6, 115, 'TECHNICIAN', HDR_M.R1)
-  value(34.6, 125, V(m?.responsable_nom, '{technician}'), HDR_M.R1)
+  value(34.6, 125, V(m?.responsable_nom, '{technician}'), HDR_M.R1, { fk: 'responsable_nom' })
 
   // ── CAIXA 2 ── identificació de la peça (STYLE NAME → MODEL)
   label(176.3, 47.5, 'INTERNAL REFERENCE', HDR_M.SUB2)
-  value(176.3, 57.5, V(m?.codi_intern, '{internal ref}'), HDR_M.SUB2)
+  value(176.3, 57.5, V(m?.codi_intern, '{internal ref}'), HDR_M.SUB2, { fk: 'codi_intern' })
   label(HDR_M.SUB2, 47.5, 'SEASON', HDR_M.R2)
-  value(HDR_M.SUB2, 57.5, placeholderMode ? '{season}' : [m?.temporada, m?.any].filter(Boolean).join(' '), HDR_M.R2)
+  value(HDR_M.SUB2, 57.5, placeholderMode ? '{season}' : [m?.temporada, m?.any].filter(Boolean).join(' '), HDR_M.R2, { fk: 'temporada_any' })
   label(176.3, 70, 'CLIENT REFERENCE', HDR_M.R2)
-  value(176.3, 80, V(m?.codi_client, '{client ref}'), HDR_M.R2)
+  value(176.3, 80, V(m?.codi_client, '{client ref}'), HDR_M.R2, { fk: 'codi_client' })
   label(176.3, 92.5, 'MODEL', HDR_M.R2)
-  value(176.3, 102.5, V(m?.nom_prenda, '{model}'), HDR_M.R2)
+  value(176.3, 102.5, V(m?.nom_prenda, '{model}'), HDR_M.R2, { fk: 'nom_prenda' })
   label(176.3, 115, 'COLLECTION', HDR_M.R2)
-  value(176.3, 125, V(m?.collection, '{collection}'), HDR_M.R2)
+  value(176.3, 125, V(m?.collection, '{collection}'), HDR_M.R2, { fk: 'collection' })
 
   // ── CAIXA 3 ── definició tècnica · UNA etiqueta / UN valor per línia (D3)
   label(497.8, 47.5, 'GARMENT TYPE | ITEM', HDR_M.R3)
@@ -822,7 +826,7 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   label(497.8, 70, 'TARGET | FIT TYPE | CONSTRUCTION', HDR_M.R3)
   value(497.8, 80, placeholderMode ? '{target} | {fit} | {construction}' : join([m?.grading_target_nom, m?.grading_fit_nom, m?.grading_construction_nom]), HDR_M.R3)
   label(497.8, 92.5, 'SIZE SYSTEM', HDR_M.R3)
-  value(497.8, 102.5, V(m?.size_system_nom, '{size system}'), HDR_M.R3)
+  value(497.8, 102.5, V(m?.size_system_nom, '{size system}'), HDR_M.R3, { fk: 'size_system_nom' })
   label(497.8, 115, 'SIZE RUN', HDR_M.R3)
   _pushSizeRun(prims, m, placeholderMode, 497.8, 125, P)
 
@@ -1205,6 +1209,26 @@ function buildPendingRibbonPrims(totalW, totalH) {
     { t: 'r', x: 0, y, w: totalW, h: PENDING_RIBBON_H, fill: KONVA_COL.goldPale, stroke: KONVA_COL.gold, sw: 1, dash: [4, 3] },
     { t: 't', x: T_PAD, y, w: totalW - 2 * T_PAD, h: PENDING_RIBBON_H, text: pendingLabel(), fill: KONVA_COL.textMain, size: Math.round(3 * MM_TO_PX), mid: true },
   ]
+}
+
+// A5 — BAKE DE LA TRANSFORMACIÓ A GEOMETRIA (llei "geometria sempre", S20).
+// Un `path` amb els handles del Transformer desava l'escala i la rotació com a obj.scaleX/
+// scaleY/rotation i deixava els segments intactes. Conseqüència: la geometria del model
+// MENTIA (deia una cosa i se'n pintava una altra), i PaperFlatEditor havia de desfer la
+// transformació a l'entrada i tornar-la a aplicar a la sortida per poder editar-hi nodes.
+// Ara, en deixar anar el handle, la transformació entra als segments i l'objecte torna a
+// neutre. Els primitius ja existien i són purs: només calia cridar-los des d'aquí.
+function bakePathEntries(entries, sx, sy, deg) {
+  const cook = (segs) => {
+    let r = { segments: segs || [] }
+    if (sx !== 1 || sy !== 1) r = scaleSubpath(r.segments, sx, sy, 0, 0)
+    if (deg) r = rotateSubpath(r.segments, deg, 0, 0)
+    return r.segments
+  }
+  // Una entrada pot ser simple {segments} o composta {subpaths:[{segments}]} (forats).
+  return (entries || []).map(entry => (entry.subpaths
+    ? { ...entry, subpaths: entry.subpaths.map(sp => ({ ...sp, segments: cook(sp.segments) })) }
+    : { ...entry, segments: cook(entry.segments) }))
 }
 
 function blocksTransform(obj) {
@@ -2195,6 +2219,130 @@ export default function TechSheetEditor() {
     setSelectedIds(children.map(child => child.id))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, pages, updatePageObjects])
+  // ── B1 · AGRUPAR/DESAGRUPAR VECTORIAL ───────────────────────────────────────────────────
+  // Un objecte `path` JA és un compound: `paths[]` és la llista de subpaths (el que la fletxa
+  // negra en diu "formes"). Per això un SVG importat entra com un sol objecte monolític i no hi
+  // ha manera de treure'n una peça. Aquí es tanca el cercle: un botó, dos motors —el de grups
+  // Konva de tota la vida i aquest, que opera sobre subpaths— i el botó tria pel que hi ha
+  // seleccionat. Cap superfície nova.
+  //
+  // Portar una entrada de paths[] a coordenades absolutes: primer es baka la transformació de
+  // l'objecte origen (els .ftt vells en poden portar; els nous ja són neutres després d'A5) i
+  // després es translada del seu origen al de destí. Tot amb primitius purs de paperOps.
+  const entriesToOrigin = useCallback((o, ox, oy) => {
+    const baked = bakePathEntries(o.paths, o.scaleX || 1, o.scaleY || 1, o.rotation || 0)
+    const dx = (o.x || 0) - ox, dy = (o.y || 0) - oy
+    if (!dx && !dy) return baked
+    const mou = (segs) => translateSubpath(segs || [], dx, dy).segments
+    return baked.map(e => (e.subpaths
+      ? { ...e, subpaths: e.subpaths.map(sp => ({ ...sp, segments: mou(sp.segments) })) }
+      : { ...e, segments: mou(e.segments) }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // N objectes `path` → UN compound. L'estil viatja amb cada entrada (paths[] ja el porta), de
+  // manera que formes de colors diferents segueixen sent de colors diferents dins el compound.
+  const mergePathsToCompound = useCallback(() => {
+    const ids = new Set(selectedIds)
+    const sel = objectsOf(currentPage).filter(o => ids.has(o.id))
+    if (sel.length < 2 || !sel.every(o => o.type === 'path' && Array.isArray(o.paths))) return
+    const base = sel[0]
+    const ox = base.x || 0, oy = base.y || 0
+    const entries = sel.flatMap(o => entriesToOrigin(o, ox, oy).map(e => ({
+      // Sense estil propi, l'entrada hereta el de l'objecte del qual venia: si no, en fusionar
+      // es perdria el color de tot el que el tenia a nivell d'objecte.
+      stroke: o.stroke, fill: o.fill, strokeWidth: o.strokeWidth, ...e,
+    })))
+    const nou = {
+      ...base, id: uid(), x: ox, y: oy, rotation: 0, scaleX: 1, scaleY: 1, paths: entries,
+    }
+    updatePageObjects(currentPage, objs => {
+      const firstIndex = objs.findIndex(o => ids.has(o.id))
+      const rest = objs.filter(o => !ids.has(o.id))
+      const next = [...rest]
+      next.splice(Math.max(0, firstIndex), 0, nou)
+      return next
+    })
+    setSelectedIds([nou.id])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pages, selectedIds, updatePageObjects, entriesToOrigin])
+
+  // UN compound → N objectes `path` independents, en el mateix lloc i amb el mateix ordre z
+  // relatiu (les entrades de paths[] ja hi van de baix a dalt).
+  const explodeCompoundPath = useCallback((objId) => {
+    const o = objectsOf(currentPage).find(x => x.id === objId && x.type === 'path')
+    if (!o || !Array.isArray(o.paths) || o.paths.length < 2) return
+    const baked = bakePathEntries(o.paths, o.scaleX || 1, o.scaleY || 1, o.rotation || 0)
+    const nous = baked.map(entry => ({
+      id: uid(), type: 'path', layer: o.layer || 'free',
+      x: o.x || 0, y: o.y || 0, rotation: 0, scaleX: 1, scaleY: 1,
+      stroke: entry.stroke ?? o.stroke, fill: entry.fill ?? o.fill,
+      strokeWidth: entry.strokeWidth ?? o.strokeWidth,
+      headStart: o.headStart, headEnd: o.headEnd,
+      paths: [entry],
+    }))
+    updatePageObjects(currentPage, objs => objs.flatMap(x => (x.id === objId ? nous : [x])))
+    setSelectedIds(nous.map(n => n.id))
+    setActiveSubpath(null)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pages, updatePageObjects])
+
+  // ── B2 · MATERIALITZAR LA CAPÇALERA ─────────────────────────────────────────────────────
+  // La capçalera no és un grup: és un objecte ATÒMIC (data_block kind:'header') el contingut
+  // del qual es genera per codi a cada render i es pinta amb listening={false}. Per això
+  // "desvincular" mai va deixar editar-ne res: no hi havia res a seleccionar a dins.
+  // Materialitzar-la és convertir aquelles primitives efímeres en objectes reals. El gest és el
+  // MATEIX botó Desagrupar —no n'hi ha cap de nou— i el resultat és un grup normal, així que un
+  // segon Desagrupar els deixa solts del tot.
+  //
+  // Els valors amb clau exacta a FIELD_CATALOG neixen com a `type:'field'`: així segueixen
+  // resolent-se sols si el document es desa com a plantilla i s'instancia sobre un altre model.
+  // Els que NO en tenen (PAGE, GARMENT TYPE|ITEM, TARGET|FIT|CONSTRUCTION, SIZE RUN) neixen com
+  // a text estàtic amb el valor d'ara: és una pèrdua real i coneguda, i val més dir-ho aquí que
+  // inventar claus que el resolutor del backend no sabria resoldre.
+  //
+  // SENTIT ÚNIC: no hi ha "tornar a vincular". Per recuperar la capçalera viva s'esborra i es
+  // reinsereix des de la plantilla, que és un camí que ja existeix.
+  const materialitzaHeader = useCallback((objId) => {
+    const hdr = objectsOf(currentPage).find(o => o.id === objId && o.type === 'data_block' && o.kind === 'header')
+    if (!hdr) return
+    const { prims } = buildHeaderPrimitives(model, sheet?.versio, false, !!customerLogoUrl, hdr.config,
+      { index: currentPage, total: pages.length })
+    const fills = []
+    prims.forEach(pr => {
+      if (pr.t === 'r') {
+        fills.push({ id: uid(), type: 'rect', layer: 'free', x: toMm(pr.x), y: toMm(pr.y),
+          width: toMm(pr.w), height: toMm(pr.h), fill: pr.fill || 'transparent', stroke: pr.stroke, strokeWidth: toMm(pr.sw || 1) })
+        return
+      }
+      if (pr.t === 'l') {
+        const [x1, y1, x2, y2] = pr.points || []
+        fills.push({ id: uid(), type: 'line', layer: 'free', x: 0, y: 0,
+          points: [toMm(x1), toMm(y1), toMm(x2), toMm(y2)], stroke: pr.stroke, strokeWidth: toMm(pr.sw || 1) })
+        return
+      }
+      const base = {
+        id: uid(), layer: 'free', x: toMm(pr.x), y: toMm(pr.y), width: toMm(pr.w),
+        fontSize: pr.size, fontFamily: FONT, fill: pr.fill,
+        fontStyle: pr.bold ? 'bold' : pr.italic ? 'italic' : 'normal',
+        textDecoration: pr.underline ? 'underline' : '',
+      }
+      fills.push(pr.fk
+        ? { ...base, type: 'field', key: pr.fk, label: t('tech_sheet.' + (FIELD_CATALOG.find(f => f.key === pr.fk)?.tk || pr.fk)) }
+        : { ...base, type: 'text', text: pr.text || '' })
+    })
+    if (customerLogoUrl) {
+      const r = headerMasterLogoRect(0, 0, hdr.config)
+      fills.push({ id: uid(), type: 'field', key: 'customer_logo', label: t('tech_sheet.field_customer_logo'),
+        x: toMm(r.x), y: toMm(r.y), width: toMm(r.w), height: toMm(r.h), layer: 'free', fontSize: 9 })
+    }
+    const grup = { id: uid(), type: 'group', layer: 'free', x: hdr.x || 0, y: hdr.y || 0, rotation: 0, children: fills }
+    updatePageObjects(currentPage, objs => objs.flatMap(o => (o.id === objId ? [grup] : [o])))
+    setSelectedIds([grup.id])
+    flash(t('tech_sheet.header_materialized', { n: fills.filter(f => f.type === 'field').length }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pages, model, sheet, customerLogoUrl, updatePageObjects, t])
+
   const alignSelection = useCallback((mode) => {
     const ids = new Set(selectedIds)
     const selected = objectsOf(currentPage).filter(o => ids.has(o.id))
@@ -2876,24 +3024,6 @@ export default function TechSheetEditor() {
       updateObject(obj.id, { points: pts })
     }
   }
-  // A5 — BAKE DE LA TRANSFORMACIÓ A GEOMETRIA (llei "geometria sempre", S20).
-  // Un `path` amb els handles del Transformer desava l'escala i la rotació com a obj.scaleX/
-  // scaleY/rotation i deixava els segments intactes. Conseqüència: la geometria del model
-  // MENTIA (deia una cosa i se'n pintava una altra), i PaperFlatEditor havia de desfer la
-  // transformació a l'entrada i tornar-la a aplicar a la sortida per poder editar-hi nodes.
-  // Ara, en deixar anar el handle, la transformació entra als segments i l'objecte torna a
-  // neutre. Els primitius ja existien i són purs: només calia cridar-los des d'aquí.
-  const bakePathEntries = (entries, sx, sy, deg) => (entries || []).map(entry => {
-    const cook = (segs) => {
-      let r = { segments: segs || [] }
-      if (sx !== 1 || sy !== 1) r = scaleSubpath(r.segments, sx, sy, 0, 0)
-      if (deg) r = rotateSubpath(r.segments, deg, 0, 0)
-      return r.segments
-    }
-    // Una entrada pot ser simple {segments} o composta {subpaths:[{segments}]} (forats).
-    if (entry.subpaths) return { ...entry, subpaths: entry.subpaths.map(sp => ({ ...sp, segments: cook(sp.segments) })) }
-    return { ...entry, segments: cook(entry.segments) }
-  })
   const handleTransformEnd = (obj) => (e) => {
     const node = e.target
     const sx = node.scaleX(), sy = node.scaleY()
@@ -3771,18 +3901,6 @@ export default function TechSheetEditor() {
     if (!locked) return
     updatePageObjects(pageIdx, objs => objs.filter(o => !(o.type === 'data_block' && o.kind === 'header')))
   }
-  // B3 — "Detach & edit": converteix la capçalera ancorada en un OBJECTE LLIURE d'aquesta pàgina
-  // (perd la sincronia amb la plantilla: deixa de ser locked/template i ja no es re-instancia).
-  // layer 'free' → seleccionable, arrossegable i esborrable pel camí normal (Delete/selecció).
-  const detachHeaderOnPage = (pageIdx) => {
-    if (!locked) return
-    updatePageObjects(pageIdx, objs => objs.map(o => (
-      (o.type === 'data_block' && o.kind === 'header')
-        ? { ...o, layer: 'free', locked: false, detached: true }
-        : o
-    )))
-    flash(t('tech_sheet.header_detached'))
-  }
   const removePage = (index) => {
     if (!locked || pages.length <= 1) return
     if (!window.confirm(t('tech_sheet.confirm_delete_page'))) return
@@ -3983,6 +4101,24 @@ export default function TechSheetEditor() {
   const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
   const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse', 'path'].includes(o.type))
   const multiPosition = selectedObjects.filter(o => o.type !== 'line' && o.type !== 'arrow')
+  // B1 · UN BOTÓ, DOS MOTORS. Agrupar i Desagrupar no canvien de lloc ni es dupliquen: miren
+  // què hi ha seleccionat i trien el motor. Tots els seleccionats són paths → compound
+  // vectorial; barreja de tipus → grup Konva de sempre. A l'inrevés igual.
+  const canGroupCompound = selectedObjects.length >= 2 && selectedObjects.every(o => o.type === 'path' && Array.isArray(o.paths))
+  const canGroup = selectedObjects.length >= 2
+  const doGroup = () => (canGroupCompound ? mergePathsToCompound() : groupSelection())
+  const ungroupKind = selObj?.type === 'group' ? 'group'
+    : (selObj?.type === 'path' && (selObj.paths?.length || 0) > 1) ? 'compound'
+    : (selObj?.type === 'data_block' && selObj.kind === 'header') ? 'header'
+    : null
+  const doUngroup = () => {
+    if (ungroupKind === 'group') ungroupObject(selObj.id)
+    else if (ungroupKind === 'compound') explodeCompoundPath(selObj.id)
+    else if (ungroupKind === 'header') materialitzaHeader(selObj.id)
+  }
+  const ungroupTitle = ungroupKind === 'compound' ? t('tech_sheet.ungroup_compound_title')
+    : ungroupKind === 'header' ? t('tech_sheet.ungroup_header_title')
+    : t('tech_sheet.ungroup')
   const mirrorableIds = selectedObjects.filter(o => !blocksTransform(o)).map(o => o.id)
   const freeSelectedIds = selectedObjects.filter(o => o.layer === 'free').map(o => o.id)
 
@@ -4482,8 +4618,8 @@ export default function TechSheetEditor() {
       ribbonTool({ key: 'align-bottom', icon: 'ti-layout-align-bottom', label: t('tech_sheet.align_bottom_short'), onClick: () => alignSelection('bottom'), disabled: nodeMode || selectedObjects.length < 2 }),
       ribbonTool({ key: 'dist-h', icon: 'ti-layout-distribute-horizontal', label: t('tech_sheet.distribute_h_short'), onClick: () => distributeSelection('h'), disabled: nodeMode || selectedObjects.length < 3 }),
       ribbonTool({ key: 'dist-v', icon: 'ti-layout-distribute-vertical', label: t('tech_sheet.distribute_v_short'), onClick: () => distributeSelection('v'), disabled: nodeMode || selectedObjects.length < 3 }),
-      ribbonTool({ key: 'group', icon: 'ti-box-multiple', label: t('tech_sheet.group'), onClick: groupSelection, disabled: nodeMode || selectedObjects.length < 2 }),
-      ribbonTool({ key: 'ungroup', icon: 'ti-unlink', label: t('tech_sheet.ungroup'), onClick: () => ungroupObject(selObj.id), disabled: nodeMode || selObj?.type !== 'group' }),
+      ribbonTool({ key: 'group', icon: 'ti-box-multiple', label: t('tech_sheet.group'), onClick: doGroup, disabled: nodeMode || !canGroup, title: canGroupCompound ? t('tech_sheet.group_compound_title') : t('tech_sheet.group') }),
+      ribbonTool({ key: 'ungroup', icon: 'ti-unlink', label: t('tech_sheet.ungroup'), onClick: doUngroup, disabled: nodeMode || !ungroupKind, title: ungroupTitle }),
       ribbonTool({ key: 'mirror-h', icon: 'ti-flip-horizontal', label: t('tech_sheet.mirror_h'), onClick: () => mirrorObjects(mirrorableIds, 'scaleX'), disabled: nodeMode || mirrorableIds.length === 0 }),
       ribbonTool({ key: 'mirror-v', icon: 'ti-flip-vertical', label: t('tech_sheet.mirror_v'), onClick: () => mirrorObjects(mirrorableIds, 'scaleY'), disabled: nodeMode || mirrorableIds.length === 0 }),
       ribbonTool({ key: 'send-back', icon: 'ti-chevrons-down', label: t('tech_sheet.send_to_back'), onClick: () => moveSelectionToFreeLayerEdge('back'), disabled: nodeMode || freeSelectedIds.length === 0 }),
@@ -5380,8 +5516,9 @@ export default function TechSheetEditor() {
       {headerMenu && (<>
         <div onClick={() => setHeaderMenu(null)} onContextMenu={(e) => { e.preventDefault(); setHeaderMenu(null) }} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
         <div style={{ position: 'fixed', left: headerMenu.x, top: headerMenu.y, zIndex: 999, background: 'var(--white)', border: `1px solid ${COL.border}`, borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', padding: 4, minWidth: 190, fontFamily: FONT }}>
-          {[{ ic: 'ti-square-off', tk: 'header_delete_on_page', fn: () => deleteHeaderOnPage(currentPage) },
-            { ic: 'ti-unlink', tk: 'header_detach', fn: () => detachHeaderOnPage(currentPage) }].map(mi => (
+          {/* "Desvincular" ha marxat: el gest per obrir la capçalera és ara Desagrupar (B2), que
+              a més la materialitza de veritat en lloc de canviar-li tres flags. */}
+          {[{ ic: 'ti-square-off', tk: 'header_delete_on_page', fn: () => deleteHeaderOnPage(currentPage) }].map(mi => (
             <button key={mi.tk} type="button" onClick={() => { mi.fn(); setHeaderMenu(null) }}
               style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', border: 'none', background: 'transparent', color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', textAlign: 'left', cursor: 'pointer', borderRadius: 4 }}
               onMouseEnter={(e) => { e.currentTarget.style.background = COL.bg }}
