@@ -152,20 +152,27 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     const pathByIndex = (idx) => allPaths().find(p => (p.data?.index ?? 0) === idx)
     // Ressalta les FORMES seleccionades (subpaths sencers) clonant-ne el traç a la capa UI en color
     // de selecció. No dibuixa àncores de node (superfície excloent de la selecció directa).
+    // Cue de selecció/hover de FORMA: rectangle de bounds amb traç discontinu a la capa UI. MAI repinta
+    // el traç del subpath. Abans el cue era un CLON amb el stroke repintat de verd: com que l'overlay és
+    // opac i té la mateixa geometria, tapava el stroke real (el fill sí que es veia, perquè el clon
+    // anava sense fill) — d'aquí que editar el stroke semblés no fer res i "desaparegués" en deseleccionar.
+    // L'estil real de l'usuari (color + gruix) ha de ser SEMPRE el que es veu al canvas.
+    const drawShapeBox = (p, color, dash, tag) => {
+      const b = p.strokeBounds
+      if (!b || !(b.width || b.height)) return
+      const box = new scope.Path.Rectangle(b.expand(4))
+      box.strokeColor = color
+      box.strokeWidth = 1
+      box.dashArray = dash
+      box.fillColor = null
+      box.data = { [tag]: true }
+      uiLayer.addChild(box)
+    }
     const drawShapeSelection = () => {
       clearHandles()
       uiLayer.activate()
       const sel = selectedShapesRef.current
-      allPaths().forEach(p => {
-        if (!sel.has(p.data?.index ?? 0)) return
-        const hl = p.clone({ insert: false })
-        hl.strokeColor = PAPER_COL.nodeSel
-        hl.strokeWidth = Math.max(2, (p.strokeWidth || 1) + 1)
-        hl.fillColor = null
-        hl.dashArray = null
-        hl.data = { shapeHl: true }
-        uiLayer.addChild(hl)
-      })
+      allPaths().forEach(p => { if (sel.has(p.data?.index ?? 0)) drawShapeBox(p, PAPER_COL.nodeSel, [4, 3], 'shapeHl') })
       sketchLayer.activate()
       scope.view.update()
     }
@@ -199,7 +206,12 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       const idx = path.data?.index ?? 0
       const ov = (paintRef.current[idx] = paintRef.current[idx] || {})
       if (kind === 'strokeWidth') {
-        const wMm = Math.max(0, Number(value) || 0)
+        // El camp de gruix escriu a cada pulsació: buidar-lo per reescriure enviava '' i
+        // `Number('')||0` posava el gruix a 0 → stroke invisible i un 0 fusionat al commit/PDF.
+        // Camp buit/no numèric = cap canvi; un 0 EXPLÍCIT segueix sent vàlid (= sense traç).
+        const n = Number(value)
+        if (value === '' || value == null || Number.isNaN(n)) return
+        const wMm = Math.max(0, n)
         path.strokeWidth = toViewPx(wMm); ov.strokeWidth = wMm
       } else {
         const none = !value || value === 'transparent' || value === 'none'
@@ -729,10 +741,7 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
         const hp = h?.item?.className === 'Path' ? h.item : h?.item?.parent?.getItem?.({ class: scope.Path })
         if (hp && hp.segments?.length && !selectedShapesRef.current.has(hp.data?.index ?? 0)) {
           uiLayer.activate()
-          const hl = hp.clone({ insert: false })
-          hl.strokeColor = PAPER_COL.segHover; hl.strokeWidth = Math.max(2, (hp.strokeWidth || 1) + 1); hl.fillColor = null; hl.dashArray = null
-          hl.data = { hover: true }
-          uiLayer.addChild(hl)
+          drawShapeBox(hp, PAPER_COL.segHover, [2, 3], 'hover')   // preressalt sense tapar el traç real
           sketchLayer.activate()
         }
         scope.view.update(); return
