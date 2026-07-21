@@ -9,6 +9,7 @@ from django.test import SimpleTestCase
 
 from .services_ftt import (
     ASSETS_PREFIX,
+    FTT_KIND_TEMPLATE,
     FTT_MAGIC,
     FTT_SCHEMA_VERSION,
     document_to_v2,
@@ -338,3 +339,60 @@ class FttUnfreezeTest(SimpleTestCase):
         avis = avis_de_copia(report)
         self.assertIn('PER VINCULAR', avis)
         self.assertIsNone(avis_de_copia(None))   # no és un .ftt: res a dir
+
+
+class FttSaveAsTemplateTest(SimpleTestCase):
+    """Una plantilla desada des d'un document INSTANCIAT no pot portar dades del model host.
+
+    La vista (`FttSaveAsTemplateView`) empaquetava el cap de cadena tal qual: com que els
+    `field` d'una instància ja estan congelats a `text` amb els valors del host, cada
+    plantilla naixia amb el codi, el client i les mesures d'aquell model gravats com a text
+    literal. Aquí es reprodueix la seqüència EXACTA que ara fa la vista —descongelar i
+    després empaquetar amb kind=template— sobre un .ftt real, sense BD.
+    """
+
+    def _desa_com_a_plantilla(self, nom_fixture):
+        paquet = _carrega_fixture(nom_fixture)
+        net, assets, report = unfreeze_document(
+            paquet['document_json'], paquet.get('assets') or {}
+        )
+        blob = pack(net, assets=assets, kind=FTT_KIND_TEMPLATE)
+        return unpack(blob), report
+
+    def test_la_plantilla_no_porta_valors_del_model_host(self):
+        tpl, _ = self._desa_com_a_plantilla(FIXTURE_188)
+        cru = json.dumps(tpl['document_json'], ensure_ascii=False)
+        for valor_del_188 in ('Chest width', 'Ample de pit', '1/2 bottom width relaxed'):
+            self.assertNotIn(valor_del_188, cru)
+
+    def test_la_plantilla_no_porta_cap_referencia_al_host(self):
+        for nom in (FIXTURE_188, FIXTURE_162):
+            with self.subTest(fixture=nom):
+                tpl, _ = self._desa_com_a_plantilla(nom)
+                vius = _claus_amb_valor(tpl['document_json'], '_id')
+                self.assertEqual(vius, [], f'referències de host a la plantilla {nom}: {vius}')
+
+    def test_els_camps_segueixen_sent_placeholders(self):
+        """L'altra meitat: descongelar no ha de DESTRUIR res. Els `field` que el document
+        porta segueixen sent `field` a la plantilla, i per tant es resoldran sols quan
+        s'instanciï sobre un altre model.
+
+        Nota sobre aquest fixture: `camps_descongelats` hi és 0 perquè els seus xips es van
+        inserir a mà a l'editor i no han passat mai per `resolve_placeholders`, així que no
+        porten la marca `field_key` (la DEGRADACIÓ CONEGUDA que documenta `unfreeze_document`).
+        Que en surtin 2 igualment és el que demostra que no se'n perd cap pel camí."""
+        paquet = _carrega_fixture(FIXTURE_188)
+        abans = [o for o in _tots_els_objectes(paquet['document_json']) if o.get('type') == 'field']
+        tpl, _ = self._desa_com_a_plantilla(FIXTURE_188)
+        despres = [o for o in _tots_els_objectes(tpl['document_json']) if o.get('type') == 'field']
+        self.assertEqual(len(despres), len(abans))
+        self.assertGreater(len(despres), 0)
+
+    def test_la_plantilla_es_marca_com_a_plantilla(self):
+        tpl, _ = self._desa_com_a_plantilla(FIXTURE_188)
+        self.assertEqual(tpl['kind'], FTT_KIND_TEMPLATE)
+
+    def test_el_report_permet_avisar_l_usuari(self):
+        """La vista retorna aquest report: és el que deixa dir «t'he buidat 1 taula»."""
+        _, report = self._desa_com_a_plantilla(FIXTURE_188)
+        self.assertIn('PER VINCULAR', avis_de_copia(report))
