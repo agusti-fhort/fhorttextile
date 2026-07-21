@@ -3842,12 +3842,16 @@ export default function TechSheetEditor() {
   // Punt d'entrada del picker (encara sense botó al ribbon — commit 4): tria de variant →
   // si cal, sub-selector de size fitting → insereix.
   const runTableVariant = (variant, sfId) => {
+    setTablePicker(null)
     if (variant === 't1a') insertTableT1a(sfId)
     else if (variant === 't1b') insertTableT1b(sfId)
   }
   const onPickTableVariant = (variant) => {
     if (variant === 't2') { insertTableT2(); return }
-    if (variant === 'custom') { setTablePicker({ variant: 'custom', rows: 3, cols: 3 }); return }
+    // R3 — la personalitzada s'insereix ja, 3×3. Preguntar files i columnes abans de veure res
+    // no aporta: el panell dret ja té els controls d'afegir i treure files i columnes, i allà
+    // es decideix VEIENT la taula, que és quan se sap quantes en calen.
+    if (variant === 'custom') { insertTableCustom(3, 3); return }
     if (!sizeFittings.length) return   // ribbon el desactiva (commit 4); sense fitting no hi ha què inserir
     if (sizeFittings.length === 1) { runTableVariant(variant, sizeFittings[0].id); return }
     setTablePicker({ variant })
@@ -4000,6 +4004,16 @@ export default function TechSheetEditor() {
   // C1 · Partició dels fitxers del model per a la biblioteca: el que és geometria inserible
   // (croquis/flats) va a la seva persiana; la resta, a Arxius. Mateix criteri que ja fa servir
   // l'AssetNavigator de l'import, no un de nou.
+  // R3 · les quatre variants de taula amb la seva DISPONIBILITAT. La detecció és la que el
+  // popup ja feia (sizeFittings per a les dues taules de mesures); aquí, en comptes de
+  // deshabilitar un botó dins un modal, s'ensenya sempre i es diu el motiu.
+  const TABLE_VARIANTS = [
+    { k: 't1a', icon: 'ti-ruler-measure', label: t('tech_sheet.table_variant_t1a'), ok: sizeFittings.length > 0, motiu: t('tech_sheet.lib_table_no_fitting') },
+    { k: 't1b', icon: 'ti-chart-grid-dots', label: t('tech_sheet.table_variant_t1b'), ok: sizeFittings.length > 0, motiu: t('tech_sheet.lib_table_no_fitting') },
+    { k: 't2', icon: 'ti-list-details', label: t('tech_sheet.table_variant_t2'), ok: true, motiu: '' },
+    { k: 'custom', icon: 'ti-table-plus', label: t('tech_sheet.table_variant_custom'), ok: true, motiu: '' },
+  ]
+
   const fitxersSketch = useMemo(
     () => (fitxers || []).filter(f => TIPUS_GEOMETRIA.includes(f.tipus) || GEOMETRIA_INSERIBLE.test(f.nom_fitxer || '')),
     [fitxers])
@@ -4891,12 +4905,19 @@ export default function TechSheetEditor() {
                 ))}
             </Contenidor>
 
+            {/* R3 — les quatre variants són ÍTEMS DIRECTES, no un popup que et pregunta què
+                vols abans de deixar-te veure què hi ha. La que el model no pot servir es veu
+                igualment, en fade i dient per què: una opció que desapareix no s'aprèn. */}
             <Contenidor titol={t('tech_sheet.lib_tables')} icona="ti-table" defaultOpen={false} pes={1}>
-              <p style={libEmpty}>{t('tech_sheet.lib_tables_hint')}</p>
-              <button type="button" onClick={() => setTablePicker({})} style={libRow}>
-                <i className="ti ti-table-plus" style={libIcon} />
-                <span style={libName}>{t('tech_sheet.ribbon_table')}</span>
-              </button>
+              {TABLE_VARIANTS.map(v => (
+                <button key={v.k} type="button" disabled={!v.ok}
+                  onClick={() => onPickTableVariant(v.k)}
+                  title={v.ok ? t('tech_sheet.lib_table_insert', { nom: v.label }) : v.motiu}
+                  style={{ ...libRow, opacity: v.ok ? 1 : 0.45, cursor: v.ok ? 'pointer' : 'default' }}>
+                  <i className={`ti ${v.icon}`} style={libIcon} />
+                  <span style={libName}>{v.label}</span>
+                </button>
+              ))}
             </Contenidor>
 
             <Contenidor titol={t('tech_sheet.lib_files', { n: fitxersAltres.length })} icona="ti-folder" defaultOpen={false} pes={1}>
@@ -5646,55 +5667,21 @@ export default function TechSheetEditor() {
           </div>
         </div>
       )}
-      {tablePicker && (
+      {/* R3 — d'aquest modal només en queda el TRIA-FITTING: apareix quan el model té més d'un
+          SizeFitting i cal saber de quin es fa la taula. El menú de variants ha marxat a la
+          persiana TAULES de la biblioteca, i la personalitzada s'insereix directament. */}
+      {tablePicker?.variant && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setTablePicker(null)}>
           <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
-            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.table_picker_title')}</h2>
-            {!tablePicker.variant ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <button type="button" disabled={!sizeFittings.length} onClick={() => onPickTableVariant('t1a')}
-                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: sizeFittings.length ? 'pointer' : 'default', opacity: sizeFittings.length ? 1 : 0.5 }}>
-                  {t('tech_sheet.table_variant_t1a')}
-                </button>
-                <button type="button" disabled={!sizeFittings.length} onClick={() => onPickTableVariant('t1b')}
-                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: sizeFittings.length ? 'pointer' : 'default', opacity: sizeFittings.length ? 1 : 0.5 }}>
-                  {t('tech_sheet.table_variant_t1b')}
-                </button>
-                <button type="button" onClick={() => onPickTableVariant('t2')}
+            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.table_pick_fitting')}</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {sizeFittings.map(sf => (
+                <button key={sf.id} type="button" onClick={() => runTableVariant(tablePicker.variant, sf.id)}
                   style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
-                  {t('tech_sheet.table_variant_t2')}
+                  {sf.codi || sf.nom || sf.talla_base || `#${sf.id}`}{sf.tipus ? ` · ${sf.tipus}` : ''}
                 </button>
-                <button type="button" onClick={() => onPickTableVariant('custom')}
-                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
-                  {t('tech_sheet.table_variant_custom')}
-                </button>
-              </div>
-            ) : tablePicker.variant === 'custom' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <label style={propLabel}>{t('tech_sheet.table_custom_rows')}
-                  <input type="number" min={1} max={20} value={tablePicker.rows}
-                    onChange={e => setTablePicker(p => ({ ...p, rows: Math.min(20, Math.max(1, Number(e.target.value) || 1)) }))} style={propInput} />
-                </label>
-                <label style={propLabel}>{t('tech_sheet.table_custom_cols')}
-                  <input type="number" min={1} max={20} value={tablePicker.cols}
-                    onChange={e => setTablePicker(p => ({ ...p, cols: Math.min(20, Math.max(1, Number(e.target.value) || 1)) }))} style={propInput} />
-                </label>
-                <button type="button" onClick={() => insertTableCustom(tablePicker.rows, tablePicker.cols)}
-                  style={{ textAlign: 'center', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.gold}`, borderRadius: 6, background: COL.goldPale, color: COL.gold, fontWeight: 600, fontFamily: FONT, cursor: 'pointer' }}>
-                  {t('tech_sheet.table_custom_create')}
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 4 }}>{t('tech_sheet.table_pick_fitting')}</p>
-                {sizeFittings.map(sf => (
-                  <button key={sf.id} type="button" onClick={() => runTableVariant(tablePicker.variant, sf.id)}
-                    style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
-                    {sf.codi || sf.nom || sf.talla_base || `#${sf.id}`}{sf.tipus ? ` · ${sf.tipus}` : ''}
-                  </button>
-                ))}
-              </div>
-            )}
+              ))}
+            </div>
             <button type="button" onClick={() => setTablePicker(null)}
               style={{ marginTop: 12, fontSize: 'var(--fs-label)', color: COL.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
               {t('tech_sheet.table_picker_cancel')}
@@ -5702,7 +5689,6 @@ export default function TechSheetEditor() {
           </div>
         </div>
       )}
-
       {/* S4: modal "Desar com a plantilla" — mateix look que pickFitting/tablePicker */}
       {saveAsTpl && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setSaveAsTpl(null)}>
