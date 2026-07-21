@@ -2641,7 +2641,12 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroup, editingText, editingFlatId])
 
-  // ── E1b — Teclat: Escape cancel·la l'edició de nodes (equivalent al botó Cancel·lar) ──
+  // ── A1 — SORTIDA DEL MODE D'EDICIÓ DE NODES ────────────────────────────────
+  // Amb l'edició contínua (F6a) ja no hi ha res a cancel·lar: tot està escrit al document a
+  // mesura que es fa. Sortir vol dir només "deixa d'editar aquest objecte". Hi ha tres portes,
+  // i totes tres acaben aquí: Escape, el clic al buit dins el canvas de Paper (que el fill ens
+  // demana per `onExitEdit`) i el clic fora de l'abast del canvas.
+  const exitFlatEdit = useCallback(() => setEditingFlatId(null), [])
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'Escape') return
@@ -3193,6 +3198,14 @@ export default function TechSheetEditor() {
   }
   // ── PEÇA P: pan arrossegant el viewport (eina 'pan' o barra espaiadora) ──
   const onViewportMouseDown = (e) => {
+    // A1 · clic FORA de l'abast del canvas de Paper (marge gris o zona de pàgina no coberta).
+    // Allà no hi ha res a deseleccionar, així que no cal el patró de dos temps: se surt i prou.
+    // Va abans del guard de pan perquè aquest handler, fins ara, ignorava tot el que no fos pan
+    // i el gris de treball era una zona morta on clicar no feia absolutament res.
+    if (editingFlatId && !(tool === 'pan' || spaceHeld) && !e.target?.closest?.('canvas')) {
+      exitFlatEdit()
+      return
+    }
     if (!(tool === 'pan' || spaceHeld) || !locked) return
     const vp = viewportRef.current
     if (!vp) return
@@ -4738,6 +4751,7 @@ export default function TechSheetEditor() {
                 onCommit={commitFlatEdit}
                 onSplitObject={handleSplitObject}
                 onEnterDirect={() => setNodeTool('select')}
+                onExitEdit={exitFlatEdit}
               />
             </Suspense>
           )}

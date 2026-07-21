@@ -20,7 +20,7 @@ const DEFAULT_HANDLE_OFFSET = 22
 // F1 — el sub-editor NO té UI pròpia: les eines viuen a la barra superior del pare. Aquí només el
 // canvas Paper + la lògica. El pare controla l'eina activa (prop `nodeTool`), rep l'estat de selecció
 // (`onNodeState`) i dispara accions per l'API imperativa `run(name, ...args)` (ref).
-const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onSplitObject, onNodeState, nodeTool = 'shape', pointerActive = true, onEnterDirect }, ref) {
+const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onSplitObject, onNodeState, nodeTool = 'shape', pointerActive = true, onEnterDirect, onExitEdit }, ref) {
   const canvasRef = useRef(null)
   const scopeRef = useRef(null)
   const sketchLayerRef = useRef(null)
@@ -42,6 +42,8 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   const flatIdRef = useRef(null)
   const onNodeStateRef = useRef(onNodeState)  // callback per pujar {selCount} al pare
   const onEnterDirectRef = useRef(onEnterDirect)  // G1: demana al pare passar a selecció directa (doble-clic forma)
+  // A1: demana al pare TANCAR l'edició. El fill no coneix `editingFlatId` i no ha de conèixer-lo:
+  // només sap dir "aquí ja no hi ha res a fer". El pare decideix què vol dir sortir.
   const nodeToolRef = useRef(nodeTool)        // eina activa (llegida dins els handlers de Paper)
   const [, setStatus] = useState('')
   const [canCommit, setCanCommit] = useState(false)   // l'escena de Paper està muntada i és segura d'escriure
@@ -49,6 +51,8 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
 
   useEffect(() => { onNodeStateRef.current = onNodeState }, [onNodeState])
   useEffect(() => { onEnterDirectRef.current = onEnterDirect }, [onEnterDirect])
+  const onExitEditRef = useRef(onExitEdit)
+  useEffect(() => { onExitEditRef.current = onExitEdit }, [onExitEdit])
   // G1 — en canviar d'eina, si es creua la frontera forma↔nodes cal repintar la capa UI (les àncores
   // de node i el ressaltat de forma són superfícies excloents) I re-sincronitzar l'estat al pare (mode
   // + comptador), perquè l'indicador i els grups d'eina de forma de la barra depenen de nodeSel.mode.
@@ -611,9 +615,16 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
           else selectedPathRef.current = hitPath   // ja seleccionada: refixa el primari
           // G2 — inicia el moviment de forma (Alt = duplicar en arrossegar, estàndard Illustrator).
           dragRef.current = { kind: 'shape', alt: !!(event.modifiers?.option || event.modifiers?.alt) }
-        } else if (!shift) {
+        } else {
           lastShapeClickRef.current = { index: null, t: 0 }
-          setShapeSelection([])
+          // A1 · SORTIDA EN DOS TEMPS. Clic al buit amb formes seleccionades = deseleccionar.
+          // Clic al buit SENSE res seleccionat = ja no queda res a deseleccionar → sortir del
+          // mode. És el mateix patró que el llenç d'objectes ja fa per sortir d'un grup entrat.
+          if (!shift && !selectedShapesRef.current.size) { onExitEditRef.current?.(); return }
+          if (!shift) setShapeSelection([])
+          // A2 · MARQUESINA DE FORMES: el mode forma era l'únic dels tres nivells que no en
+          // tenia. S'obre igual que la de nodes; el que canvia és què es tria en tancar-la.
+          marqueeRef.current = { x0: event.point.x, y0: event.point.y, kind: 'shape', shift }
         }
         return
       }
@@ -663,7 +674,13 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
       const anyHit = sketchLayer.hitTest(event.point, { fill: true, stroke: true, tolerance: 8 })
       const hitPath = anyHit?.item?.className === 'Path' ? anyHit.item : anyHit?.item?.parent?.getItem?.({ class: scope.Path })
       if (hitPath && hitPath !== path) { selectPath(hitPath); return }
-      if (active === 'select') { marqueeRef.current = { x0: event.point.x, y0: event.point.y }; if (!shift) setSelection([]) }
+      if (active === 'select') {
+        // A1 · mateix patró de dos temps que el mode forma: sense selecció fina viva, el clic
+        // al buit vol dir sortir, no obrir una marquesina que no seleccionarà res.
+        if (!shift && !selectedSegsRef.current.size && selectedSegRef.current == null) { onExitEditRef.current?.(); return }
+        marqueeRef.current = { x0: event.point.x, y0: event.point.y, kind: 'nodes', shift }
+        if (!shift) setSelection([])
+      }
     }
 
     tool.onMouseDrag = (event) => {
@@ -745,13 +762,32 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     tool.onMouseUp = () => {
       // Final de gest: si s'estava arrossegant, la posició definitiva ha d'arribar al document.
       if (dragRef.current?.pushed) markDirty()
-      if (marqueeRef.current?.now) {   // tanca la marquesina: selecciona els nodes dins el rectangle
-        const path = selectedPathRef.current
+      if (marqueeRef.current?.now) {
         const m = marqueeRef.current
         const r = new scope.Rectangle(new scope.Point(m.x0, m.y0), new scope.Point(m.now.x, m.now.y))
-        const picked = []
-        path?.segments.forEach((s, i) => { if (r.contains(s.point)) picked.push(i) })
-        setSelection(picked)
+        if (m.kind === 'shape') {
+          // A2 · criteri de SOLAPAMENT (el mateix que la marquesina d'objectes del llenç), no de
+          // contenció: una forma que creua el marc s'agafa. Amb contenció, seleccionar una peça
+          // gran obligaria a envoltar-la sencera, que no és el gest que ningú espera.
+          const picked = allPaths().filter(p => r.intersects(p.bounds) || r.contains(p.bounds))
+            .map(p => p.data?.index ?? 0)
+          const next = m.shift ? [...new Set([...selectedShapesRef.current, ...picked])] : picked
+          setShapeSelection(next, next[next.length - 1])
+        } else {
+          // A3 · la marquesina de nodes ja no mira NOMÉS el subpath actiu. Recorre'ls tots i es
+          // queda amb el primer que hi tingui nodes a dins, canviant-hi el path actiu si cal;
+          // abans, un marc sobre una altra forma no seleccionava res i semblava avariat.
+          // Límit honest que NO es toca aquí: la selecció de nodes és per path (els índexs són
+          // dins d'un sol path), així que un marc que travessi dues formes n'agafa la primera.
+          const amb = allPaths()
+            .map(p => ({ p, idx: p.segments.reduce((acc, seg, i) => (r.contains(seg.point) ? [...acc, i] : acc), []) }))
+            .filter(x => x.idx.length)
+          const tria = amb.find(x => x.p === selectedPathRef.current) || amb[0]
+          if (tria) {
+            if (tria.p !== selectedPathRef.current) selectPath(tria.p)
+            setSelection(m.shift ? [...new Set([...selectedSegsRef.current, ...tria.idx])] : tria.idx)
+          } else if (!m.shift) setSelection([])
+        }
       }
       marqueeRef.current = null
       dragRef.current = null
