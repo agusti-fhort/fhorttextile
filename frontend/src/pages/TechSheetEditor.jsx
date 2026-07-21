@@ -16,6 +16,7 @@ import { PomNamePair } from '../components/POMBrowser/POMBrowser'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 import { booleanOp } from './ftt/paperbool'
+import { scaleSubpath, rotateSubpath } from './ftt/paperOps'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -2875,6 +2876,24 @@ export default function TechSheetEditor() {
       updateObject(obj.id, { points: pts })
     }
   }
+  // A5 — BAKE DE LA TRANSFORMACIÓ A GEOMETRIA (llei "geometria sempre", S20).
+  // Un `path` amb els handles del Transformer desava l'escala i la rotació com a obj.scaleX/
+  // scaleY/rotation i deixava els segments intactes. Conseqüència: la geometria del model
+  // MENTIA (deia una cosa i se'n pintava una altra), i PaperFlatEditor havia de desfer la
+  // transformació a l'entrada i tornar-la a aplicar a la sortida per poder editar-hi nodes.
+  // Ara, en deixar anar el handle, la transformació entra als segments i l'objecte torna a
+  // neutre. Els primitius ja existien i són purs: només calia cridar-los des d'aquí.
+  const bakePathEntries = (entries, sx, sy, deg) => (entries || []).map(entry => {
+    const cook = (segs) => {
+      let r = { segments: segs || [] }
+      if (sx !== 1 || sy !== 1) r = scaleSubpath(r.segments, sx, sy, 0, 0)
+      if (deg) r = rotateSubpath(r.segments, deg, 0, 0)
+      return r.segments
+    }
+    // Una entrada pot ser simple {segments} o composta {subpaths:[{segments}]} (forats).
+    if (entry.subpaths) return { ...entry, subpaths: entry.subpaths.map(sp => ({ ...sp, segments: cook(sp.segments) })) }
+    return { ...entry, segments: cook(entry.segments) }
+  })
   const handleTransformEnd = (obj) => (e) => {
     const node = e.target
     const sx = node.scaleX(), sy = node.scaleY()
@@ -2884,11 +2903,36 @@ export default function TechSheetEditor() {
     const rotation = node.rotation()
     node.scaleX(1); node.scaleY(1)
     if (obj.type === 'group') {
+      // Un grup només es pot bakejar si TOTS els fills són paths: si n'hi ha cap altre tipus
+      // (text, imatge, taula), neutralitzar el grup li trauria la transformació i el trencaria.
+      // En aquest cas es conserva el comportament de sempre. Decisió acotada a posta.
+      const kids = obj.children || []
+      const totPaths = kids.length > 0 && kids.every(c => c.type === 'path' && Array.isArray(c.paths))
+      if (totPaths) {
+        updateObject(obj.id, {
+          x: toMm(node.x()), y: toMm(node.y()), rotation: 0, scaleX: 1, scaleY: 1,
+          children: kids.map(c => ({
+            ...c, rotation: 0, scaleX: 1, scaleY: 1,
+            // El fill també porta el seu propi offset local: escalar i girar el conjunt vol dir
+            // moure'n l'origen igual que la geometria.
+            ...(() => {
+              const r0 = scaleSubpath([{ x: c.x || 0, y: c.y || 0, inX: 0, inY: 0, outX: 0, outY: 0 }], sx, sy, 0, 0)
+              const r1 = rotation ? rotateSubpath(r0.segments, rotation, 0, 0) : r0
+              return { x: r1.segments[0].x, y: r1.segments[0].y }
+            })(),
+            paths: bakePathEntries(c.paths, sx, sy, rotation),
+          })),
+        })
+        return
+      }
       updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, scaleX: sx, scaleY: sy })
       return
     }
     if (obj.type === 'path') {
-      updateObject(obj.id, { x: toMm(node.x()), y: toMm(node.y()), rotation, scaleX: sx, scaleY: sy })
+      updateObject(obj.id, {
+        x: toMm(node.x()), y: toMm(node.y()), rotation: 0, scaleX: 1, scaleY: 1,
+        paths: bakePathEntries(obj.paths, sx, sy, rotation),
+      })
       return
     }
     // Blocs de dades: el resize baka l'escala a obj.scale (coherent amb l'auto-fit),

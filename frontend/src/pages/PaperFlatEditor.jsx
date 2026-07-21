@@ -430,6 +430,10 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
     }
 
     const toViewPx = (mm) => toPx(mm) * zoomRef.current
+    // A5 — aquest des-fer de rotació/escala NO queda obsolet amb el bake del Transformer, i per
+    // això es conserva: els objectes creats abans del bake (i els .ftt ja desats) poden portar
+    // scaleX/scaleY/rotation vius, i aquí s'han de poder editar igual. Per als objectes nous
+    // aquests valors són neutres i tota la cadena es redueix a la identitat.
     const rotation = ((flat.rotation || 0) * Math.PI) / 180
     const scaleX = flat.scaleX || 1
     const scaleY = flat.scaleY || 1
