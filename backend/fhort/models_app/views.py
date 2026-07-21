@@ -482,6 +482,63 @@ def next_model_ref(request):
     return Response({'codi_intern': codi, 'next_number': next_num})
 
 
+def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, confirmat=False):
+    """D1 — porta d'entrada de l'assignació d'un GradingRuleSet a un model.
+
+    Assignar un ruleset dispara un wipe-and-recreate de les regles residents
+    (`materialize_model_grading_rules`): si el ruleset no serveix, el model es queda
+    sense regles i el motor ja no ho pot arreglar. Per això es valida ABANS d'assignar,
+    no al consum. És el forat pel qual el model 163 va quedar buit
+    (DIAGNOSI_REFACTOR_GRADING_2026-07-21, R5/R6).
+
+    Retorna `(payload, status)` si cal aturar, o `None` si es pot assignar.
+      - 0 regles actives          → BLOQUEIG DUR (400). Mai assignable.
+      - size_system divergent     → BLOQUEIG DUR (400). Graduar amb un run que no és el
+                                    del model no vol dir res.
+      - customer divergent        → AVÍS CONSCIENT (409) fins que arribi `confirmat`.
+                                    MAI bloqueig: aplicar la forma d'un altre client és
+                                    un flux de taller legítim.
+    """
+    from fhort.pom.models import GradingRule
+
+    n_regles = GradingRule.objects.filter(rule_set_id=rs.id, actiu=True).count()
+    if n_regles == 0:
+        return ({
+            'error': 'ruleset_buit',
+            'codi': 'GRADING_RULESET_EMPTY',
+            'grading_rule_set_id': rs.id,
+            'grading_rule_set_nom': rs.nom,
+            'message': (f"El grading «{rs.nom}» no té cap regla: assignar-lo deixaria el "
+                        f"model sense graduació. Tria'n un altre o omple'l primer."),
+        }, 400)
+
+    if rs.size_system_id and size_system_id and rs.size_system_id != size_system_id:
+        return ({
+            'error': 'size_system_divergent',
+            'codi': 'GRADING_SIZE_SYSTEM_MISMATCH',
+            'grading_rule_set_id': rs.id,
+            'grading_rule_set_nom': rs.nom,
+            'ruleset_size_system_id': rs.size_system_id,
+            'model_size_system_id': size_system_id,
+            'message': (f"El grading «{rs.nom}» és d'un altre sistema de talles que el del "
+                        f"model. Les regles no es poden aplicar a aquest run."),
+        }, 400)
+
+    if rs.customer_id and customer_id and rs.customer_id != customer_id and not confirmat:
+        return ({
+            'conflict': True,
+            'tipus': 'ruleset_altre_client',
+            'codi': 'GRADING_CUSTOMER_MISMATCH',
+            'grading_rule_set_id': rs.id,
+            'grading_rule_set_nom': rs.nom,
+            'ruleset_customer': str(getattr(rs.customer, 'nom', '') or rs.customer_id),
+            'message': (f"El grading «{rs.nom}» és d'un altre client. Es pot fer servir "
+                        f"igualment, però és una decisió conscient: confirma-ho per continuar."),
+        }, 409)
+
+    return None
+
+
 def _resolve_garment_def(d):
     """Resol la definició de garment + talles d'un payload d'esquelet (Pas 5A).
     Cada camp és OPCIONAL (es posa només si ve al payload). Retorna (fields, error_msg).
@@ -712,6 +769,20 @@ def update_model_step2(request, model_id):
     if 'grading_rule_set_id' in d and not d.get('grading_rule_set_id') and model.grading_rule_set_id:
         model.grading_rule_set = None
         model.grading_rules.all().delete()
+
+    # D1 — valida ABANS de desar i abans del wipe-and-recreate. Es valida contra els valors
+    # POSTERIORS a l'assignació (el mateix PATCH pot canviar size_system), i només quan el
+    # ruleset ve al payload: re-desar un model sense tocar la graduació no ha de rebotar.
+    if d.get('grading_rule_set_id') and model.grading_rule_set_id:
+        _err = _validar_ruleset_assignable(
+            model.grading_rule_set,
+            size_system_id=model.size_system_id,
+            customer_id=model.customer_id,
+            confirmat=bool(d.get('confirmar_altre_client')),
+        )
+        if _err is not None:
+            payload, status_code = _err
+            return Response(payload, status=status_code)
 
     model.save()
     # PG-2 Cas B: re-materialitza si hi ha ruleset (wipe-and-recreate cobreix canvi de profile).
