@@ -1856,11 +1856,6 @@ export default function TechSheetEditor() {
   const [panning, setPanning] = useState(false)              // PEÇA P: arrossegant amb pan actiu
   const [zoom, setZoom] = useState(1)
   const [pageFormat, setPageFormat] = useState('A4L')   // TS-4b: format del document sencer
-  // PAL-1: paleta amb flyouts (estil Adobe). flyoutOpen = id del flyout desplegat; flyoutSel =
-  // última eina triada per flyout (la que queda visible al botó col·lapsat).
-  const [flyoutOpen, setFlyoutOpen] = useState(null)
-  const [flyoutSel, setFlyoutSel] = useState({})
-  const [flyoutRect, setFlyoutRect] = useState(null)   // rect del botó (popover en position:fixed)
   const [ribbonGroup, setRibbonGroup] = useState('file')
   const [dockTab, setDockTab] = useState('properties')   // D2: pestanya activa del dock dret
   // MODE PLANTILLA — no és un estat nou de React inventat per a la sessió: és el `kind` del
@@ -1899,17 +1894,6 @@ export default function TechSheetEditor() {
   const viewportRef = useRef(null)
   const wrapRef = useRef(null)
   const fileRef = useRef(null)
-  const holdTimer = useRef(null)        // PAL-1: timer del press-and-hold per obrir flyout
-  const suppressClick = useRef(false)   // PAL-1: evita activar l'eina si el hold ja ha obert el flyout
-  // PAL-1: tancar el flyout obert en clicar fora del seu contenidor.
-  useEffect(() => {
-    if (!flyoutOpen) return
-    const onDown = (e) => {
-      if (!(e.target.closest && e.target.closest(`[data-flyout="${flyoutOpen}"]`))) setFlyoutOpen(null)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [flyoutOpen])
   // E3: barra de menús en text (Fitxer/Edició/Objecte/Visualització) — mateix patró de tancar-per-clic-fora.
   const [menuOpen, setMenuOpen] = useState(null)   // 'file'|'edit'|'object'|'view'|null
   useEffect(() => {
@@ -3992,16 +3976,6 @@ export default function TechSheetEditor() {
     borderRadius: 6, border: `1px solid ${COL.border}`, background: COL.field,
     cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
   }
-  // Botó de la paleta d'eines vertical (C2): icona quadrada; eina activa ressaltada amb accent gold.
-  const paletteBtn = {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30,
-    borderRadius: 6, border: `1px solid transparent`, background: 'transparent',
-    cursor: 'pointer', color: COL.textMain, fontFamily: FONT,
-  }
-  // Doble intensitat d'actiu (P-C): la paleta fixa una EINA, no selecciona un element →
-  // gold PLE + text blanc (mateix tractament que el botó de mode del Taller). El goldPale
-  // queda reservat per a "element seleccionat" (fila de POM, forma activa).
-  const paletteBtnOn = { borderColor: COL.gold, background: COL.gold, color: 'var(--white)' }
   // Barra contextual (C4): mateixa pell que la resta de la closca (tokens globals, T1), discreta,
   // separada de la topbar i del viewport per un filet molt fi (1px COL.border) — com el peu d'estat.
   const CTX_BG = COL.sidebar, CTX_BORDER = COL.border, CTX_TEXT = COL.textMain
@@ -4293,66 +4267,35 @@ export default function TechSheetEditor() {
     node_editing: t('tech_sheet.node_editing'),
   }
 
-  // PAL-1: PALETA D'EINES (estil Adobe) — 6 categories amb separadors; els grups amb múltiples
-  // eines són FLYOUTS (icona + ▸; clic al triangle o press-and-hold desplega; l'última usada queda
-  // visible). Es conserven els tool keys i TOTS els handlers (RECT_TOOLS/LINE_TOOLS/PRESET_TOOLS,
-  // onStageMouseDown…): això és només presentació + agrupació. Cap eina de la paleta és un
-  // placeholder: totes tenen handler (el suport de `soon` era codi mort, retirat a F7).
-  const PALETTE = [
-    // `node` i `subpath` han marxat a la tab "Editar" del ribbon: són les úniques dues eines de
-    // la paleta que no creen res —seleccionen més fi dins d'un objecte que ja existeix— i el
-    // seu lloc és al costat de la resta d'eines d'edició, no entre les de dibuix.
-    { cat: 'select', items: [
-      { kind: 'tool', k: 'select', icon: 'ti-pointer-2', label: t('tech_sheet.tool_select') },
-    ] },
-    { cat: 'draw', items: [
-      { kind: 'tool', k: 'draw', icon: 'ti-pencil', label: t('tech_sheet.tool_draw') },
-      { kind: 'tool', k: 'pen', icon: 'ti-vector-bezier', label: t('tech_sheet.tool_pen') },
-      { kind: 'flyout', id: 'shapes', label: t('tech_sheet.tool_group_shapes'), tools: [
-        { k: 'rect', icon: 'ti-square', label: t('tech_sheet.tool_rect') },
-        { k: 'rect_round', icon: 'ti-square-rounded', label: t('tech_sheet.tool_rect_round') },
-        { k: 'ellipse', icon: 'ti-circle', label: t('tech_sheet.tool_ellipse') },
-        { k: 'polygon', icon: 'ti-hexagon', label: t('tech_sheet.tool_polygon') },
-      ] },
-      { kind: 'flyout', id: 'lines', label: t('tech_sheet.tool_group_lines'), tools: [
-        { k: 'line', icon: 'ti-line', label: t('tech_sheet.tool_line') },
-        { k: 'line_dot', icon: 'ti-line-dashed', label: t('tech_sheet.tool_line_dot') },
-      ] },
-      { kind: 'flyout', id: 'arrows', label: t('tech_sheet.tool_group_arrows'), tools: [
-        { k: 'arrow', icon: 'ti-arrow-right', label: t('tech_sheet.tool_arrow') },
-        { k: 'arrow2', icon: 'ti-arrows-horizontal', label: t('tech_sheet.tool_arrow2') },
-        { k: 'arrow_curve', icon: 'ti-vector-spline', label: t('tech_sheet.tool_arrow_curve') },
-      ] },
-    ] },
-    { cat: 'text', items: [
-      { kind: 'flyout', id: 'text', label: t('tech_sheet.tool_group_text'), tools: [
-        { k: 'text', icon: 'ti-text-recognition', label: t('tech_sheet.tool_text') },
-        { k: 'text_box', icon: 'ti-text-scan-2', label: t('tech_sheet.tool_text_box') },
-      ] },
-    ] },
-    { cat: 'annot', items: [
-      { kind: 'tool', k: 'cota_pom', icon: 'ti-ruler-measure', label: t('tech_sheet.tool_cota_pom') },
-      { kind: 'tool', k: 'note', icon: 'ti-arrow-guide', label: t('tech_sheet.tool_note') },
-      { kind: 'flyout', id: 'presets', label: t('tech_sheet.tool_group_presets'), tools: [
-        { k: 'preset_callout', icon: 'ti-message-2-share', label: t('tech_sheet.preset_callout') },
-        { k: 'preset_detail_circle', icon: 'ti-circle-dashed', label: t('tech_sheet.preset_detail_circle') },
-        { k: 'preset_legend', icon: 'ti-list-details', label: t('tech_sheet.preset_legend') },
-      ] },
-    ] },
-    { cat: 'nav', items: [
-      // PEÇA P: pan funcional (arrossega el llenç). També s'activa amb la barra espaiadora.
-      { kind: 'tool', k: 'pan', icon: 'ti-hand-stop', label: t('tech_sheet.tool_pan') },
-    ] },
+  // D1 — Del `PALETTE` amb categories i flyouts que alimentava la paleta vertical només queda
+  // el que encara fa falta: resoldre icona i etiqueta de l'EINA ACTIVA per a l'indicador de
+  // context del ribbon. Les eines s'ofereixen al tab Inserir (C1), i és allà on viu l'ordre.
+  const TOOL_DEFS = [
+    { k: 'select', icon: 'ti-pointer-2', label: t('tech_sheet.tool_select') },
+    { k: 'pan', icon: 'ti-hand-stop', label: t('tech_sheet.tool_pan') },
+    { k: 'node', icon: 'ti-vector', label: t('tech_sheet.tool_node') },
+    { k: 'subpath', icon: 'ti-vector-triangle', label: t('tech_sheet.tool_subpath') },
+    { k: 'draw', icon: 'ti-pencil', label: t('tech_sheet.tool_draw') },
+    { k: 'pen', icon: 'ti-vector-bezier', label: t('tech_sheet.tool_pen') },
+    { k: 'rect', icon: 'ti-square', label: t('tech_sheet.tool_rect') },
+    { k: 'rect_round', icon: 'ti-square-rounded', label: t('tech_sheet.tool_rect_round') },
+    { k: 'ellipse', icon: 'ti-circle', label: t('tech_sheet.tool_ellipse') },
+    { k: 'polygon', icon: 'ti-hexagon', label: t('tech_sheet.tool_polygon') },
+    { k: 'line', icon: 'ti-line', label: t('tech_sheet.tool_line') },
+    { k: 'line_dot', icon: 'ti-line-dashed', label: t('tech_sheet.tool_line_dot') },
+    { k: 'arrow', icon: 'ti-arrow-right', label: t('tech_sheet.tool_arrow') },
+    { k: 'arrow2', icon: 'ti-arrows-horizontal', label: t('tech_sheet.tool_arrow2') },
+    { k: 'arrow_curve', icon: 'ti-vector-spline', label: t('tech_sheet.tool_arrow_curve') },
+    { k: 'text', icon: 'ti-text-recognition', label: t('tech_sheet.tool_text') },
+    { k: 'text_box', icon: 'ti-text-scan-2', label: t('tech_sheet.tool_text_box') },
+    { k: 'cota_pom', icon: 'ti-ruler-measure', label: t('tech_sheet.tool_cota_pom') },
+    { k: 'note', icon: 'ti-arrow-guide', label: t('tech_sheet.tool_note') },
+    { k: 'preset_callout', icon: 'ti-message-2-share', label: t('tech_sheet.preset_callout') },
+    { k: 'preset_detail_circle', icon: 'ti-circle-dashed', label: t('tech_sheet.preset_detail_circle') },
+    { k: 'preset_legend', icon: 'ti-list-details', label: t('tech_sheet.preset_legend') },
   ]
-  // Eines funcionals planes (per resoldre icona/etiqueta de l'eina activa a la barra contextual).
-  const flatTools = PALETTE.flatMap(c => c.items.flatMap(it => it.kind === 'flyout' ? it.tools : (it.kind === 'tool' ? [it] : [])))
-  const activeToolDef = flatTools.find(tl => tl.k === tool) || { icon: 'ti-pointer-2', label: t('tech_sheet.tool_select') }
+  const activeToolDef = TOOL_DEFS.find(tl => tl.k === tool) || TOOL_DEFS[0]
   // Flyout: eina visible (col·lapsada) = l'activa si pertany al grup, si no l'última triada, si no la 1a.
-  const flyoutVisible = (fl) => fl.tools.find(tl => tl.k === tool) || fl.tools.find(tl => tl.k === flyoutSel[fl.id]) || fl.tools[0]
-  const cancelHold = () => { if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null } }
-  const openFlyout = (id, rect) => { setFlyoutRect(rect); setFlyoutOpen(id) }
-  const startHold = (id, rect) => { cancelHold(); holdTimer.current = setTimeout(() => { suppressClick.current = true; openFlyout(id, rect) }, 300) }
-  const pickFlyoutTool = (fl, k) => { setFlyoutSel(s => ({ ...s, [fl.id]: k })); setTool(k); setFlyoutOpen(null); cancelHold() }
   // IMP-1/2: panell d'importació al dock dret. openImport substitueix els tabs; closeImport hi torna.
   const openImport = (mode) => { setImportFile(null); setImportDrag(false); setImportMode(mode) }
   const closeImport = () => { setImportMode(null); setImportFile(null); setImportDrag(false) }
