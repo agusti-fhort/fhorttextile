@@ -580,11 +580,21 @@ def _te_regles(model) -> bool:
 
     El que NO canvia: un model sense regles enlloc continua sense poder graduar (ValueError al
     generador, `{}` al preview). La porta s'alinea amb el motor; no s'obre.
+
+    R2 (2026-07-21) — la porta preguntava pel PUNTER del set (`bool(grading_rule_set_id)`), no
+    per les REGLES. Un model apuntant a un GradingRuleSet BUIT passava el gate i graduava a
+    FIXED tota la taula. Ara la segona branca compta regles actives del set: mateixa pregunta
+    que respon `_load_grading_rules`, que és de qui ha de ser el mirall.
     """
     from fhort.models_app.models import ModelGradingRule
     if ModelGradingRule.objects.filter(model_id=model.id, actiu=True).exists():
         return True
-    return bool(model.grading_rule_set_id)
+    if not model.grading_rule_set_id:
+        return False
+    from fhort.pom.models import GradingRule
+    return GradingRule.objects.filter(
+        rule_set_id=model.grading_rule_set_id, actiu=True
+    ).exists()
 
 
 def _load_grading_rules(model) -> dict:
@@ -597,21 +607,23 @@ def _load_grading_rules(model) -> dict:
 
     Imports DINS la funció (mateix idioma que la resta del fitxer) per evitar cicles
     models_app ↔ pom a load time.
+
+    R4 (2026-07-21) — aquí hi havia un `except Exception: logger.warning(...); return {}`. Un
+    diccionari buit és indistingible de "aquest model no té regles", o sigui que QUALSEVOL
+    error carregant-les es convertia en graduar-ho tot a FIXED amb un 200 OK. Era la segona
+    porta al mateix símptoma del 163, independent del ruleset buit. Ara un error de càrrega
+    puja: val més una propagació que peta que una que menteix.
     """
-    try:
-        from fhort.models_app.models import ModelGradingRule
-        rules = ModelGradingRule.objects.filter(model_id=model.id, actiu=True)
-        if rules.exists():
-            return {r.pom_id: r for r in rules}
-        if model.grading_rule_set_id:
-            from fhort.pom.models import GradingRule
-            return {r.pom_id: r for r in GradingRule.objects.filter(
-                rule_set_id=model.grading_rule_set_id, actiu=True
-            )}
-        return {}
-    except Exception as e:
-        logger.warning(f"Could not load grading rules: {e}")
-        return {}
+    from fhort.models_app.models import ModelGradingRule
+    rules = ModelGradingRule.objects.filter(model_id=model.id, actiu=True)
+    if rules.exists():
+        return {r.pom_id: r for r in rules}
+    if model.grading_rule_set_id:
+        from fhort.pom.models import GradingRule
+        return {r.pom_id: r for r in GradingRule.objects.filter(
+            rule_set_id=model.grading_rule_set_id, actiu=True
+        )}
+    return {}
 
 
 def _load_model_overrides(model_id: int) -> dict:

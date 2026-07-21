@@ -717,13 +717,29 @@ def update_model_step2(request, model_id):
     # PG-2 Cas B: re-materialitza si hi ha ruleset (wipe-and-recreate cobreix canvi de profile).
     # L'atomic embolcalla només la materialització → si peta, el model queda sense MGR i gradua
     # pel fallback PG-1 (ruleset extern). Degradació gràcil INTENCIONAL, no descuit.
+    n_regles = None
     if model.grading_rule_set_id:
         from django.db import transaction
         from fhort.models_app.services import materialize_model_grading_rules
         with transaction.atomic():
-            materialize_model_grading_rules(
+            n_regles = materialize_model_grading_rules(
                 model, model.grading_rule_set.regles.all(), origen='CANONICAL')
-    return Response({'id': model.id, 'codi_intern': model.codi_intern})
+        # R1 — el retorn d'aquesta funció es DESCARTAVA. Materialitzar 0 regles (ruleset buit)
+        # esborrava les residents i tornava un 200 mut: exactament el que va buidar el 163.
+        # Amb la validació D1 això ja no hauria de poder passar per l'endpoint; si passa igual
+        # (dades tocades per un altre camí), que quedi rastre i que la resposta ho digui.
+        if n_regles == 0:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"update_model_step2: model {model.codi_intern} (id={model.id}) ha "
+                f"materialitzat 0 regles des del GradingRuleSet {model.grading_rule_set_id} "
+                f"— el model queda SENSE regles residents."
+            )
+    return Response({
+        'id': model.id,
+        'codi_intern': model.codi_intern,
+        'regles_materialitzades': n_regles,
+    })
 
 
 @api_view(['GET'])
