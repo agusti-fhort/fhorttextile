@@ -75,6 +75,7 @@ export default function ModelWizard() {
   const [modelBaseSize, setModelBaseSize] = useState(null)
   const [modelSizeSystemNom, setModelSizeSystemNom] = useState('')
   const [sizingHydrated, setSizingHydrated] = useState(false)
+  const [runPerdut, setRunPerdut] = useState([])   // talles del run desat que ja no són al sistema
   // Bloc 4 — GRADUACIÓ (sprint WIZARD-COMPLET). Eixos target/construction/grup + size_system venen
   // fixats dels passos 2-3 (arbre únic: el grup el mana l'item, no es re-tria); l'usuari només tria FIT.
   const [gradingRuleSets_, setGradingRuleSets_] = useState([])
@@ -201,12 +202,17 @@ export default function ModelWizard() {
     if (!sys) return   // el sistema del model no és a l'oferta (inactiu o d'un altre target): no forcem res
     const labels = labelsOf(sys)
     // El run es desa amb '·' (skeletonPayload); tolerem ','/';' d'imports antics.
-    const run = modelSizeRun.split(/[·,;]/).map(x => x.trim()).filter(Boolean).filter(l => labels.includes(l))
+    const desat = modelSizeRun.split(/[·,;]/).map(x => x.trim()).filter(Boolean)
+    const run = desat.filter(l => labels.includes(l))
     const vius = run.length ? run : labels
     setSelSystem(sys)
     setSizeDefs(sys.talles || [])
     setSelectedSizes(vius)
     setBaseSize(modelBaseSize && vius.includes(modelBaseSize) ? modelBaseSize : null)
+    // El run desat pot portar talles que ja no són al sistema (talles retirades, deriva de dades).
+    // No es poden rehidratar, però tampoc es descarten en silenci: desar amb el run escurçat
+    // reescriuria size_run_model, i això s'ha de veure abans de prémer Guardar.
+    setRunPerdut(desat.filter(l => !labels.includes(l)))
     setSizingHydrated(true)
   }, [systems, isEditMode, sizingHydrated, modelSizeSystemId, modelSizeRun, modelBaseSize])
 
@@ -250,14 +256,20 @@ export default function ModelWizard() {
         const gg = ggRes.data?.results ?? (Array.isArray(ggRes.data) ? ggRes.data : [])
         const map = {}; gg.forEach(g => { map[g.id] = g.codi })
         setGradingRuleSets_(rs); setGgCodiById(map)
-        if (gradingRuleSetId && !fit) {
-          const cur = rs.find(r => r.id === gradingRuleSetId)
-          if (cur?.fit_type_codi) setFit(cur.fit_type_codi)
-        }
       })
       .catch(() => { if (alive) setGradingRuleSets_([]) })
     return () => { alive = false }
   }, [block])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // El fit vigent es deriva del ruleset del model. Viu en un efecte PROPI perquè al camí
+  // «Canviar graduació» (?block=4) el bloc s'obre al mount: l'efecte de càrrega corria amb
+  // gradingRuleSetId encara null (el prefill no havia resolt) i el fit no es derivava mai —
+  // el picker quedava amagat justament al camí que F1.1 volia rescatar.
+  useEffect(() => {
+    if (fit || !gradingRuleSetId || !gradingRuleSets_.length) return
+    const cur = gradingRuleSets_.find(r => r.id === gradingRuleSetId)
+    if (cur?.fit_type_codi) setFit(cur.fit_type_codi)
+  }, [gradingRuleSets_, gradingRuleSetId, fit])
 
   // Sprint ÀMBIT — el node de la peça (item → família → grup) viatja als eixos: un contenidor amb
   // àmbit aplica si el conté a ell o a un ancestre seu. Sense àmbit → fallback al garment_group.
@@ -283,7 +295,6 @@ export default function ModelWizard() {
     !target && t('grading.axis_target'),
     !construction && t('grading.axis_construction'),
     !garmentGroupCodi && t('grading.axis_group'),
-    !sizingResult && t('grading.axis_size_system'),
   ].filter(Boolean)
 
   // B1 — coincidències estrictes per als eixos FIXATS (incloent el fit triat). Consumeix el matcher
@@ -436,6 +447,14 @@ export default function ModelWizard() {
 
       {error && <div style={errBox}>{error}</div>}
 
+      {/* El run desat portava talles que ja no són al sistema del model: no s'han pogut rehidratar
+          i desar les reescriuria. Es diu SEMPRE (a qualsevol pas), abans de prémer Guardar. */}
+      {runPerdut.length > 0 && (
+        <div style={{ ...errBox, background: 'var(--warn-bg)', color: 'var(--warn)', border: '0.5px solid var(--warn)' }}>
+          {t('model_wizard.run_lost_sizes', { talles: runPerdut.join(' · ') })}
+        </div>
+      )}
+
       <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 20 }}>
         {block === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -568,7 +587,7 @@ export default function ModelWizard() {
                             no amb ocultació); es marca, que és el que evitava el parany del 174. */}
                         {isEditMode && modelSizeSystemId === s.id && (
                           <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '1px 6px', borderRadius: 999,
-                                         background: 'var(--warn-bg)', color: 'var(--warn)', border: '0.5px solid var(--warn)' }}>
+                                         background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)' }}>
                             {t('model_wizard.model_size_system')}
                           </span>
                         )}
@@ -655,10 +674,10 @@ export default function ModelWizard() {
                     </div>
                   )}
                 </Field>
-                {gradingDropped && gradingRuleSetId == null && (
+                {gradingDropped && (
                   <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--warn)', background: 'var(--warn-bg)',
                                 border: '0.5px solid var(--warn)', borderRadius: 6, padding: '8px 12px' }}>
-                    {t('model_wizard.grading_dropped')}
+                    {t(gradingRuleSetId != null ? 'model_wizard.grading_dropped_replaced' : 'model_wizard.grading_dropped')}
                   </div>
                 )}
                 {fit && autoProposed && gradingRuleSetId != null && (

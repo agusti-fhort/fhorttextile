@@ -933,7 +933,6 @@
     "grading_system": "Sistema de tallas",
     "no_grading": "Sin graduación (elegir más tarde)",
     "pick_fit": "Elige el fit",
-    "grading_needs_sizes": "Define primero las tallas (paso 3) para poder elegir la graduación.",
     "no_grading_available": "No hay ningún juego de reglas que coincida con esta combinación de prenda y tallas. Puedes continuar sin graduación y añadirla más tarde.",
     "grading_auto_proposed": "Propuesto automáticamente (única coincidencia). Puedes cambiarlo o elegir «Sin graduación».",
     "size_run_replace_confirm": "El sistema «{{sistema}}» no contiene todas las tallas del run actual. Esto sustituirá el run de {{from}} tallas por {{to}} tallas y reasignará la talla base. ¿Quieres continuar?",
@@ -942,7 +941,9 @@
     "grading_needs_base": "Falta la TALLA BASE: elígela en el paso 3 (debe ser una de las tallas del run).",
     "grading_missing_axes": "Todavía no se puede buscar graduación: falta {{eixos}}.",
     "model_size_system": "Sistema del modelo",
-    "grading_dropped": "La graduación que tenía el modelo ya no casa con los ejes elegidos (prenda, construcción o sistema de tallas). Se ha desasignado: elige otra o marca «Sin graduación»."
+    "grading_dropped": "La graduación que tenía el modelo ya no casa con los ejes elegidos (prenda, construcción o sistema de tallas). Se ha desasignado: elige otra o marca «Sin graduación».",
+    "grading_dropped_replaced": "La graduación que tenía el modelo ya no casa con los ejes elegidos y se ha sustituido por la única compatible. Revísala antes de guardar.",
+    "run_lost_sizes": "Atención: el run guardado del modelo contiene tallas que ya no están en su sistema de tallas ({{talles}}). No se han podido recuperar; si guardas ahora, el run se quedará sin ellas."
   },
   "models_list": {
     "title": "Modelos",

@@ -933,7 +933,6 @@
     "grading_system": "Sistema de talles",
     "no_grading": "Sense graduació (triar més tard)",
     "pick_fit": "Tria el fit",
-    "grading_needs_sizes": "Defineix primer les talles (pas 3) per poder triar la graduació.",
     "no_grading_available": "No hi ha cap joc de regles que casi amb aquesta combinació de peça i talles. Pots continuar sense graduació i afegir-la més tard.",
     "grading_auto_proposed": "Proposat automàticament (única coincidència). Pots canviar-lo o triar «Sense graduació».",
     "size_run_replace_confirm": "El sistema «{{sistema}}» no conté totes les talles del run actual. Això substituirà el run de {{from}} talles per {{to}} talles i reassignarà la talla base. Vols continuar?",
@@ -942,7 +941,9 @@
     "grading_needs_base": "Falta la TALLA BASE: tria-la al pas 3 (ha de ser una de les talles del run).",
     "grading_missing_axes": "Encara no es pot buscar graduació: falta {{eixos}}.",
     "model_size_system": "Sistema del model",
-    "grading_dropped": "La graduació que tenia el model ja no casa amb els eixos triats (peça, construcció o sistema de talles). S'ha desassignat: torna a triar-ne una o marca «Sense graduació»."
+    "grading_dropped": "La graduació que tenia el model ja no casa amb els eixos triats (peça, construcció o sistema de talles). S'ha desassignat: torna a triar-ne una o marca «Sense graduació».",
+    "grading_dropped_replaced": "La graduació que tenia el model ja no casa amb els eixos triats i s'ha substituït per l'única compatible. Revisa-la abans de desar.",
+    "run_lost_sizes": "Atenció: el run desat del model conté talles que ja no són al seu sistema de talles ({{talles}}). No s'han pogut recuperar; si deses ara, el run quedarà sense elles."
   },
   "models_list": {
     "title": "Models",
