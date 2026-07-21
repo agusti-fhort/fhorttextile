@@ -2564,6 +2564,7 @@
     "sec_stroke": "Traç i puntes",
     "sec_fill": "Emplenat",
     "sec_rotation": "Rotació",
+    "panel_paused_editing": "En pausa: s'estan editant els nodes d'aquest element al llenç.",
     "rotation_of_child": "Rotació del fill seleccionat",
     "poms_of_model": "POMs del model ({{n}})",
     "poms_hint": "Clica un POM per acotar-lo al croquis: la cota naixerà amb la seva nomenclatura.",

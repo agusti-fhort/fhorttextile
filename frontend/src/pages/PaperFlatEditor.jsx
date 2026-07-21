@@ -20,7 +20,7 @@ const DEFAULT_HANDLE_OFFSET = 22
 // F1 — el sub-editor NO té UI pròpia: les eines viuen a la barra superior del pare. Aquí només el
 // canvas Paper + la lògica. El pare controla l'eina activa (prop `nodeTool`), rep l'estat de selecció
 // (`onNodeState`) i dispara accions per l'API imperativa `run(name, ...args)` (ref).
-const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onSplitObject, onNodeState, nodeTool = 'shape', onEnterDirect }, ref) {
+const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH, toPx, zoom = 1, onCommit, onSplitObject, onNodeState, nodeTool = 'shape', pointerActive = true, onEnterDirect }, ref) {
   const canvasRef = useRef(null)
   const scopeRef = useRef(null)
   const sketchLayerRef = useRef(null)
@@ -851,7 +851,9 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   const cursor = nodeTool === 'add' ? 'copy' : nodeTool === 'remove' ? 'not-allowed'
     : nodeTool === 'convert' ? 'cell' : nodeTool === 'scissors' ? 'crosshair' : 'default'
   return (
-    <div style={{ position: 'absolute', left: 0, top: 0, width: pageW * zoom, height: pageH * zoom, zIndex: 20, overflow: 'hidden' }}>
+    // `pointerEvents` commutat és l'arbitratge: quan el mode és d'objecte, aquest canvas deixa
+    // passar el punter a Konva sense desmuntar-se ni perdre l'escena (precedent del PoC).
+    <div style={{ position: 'absolute', left: 0, top: 0, width: pageW * zoom, height: pageH * zoom, zIndex: 20, overflow: 'hidden', pointerEvents: pointerActive ? 'auto' : 'none' }}>
       <canvas ref={canvasRef} width={pageW * zoom} height={pageH * zoom}
         style={{ position: 'absolute', left: 0, top: 0, width: pageW * zoom, height: pageH * zoom, touchAction: 'none', cursor }} />
     </div>

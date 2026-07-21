@@ -2564,6 +2564,7 @@
     "sec_stroke": "Trazo y puntas",
     "sec_fill": "Relleno",
     "sec_rotation": "Rotación",
+    "panel_paused_editing": "En pausa: se están editando los nodos de este elemento en el lienzo.",
     "rotation_of_child": "Rotación del hijo seleccionado",
     "poms_of_model": "POMs del modelo ({{n}})",
     "poms_hint": "Haz clic en un POM para acotarlo en el croquis: la cota nacerá con su nomenclatura.",

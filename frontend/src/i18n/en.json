@@ -2564,6 +2564,7 @@
     "sec_stroke": "Stroke and caps",
     "sec_fill": "Fill",
     "sec_rotation": "Rotation",
+    "panel_paused_editing": "Paused: this element's nodes are being edited on the canvas.",
     "rotation_of_child": "Rotation of the selected child",
     "poms_of_model": "Model POMs ({{n}})",
     "poms_hint": "Click a POM to dimension it on the sketch: the callout is created with its nomenclature.",

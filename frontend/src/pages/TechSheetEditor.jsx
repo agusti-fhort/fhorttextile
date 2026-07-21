@@ -2927,6 +2927,9 @@ export default function TechSheetEditor() {
   // Bloc 2 (i): doble-clic al llenç = final descobrible d'un traç obert (ploma/fletxa curva),
   // equivalent a Enter. Només actua si hi ha un traç en curs amb ≥2 punts.
   const finishPenOnDblClick = () => {
+    // Aquest era l'únic handler del Stage SENSE guard: amb el sub-editor obert, un doble-clic
+    // per entrar a selecció directa també tancava el traç de la ploma que hi hagués en curs.
+    if (!konvaOwnsPointer) return
     if (penRef.current && penRef.current.points.length >= 2) finishPen(false)
   }
   // ── E2: 2n clic de nota-fletxa/cota → construeix el GRUP (children relatius a l'origen del grup) ──
@@ -2972,7 +2975,7 @@ export default function TechSheetEditor() {
     setCotaPreset(null)
   }
   const onStageMouseDown = (e) => {
-    if (editingFlatId) return
+    if (!konvaOwnsPointer) return
     if (tool === 'pan' || spaceHeld) return   // PEÇA P: el pan el gestiona el viewport, no el Stage
     if (!locked) { if (e.target === e.target.getStage()) clearSelection(); return }
     const pos = stagePoint()
@@ -3037,7 +3040,7 @@ export default function TechSheetEditor() {
     }
   }
   const onStageMouseMove = (e) => {
-    if (editingFlatId) return
+    if (!konvaOwnsPointer) return
     // S2: marcador de cursor a les regles (mm) — no interfereix amb marquee/dibuix, que
     // recalculen `pos` pel seu compte més avall.
     const cur = stagePoint()
@@ -3089,7 +3092,7 @@ export default function TechSheetEditor() {
     }
   }
   const onStageMouseUp = (e) => {
-    if (editingFlatId) return
+    if (!konvaOwnsPointer) return
     if ((tool === 'pen' || tool === 'arrow_curve') && penRef.current) {
       penRef.current.dragging = false
       const pos = stagePoint()
@@ -3319,6 +3322,16 @@ export default function TechSheetEditor() {
   }
   // F1 — dispara una acció sobre el canvas viu del sub-editor (close/open/split/removeSelection…).
   const runNode = (name, ...args) => paperFlatRef.current?.run?.(name, ...args)
+  // ARBITRATGE DE PUNTER (Camí 1). Fins ara la separació entre Konva i Paper era una exclusió
+  // total: tres handlers del Stage que sortien d'hora amb `editingFlatId` i un objecte que
+  // desapareixia de l'escena. Ara hi ha un MODE explícit i el punter se li assigna:
+  //   'objecte' → mana Konva (el canvas de Paper deixa passar el punter)
+  //   'forma'   → Paper, selecció de subpaths sencers (fletxa negra)
+  //   'node'    → Paper, selecció directa de nodes/segments/nanses (fletxa blanca)
+  // L'objecte editat ja NO surt de l'escena de Konva: es queda visible i al seu lloc, i Paper
+  // hi pinta les nanses per damunt. És el que fa que l'edició se senti in-place.
+  const pointerMode = !editingFlatId ? 'objecte' : (nodeTool === 'shape' ? 'forma' : 'node')
+  const konvaOwnsPointer = pointerMode === 'objecte'
   // F4 — mode edició de nodes actiu: cap acció d'abast OBJECTE (ribbon/menú/panell dret) hi és clicable.
   const nodeMode = !!editingFlatId
   // G1 — en entrar/sortir del mode edició, el mode per defecte és FORMA (fletxa negra): el primer gest
@@ -3859,6 +3872,14 @@ export default function TechSheetEditor() {
   const updateRotation = (deg) => (rotChildId
     ? updateChild(selObj.id, rotChildId, { rotation: deg })
     : updateObject(selObj.id, { rotation: deg }))
+  // B3 — GATE DEL PANELL DRET. Mentre s'estan manipulant nodes o formes d'un objecte, el panell
+  // no pot escriure sobre AQUEST MATEIX objecte: serien dues mans a la mateixa geometria (el
+  // model per una banda, el canvas viu per l'altra) i la que arribés segona guanyaria per atzar.
+  // Abans quedava amagat perquè l'edició era una transacció i el panell escrivia sobre una còpia
+  // que ningú tornava a llegir; sense transacció, el forat és visible. Els blocs afectats es
+  // deshabiliten amb un <fieldset disabled> i s'expliquen, en lloc d'ignorar el clic en silenci.
+  const panelLockedForEdit = !!editingFlatId && !!selObj
+    && (selObj.id === editingFlatId || selObj.id === editingFlatGroupId)
   const multiSelected = selectedObjects.length > 1
   const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
   const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse', 'path'].includes(o.type))
@@ -4677,7 +4698,7 @@ export default function TechSheetEditor() {
                   ordenem els objectes i pintem en una sola Layer (z per ordre d'array). */}
               <Layer>
                 <Rect x={0} y={0} width={pageW} height={pageH} fill={KONVA_COL.white} listening={false} />
-                {ordered.filter(o => o.id !== editingFlatId && o.visible !== false).map(o => (
+                {ordered.filter(o => o.visible !== false).map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
                     placeholderMode={templateMode}
@@ -4776,6 +4797,7 @@ export default function TechSheetEditor() {
                 zoom={zoom}
                 toPx={toPx}
                 nodeTool={nodeTool}
+                pointerActive={!konvaOwnsPointer}
                 onNodeState={setNodeSel}
                 onCommit={commitFlatEdit}
                 onSplitObject={handleSplitObject}
@@ -5024,6 +5046,7 @@ export default function TechSheetEditor() {
                 <SectionTitle>{t('tech_sheet.element')} · {selObj.type}</SectionTitle>
                 {selDim && (
                   <Contenidor titol={t('tech_sheet.dimensions_position')} icona="ti-ruler-2" fitContent>
+                    <BlocEnPausa pausa={panelLockedForEdit} motiu={t('tech_sheet.panel_paused_editing')}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 6 }}>
                       <button type="button" onClick={() => setRatioLocked(v => !v)} title={t('tech_sheet.keep_ratio')}
                         style={{ width: 24, height: 22, border: `1px solid ${ratioLocked ? COL.gold : COL.border}`, borderRadius: 4, background: ratioLocked ? COL.goldPale : COL.field, color: ratioLocked ? COL.gold : COL.textMuted, cursor: 'pointer' }}>
@@ -5052,6 +5075,7 @@ export default function TechSheetEditor() {
                           onChange={e => moveObjectTo(selObj, 'y', e.target.value)} style={propInput} />
                       </label>
                     </div>
+                    </BlocEnPausa>
                   </Contenidor>
                 )}
                 {textObj && (() => {
@@ -5120,6 +5144,7 @@ export default function TechSheetEditor() {
                     superior o el fill arrow/path d'un grup (cota) — i muta via updateShape. */}
                 {shapeObj && (
                   <Contenidor titol={t('tech_sheet.sec_stroke')} icona="ti-line" fitContent>
+                    <BlocEnPausa pausa={panelLockedForEdit} motiu={t('tech_sheet.panel_paused_editing')}>
                     {shapeObj.type === 'path' && subActive != null && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>
                         <span>{t('tech_sheet.subpath_active', { n: subActive + 1 })}</span>
@@ -5166,10 +5191,12 @@ export default function TechSheetEditor() {
                         </div>
                       )
                     })()}
+                    </BlocEnPausa>
                   </Contenidor>
                 )}
                 {(selObj.type === 'rect' || selObj.type === 'ellipse' || selObj.type === 'path') && (
                   <Contenidor titol={t('tech_sheet.sec_fill')} icona="ti-color-swatch" fitContent>
+                    <BlocEnPausa pausa={panelLockedForEdit} motiu={t('tech_sheet.panel_paused_editing')}>
                     <div style={propLabel}>{t('tech_sheet.fill')}
                       <ColorPicker
                         value={subActive != null ? (selObj.paths[subActive]?.fill || selObj.fill || KONVA_COL.white) : (selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : KONVA_COL.white)}
@@ -5177,6 +5204,7 @@ export default function TechSheetEditor() {
                           ? updateObject(selObj.id, { paths: selObj.paths.map((p, i) => i === subActive ? { ...p, fill: c } : p) })
                           : updateObject(selObj.id, { fill: c })} />
                     </div>
+                    </BlocEnPausa>
                   </Contenidor>
                 )}
                 {selObj.type === 'data_block' && (
@@ -5255,11 +5283,13 @@ export default function TechSheetEditor() {
                 )}
                 {!blocksTransform(rotObj) && (
                   <Contenidor titol={t('tech_sheet.sec_rotation')} icona="ti-rotate" fitContent>
+                    <BlocEnPausa pausa={panelLockedForEdit} motiu={t('tech_sheet.panel_paused_editing')}>
                     {rotChildId && <div style={{ fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>{t('tech_sheet.rotation_of_child')}</div>}
                     <label style={propLabel}>{t('tech_sheet.rotation_deg')}
                       <input type="number" min={0} max={360} step={1} value={Math.round(rotObj.rotation || 0)}
                         onChange={e => updateRotation(((Number(e.target.value) || 0) % 360 + 360) % 360)} style={propInput} />
                     </label>
+                    </BlocEnPausa>
                   </Contenidor>
                 )}
                 {(selObj.layer === 'free' || selObj.type === 'data_block') && (
@@ -5519,6 +5549,19 @@ export function ColorPicker({ value, onChange }) {
       <input type="color" value={value || KONVA_COL.textMain} onChange={e => onChange(e.target.value)} title={t('tech_sheet.more_colors')}
         style={{ width: 22, height: 22, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0, background: 'none' }} />
     </div>
+  )
+}
+
+// B3 — embolcall que deixa un bloc del panell EN LECTURA mentre el canvas té la mà a la
+// mateixa geometria. `fieldset disabled` desactiva d'una tacada inputs, selects i botons de
+// dins (ColorPicker inclòs), que és exactament el que cal i sense tocar cap control un per un.
+export function BlocEnPausa({ pausa, motiu, children }) {
+  if (!pausa) return children
+  return (
+    <fieldset disabled style={{ border: 'none', margin: 0, padding: 0, minWidth: 0, opacity: 0.45 }}>
+      <div style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, marginBottom: 4 }}>{motiu}</div>
+      {children}
+    </fieldset>
   )
 }
 
