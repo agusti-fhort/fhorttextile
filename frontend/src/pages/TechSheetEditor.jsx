@@ -4180,12 +4180,37 @@ export default function TechSheetEditor() {
   // pintura pendent que el desat fusiona des del canvas.
   const pintaEnCanvas = (accio, valor) => {
     if (!panelLockedForEdit) return false
+    // X2 — i si el sub-editor encara no s'ha muntat (`lazy` dins d'un <Suspense>), NO diguem
+    // que ens n'hem fet càrrec: `runNode` seria un no-op i el gest de l'usuari es perdria en
+    // silenci. Sense canvas obert no hi ha dues mans, i escriure al model és el correcte.
+    if (!paperFlatRef.current?.run) return false
     runNode(accio, valor)
     return true
   }
   const pintaFill = (c) => pintaEnCanvas('setFill', c)
   const pintaStroke = (c) => pintaEnCanvas('setStroke', c)
   const pintaStrokeWidth = (w) => pintaEnCanvas('setStrokeWidth', w)
+  // X2 — ESCRIURE PINTURA. Una sola porta per als tres canals i per als dos nivells, perquè
+  // el que s'escriu i el que es llegeix (`ftt/paint.js`) siguin la mateixa llei:
+  //   · amb una subpath activa → s'escriu NOMÉS en aquella subpath;
+  //   · sense subpath activa → s'escriu a l'objecte I s'esborren els sobreescrits que els
+  //     seus subpaths tinguessin d'aquesta clau.
+  // El segon punt és el que faltava. El subpath mana sobre l'objecte, o sigui que escriure
+  // a l'objecte sense netejar el subpath deixava l'ordre de l'usuari amagada per sempre. Al
+  // color gairebé no es notava (els subpaths solen tenir-lo buit i heretaven), però el gruix
+  // el porten SEMPRE escrit tots els productors —la ploma hi posa 1,2; l'SVG,
+  // `Math.max(0.2, …)`— i per això el gruix no es movia mai des del panell.
+  const patchPintura = (obj, patch) => (Array.isArray(obj?.paths)
+    ? { ...patch, paths: obj.paths.map(p => sensePintura(p, Object.keys(patch))) }
+    : patch)
+  const patchSubpath = (obj, i, patch) => ({ paths: obj.paths.map((p, k) => (k === i ? { ...p, ...patch } : p)) })
+  const pintaShape = (patch) => updateShape(subActive != null && Array.isArray(shapeObj?.paths)
+    ? patchSubpath(shapeObj, subActive, patch)
+    : patchPintura(shapeObj, patch))
+  // Pintura VIVA: amb el canvas obert els controls no poden llegir el model (allà no s'hi
+  // escriu res fins al desat) o rebotarien al valor antic a cada pulsació. L'estat el puja el
+  // sub-editor a `nodeSel` — ja hi era i no el llegia ningú.
+  const pinturaViva = panelLockedForEdit && nodeSel?.strokeWidth != null ? nodeSel : null
   const multiSelected = selectedObjects.length > 1
   const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
   const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse', 'path'].includes(o.type))
@@ -5456,15 +5481,21 @@ export default function TechSheetEditor() {
                     {shapeGroupId && <div style={{ fontSize: 'var(--fs-label)', color: COL.gold, marginBottom: 4 }}>{t('tech_sheet.group_shape')}</div>}
                     <div style={propLabel}>{t('tech_sheet.stroke_color')}
                       <ColorPicker
-                        value={subActive != null ? (shapeObj.paths[subActive]?.stroke || shapeObj.stroke || KONVA_COL.textMain) : (shapeObj.stroke || KONVA_COL.textMain)}
+                        value={(pinturaViva ? pinturaViva.stroke : resolStroke(shapeObj, shapeObj.paths?.[subActive ?? 0])) || KONVA_COL.textMain}
                         onChange={c => { if (pintaStroke(c)) return
-                          if (subActive != null) updateShape({ paths: shapeObj.paths.map((p, i) => i === subActive ? { ...p, stroke: c } : p) })
-                          else updateShape({ stroke: c, ...(shapeObj.type === 'arrow' ? { fill: c } : {}) }) }} />
+                          pintaShape({ stroke: c, ...(shapeObj.type === 'arrow' ? { fill: c } : {}) }) }} />
                     </div>
                     <label style={propLabel}>{t('tech_sheet.stroke_width')}
-                      <input type="number" min={0.5} max={5} step={0.5} value={shapeObj.strokeWidth || (shapeObj.type === 'arrow' ? 1.5 : 1)}
+                      <input type="number" min={0.1} max={5} step={0.1}
+                        value={pinturaViva ? pinturaViva.strokeWidth
+                          : shapeObj.type === 'path' ? resolStrokeWidth(shapeObj, shapeObj.paths?.[subActive ?? 0])
+                            /* rect/ellipse/line/arrow no tenen subpaths i cadascun porta el seu
+                               propi valor per defecte al render (rectProps/lineProps/arrowProps). */
+                            : (shapeObj.strokeWidth || (shapeObj.type === 'arrow' ? 1.5 : 1))}
                         onChange={e => { if (pintaStrokeWidth(e.target.value)) return
-                          updateShape({ strokeWidth: Number(e.target.value) || 1 }) }} style={propInput} />
+                          const n = Number(e.target.value)
+                          if (e.target.value === '' || !Number.isFinite(n)) return
+                          pintaShape({ strokeWidth: Math.max(0, n) }) }} style={propInput} />
                     </label>
                     {/* COMMIT 4: puntes per element (arrow i path). Escriu ambdós camps perquè
                         prevalguin sobre el legacy arrow2 (retrocompat via headConfig). */}
@@ -5486,10 +5517,11 @@ export default function TechSheetEditor() {
                   <Contenidor titol={t('tech_sheet.sec_fill')} icona="ti-color-swatch" fitContent>
                     <div style={propLabel}>{t('tech_sheet.fill')}
                       <ColorPicker
-                        value={subActive != null ? (selObj.paths[subActive]?.fill || selObj.fill || KONVA_COL.white) : (selObj.fill && selObj.fill !== 'transparent' ? selObj.fill : KONVA_COL.white)}
+                        value={(pinturaViva ? pinturaViva.fill : resolFill(selObj, selObj.paths?.[subActive ?? 0])) || KONVA_COL.white}
                         onChange={c => { if (pintaFill(c)) return
-                          if (subActive != null) updateObject(selObj.id, { paths: selObj.paths.map((p, i) => i === subActive ? { ...p, fill: c } : p) })
-                          else updateObject(selObj.id, { fill: c }) }} />
+                          updateObject(selObj.id, subActive != null && Array.isArray(selObj.paths)
+                            ? patchSubpath(selObj, subActive, { fill: c })
+                            : patchPintura(selObj, { fill: c })) }} />
                     </div>
                   </Contenidor>
                 )}
