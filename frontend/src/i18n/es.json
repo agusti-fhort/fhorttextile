@@ -3755,5 +3755,24 @@
     "sobrarien_help": "Estos NO se borran. Se listan para que los podes a mano desde la autoría de ítem si ya no pintan nada.",
     "sense_canvis": "No hay nada que escribir: la plantilla ya dice lo mismo que el modelo.",
     "err": "No se ha podido promover."
+  },
+  "promocio_poms": {
+    "title": "Propuesta de promoción al catálogo del cliente",
+    "subtitle": "Estos POMs se han guardado SOLO en el modelo. El catálogo «{{contenidor}}» no se ha tocado.",
+    "bucket": {
+      "amplia": "el catálogo no lo tiene",
+      "conflicte": "diverge del catálogo"
+    },
+    "estat": {
+      "nomes_model": "Solo en el modelo",
+      "promocionat": "Promocionado al catálogo"
+    },
+    "accio": {
+      "nomes_model": "Mantener solo en el modelo",
+      "promocionar": "Promocionar al catálogo"
+    },
+    "aplicar": "Promocionar {{n}} POM(s)",
+    "nota_intocable": "Solo subirán al catálogo los POMs marcados.",
+    "err": "No se ha podido aplicar la promoción. Inténtalo de nuevo."
   }
 }

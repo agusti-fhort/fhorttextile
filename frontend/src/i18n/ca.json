@@ -3755,5 +3755,24 @@
     "sobrarien_help": "Aquests NO s'esborren. Es llisten perquè els podis a mà des de l'autoria d'item si ja no hi pinten res.",
     "sense_canvis": "No hi ha res a escriure: la plantilla ja diu el mateix que el model.",
     "err": "No s'ha pogut promoure."
+  },
+  "promocio_poms": {
+    "title": "Proposta de promoció al catàleg del client",
+    "subtitle": "Aquests POMs s'han desat NOMÉS al model. El catàleg «{{contenidor}}» no s'ha tocat.",
+    "bucket": {
+      "amplia": "el catàleg no el té",
+      "conflicte": "divergeix del catàleg"
+    },
+    "estat": {
+      "nomes_model": "Només al model",
+      "promocionat": "Promocionat al catàleg"
+    },
+    "accio": {
+      "nomes_model": "Mantenir només al model",
+      "promocionar": "Promocionar al catàleg"
+    },
+    "aplicar": "Promocionar {{n}} POM(s)",
+    "nota_intocable": "Només pujaran al catàleg els POMs marcats.",
+    "err": "No s'ha pogut aplicar la promoció. Torna-ho a provar."
   }
 }

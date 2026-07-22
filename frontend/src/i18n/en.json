@@ -3755,5 +3755,24 @@
     "sobrarien_help": "These are NOT deleted. They are listed so you can prune them by hand from item authoring if they no longer belong.",
     "sense_canvis": "Nothing to write: the template already says the same as the model.",
     "err": "The promotion failed."
+  },
+  "promocio_poms": {
+    "title": "Proposal to promote to the client catalogue",
+    "subtitle": "These POMs were saved to the model ONLY. The «{{contenidor}}» catalogue was left untouched.",
+    "bucket": {
+      "amplia": "not in the catalogue",
+      "conflicte": "differs from the catalogue"
+    },
+    "estat": {
+      "nomes_model": "Model only",
+      "promocionat": "Promoted to catalogue"
+    },
+    "accio": {
+      "nomes_model": "Keep on the model only",
+      "promocionar": "Promote to catalogue"
+    },
+    "aplicar": "Promote {{n}} POM(s)",
+    "nota_intocable": "Only the marked POMs will go into the catalogue.",
+    "err": "The promotion could not be applied. Please try again."
   }
 }
