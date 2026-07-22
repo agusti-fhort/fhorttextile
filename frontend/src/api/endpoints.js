@@ -137,6 +137,10 @@ export const watchpoints = {
   create: (data) => client.post('/api/v1/watchpoints/', data),          // {model, task?, text}
   resolve: (id, data) => client.post(`/api/v1/watchpoints/${id}/resolve/`, data || {}),
   reopen: (id) => client.post(`/api/v1/watchpoints/${id}/reopen/`),
+  // D1 — aplicar una proposta de promoció (Watchpoint amb dades.codi='promocio_poms').
+  // Només entren al catàleg del client els pom_id que s'hi esmenten explícitament.
+  promocionarPoms: (modelId, data) =>
+    client.post(`/api/v1/models/${modelId}/promocionar-poms/`, data),
 }
 
 // Fitxers del model — panell info de fitting (5B.6-B1) i FilePicker de l'editor (S03b · P7).

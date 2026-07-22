@@ -1986,9 +1986,12 @@ def import_session_confirmar_view(request, token):
             derive_rules_from_fitxa, resolve_grading_container, classifica_fitxa_vs_contenidor)
         from fhort.pom.models import FitType, Target, ConstructionType, GradingRuleSet
         from fhort.models_app.services import (
-            materialize_model_grading_rules_from_specs, afegeix_regles_al_contenidor)
+            materialize_model_grading_rules_from_specs, afegeix_regles_al_contenidor,
+            proposta_promocio, resum_proposta_promocio)
+        from fhort.models_app.models import Watchpoint
         from fhort.pom.services import maybe_learn_customer_alias
 
+        watchpoint_promocio = None
         grading_avisos = []
         grading_bloqueigs = []
         # REFERENT (llei S24): el run del DOCUMENT en llengua-tenant. Es passa pel MATEIX
@@ -2267,16 +2270,19 @@ def import_session_confirmar_view(request, token):
                                               'motiu': ("Import W5 — divergència vs catàleg del "
                                                         "contenidor (INTOCABLE)")})
                                 n_ovr += 1
-                        if cls['conflicte']:
-                            grading_avisos.append(
-                                f"⚠️ Watchpoint: {len(cls['conflicte'])} POM(s) divergeixen del catàleg "
-                                f"del contenidor #{container.id} (INTOCABLE); desats com a override "
-                                f"per-talla al model (el catàleg del client NO s'ha tocat).")
-                        if cls['amplia']:
-                            grading_avisos.append(
-                                f"⚠️ Watchpoint: {len(cls['amplia'])} POM(s) de la fitxa no són al "
-                                f"contenidor #{container.id}; desats com a override per-talla al model "
-                                f"(contenidor intocable).")
+                        # D1 — PROPOSTA DE PROMOCIÓ. Aquí hi havia dos avisos de text lliure que
+                        # ningú no llegia mai: anaven a `grading_avisos`, que el front descarta, i a
+                        # `session.avisos`, que cap serialitzador exposa. Els POMs que no entraven al
+                        # catàleg quedaven registrats enlloc visible — la pèrdua silenciosa que
+                        # aquest sprint tanca. Ara en surt un Watchpoint ESTRUCTURAT i accionable
+                        # (mateix mecanisme viu que l'import de config: `dades` + WatchpointsPanel).
+                        proposta = proposta_promocio(cls, container, base_def_id)
+                        if proposta:
+                            watchpoint_promocio = Watchpoint.objects.create(
+                                model=model, task=None, created_by=user_profile,
+                                text=resum_proposta_promocio(proposta),
+                                dades=proposta,
+                            )
                         if cls['sembra']:
                             grading_avisos.append(
                                 f"{len(cls['sembra'])} POM(s) coincideixen amb el catàleg: el model "
@@ -2373,6 +2379,111 @@ def import_session_confirmar_view(request, token):
         'grading_rule_set': (new_rule_set.nom if new_rule_set else None),
         'grading_rules': n_rules,
         'grading_avisos': grading_avisos,
+        # D1 — la proposta viatja també a la resposta perquè el wizard la pugui ensenyar
+        # a l'acte; la font persistent, però, és el Watchpoint (sobreviu al tancament del
+        # wizard, que és justament on abans es perdia tot).
+        'proposta_promocio': (watchpoint_promocio.dades if watchpoint_promocio else None),
+        'proposta_promocio_watchpoint_id': (watchpoint_promocio.id if watchpoint_promocio else None),
         'message': f'Importació confirmada: {n_bm} POMs ({n_bm_valors} amb valor de base), regla '
                    f'(deltes+breaks) retinguda al model; grading propagat pendent de projecció conscient.',
     }, status=201)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# D1 · PROPOSTA DE PROMOCIÓ — aplicar la decisió humana, POM a POM.
+#
+# L'import deixa els POMs `amplia`/`conflicte` NOMÉS al model i n'obre un Watchpoint
+# estructurat (v. `proposta_promocio`). Aquest endpoint és l'altra meitat: el moment en què
+# algú decideix que un POM concret ha d'entrar al catàleg del client.
+#
+# Res s'hi escriu automàticament, ni tan sols aquí: només entren al contenidor els pom_id
+# que arriben explícitament a `promocions`. Els que no s'hi esmenten es queden com estan.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def promocionar_poms_view(request, model_id):
+    """Promociona al contenidor de client els POMs triats d'una proposta d'import.
+
+    Body: {'watchpoint_id': int, 'promocions': [pom_id, ...]}
+
+    Per a cada POM promocionat:
+      1. la seva regla entra al contenidor (`afegeix_regles_al_contenidor` — el mateix camí
+         que ja fa servir l'import per al contenidor nou o esquelet: no n'estrenem cap);
+      2. se n'esborren els `ModelGradingOverride`. Aquest pas NO és cosmètic: l'override té
+         prioritat sobre qualsevol regla (`generate_graded_specs`), o sigui que sense
+         esborrar-lo el POM continuaria graduant pel valor congelat del model i la regla
+         acabada de promocionar no s'aplicaria mai. Promocionar i no heretar seria pitjor
+         que no promocionar: semblaria fet i no ho estaria.
+
+    Els POMs no esmentats queden en `nomes_model`. El Watchpoint es resol tot sol quan ja
+    no queda ningú per decidir.
+    """
+    from django.db import transaction
+    from fhort.models_app.models import Model, ModelGradingOverride, Watchpoint
+    from fhort.models_app.services import (
+        afegeix_regles_al_contenidor, PROMOCIO_CODI, PROMOCIO_NOMES_MODEL,
+        PROMOCIO_PROMOCIONAT)
+    from fhort.pom.models import GradingRuleSet
+
+    model = Model.objects.filter(pk=model_id).first()
+    if model is None:
+        return Response({'error': 'model no trobat'}, status=404)
+
+    wp = Watchpoint.objects.filter(pk=request.data.get('watchpoint_id'),
+                                   model_id=model_id).first()
+    if wp is None or not isinstance(wp.dades, dict) or wp.dades.get('codi') != PROMOCIO_CODI:
+        return Response({'error': 'proposta_no_trobada',
+                         'message': "No hi ha cap proposta de promoció per a aquest model."},
+                        status=404)
+
+    demanats = {int(p) for p in (request.data.get('promocions') or [])}
+    items = wp.dades.get('items') or []
+    pendents = {i['pom_id'] for i in items if i['estat'] == PROMOCIO_NOMES_MODEL}
+    a_promocionar = demanats & pendents
+    if demanats - pendents:
+        # No és un error: pot ser un doble clic o una pestanya ranci. Es diu i s'ignora.
+        _logging.getLogger(__name__).info(
+            f"promocionar-poms model {model_id}: {sorted(demanats - pendents)} "
+            f"ja decidits o forans; ignorats.")
+
+    container = GradingRuleSet.objects.filter(pk=wp.dades.get('contenidor_id')).first()
+    if container is None:
+        return Response({'error': 'contenidor_absent',
+                         'message': "El contenidor de la proposta ja no existeix."}, status=409)
+
+    n_regles = n_ovr = 0
+    if a_promocionar:
+        specs = [i['spec'] for i in items if i['pom_id'] in a_promocionar]
+        with transaction.atomic():
+            n_regles = afegeix_regles_al_contenidor(
+                container, specs, wp.dades.get('base_def_id'))
+            n_ovr, _ = ModelGradingOverride.objects.filter(
+                model_id=model_id, pom_id__in=a_promocionar).delete()
+            for i in items:
+                if i['pom_id'] in a_promocionar:
+                    i['estat'] = PROMOCIO_PROMOCIONAT
+            # `dades` és un JSONField mutat en memòria: cal reassignar-lo perquè Django
+            # el vegi brut.
+            wp.dades = {**wp.dades, 'items': items}
+            if all(i['estat'] != PROMOCIO_NOMES_MODEL for i in items):
+                wp.estat = 'resolved'
+                wp.resolved_at = _dt.datetime.now(_dt.timezone.utc)
+                wp.resolution_note = (
+                    f"{sum(1 for i in items if i['estat'] == PROMOCIO_PROMOCIONAT)} POM(s) "
+                    f"promocionats al contenidor #{container.id}.")
+                perfil = getattr(request.user, 'profile', None) or getattr(
+                    request.user, 'userprofile', None)
+                if perfil is not None:
+                    wp.resolved_by = perfil
+            wp.save(update_fields=['dades', 'estat', 'resolved_at', 'resolved_by',
+                                   'resolution_note'])
+
+    return Response({
+        'ok': True,
+        'promocionats': sorted(a_promocionar),
+        'regles_al_contenidor': n_regles,
+        'overrides_esborrats': n_ovr,
+        'watchpoint_estat': wp.estat,
+        'items': items,
+    }, status=200)

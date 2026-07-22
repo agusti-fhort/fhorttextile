@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { watchpoints } from '../../api/endpoints'
+import PropostaPromocio from './PropostaPromocio'
 
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('ca-ES', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
 const linkBtn = { background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-caption)', color: 'var(--gold)' }
@@ -82,7 +83,13 @@ export default function WatchpointsPanel({ modelId, taskId = null, editable = fa
           <i className={`ti ${w.estat === 'resolved' ? 'ti-check' : 'ti-flag'}`}
             style={{ fontSize: 14, marginTop: 2, color: w.estat === 'resolved' ? 'var(--ok)' : 'var(--warn)' }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            {Array.isArray(w.dades) && w.dades.length > 0 ? (
+            {w.dades && !Array.isArray(w.dades) && w.dades.codi === 'promocio_poms' ? (
+              // D1 — PROPOSTA DE PROMOCIÓ. El contenidor del client no s'escriu mai sol:
+              // aquests POMs ja són al model (base + overrides) i aquí es decideix, un a un,
+              // si pugen al catàleg. Abans això eren dos avisos que no arribaven enlloc.
+              <PropostaPromocio wp={w} modelId={modelId} editable={editable}
+                                onDone={() => { load(); onChanged?.() }} />
+            ) : Array.isArray(w.dades) && w.dades.length > 0 ? (
               // F2 — Watchpoint de SISTEMA (import viu): render PER CLAU en l'idioma del lector.
               <div style={{ fontSize: 'var(--fs-body)',
                             color: w.estat === 'resolved' ? 'var(--text-muted)' : 'var(--text-main)',

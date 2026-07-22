@@ -221,6 +221,79 @@ def materialize_model_grading_rules_from_specs(model, specs, origen):
     return len(objs)
 
 
+#: Codi del Watchpoint estructurat de proposta de promoció. El front hi enganxa el render.
+PROMOCIO_CODI = 'promocio_poms'
+
+#: Estat per POM dins la proposta. `nomes_model` és l'estat INICIAL de tothom: l'import ja
+#: ha desat el POM al model (base + overrides per-talla) i el contenidor no s'ha tocat.
+PROMOCIO_NOMES_MODEL = 'nomes_model'
+PROMOCIO_PROMOCIONAT = 'promocionat'
+
+
+def proposta_promocio(cls, container, base_def_id):
+    """Els POMs `amplia`/`conflicte` d'un import, com a PROPOSTA accionable (dict o None).
+
+    D1 (Agus 2026-07-22) · **el contenidor de client no s'escriu mai automàticament**. Un
+    import que troba POMs que el catàleg no cobreix (`amplia`) o que hi divergeixen
+    (`conflicte`) els desa al MODEL —base + overrides per-talla— i proposa promocionar-los
+    al catàleg. Promocionar és una decisió humana, per POM.
+
+    Fins ara aquests POMs generaven dos avisos de text lliure que no arribaven enlloc: el
+    front descarta `grading_avisos` i cap serialitzador exposa `session.avisos`. La fila
+    s'havia desat, però ningú no ho sabia. Això és la pèrdua silenciosa que la decisió D1
+    tanca: si no es pot escriure al catàleg, com a mínim s'ha de VEURE que no s'hi ha escrit.
+
+    El spec de cada POM viatja DINS de la proposta a posta: promocionar-lo després no ha de
+    dependre que la ImportSession encara existeixi ni de re-derivar res del fitxer. La
+    proposta és autosuficient.
+    """
+    items = []
+    for bucket, entrades in (('amplia', cls.get('amplia') or []),
+                             ('conflicte', cls.get('conflicte') or [])):
+        for e in entrades:
+            spec = e['spec_fitxa'] if bucket == 'conflicte' else e
+            pom = spec.get('pom')
+            items.append({
+                'pom_id': spec['pom_id'],
+                'pom_codi': getattr(pom, 'codi_client', None) or str(spec['pom_id']),
+                'pom_nom': getattr(pom, 'nom_client', '') or '',
+                'bucket': bucket,
+                'estat': PROMOCIO_NOMES_MODEL,
+                'detall': e.get('detall', '') if bucket == 'conflicte' else '',
+                # `pom` és una instància de model: fora del JSON.
+                'spec': {k: v for k, v in spec.items() if k != 'pom'},
+            })
+    if not items:
+        return None
+    return {
+        'codi': PROMOCIO_CODI,
+        'contenidor_id': container.id,
+        'contenidor_nom': container.nom,
+        'base_def_id': base_def_id,
+        'items': items,
+    }
+
+
+def resum_proposta_promocio(proposta) -> str:
+    """Text de reserva del Watchpoint: el que es llegeix si ningú en renderitza les `dades`.
+
+    Un Watchpoint estructurat no pot dependre del seu render per dir alguna cosa: el mateix
+    `text` viatja a llistes, exports i historials que no saben res del codi `promocio_poms`.
+    """
+    items = proposta['items']
+    n_amplia = sum(1 for i in items if i['bucket'] == 'amplia')
+    n_confl = len(items) - n_amplia
+    trossos = []
+    if n_amplia:
+        trossos.append(f"{n_amplia} POM(s) que el catàleg no té")
+    if n_confl:
+        trossos.append(f"{n_confl} POM(s) que divergeixen del catàleg")
+    return (f"Proposta de promoció al contenidor #{proposta['contenidor_id']} "
+            f"'{proposta['contenidor_nom']}': " + " i ".join(trossos) +
+            ". Desats NOMÉS al model (base + overrides per-talla); el catàleg del client "
+            "NO s'ha tocat. Cal decidir, per POM, si es promocionen al catàleg.")
+
+
 def afegeix_regles_al_contenidor(container, specs, base_def_id):
     """AMPLIAR (llei del contenidor): afegeix al contenidor les regles de la fitxa per a POMs que
     encara no hi són (o, si ja existeixen, N'ACTUALITZA la forma — cas 'update_catalog'). El
