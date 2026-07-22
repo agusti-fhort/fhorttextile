@@ -109,6 +109,7 @@ export default function Entrar() {
   }
 
   const entrant = estat === 'entrant'
+  const triaGastada = estat === 'error'   // el tiquet ja s'ha cremat en el primer intent
 
   return (
     <div style={wrap}>
@@ -123,10 +124,15 @@ export default function Entrar() {
           <>
             <h1 id="entrar-tria-title" style={title}>{t('entrar.tria_title')}</h1>
             <p style={sub}>{t('entrar.tria_sub')}</p>
+            {/* Un cop s'ha clicat un espai, el tiquet de selecció ja s'ha consumit (és d'un
+                sol ús a posta). Si el pas ha fallat, la llista es queda a la vista com a
+                context, però MORTA: convidar a un altre clic seria convidar a un 401 segur.
+                La sortida real és «Entra amb un altre compte». */}
             <ul style={llista} aria-labelledby="entrar-tria-title">
               {tria.workspaces.map(w => (
                 <li key={w.schema}>
-                  <button type="button" onClick={() => onTria(w.schema)} style={targeta}>
+                  <button type="button" onClick={() => onTria(w.schema)} disabled={triaGastada}
+                    style={triaGastada ? targetaMorta : targeta}>
                     <i className="ti ti-building-store" style={iconaTargeta} aria-hidden="true" />
                     <span style={{ flex: 1, textAlign: 'left' }}>
                       <span style={nomWs}>{w.nom}</span>
@@ -199,6 +205,7 @@ const icona = { fontSize: 40, color: 'var(--gold)', display: 'inline-block', ani
 const aviat = { display: 'block', marginTop: 2, fontSize: 'var(--fs-label)', color: 'var(--gray)' }
 const llista = { listStyle: 'none', margin: '0 0 4px', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }
 const targeta = { width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)', cursor: 'pointer' }
+const targetaMorta = { ...targeta, opacity: 0.5, cursor: 'not-allowed' }
 const iconaTargeta = { fontSize: 20, color: 'var(--gold)' }
 const nomWs = { display: 'block', fontWeight: 600 }
 const hostWs = { display: 'block', fontSize: 'var(--fs-label)', color: 'var(--gray)' }

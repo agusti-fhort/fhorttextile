@@ -53,11 +53,7 @@ const refreshClient = axios.create({
 
 // Rutes on un 401 NO vol dir «token caducat» sinó «credencials dolentes»: refrescar-hi no
 // té sentit i emmascararia l'error real del formulari de login.
-// `/api/auth/bescanvi/` hi és pel mateix motiu (login únic, F2): allà el 401 vol dir «aquest
-// codi ja no val». Sense excloure-la, el flux entraria a l'intent de refresh, no trobaria cap
-// refresh token —encara no n'hi ha, la sessió tot just s'està creant— i faria `tancaSessio()`,
-// que expulsa a /login. La persona veuria un rebot en lloc del «torna-ho a provar» d'/entrar.
-const RUTES_SENSE_REFRESH = ['/api/token/', '/api/token/refresh/', '/api/auth/bescanvi/']
+const RUTES_SENSE_REFRESH = ['/api/token/', '/api/token/refresh/']
 
 let isRefreshing = false
 // Cua de les peticions que reben un 401 MENTRE un refresh ja està en marxa. Sense ella,
