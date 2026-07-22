@@ -329,6 +329,15 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
     ordering_fields = ['id', 'garment_type_item', 'pom']
     ordering = ['garment_type_item', 'pom']
 
+    # P9 — el CRUD pla (POST/PATCH del ViewSet) és el mateix camí de mà humana que l'upsert:
+    # mateixa provinença i mateixa autoria. Sense això, escriure per CRUD deixaria un valor
+    # anònim just al costat d'un de signat.
+    def perform_create(self, serializer):
+        serializer.save(origen=ItemBaseMeasurement.ORIGEN_MANUAL, updated_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(origen=ItemBaseMeasurement.ORIGEN_MANUAL, updated_by=self.request.user)
+
     @action(detail=False, methods=['post'], url_path='upsert')
     def upsert(self, request):
         """POST /api/v1/item-base-measurements/upsert/  Body: {garment_type_item, pom,
@@ -351,6 +360,12 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
         defaults = {f: request.data.get(f)
                     for f in ('base_value_cm', 'tol_minus', 'tol_plus', 'nom_fitxa')
                     if f in request.data}
+        # P9 (2026-07-22) — PROVINENÇA I AUTORIA. Aquest camí és mà humana per definició
+        # (gate CONFIGURE): origen MANUAL sempre. Qui l'escriu queda registrat; `origen` NO
+        # s'accepta del body — el determina el CAMÍ, no qui crida. La promoció model→item té
+        # el seu propi endpoint i hi posa PROMOTED.
+        defaults['origen'] = ItemBaseMeasurement.ORIGEN_MANUAL
+        defaults['updated_by'] = request.user
         obj, created = ItemBaseMeasurement.objects.update_or_create(
             garment_type_item_id=item_id, pom_id=pom_id, defaults=defaults)
         return Response(self.get_serializer(obj).data,

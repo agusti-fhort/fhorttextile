@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -487,6 +488,30 @@ class ItemBaseMeasurement(models.Model):
     # POM, editable (sobirania de l'item).
     # DEUTE: renombrar nom_fitxa→anglès a les DUES taules a la sessió Size Check.
     nom_fitxa = models.CharField(max_length=20, blank=True, default='')
+
+    # ── P9 (2026-07-22) — PROVINENÇA I AUTORIA. Condició dura de D-PROM: sense això una
+    # promoció model→item és IRRECUPERABLE I ANÒNIMA (un valor de plantilla no deia ni qui
+    # ni quan; risc 9 de la DIAGNOSI_GTI_PLANTILLA).
+    #
+    # `origen` NO copia els 8 valors de BaseMeasurement.ORIGEN_CHOICES: la capa Item només
+    # en necessita tres. TEMPLATE/ITEM_STANDARD/FITTED/CALCULATED/CHECKED/STANDARD són estats
+    # d'INSTÀNCIA (com ha arribat un valor a un model concret) i aquí no volen dir res.
+    ORIGEN_MANUAL = 'MANUAL'        # escrit a mà a ItemAuthoring / ViewSet (l'únic camí fins avui)
+    ORIGEN_PROMOTED = 'PROMOTED'    # promogut des d'un model real (acte CONFIGURE explícit)
+    ORIGEN_IMPORTED = 'IMPORTED'    # entrat per paquet/loader (load_losan_package)
+    ORIGEN_CHOICES = [
+        (ORIGEN_MANUAL, 'Introduït manualment'),
+        (ORIGEN_PROMOTED, 'Promogut des d\'un model'),
+        (ORIGEN_IMPORTED, 'Importat de paquet'),
+    ]
+    origen = models.CharField(max_length=20, choices=ORIGEN_CHOICES, default=ORIGEN_MANUAL)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    # SET_NULL: esborrar un usuari no ha d'endur-se el valor de plantilla del taller.
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='item_base_measurements_updated',
+    )
 
     class Meta:
         verbose_name = 'Mesura base d\'item'
