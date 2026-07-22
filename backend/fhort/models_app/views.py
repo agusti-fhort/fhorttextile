@@ -14,6 +14,9 @@ import django_filters
 
 from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
 from fhort.pom.services import SealedGradingVersionError, _te_regles
+from fhort.pom.grading_regime import (
+    CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada,
+)
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
 from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
 from .serializers import (
@@ -1387,6 +1390,13 @@ def gravar_pom_view(request, model_id):
                     label = (r.get('talla_break_label') or '').strip() or None
                     rule.talla_break_label = label
                     rule.talla_break_pos = _break_pos(label)
+                # A3 (2026-07-22) — MATEIX guard que set_pom_regim_view. Aquest camí
+                # (gravar_pom, la taula de gènesi) escrivia LINEAR+0 sense cap comprovació:
+                # era el forat per on la llei encara es podia trencar.
+                if es_linear_degenerada(rule.logica, rule.increment_base, rule.increment,
+                                        rule.increment_break, rule.talla_break_label):
+                    errors.append(f'POM {pom_id}: {MISSATGE_LINEAR_ZERO}')
+                    continue
                 rule.origen = 'MANUAL'
                 rule.actiu = True
                 rule.save()
@@ -2835,18 +2845,14 @@ def set_pom_regim_view(request, model_id, pom_id):
         # D2 — una regla LINEAR amb delta 0 és INVÀLIDA: no gradua res, i el que expressa
         # («aquesta mesura no canvia entre talles») ja té forma pròpia i honesta, que és
         # FIXED. Deixar-la passar torna a fabricar una taula plana que sembla graduada.
-        # El delta efectiu és increment_base si està poblat (forma canònica); si no, increment.
-        if rule.logica == 'LINEAR':
-            _ib = rule.increment_base
-            _delta = float(_ib) if _ib is not None else float(rule.increment or 0)
-            _brk = float(rule.increment_break) if rule.increment_break is not None else _delta
-            if _delta == 0.0 and _brk == 0.0:
-                return Response({
-                    'detail': ("Una regla LINEAR amb increment 0 no gradua res. Si aquesta "
-                               "mesura no ha de canviar entre talles, fes-la FIXED; si no "
-                               "aplica a aquest model, esborra-la."),
-                    'codi': 'LINEAR_INCREMENT_ZERO',
-                }, status=400)
+        # A3 (2026-07-22): la condició viu ara a pom.grading_regime (punt únic del backend),
+        # perquè aquest camí i el de `gravar_pom` no divergeixin.
+        if es_linear_degenerada(rule.logica, rule.increment_base, rule.increment,
+                                rule.increment_break, rule.talla_break_label):
+            return Response({
+                'detail': MISSATGE_LINEAR_ZERO,
+                'codi': CODI_LINEAR_ZERO,
+            }, status=400)
 
         rule.origen = 'MANUAL'
         rule.save()

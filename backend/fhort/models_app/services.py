@@ -174,11 +174,17 @@ def materialize_model_grading_rules(model, source_rules, origen):
     origen: 'IMPORTED' (W5) | 'CANONICAL' (wizard) | 'MANUAL'.
     """
     from fhort.models_app.models import ModelGradingRule
+    from fhort.pom.grading_regime import normalitza_logica
     model.grading_rules.all().delete()
     objs = [
         ModelGradingRule(
             model=model, pom_id=r.pom_id,
-            logica=r.logica, increment=r.increment, valors_step=r.valors_step,
+            # A3 (2026-07-22) — LINEAR+0 sense break s'etiqueta FIXED en sembrar. Aquest camí
+            # NO és autoria (no hi ha ningú a qui preguntar i rebutjar trencaria l'import):
+            # es normalitza. La conversió és neutra — cap valor graduat canvia.
+            logica=normalitza_logica(r.logica, r.increment_base, r.increment,
+                                     r.increment_break, r.talla_break_label),
+            increment=r.increment, valors_step=r.valors_step,
             increment_base=r.increment_base, increment_break=r.increment_break,
             talla_break_label=r.talla_break_label, talla_break_pos=r.talla_break_pos,
             origen=origen, actiu=True,
@@ -196,11 +202,15 @@ def materialize_model_grading_rules_from_specs(model, specs, origen):
     Wipe-and-recreate idempotent per (model): el set resultant és EXACTAMENT `specs`.
     origen: 'IMPORTED' (W5) | 'CANONICAL' | 'MANUAL'."""
     from fhort.models_app.models import ModelGradingRule
+    from fhort.pom.grading_regime import normalitza_logica
     model.grading_rules.all().delete()
     objs = [
         ModelGradingRule(
             model=model, pom_id=s['pom_id'],
-            logica=s['logica'], increment=s.get('increment'), valors_step=s.get('valors_step'),
+            # A3 — mateixa normalització que materialize_model_grading_rules (vegeu-hi la nota).
+            logica=normalitza_logica(s['logica'], s.get('increment_base'), s.get('increment'),
+                                     s.get('increment_break'), s.get('talla_break_label')),
+            increment=s.get('increment'), valors_step=s.get('valors_step'),
             increment_base=s.get('increment_base'), increment_break=s.get('increment_break'),
             talla_break_label=s.get('talla_break_label'), talla_break_pos=s.get('talla_break_pos'),
             origen=origen, actiu=True,
