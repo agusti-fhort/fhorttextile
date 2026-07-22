@@ -321,8 +321,19 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
     if (wiz.customer_codi) fd.append('customer_codi', wiz.customer_codi)
     sizeMap.gradingPreviewFile(fd)
       .then(r => applyGradingData(r.data))
-      .catch(e => setErr(e?.response?.data?.error || t('size_map_file_err')))
+      .catch(e => setErr(errText(e)))
       .finally(() => setBusy(false))
+  }
+
+  // Check (d): el document porta una talla que el sistema triat no coneix. NO és una talla que
+  // falti (això és `incompleta`): és un desajust real entre document i sistema, i el backend el
+  // torna com a 400 amb la llista. Es rotula aquí perquè el text sigui traduïble; la resta
+  // d'errors del backend segueixen mostrant-se tal com arriben.
+  const errText = (e, fallback = 'size_map_file_err') => {
+    const d = e?.response?.data
+    if (d?.etiquetes_desconegudes?.length)
+      return t('size_map_unknown_sizes', { sizes: d.etiquetes_desconegudes.join(', ') })
+    return d?.error || t(fallback)
   }
 
   // Col·lisió R1 (pre-check al pas 3): pom_id vinculats per >1 codi de document. Dues files al
@@ -431,7 +442,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
       .catch(e => {
         // 409 = avís-i-confirma (no és error): obre el panell amb les graduacions existents.
         if (e?.response?.status === 409) { setConflict(e.response.data); return }
-        setErr(e?.response?.data?.error || t('size_map_create_err'))
+        setErr(errText(e, 'size_map_create_err'))
       })
       .finally(() => setBusy(false))
   }
