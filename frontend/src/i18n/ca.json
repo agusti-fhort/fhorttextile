@@ -3299,7 +3299,15 @@
     "pending_review": "Pendent de revisió",
     "pending_badge": "pendent",
     "weak_hint": "Confiança baixa, no vinculat automàticament. Suggeriment:",
-    "many_to_one_hint": "Dues files de la fitxa apuntaven a aquest mateix POM: cap no s'ha vinculat (la segona n'esborraria la primera). Suggeriment:"
+    "many_to_one_hint": "Dues files de la fitxa apuntaven a aquest mateix POM: cap no s'ha vinculat (la segona n'esborraria la primera). Suggeriment:",
+    "soroll_title": "Mesures que el document no menciona",
+    "soroll_help": "Aquest model té {{count}} mesura/es vives que el document importat no porta. El model s'alimenta de la realitat del document: es proposa desactivar-les. Mai s'esborren — queden inactives i amb registre al log de mesures.",
+    "soroll_desactivar": "Desactivar-les",
+    "soroll_conservar": "Conservar-les",
+    "soroll_manual_title": "Mesures manuals que el document trepitjaria",
+    "soroll_manual_help": "El document porta valor per a {{count}} mesura/es que algú va introduir MANUALMENT. L'import no les trepitja sense permís: vols que el document mani o que es respecti el valor manual?",
+    "soroll_manual_sobreescriure": "Que mani el document",
+    "soroll_manual_respectar": "Respectar el valor manual"
   },
   "dependency": {
     "title": "Dependència",

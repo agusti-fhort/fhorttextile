@@ -3299,7 +3299,15 @@
     "pending_review": "Pending review",
     "pending_badge": "pending",
     "weak_hint": "Low confidence, not linked automatically. Suggestion:",
-    "many_to_one_hint": "Two rows of the sheet pointed to this same POM: neither was linked (the second would erase the first). Suggestion:"
+    "many_to_one_hint": "Two rows of the sheet pointed to this same POM: neither was linked (the second would erase the first). Suggestion:",
+    "soroll_title": "Measurements the document does not mention",
+    "soroll_help": "This model has {{count}} live measurement(s) the imported document does not carry. The model feeds on the reality of the document: deactivating them is proposed. They are never deleted — they stay inactive and recorded in the measurement log.",
+    "soroll_desactivar": "Deactivate them",
+    "soroll_conservar": "Keep them",
+    "soroll_manual_title": "Manual measurements the document would overwrite",
+    "soroll_manual_help": "The document carries a value for {{count}} measurement(s) that someone entered MANUALLY. The import does not overwrite them without permission: should the document rule, or should the manual value be respected?",
+    "soroll_manual_sobreescriure": "Let the document rule",
+    "soroll_manual_respectar": "Respect the manual value"
   },
   "dependency": {
     "title": "Dependency",

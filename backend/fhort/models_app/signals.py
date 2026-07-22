@@ -245,6 +245,33 @@ def log_measurement_change(sender, instance, created, raw=False, **kwargs):
     if raw:  # loaddata / fixtures
         return
 
+    from fhort.models_app.models import MeasurementChangeLog
+
+    # B1 (PRINCIPI DEL SOROLL, 2026-07-22) — LA PODA ES REGISTRA.
+    # Una desactivació no canvia cap valor, i fins ara queia pels dos filtres de sota
+    # (valor NULL → return; valor igual → return): desapareixia una mesura del model
+    # sense deixar rastre enlloc. El log és la memòria d'auditoria del model, i el
+    # patrimoni que s'esborra hi ha de constar.
+    #
+    # Gated per `_desactivat`, marca EXPLÍCITA que posa qui poda: no es registra cap
+    # toggle d'is_active fet de passada per una altra raó (la promesa del docstring es
+    # manté per a tota la resta).
+    if getattr(instance, '_desactivat', False) and not created:
+        MeasurementChangeLog.objects.create(
+            model=instance.model,
+            pom=instance.pom,
+            base_measurement=instance,
+            valor_anterior=instance.base_value_cm,
+            # `valor_nou` no és nullable i la poda no canvia el valor: 0.0 vol dir
+            # «aquesta mesura ja no compta per al model». El motiu ho explicita.
+            valor_nou=0.0,
+            context=_ORIGEN_TO_CONTEXT.get(instance.origen, (instance.origen or '').lower()),
+            created_by=(getattr(instance, '_changed_by', None)
+                        or getattr(instance, 'created_by', None)),
+            motiu=getattr(instance, '_motiu', '') or 'desactivacio',
+        )
+        return
+
     # Materialització família→item: una fila sense valor (base_value_cm=None, p.ex. origen='TEMPLATE')
     # NO és un canvi de mesura → no genera log. Quan rebi un valor real (None→x) sí es registrarà.
     if instance.base_value_cm is None:
@@ -253,8 +280,6 @@ def log_measurement_change(sender, instance, created, raw=False, **kwargs):
     old_value = getattr(instance, '_old_value', None)
     if not created and old_value == instance.base_value_cm:
         return  # value unchanged → nothing to log
-
-    from fhort.models_app.models import MeasurementChangeLog
 
     changed_by = getattr(instance, '_changed_by', None) or getattr(instance, 'created_by', None)
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Modal from '../ui/Modal'
@@ -128,6 +128,11 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const [gradingConflict, setGradingConflict] = useState(null)   // {divergencies:[{pom_id,pom,detall}], options}
   const [containerConflict, setContainerConflict] = useState(null) // {customer_nom, garment_type_item, size_system, fit}
   const [conflictChoices, setConflictChoices] = useState({})     // {pom_id: keep_catalog|update_catalog|model_resident}
+  // B1 (PRINCIPI DEL SOROLL): 409 'poms_no_mencionats' — mesures vives que el document no porta.
+  const [sorollConflict, setSorollConflict] = useState(null)     // {poms:[{pom_id,codi,nom,base_value_cm,origen}], n}
+  // Les decisions del tècnic s'ACUMULEN: resoldre el soroll pot destapar el 409 del contenidor,
+  // i el re-POST ha de tornar a portar la tria anterior o el mateix gat es tornaria a disparar.
+  const decisionsRef = useRef({})
 
   const docLabels = cribratge?.run_talles_document || []
   // Columnes del document sense parella model → avís (no bloqueja, tret de la base).
@@ -492,14 +497,19 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   // `bodyExtra` és el que afegim al POST en re-confirmar amb la decisió del tècnic.
   const handleConfirmar = async (bodyExtra = {}) => {
     setConfirming(true); setError('')
+    const body = { ...decisionsRef.current, ...bodyExtra }
+    decisionsRef.current = body
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/confirmar/`, {
         method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyExtra),
+        body: JSON.stringify(body),
       })
       const data = await res.json().catch(() => ({}))
       if (res.status === 409 && data.conflict) {
-        if (data.tipus === 'container_absent') { setContainerConflict(data); setGradingConflict(null) }
+        if (data.tipus === 'poms_no_mencionats') {
+          setSorollConflict(data); setContainerConflict(null); setGradingConflict(null)
+        }
+        else if (data.tipus === 'container_absent') { setContainerConflict(data); setGradingConflict(null) }
         else if (data.tipus === 'grading_conflict') {
           setGradingConflict(data); setContainerConflict(null)
           // per defecte: mantenir el catàleg per a cada POM en conflicte.
@@ -515,7 +525,8 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         setConfirming(false); return
       }
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setConfirming(false); return }
-      setGradingConflict(null); setContainerConflict(null)
+      setGradingConflict(null); setContainerConflict(null); setSorollConflict(null)
+      decisionsRef.current = {}
       onComplete && onComplete(data.model_id)
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setConfirming(false)
@@ -1039,6 +1050,48 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                         borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 16 }}>
             {t('import_wizard.mana_doc', { count: pomsActius })}
           </div>
+
+          {/* PRINCIPI DEL SOROLL — el model s'alimenta de realitat. Les mesures vives que el
+              document NO menciona es PROPOSEN per desactivar; mai s'esborren soles i mai
+              sobreviuen actives en silenci. Sempre soft-delete (el model en guarda memòria). */}
+          {sorollConflict && (
+            <div style={{ background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
+                          padding: '12px 14px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600,
+                            fontSize: 'var(--fs-body)', color: '#7a5a00', marginBottom: 6 }}>
+                <i className="ti ti-eraser" aria-hidden="true" />
+                {t('import_wizard.soroll_title')}
+              </div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', marginBottom: 10 }}>
+                {t('import_wizard.soroll_help', { count: sorollConflict.n })}
+              </div>
+              <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 'var(--fs-label)',
+                           color: 'var(--text-muted)', maxHeight: 160, overflowY: 'auto' }}>
+                {(sorollConflict.poms || []).map(p => (
+                  <li key={p.pom_id} style={{ marginBottom: 2 }}>
+                    <strong style={{ color: 'var(--text-main)' }}>{p.codi || `#${p.pom_id}`}</strong>
+                    {p.nom ? ` · ${p.nom}` : ''}
+                    {p.base_value_cm != null ? ` · ${p.base_value_cm} cm` : ''}
+                    {p.origen ? ` · ${p.origen}` : ''}
+                  </li>
+                ))}
+              </ul>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => handleConfirmar({ poda_choice: 'desactivar' })} disabled={confirming}
+                  style={{ padding: '8px 14px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-body)',
+                           fontWeight: 500, color: 'var(--white)', background: GOLD,
+                           cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                  {t('import_wizard.soroll_desactivar')}
+                </button>
+                <button type="button" onClick={() => handleConfirmar({ poda_choice: 'conservar' })} disabled={confirming}
+                  style={{ padding: '8px 14px', borderRadius: 6, border: `0.5px solid ${BORDER}`,
+                           fontSize: 'var(--fs-body)', fontWeight: 500, background: 'var(--white)',
+                           color: 'var(--text-main)', cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                  {t('import_wizard.soroll_conservar')}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Llei del contenidor — combinació verge: el client no té contenidor per aquesta
               (peça + sistema de talles + fit). Crear-lo (acte explícit) o deixar el model amb

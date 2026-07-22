@@ -3299,7 +3299,15 @@
     "pending_review": "Pendiente de revisión",
     "pending_badge": "pendiente",
     "weak_hint": "Confianza baja, no vinculado automáticamente. Sugerencia:",
-    "many_to_one_hint": "Dos filas de la ficha apuntaban al mismo POM: ninguna se ha vinculado (la segunda borraría la primera). Sugerencia:"
+    "many_to_one_hint": "Dos filas de la ficha apuntaban al mismo POM: ninguna se ha vinculado (la segunda borraría la primera). Sugerencia:",
+    "soroll_title": "Medidas que el documento no menciona",
+    "soroll_help": "Este modelo tiene {{count}} medida(s) vivas que el documento importado no trae. El modelo se alimenta de la realidad del documento: se propone desactivarlas. Nunca se borran — quedan inactivas y con registro en el log de medidas.",
+    "soroll_desactivar": "Desactivarlas",
+    "soroll_conservar": "Conservarlas",
+    "soroll_manual_title": "Medidas manuales que el documento pisaría",
+    "soroll_manual_help": "El documento trae valor para {{count}} medida(s) que alguien introdujo MANUALMENTE. La importación no las pisa sin permiso: ¿quieres que mande el documento o que se respete el valor manual?",
+    "soroll_manual_sobreescriure": "Que mande el documento",
+    "soroll_manual_respectar": "Respetar el valor manual"
   },
   "dependency": {
     "title": "Dependencia",
