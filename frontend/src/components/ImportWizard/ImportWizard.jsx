@@ -130,6 +130,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const [conflictChoices, setConflictChoices] = useState({})     // {pom_id: keep_catalog|update_catalog|model_resident}
   // B1 (PRINCIPI DEL SOROLL): 409 'poms_no_mencionats' — mesures vives que el document no porta.
   const [sorollConflict, setSorollConflict] = useState(null)     // {poms:[{pom_id,codi,nom,base_value_cm,origen}], n}
+  // B2 (precedència mínima d'orígens): 409 'manual_trepitjat' — el document porta valor per a
+  // files que algú va escriure a mà. No es decideix per ell en cap direcció.
+  const [manualConflict, setManualConflict] = useState(null)     // {poms:[{pom_id,codi,nom,valor_manual,valor_document}], n}
   // Les decisions del tècnic s'ACUMULEN: resoldre el soroll pot destapar el 409 del contenidor,
   // i el re-POST ha de tornar a portar la tria anterior o el mateix gat es tornaria a disparar.
   const decisionsRef = useRef({})
@@ -507,7 +510,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       const data = await res.json().catch(() => ({}))
       if (res.status === 409 && data.conflict) {
         if (data.tipus === 'poms_no_mencionats') {
-          setSorollConflict(data); setContainerConflict(null); setGradingConflict(null)
+          setSorollConflict(data); setManualConflict(null); setContainerConflict(null); setGradingConflict(null)
+        }
+        else if (data.tipus === 'manual_trepitjat') {
+          setManualConflict(data); setSorollConflict(null); setContainerConflict(null); setGradingConflict(null)
         }
         else if (data.tipus === 'container_absent') { setContainerConflict(data); setGradingConflict(null) }
         else if (data.tipus === 'grading_conflict') {
@@ -525,7 +531,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         setConfirming(false); return
       }
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setConfirming(false); return }
-      setGradingConflict(null); setContainerConflict(null); setSorollConflict(null)
+      setGradingConflict(null); setContainerConflict(null); setSorollConflict(null); setManualConflict(null)
       decisionsRef.current = {}
       onComplete && onComplete(data.model_id)
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
@@ -1088,6 +1094,46 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                            fontSize: 'var(--fs-body)', fontWeight: 500, background: 'var(--white)',
                            color: 'var(--text-main)', cursor: confirming ? 'not-allowed' : 'pointer' }}>
                   {t('import_wizard.soroll_conservar')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* PRECEDÈNCIA MÍNIMA D'ORÍGENS — el document no trepitja el que un tècnic va
+              escriure a mà sense demanar-ho. Mateixa mecànica de proposta+confirmació. */}
+          {manualConflict && (
+            <div style={{ background: '#fff9e6', border: '1px solid #f0c040', borderRadius: 8,
+                          padding: '12px 14px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600,
+                            fontSize: 'var(--fs-body)', color: '#7a5a00', marginBottom: 6 }}>
+                <i className="ti ti-hand-stop" aria-hidden="true" />
+                {t('import_wizard.soroll_manual_title')}
+              </div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', marginBottom: 10 }}>
+                {t('import_wizard.soroll_manual_help', { count: manualConflict.n })}
+              </div>
+              <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 'var(--fs-label)',
+                           color: 'var(--text-muted)', maxHeight: 160, overflowY: 'auto' }}>
+                {(manualConflict.poms || []).map(p => (
+                  <li key={p.pom_id} style={{ marginBottom: 2 }}>
+                    <strong style={{ color: 'var(--text-main)' }}>{p.codi || `#${p.pom_id}`}</strong>
+                    {p.nom ? ` · ${p.nom}` : ''}
+                    {' · '}{p.valor_manual} cm → {p.valor_document} cm
+                  </li>
+                ))}
+              </ul>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => handleConfirmar({ manual_choice: 'sobreescriure' })} disabled={confirming}
+                  style={{ padding: '8px 14px', borderRadius: 6, border: 'none', fontSize: 'var(--fs-body)',
+                           fontWeight: 500, color: 'var(--white)', background: GOLD,
+                           cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                  {t('import_wizard.soroll_manual_sobreescriure')}
+                </button>
+                <button type="button" onClick={() => handleConfirmar({ manual_choice: 'respectar' })} disabled={confirming}
+                  style={{ padding: '8px 14px', borderRadius: 6, border: `0.5px solid ${BORDER}`,
+                           fontSize: 'var(--fs-body)', fontWeight: 500, background: 'var(--white)',
+                           color: 'var(--text-main)', cursor: confirming ? 'not-allowed' : 'pointer' }}>
+                  {t('import_wizard.soroll_manual_respectar')}
                 </button>
               </div>
             </div>

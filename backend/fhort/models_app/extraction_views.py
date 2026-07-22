@@ -1916,6 +1916,44 @@ def import_session_confirmar_view(request, token):
                             "document) o conservar-les?"),
             }, status=409)
 
+        # ══ PRE-FLIGHT PRECEDÈNCIA MANUAL (B2) ══════════════════════════════════════════
+        # Precedència d'orígens MÍNIMA — només la que aquesta llei necessita, no el mapa
+        # complet (§B3.3: `ORIGEN_CHOICES` segueix sent una llista plana i això NO ho canvia).
+        #
+        # Una fila origen='MANUAL' amb valor és patrimoni escrit a mà per un tècnic. Fins ara
+        # l'`update_or_create` de sota la trepitjava sense mirar-se l'origen previ — l'única
+        # comparació d'origen de tot el repo vivia a `models_app/views.py:827`. El patró de
+        # guard que se segueix és `pom/dictionary_service.py:158` (`preserve_manual`).
+        #
+        # No es decideix per ell en cap direcció: es PROPOSA, com el soroll.
+        manual_choice = (request.data.get('manual_choice') or '').strip().lower()  # 'sobreescriure'|'respectar'
+        _doc_pom_ids = {int(p['pom_master_id']) for _i, p, _pm in resolved
+                        if valors.get(int(p['pom_master_id']), {}).get(base_size) is not None}
+        manuals = list(
+            BaseMeasurement.objects
+            .filter(model=model, is_active=True, origen='MANUAL',
+                    base_value_cm__isnull=False, pom_id__in=_doc_pom_ids)
+            .select_related('pom')
+        ) if _doc_pom_ids else []
+        if manuals and manual_choice not in ('sobreescriure', 'respectar'):
+            return Response({
+                'conflict': True,
+                'tipus': 'manual_trepitjat',
+                'poms': [{
+                    'pom_id': bm.pom_id,
+                    'codi': bm.pom.codi_client or '',
+                    'nom': bm.nom_fitxa or getattr(bm.pom, 'nom_ca', '') or '',
+                    'valor_manual': bm.base_value_cm,
+                    'valor_document': valors.get(bm.pom_id, {}).get(base_size),
+                } for bm in manuals],
+                'n': len(manuals),
+                'message': ("El document porta valor per a mesures introduïdes MANUALMENT. "
+                            "Vols que mani el document o que es respecti el valor manual?"),
+            }, status=409)
+        # POMs on el valor manual guanya: l'escriptura de sota els salta.
+        respectats_pom_ids = ({bm.pom_id for bm in manuals}
+                              if manual_choice == 'respectar' else set())
+
         # ══ PRE-FLIGHT GRADING (D1) — detecció (pura) + matcher + GATES 409, TOT abans d'escriure.
         # El contenidor de client (GradingRuleSet origen=CLIENT_RUN) és ÚNIC per (customer +
         # size_system + garment_type_item + fit). Les decisions que exigeixen tria del tècnic surten
@@ -2003,8 +2041,22 @@ def import_session_confirmar_view(request, token):
 
         n_bm = 0
         n_bm_valors = 0
+        n_manual_respectats = 0
         for i, p, pm in resolved:
             base_val = valors.get(int(p['pom_master_id']), {}).get(base_size)
+            # B2 — el tècnic ha decidit que el valor manual mana: el document no el trepitja.
+            # La fila queda tal com està (valor, origen MANUAL i tot); només és patrimoni que
+            # sobreviu a l'import, no una fila nova.
+            if pm.id in respectats_pom_ids:
+                n_manual_respectats += 1
+                n_bm += 1
+                n_bm_valors += 1
+                # El vincle codi↔POM SÍ s'aprèn: la tria és sobre el VALOR, no sobre el
+                # vocabulari. El document ha anomenat aquest POM i això és realitat.
+                maybe_learn_customer_alias(
+                    model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
+                    origen='IMPORT', nomes_si_manual=False)
+                continue
             _defaults = {
                 'base_value_cm': base_val,
                 'nom_fitxa': p.get('codi_fitxa') or '',
@@ -2048,6 +2100,14 @@ def import_session_confirmar_view(request, token):
             grading_avisos.append(
                 f"{len(orfes)} POM(s) vius que el document NO menciona s'han CONSERVAT per "
                 f"decisió del tècnic: la fitxa del model els segueix incloent.")
+        if n_manual_respectats:
+            grading_avisos.append(
+                f"{n_manual_respectats} mesura/es d'origen MANUAL s'han RESPECTAT per decisió "
+                f"del tècnic: el valor del document no les ha trepitjat.")
+        elif manuals and manual_choice == 'sobreescriure':
+            grading_avisos.append(
+                f"{len(manuals)} mesura/es d'origen MANUAL s'han sobreescrit amb el valor del "
+                f"document per decisió del tècnic.")
         if n_buides_soft:
             grading_avisos.append(
                 f"{n_buides_soft} fila/es sense valor i d'origen no-plantilla s'han "
@@ -2247,6 +2307,7 @@ def import_session_confirmar_view(request, token):
         'poms_podats': n_podats,
         'poms_conservats': (len(orfes) if poda_choice == 'conservar' else 0),
         'files_buides_desactivades': n_buides_soft,
+        'manual_respectats': n_manual_respectats,
         'graded_specs': n_specs,
         'size_fitting': size_fitting.codi,
         'document_fitxer': (doc_fitxer.nom_fitxer if doc_fitxer else None),
