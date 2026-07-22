@@ -279,6 +279,92 @@ def run_del_document(values_per_fila, run_sistema):
     return doc_run, desconegudes
 
 
+def run_sistema_de(size_system):
+    """`SizeSystem` (o llista d'etiquetes, o None) → llista d'etiquetes ORDENADA per
+    `SizeDefinition.ordre`.
+
+    Adaptador únic perquè `run_del_model` es pugui cridar de les dues maneres: amb un
+    `SizeSystem` (com fan les vistes, que tenen el model a mà) o amb una llista ja llegida
+    (com fa `run_del_document`, i com fan els tests, que així no toquen BD). Una llista
+    entra i surt intacta: qui la passa ja assumeix la responsabilitat de l'ordre.
+    """
+    if size_system is None:
+        return []
+    if isinstance(size_system, (list, tuple)):
+        return [str(e).strip() for e in size_system if str(e).strip()]
+    return [t.etiqueta.strip()
+            for t in size_system.talles.order_by('ordre')
+            if (t.etiqueta or '').strip()]
+
+
+def run_del_model(etiquetes, size_system):
+    """REFERENT D'ESCALA (llei S24b, 2026-07-22): l'ordre del run del MODEL el mana el SISTEMA.
+
+    Germà de `run_del_document`, i el mateix principi aplicat a l'altre eix: allà el referent
+    de DERIVACIÓ de regles és el run del document; aquí el referent d'ORDRE del run del model
+    és la seqüència del `SizeSystem`. El run del model és un SUBCONJUNT — potencialment NO
+    CONTIGU (un client que no fabrica la M) — que mai redefineix ni l'ordre ni la distància.
+
+    Existeix perquè `Model.size_run_model` no tenia cap porta d'escriptura que ordenés: les 9
+    vies del cens desaven l'ordre d'entrada (clic de l'usuari al wizard, ordre del document,
+    ordre de la cel·la d'Excel). Amb el motor comptant els passos per POSICIÓ dins la llista,
+    un run apendat com `XS·S·L·XXS·M` feia que la XXS gradués amb el SIGNE INVERTIT (cas real
+    del model 166; vegeu `DIAGNOSI_ORDRE_RUN_MODEL_2026-07-22.md`).
+
+    Pur en el sentit que importa: cap escriptura, cap efecte, resultat determinista. Si es
+    passa una llista d'etiquetes com a `size_system` no toca BD en absolut (és així com el
+    proven els tests); si es passa un `SizeSystem`, `run_sistema_de` en llegeix les talles.
+
+    Args:
+        etiquetes: iterable d'etiquetes del run del model, en qualsevol ordre i amb possibles
+            duplicats (el toggle del wizard en pot produir). `None`/buides s'ignoren.
+        size_system: `SizeSystem`, llista d'etiquetes ja ordenada, o None. **None (o sistema
+            sense talles) = no hi ha res contra què ordenar**: es retornen les etiquetes tal
+            com vénen, deduplicades, i cap desconeguda. És el camí legacy (p. ex.
+            `tech_sheet_views`, que crea models sense sistema assignat): degradar amb gràcia,
+            mai petar un import que fins ara funcionava.
+
+    Returns:
+        (run_ordenat, etiquetes_desconegudes):
+          - run_ordenat: etiquetes del TENANT, sense duplicats, ordenades per
+            `SizeDefinition.ordre`. Els forats són LEGÍTIMS i es conserven.
+          - etiquetes_desconegudes: les que el sistema no coneix, en ordre d'aparició. NO
+            entren al run. El cridador decideix: 400 al camí de producte (coherent amb el
+            check (d) de la S24), avís al camí legacy.
+
+    El pont de comparació és `canonical_size_label` (pont ÚNIC, llei 2026-07-08): salva
+    XXL↔2XL, que un `upper+strip` no cobreix. Mai es persisteix la forma canònica: el run
+    torna SEMPRE amb l'etiqueta del tenant.
+    """
+    from fhort.pom.size_labels import canonical_size_label
+
+    # Etiquetes del model, en ordre d'aparició i sense duplicats (fallback sense sistema).
+    vistes, model_labels = set(), []
+    for e in (etiquetes or []):
+        lbl = str(e or '').strip()
+        if lbl and lbl not in vistes:
+            vistes.add(lbl)
+            model_labels.append(lbl)
+
+    run_sistema = run_sistema_de(size_system)
+    if not run_sistema:
+        return model_labels, []
+
+    canon_to_tenant = {canonical_size_label(e): e for e in run_sistema}
+    ordre = {e: i for i, e in enumerate(run_sistema)}
+
+    presents, desconegudes = set(), []
+    for lbl in model_labels:
+        tenant = canon_to_tenant.get(canonical_size_label(lbl))
+        if tenant is None:
+            desconegudes.append(lbl)
+        else:
+            presents.add(tenant)
+
+    run_ordenat = sorted(presents, key=lambda e: ordre[e])
+    return run_ordenat, desconegudes
+
+
 def derive_break_fields(logica, increment, valors_step, run_ordenat):
     """Forma canònica PEÇA A → (increment_base, increment_break, talla_break_label, talla_break_pos).
 
