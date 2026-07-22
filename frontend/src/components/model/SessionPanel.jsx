@@ -2,20 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fittingSessions, fittingPhotos } from '../../api/endpoints'
 import { thStyle, useDebouncedSave, SaveStatus, fmtMeasure, useUnit } from '../../pages/fittingShared'
+import { orderedSizes } from '../../utils/sizeRun'
 
 // Sprint Y — Panell de la SESSIÓ de fitting dins la superfície Mesures (mode sessió). Migra de
 // FittingDetail: la franja de context (estat/data/responsable/lloc/persona) + el panell plegable
 // Canvis · Observacions · Imatges. Cap pantalla pròpia: és un germà de DependencyPanel/WatchpointsPanel.
 
 const estatColor = { Oberta: 'var(--warn)', Programada: 'var(--gold)', Tancada: 'var(--ok)', Anullada: 'var(--gray)' }
-
-// Ordre de talles segons el size run del model (migrat de FittingDetail): mai alfabètic.
-function orderedSizes(sizeRun, present) {
-  const run = (sizeRun || '').replace(/;/g, '·').split('·').map(s => s.trim()).filter(Boolean)
-  const ordered = run.filter(s => present.has(s))
-  const extras = [...present].filter(s => !run.includes(s))
-  return [...ordered, ...extras]
-}
 
 // Files (POM) amb almenys una talla modificada respecte de Base (evolucio[0]) — migrat de FittingDetail.
 function changedRows(grid) {

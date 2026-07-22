@@ -27,6 +27,15 @@ const labelsOf = (sys) => (sys?.talles || []).map(s => s.etiqueta || s.size_labe
 // Un run és VÀLID dins un sistema si totes les seves talles hi són (subconjunt legítim, forma normal
 // i massiva al tenant: 218 models — DIAGNOSI_MODEL_174 §B0.4).
 const runCapDins = (run, labels) => run.length > 0 && run.every(l => labels.includes(l))
+// S24b — l'ORDRE el mana el SizeSystem, no l'ordre de clic. `labels` ve ja ordenat per
+// `SizeDefinition.ordre` (el prefetch de l'API respecta el Meta.ordering), i per tant ordenar
+// per la seva posició és ordenar pel sistema. Les talles que no hi són (no hauria de passar-ne
+// cap: el guard `runCapDins` ho comprova) queden al final en comptes de desaparèixer.
+const ordenaPelSistema = (run, labels) =>
+  [...run].sort((a, b) => {
+    const ia = labels.indexOf(a), ib = labels.indexOf(b)
+    return (ia < 0 ? Infinity : ia) - (ib < 0 ? Infinity : ib)
+  })
 // TARGETS i CONSTRUCTIONS: vocabulari ÚNIC de gradingAxes (fora la còpia privada — Onada 1). Objectes
 // {codi, nom_*}; aquí només en fem servir el `codi` (l'etiqueta la resol t('model_wizard.*')).
 
@@ -622,7 +631,11 @@ export default function ModelWizard() {
                       {sizeDefs.map(s => {
                         const label = s.etiqueta || s.size_label || s.label
                         const active = selectedSizes.includes(label)
-                        return <Chip key={label} active={active} onClick={() => setSelectedSizes(prev => active ? prev.filter(x => x !== label) : [...prev, label])}>{label}</Chip>
+                        // S24b — el toggle APENDIA (`[...prev, label]`) i l'ordre de clic acabava
+                        // persistit tal qual: és l'origen del run `XS·S·L·XXS·M` del model 166.
+                        // Ara s'ordena pel sistema en marcar, de manera que la tira de talla base
+                        // de sota (que pinta `selectedSizes`) també es veu en ordre.
+                        return <Chip key={label} active={active} onClick={() => setSelectedSizes(prev => active ? prev.filter(x => x !== label) : ordenaPelSistema([...prev, label], labelsOf(selSystem)))}>{label}</Chip>
                       })}
                     </div>
                   </Field>
