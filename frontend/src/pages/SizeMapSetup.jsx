@@ -276,7 +276,12 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   }
 
   // P2 → preview
+  // P2 → P3 (definició de talles) NOMÉS quan es construeix un sistema. Amb REUTILITZAR, el run
+  // ja existeix i és sobirà: quines talles fabrica un model és pregunta del MODEL, no del joc de
+  // regles (llei S24). El pas es salta sencer — abans hi havia una graella editable que convidava
+  // a podar el run i la poda ni es desava ni validava res: era estat local que es llençava.
   const goPreview = () => {
+    if (wiz.decision === 'REUTILITZAR') { setStep(4); return }
     setErr(null); setBusy(true)
     const inputLabels = labels().map((et, i) => ({ etiqueta: et, ordre: i + 1 }))
     sizeMap.preview({ accio: wiz.decision, size_system_id: wiz.size_system_id, labels: inputLabels })
@@ -396,17 +401,19 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   }
 
   const submitCreate = (extra = {}) => {
-    // Guard d'integritat: cap regla d'una taula incompleta. Torna al pas 3 (backend també 400).
+    // Guard d'integritat: cap regla d'una taula incompleta. Torna a la taula de grading, que és
+    // on es veuen les files marcades (abans tornava al pas 3, la graella de talles: amagava
+    // justament les files vermelles que calia resoldre). El backend també ho bloqueja amb 400.
     if (incompletes.length > 0) {
       setErr(t('size_map_incompleta_warn', { count: incompletes.length }))
-      setStep(3)
+      setStep(4)
       return
     }
-    // Guard anti-col·lisió (R1): si dos codis comparteixen POM, tornar al pas 3 a resoldre-ho
-    // (el backend també ho bloqueja amb 400, però evitem la crida inútil).
+    // Guard anti-col·lisió (R1): si dos codis comparteixen POM, tornar a la taula de grading a
+    // resoldre-ho (el backend també ho bloqueja amb 400, però evitem la crida inútil).
     if (dupPomIds.size > 0) {
       setErr(t('size_map_dup_warn', { count: dupPomIds.size }))
-      setStep(3)
+      setStep(4)
       return
     }
     // Guard anti-descart-silenciós: buildPayload filtra els !pom_id; abans d'enviar, avisa
@@ -598,8 +605,9 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         </div>
       )}
 
-      {/* ---- P3 ---- */}
-      {step === 3 && (
+      {/* ---- P3 · definició del run del sistema NOU (CREAR/CLONAR). Amb REUTILITZAR no s'hi
+           arriba mai: el run del sistema triat és sobirà i no s'edita des d'aquí (llei S24). ---- */}
+      {step === 3 && wiz.decision !== 'REUTILITZAR' && (
         <div style={card}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
@@ -862,7 +870,14 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
             {/* R5 — comptador de regles = POMs distints vinculats (regles reals que es
                 persistiran, font única), no files de document. La col·lisió (R1) es bloqueja
                 abans, així que aquest recompte coincideix amb el de la BD després de crear. */}
-            <div>{t('size_map_sum_talles')}: {wiz.talles.length} · {t('size_map_sum_rules')}: {new Set(wiz.gradingResults.filter(g => g.pom_id).map(g => g.pom_id)).size} · {t('size_map_sum_perfils')}: {wiz.perfilTargets.length}</div>
+            {/* El comptador de talles només té sentit quan aquest wizard DEFINEIX el run (sistema
+                nou). Amb REUTILITZAR el run no és cosa seva: es diu quin document s'ha llegit. */}
+            <div>
+              {wiz.decision === 'REUTILITZAR'
+                ? <>{t('size_map_sum_doc_run')}: {wiz.gradingRun.length ? wiz.gradingRun.join(' · ') : '—'} · </>
+                : <>{t('size_map_sum_talles')}: {wiz.talles.length} · </>}
+              {t('size_map_sum_rules')}: {new Set(wiz.gradingResults.filter(g => g.pom_id).map(g => g.pom_id)).size} · {t('size_map_sum_perfils')}: {wiz.perfilTargets.length}
+            </div>
             {wiz.construction_id && <div>{t('size_map_sum_constr')}: {nomById(lookups.constructions, wiz.construction_id)}</div>}
           </div>
 
@@ -905,7 +920,8 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           )}
 
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => { setConflict(null); setStep(3) }} style={ghostBtn}>{t('size_map_back')}</button>
+            <button onClick={() => { setConflict(null); setStep(wiz.decision === 'REUTILITZAR' ? 2 : 3) }}
+              style={ghostBtn}>{t('size_map_back')}</button>
             <button onClick={doCreate} disabled={busy} style={primaryBtn}>
               <i className="ti ti-check" />{t('size_map_create_btn')}
             </button>
