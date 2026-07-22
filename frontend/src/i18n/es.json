@@ -2291,7 +2291,13 @@
     "regle_break": "Break",
     "regle_from": "a partir de",
     "regle_none": "—",
-    "regle_save_err": "No se ha podido guardar la regla."
+    "regle_save_err": "No se ha podido guardar la regla.",
+    "col_accions": "Acciones",
+    "poda_title": "Quitar esta medida del modelo",
+    "poda_confirma": "Confirmar: quitarla",
+    "poda_candidata": "Sin ningún valor real (base y tallas a cero o vacías): candidata a quitar.",
+    "poda_ok": "Medida {{codi}} quitada del modelo (queda inactiva, con registro en el log).",
+    "poda_err": "No se ha podido quitar la medida."
   },
   "sizecheck": {
     "col_date": "Fecha",

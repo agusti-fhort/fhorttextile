@@ -2770,6 +2770,46 @@ def registre_activitat_view(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+def desactivar_pom_view(request, model_id, pom_id):
+    """C1 (PRINCIPI DEL SOROLL, 2026-07-22) — PODA d'un POM del model. SOFT, mai DELETE.
+
+    La superfície de treball real (MeasureGrid) no tenia cap manera de treure un POM del
+    model: la poda només existia com a efecte col·lateral del desat complet de la taula de
+    GÈNESI (`keep_pom_ids`), i l'endpoint REST de DELETE dur era orfe de client
+    (DIAGNOSI_GTI_PLANTILLA §B3.4). Això n'és la porta, i és la SOFT: `is_active=False` +
+    entrada al `MeasurementChangeLog` (via la marca `_desactivat`, vegeu signals.py).
+
+    Deliberadament NO es cabla el DELETE dur: la mesura va existir i el model n'ha de
+    guardar memòria. La UI pot dir «eliminar»; la BD diu «inactiva».
+
+    Body opcional: {motiu: str}.
+    """
+    from fhort.models_app.models import BaseMeasurement
+
+    bm = (BaseMeasurement.objects
+          .filter(model_id=model_id, pom_id=pom_id, is_active=True)
+          .select_related('pom').first())
+    if bm is None:
+        return Response({'detail': 'Mesura no trobada (o ja inactiva) per a aquest model.'},
+                        status=404)
+
+    bm.is_active = False
+    bm._desactivat = True
+    bm._changed_by = request.user
+    bm._motiu = (request.data.get('motiu') or '').strip() or 'poda manual des de la graella'
+    bm.save(update_fields=['is_active'])
+
+    return Response({
+        'model': int(model_id),
+        'pom': int(pom_id),
+        'base_measurement': bm.id,
+        'is_active': False,
+        'codi': bm.nom_fitxa or bm.pom.codi_client or '',
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def set_pom_regim_view(request, model_id, pom_id):
     """PG-4b-3a / P3 — UPSERT de la REGLA resident (ModelGradingRule) per (model, pom).
 

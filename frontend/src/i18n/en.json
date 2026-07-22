@@ -2291,7 +2291,13 @@
     "regle_break": "Break",
     "regle_from": "from",
     "regle_none": "—",
-    "regle_save_err": "Could not save the rule."
+    "regle_save_err": "Could not save the rule.",
+    "col_accions": "Actions",
+    "poda_title": "Remove this measurement from the model",
+    "poda_confirma": "Confirm: remove it",
+    "poda_candidata": "No real value anywhere (base and sizes zero or empty): candidate for removal.",
+    "poda_ok": "Measurement {{codi}} removed from the model (kept inactive, recorded in the log).",
+    "poda_err": "The measurement could not be removed."
   },
   "sizecheck": {
     "col_date": "Date",

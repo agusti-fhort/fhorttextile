@@ -2291,7 +2291,13 @@
     "regle_break": "Break",
     "regle_from": "a partir de",
     "regle_none": "—",
-    "regle_save_err": "No s'ha pogut desar la regla."
+    "regle_save_err": "No s'ha pogut desar la regla.",
+    "col_accions": "Accions",
+    "poda_title": "Treure aquesta mesura del model",
+    "poda_confirma": "Confirmar: treure-la",
+    "poda_candidata": "Sense cap valor real (base i talles a zero o buides): candidata a treure.",
+    "poda_ok": "Mesura {{codi}} treta del model (queda inactiva, amb registre al log).",
+    "poda_err": "No s'ha pogut treure la mesura."
   },
   "sizecheck": {
     "col_date": "Data",

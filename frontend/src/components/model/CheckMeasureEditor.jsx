@@ -183,6 +183,7 @@ const checkSource = {
   kind: 'check',
   supportsResolve: true,
   supportsReorder: true,
+  supportsPoda: true,     // C1 — la taula de mesures del model és seva: aquí sí s'hi pot podar.
 
   load(model, ctx) {
     // CONSULTA: NO obre cap check (només llegeix el més recent). TREBALL: open idempotent.
@@ -363,6 +364,15 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.reorder_err') })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [src, model.id, load, onFeedback, t])
+  // C1 (PRINCIPI DEL SOROLL) — poda d'un POM del model des de la graella: SOFT (is_active=False)
+  // + registre al log de mesures. La UI diu «treure»; la BD guarda memòria. Mai DELETE dur.
+  const onPodar = useCallback((row) =>
+    models.desactivarPom(model.id, row.pom_id)
+      .then(() => load())
+      .then(() => onFeedback?.({ type: 'ok', text: t('measuregrid.poda_ok', { codi: row.codi || row.pom_code || '' }) }))
+      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.poda_err') })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model.id, load, onFeedback, t])
 
   if (loading) return <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('common.loading')}</div>
 
@@ -371,6 +381,9 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   const rows = raw ? src.buildRows(raw, ctx) : []
   const leadCols = raw ? src.buildLeadCols(raw, ctx) : []
   const canReorder = !readOnly && src.supportsReorder
+  // Només la superfície de MESURES del model (font check) és propietària de la taula de POMs:
+  // al fitting la fila és una presa d'una sessió, no patrimoni que es pugui podar des d'allà.
+  const canPodar = !readOnly && src.supportsPoda
   const canEditNom = !readOnly && !lockRules   // lockRules: nomenclatura read-only, preses editables
 
   return (
@@ -382,6 +395,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
         onSave={readOnly ? undefined : onSave} onNomSave={canEditNom ? onNomSave : undefined}
         editCodi reorderable={canReorder} onReorder={canReorder ? onReorder : undefined}
+        onPodar={canPodar ? onPodar : undefined}
         empty={
           // Estat buit GUIAT: un model sense BaseMeasurement (POM per definir) no pot ser un
           // cul-de-sac. En mode treball sobre la superfície de mesures (font check) expliquem
