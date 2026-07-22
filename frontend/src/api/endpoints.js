@@ -80,6 +80,9 @@ export const models = {
   // C1 (principi del soroll) — PODA d'un POM del model: SOFT (is_active=False) + registre al
   // log de mesures. Mai DELETE dur: la mesura va existir i el model n'ha de guardar memòria.
   desactivarPom: (modelId, pomId, motiu) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/desactivar/`, { motiu }),
+  // P0+P2+P3 — PROMOCIÓ model→item. Dues fases: confirm=false retorna el diff sense escriure
+  // res; confirm=true aplica dins d'una transacció. Gate CONFIGURE al backend.
+  promoureAItem: (modelId, confirm = false) => client.post(`/api/v1/models/${modelId}/promoure-a-item/`, { confirm }),
   // D5 (2026-07-21) — `setSizeOverride` JUBILAT: estava declarat aquí però cap component el
   // cridava mai; l'editor real fa servir `escalatAjustarTalla`. La ruta del backend també s'ha
   // retirat. Si algun dia cal editar una talla no-base per API, es reobre conscientment.

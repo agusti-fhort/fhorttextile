@@ -3714,5 +3714,19 @@
     "cancel": "Cancelar",
     "confirm": "Confirmar selección",
     "confirm_error": "No se ha podido confirmar la selección."
+  },
+  "promote": {
+    "cta": "Promover como estándar del ítem",
+    "title": "Promover al estándar de «{{item}}»",
+    "subtitle": "Los valores del modelo {{model}} (talla base {{talla}}) pasarán a ser la plantilla del ítem. No se escribe nada hasta que confirmes.",
+    "confirm": "Promover",
+    "talla_ok": "La talla base de la plantilla se fijará en «{{talla}}».",
+    "nous": "Valores nuevos en la plantilla",
+    "canvien": "Valores que cambian (plantilla → modelo)",
+    "iguals": "Ya iguales (nada que hacer)",
+    "sobrarien": "En la plantilla y no en el modelo",
+    "sobrarien_help": "Estos NO se borran. Se listan para que los podes a mano desde la autoría de ítem si ya no pintan nada.",
+    "sense_canvis": "No hay nada que escribir: la plantilla ya dice lo mismo que el modelo.",
+    "err": "No se ha podido promover."
   }
 }

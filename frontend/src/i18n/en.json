@@ -3714,5 +3714,19 @@
     "cancel": "Cancel",
     "confirm": "Confirm selection",
     "confirm_error": "Could not confirm the selection."
+  },
+  "promote": {
+    "cta": "Promote as the item standard",
+    "title": "Promote to the «{{item}}» standard",
+    "subtitle": "The values of model {{model}} (base size {{talla}}) will become the item template. Nothing is written until you confirm.",
+    "confirm": "Promote",
+    "talla_ok": "The template base size will be set to «{{talla}}».",
+    "nous": "New values in the template",
+    "canvien": "Values that change (template → model)",
+    "iguals": "Already equal (nothing to do)",
+    "sobrarien": "In the template but not in the model",
+    "sobrarien_help": "These are NOT deleted. They are listed so you can prune them by hand from item authoring if they no longer belong.",
+    "sense_canvis": "Nothing to write: the template already says the same as the model.",
+    "err": "The promotion failed."
   }
 }

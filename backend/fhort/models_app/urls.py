@@ -33,6 +33,7 @@ from .views import (
     measurements_chat_view,
     set_pom_regim_view,
     desactivar_pom_view,
+    promoure_a_item_view,
 )
 
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
@@ -213,6 +214,8 @@ urlpatterns = (
         path('models/<int:model_id>/pom/<int:pom_id>/regim/', set_pom_regim_view),
         # C1 — poda SOFT d'un POM del model des de la graella (mai DELETE dur).
         path('models/<int:model_id>/pom/<int:pom_id>/desactivar/', desactivar_pom_view),
+        # P0+P2+P3 — l'acte de PROMOCIÓ model→item (gate CONFIGURE propi, dry-run per defecte).
+        path('models/<int:model_id>/promoure-a-item/', promoure_a_item_view),
         path('models/iso-shrinkage/', iso_shrinkage_view),
         path('models/<int:model_id>/update-fabric/', update_fabric_view),
         path('models/<int:model_id>/albara/', consumption_delivery_view),

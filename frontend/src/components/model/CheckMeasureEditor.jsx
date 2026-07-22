@@ -9,6 +9,7 @@ import DependencyPanel from './DependencyPanel'
 import WatchpointsPanel from './WatchpointsPanel'
 import SessionPanel from './SessionPanel'
 import SessionActions from './SessionActions'
+import PromoteToItemButton from './PromoteToItemButton'
 
 // CHECK sobre l'editor únic MeasureGrid (substitueix SizeCheckWork): UNA graella amb l'historial
 // d'estadis (base-stages, read-only) com a columnes + la columna activa 'Real' (valor_real) + el
@@ -392,6 +393,14 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       <DependencyPanel model={model} />
       {/* Sprint Y — en mode sessió (font fitting), el panell de la sessió: context + Canvis/Observacions/Imatges. */}
       {ctx.fittingSession && <SessionPanel session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} grid={raw?.grid} />}
+      {/* P0 — la PROMOCIÓ viu aquí, sobre la taula de mesures del model: és el material que
+          promou i el lloc on el tècnic ja hi és. Acte separat i explícit, mai un pas d'un flux
+          (llei D-PROM). El component s'auto-amaga sense capability CONFIGURE o sense item. */}
+      {src.kind === 'check' && !readOnly && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <PromoteToItemButton model={model} onFeedback={onFeedback} />
+        </div>
+      )}
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
         onSave={readOnly ? undefined : onSave} onNomSave={canEditNom ? onNomSave : undefined}
         editCodi reorderable={canReorder} onReorder={canReorder ? onReorder : undefined}

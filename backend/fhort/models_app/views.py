@@ -12,7 +12,7 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
-from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
+from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS, CONFIGURE
 from fhort.pom.services import SealedGradingVersionError, _te_regles
 from fhort.pom.grading_regime import (
     CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada,
@@ -2808,6 +2808,201 @@ def registre_activitat_view(request):
         },
         'results': results,
     })
+
+
+def _truthy(v):
+    """Un `confirm` que arriba com a string ('true'/'1') val igual que un booleà JSON."""
+    return v is True or str(v).strip().lower() in ('true', '1', 'yes', 'si', 'sí')
+
+
+class _Configure(HasCapability):
+    """Gate CONFIGURE PROPI (D-PROM). La capa Item exigeix CONFIGURE a tot arreu
+    (`pom/views.py:get_permissions`), i els endpoints de la capa Model estan gated només a
+    `IsAuthenticated`. Un endpoint que ESCRIU a la capa Item des de la capa Model no pot
+    heretar el gate fluix de l'amfitrió: se'l posa propi."""
+    required_capability = CONFIGURE
+
+
+@api_view(['POST'])
+@permission_classes([_Configure])
+def promoure_a_item_view(request, model_id):
+    """POST /api/v1/models/<id>/promoure-a-item/ — P0+P2+P3, l'ACTE DE PROMOCIÓ model→item.
+
+    LLEI (Agus, 2026-07-22): *"La sobirania del model és sobre els SEUS valors. L'estàndard del
+    taller és un acte separat, explícit i CONFIGURE — mai un efecte secundari d'un import."*
+
+    Aquest endpoint és el bessó INVERS de `materialize_poms_view`: allà la plantilla sembra el
+    model, aquí un model real fixa la plantilla. Per això NO es penja de `confirmar/` de l'import
+    (la norma inamovible 1 queda intacta) i per això té gate CONFIGURE propi.
+
+    D-PROM — SOBREESCRIURE AMB CONFIRMACIÓ, en dues fases (mateix patró que el 409 del
+    contenidor i que el principi del soroll):
+      · **dry-run** (default) — retorna el diff sencer i NO escriu RES.
+      · **`confirm=true`** — aplica, dins d'una sola transacció.
+
+    El diff, per POM: `nou` (a l'item no hi és) · `canvia` (hi és amb un altre valor, es
+    mostren els dos) · `igual` (res a fer) · `sobraria` (a l'item i no al model).
+
+    Els «sobraria» **NO s'esborren mai**, ni amb confirm. `ItemBaseMeasurement` no té
+    `is_active`, o sigui que l'única poda possible seria un DELETE dur, i el principi del soroll
+    diu proposar, no executar. Es LLISTEN perquè el tècnic els podi a mà des d'ItemAuthoring.
+
+    P3 — el mateix acte escriu `GarmentTypeItem.base_size_definition`: la promoció és l'ÚNIC
+    moment en què el sistema SAP en quina talla parlen els valors (`Model.base_size_label`).
+    Passa per `clean()` (`tasks/models.py:336-343`), que exigeix que la talla pertanyi al
+    `size_system` del ruleset de l'item. Si falla → 422 amb el motiu i CAP escriptura.
+    """
+    from django.core.exceptions import ValidationError
+    from django.db import transaction
+    from fhort.pom.models import ItemBaseMeasurement, SizeDefinition
+    from fhort.models_app.models import BaseMeasurement
+
+    model = Model.objects.select_related('garment_type_item').filter(id=model_id).first()
+    if model is None:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    item = model.garment_type_item
+    if item is None:
+        return Response({'error': "Aquest model no té cap item de tipologia assignat: no hi ha "
+                                  "cap plantilla a promoure."}, status=400)
+
+    talla_model = (model.base_size_label or '').strip()
+    if not talla_model:
+        return Response({
+            'error': "El model no té talla base definida. Un valor de plantilla ha de dir en "
+                     "quina talla està expressat; sense això la promoció seria una mesura muda.",
+            'tipus': 'model_sense_talla_base',
+        }, status=422)
+
+    # ── El material: mesures VIVES i AMB VALOR del model. Les files buides o podades no són
+    # patrimoni promocionable (principi del soroll: no s'ascendeix el que no és realitat).
+    fonts = (BaseMeasurement.objects
+             .filter(model=model, is_active=True, base_value_cm__isnull=False)
+             .select_related('pom').order_by('ordre', 'id'))
+    if not fonts:
+        return Response({
+            'error': "El model no té cap mesura viva amb valor: no hi ha res a promoure.",
+            'tipus': 'model_sense_mesures',
+        }, status=422)
+
+    actuals = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(garment_type_item=item)}
+
+    # ── P3 — la talla que s'escriurà a l'item, resolta DINS del size_system del ruleset de
+    # l'item (no del model): és el sistema contra el qual `clean()` validarà.
+    ss_item_id = getattr(item.grading_rule_set, 'size_system_id', None)
+    talla_def = None
+    talla_motiu = None
+    if ss_item_id is None:
+        talla_motiu = ("L'item no té grading rule set (o el ruleset no té sistema de talles): "
+                       "no es pot resoldre la talla base de la plantilla. Es promouran els "
+                       "valors, però `base_size_definition` quedarà com estava.")
+    else:
+        talla_def = SizeDefinition.objects.filter(
+            size_system_id=ss_item_id, etiqueta=talla_model).first()
+        if talla_def is None:
+            talla_motiu = (f"La talla «{talla_model}» del model no existeix al sistema de talles "
+                           f"del ruleset de l'item: no es pot fixar `base_size_definition`.")
+
+    # ── El DIFF (pur, sense escriure).
+    nous, canvien, iguals = [], [], []
+    for bm in fonts:
+        actual = actuals.get(bm.pom_id)
+        fila = {
+            'pom_id': bm.pom_id,
+            'codi': bm.nom_fitxa or bm.pom.codi_client or '',
+            'nom': bm.pom.nom_client or '',
+            'valor_model': float(bm.base_value_cm),
+        }
+        if actual is None:
+            nous.append(fila)
+        elif actual.base_value_cm is None or float(actual.base_value_cm) != float(bm.base_value_cm):
+            fila['valor_item'] = (float(actual.base_value_cm)
+                                  if actual.base_value_cm is not None else None)
+            fila['origen_item'] = actual.origen
+            canvien.append(fila)
+        else:
+            iguals.append(fila)
+
+    poms_model = {bm.pom_id for bm in fonts}
+    sobrarien = [{
+        'pom_id': i.pom_id,
+        'codi': i.nom_fitxa or i.pom.codi_client or '',
+        'nom': i.pom.nom_client or '',
+        'valor_item': float(i.base_value_cm) if i.base_value_cm is not None else None,
+        'origen_item': i.origen,
+    } for i in ItemBaseMeasurement.objects
+        .filter(garment_type_item=item).exclude(pom_id__in=poms_model)
+        .select_related('pom').order_by('pom__codi_client')]
+
+    diff = {
+        'model': model.id,
+        'model_codi': model.codi_intern,
+        'garment_type_item': item.id,
+        'item_code': item.code,
+        'talla_model': talla_model,
+        'talla_item_actual': getattr(item.base_size_definition, 'etiqueta', None),
+        'talla_a_escriure': (talla_def.etiqueta if talla_def else None),
+        'talla_motiu': talla_motiu,
+        'nous': nous,
+        'canvien': canvien,
+        'iguals': iguals,
+        # NO s'esborren mai: es llisten perquè el tècnic decideixi a ItemAuthoring.
+        'sobrarien': sobrarien,
+        'resum': {'nous': len(nous), 'canvien': len(canvien),
+                  'iguals': len(iguals), 'sobrarien': len(sobrarien)},
+    }
+
+    if not _truthy(request.data.get('confirm')):
+        diff['dry_run'] = True
+        diff['message'] = (f"Simulació: {len(nous)} valor(s) nou(s), {len(canvien)} que canvien, "
+                           f"{len(iguals)} iguals. {len(sobrarien)} de l'item no són al model "
+                           f"(NO s'esborraran). Cap escriptura feta.")
+        return Response(diff, status=200)
+
+    # ── APLICAR. Tot dins d'una transacció: o s'escriu la plantilla sencera amb la seva talla,
+    # o no s'escriu res. Una plantilla a mitges és pitjor que no promoure.
+    try:
+        with transaction.atomic():
+            for bm in fonts:
+                ItemBaseMeasurement.objects.update_or_create(
+                    garment_type_item=item, pom_id=bm.pom_id,
+                    defaults={
+                        'base_value_cm': bm.base_value_cm,
+                        'tol_minus': bm.tolerancia_minus,
+                        'tol_plus': bm.tolerancia_plus,
+                        'nom_fitxa': bm.nom_fitxa or '',
+                        'origen': ItemBaseMeasurement.ORIGEN_PROMOTED,
+                        'updated_by': request.user,
+                    })
+
+            if talla_def is not None:
+                item.base_size_definition = talla_def
+                # full_clean sobre el camp que toquem: `clean()` és qui sap si la talla i el
+                # ruleset de l'item parlen el mateix sistema. Si no, ValidationError → rollback.
+                item.full_clean(exclude=[f.name for f in item._meta.fields
+                                         if f.name not in ('base_size_definition',)])
+                item.save(update_fields=['base_size_definition'])
+    except ValidationError as e:
+        # Cap escriptura parcial: l'atomic ja ha fet rollback en sortir per excepció.
+        return Response({
+            'error': "No s'ha pogut fixar la talla base de la plantilla; la promoció s'ha "
+                     "desfet sencera.",
+            'tipus': 'talla_incoherent',
+            'detall': e.message_dict if hasattr(e, 'message_dict') else str(e),
+            'talla_model': talla_model,
+        }, status=422)
+
+    diff['dry_run'] = False
+    diff['promoguts'] = len(nous) + len(canvien) + len(iguals)
+    diff['talla_escrita'] = talla_def.etiqueta if talla_def else None
+    diff['message'] = (
+        f"Promoció aplicada: {diff['promoguts']} valor(s) escrits a la plantilla de l'item "
+        f"«{item.code}» amb origen PROMOTED. "
+        + (f"Talla base de la plantilla fixada a «{talla_def.etiqueta}». "
+           if talla_def else "La talla base de la plantilla NO s'ha tocat. ")
+        + (f"{len(sobrarien)} valor(s) de l'item no són al model i s'han CONSERVAT: "
+           f"podi'ls a mà des de l'autoria d'item si vols." if sobrarien else ''))
+    return Response(diff, status=200)
 
 
 @api_view(['POST'])
