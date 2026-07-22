@@ -585,14 +585,10 @@ class GradingRuleSet(models.Model):
 
 
     # Sprint S1 — target, construction, versioning
-    # Sprint S16-A — `target` FK kept temporarily (related_name renamed
-    # to *_legacy). The new `targets` M2M is the authoritative source; the FK will be
-    # removed in a later sprint once the consuming code is updated.
-    target = models.ForeignKey(
-        'Target', null=True, blank=True,
-        on_delete=models.SET_NULL,
-        related_name='grading_rule_sets_legacy',
-    )
+    # P7 (2026-07-22, D-CONS "un rol, un vincle") — el FK legacy `target` s'ha RETIRAT
+    # (migració 0043). `targets` és la font única del ventall de targets: és l'únic que
+    # sap expressar el cas real (8 rulesets aplicaven a més d'un target i el FK no ho
+    # podia representar). Vegeu docs/diagnosis/DIAGNOSI_ITEM_PLANTILLA_COMPLETA_2026-07-22.md §B2.6.
     targets = models.ManyToManyField(
         'Target',
         blank=True,

@@ -192,7 +192,6 @@ def clone_sizing_profile_view(request, pk):
             nou_rs = GradingRuleSet.objects.create(
                 nom=nom_client,
                 codi_sistema=f"{original_rs.codi_sistema}_CUSTOM",
-                target=original_rs.target,
                 construction=original_rs.construction,
                 fit_type=original_rs.fit_type,
                 origen=GradingRuleSet.ORIGEN_CLIENT_RUN,
@@ -201,6 +200,9 @@ def clone_sizing_profile_view(request, pk):
                 parent_version=original_rs,
                 version_number=original_rs.version_number + 1,
             )
+            # P7 — el ventall de targets és la M2M (font única): el clon hereta el conjunt
+            # sencer de l'original, no només el primer com feia el FK legacy.
+            nou_rs.targets.set(original_rs.targets.all())
 
             # Copy all the rules — tots els camps reals de GradingRule des de l'original
             # (talla_base és NOT NULL; valors_step preserva la fidelitat del grading).

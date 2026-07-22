@@ -838,9 +838,7 @@ def size_map_create_view(request):
                         {'error': f"Graduació a actualitzar no trobada (nom='{rs_nom}')."},
                         status=status.HTTP_400_BAD_REQUEST)
                 rule_set.actiu = True
-                if target:
-                    rule_set.target = target
-                rule_set.save(update_fields=['actiu', 'target'])
+                rule_set.save(update_fields=['actiu'])
             else:
                 # on_conflict=='new' o cas sense conflicte: reusa la graduació d'aquest
                 # nom si ja existeix, si no en crea una de nova.
@@ -854,7 +852,7 @@ def size_map_create_view(request):
                             "GradingRuleSet CLIENT_RUN sense customer resoluble (nom=%r): "
                             "run genèric; procedència tancada per origen.", rs_nom)
                     rule_set = GradingRuleSet.objects.create(
-                        nom=rs_nom, size_system=ss, actiu=True, target=target,
+                        nom=rs_nom, size_system=ss, actiu=True,
                         construction=rs_construction, fit_type=rs_fit, garment_type_item=rs_gti,
                         origen=GradingRuleSet.ORIGEN_CLIENT_RUN, customer=alias_customer,
                     )

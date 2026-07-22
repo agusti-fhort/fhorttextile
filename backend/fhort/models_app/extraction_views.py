@@ -2154,7 +2154,7 @@ def import_session_confirmar_view(request, token):
                             container = GradingRuleSet.objects.create(
                                 nom=nom_cont, size_system=model.size_system,
                                 garment_group=model.garment_group, garment_type_item=None,
-                                target=rs_target, construction=rs_constr, fit_type=rs_fit,
+                                construction=rs_constr, fit_type=rs_fit,
                                 is_system_default=False, actiu=True,
                                 origen=GradingRuleSet.ORIGEN_CLIENT_RUN, customer=model.customer)
                             if rs_target:
