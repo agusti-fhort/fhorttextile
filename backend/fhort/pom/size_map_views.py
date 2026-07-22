@@ -16,7 +16,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from fhort.accounts.capabilities import HasCapability, CONFIGURE
-from fhort.pom.grading_utils import _norm, detect_grading, derive_break_fields
+from fhort.pom.grading_utils import (
+    _norm, detect_grading, derive_break_fields, run_del_document)
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +272,7 @@ def size_map_grading_preview_view(request):
     try:
         from fhort.pom.models import SizeDefinition
         from fhort.models_app.extraction_views import find_pom_master
+        from fhort.pom.size_labels import canonical_size_label
 
         data = request.data or {}
         ssid = data.get('size_system_id')
@@ -278,26 +280,33 @@ def size_map_grading_preview_view(request):
         taula = data.get('taula') or []
         customer = _resolve_run_customer(data, ssid)  # N3: matcher per àlies del client
 
-        # Run ordenat: unió d'etiquetes presents, ordenades pel size_system si es dóna.
-        all_labels = []
-        for row in taula:
-            for k in (row.get('valors') or {}).keys():
-                if k not in all_labels:
-                    all_labels.append(k)
-        order_map = {}
+        # REFERENT (llei S24) — el run del DOCUMENT ordenat pel sistema, via el helper únic
+        # (mateixa font que el preview per fitxer i que el create). Abans es feia aquí
+        # inline amb `order_map` i un fallback `9999` que deixava entrar al run les
+        # etiquetes que el sistema no coneix, en silenci i a la cua.
+        tenant_run = []
         if ssid:
-            for et, ordre in SizeDefinition.objects.filter(
-                size_system_id=ssid).order_by('ordre').values_list('etiqueta', 'ordre'):
-                order_map[_norm(et)] = ordre
-        if order_map:
-            run = sorted(all_labels, key=lambda l: order_map.get(_norm(l), 9999))
-        else:
-            run = list(all_labels)
+            tenant_run = list(SizeDefinition.objects.filter(size_system_id=ssid)
+                              .order_by('ordre').values_list('etiqueta', flat=True))
+        run, desconegudes = run_del_document(
+            [(row.get('valors') or {}) for row in taula], tenant_run)
+        # Check (d): etiqueta del document que el sistema no coneix = error real, no talla absent.
+        if desconegudes:
+            return Response({
+                'error': ("El document porta talles que el sistema seleccionat no coneix: "
+                          f"{', '.join(desconegudes)}. Revisa el sistema de talles o el document."),
+                'etiquetes_desconegudes': desconegudes,
+            }, status=status.HTTP_400_BAD_REQUEST)
+        # Pont únic canonical_size_label: el referent parla TENANT, els valors enganxats parlen
+        # DOCUMENT. Es re-claven aquí (com ja fa el camí per fitxer) perquè el guard i
+        # detect_grading llegeixin les mateixes claus. Salva XXL↔2XL, que _norm no cobreix.
+        canon_to_tenant = {canonical_size_label(e): e for e in run}
 
         results = []
         for row in taula:
             codi = row.get('pom_codi_client')
-            valors_raw = row.get('valors') or {}
+            valors_raw = {canon_to_tenant.get(canonical_size_label(k), k): v
+                          for k, v in (row.get('valors') or {}).items()}
 
             # descripció si el paste la porta (avui no); el fitxer SÍ → match per nom.
             pom, mtype, conf = find_pom_master(codi, row.get('descripcio') or '', customer=customer)
@@ -501,13 +510,20 @@ def size_map_grading_preview_file_view(request):
             return Response({'results': [], 'run': [], 'base_size': base_size,
                              'avisos': avisos or ["No s'han trobat POMs al fitxer."]}, status=200)
 
-        # 3. run ordenat — MATEIXA font que el preview de paste i el create (tenant_run, ja calculat).
-        run = list(tenant_run)
-        if not run:
-            for p in poms_in:
-                for k in (p['values'] or {}).keys():
-                    if k not in run:
-                        run.append(k)
+        # 3. REFERENT (llei S24) — el run del DOCUMENT, no el del SizeSystem. `tenant_run`
+        # només hi posa l'ORDRE i fa de catàleg per validar. Abans aquí hi havia
+        # `run = list(tenant_run)`: un document amb menys talles que el sistema marcava
+        # TOTES les files com a incompletes (cas Meredith: doc XXS-L sobre ALPHA_EU_W de 8
+        # talles → 26 files bloquejades) tot i ser internament coherent.
+        run, desconegudes = run_del_document([p['values'] for p in poms_in], tenant_run)
+        # Check (d): una etiqueta que el sistema NO coneix no és una talla que falti, és un
+        # error real → 400 abans de derivar res (mai el silenci d'ignorar-la).
+        if desconegudes:
+            return Response({
+                'error': ("El document porta talles que el sistema seleccionat no coneix: "
+                          f"{', '.join(desconegudes)}. Revisa el sistema de talles o el document."),
+                'etiquetes_desconegudes': desconegudes,
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         # Capa 2 (DIAGNOSI_ETIQUETES_TALLA): mapa forma-canònica → etiqueta del tenant, per re-clavar
         # les claus de values_by_size a les talles del run ABANS de detect_grading. Reusa
