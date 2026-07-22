@@ -143,9 +143,13 @@ class ModelViewSet(viewsets.ModelViewSet):
             return Model.objects.none()
         qs = (
             Model.objects
+            # `garment_type_item` i `customer`: el serializer els llegeix per fila
+            # (serializers.py:90,92) i sense select_related eren 2 queries per model
+            # — 407 amb page_size=200 (§B3.1).
             .select_related('garment_type', 'garment_group',
                             'responsable', 'responsable__user',
-                            'size_system', 'grading_rule_set')
+                            'size_system', 'grading_rule_set',
+                            'garment_type_item', 'customer')
             .all()
         )
         if self.action != 'list':
