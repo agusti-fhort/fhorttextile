@@ -333,23 +333,58 @@ def _spec_from_detection(pm, res, base_def_id, run_ordenat):
     }
 
 
-def derive_rules_from_fitxa(*, size_run_model, base_size, valors, confirmed_pom_ids,
-                            size_system, avisos):
+def derive_rules_from_fitxa(*, run_document, base_size, valors, confirmed_pom_ids,
+                            size_system, avisos, bloqueigs=None):
     """DETECCIÓ pura de les regles d'una fitxa (sense persistència, sense ruleset).
 
     Reutilitza el motor de detecció (detect_grading per POM + derive_break_fields). Retorna
     una llista d'SPECS canònics uniformes (dicts), un per POM detectat; buida si no derivable.
     Substitueix el paper CREADOR de derive_grading_rule_set: aquí NOMÉS es detecta la forma;
     sembrar/afegir/materialitzar ho decideix el camí de la llei del contenidor a fora.
+
+    REFERENT (llei S24): `run_document` — les talles del DOCUMENT, en llengua-tenant (el
+    cridador hi ha aplicat el mateix aparellament que a `valors`). Abans el referent era
+    `model.size_run_model`: si el run del model era MÉS ESTRET que el document, els deltes
+    es calculaven entre veïns falsos i el break sortia FABRICAT. És el bug del model 166
+    (run XS·S·L contra document XXS-L: S→L salta la M i val 2 passos → fals «×2» amb
+    `talla_break_label='L'`). El referent final és la unió del run del document amb les
+    talles realment presents a `valors`, ordenada pel sistema de talles.
+
+    BLOQUEIG (llei d'integritat 2026-07-08, aquí per primer cop): una fila sense valor per a
+    alguna talla del referent NO deriva cap regla amb deltes parcials — s'apunta a
+    `bloqueigs` i el cridador ha d'aturar l'import. Abans només s'emetia un avís i la regla
+    es persistia igualment: era el forat pel qual la llei encara es podia trencar.
+
+    Args:
+        bloqueigs: llista out-param (com `avisos`). Entrades
+            {'tipus': 'fila_incompleta', 'pom_codi', 'missing_sizes'} o
+            {'tipus': 'talles_desconegudes', 'etiquetes'}. Si el cridador no la passa, el
+            comportament de bloqueig degrada a avís (cap cridador de producte ho fa).
     """
     from fhort.pom.models import SizeDefinition, POMMaster
-    run_ordenat = [
-        s.strip() for s in (size_run_model or '').replace(';', '·').split('·') if s.strip()]
+    if bloqueigs is None:
+        bloqueigs = []
     base_def = SizeDefinition.objects.filter(
         size_system=size_system, etiqueta__iexact=base_size,
     ).first() if (getattr(size_system, 'id', None) and base_size) else None
+
+    run_sistema = list(
+        SizeDefinition.objects.filter(size_system=size_system).order_by('ordre')
+        .values_list('etiqueta', flat=True)) if getattr(size_system, 'id', None) else []
+    # El document mana; les claus de `valors` hi entren perquè una columna amb valor és
+    # columna del document encara que l'extracció no l'hagi rotulada al run detectat.
+    files_ref = [{l: None for l in (run_document or [])}]
+    files_ref += [valors.get(pid) or {} for pid in dict.fromkeys(confirmed_pom_ids)]
+    run_ordenat, desconegudes = run_del_document(files_ref, run_sistema)
+    if desconegudes:
+        bloqueigs.append({'tipus': 'talles_desconegudes', 'etiquetes': desconegudes})
+        avisos.append(
+            "Talles del document sense equivalència al sistema de talles: "
+            + ', '.join(desconegudes))
+        return []
+
     if not run_ordenat or not base_size:
-        avisos.append("Grading no derivat: manca run o talla base al model.")
+        avisos.append("Grading no derivat: manca run del document o talla base.")
         return []
     if base_def is None:
         avisos.append(
@@ -360,8 +395,15 @@ def derive_rules_from_fitxa(*, size_run_model, base_size, valors, confirmed_pom_
         pm = POMMaster.objects.filter(id=pid).first()
         if not pm:
             continue
+        vals = valors.get(pid) or {}
+        # BLOQUEIG: cap regla d'una taula incompleta. Un forat intern amaga un break.
+        missing = [s for s in run_ordenat if vals.get(s) is None]
+        if missing:
+            bloqueigs.append({'tipus': 'fila_incompleta',
+                              'pom_codi': pm.codi_client, 'missing_sizes': missing})
+            continue
         try:
-            res = detect_grading(valors.get(pid) or {}, run_ordenat, base_size)
+            res = detect_grading(vals, run_ordenat, base_size)
         except Exception as e:
             avisos.append(f"POM {pm.codi_client}: detecció de grading fallida ({e}).")
             continue
@@ -371,7 +413,7 @@ def derive_rules_from_fitxa(*, size_run_model, base_size, valors, confirmed_pom_
             avisos.append(f"POM {pm.codi_client}: grading no detectat; regla omesa.")
             continue
         specs.append(_spec_from_detection(pm, res, base_def.id, run_ordenat))
-    if not specs:
+    if not specs and not bloqueigs:
         avisos.append("Cap regla de grading derivada dels valors.")
     return specs
 

@@ -1768,13 +1768,13 @@ def import_session_confirmar_view(request, token):
         # anteriors al canvi), fallback al remap canònic C1b + avís. El save de model es difereix.
         meta_update_fields = []
         _to_tenant = None
+        doc_to_model = {}
         extraccio = (session.resultat or {}).get('extraccio') or {}
         run_detectat = extraccio.get('sizes') or []
         base_detectada = extraccio.get('base_size')
         talla_mapping = (session.run_conciliat or {}).get('talla_mapping')
 
         if talla_mapping:
-            doc_to_model = {}
             for _p in talla_mapping:
                 _d, _m = (_p or {}).get('document'), (_p or {}).get('model')
                 if _d and _m:
@@ -1967,10 +1967,45 @@ def import_session_confirmar_view(request, token):
         from fhort.pom.services import maybe_learn_customer_alias
 
         grading_avisos = []
+        grading_bloqueigs = []
+        # REFERENT (llei S24): el run del DOCUMENT en llengua-tenant. Es passa pel MATEIX
+        # aparellament que ja s'ha aplicat a `valors` més amunt (taula de la sessió si n'hi ha,
+        # remap canònic si no) perquè referent i valors parlin la mateixa llengua. Abans aquí
+        # s'hi passava `model.size_run_model`: amb un run de model més ESTRET que el document,
+        # els deltes es calculaven entre veïns falsos i el break sortia fabricat (bug 166).
+        run_document = list(run_detectat or [])
+        if talla_mapping:
+            run_document = [doc_to_model.get(l, l) for l in run_document]
+        elif _to_tenant is not None:
+            run_document = [_to_tenant(l) for l in run_document]
         # (a) DETECCIÓ de les regles de la fitxa (pur, sense persistència; reusa detect_grading).
         fitxa_specs = derive_rules_from_fitxa(
-            size_run_model=model.size_run_model, base_size=base_size, valors=valors,
-            confirmed_pom_ids=confirmed_pom_ids, size_system=model.size_system, avisos=grading_avisos)
+            run_document=run_document, base_size=base_size, valors=valors,
+            confirmed_pom_ids=confirmed_pom_ids, size_system=model.size_system,
+            avisos=grading_avisos, bloqueigs=grading_bloqueigs)
+        # BLOQUEIG d'integritat (llei 2026-07-08): cap regla d'una taula incompleta. Abans
+        # aquest camí només avisava i persistia igualment — el forat del bug 166. 422 ABANS de
+        # cap escriptura de grading; `set_rollback` perquè som dins de l'atomic i les mesures
+        # ja escrites més amunt no poden quedar confirmades amb un error a la mà.
+        if grading_bloqueigs:
+            incompletes = [b for b in grading_bloqueigs if b['tipus'] == 'fila_incompleta']
+            desconegudes = [e for b in grading_bloqueigs
+                            if b['tipus'] == 'talles_desconegudes' for e in b['etiquetes']]
+            if desconegudes:
+                msg = ("El document porta talles que el sistema de talles del model no coneix: "
+                       f"{', '.join(desconegudes)}.")
+            else:
+                msg = (f"{len(incompletes)} mesura/es no tenen valor per a totes les talles del "
+                       "document; no se'n pot derivar cap regla sense inventar-ne el trencament. "
+                       "Completa-les al pas de mesures o desmarca-les.")
+            transaction.set_rollback(True)
+            return Response({
+                'error': msg + ' (cap regla desada)',
+                'tipus': 'grading_taula_incompleta',
+                'bloqueigs': grading_bloqueigs,
+                'run_document': run_document,
+                'avisos': grading_avisos,
+            }, status=422)
         base_def_id = fitxa_specs[0]['talla_base_id'] if fitxa_specs else None
 
         # (b) MATCHER ÚNIC (M1): resol fit (codi→FK) i EL contenidor per la llei del contenidor
