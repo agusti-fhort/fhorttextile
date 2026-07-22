@@ -13,6 +13,7 @@ from rest_framework import status
 
 from fhort.pom.size_labels import canonical_size_label
 from fhort.pom.grading_utils import normalitza_cm
+from fhort.models_app.extraction_utils import registra_us_ia
 
 
 def normalize_size_run(raw):
@@ -474,6 +475,54 @@ def _cribratge_content_block(file_bytes: bytes, filename: str, content_type: str
     }
 
 
+def _cribratge_determinista(file_name, file_bytes, model):
+    """Cribratge SENSE IA per a un .xlsx que el parser determinista entén — o `None`.
+
+    Decisió Agus 2026-07-22: «IA només quan el determinista no pot; un xlsx parsejable no ha
+    de costar ni un cèntim de token.»
+
+    El cribratge existeix per saber QUANTS models porta el document i QUIN run de talles té.
+    Per a un xlsx que el parser entén, tots dos ja els sabem sense preguntar res: el parser
+    només retorna files quan pot DEMOSTRAR que ha entès la taula (capçalera ancorada per
+    contingut + columna de talla base identificada + mínim de files coherents), i les seves
+    talles surten de les columnes reals, no d'una lectura. Fins ara el fitxer s'enviava a
+    Opus SEMPRE, també quan tot seguit el parser el resoldria sol al pas 2: pagàvem una
+    lectura de visió per confirmar una cosa que teníem a la mà.
+
+    Els altres camps que retornava el cribratge (tipologia, gènere, `pot_continuar`) no els
+    llegeix ningú al wizard —només consumeix `run_talles_document` i `num_models`—, o sigui
+    que saltar la crida no li treu res.
+
+    Retorna `None` (→ cau a Opus, com sempre) per a PDF, imatge, i xlsx on el parser abdica.
+    Que el parser peti compta com abdicar: davant del dubte, IA.
+    """
+    if not (file_name or '').lower().endswith(('.xlsx', '.xls')):
+        return None
+    run_hint = [s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·')
+                if s.strip()]
+    try:
+        poms, talles, meta = _parse_excel_poms(
+            file_bytes, base_hint=model.base_size_label, run_hint=run_hint)
+    except Exception:
+        _logging.getLogger(__name__).exception(
+            'Cribratge: el parser determinista ha petat; es cau a la IA')
+        return None
+    if not poms:
+        return None
+    return {
+        'num_models': 1,               # el parser ha entès UNA taula de mesures
+        'models_detectats': [],
+        # Tipologia i gènere els decideix l'humà al pas següent; el cribratge només els
+        # proposava, i el wizard no els llegeix.
+        'tipologia_detectada': '',
+        'genere_detectat': '',
+        'run_talles_document': talles,
+        'sistema_talles': 'unknown',
+        'origen': 'parser_determinista',
+        'n_files_amb_codi': meta.get('n_files_amb_codi') or len(poms),
+    }
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
@@ -529,32 +578,65 @@ def import_session_cribratge_view(request):
     file_bytes = file_obj.read()
     session.document.save(file_obj.name, ContentFile(file_bytes), save=True)
 
-    content_block = _cribratge_content_block(file_bytes, file_obj.name, file_obj.content_type)
+    # ── CRIBRATGE DETERMINISTA PRIMER (Agus 2026-07-22) ───────────────────────────────
+    # «IA només quan el determinista no pot; un xlsx parsejable no ha de costar ni un
+    # cèntim de token.»
+    #
+    # El cribratge existeix per saber QUANTS models porta el document i QUIN run de talles
+    # té. Per a un .xlsx que el parser determinista entén, això ja ho sabem sense preguntar
+    # res a ningú: el parser només retorna files quan pot DEMOSTRAR que ha entès la taula
+    # (capçalera ancorada per contingut + columna de talla base + mínim de files coherents),
+    # i les seves talles surten de les columnes reals, no d'una lectura.
+    #
+    # Fins ara el fitxer s'enviava a Opus SEMPRE, també quan tot seguit el parser el
+    # resoldria sol al pas 2 — o sigui que pagàvem una lectura de visió per confirmar una
+    # cosa que teníem a la mà.
+    #
+    # Els altres camps del cribratge (tipologia, gènere, `pot_continuar`) no els llegeix
+    # ningú al wizard: només consumeix `run_talles_document` i `num_models`. Per això
+    # saltar la crida no li treu res. PDF, imatge i xlsx on el parser abdica segueixen
+    # passant per Opus exactament com abans.
+    resultat = _cribratge_determinista(file_obj.name, file_bytes, model)
+    cribratge_ia = resultat is None
+    if not cribratge_ia:
+        _logging.getLogger(__name__).info(
+            f"Cribratge SENSE IA (sessió {session.token}): parser determinista, "
+            f"{resultat['n_files_amb_codi']} POM(s), talles={resultat['run_talles_document']}")
 
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model=CRIBRATGE_MODEL,
-            max_tokens=900,
-            system=CRIBRATGE_PROMPT,
-            messages=[{'role': 'user', 'content': [content_block]}],
-        )
-        raw = ''.join(
-            b.text for b in response.content if getattr(b, 'type', None) == 'text'
-        ).strip()
-    except Exception as e:
-        _logging.getLogger(__name__).exception('Cribratge: error a la crida Claude')
-        return Response({'error': f'Error a la crida de cribratge: {e}', 'token': str(session.token)},
-                        status=502)
+    if cribratge_ia:
+        content_block = _cribratge_content_block(file_bytes, file_obj.name, file_obj.content_type)
 
-    # Parse tolerant (Fase 1).
-    try:
-        resultat = safe_json_parse(raw)
-    except ValueError as e:
-        session.avisos = (session.avisos or []) + [f'Cribratge: JSON invàlid ({e})']
-        session.save(update_fields=['avisos', 'actualitzat_at'])
-        return Response({'error': f'Cribratge: resposta no parsejable ({e})',
-                         'token': str(session.token), 'raw': raw[:500]}, status=422)
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model=CRIBRATGE_MODEL,
+                max_tokens=900,
+                system=CRIBRATGE_PROMPT,
+                messages=[{'role': 'user', 'content': [content_block]}],
+            )
+            raw = ''.join(
+                b.text for b in response.content if getattr(b, 'type', None) == 'text'
+            ).strip()
+            registra_us_ia(cami='cribratge', model_ia=CRIBRATGE_MODEL,
+                           usage=getattr(response, 'usage', None),
+                           import_session=session, model=model, created_by=profile)
+        except Exception as e:
+            _logging.getLogger(__name__).exception('Cribratge: error a la crida Claude')
+            # Una crida que peta també s'ha pagat: es registra igual (ok=False).
+            registra_us_ia(cami='cribratge', model_ia=CRIBRATGE_MODEL,
+                           import_session=session, model=model, created_by=profile,
+                           ok=False, error=str(e))
+            return Response({'error': f'Error a la crida de cribratge: {e}', 'token': str(session.token)},
+                            status=502)
+
+        # Parse tolerant (Fase 1).
+        try:
+            resultat = safe_json_parse(raw)
+        except ValueError as e:
+            session.avisos = (session.avisos or []) + [f'Cribratge: JSON invàlid ({e})']
+            session.save(update_fields=['avisos', 'actualitzat_at'])
+            return Response({'error': f'Cribratge: resposta no parsejable ({e})',
+                             'token': str(session.token), 'raw': raw[:500]}, status=422)
 
     num_models = resultat.get('num_models') or len(resultat.get('models_detectats') or []) or 0
     models_detectats = resultat.get('models_detectats') or []
@@ -581,7 +663,10 @@ def import_session_cribratge_view(request):
     session.save()
 
     plausible_genere = genere in ('woman', 'man', 'unisex', 'baby', 'kids')
-    pot_continuar = bool(num_models == 1 and tipologia and tipologia != 'unknown' and plausible_genere)
+    # Pel camí determinista no hi ha tipologia ni gènere per validar (ningú no els demanava
+    # al parser): el que fa continuable el document és que s'hagi entès UNA taula de mesures.
+    pot_continuar = (not cribratge_ia) or bool(
+        num_models == 1 and tipologia and tipologia != 'unknown' and plausible_genere)
 
     return Response({
         'token': str(session.token),
@@ -594,6 +679,9 @@ def import_session_cribratge_view(request):
         'sistema_talles': sistema,
         'run_configurat': run_configurat,
         'pot_continuar': pot_continuar,
+        # Traça del routing: qui ha resolt aquest cribratge. Visible a la resposta perquè
+        # «quantes crides d'IA ha fet aquest import?» tingui resposta sense mirar logs.
+        'cribratge_origen': ('ia' if cribratge_ia else 'parser_determinista'),
     }, status=200)
 
 
@@ -1116,6 +1204,8 @@ No afegeixis cap text fora del JSON.""",
         raw = ''.join(
             b.text for b in response.content if getattr(b, 'type', None) == 'text'
         ).strip()
+        registra_us_ia(cami='revisio', model_ia=EXCEL_REVISION_MODEL,
+                       usage=getattr(response, 'usage', None))
         parsed = safe_json_parse(raw)
         if not isinstance(parsed, dict):
             return default
@@ -1159,6 +1249,7 @@ def _extraccio_via_excel(session, api_key):
       · `meta` = el que el parser ha pogut saber del document **encara que abdiqui** — hi ha
         el recompte de files, que el camí IA necessita per al Fix D.
     """
+    from django.conf import settings
     # 1. Bytes del document desat al Pas 1.
     try:
         session.document.open('rb')
@@ -1188,8 +1279,17 @@ def _extraccio_via_excel(session, api_key):
     ]
     poms_text = '\n'.join(linies)
 
-    # 5. Revisió lleugera (no-fatal).
-    revision = _revise_excel_poms_with_sonnet(poms_text, api_key)
+    # 5. Revisió lleugera (no-fatal) — OPT-IN, per defecte APAGADA.
+    #
+    # Decisió Agus 2026-07-22: «un xlsx parsejable no ha de costar ni un cèntim de token».
+    # Aquesta crida només retoca `descripcio`/`dim` —mai un valor de mesura— sobre files que
+    # el parser determinista ja ha entès i demostrat que entenia (porta d'abdicació). És a
+    # dir: paga una crida a Sonnet per a cada import d'xlsx a canvi de polir text cosmètic.
+    # Queda darrere d'un setting per poder-la encendre quan es vulgui avaluar, sense que
+    # sigui el comportament de tothom.
+    revision = ({'corrections': [], 'warnings': []}
+                if not getattr(settings, 'IMPORT_REVISIO_SONNET', False)
+                else _revise_excel_poms_with_sonnet(poms_text, api_key))
 
     # 6. Aplica correccions (només camp descripcio/dim, codis existents).
     by_codi = {}
@@ -1350,8 +1450,15 @@ def import_session_extraccio_view(request, token):
         raw = ''.join(
             b.text for b in response.content if getattr(b, 'type', None) == 'text'
         ).strip()
+        registra_us_ia(cami='extraccio', model_ia=EXTRACCIO_MODEL,
+                       usage=getattr(response, 'usage', None),
+                       import_session=session, model=session.model,
+                       created_by=session.creat_per)
     except Exception as e:
         _logging.getLogger(__name__).exception('Extracció W2: error a la crida Claude')
+        registra_us_ia(cami='extraccio', model_ia=EXTRACCIO_MODEL,
+                       import_session=session, model=session.model,
+                       created_by=session.creat_per, ok=False, error=str(e))
         return Response({'error': f'Error a la crida d\'extracció: {e}'}, status=502)
 
     # Guarda de truncament: si Opus talla per límit de tokens, degradem amb gràcia

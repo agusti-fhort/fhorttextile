@@ -132,6 +132,11 @@ DATABASE_ROUTERS = ['django_tenants.routers.TenantSyncRouter']
 # Anthropic Claude API — usat per extraction_service.py (sprint 6)
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 
+# Revisió Sonnet de la via ràpida d'Excel (retoc de descripcio/dim, mai de valors).
+# APAGADA per defecte: un xlsx que el parser determinista ja ha entès no ha de pagar una
+# crida per polir text cosmètic. S'encén per avaluar-la, no per a tothom.
+IMPORT_REVISIO_SONNET = os.environ.get('IMPORT_REVISIO_SONNET', '').lower() in ('1', 'true', 'yes')
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
