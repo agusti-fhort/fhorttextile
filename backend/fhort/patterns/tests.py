@@ -2065,7 +2065,7 @@ class EscalatTestBase(PatternsAPITestBase):
         doc = DjangoGeometryStore().load_from(self.fp)
         snapshot = DjangoGradingSource().snapshot(self.gv.id)
         specs, _ = pom_specs(self.fp)
-        return doc, snapshot, specs, project(doc, snapshot, specs, sew_specs(self.fp))
+        return doc, snapshot, specs, project(doc, snapshot, specs, sew_specs(self.fp)[0])
 
 
 class ProjeccioTest(EscalatTestBase):
@@ -2208,7 +2208,7 @@ class SewPerTallaTest(EscalatTestBase):
         rel.segments_b.add(front.segments.first())
 
         doc, snapshot, specs, proj = self._projectar()
-        previews = preview_per_talla(doc, proj, snapshot, specs, sew_specs(self.fp))
+        previews = preview_per_talla(doc, proj, snapshot, specs, sew_specs(self.fp)[0])
 
         for sp in previews:
             self.assertEqual(len(sp.costures), 1, f'talla {sp.talla}')

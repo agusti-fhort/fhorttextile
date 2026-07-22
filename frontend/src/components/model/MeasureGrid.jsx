@@ -34,6 +34,30 @@ const toNum = (v) => (v === '' || v == null) ? null : Number(String(v).replace('
 const isModified = (value, baseValue) => value !== '' && value != null && baseValue != null
   && toNum(value) !== Number(baseValue)
 
+// C2 (PRINCIPI DEL SOROLL) — fila CANDIDATA A PODA: cap valor real enlloc (base i talles totes a
+// zero o buides, història inclosa). El model s'alimenta de realitat; una fila així no n'aporta cap.
+// És un INDICADOR, no un automatisme: qui decideix és el tècnic, amb la columna d'acció.
+const isNoiseRow = (row, groups) => {
+  let vist = false
+  for (const g of groups) {
+    const cell = row.cells?.[g.key]
+    if (!cell) continue
+    const vals = []
+    for (const h of (g.historyCols || [])) {
+      const hv = cell.history?.[h.key]
+      vals.push(hv && typeof hv === 'object' ? hv.value : hv)
+    }
+    if (cell.active) vals.push(cell.active.value)
+    for (const v of vals) {
+      if (v === null || v === undefined || v === '') continue
+      vist = true
+      if (Number(v) !== 0) return false
+    }
+  }
+  // Sense cap valor llegit no es pot afirmar res: no es marca (millor callar que acusar).
+  return vist
+}
+
 // Marcatge vermell de la cel·la activa: per defecte "difereix de base" (fitting); si l'active porta
 // `tol` (check), vermell NOMÉS quan surt de la banda de tolerància [base-minus, base+plus].
 const activeRed = (value, active) => {
@@ -165,7 +189,7 @@ function NomCell({ nomEn, nomLocal, nomFitxa, bmId, editable, onNomSave, editCod
 // (nom_fitxa || pom_code global). En edició (`editCodi` + bmId + onNomSave) és un input que desa
 // nom_fitxa per-model via onNomSave (NO toca el POM global; placeholder = codi global per defecte).
 // Mateix patró que el llegat del NomCell: buffer local, commit on blur, affordance només si editable.
-function CodiCell({ codi, nomFitxa, pomCode, bmId, isKey, editable, editCodi, onNomSave, reorderable, style }) {
+function CodiCell({ codi, nomFitxa, pomCode, bmId, isKey, editable, editCodi, onNomSave, reorderable, style, title }) {
   const { t } = useTranslation()
   const canEdit = !!(editable && editCodi && bmId != null && onNomSave)
   const [val, setVal] = useState(nomFitxa ?? '')
@@ -177,7 +201,7 @@ function CodiCell({ codi, nomFitxa, pomCode, bmId, isKey, editable, editCodi, on
     if (v !== (nomFitxa ?? '')) onNomSave(bmId, v)
   }
   return (
-    <td style={style}>
+    <td style={style} title={title}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
         {reorderable && (
           <i className="ti ti-grip-vertical" title={t('measuregrid.reorder')}
@@ -218,6 +242,7 @@ export default function MeasureGrid({
   editCodi = false,       // on s'edita nom_fitxa: true → columna POM (codi curt CH/WA/HI, Mesures); false → 2a línia del Nom (fitting, llegat)
   reorderable = false,    // DnD de files (NOMÉS Mesures-edició); default false → Escalat/fitting/consulta intactes
   onReorder = null,       // (orderedBmIds) => Promise — desa el nou ordre global del model
+  onPodar = null,         // C1 — (row) => Promise: treu el POM del model (SOFT). null = cap columna d'acció
   empty = null,           // node quan no hi ha files
 }) {
   const { t } = useTranslation()
@@ -226,6 +251,11 @@ export default function MeasureGrid({
   const [edited, setEdited] = useState(() => new Set())  // ancoratge (editat a mà)
   const focusRef = useRef(null)
   const dragFrom = useRef(null)
+  // C1 — confirmació LLEUGERA (dos temps a la mateixa fila, sense modal): el primer clic arma
+  // la fila, el segon la poda. Treure una mesura del model no ha de ser un clic distret.
+  const [podaArmada, setPodaArmada] = useState(null)   // pom_id
+  const [podant, setPodant] = useState(false)
+  const canPodar = !!(editable && onPodar)
   // Reordena (DnD): en deixar anar, calcula el nou ordre de bm_id i ho delega a onReorder (que desa +
   // refresca). Sense estat visual local: la fila es recol·loca en rellegir (simple i sense desincronies).
   const onRowDrop = (toIdx) => {
@@ -308,6 +338,12 @@ export default function MeasureGrid({
                 }}>{g.label}</th>
               )
             })}
+            {canPodar && (
+              <th rowSpan={2} style={{ ...thStyle, textAlign: 'center', width: 64, minWidth: 64,
+                                       background: 'var(--bg-muted)', borderLeft: '1px solid var(--border)' }}>
+                {t('measuregrid.col_accions')}
+              </th>
+            )}
           </tr>
           <tr>
             {groups.flatMap(g => {
@@ -325,6 +361,8 @@ export default function MeasureGrid({
         <tbody>
           {rows.map((r, i) => {
             const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-card)'
+            // C2 — candidata a poda: indicador SUBTIL (un filet a l'esquerra), mai un automatisme.
+            const soroll = isNoiseRow(r, groups)
             return (
               <tr key={r.pom_id} style={{ background: rowBg }}
                 draggable={reorderable || undefined}
@@ -333,7 +371,11 @@ export default function MeasureGrid({
                 onDrop={reorderable ? (() => onRowDrop(i)) : undefined}>
                 <CodiCell codi={r.codi} nomFitxa={r.nom_fitxa} pomCode={r.pom_code} bmId={r.bm_id}
                   isKey={r.is_key} editable={editable} editCodi={editCodi} onNomSave={onNomSave}
-                  reorderable={reorderable} style={stickyTd(0, COL_POM_W, rowBg)} />
+                  reorderable={reorderable}
+                  style={soroll
+                    ? { ...stickyTd(0, COL_POM_W, rowBg), boxShadow: 'inset 3px 0 0 var(--border)' }
+                    : stickyTd(0, COL_POM_W, rowBg)}
+                  title={soroll ? t('measuregrid.poda_candidata') : undefined} />
                 <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} nomFitxa={r.nom_fitxa} bmId={r.bm_id}
                   editable={editable} onNomSave={onNomSave} editCodi={editCodi} style={stickyTd(COL_POM_W, COL_NOM_W, rowBg)} />
                 {leadCols.map((c, idx) => (
@@ -361,6 +403,41 @@ export default function MeasureGrid({
                   }
                   return out
                 })}
+                {canPodar && (
+                  <td style={{ padding: '5px 8px', borderBottom: '0.5px solid var(--border)',
+                               borderLeft: '1px solid var(--border)', textAlign: 'center',
+                               verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                    {podaArmada === r.pom_id ? (
+                      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                        <button type="button" title={t('measuregrid.poda_confirma')}
+                          aria-label={t('measuregrid.poda_confirma')} disabled={podant}
+                          onClick={() => {
+                            setPodant(true)
+                            Promise.resolve(onPodar(r))
+                              .finally(() => { setPodant(false); setPodaArmada(null) })
+                          }}
+                          style={{ border: 'none', background: 'transparent', cursor: podant ? 'wait' : 'pointer',
+                                   color: 'var(--err)', padding: 2, lineHeight: 1 }}>
+                          <i className="ti ti-check" aria-hidden="true" style={{ fontSize: 15 }} />
+                        </button>
+                        <button type="button" title={t('common.cancel')} aria-label={t('common.cancel')}
+                          onClick={() => setPodaArmada(null)}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer',
+                                   color: 'var(--text-muted)', padding: 2, lineHeight: 1 }}>
+                          <i className="ti ti-x" aria-hidden="true" style={{ fontSize: 15 }} />
+                        </button>
+                      </span>
+                    ) : (
+                      <button type="button" title={t('measuregrid.poda_title')}
+                        aria-label={t('measuregrid.poda_title')}
+                        onClick={() => setPodaArmada(r.pom_id)}
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer',
+                                 color: 'var(--text-muted)', padding: 2, lineHeight: 1 }}>
+                        <i className="ti ti-trash" aria-hidden="true" style={{ fontSize: 14 }} />
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             )
           })}

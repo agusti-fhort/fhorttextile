@@ -387,13 +387,21 @@ class ItemBaseMeasurementSerializer(serializers.ModelSerializer):
     per Item (P3). Inclou display del POM (codi/nom) per a la columna del POMBrowser ASSIGN (P4)."""
     pom_codi = serializers.CharField(source='pom.codi_client', read_only=True)
     pom_nom = serializers.CharField(source='pom.nom_client', read_only=True)
+    # P9 — qui i quan. `updated_by_nom` és display; l'autoria mateixa no s'escriu per API.
+    updated_by_nom = serializers.CharField(source='updated_by.username', read_only=True,
+                                           default=None)
 
     class Meta:
         model = ItemBaseMeasurement
         fields = (
             'id', 'garment_type_item', 'pom', 'pom_codi', 'pom_nom',
             'base_value_cm', 'tol_minus', 'tol_plus', 'nom_fitxa',
+            # P9 — PROVINENÇA: read_only sencera. `origen` el determina el CAMÍ d'escriptura
+            # (ViewSet = MANUAL · promoció = PROMOTED · loader = IMPORTED), mai el body: si
+            # fos escrivible, qualsevol client podria signar un valor com a promogut.
+            'origen', 'created_at', 'updated_at', 'updated_by', 'updated_by_nom',
         )
+        read_only_fields = ('origen', 'created_at', 'updated_at', 'updated_by')
 
 
 class CustomerPOMAliasSerializer(serializers.ModelSerializer):

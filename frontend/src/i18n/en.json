@@ -885,6 +885,7 @@
     "save": "Save",
     "creating": "Creating…",
     "saving": "Saving…",
+    "grading_other_customer_confirm": "Do you want to apply it to this model anyway?",
     "conn_error": "Connection error",
     "season_required": "Select a season",
     "created_ok": "Model created.",
@@ -932,9 +933,17 @@
     "grading_system": "Size system",
     "no_grading": "No grading (choose later)",
     "pick_fit": "Pick the fit",
-    "grading_needs_sizes": "Define the sizes first (step 3) to be able to choose grading.",
     "no_grading_available": "No rule set matches this garment and size combination. You can continue without grading and add it later.",
-    "grading_auto_proposed": "Proposed automatically (single match). You can change it or choose “No grading”."
+    "grading_auto_proposed": "Proposed automatically (single match). You can change it or choose “No grading”.",
+    "size_run_replace_confirm": "System “{{sistema}}” does not contain every size of the current run. This will replace the {{from}}-size run with a {{to}}-size one and reassign the base size. Continue?",
+    "grading_needs_system": "Choose a size system first (step 3) to be able to pick grading.",
+    "grading_needs_run": "Choose the sizes of the run (step 3) to be able to pick grading.",
+    "grading_needs_base": "The BASE SIZE is missing: pick it in step 3 (it must be one of the run sizes).",
+    "grading_missing_axes": "Grading cannot be searched yet: {{eixos}} missing.",
+    "model_size_system": "Model’s system",
+    "grading_dropped": "The grading the model had no longer matches the chosen axes (garment, construction or size system). It has been unassigned: pick another one or tick “No grading”.",
+    "grading_dropped_replaced": "The grading the model had no longer matches the chosen axes and has been replaced by the only compatible one. Review it before saving.",
+    "run_lost_sizes": "Warning: the model’s saved run contains sizes that are no longer in its size system ({{talles}}). They could not be restored; if you save now, the run will lose them."
   },
   "models_list": {
     "title": "Models",
@@ -2282,7 +2291,13 @@
     "regle_break": "Break",
     "regle_from": "from",
     "regle_none": "—",
-    "regle_save_err": "Could not save the rule."
+    "regle_save_err": "Could not save the rule.",
+    "col_accions": "Actions",
+    "poda_title": "Remove this measurement from the model",
+    "poda_confirma": "Confirm: remove it",
+    "poda_candidata": "No real value anywhere (base and sizes zero or empty): candidate for removal.",
+    "poda_ok": "Measurement {{codi}} removed from the model (kept inactive, recorded in the log).",
+    "poda_err": "The measurement could not be removed."
   },
   "sizecheck": {
     "col_date": "Date",
@@ -2384,7 +2399,13 @@
     "sealed_title": "Grading version v{{v}} is approved (sealed for production).",
     "sealed_hint": "What has been approved does not change: to edit it, create a new version.",
     "sealed_new_version": "Create new version",
-    "sealed_bump_err": "The new version could not be created."
+    "sealed_bump_err": "The new version could not be created.",
+    "seed_title_empty": "Create the item’s POM list?",
+    "seed_subtitle_empty": "The item has no standard base measurements: the POM list will be created without values.",
+    "seed_body_empty": "The rows for the POMs the item declares will be created, empty (to fill in by hand or by import). Measurements you already touched on the model are not overwritten.",
+    "seed_confirm_empty": "Create the list",
+    "seed_count": "POMs of the item: {{total}} · selected to seed: {{tria}}. Remove the ones you don’t want.",
+    "seed_count_zero": "Pick at least one POM to seed."
   },
   "model_fabric": {
     "err_close_table": "Could not close the table.",
@@ -3054,6 +3075,7 @@
     "rules_count": "{{count}} rules",
     "rules_count_filtered": "{{count}}/{{total}} rules",
     "with_break": "{{count}} with break",
+    "suggested_by_item": "Suggested by the item",
     "system": "System",
     "custom": "Custom",
     "active": "Active",
@@ -3091,7 +3113,13 @@
     "origen_IMPORT": "Imported",
     "origen_none": "Unclassified",
     "step_family": "Family",
-    "step_item": "Item"
+    "step_item": "Item",
+    "axis_target": "target",
+    "axis_construction": "construction",
+    "axis_group": "garment group",
+    "axis_fit": "fit",
+    "axis_size_system": "size system",
+    "picker_missing_axes": "To list rule sets, {{eixos}} is missing."
   },
   "model_phases": {
     "Nou": "New",
@@ -3278,7 +3306,15 @@
     "pending_review": "Pending review",
     "pending_badge": "pending",
     "weak_hint": "Low confidence, not linked automatically. Suggestion:",
-    "many_to_one_hint": "Two rows of the sheet pointed to this same POM: neither was linked (the second would erase the first). Suggestion:"
+    "many_to_one_hint": "Two rows of the sheet pointed to this same POM: neither was linked (the second would erase the first). Suggestion:",
+    "soroll_title": "Measurements the document does not mention",
+    "soroll_help": "This model has {{count}} live measurement(s) the imported document does not carry. The model feeds on the reality of the document: deactivating them is proposed. They are never deleted — they stay inactive and recorded in the measurement log.",
+    "soroll_desactivar": "Deactivate them",
+    "soroll_conservar": "Keep them",
+    "soroll_manual_title": "Manual measurements the document would overwrite",
+    "soroll_manual_help": "The document carries a value for {{count}} measurement(s) that someone entered MANUALLY. The import does not overwrite them without permission: should the document rule, or should the manual value be respected?",
+    "soroll_manual_sobreescriure": "Let the document rule",
+    "soroll_manual_respectar": "Respect the manual value"
   },
   "dependency": {
     "title": "Dependency",
@@ -3679,5 +3715,19 @@
     "cancel": "Cancel",
     "confirm": "Confirm selection",
     "confirm_error": "Could not confirm the selection."
+  },
+  "promote": {
+    "cta": "Promote as the item standard",
+    "title": "Promote to the «{{item}}» standard",
+    "subtitle": "The values of model {{model}} (base size {{talla}}) will become the item template. Nothing is written until you confirm.",
+    "confirm": "Promote",
+    "talla_ok": "The template base size will be set to «{{talla}}».",
+    "nous": "New values in the template",
+    "canvien": "Values that change (template → model)",
+    "iguals": "Already equal (nothing to do)",
+    "sobrarien": "In the template but not in the model",
+    "sobrarien_help": "These are NOT deleted. They are listed so you can prune them by hand from item authoring if they no longer belong.",
+    "sense_canvis": "Nothing to write: the template already says the same as the model.",
+    "err": "The promotion failed."
   }
 }

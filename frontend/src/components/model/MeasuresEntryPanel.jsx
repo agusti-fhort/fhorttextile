@@ -25,13 +25,18 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
 
   const [mode, setMode] = useState('loading')   // 'loading' | 'selector' | 'manual' | 'import'
   const [pomsSuggerits, setPomsSuggerits] = useState([])
-  const [selectedPomIds, setSelectedPomIds] = useState([])
+  const [selectedPomIds, setSelectedPomIds] = useState([])   // graella manual
+  const [seedPomIds, setSeedPomIds] = useState([])           // oferta de sembra (estat propi)
   const [taulaRows, setTaulaRows] = useState([])
   const [sizesAmbDades, setSizesAmbDades] = useState(null)
   const [deltes, setDeltes] = useState(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [seedOffer, setSeedOffer] = useState(false)
+  // F2.1 — quina sembra s'ofereix: 'values' (l'item porta mides base → ITEM_STANDARD) o 'empty'
+  // (l'item no en porta → llista de POMs buida, origen TEMPLATE). Les dues escriuen a BD, i per
+  // tant les dues es CONFIRMEN. Entrar a mirar no escriu res.
+  const [seedKind, setSeedKind] = useState('values')
   const [seedBusy, setSeedBusy] = useState(false)
   const [savingPom, setSavingPom] = useState(false)
   // Confirmació de Gravar POM (paral·lel a "Propagar"): missatge SIMPLE la 1a vegada; ADVERTÈNCIA si
@@ -47,10 +52,23 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
     if (hadBaseRef.current === null) hadBaseRef.current = (rows || []).some(r => r.base_value_cm != null)
   }
 
-  const togglePom = (pom) => {
-    setSelectedPomIds(prev =>
-      prev.includes(pom.pom_id) ? prev.filter(x => x !== pom.pom_id) : [...prev, pom.pom_id])
-  }
+  const toggleIn = (setter) => (pom) => setter(prev =>
+    prev.includes(pom.pom_id) ? prev.filter(x => x !== pom.pom_id) : [...prev, pom.pom_id])
+  const togglePom = toggleIn(setSelectedPomIds)      // graella manual (arrenca amb els KEY)
+  const toggleSeedPom = toggleIn(setSeedPomIds)      // modal de sembra (arrenca amb tot el mapa)
+
+  // F2.2 — en obrir l'oferta de sembra, la proposta és TOT el mapa de l'item (el que sembrava abans
+  // sense preguntar). Els chips es pinten DINS el modal: el tècnic hi treu el que no vol i el que hi
+  // queda és exactament el que s'escriurà. Un sol cop per oferta (no trepitja el que ell toqui).
+  // La tria del modal viu en un estat PROPI: compartir-la amb la graella manual feia que cancel·lar
+  // la sembra deixés la graella amb el mapa sencer en comptes de només els KEY.
+  const seedPreselectRef = useRef(false)
+  useEffect(() => {
+    if (!seedOffer) { seedPreselectRef.current = false; return }
+    if (seedPreselectRef.current || pomsSuggerits.length === 0) return
+    setSeedPomIds(pomsSuggerits.map(p => p.pom_id))
+    seedPreselectRef.current = true
+  }, [seedOffer, pomsSuggerits])
 
   const refreshTableMeta = (d) => {
     setSizesAmbDades(d.sizes_amb_dades || null)
@@ -67,10 +85,15 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
 
   // B5 — confirmar la sembra: materialitzar-poms (valor+nom_fitxa+tol, origen ITEM_STANDARD) i mostra
   // la graella sembrada en mode manual perquè el tècnic pugui ajustar abans de sortir a la consulta.
+  // F2.2 — la selecció de chips ARA té efecte: els pom_ids triats viatgen a materialitzar-poms.
+  // Abans confirmSeed ignorava selectedPomIds i sembrava tot el GarmentPOMMap: la tria era decorativa.
   const confirmSeed = async () => {
     setSeedBusy(true)
     try {
-      await fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders })
+      // Els chips del modal SÓN la petició: el que es veu triat és el que s'escriu. Només es cau al
+      // "sembra-ho tot" si no hem pogut carregar la llista de POMs suggerits (res per triar).
+      const body = pomsSuggerits.length > 0 ? JSON.stringify({ pom_ids: seedPomIds }) : undefined
+      await fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders, body })
       setSeedOffer(false)
       await reloadTable('manual')
     } catch {
@@ -130,11 +153,13 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
         } catch { /* sense oferta */ }
 
         if (!alive) return
+        // F2.1 — la sembra és un ACTE DEL TÈCNIC, mai un efecte de muntatge. Abans, entrar al tab
+        // amb la taula buida feia el POST materialitzar-poms sol: mirar escrivia a BD. Ara el panell
+        // OFEREIX la sembra (amb els POMs proposats a la vista) i espera la confirmació.
         if (hasValues) {
-          setMode('selector'); setSeedOffer(true)
+          setSeedKind('values'); setMode('selector'); setSeedOffer(true)
         } else if (rows.length === 0) {
-          fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders })
-            .then(() => reloadTable('selector')).catch(() => reloadTable('selector'))
+          setSeedKind('empty'); setMode('selector'); setSeedOffer(true)
         } else {
           setMode('selector')
         }
@@ -201,17 +226,33 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
 
       {seedOffer && (
         <Modal
-          title={t('model_measurements.seed_title')}
-          subtitle={t('model_measurements.seed_subtitle')}
+          title={t(`model_measurements.seed_title${seedKind === 'empty' ? '_empty' : ''}`)}
+          subtitle={t(`model_measurements.seed_subtitle${seedKind === 'empty' ? '_empty' : ''}`)}
           cancelLabel={t('model_measurements.seed_cancel')}
-          confirmLabel={seedBusy ? t('common.saving') : t('model_measurements.seed_confirm')}
+          confirmLabel={seedBusy
+            ? t('common.saving')
+            : t(`model_measurements.seed_confirm${seedKind === 'empty' ? '_empty' : ''}`)}
           onCancel={cancelSeed}
           onConfirm={confirmSeed}
-          confirmDisabled={seedBusy}
+          confirmDisabled={seedBusy || seedPomIds.length === 0}
         >
           <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: 0 }}>
-            {t('model_measurements.seed_body')}
+            {t(`model_measurements.seed_body${seedKind === 'empty' ? '_empty' : ''}`)}
           </p>
+          <p style={{ fontSize: 'var(--fs-body)', margin: '8px 0 0',
+                      color: seedPomIds.length === 0 ? 'var(--warn)' : 'var(--text-muted)' }}>
+            {seedPomIds.length === 0
+              ? t('model_measurements.seed_count_zero')
+              : t('model_measurements.seed_count', { total: pomsSuggerits.length, tria: seedPomIds.length })}
+          </p>
+          {pomsSuggerits.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, maxHeight: 220,
+                          overflowY: 'auto', border: '0.5px solid var(--border)', borderRadius: 8, padding: 8 }}>
+              {pomsSuggerits.map(p => (
+                <POMChipSuggerit key={p.pom_id} pom={p} selected={seedPomIds.includes(p.pom_id)} onToggle={() => toggleSeedPom(p)} />
+              ))}
+            </div>
+          )}
         </Modal>
       )}
 

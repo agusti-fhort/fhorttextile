@@ -136,6 +136,7 @@ class ExportResult:
     previews: tuple[SizePreview, ...]
     autovalidacio: Autovalidacio
     problemes_poms: tuple[str, ...] = field(default_factory=tuple)
+    problemes_costures: tuple[str, ...] = field(default_factory=tuple)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -166,7 +167,7 @@ def build_export(
     # ── 1. La geometria i les anotacions que hi pengen.
     doc = DjangoGeometryStore().load_from(pattern_file)
     specs, problemes = pom_specs(pattern_file)
-    sews = sew_specs(pattern_file)
+    sews, problemes_sews = sew_specs(pattern_file)
 
     # ── 2. El grading, PINÇAT: la versió ve donada, no es tria.
     try:
@@ -235,6 +236,7 @@ def build_export(
         previews=previews,
         autovalidacio=auto,
         problemes_poms=tuple(problemes),
+        problemes_costures=tuple(problemes_sews),
     )
 
 

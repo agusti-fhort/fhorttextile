@@ -704,9 +704,15 @@ class ModelGradingRule(models.Model):
 
     PG-0 només crea l'entitat — RES la consumeix encara. Cap canvi de comportament.
     """
+    # R8 (2026-07-21) — 'CLIENT_RUN' hi faltava. El vocabulari de GradingRuleSet.origen
+    # (CANONICAL/CLIENT_RUN/IMPORT) i el d'aquí no s'alineaven, i el wizard resolia la
+    # diferència escrivint sempre 'CANONICAL': 104 regles residents de 4 models deien que
+    # eren canòniques quan venien d'un run de client (DIAGNOSI_REFACTOR_GRADING_2026-07-21,
+    # R8). Sense aquest valor, la provinença real no era ni expressable.
     ORIGEN_CHOICES = [
         ('IMPORTED', 'Importat de fitxa externa'),
         ('CANONICAL', 'Derivat canònicament'),
+        ('CLIENT_RUN', 'Derivat de run de client'),
         ('MANUAL', 'Introduït manualment'),
     ]
 

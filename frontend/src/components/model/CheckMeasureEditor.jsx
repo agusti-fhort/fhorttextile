@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { models, sizeChecks, sizeCheckLines, baseMeasurements } from '../../api/endpoints'
+import { effectiveRegime } from '../../utils/gradingRegime'
 import MeasureGrid from './MeasureGrid'
 import EditorHeader from './EditorHeader'
 import DependencyPanel from './DependencyPanel'
 import WatchpointsPanel from './WatchpointsPanel'
 import SessionPanel from './SessionPanel'
 import SessionActions from './SessionActions'
+import PromoteToItemButton from './PromoteToItemButton'
 
 // CHECK sobre l'editor únic MeasureGrid (substitueix SizeCheckWork): UNA graella amb l'historial
 // d'estadis (base-stages, read-only) com a columnes + la columna activa 'Real' (valor_real) + el
@@ -110,6 +112,8 @@ const modal = { background: 'var(--white)', borderRadius: 8, padding: 24, maxWid
 function regleLabel(row, t) {
   if (row.logica == null) return ''
   if (row.logica === 'STEP') return t('fitting.grid.rule_free')
+  // LINEAR+0 sense break = FIXED: no té delta a ensenyar (§LLEI a utils/gradingRegime).
+  if (effectiveRegime(row) === 'FIXED') return ''
   if (row.increment_base == null) return ''
   if (row.increment_break != null && row.talla_break_label)
     return `+${row.increment_base} · ${t('fitting.grid.break')} ${row.talla_break_label} +${row.increment_break}`
@@ -180,6 +184,7 @@ const checkSource = {
   kind: 'check',
   supportsResolve: true,
   supportsReorder: true,
+  supportsPoda: true,     // C1 — la taula de mesures del model és seva: aquí sí s'hi pot podar.
 
   load(model, ctx) {
     // CONSULTA: NO obre cap check (només llegeix el més recent). TREBALL: open idempotent.
@@ -360,6 +365,15 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.reorder_err') })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [src, model.id, load, onFeedback, t])
+  // C1 (PRINCIPI DEL SOROLL) — poda d'un POM del model des de la graella: SOFT (is_active=False)
+  // + registre al log de mesures. La UI diu «treure»; la BD guarda memòria. Mai DELETE dur.
+  const onPodar = useCallback((row) =>
+    models.desactivarPom(model.id, row.pom_id)
+      .then(() => load())
+      .then(() => onFeedback?.({ type: 'ok', text: t('measuregrid.poda_ok', { codi: row.codi || row.pom_code || '' }) }))
+      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.poda_err') })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model.id, load, onFeedback, t])
 
   if (loading) return <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('common.loading')}</div>
 
@@ -368,6 +382,9 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   const rows = raw ? src.buildRows(raw, ctx) : []
   const leadCols = raw ? src.buildLeadCols(raw, ctx) : []
   const canReorder = !readOnly && src.supportsReorder
+  // Només la superfície de MESURES del model (font check) és propietària de la taula de POMs:
+  // al fitting la fila és una presa d'una sessió, no patrimoni que es pugui podar des d'allà.
+  const canPodar = !readOnly && src.supportsPoda
   const canEditNom = !readOnly && !lockRules   // lockRules: nomenclatura read-only, preses editables
 
   return (
@@ -376,9 +393,18 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       <DependencyPanel model={model} />
       {/* Sprint Y — en mode sessió (font fitting), el panell de la sessió: context + Canvis/Observacions/Imatges. */}
       {ctx.fittingSession && <SessionPanel session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} grid={raw?.grid} />}
+      {/* P0 — la PROMOCIÓ viu aquí, sobre la taula de mesures del model: és el material que
+          promou i el lloc on el tècnic ja hi és. Acte separat i explícit, mai un pas d'un flux
+          (llei D-PROM). El component s'auto-amaga sense capability CONFIGURE o sense item. */}
+      {src.kind === 'check' && !readOnly && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <PromoteToItemButton model={model} onFeedback={onFeedback} />
+        </div>
+      )}
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
         onSave={readOnly ? undefined : onSave} onNomSave={canEditNom ? onNomSave : undefined}
         editCodi reorderable={canReorder} onReorder={canReorder ? onReorder : undefined}
+        onPodar={canPodar ? onPodar : undefined}
         empty={
           // Estat buit GUIAT: un model sense BaseMeasurement (POM per definir) no pot ser un
           // cul-de-sac. En mode treball sobre la superfície de mesures (font check) expliquem

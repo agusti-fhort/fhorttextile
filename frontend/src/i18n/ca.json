@@ -885,6 +885,7 @@
     "save": "Guardar",
     "creating": "Creant…",
     "saving": "Guardant…",
+    "grading_other_customer_confirm": "Vols aplicar-lo igualment a aquest model?",
     "conn_error": "Error de connexió",
     "season_required": "Selecciona una temporada",
     "created_ok": "Model creat.",
@@ -932,9 +933,17 @@
     "grading_system": "Sistema de talles",
     "no_grading": "Sense graduació (triar més tard)",
     "pick_fit": "Tria el fit",
-    "grading_needs_sizes": "Defineix primer les talles (pas 3) per poder triar la graduació.",
     "no_grading_available": "No hi ha cap joc de regles que casi amb aquesta combinació de peça i talles. Pots continuar sense graduació i afegir-la més tard.",
-    "grading_auto_proposed": "Proposat automàticament (única coincidència). Pots canviar-lo o triar «Sense graduació»."
+    "grading_auto_proposed": "Proposat automàticament (única coincidència). Pots canviar-lo o triar «Sense graduació».",
+    "size_run_replace_confirm": "El sistema «{{sistema}}» no conté totes les talles del run actual. Això substituirà el run de {{from}} talles per {{to}} talles i reassignarà la talla base. Vols continuar?",
+    "grading_needs_system": "Tria primer un sistema de talles (pas 3) per poder triar la graduació.",
+    "grading_needs_run": "Tria les talles del run (pas 3) per poder triar la graduació.",
+    "grading_needs_base": "Falta la TALLA BASE: tria-la al pas 3 (ha de ser una de les talles del run).",
+    "grading_missing_axes": "Encara no es pot buscar graduació: falta {{eixos}}.",
+    "model_size_system": "Sistema del model",
+    "grading_dropped": "La graduació que tenia el model ja no casa amb els eixos triats (peça, construcció o sistema de talles). S'ha desassignat: torna a triar-ne una o marca «Sense graduació».",
+    "grading_dropped_replaced": "La graduació que tenia el model ja no casa amb els eixos triats i s'ha substituït per l'única compatible. Revisa-la abans de desar.",
+    "run_lost_sizes": "Atenció: el run desat del model conté talles que ja no són al seu sistema de talles ({{talles}}). No s'han pogut recuperar; si deses ara, el run quedarà sense elles."
   },
   "models_list": {
     "title": "Models",
@@ -2282,7 +2291,13 @@
     "regle_break": "Break",
     "regle_from": "a partir de",
     "regle_none": "—",
-    "regle_save_err": "No s'ha pogut desar la regla."
+    "regle_save_err": "No s'ha pogut desar la regla.",
+    "col_accions": "Accions",
+    "poda_title": "Treure aquesta mesura del model",
+    "poda_confirma": "Confirmar: treure-la",
+    "poda_candidata": "Sense cap valor real (base i talles a zero o buides): candidata a treure.",
+    "poda_ok": "Mesura {{codi}} treta del model (queda inactiva, amb registre al log).",
+    "poda_err": "No s'ha pogut treure la mesura."
   },
   "sizecheck": {
     "col_date": "Data",
@@ -2384,7 +2399,13 @@
     "sealed_title": "La versió v{{v}} de l'escalat està aprovada (segellada a producció).",
     "sealed_hint": "El que ja s'ha aprovat no canvia: per editar-lo, crea'n una versió nova.",
     "sealed_new_version": "Crear nova versió",
-    "sealed_bump_err": "No s'ha pogut crear la versió nova."
+    "sealed_bump_err": "No s'ha pogut crear la versió nova.",
+    "seed_title_empty": "Crear la llista de POMs de l'item?",
+    "seed_subtitle_empty": "L'item no té mides base estàndard: es crearà la llista de POMs sense valors.",
+    "seed_body_empty": "Es crearan les files dels POMs que l'item declara, buides (per omplir a mà o per import). Les mides que ja hagis tocat al model no es trepitgen.",
+    "seed_confirm_empty": "Crear la llista",
+    "seed_count": "POMs de l'item: {{total}} · seleccionats per sembrar: {{tria}}. Treu els que no vulguis.",
+    "seed_count_zero": "Cal triar almenys un POM per sembrar."
   },
   "model_fabric": {
     "err_close_table": "No s'ha pogut tancar la taula.",
@@ -3054,6 +3075,7 @@
     "rules_count": "{{count}} regles",
     "rules_count_filtered": "{{count}}/{{total}} regles",
     "with_break": "{{count}} amb break",
+    "suggested_by_item": "Suggerit per l'item",
     "system": "Sistema",
     "custom": "Personalitzat",
     "active": "Actiu",
@@ -3091,7 +3113,13 @@
     "origen_IMPORT": "Importat",
     "origen_none": "No classificat",
     "step_family": "Família",
-    "step_item": "Item"
+    "step_item": "Item",
+    "axis_target": "el target",
+    "axis_construction": "la construcció",
+    "axis_group": "el grup de peça",
+    "axis_fit": "el fit",
+    "axis_size_system": "el sistema de talles",
+    "picker_missing_axes": "Per llistar jocs de regles falta {{eixos}}."
   },
   "model_phases": {
     "Nou": "Nou",
@@ -3278,7 +3306,15 @@
     "pending_review": "Pendent de revisió",
     "pending_badge": "pendent",
     "weak_hint": "Confiança baixa, no vinculat automàticament. Suggeriment:",
-    "many_to_one_hint": "Dues files de la fitxa apuntaven a aquest mateix POM: cap no s'ha vinculat (la segona n'esborraria la primera). Suggeriment:"
+    "many_to_one_hint": "Dues files de la fitxa apuntaven a aquest mateix POM: cap no s'ha vinculat (la segona n'esborraria la primera). Suggeriment:",
+    "soroll_title": "Mesures que el document no menciona",
+    "soroll_help": "Aquest model té {{count}} mesura/es vives que el document importat no porta. El model s'alimenta de la realitat del document: es proposa desactivar-les. Mai s'esborren — queden inactives i amb registre al log de mesures.",
+    "soroll_desactivar": "Desactivar-les",
+    "soroll_conservar": "Conservar-les",
+    "soroll_manual_title": "Mesures manuals que el document trepitjaria",
+    "soroll_manual_help": "El document porta valor per a {{count}} mesura/es que algú va introduir MANUALMENT. L'import no les trepitja sense permís: vols que el document mani o que es respecti el valor manual?",
+    "soroll_manual_sobreescriure": "Que mani el document",
+    "soroll_manual_respectar": "Respectar el valor manual"
   },
   "dependency": {
     "title": "Dependència",
@@ -3679,5 +3715,19 @@
     "cancel": "Cancel·lar",
     "confirm": "Confirmar selecció",
     "confirm_error": "No s'ha pogut confirmar la selecció."
+  },
+  "promote": {
+    "cta": "Promoure com a estàndard de l'item",
+    "title": "Promoure a l'estàndard de «{{item}}»",
+    "subtitle": "Els valors del model {{model}} (talla base {{talla}}) passaran a ser la plantilla de l'item. Res s'escriu fins que confirmis.",
+    "confirm": "Promoure",
+    "talla_ok": "La talla base de la plantilla es fixarà a «{{talla}}».",
+    "nous": "Valors nous a la plantilla",
+    "canvien": "Valors que canvien (plantilla → model)",
+    "iguals": "Ja iguals (res a fer)",
+    "sobrarien": "A la plantilla i no al model",
+    "sobrarien_help": "Aquests NO s'esborren. Es llisten perquè els podis a mà des de l'autoria d'item si ja no hi pinten res.",
+    "sense_canvis": "No hi ha res a escriure: la plantilla ja diu el mateix que el model.",
+    "err": "No s'ha pogut promoure."
   }
 }

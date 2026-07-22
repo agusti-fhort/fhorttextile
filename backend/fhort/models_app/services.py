@@ -144,6 +144,27 @@ def config_missing_text(missing):
     return f'Completa la configuració del model abans de definir POMs: {labels}.'
 
 
+#: R8 — traducció entre els dos vocabularis de provinença. `GradingRuleSet.origen` diu
+#: CANONICAL/CLIENT_RUN/IMPORT (o NULL, no classificat); `ModelGradingRule.origen` diu
+#: IMPORTED/CANONICAL/CLIENT_RUN/MANUAL. Abans el wizard resolia la diferència escrivint
+#: sempre el literal 'CANONICAL', que és el que va fer que 104 regles de client es
+#: presentessin com a canòniques.
+_ORIGEN_RS_A_MGR = {
+    'CANONICAL': 'CANONICAL',
+    'CLIENT_RUN': 'CLIENT_RUN',
+    'IMPORT': 'IMPORTED',
+}
+
+
+def origen_mgr_des_de_ruleset(rule_set) -> str:
+    """Provinença que han de dur les regles residents materialitzades des de `rule_set`.
+
+    Ruleset sense origen classificat (NULL) → 'MANUAL': la provinença no està establerta, i
+    afirmar que és canònica seria tornar a mentir (decisió Agus, 2026-07-21).
+    """
+    return _ORIGEN_RS_A_MGR.get(getattr(rule_set, 'origen', None) or '', 'MANUAL')
+
+
 def materialize_model_grading_rules(model, source_rules, origen):
     """Materialitza regles de grading residents al model des d'un iterable de
     GradingRule. Wipe-and-recreate: el set resultant és EXACTAMENT source_rules.
@@ -153,11 +174,17 @@ def materialize_model_grading_rules(model, source_rules, origen):
     origen: 'IMPORTED' (W5) | 'CANONICAL' (wizard) | 'MANUAL'.
     """
     from fhort.models_app.models import ModelGradingRule
+    from fhort.pom.grading_regime import normalitza_logica
     model.grading_rules.all().delete()
     objs = [
         ModelGradingRule(
             model=model, pom_id=r.pom_id,
-            logica=r.logica, increment=r.increment, valors_step=r.valors_step,
+            # A3 (2026-07-22) — LINEAR+0 sense break s'etiqueta FIXED en sembrar. Aquest camí
+            # NO és autoria (no hi ha ningú a qui preguntar i rebutjar trencaria l'import):
+            # es normalitza. La conversió és neutra — cap valor graduat canvia.
+            logica=normalitza_logica(r.logica, r.increment_base, r.increment,
+                                     r.increment_break, r.talla_break_label),
+            increment=r.increment, valors_step=r.valors_step,
             increment_base=r.increment_base, increment_break=r.increment_break,
             talla_break_label=r.talla_break_label, talla_break_pos=r.talla_break_pos,
             origen=origen, actiu=True,
@@ -175,11 +202,15 @@ def materialize_model_grading_rules_from_specs(model, specs, origen):
     Wipe-and-recreate idempotent per (model): el set resultant és EXACTAMENT `specs`.
     origen: 'IMPORTED' (W5) | 'CANONICAL' | 'MANUAL'."""
     from fhort.models_app.models import ModelGradingRule
+    from fhort.pom.grading_regime import normalitza_logica
     model.grading_rules.all().delete()
     objs = [
         ModelGradingRule(
             model=model, pom_id=s['pom_id'],
-            logica=s['logica'], increment=s.get('increment'), valors_step=s.get('valors_step'),
+            # A3 — mateixa normalització que materialize_model_grading_rules (vegeu-hi la nota).
+            logica=normalitza_logica(s['logica'], s.get('increment_base'), s.get('increment'),
+                                     s.get('increment_break'), s.get('talla_break_label')),
+            increment=s.get('increment'), valors_step=s.get('valors_step'),
             increment_base=s.get('increment_base'), increment_break=s.get('increment_break'),
             talla_break_label=s.get('talla_break_label'), talla_break_pos=s.get('talla_break_pos'),
             origen=origen, actiu=True,

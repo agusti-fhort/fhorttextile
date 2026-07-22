@@ -16,8 +16,8 @@ def _norm(label) -> str:
 
 def _step_equal(a, b):
     """Igualtat numèrica de valors_step (dict {etiqueta: delta} o None) amb tolerància
-    0.001 sobre claus normalitzades (_norm). Funció de mòdul (PG-3): la comparteixen
-    l'anti-proliferació 1D de derive_grading_rule_set i grading_rules_match."""
+    0.001 sobre claus normalitzades (_norm). Funció de mòdul (PG-3): la comparteix
+    `grading_rules_match`."""
     if not a and not b:
         return True
     if bool(a) != bool(b):
@@ -87,12 +87,10 @@ def cerca_canonic_equivalent(model):
 
     Font de la classificació: els CAMPS PROPIS del model (no model.grading_rule_set, que
     seria circular en Cas A). target/construction/fit_type són codis (string) al model →
-    es resolen a FK via codi__iexact, mateix patró que derive_grading_rule_set.
+    es resolen a FK via codi__iexact.
 
-    DEUTE (PG-3): el match de target va per la M2M `targets` (autoritativa), mentre que
-    l'anti-proliferació 1D de derive_grading_rule_set encara filtra pel FK legacy `target`.
-    Si un canònic té el target a la M2M però no al FK (o viceversa) divergiran. No es toca
-    el 1D avui; queda anotat com a deute fins que el FK `target` es retiri.
+    P7 (2026-07-22): el DEUTE (PG-3) que hi havia aquí queda TANCAT — el match de target va
+    per la M2M `targets`, que és ara la font única (el FK legacy `target` s'ha retirat).
     """
     from fhort.pom.models import Target, ConstructionType, FitType, GradingRuleSet
     ss = model.size_system        # FK directe
@@ -125,8 +123,8 @@ def cerca_client_equivalent(customer, size_system, exclude_ids=()):
 
     Trigger de "similar" = customer + size_system (decisió Agus). NO es filtra per eixos ni per
     solapament de POM: precisament els casos on els eixos difereixen (un ruleset amb
-    construction/fit NULL i un altre amb WOVEN/REGULAR) són els que la dedup estricta de
-    `derive_grading_rule_set` (1D) no pot casar. Buit si falta customer o size_system.
+    construction/fit NULL i un altre amb WOVEN/REGULAR) són els que una dedup estricta per
+    eixos no pot casar. Buit si falta customer o size_system.
     """
     from fhort.pom.models import GradingRuleSet
     if not (customer and size_system):
@@ -248,188 +246,15 @@ def derive_break_fields(logica, increment, valors_step, run_ordenat):
     return ib, ibrk, tlabel, tpos
 
 
-def derive_grading_rule_set(*, size_run_model, base_size, valors, confirmed_pom_ids,
-                            size_system, garment_group, target_codi, construction_codi,
-                            fit_type_codi, nom, nom_sufix_unic, avisos, customer=None):
-    """Deriva (o reutilitza) el GradingRuleSet d'una graduació a partir dels valors per talla.
-
-    Pura de model: rep run/base/valors + la classificació (per CODIS) + el nom, i RETORNA el
-    GradingRuleSet (nou o reutilitzat) o None si no s'ha pogut derivar. NO toca cap model, NO
-    fa re-apuntat, NO desa cap sessió. Acumula la traça a la llista `avisos` que rep.
-
-    Extreta del bloc 3b del W5 (1B+1D) perquè el camí d'import de fitxa (W5) i la Size Library
-    comparteixin EXACTAMENT la mateixa derivació. Anti-proliferació (1D): si ja existeix un
-    ruleset no-system_default per la mateixa combinació amb graduació IDÈNTICA, es reutilitza.
-
-    - size_system / garment_group: instàncies (o None) — entren a la combinació tal com resolen.
-    - target_codi / construction_codi / fit_type_codi: CODIS (string); resolució a FK via
-      codi__iexact aquí dins (None si no resol).
-    - nom: nom primari del ruleset; nom_sufix_unic: sufix únic i determinista que s'hi afegeix
-      NOMÉS si `nom` ja col·lisiona exacte (lògica de 1D).
-    - customer: Customer del run (o None). El ruleset creat aquí és sempre CLIENT_RUN; el
-      customer només enriqueix l'eix de client. Si és None, es deixa un warning al log.
-    - La creació de ruleset+regles va dins un transaction.atomic() intern (savepoint): si peta,
-      no queda cap ruleset orfe parcial; l'excepció propaga al cridador.
-
-    DEUTE 1C-3: els avisos diuen "del model"; quan la Library sigui el segon cridador (sense
-    model) cal fer-los neutres model/catàleg. A 1C-1 es mantenen idèntics (refactor pur).
-    """
-    from django.db import transaction
-    from fhort.pom.models import (
-        GradingRuleSet, GradingRule, SizeDefinition,
-        Target, ConstructionType, FitType, POMMaster,
-    )
-
-    # detect_grading vol run_ordenat = LLISTA d'etiquetes (itera/indexa posicions), no un
-    # string. Mateixa llista que el motor (services.py:156) → round-trip simètric dels deltes.
-    run_ordenat = [
-        s.strip() for s in (size_run_model or '').replace(';', '·').split('·')
-        if s.strip()
-    ]
-    base_def = SizeDefinition.objects.filter(
-        size_system=size_system, etiqueta__iexact=base_size,
-    ).first() if (getattr(size_system, 'id', None) and base_size) else None
-
-    if not run_ordenat or not base_size:
-        avisos.append(
-            "Grading no derivat: manca run o talla base al model; es manté el ruleset previ.")
-        return None
-    if base_def is None:
-        avisos.append(
-            f"Grading no derivat: talla base '{base_size}' no trobada al sistema de "
-            f"talles del model; es manté el ruleset previ.")
-        return None
-
-    # Unicitat per la FK `pom` (no per pid): dos valors poden resoldre al mateix POMMaster
-    # (p.ex. TOTAL LENGTH duplicat). dict.fromkeys conserva el primer-vist de forma
-    # determinista → una sola regla per pom. detect_grading aïllat per POM (degrada, no peta).
-    pom_specs = []
-    for pid in dict.fromkeys(confirmed_pom_ids):
-        pm = POMMaster.objects.filter(id=pid).first()
-        if not pm:
-            continue
-        try:
-            res = detect_grading(valors.get(pid) or {}, run_ordenat, base_size)
-        except Exception as e:
-            avisos.append(f"POM {pm.codi_client}: detecció de grading fallida ({e}).")
-            continue
-        if res.get('warning'):
-            avisos.append(f"POM {pm.codi_client}: {res['warning']}")
-        if not res.get('logica'):
-            avisos.append(f"POM {pm.codi_client}: grading no detectat; regla omesa.")
-            continue
-        pom_specs.append((pm, res))
-
-    if not pom_specs:
-        avisos.append(
-            "Cap regla de grading derivada dels valors; es manté el ruleset previ del model.")
-        return None
-
-    with transaction.atomic():
-        rs_target = Target.objects.filter(codi__iexact=target_codi).first() if target_codi else None
-        rs_constr = ConstructionType.objects.filter(codi__iexact=construction_codi).first() if construction_codi else None
-        rs_fit = FitType.objects.filter(codi__iexact=fit_type_codi).first() if fit_type_codi else None
-
-        spec_by_pom = {pm.id: res for pm, res in pom_specs}
-        candidat = None
-        candidats = GradingRuleSet.objects.filter(
-            is_system_default=False,
-            size_system=size_system,
-            garment_group=garment_group,
-            target=rs_target,
-            construction=rs_constr,
-            fit_type=rs_fit,
-        )
-        for c in candidats:
-            regles_c = list(c.regles.all())  # files reals del candidat
-            # (1) MATEIX conjunt de pom_id (igualtat estricta, no subconjunt).
-            if {r.pom_id for r in regles_c} != set(spec_by_pom):
-                continue
-            # (2)+(3) per cada pom: mateixa talla_base, logica, increment i valors_step.
-            igual = True
-            for r in regles_c:
-                res_s = spec_by_pom[r.pom_id]
-                if r.talla_base_id != base_def.id:
-                    igual = False
-                    break
-                if (r.logica or '') != (res_s.get('logica') or ''):
-                    igual = False
-                    break
-                if abs(float(r.increment or 0) - float(res_s.get('increment') or 0)) >= 0.001:
-                    igual = False
-                    break
-                if not _step_equal(r.valors_step, res_s.get('valors_step')):
-                    igual = False
-                    break
-            if igual:
-                candidat = c
-                break
-
-        if candidat is not None:
-            # REUTILITZAR: no es crea cap regla; el cridador re-apunta el model.
-            avisos.append(
-                f"Grading reutilitzat: ruleset existent #{candidat.id} '{candidat.nom}' "
-                f"(graduació idèntica per la combinació; no s'ha creat cap ruleset nou).")
-            return candidat
-
-        # CREAR NOU. Nom desambiguat: si `nom` ja col·lisiona exacte (reimport del mateix model
-        # amb graduació diferent), hi afegim el sufix únic determinista (1D).
-        nom_final = nom
-        if GradingRuleSet.objects.filter(nom=nom_final).exists():
-            nom_final = f"{nom} · {nom_sufix_unic}"
-        # PROVINENÇA: aquest és el camí d'importació d'un run/fitxa → sempre CLIENT_RUN. El
-        # `customer` és desitjable però no imprescindible: si no és resoluble, l'eix de
-        # procedència ja tanca la fuita (el ruleset no viatjarà) i deixem traça al log.
-        if customer is None:
-            logger.warning(
-                "GradingRuleSet CLIENT_RUN sense customer resoluble (nom=%r): "
-                "procedència tancada per origen, però l'eix de client queda buit.", nom_final)
-        new_rule_set = GradingRuleSet.objects.create(
-            nom=nom_final,
-            size_system=size_system,
-            garment_group=garment_group,
-            target=rs_target,
-            construction=rs_constr,
-            fit_type=rs_fit,
-            is_system_default=False,
-            actiu=True,
-            origen=GradingRuleSet.ORIGEN_CLIENT_RUN,
-            customer=customer,
-        )
-        if rs_target:
-            new_rule_set.targets.add(rs_target)
-        for pm, res in pom_specs:
-            # Peça A — omplir la forma canònica a més de valors_step (origen). STEP → derivar
-            # increment_base/talla_break_label/increment_break del run; LINEAR → increment uniforme.
-            ib, ibrk, tlabel, tpos = derive_break_fields(
-                res['logica'], res.get('increment'), res.get('valors_step'), run_ordenat)
-            GradingRule.objects.create(
-                rule_set=new_rule_set,
-                pom=pm,
-                talla_base=base_def,
-                logica=res['logica'],
-                increment=res.get('increment') or 0,
-                valors_step=res.get('valors_step'),
-                increment_base=ib,
-                increment_break=ibrk,
-                talla_break_label=tlabel,
-                talla_break_pos=tpos,
-                actiu=True,
-            )
-        avisos.append(
-            f"Grading nou: creat ruleset #{new_rule_set.id} (graduació específica "
-            f"d'aquest model; cap candidat existent coincidia).")
-        return new_rule_set
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # LLEI DEL CONTENIDOR (2026-07-16) — primitives del camí d'import segons la llei.
 # Un GradingRuleSet de client = CONTENIDOR ACUMULATIU únic per
 # (customer + size_system + garment_type_item + fit). L'import SEMBRA del contenidor
 # (POMs de la fitxa), AMPLIA (POMs noves → afegir al contenidor), CONFLICTE per-regla,
-# CREA només com a acte explícit. `derive_grading_rule_set` (sobre) queda JUBILAT com a
-# CREADOR automàtic; aquí es reutilitza el motor de detecció (detect_grading +
-# derive_break_fields) per derivar les regles a sembrar/afegir, sense crear cap ruleset.
+# CREA només com a acte explícit. L'antic `derive_grading_rule_set` (creador automàtic 1D)
+# va quedar JUBILAT per aquesta llei i ESBORRAT a P7 (2026-07-22); aquí es reutilitza el
+# motor de detecció (detect_grading + derive_break_fields) per derivar les regles a
+# sembrar/afegir, sense crear cap ruleset.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _spec_from_detection(pm, res, base_def_id, run_ordenat):

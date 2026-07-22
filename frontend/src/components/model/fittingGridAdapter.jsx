@@ -8,6 +8,7 @@
 // Mateix patró d'un sol group que CheckMeasureEditor.
 
 import { pieceFittingLines } from '../../api/endpoints'
+import { effectiveRegime } from '../../utils/gradingRegime'
 
 // Etiqueta d'una versió: la primera (v1) és Base; les següents són Fit N amb N = version_number - 1.
 const versionLabel = (vn, idx, t) =>
@@ -61,6 +62,8 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers) {
 function regleLabel(row, t) {
   if (row.logica == null) return ''
   if (row.logica === 'STEP') return t('fitting.grid.rule_free')
+  // LINEAR+0 sense break = FIXED: no té delta a ensenyar (§LLEI a utils/gradingRegime).
+  if (effectiveRegime(row) === 'FIXED') return ''
   if (row.increment_base == null) return ''
   if (row.increment_break != null && row.talla_break_label)
     return `+${row.increment_base} · ${t('fitting.grid.break')} ${row.talla_break_label} +${row.increment_break}`
@@ -73,13 +76,18 @@ function regleLabel(row, t) {
 export function regimeLeadCol(t, onRegimChange, readOnly = false) {
   return {
     key: 'regim', label: t('fitting.grid.regime'), width: 118,
-    render: (row) => (
+    render: (row) => {
+      // Règim EFECTIU, no el desat: LINEAR+0 sense break es presenta com a FIXED. Quan passa,
+      // FIXED s'afegeix com a opció del desplegable perquè el valor visible sigui triable i
+      // el tècnic pugui segellar-lo (POST regim FIXED) sense que sembli un LINEAR que gradua.
+      const regim = effectiveRegime(row)
+      return (
       <div>
         {readOnly ? (
-          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-main)' }}>{row.logica ?? '—'}</div>
+          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-main)' }}>{regim ?? '—'}</div>
         ) : (
           <select
-            value={row.logica ?? ''}
+            value={regim ?? ''}
             onChange={e => onRegimChange(row, e.target.value)}
             style={{
               font: 'inherit', fontSize: 'var(--fs-label)', width: '100%', padding: '1px 2px',
@@ -90,6 +98,7 @@ export function regimeLeadCol(t, onRegimChange, readOnly = false) {
             {row.logica == null && <option value="">—</option>}
             <option value="LINEAR">LINEAR</option>
             <option value="STEP">STEP</option>
+            {regim === 'FIXED' && <option value="FIXED">FIXED</option>}
           </select>
         )}
         {regleLabel(row, t) && (
@@ -98,7 +107,8 @@ export function regimeLeadCol(t, onRegimChange, readOnly = false) {
           </div>
         )}
       </div>
-    ),
+      )
+    },
   }
 }
 

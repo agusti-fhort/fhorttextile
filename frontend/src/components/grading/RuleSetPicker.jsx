@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { matchingRuleSets, matchingRuleSetsStrict } from './gradingAxes'
+import { matchingRuleSets, matchingRuleSetsStrict, orderWithSuggestedFirst } from './gradingAxes'
 
 // RuleSetPicker — llistat de RuleSets que encaixen amb els eixos triats, amb acció final
 // PARAMETRITZADA (Sprint Llibreria d'Items, B2). A diferència de RuleSetCard de GradingRuleSets,
@@ -13,34 +13,53 @@ import { matchingRuleSets, matchingRuleSetsStrict } from './gradingAxes'
 //  - onPick(ruleSet): acció final (a l'item: assignar la FK grading_rule_set).
 //  - actionLabel: text del botó d'acció (p.ex. "Assignar").
 //  - selectedId: id del ruleset ja triat (per ressaltar-lo). Opcional.
+//  - suggestedId: id del ruleset que l'ITEM porta com a estàndard (V1, P6). SUGGERIR ≠ ARROSSEGAR:
+//    si és a la llista de candidats, se'l puja al capdamunt i se'l marca — però NO s'assigna sol.
+//    El tècnic clica igualment. Si no hi és (o l'item no en porta), no té cap efecte. Opcional.
 //  - onEmptyAction + emptyActionLabel: acció de l'estat buit (p.ex. anar a Grading Rules). Opcional.
 //  - strict + sizeSystemId: mode WIZARD (sprint WIZARD-COMPLET). strict=true → matching ESTRICTE amb
 //    `sizeSystemId` obligatori i sense comodí NULL. Per defecte false → matching LENIENT (superfícies CRUD).
 
 export default function RuleSetPicker({
   ruleSets = [], garmentGroupCodiById = {}, axes,
-  onPick, actionLabel, selectedId = null,
+  onPick, actionLabel, selectedId = null, suggestedId = null,
   onEmptyAction, emptyActionLabel,
   strict = false, sizeSystemId = null,
 }) {
   const { t } = useTranslation()
   const matches = useMemo(
-    () => strict
-      ? matchingRuleSetsStrict(ruleSets, axes, garmentGroupCodiById, sizeSystemId)
-      : matchingRuleSets(ruleSets, axes, garmentGroupCodiById),
-    [ruleSets, axes, garmentGroupCodiById, strict, sizeSystemId],
+    () => {
+      const m = strict
+        ? matchingRuleSetsStrict(ruleSets, axes, garmentGroupCodiById, sizeSystemId)
+        : matchingRuleSets(ruleSets, axes, garmentGroupCodiById)
+      // P6 — el suggerit de l'item (V1) puja al capdamunt SENSE alterar el conjunt: el
+      // ventall el segueix decidint el matching d'eixos, aquí només canvia l'ordre.
+      return orderWithSuggestedFirst(m, suggestedId)
+    },
+    [ruleSets, axes, garmentGroupCodiById, strict, sizeSystemId, suggestedId],
   )
 
-  const ready = axes && axes.target && axes.construction && axes.fit && axes.garmentGroup
-    && (!strict || sizeSystemId != null)
-  if (!ready) return null
+  // F1.3 — quan falta un eix, el picker JA NO desapareix en silenci (DIAGNOSI_MODEL_174, risc #5):
+  // pinta un estat buit dient QUINS eixos li falten. El silenci absolut es llegia com «el botó no respon».
+  const missing = [
+    !axes?.target && t('grading.axis_target'),
+    !axes?.construction && t('grading.axis_construction'),
+    !axes?.garmentGroup && t('grading.axis_group'),
+    !axes?.fit && t('grading.axis_fit'),
+    strict && sizeSystemId == null && t('grading.axis_size_system'),
+  ].filter(Boolean)
+
+  if (missing.length > 0) {
+    return (
+      <div style={emptyBox}>
+        {t('grading.picker_missing_axes', { eixos: missing.join(' · ') })}
+      </div>
+    )
+  }
 
   if (matches.length === 0) {
     return (
-      <div style={{
-        marginTop: 8, padding: '2rem', border: '1px dashed var(--border)', borderRadius: 8,
-        textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
-      }}>
+      <div style={emptyBox}>
         {t('grading.no_match')}
         <div style={{ marginTop: 8 }}>
           {onEmptyAction
@@ -66,6 +85,7 @@ export default function RuleSetPicker({
           key={rs.id}
           rs={rs}
           selected={selectedId != null && rs.id === selectedId}
+          suggested={suggestedId != null && rs.id === suggestedId}
           actionLabel={actionLabel}
           onPick={() => onPick?.(rs)}
         />
@@ -74,7 +94,12 @@ export default function RuleSetPicker({
   )
 }
 
-function PickCard({ rs, selected, actionLabel, onPick }) {
+const emptyBox = {
+  marginTop: 8, padding: '2rem', border: '1px dashed var(--border)', borderRadius: 8,
+  textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
+}
+
+function PickCard({ rs, selected, suggested = false, actionLabel, onPick }) {
   const { t } = useTranslation()
   const reglesCount = rs.regles_count ?? rs.regles?.length ?? 0
   const breakCount = (rs.regles || []).filter(
@@ -90,8 +115,14 @@ function PickCard({ rs, selected, actionLabel, onPick }) {
       gap: 14, flexWrap: 'wrap',
     }}>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
+        <div style={{
+          fontWeight: 600, fontSize: 'var(--fs-body)', color: 'var(--text-main)',
+          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+        }}>
           {rs.nom}
+          {suggested && (
+            <Pill bg="#fdf6ee" color="var(--gold)">{t('grading.suggested_by_item')}</Pill>
+          )}
         </div>
         <div style={{
           fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2,

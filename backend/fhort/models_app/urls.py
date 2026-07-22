@@ -32,6 +32,8 @@ from .views import (
     upload_file_view,
     measurements_chat_view,
     set_pom_regim_view,
+    desactivar_pom_view,
+    promoure_a_item_view,
 )
 
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
@@ -101,7 +103,8 @@ try:
     _sprint7_model_paths = [
         path('models/<int:model_id>/aprovar-design-freeze/', approve_design_freeze_view),
         path('models/<int:model_id>/guardar-talla-base/',    save_base_size_view),
-        path('models/<int:model_id>/confirmar-talla-base/',  confirm_base_size_view),
+        # D5 — `confirmar-talla-base/` JUBILADA (cap consumidor a frontend/src; resta del
+        # wizard vell). La vista es conserva importable per a test_g6_segell (camí 6 del segell).
         path('models/<int:model_id>/base-measurements/',     base_measurements_view),
     ]
 except Exception:
@@ -202,12 +205,17 @@ urlpatterns = (
         path('models/<int:model_id>/analisi-ia/', ai_analysis_view),
         path('models/<int:model_id>/xat-mesures/', measurements_chat_view),
         path('models/<int:model_id>/generar-grading/', generate_grading_view),
-        path('models/<int:model_id>/set-size-override/', set_size_override_view),
+        # D5 — `set-size-override/` JUBILADA: el wrapper JS existia i cap component el cridava;
+        # l'editor real fa servir escalat/ajustar-talla. Vista conservada per a test_g6_segell.
         path('models/<int:model_id>/escalat/ajustar-talla/', escalat_ajustar_talla_view),
         path('models/<int:model_id>/grading-status/', grading_status_view),
         path('models/<int:model_id>/base-measurements/reorder/', base_measurements_reorder_view),
         path('models/<int:model_id>/base-stages/', base_stages_view),
         path('models/<int:model_id>/pom/<int:pom_id>/regim/', set_pom_regim_view),
+        # C1 — poda SOFT d'un POM del model des de la graella (mai DELETE dur).
+        path('models/<int:model_id>/pom/<int:pom_id>/desactivar/', desactivar_pom_view),
+        # P0+P2+P3 — l'acte de PROMOCIÓ model→item (gate CONFIGURE propi, dry-run per defecte).
+        path('models/<int:model_id>/promoure-a-item/', promoure_a_item_view),
         path('models/iso-shrinkage/', iso_shrinkage_view),
         path('models/<int:model_id>/update-fabric/', update_fabric_view),
         path('models/<int:model_id>/albara/', consumption_delivery_view),

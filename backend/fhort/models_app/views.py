@@ -12,8 +12,11 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 
-from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS
+from fhort.accounts.capabilities import HasCapability, EXECUTE_TASKS, CONFIGURE
 from fhort.pom.services import SealedGradingVersionError, _te_regles
+from fhort.pom.grading_regime import (
+    CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada,
+)
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
 from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
 from .serializers import (
@@ -482,6 +485,63 @@ def next_model_ref(request):
     return Response({'codi_intern': codi, 'next_number': next_num})
 
 
+def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, confirmat=False):
+    """D1 — porta d'entrada de l'assignació d'un GradingRuleSet a un model.
+
+    Assignar un ruleset dispara un wipe-and-recreate de les regles residents
+    (`materialize_model_grading_rules`): si el ruleset no serveix, el model es queda
+    sense regles i el motor ja no ho pot arreglar. Per això es valida ABANS d'assignar,
+    no al consum. És el forat pel qual el model 163 va quedar buit
+    (DIAGNOSI_REFACTOR_GRADING_2026-07-21, R5/R6).
+
+    Retorna `(payload, status)` si cal aturar, o `None` si es pot assignar.
+      - 0 regles actives          → BLOQUEIG DUR (400). Mai assignable.
+      - size_system divergent     → BLOQUEIG DUR (400). Graduar amb un run que no és el
+                                    del model no vol dir res.
+      - customer divergent        → AVÍS CONSCIENT (409) fins que arribi `confirmat`.
+                                    MAI bloqueig: aplicar la forma d'un altre client és
+                                    un flux de taller legítim.
+    """
+    from fhort.pom.models import GradingRule
+
+    n_regles = GradingRule.objects.filter(rule_set_id=rs.id, actiu=True).count()
+    if n_regles == 0:
+        return ({
+            'error': 'ruleset_buit',
+            'codi': 'GRADING_RULESET_EMPTY',
+            'grading_rule_set_id': rs.id,
+            'grading_rule_set_nom': rs.nom,
+            'message': (f"El grading «{rs.nom}» no té cap regla: assignar-lo deixaria el "
+                        f"model sense graduació. Tria'n un altre o omple'l primer."),
+        }, 400)
+
+    if rs.size_system_id and size_system_id and rs.size_system_id != size_system_id:
+        return ({
+            'error': 'size_system_divergent',
+            'codi': 'GRADING_SIZE_SYSTEM_MISMATCH',
+            'grading_rule_set_id': rs.id,
+            'grading_rule_set_nom': rs.nom,
+            'ruleset_size_system_id': rs.size_system_id,
+            'model_size_system_id': size_system_id,
+            'message': (f"El grading «{rs.nom}» és d'un altre sistema de talles que el del "
+                        f"model. Les regles no es poden aplicar a aquest run."),
+        }, 400)
+
+    if rs.customer_id and customer_id and rs.customer_id != customer_id and not confirmat:
+        return ({
+            'conflict': True,
+            'tipus': 'ruleset_altre_client',
+            'codi': 'GRADING_CUSTOMER_MISMATCH',
+            'grading_rule_set_id': rs.id,
+            'grading_rule_set_nom': rs.nom,
+            'ruleset_customer': str(getattr(rs.customer, 'nom', '') or rs.customer_id),
+            'message': (f"El grading «{rs.nom}» és d'un altre client. Es pot fer servir "
+                        f"igualment, però és una decisió conscient: confirma-ho per continuar."),
+        }, 409)
+
+    return None
+
+
 def _resolve_garment_def(d):
     """Resol la definició de garment + talles d'un payload d'esquelet (Pas 5A).
     Cada camp és OPCIONAL (es posa només si ve al payload). Retorna (fields, error_msg).
@@ -554,6 +614,22 @@ def create_model_wizard(request):
     garment_fields, gerr = _resolve_garment_def(request.data)
     if gerr:
         return Response({'error': gerr}, status=400)
+
+    # D1 — mateixa porta que a update_model_step2: el wizard pot arrossegar graduació ja des de
+    # la creació, i un ruleset buit o d'un altre run faria néixer el model sense regles útils.
+    _rs = garment_fields.get('grading_rule_set')
+    if _rs is not None:
+        _ss = garment_fields.get('size_system')
+        _err = _validar_ruleset_assignable(
+            _rs,
+            size_system_id=(_ss.id if _ss is not None else None),
+            customer_id=request.data.get('customer_id') or None,
+            confirmat=bool(request.data.get('confirmar_altre_client')),
+        )
+        if _err is not None:
+            payload, status_code = _err
+            return Response(payload, status=status_code)
+
     creator = getattr(request.user, 'profile', None)
 
     if not year or not season:
@@ -633,10 +709,12 @@ def create_model_wizard(request):
         # fallback PG-1 (ruleset extern). Degradació gràcil INTENCIONAL, no descuit.
         if model.grading_rule_set_id:
             from django.db import transaction
-            from fhort.models_app.services import materialize_model_grading_rules
+            from fhort.models_app.services import (materialize_model_grading_rules,
+                                               origen_mgr_des_de_ruleset)
             with transaction.atomic():
                 materialize_model_grading_rules(
-                    model, model.grading_rule_set.regles.all(), origen='CANONICAL')
+                    model, model.grading_rule_set.regles.all(),
+                    origen=origen_mgr_des_de_ruleset(model.grading_rule_set))
         return Response({'id': model.id, 'codi_intern': model.codi_intern}, status=201)
 
     # Multi-piece: one GarmentSet + N piece Models, codi_intern = codi_base-NN.
@@ -670,9 +748,11 @@ def create_model_wizard(request):
             # materialitza les seves regles residents. Dins l'atomic del set: una fallada
             # avorta tot el conjunt (atòmic per disseny del multi-peça).
             if piece.grading_rule_set_id:
-                from fhort.models_app.services import materialize_model_grading_rules
+                from fhort.models_app.services import (materialize_model_grading_rules,
+                                               origen_mgr_des_de_ruleset)
                 materialize_model_grading_rules(
-                    piece, piece.grading_rule_set.regles.all(), origen='CANONICAL')
+                    piece, piece.grading_rule_set.regles.all(),
+                    origen=origen_mgr_des_de_ruleset(piece.grading_rule_set))
             pieces.append({
                 'id': piece.id,
                 'codi_intern': piece.codi_intern,
@@ -713,17 +793,49 @@ def update_model_step2(request, model_id):
         model.grading_rule_set = None
         model.grading_rules.all().delete()
 
+    # D1 — valida ABANS de desar i abans del wipe-and-recreate. Es valida contra els valors
+    # POSTERIORS a l'assignació (el mateix PATCH pot canviar size_system), i només quan el
+    # ruleset ve al payload: re-desar un model sense tocar la graduació no ha de rebotar.
+    if d.get('grading_rule_set_id') and model.grading_rule_set_id:
+        _err = _validar_ruleset_assignable(
+            model.grading_rule_set,
+            size_system_id=model.size_system_id,
+            customer_id=model.customer_id,
+            confirmat=bool(d.get('confirmar_altre_client')),
+        )
+        if _err is not None:
+            payload, status_code = _err
+            return Response(payload, status=status_code)
+
     model.save()
     # PG-2 Cas B: re-materialitza si hi ha ruleset (wipe-and-recreate cobreix canvi de profile).
     # L'atomic embolcalla només la materialització → si peta, el model queda sense MGR i gradua
     # pel fallback PG-1 (ruleset extern). Degradació gràcil INTENCIONAL, no descuit.
+    n_regles = None
     if model.grading_rule_set_id:
         from django.db import transaction
-        from fhort.models_app.services import materialize_model_grading_rules
+        from fhort.models_app.services import (materialize_model_grading_rules,
+                                               origen_mgr_des_de_ruleset)
         with transaction.atomic():
-            materialize_model_grading_rules(
-                model, model.grading_rule_set.regles.all(), origen='CANONICAL')
-    return Response({'id': model.id, 'codi_intern': model.codi_intern})
+            n_regles = materialize_model_grading_rules(
+                model, model.grading_rule_set.regles.all(),
+                origen=origen_mgr_des_de_ruleset(model.grading_rule_set))
+        # R1 — el retorn d'aquesta funció es DESCARTAVA. Materialitzar 0 regles (ruleset buit)
+        # esborrava les residents i tornava un 200 mut: exactament el que va buidar el 163.
+        # Amb la validació D1 això ja no hauria de poder passar per l'endpoint; si passa igual
+        # (dades tocades per un altre camí), que quedi rastre i que la resposta ho digui.
+        if n_regles == 0:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"update_model_step2: model {model.codi_intern} (id={model.id}) ha "
+                f"materialitzat 0 regles des del GradingRuleSet {model.grading_rule_set_id} "
+                f"— el model queda SENSE regles residents."
+            )
+    return Response({
+        'id': model.id,
+        'codi_intern': model.codi_intern,
+        'regles_materialitzades': n_regles,
+    })
 
 
 @api_view(['GET'])
@@ -775,7 +887,22 @@ def materialize_poms_view(request, model_id):
 
     SOBIRANIA DEL MODEL (idempotent): NOMÉS sembra on no hi ha res o on hi ha un TEMPLATE BUIT.
     Una fila amb origen més específic (MANUAL/IMPORTED/FITTED) o amb valor ja posat NO es trepitja:
-    a partir del primer valor, el Model és sobirà. Re-executar no clobera res."""
+    a partir del primer valor, el Model és sobirà. Re-executar no clobera res.
+
+    F2.2 — `pom_ids` (llista opcional al body): sembra NOMÉS aquests POMs, sempre que pertanyin al
+    GarmentPOMMap de l'item. Sense el paràmetre, es sembra tot el mapa (comportament de sempre, cap
+    caller trencat). Un `pom_ids` present i buit és una petició sense feina, no "sembra-ho tot".
+
+    P1 — GUARD DE TALLA (2026-07-22, DIAGNOSI_ITEM_PLANTILLA §B1.5). Un valor de plantilla està
+    expressat EN UNA TALLA: la de `GarmentTypeItem.base_size_definition`. Fins ara aquesta vista
+    copiava valors item→model sense comparar-la mai amb `Model.base_size_label` — els valors podien
+    aterrar a `BaseMeasurement` expressats en una talla diferent de la del model, EN SILENCI. La
+    coherència de les dades d'avui és casualitat, no invariant (cap FK, cap constraint, cap codi).
+      · talles DIVERGENTS → NO es sembra cap valor; sí la PERTINENÇA (fila TEMPLATE buida), perquè
+        la pertinença de POMs és certa encara que la talla no quadri. Avís explícit a la resposta.
+      · `base_size_definition` NULL → se sembra com sempre, amb l'avís «talla de plantilla no
+        verificada». NO bloqueja: 59 dels 62 items de `fhort` la tenen NULL avui, i bloquejar
+        trencaria la sembra de tot el catàleg per una dada que ningú no ha omplert encara."""
     from django.db import transaction
     try:
         model = Model.objects.get(id=model_id)
@@ -789,18 +916,59 @@ def materialize_poms_view(request, model_id):
     from fhort.pom.models import GarmentPOMMap, ItemBaseMeasurement
     from fhort.models_app.models import BaseMeasurement
 
+    subconjunt = None
+    if 'pom_ids' in request.data:
+        crus = request.data.get('pom_ids')
+        if not isinstance(crus, list):
+            return Response({'error': "pom_ids ha de ser una llista d'ids de POM"}, status=400)
+        try:
+            subconjunt = {int(x) for x in crus}
+        except (TypeError, ValueError):
+            return Response({'error': "pom_ids ha de contenir només ids numèrics"}, status=400)
+
     maps = (GarmentPOMMap.objects
             .filter(garment_type_item=model.garment_type_item)
             .select_related('pom').order_by('ordre'))
+    total_template = maps.count()
+    if subconjunt is not None:
+        maps = maps.filter(pom_id__in=subconjunt)
+        # Els ids que no són del mapa de l'item no es sembren en silenci: es reporten.
+        desconeguts = sorted(subconjunt - {m.pom_id for m in maps})
+    else:
+        desconeguts = []
     # Valors base de l'item per pom (plantilla → instància).
     ibms = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(
         garment_type_item=model.garment_type_item)}
+
+    # P1 — GUARD DE TALLA. Es resol UNA vegada, abans del bucle: la talla no depèn del POM.
+    item = model.garment_type_item
+    talla_item = (getattr(item.base_size_definition, 'etiqueta', None) or '').strip()
+    talla_model = (model.base_size_label or '').strip()
+    talla_avis = None
+    talla_divergent = False
+    if not talla_item:
+        talla_avis = ("Talla de plantilla NO VERIFICADA: l'item no té `base_size_definition`. "
+                      "Els valors s'han sembrat assumint que ja parlen la talla base del model "
+                      f"(«{talla_model or '—'}»), però ningú no ho ha declarat.")
+    elif not talla_model:
+        talla_divergent = True
+        talla_avis = (f"El model no té talla base definida i la plantilla parla en «{talla_item}»: "
+                      "no s'ha sembrat cap VALOR (sí la pertinença de POMs). Fixa la talla base "
+                      "del model i torna a sembrar.")
+    elif talla_item != talla_model:
+        talla_divergent = True
+        talla_avis = (f"TALLES DIVERGENTS: la plantilla de l'item està expressada en «{talla_item}» "
+                      f"i la talla base del model és «{talla_model}». NO s'ha sembrat cap VALOR "
+                      "(sí la pertinença de POMs, que és certa igualment). Un valor en una talla "
+                      "que no és la del model és una mesura falsa.")
 
     materialized = seeded = skipped = 0
     with transaction.atomic():
         for m in maps:
             ibm = ibms.get(m.pom_id)
-            has_value = ibm is not None and ibm.base_value_cm is not None
+            # P1 — amb talles divergents un valor de plantilla és una mesura FALSA: la pertinença
+            # sí es materialitza (fila TEMPLATE buida), el valor no viatja.
+            has_value = (not talla_divergent) and ibm is not None and ibm.base_value_cm is not None
             existing = BaseMeasurement.objects.filter(model=model, pom=m.pom).first()
 
             if existing is None:
@@ -838,8 +1006,22 @@ def materialize_poms_view(request, model_id):
             else:
                 skipped += 1   # res a sembrar, o fila sobirana (MANUAL/IMPORTED/FITTED/amb valor)
 
-    return Response({'materialized': materialized, 'seeded': seeded, 'skipped': skipped,
-                     'total_template': maps.count()})
+    resposta = {'materialized': materialized, 'seeded': seeded, 'skipped': skipped,
+                'total_template': total_template}
+    # P1 — el veredicte de la talla mai és silenciós, ni quan deixa passar la sembra.
+    resposta['talla_item'] = talla_item or None
+    resposta['talla_model'] = talla_model or None
+    resposta['talla_verificada'] = bool(talla_item) and not talla_divergent
+    resposta['valors_bloquejats_per_talla'] = talla_divergent
+    if talla_avis:
+        resposta['talla_avis'] = talla_avis
+    if subconjunt is not None:
+        resposta['requested'] = len(subconjunt)
+        if desconeguts:
+            resposta['pom_ids_desconeguts'] = desconeguts
+            resposta['warning'] = ('Aquests POMs no pertanyen al GarmentPOMMap de '
+                                   f"l'item i no s'han sembrat: {desconeguts}")
+    return Response(resposta)
 
 
 @api_view(['POST'])
@@ -1158,6 +1340,16 @@ def gravar_pom_view(request, model_id):
         if not pom_id or value is None:
             errors.append('pom_id i base_value_cm obligatoris')
             continue
+        # D2 — una talla base a 0 és físicament impossible. O el POM no aplica a aquest model
+        # (i llavors no s'entra, no s'entra a zero), o és un error de teclat. El motor tracta
+        # el 0 com a "el POM no existeix" i no en gradua cap cel·la: si es deixés entrar, la
+        # mesura desapareixeria de la taula sense dir-ho a ningú.
+        if value == 0:
+            errors.append(
+                f"POM {pom_id}: la mesura base no pot ser 0 cm. Si aquesta mesura no aplica "
+                f"a aquest model, deixa-la buida o desactiva-la; no la posis a zero."
+            )
+            continue
         prepared.append((m, value))
 
     if not prepared:
@@ -1240,6 +1432,13 @@ def gravar_pom_view(request, model_id):
                     label = (r.get('talla_break_label') or '').strip() or None
                     rule.talla_break_label = label
                     rule.talla_break_pos = _break_pos(label)
+                # A3 (2026-07-22) — MATEIX guard que set_pom_regim_view. Aquest camí
+                # (gravar_pom, la taula de gènesi) escrivia LINEAR+0 sense cap comprovació:
+                # era el forat per on la llei encara es podia trencar.
+                if es_linear_degenerada(rule.logica, rule.increment_base, rule.increment,
+                                        rule.increment_break, rule.talla_break_label):
+                    errors.append(f'POM {pom_id}: {MISSATGE_LINEAR_ZERO}')
+                    continue
                 rule.origen = 'MANUAL'
                 rule.actiu = True
                 rule.save()
@@ -2611,6 +2810,241 @@ def registre_activitat_view(request):
     })
 
 
+def _truthy(v):
+    """Un `confirm` que arriba com a string ('true'/'1') val igual que un booleà JSON."""
+    return v is True or str(v).strip().lower() in ('true', '1', 'yes', 'si', 'sí')
+
+
+class _Configure(HasCapability):
+    """Gate CONFIGURE PROPI (D-PROM). La capa Item exigeix CONFIGURE a tot arreu
+    (`pom/views.py:get_permissions`), i els endpoints de la capa Model estan gated només a
+    `IsAuthenticated`. Un endpoint que ESCRIU a la capa Item des de la capa Model no pot
+    heretar el gate fluix de l'amfitrió: se'l posa propi."""
+    required_capability = CONFIGURE
+
+
+@api_view(['POST'])
+@permission_classes([_Configure])
+def promoure_a_item_view(request, model_id):
+    """POST /api/v1/models/<id>/promoure-a-item/ — P0+P2+P3, l'ACTE DE PROMOCIÓ model→item.
+
+    LLEI (Agus, 2026-07-22): *"La sobirania del model és sobre els SEUS valors. L'estàndard del
+    taller és un acte separat, explícit i CONFIGURE — mai un efecte secundari d'un import."*
+
+    Aquest endpoint és el bessó INVERS de `materialize_poms_view`: allà la plantilla sembra el
+    model, aquí un model real fixa la plantilla. Per això NO es penja de `confirmar/` de l'import
+    (la norma inamovible 1 queda intacta) i per això té gate CONFIGURE propi.
+
+    D-PROM — SOBREESCRIURE AMB CONFIRMACIÓ, en dues fases (mateix patró que el 409 del
+    contenidor i que el principi del soroll):
+      · **dry-run** (default) — retorna el diff sencer i NO escriu RES.
+      · **`confirm=true`** — aplica, dins d'una sola transacció.
+
+    El diff, per POM: `nou` (a l'item no hi és) · `canvia` (hi és amb un altre valor, es
+    mostren els dos) · `igual` (res a fer) · `sobraria` (a l'item i no al model).
+
+    Els «sobraria» **NO s'esborren mai**, ni amb confirm. `ItemBaseMeasurement` no té
+    `is_active`, o sigui que l'única poda possible seria un DELETE dur, i el principi del soroll
+    diu proposar, no executar. Es LLISTEN perquè el tècnic els podi a mà des d'ItemAuthoring.
+
+    P3 — el mateix acte escriu `GarmentTypeItem.base_size_definition`: la promoció és l'ÚNIC
+    moment en què el sistema SAP en quina talla parlen els valors (`Model.base_size_label`).
+    Passa per `clean()` (`tasks/models.py:336-343`), que exigeix que la talla pertanyi al
+    `size_system` del ruleset de l'item. Si falla → 422 amb el motiu i CAP escriptura.
+    """
+    from django.core.exceptions import ValidationError
+    from django.db import transaction
+    from fhort.pom.models import ItemBaseMeasurement, SizeDefinition
+    from fhort.models_app.models import BaseMeasurement
+
+    model = Model.objects.select_related('garment_type_item').filter(id=model_id).first()
+    if model is None:
+        return Response({'error': 'Model no trobat'}, status=404)
+
+    item = model.garment_type_item
+    if item is None:
+        return Response({'error': "Aquest model no té cap item de tipologia assignat: no hi ha "
+                                  "cap plantilla a promoure."}, status=400)
+
+    talla_model = (model.base_size_label or '').strip()
+    if not talla_model:
+        return Response({
+            'error': "El model no té talla base definida. Un valor de plantilla ha de dir en "
+                     "quina talla està expressat; sense això la promoció seria una mesura muda.",
+            'tipus': 'model_sense_talla_base',
+        }, status=422)
+
+    # ── El material: mesures VIVES i AMB VALOR del model. Les files buides o podades no són
+    # patrimoni promocionable (principi del soroll: no s'ascendeix el que no és realitat).
+    fonts = (BaseMeasurement.objects
+             .filter(model=model, is_active=True, base_value_cm__isnull=False)
+             .select_related('pom').order_by('ordre', 'id'))
+    if not fonts:
+        return Response({
+            'error': "El model no té cap mesura viva amb valor: no hi ha res a promoure.",
+            'tipus': 'model_sense_mesures',
+        }, status=422)
+
+    actuals = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(garment_type_item=item)}
+
+    # ── P3 — la talla que s'escriurà a l'item, resolta DINS del size_system del ruleset de
+    # l'item (no del model): és el sistema contra el qual `clean()` validarà.
+    ss_item_id = getattr(item.grading_rule_set, 'size_system_id', None)
+    talla_def = None
+    talla_motiu = None
+    if ss_item_id is None:
+        talla_motiu = ("L'item no té grading rule set (o el ruleset no té sistema de talles): "
+                       "no es pot resoldre la talla base de la plantilla. Es promouran els "
+                       "valors, però `base_size_definition` quedarà com estava.")
+    else:
+        talla_def = SizeDefinition.objects.filter(
+            size_system_id=ss_item_id, etiqueta=talla_model).first()
+        if talla_def is None:
+            talla_motiu = (f"La talla «{talla_model}» del model no existeix al sistema de talles "
+                           f"del ruleset de l'item: no es pot fixar `base_size_definition`.")
+
+    # ── El DIFF (pur, sense escriure).
+    nous, canvien, iguals = [], [], []
+    for bm in fonts:
+        actual = actuals.get(bm.pom_id)
+        fila = {
+            'pom_id': bm.pom_id,
+            'codi': bm.nom_fitxa or bm.pom.codi_client or '',
+            'nom': bm.pom.nom_client or '',
+            'valor_model': float(bm.base_value_cm),
+        }
+        if actual is None:
+            nous.append(fila)
+        elif actual.base_value_cm is None or float(actual.base_value_cm) != float(bm.base_value_cm):
+            fila['valor_item'] = (float(actual.base_value_cm)
+                                  if actual.base_value_cm is not None else None)
+            fila['origen_item'] = actual.origen
+            canvien.append(fila)
+        else:
+            iguals.append(fila)
+
+    poms_model = {bm.pom_id for bm in fonts}
+    sobrarien = [{
+        'pom_id': i.pom_id,
+        'codi': i.nom_fitxa or i.pom.codi_client or '',
+        'nom': i.pom.nom_client or '',
+        'valor_item': float(i.base_value_cm) if i.base_value_cm is not None else None,
+        'origen_item': i.origen,
+    } for i in ItemBaseMeasurement.objects
+        .filter(garment_type_item=item).exclude(pom_id__in=poms_model)
+        .select_related('pom').order_by('pom__codi_client')]
+
+    diff = {
+        'model': model.id,
+        'model_codi': model.codi_intern,
+        'garment_type_item': item.id,
+        'item_code': item.code,
+        'talla_model': talla_model,
+        'talla_item_actual': getattr(item.base_size_definition, 'etiqueta', None),
+        'talla_a_escriure': (talla_def.etiqueta if talla_def else None),
+        'talla_motiu': talla_motiu,
+        'nous': nous,
+        'canvien': canvien,
+        'iguals': iguals,
+        # NO s'esborren mai: es llisten perquè el tècnic decideixi a ItemAuthoring.
+        'sobrarien': sobrarien,
+        'resum': {'nous': len(nous), 'canvien': len(canvien),
+                  'iguals': len(iguals), 'sobrarien': len(sobrarien)},
+    }
+
+    if not _truthy(request.data.get('confirm')):
+        diff['dry_run'] = True
+        diff['message'] = (f"Simulació: {len(nous)} valor(s) nou(s), {len(canvien)} que canvien, "
+                           f"{len(iguals)} iguals. {len(sobrarien)} de l'item no són al model "
+                           f"(NO s'esborraran). Cap escriptura feta.")
+        return Response(diff, status=200)
+
+    # ── APLICAR. Tot dins d'una transacció: o s'escriu la plantilla sencera amb la seva talla,
+    # o no s'escriu res. Una plantilla a mitges és pitjor que no promoure.
+    try:
+        with transaction.atomic():
+            for bm in fonts:
+                ItemBaseMeasurement.objects.update_or_create(
+                    garment_type_item=item, pom_id=bm.pom_id,
+                    defaults={
+                        'base_value_cm': bm.base_value_cm,
+                        'tol_minus': bm.tolerancia_minus,
+                        'tol_plus': bm.tolerancia_plus,
+                        'nom_fitxa': bm.nom_fitxa or '',
+                        'origen': ItemBaseMeasurement.ORIGEN_PROMOTED,
+                        'updated_by': request.user,
+                    })
+
+            if talla_def is not None:
+                item.base_size_definition = talla_def
+                # full_clean sobre el camp que toquem: `clean()` és qui sap si la talla i el
+                # ruleset de l'item parlen el mateix sistema. Si no, ValidationError → rollback.
+                item.full_clean(exclude=[f.name for f in item._meta.fields
+                                         if f.name not in ('base_size_definition',)])
+                item.save(update_fields=['base_size_definition'])
+    except ValidationError as e:
+        # Cap escriptura parcial: l'atomic ja ha fet rollback en sortir per excepció.
+        return Response({
+            'error': "No s'ha pogut fixar la talla base de la plantilla; la promoció s'ha "
+                     "desfet sencera.",
+            'tipus': 'talla_incoherent',
+            'detall': e.message_dict if hasattr(e, 'message_dict') else str(e),
+            'talla_model': talla_model,
+        }, status=422)
+
+    diff['dry_run'] = False
+    diff['promoguts'] = len(nous) + len(canvien) + len(iguals)
+    diff['talla_escrita'] = talla_def.etiqueta if talla_def else None
+    diff['message'] = (
+        f"Promoció aplicada: {diff['promoguts']} valor(s) escrits a la plantilla de l'item "
+        f"«{item.code}» amb origen PROMOTED. "
+        + (f"Talla base de la plantilla fixada a «{talla_def.etiqueta}». "
+           if talla_def else "La talla base de la plantilla NO s'ha tocat. ")
+        + (f"{len(sobrarien)} valor(s) de l'item no són al model i s'han CONSERVAT: "
+           f"podi'ls a mà des de l'autoria d'item si vols." if sobrarien else ''))
+    return Response(diff, status=200)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def desactivar_pom_view(request, model_id, pom_id):
+    """C1 (PRINCIPI DEL SOROLL, 2026-07-22) — PODA d'un POM del model. SOFT, mai DELETE.
+
+    La superfície de treball real (MeasureGrid) no tenia cap manera de treure un POM del
+    model: la poda només existia com a efecte col·lateral del desat complet de la taula de
+    GÈNESI (`keep_pom_ids`), i l'endpoint REST de DELETE dur era orfe de client
+    (DIAGNOSI_GTI_PLANTILLA §B3.4). Això n'és la porta, i és la SOFT: `is_active=False` +
+    entrada al `MeasurementChangeLog` (via la marca `_desactivat`, vegeu signals.py).
+
+    Deliberadament NO es cabla el DELETE dur: la mesura va existir i el model n'ha de
+    guardar memòria. La UI pot dir «eliminar»; la BD diu «inactiva».
+
+    Body opcional: {motiu: str}.
+    """
+    from fhort.models_app.models import BaseMeasurement
+
+    bm = (BaseMeasurement.objects
+          .filter(model_id=model_id, pom_id=pom_id, is_active=True)
+          .select_related('pom').first())
+    if bm is None:
+        return Response({'detail': 'Mesura no trobada (o ja inactiva) per a aquest model.'},
+                        status=404)
+
+    bm.is_active = False
+    bm._desactivat = True
+    bm._changed_by = request.user
+    bm._motiu = (request.data.get('motiu') or '').strip() or 'poda manual des de la graella'
+    bm.save(update_fields=['is_active'])
+
+    return Response({
+        'model': int(model_id),
+        'pom': int(pom_id),
+        'base_measurement': bm.id,
+        'is_active': False,
+        'codi': bm.nom_fitxa or bm.pom.codi_client or '',
+    })
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def set_pom_regim_view(request, model_id, pom_id):
@@ -2685,6 +3119,18 @@ def set_pom_regim_view(request, model_id, pom_id):
                 run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
                 if tbl in run:
                     rule.talla_break_pos = run.index(tbl)
+        # D2 — una regla LINEAR amb delta 0 és INVÀLIDA: no gradua res, i el que expressa
+        # («aquesta mesura no canvia entre talles») ja té forma pròpia i honesta, que és
+        # FIXED. Deixar-la passar torna a fabricar una taula plana que sembla graduada.
+        # A3 (2026-07-22): la condició viu ara a pom.grading_regime (punt únic del backend),
+        # perquè aquest camí i el de `gravar_pom` no divergeixin.
+        if es_linear_degenerada(rule.logica, rule.increment_base, rule.increment,
+                                rule.increment_break, rule.talla_break_label):
+            return Response({
+                'detail': MISSATGE_LINEAR_ZERO,
+                'codi': CODI_LINEAR_ZERO,
+            }, status=400)
+
         rule.origen = 'MANUAL'
         rule.save()
 

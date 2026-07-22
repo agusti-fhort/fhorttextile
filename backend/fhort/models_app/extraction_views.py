@@ -1880,6 +1880,80 @@ def import_session_confirmar_view(request, token):
             resolved.append((i, p, pm))
             confirmed_pom_ids.append(int(p['pom_master_id']))
 
+        # ══ PRE-FLIGHT SOROLL (B1, LLEI DEL SOROLL 2026-07-22) ═══════════════════════════
+        # «El model s'alimenta de realitat: tot element sense contingut real és soroll i ES
+        # PROPOSA eliminar, amb confirmació.»
+        #
+        # La norma 1 («mana el document») ja existia, però NOMÉS de cara al que el document
+        # SÍ porta. La contrapartida faltava: els POMs vius del model que el document NO
+        # menciona sobrevivien actius EN SILENCI, i la fitxa importada quedava contaminada
+        # amb mesures que el client no demanava (§B3.3 de la DIAGNOSI_GTI_PLANTILLA).
+        #
+        # Ara es PROPOSEN, mai s'esborren sols: 409 amb la llista → el tècnic tria
+        # `poda_choice`. Mateix mecanisme que `container_choice` (no cal pantalla nova).
+        # Sempre soft (is_active=False), mai DELETE dur.
+        poda_choice = (request.data.get('poda_choice') or '').strip().lower()  # 'desactivar'|'conservar'
+        orfes = list(
+            BaseMeasurement.objects
+            .filter(model=model, is_active=True, base_value_cm__isnull=False)
+            .exclude(pom_id__in=confirmed_pom_ids)
+            .select_related('pom')
+        )
+        if orfes and poda_choice not in ('desactivar', 'conservar'):
+            return Response({
+                'conflict': True,
+                'tipus': 'poms_no_mencionats',
+                'poms': [{
+                    'pom_id': bm.pom_id,
+                    'codi': bm.pom.codi_client or '',
+                    'nom': bm.nom_fitxa or getattr(bm.pom, 'nom_ca', '') or '',
+                    'base_value_cm': bm.base_value_cm,
+                    'origen': bm.origen,
+                } for bm in orfes],
+                'n': len(orfes),
+                'message': ("Aquest model té mesures vives que el document no menciona. "
+                            "Vols desactivar-les (el model s'alimenta de la realitat del "
+                            "document) o conservar-les?"),
+            }, status=409)
+
+        # ══ PRE-FLIGHT PRECEDÈNCIA MANUAL (B2) ══════════════════════════════════════════
+        # Precedència d'orígens MÍNIMA — només la que aquesta llei necessita, no el mapa
+        # complet (§B3.3: `ORIGEN_CHOICES` segueix sent una llista plana i això NO ho canvia).
+        #
+        # Una fila origen='MANUAL' amb valor és patrimoni escrit a mà per un tècnic. Fins ara
+        # l'`update_or_create` de sota la trepitjava sense mirar-se l'origen previ — l'única
+        # comparació d'origen de tot el repo vivia a `models_app/views.py:827`. El patró de
+        # guard que se segueix és `pom/dictionary_service.py:158` (`preserve_manual`).
+        #
+        # No es decideix per ell en cap direcció: es PROPOSA, com el soroll.
+        manual_choice = (request.data.get('manual_choice') or '').strip().lower()  # 'sobreescriure'|'respectar'
+        _doc_pom_ids = {int(p['pom_master_id']) for _i, p, _pm in resolved
+                        if valors.get(int(p['pom_master_id']), {}).get(base_size) is not None}
+        manuals = list(
+            BaseMeasurement.objects
+            .filter(model=model, is_active=True, origen='MANUAL',
+                    base_value_cm__isnull=False, pom_id__in=_doc_pom_ids)
+            .select_related('pom')
+        ) if _doc_pom_ids else []
+        if manuals and manual_choice not in ('sobreescriure', 'respectar'):
+            return Response({
+                'conflict': True,
+                'tipus': 'manual_trepitjat',
+                'poms': [{
+                    'pom_id': bm.pom_id,
+                    'codi': bm.pom.codi_client or '',
+                    'nom': bm.nom_fitxa or getattr(bm.pom, 'nom_ca', '') or '',
+                    'valor_manual': bm.base_value_cm,
+                    'valor_document': valors.get(bm.pom_id, {}).get(base_size),
+                } for bm in manuals],
+                'n': len(manuals),
+                'message': ("El document porta valor per a mesures introduïdes MANUALMENT. "
+                            "Vols que mani el document o que es respecti el valor manual?"),
+            }, status=409)
+        # POMs on el valor manual guanya: l'escriptura de sota els salta.
+        respectats_pom_ids = ({bm.pom_id for bm in manuals}
+                              if manual_choice == 'respectar' else set())
+
         # ══ PRE-FLIGHT GRADING (D1) — detecció (pura) + matcher + GATES 409, TOT abans d'escriure.
         # El contenidor de client (GradingRuleSet origen=CLIENT_RUN) és ÚNIC per (customer +
         # size_system + garment_type_item + fit). Les decisions que exigeixen tria del tècnic surten
@@ -1944,13 +2018,45 @@ def import_session_confirmar_view(request, token):
         if meta_update_fields:
             model.save(update_fields=meta_update_fields)
 
-        # ── 1. Mana el document: neteja files buides de plantilla i crea NOMÉS els confirmats.
-        BaseMeasurement.objects.filter(model=model, base_value_cm__isnull=True).delete()
+        # ── 1. Mana el document: neteja files buides i crea NOMÉS els confirmats.
+        #
+        # B1 (LLEI DEL SOROLL) — CRITERI TRIAT per a les files sense valor:
+        #   · origen TEMPLATE/ITEM_STANDARD → **DELETE dur**. Són bastida de plantilla que
+        #     mai va ser realitat: ningú les va mesurar, no hi ha res a auditar i deixar-les
+        #     com a inactives només acumularia runa que un segon import tornaria a trobar.
+        #   · qualsevol altre origen (MANUAL, IMPORTED, FITTED…) → **SOFT** (is_active=False)
+        #     + entrada al MeasurementChangeLog. Algú les va crear conscientment encara que
+        #     ara no portin valor; la seva desaparició ha de deixar rastre.
+        _TEMPLATE_ORIGENS = ('TEMPLATE', 'ITEM_STANDARD')
+        _buides = BaseMeasurement.objects.filter(model=model, base_value_cm__isnull=True)
+        _buides.filter(origen__in=_TEMPLATE_ORIGENS).delete()
+        n_buides_soft = 0
+        for bm in _buides.exclude(origen__in=_TEMPLATE_ORIGENS).exclude(is_active=False):
+            bm.is_active = False
+            bm._desactivat = True
+            bm._changed_by = request.user
+            bm._motiu = 'import: fila sense valor (soroll)'
+            bm.save(update_fields=['is_active'])
+            n_buides_soft += 1
 
         n_bm = 0
         n_bm_valors = 0
+        n_manual_respectats = 0
         for i, p, pm in resolved:
             base_val = valors.get(int(p['pom_master_id']), {}).get(base_size)
+            # B2 — el tècnic ha decidit que el valor manual mana: el document no el trepitja.
+            # La fila queda tal com està (valor, origen MANUAL i tot); només és patrimoni que
+            # sobreviu a l'import, no una fila nova.
+            if pm.id in respectats_pom_ids:
+                n_manual_respectats += 1
+                n_bm += 1
+                n_bm_valors += 1
+                # El vincle codi↔POM SÍ s'aprèn: la tria és sobre el VALOR, no sobre el
+                # vocabulari. El document ha anomenat aquest POM i això és realitat.
+                maybe_learn_customer_alias(
+                    model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
+                    origen='IMPORT', nomes_si_manual=False)
+                continue
             _defaults = {
                 'base_value_cm': base_val,
                 'nom_fitxa': p.get('codi_fitxa') or '',
@@ -1974,6 +2080,38 @@ def import_session_confirmar_view(request, token):
             maybe_learn_customer_alias(
                 model.customer, p.get('codi_fitxa'), p.get('descripcio'), pm,
                 origen='IMPORT', nomes_si_manual=False)
+
+        # ── 1b. PODA CONFIRMADA (B1). Els POMs vius que el document no menciona: el tècnic
+        # ja ha triat al pre-flight. SOFT sempre (is_active=False) + MeasurementChangeLog;
+        # cap DELETE dur — la mesura va existir i el model n'ha de guardar memòria.
+        n_podats = 0
+        if orfes and poda_choice == 'desactivar':
+            for bm in orfes:
+                bm.is_active = False
+                bm._desactivat = True
+                bm._changed_by = request.user
+                bm._motiu = 'import: POM no mencionat pel document (poda confirmada)'
+                bm.save(update_fields=['is_active'])
+                n_podats += 1
+            grading_avisos.append(
+                f"Poda confirmada: {n_podats} POM(s) que el document no menciona s'han "
+                f"desactivat (soft, amb registre al log de mesures).")
+        elif orfes and poda_choice == 'conservar':
+            grading_avisos.append(
+                f"{len(orfes)} POM(s) vius que el document NO menciona s'han CONSERVAT per "
+                f"decisió del tècnic: la fitxa del model els segueix incloent.")
+        if n_manual_respectats:
+            grading_avisos.append(
+                f"{n_manual_respectats} mesura/es d'origen MANUAL s'han RESPECTAT per decisió "
+                f"del tècnic: el valor del document no les ha trepitjat.")
+        elif manuals and manual_choice == 'sobreescriure':
+            grading_avisos.append(
+                f"{len(manuals)} mesura/es d'origen MANUAL s'han sobreescrit amb el valor del "
+                f"document per decisió del tècnic.")
+        if n_buides_soft:
+            grading_avisos.append(
+                f"{n_buides_soft} fila/es sense valor i d'origen no-plantilla s'han "
+                f"desactivat (soft) en lloc d'esborrar-se.")
 
         # ── 2. Identificador del contenidor SF.
         next_num = 1
@@ -2016,7 +2154,7 @@ def import_session_confirmar_view(request, token):
                             container = GradingRuleSet.objects.create(
                                 nom=nom_cont, size_system=model.size_system,
                                 garment_group=model.garment_group, garment_type_item=None,
-                                target=rs_target, construction=rs_constr, fit_type=rs_fit,
+                                construction=rs_constr, fit_type=rs_fit,
                                 is_system_default=False, actiu=True,
                                 origen=GradingRuleSet.ORIGEN_CLIENT_RUN, customer=model.customer)
                             if rs_target:
@@ -2165,6 +2303,11 @@ def import_session_confirmar_view(request, token):
         'model_codi': model.codi_intern,
         'base_measurements': n_bm,
         'base_measurements_amb_valor': n_bm_valors,
+        # B1 — el resultat de la poda mai és silenciós.
+        'poms_podats': n_podats,
+        'poms_conservats': (len(orfes) if poda_choice == 'conservar' else 0),
+        'files_buides_desactivades': n_buides_soft,
+        'manual_respectats': n_manual_respectats,
         'graded_specs': n_specs,
         'size_fitting': size_fitting.codi,
         'document_fitxer': (doc_fitxer.nom_fitxer if doc_fitxer else None),
