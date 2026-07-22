@@ -546,11 +546,25 @@ def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, co
     return None
 
 
-def _resolve_garment_def(d):
+def _resolve_garment_def(d, model=None):
     """Resol la definició de garment + talles d'un payload d'esquelet (Pas 5A).
-    Cada camp és OPCIONAL (es posa només si ve al payload). Retorna (fields, error_msg).
-    garment_type_item_id és la BAULA del motor de temps (matriu item×task_type)."""
+    Cada camp és OPCIONAL (es posa només si ve al payload). Retorna (fields, error_payload).
+    garment_type_item_id és la BAULA del motor de temps (matriu item×task_type).
+
+    PORTA ÚNICA DEL RUN (llei S24b): `size_run` no es desa mai cru. Passa per
+    `run_del_model`, que l'ordena per `SizeDefinition.ordre` del SizeSystem. Aquesta funció
+    la comparteixen `create_model_wizard` i `update_model_step2`, i per tant tancar-la aquí
+    cobreix la creació I l'edició d'un sol cop — que és per on va entrar el run apendat del
+    model 166.
+
+    `model` és el model existent en el camí d'EDICIÓ: cal per resoldre el sistema contra el
+    qual ordenar quan el PATCH porta `size_run` però no `size_system_id`.
+
+    El retorn d'error és un DICT (payload de resposta), no un string: la llista d'etiquetes
+    desconegudes ha de viatjar al client, no quedar aixafada dins d'un missatge.
+    """
     from fhort.pom.models import GarmentType, GarmentGroup, SizeSystem, GradingRuleSet
+    from fhort.pom.grading_utils import run_del_model
     from fhort.tasks.models import GarmentTypeItem
     fields = {}
     # Pont família↔item: si arriba l'item, la família (i el grup) es DERIVEN de l'item; el
@@ -560,7 +574,7 @@ def _resolve_garment_def(d):
             item = (GarmentTypeItem.objects.select_related('garment_type')
                     .get(id=d['garment_type_item_id']))
         except GarmentTypeItem.DoesNotExist:
-            return None, 'GarmentTypeItem no trobat'
+            return None, {'error': 'GarmentTypeItem no trobat'}
         fields['garment_type_item'] = item
         fields['garment_type'] = item.garment_type
         grp = GarmentGroup.objects.filter(codi=item.garment_type.grup).first()
@@ -571,12 +585,12 @@ def _resolve_garment_def(d):
         try:
             fields['garment_type'] = GarmentType.objects.get(id=d['garment_type_id'])
         except GarmentType.DoesNotExist:
-            return None, 'GarmentType no trobat'
+            return None, {'error': 'GarmentType no trobat'}
     if d.get('size_system_id'):
         try:
             fields['size_system'] = SizeSystem.objects.get(id=d['size_system_id'])
         except SizeSystem.DoesNotExist:
-            return None, 'SizeSystem no trobat'
+            return None, {'error': 'SizeSystem no trobat'}
     if d.get('grading_rule_set_id'):
         try:
             fields['grading_rule_set'] = GradingRuleSet.objects.get(id=d['grading_rule_set_id'])
@@ -587,7 +601,23 @@ def _resolve_garment_def(d):
     if d.get('construction'):
         fields['construction'] = d['construction']
     if d.get('size_run'):
-        fields['size_run_model'] = d['size_run']
+        # PORTA ÚNICA (S24b). El sistema contra el qual s'ordena és el que assigna aquest
+        # mateix payload; si no en porta, el que ja té el model (camí d'edició). Sense cap
+        # dels dos, `run_del_model` degrada i conserva l'ordre d'entrada.
+        _ss = fields.get('size_system') or (model.size_system if model is not None else None)
+        _run, _desconegudes = run_del_model(
+            str(d['size_run']).replace(';', '·').split('·'), _ss,
+        )
+        if _desconegudes:
+            return None, {
+                'error': (
+                    "Aquestes talles no pertanyen al sistema de talles del model: "
+                    + ', '.join(_desconegudes)
+                ),
+                'codi': 'talles_desconegudes',
+                'etiquetes_desconegudes': _desconegudes,
+            }
+        fields['size_run_model'] = '·'.join(_run)
     if d.get('base_size'):
         fields['base_size_label'] = d['base_size']
     return fields, None
@@ -617,7 +647,7 @@ def create_model_wizard(request):
 
     garment_fields, gerr = _resolve_garment_def(request.data)
     if gerr:
-        return Response({'error': gerr}, status=400)
+        return Response(gerr, status=400)
 
     # D1 — mateixa porta que a update_model_step2: el wizard pot arrossegar graduació ja des de
     # la creació, i un ruleset buit o d'un altre run faria néixer el model sense regles útils.
@@ -781,9 +811,11 @@ def update_model_step2(request, model_id):
 
     d = request.data
     # Pas 5A — reutilitza el mateix resolutor que la creació (inclou garment_type_item_id).
-    garment_fields, gerr = _resolve_garment_def(d)
+    # S24b: se li passa el `model` perquè pugui ordenar el run contra el SizeSystem que ja té
+    # quan el PATCH porta `size_run` sense `size_system_id`.
+    garment_fields, gerr = _resolve_garment_def(d, model=model)
     if gerr:
-        return Response({'error': gerr}, status=400)
+        return Response(gerr, status=400)
     for k, v in garment_fields.items():
         setattr(model, k, v)
     if d.get('collection') is not None:

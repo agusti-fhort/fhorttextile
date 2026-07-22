@@ -277,9 +277,15 @@ class TechSheetCreateModelView(APIView):
         raw_sizes = extracted.get('sizes') or []
         if isinstance(raw_sizes, str):
             raw_sizes = re.findall(r'[A-Za-z0-9]+', raw_sizes)
-        size_run = '·'.join(
-            str(s).strip() for s in raw_sizes if str(s).strip()
-        )
+        # PORTA ÚNICA DEL RUN (llei S24b). ⚠️ Aquest flux crea el Model SENSE `size_system`
+        # assignat (vegeu el `Model.objects.create` de sota: no hi ha camp size_system), i per
+        # tant no hi ha res contra què ordenar: `run_del_model` degrada amb gràcia i conserva
+        # l'ordre del document, només deduplicant. És deliberat — un import legacy no s'ha de
+        # petar per una llei que aquí no es pot aplicar. Queda ANOTAT: el dia que aquest camí
+        # assigni SizeSystem, el run s'ordenarà sol sense tocar aquesta línia.
+        from fhort.pom.grading_utils import run_del_model
+        _run, _ = run_del_model([str(s).strip() for s in raw_sizes], None)
+        size_run = '·'.join(_run)
 
         # NOT NULL Model fields the view must fill explicitly:
         # - any: taken from the header (`year`) or, by default, the current year.

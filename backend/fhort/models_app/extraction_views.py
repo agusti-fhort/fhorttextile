@@ -1828,7 +1828,22 @@ def import_session_confirmar_view(request, token):
                     base_detectada = _to_tenant(base_detectada)
                 if meta_update_fields:
                     model.base_size_label = base_detectada or model.base_size_label
-                    model.size_run_model = '·'.join(_to_tenant(l) for l in run_detectat)
+                    # PORTA ÚNICA DEL RUN (llei S24b): l'ordre del DOCUMENT no mana sobre el run
+                    # del MODEL. Les etiquetes ja vénen traduïdes a llengua-tenant per
+                    # `_to_tenant`; aquí només se n'imposa l'ordre del SizeSystem.
+                    from fhort.pom.grading_utils import run_del_model
+                    _run_ordenat, _run_fora = run_del_model(
+                        [_to_tenant(l) for l in run_detectat], model.size_system,
+                    )
+                    model.size_run_model = '·'.join(_run_ordenat)
+                    if _run_fora:
+                        # Abans, una etiqueta sense equivalència al sistema es desava CRUA dins el
+                        # run (només avisava `_no_resol`), i el model acabava amb una talla que el
+                        # seu propi sistema no coneix. Ara no hi entra i es diu en clar — mateixa
+                        # direcció que el check (d) de la S24.
+                        session.avisos = (session.avisos or []) + [
+                            f"Talles del document fora del sistema '{model.size_system.codi}' "
+                            f"i excloses del run del model: {', '.join(_run_fora)}."]
                 if _no_resol:
                     session.avisos = (session.avisos or []) + [
                         "Etiquetes del document sense equivalència única al sistema "
