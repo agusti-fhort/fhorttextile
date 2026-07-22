@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import models
 from django_tenants.models import DomainMixin, TenantMixin
 
@@ -222,6 +224,71 @@ class Client(TenantMixin):
 
 class Domain(DomainMixin):
     pass
+
+
+class CodiAuth(models.Model):
+    """Codi opac d'UN SOL ÚS del login únic (F1/F2). Viu SEMPRE al schema `public`.
+
+    PER QUÈ AL PUBLIC: el bescanvi creua orígens. Qui EMET el codi és l'autenticació
+    central (que pot atendre's des de qualsevol host) i qui el CONSUMEIX és el host del
+    tenant de destí. Una taula per-schema no la veurien tots dos. `fhort.tenants` és a
+    SHARED_APPS i no a TENANT_APPS (`settings.py:37,63`) → les seves taules només
+    existeixen a `public`, que és exactament el que aquesta peça necessita.
+
+    PER QUÈ UNA SOLA TAULA PER A DUES MENES: el flux té dos tiquets efímers de la mateixa
+    naturalesa (opac, server-side, un sol ús, TTL curt): la SELECCIÓ (multi-workspace: el
+    client ha de poder triar sense re-enviar mai la contrasenya) i el BESCANVI (el codi que
+    viatja a la URL i es canvia per un parell JWT). Mateixa mecànica de consum atòmic,
+    mateixa neteja, mateix risc → mateixa taula amb `mena`, no dues bessones.
+
+    PER QUÈ ES DESA EL HASH I NO EL CODI: el codi és el permís. Desar-lo en clar convertiria
+    qualsevol lectura de la BD del public (dump, backup, còpia a staging) en un joc de
+    credencials vives. El SHA-256 és suficient perquè el codi no és endevinable (32 bytes
+    d'entropia de `secrets`): no cal cap KDF lent, i la cerca segueix sent per índex únic.
+
+    L'ÚS ÉS ATÒMIC, no comprovat-i-després-marcat: el consum és un UPDATE condicional
+    (`WHERE used_at IS NULL`) i el que compta és el nombre de files afectades. Dos bescanvis
+    simultanis del mateix codi entren els dos a la comprovació però només un fa 1 fila.
+    """
+
+    MENA_SELECCIO = 'seleccio'
+    MENA_BESCANVI = 'bescanvi'
+    MENA_CHOICES = [
+        (MENA_SELECCIO, 'Selecció de workspace'),
+        (MENA_BESCANVI, 'Bescanvi per sessió'),
+    ]
+
+    #: TTL del codi de bescanvi: el temps d'una redirecció, no el d'una persona.
+    TTL_BESCANVI = timedelta(seconds=60)
+    #: TTL de la selecció: aquí SÍ que hi ha una persona llegint i triant.
+    TTL_SELECCIO = timedelta(seconds=180)
+    #: Llindar de la neteja oportunista (sense cron nou): prou per sobre del TTL màxim.
+    TTL_RETENCIO = timedelta(minutes=5)
+
+    codi_hash = models.CharField(max_length=64, unique=True)
+    mena = models.CharField(max_length=10, choices=MENA_CHOICES)
+
+    # Destí del bescanvi. Buit a les files de mena=seleccio (encara no s'ha triat).
+    tenant_schema = models.CharField(max_length=63, blank=True)
+    user_id = models.IntegerField(null=True, blank=True)
+
+    # Només mena=seleccio: els workspaces on les credencials han estat VÀLIDES,
+    # [{'schema': …, 'user_id': …}]. La contrasenya ja no torna a viatjar mai més.
+    candidats = models.JSONField(default=list, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    used_at = models.DateTimeField(null=True, blank=True)   # NULL = viu
+
+    class Meta:
+        verbose_name = "Codi d'autenticació"
+        verbose_name_plural = "Codis d'autenticació"
+
+    def __str__(self):
+        return f'{self.mena} → {self.tenant_schema or "?"}'
+
+    @property
+    def ttl(self):
+        return self.TTL_SELECCIO if self.mena == self.MENA_SELECCIO else self.TTL_BESCANVI
 
 
 class TenantContacte(models.Model):
