@@ -13,6 +13,7 @@ from rest_framework_simplejwt.views import (
 
 from fhort.auth_jwt import TenantTokenObtainPairSerializer
 from fhort.tenants.views_auth_central import AuthCentralTriaView, AuthCentralView
+from fhort.tenants.views_bescanvi import AuthBescanviView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -31,6 +32,10 @@ urlpatterns = [
     # és cross-schema per construcció: el host des del qual s'entra no altera el resultat.
     path('api/auth/central/', AuthCentralView.as_view(), name='auth-central'),
     path('api/auth/central/tria/', AuthCentralTriaView.as_view(), name='auth-central-tria'),
+
+    # Login únic (F2): bescanvi del codi per una sessió. NOMÉS aquí (mai al public): és el
+    # host del tenant qui ha d'emetre el JWT, perquè la sessió neixi al seu propi origen.
+    path('api/auth/bescanvi/', AuthBescanviView.as_view(), name='auth-bescanvi'),
 
     # OpenAPI schema + docs
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
