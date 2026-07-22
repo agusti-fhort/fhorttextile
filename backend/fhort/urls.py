@@ -12,6 +12,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from fhort.auth_jwt import TenantTokenObtainPairSerializer
+from fhort.tenants.views_auth_central import AuthCentralTriaView, AuthCentralView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -23,6 +24,13 @@ urlpatterns = [
         serializer_class=TenantTokenObtainPairSerializer), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+
+    # Login únic (F1): la MATEIXA porta central que a urls_public.py. Aquí no és redundància:
+    # a PROD el host neutre (login.*) resol al public, però la pantalla /entrar viu a l'únic
+    # build i s'ha de poder validar des d'un host de tenant (staging.*, llei S19). El lookup
+    # és cross-schema per construcció: el host des del qual s'entra no altera el resultat.
+    path('api/auth/central/', AuthCentralView.as_view(), name='auth-central'),
+    path('api/auth/central/tria/', AuthCentralTriaView.as_view(), name='auth-central-tria'),
 
     # OpenAPI schema + docs
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
