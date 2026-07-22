@@ -21,9 +21,6 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('konva')) return 'vendor-konva'
-            if (id.includes('paper')) return 'vendor-paper'
-            if (id.includes('pdf-lib')) return 'vendor-pdf'
             // Framework core (react/router/http/i18n): ja s'executa eagerly a l'entry,
             // però abans anava tot dins del chunk "index" (>500kB). Es separa a part
             // perquè sigui cacheable i no compti com a chunk d'APP; la resta de
@@ -32,6 +29,20 @@ export default defineConfig({
             if (/\/(react|react-dom|react-router|react-router-dom|scheduler|use-sync-external-store|axios|i18next|i18next-browser-languagedetector|react-i18next|zustand)\//.test(id)) {
               return 'vendor-react'
             }
+            // NO forçar cap chunk per a konva. Hi havia un `vendor-konva` explícit i era
+            // contraproduent: agrupar konva + react-konva a la força hi arrossegava el pont
+            // de react-konva cap a React, i l'entry acabava important-ne un símbol de manera
+            // ESTÀTICA. Resultat: els 317 kB de Konva al `modulepreload` de l'index.html de
+            // TOTES les pàgines, quan només el fan servir les de canvas (§B4.4, punt 6) —
+            // i els 44 `lazy(() => import(...))` d'App.jsx no en podien fer res.
+            // Amb el xunkejament automàtic, Konva queda igual de junt (306 kB en un sol
+            // chunk) però NOMÉS com a dependència dinàmica de les pàgines que l'importen.
+            // Càrrega inicial: 1.112.390 B → 806.529 B.
+            //
+            // Els dos que queden van ancorats a `node_modules/<nom>/` a propòsit: amb un
+            // `includes()` solt, qualsevol paquet que dugués la paraula al camí hi cauria.
+            if (/node_modules\/paper\//.test(id)) return 'vendor-paper'
+            if (/node_modules\/pdf-lib\//.test(id)) return 'vendor-pdf'
           }
         },
       },
