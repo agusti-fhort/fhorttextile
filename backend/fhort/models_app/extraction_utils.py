@@ -7,6 +7,7 @@ el JSON real i tolera aquests defectes; salvage_measurements recupera files POM 
 quan el JSON global no parseja (perquè una cel·la de grading malformada no s'emporti els POMs).
 """
 import json
+import logging as _logging
 import re
 
 
@@ -149,3 +150,37 @@ def salvage_measurements(text):
             except json.JSONDecodeError:
                 continue  # fila irrecuperable → es descarta, la resta es conserva
     return rows
+
+
+def registra_us_ia(*, cami, model_ia, usage=None, import_session=None, model=None,
+                   created_by=None, ok=True, error=''):
+    """Desa el cost d'UNA crida a l'API d'Anthropic. Mai peta el camí de negoci.
+
+    Decisió Agus 2026-07-22: «tot usage es loggeja». `usage` és l'objecte `response.usage`
+    del SDK o el dict `usage` del JSON cru (extraction_service va per httpx): s'accepten
+    tots dos perquè el registre no depengui de com s'ha fet la crida.
+
+    Envoltat d'un `except` ample a posta: un problema comptant tokens no pot tombar una
+    extracció que ja s'ha pagat i que l'usuari està esperant. Si el registre falla, es
+    queixa al log i el camí segueix.
+    """
+    def _t(nom):
+        if usage is None:
+            return 0
+        v = usage.get(nom) if isinstance(usage, dict) else getattr(usage, nom, 0)
+        return int(v or 0)
+
+    try:
+        from fhort.models_app.models import AIUsage
+        return AIUsage.objects.create(
+            cami=cami, model_ia=model_ia or '',
+            import_session=import_session, model=model, created_by=created_by,
+            input_tokens=_t('input_tokens'), output_tokens=_t('output_tokens'),
+            cache_creation_tokens=_t('cache_creation_input_tokens'),
+            cache_read_tokens=_t('cache_read_input_tokens'),
+            ok=ok, error=(error or '')[:2000],
+        )
+    except Exception:
+        _logging.getLogger(__name__).exception(
+            f'No s\'ha pogut registrar l\'ús d\'IA ({cami}/{model_ia})')
+        return None
