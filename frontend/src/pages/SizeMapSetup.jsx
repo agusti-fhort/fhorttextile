@@ -465,6 +465,22 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           {/* R5 — regles reals persistides (BD), font única. */}
           <div>{t('size_map_sum_rules')}: {result.rules_count ?? 0}</div>
         </div>
+        {/* 🚩2 — El document provava menys talles que el sistema. El joc de regles és una
+            FÓRMULA, no una taula: les talles no documentades s'extrapolaran quan un model les
+            faci servir. Informa; no bloqueja ni marca cel·les. */}
+        {result.extrapolacio?.talles?.length > 0 && (
+          <div style={{ background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+                        padding: '10px 12px', marginBottom: 14, fontSize: 'var(--fs-body)', color: 'var(--gold)' }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>
+              <i className="ti ti-arrow-bar-to-right" style={{ marginRight: 6 }} />
+              {t('size_map_extrapolacio_title')}
+            </div>
+            <div>{t('size_map_extrapolacio_body', {
+              doc: (result.extrapolacio.doc_run || []).join(' · '),
+              sizes: result.extrapolacio.talles.join(', '),
+            })}</div>
+          </div>
+        )}
         {pendents.length > 0 && (
           <div style={{ background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8,
                         padding: '10px 12px', marginBottom: 14, fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>

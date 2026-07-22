@@ -2235,6 +2235,8 @@
   "size_map_sum_perfils": "Profiles",
   "size_map_sum_rules": "Rules",
   "size_map_unknown_sizes": "The document contains sizes the selected size system does not know: {{sizes}}. Check the chosen system or the document.",
+  "size_map_extrapolacio_title": "Undocumented sizes",
+  "size_map_extrapolacio_body": "The rules were derived from a document with run {{doc}}. The size system has more: {{sizes}} are not in the document and will be extrapolated by formula when a model uses them.",
   "size_map_sum_doc_run": "Document run",
   "size_map_sum_talles": "Sizes",
   "size_map_sum_target": "Target",

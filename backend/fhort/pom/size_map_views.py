@@ -649,6 +649,9 @@ def size_map_create_view(request):
         nom_variant = (data.get('nom_variant') or '').strip() or None
 
         warnings = []
+        # 🚩2 — traça estructurada de l'extrapolació (es pobla al pas 5; None = el document
+        # cobria tot el sistema). Va al payload perquè el front el pugui rotular traduït.
+        extrapolacio = None
 
         # ── Guard d'INTEGRITAT (talla absent = BLOQUEIG): cap regla es deriva d'una taula
         # incompleta. Les files marcades incompletes al preview (falta valor per a alguna talla del
@@ -928,6 +931,20 @@ def size_map_create_view(request):
                 # cas, i deixar el referent buit seria pitjor que conservar el comportament d'ahir.
                 if not run_ordenat:
                     run_ordenat = run_sistema
+                # 🚩2 — El document prova menys talles de les que el sistema té. El joc de regles
+                # és una FÓRMULA, no una taula: quan un model faci servir una talla que el
+                # document no documentava, el motor l'extrapolarà. Run de talles i regles de
+                # graduació són coses distintes que només col·lapsen al model, així que això
+                # INFORMA; no bloqueja ni marca cap cel·la.
+                extrapolades = [e for e in run_sistema if e not in set(run_ordenat)]
+                if extrapolades and run_ordenat is not run_sistema:
+                    extrapolacio = {'doc_run': list(run_ordenat), 'talles': extrapolades}
+                    warnings.append(
+                        "Regles derivades d'un document de {} talles ({}) sobre un sistema de {}. "
+                        "Les talles no documentades ({}) s'extrapolaran per fórmula quan un model "
+                        "les faci servir.".format(
+                            len(run_ordenat), ' · '.join(run_ordenat), len(run_sistema),
+                            ', '.join(extrapolades)))
                 for g in grading:
                     pom_id = g.get('pom_id')
                     pom = POMMaster.objects.filter(pk=pom_id).first()
@@ -1003,6 +1020,8 @@ def size_map_create_view(request):
             'rules_count': rule_set.regles.count(),
             'discarded_codes': discarded_codes,
             'warnings': warnings,
+            # 🚩2 — el document provava menys talles que el sistema: informatiu, mai bloqueig.
+            'extrapolacio': extrapolacio,
         })
     except Exception as e:
         import logging

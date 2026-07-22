@@ -2235,6 +2235,8 @@
   "size_map_sum_perfils": "Perfiles",
   "size_map_sum_rules": "Reglas",
   "size_map_unknown_sizes": "El documento trae tallas que el sistema de tallas seleccionado no conoce: {{sizes}}. Revisa el sistema elegido o el documento.",
+  "size_map_extrapolacio_title": "Tallas no documentadas",
+  "size_map_extrapolacio_body": "Las reglas se han derivado de un documento con el run {{doc}}. El sistema de tallas tiene más: {{sizes}} no aparecen en el documento y se extrapolarán por fórmula cuando un modelo las use.",
   "size_map_sum_doc_run": "Run del documento",
   "size_map_sum_talles": "Tallas",
   "size_map_sum_target": "Target",
