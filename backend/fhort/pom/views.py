@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -59,7 +59,9 @@ class POMMasterViewSet(viewsets.ModelViewSet):
 class SizeSystemViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = SizeSystemSerializer
-    queryset = SizeSystem.objects.prefetch_related('talles').all()
+    # `targets` prefetchat: get_target_codis (serializers.py:113) el recorre per fila i
+    # sense això costava 1 query per sistema (§B3.3).
+    queryset = SizeSystem.objects.prefetch_related('talles', 'targets').all()
     filter_backends = [DjangoFilterBackend, SearchFilter]
     # LLEI 5 CAPES: el pas «Talles» del wizard llista SizeSystems PURS (escala, capa 3) filtrats
     # pel target de la peça. `targets` (M2M) additiu al filterset → GET size-systems/?targets=<id>.
@@ -167,10 +169,23 @@ class POMCategoryViewSet(viewsets.ReadOnlyModelViewSet):
 class GradingRuleSetViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = GradingRuleSetSerializer
+    # El `prefetch_related('regles')` estalviava 1 query per conjunt, però deixava el
+    # GradingRuleSerializer serialitzant cada regla amb les relacions fredes: 3,2 queries
+    # per regla (pom_pommaster + pom_pomglobal + pom_sizedefinition), 3.683 en total amb
+    # page_size=200. El mateix serializer ja es fa servir a GradingRuleViewSet (sota) amb
+    # el select_related correcte i hi costa 5 queries. Aquí s'hi aplica el mateix, dins
+    # del Prefetch. `targets`/`scope_nodes` són M2M que el serializer recorre per fila.
+    # (Mesurat a DIAGNOSI_RENDIMENT_SESSIO_2026-07-22 §B3.2.)
     queryset = (
         GradingRuleSet.objects
-        .select_related('garment_group', 'size_system')
-        .prefetch_related('regles')
+        .select_related('garment_group', 'size_system', 'customer',
+                        'construction', 'fit_type')
+        .prefetch_related(
+            Prefetch('regles', queryset=GradingRule.objects.select_related(
+                'pom__pom_global', 'talla_base', 'rule_set')),
+            'targets',
+            'scope_nodes__garment_group',
+        )
         .all()
     )
     filter_backends = [DjangoFilterBackend, SearchFilter]

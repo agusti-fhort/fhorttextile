@@ -235,12 +235,15 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
             self._write_scope(inst, applies)
         return inst
 
+    # `.all()` i prou: `values_list()` i `.first()` construeixen un queryset NOU i per tant
+    # ignoren la cache del prefetch_related del ViewSet — eren 2 queries per conjunt encara
+    # amb el prefetch posat. `.all()` sobre un M2M prefetchat no toca la BD.
     def get_targets_codis(self, obj):
-        return list(obj.targets.values_list('codi', flat=True))
+        return [tg.codi for tg in obj.targets.all()]
 
     def get_target_codi(self, obj):
-        first = obj.targets.first()
-        return first.codi if first else None
+        codis = self.get_targets_codis(obj)
+        return codis[0] if codis else None
 
     def get_construction_codi(self, obj):
         return obj.construction.codi if obj.construction else None
