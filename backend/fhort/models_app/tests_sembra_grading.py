@@ -304,3 +304,310 @@ class UpdateStep2GradingTest(_BaseSembraTest):
         self.model.refresh_from_db()
         self.assertEqual(self.model.size_run_model, 'S·M')
         self.assertEqual(self.model.grading_rule_set_id, rs.id)
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════
+# MELÓ 2026-07-22 — LINEAR+0=FIXED (fase A) · PRINCIPI DEL SOROLL (fase B) · PODA (fase C)
+# ═════════════════════════════════════════════════════════════════════════════════════════
+
+class LinearZeroEsFixedTest(_BaseSembraTest):
+    """A2/A3 — la llei «LINEAR amb delta 0 i sense break ÉS FIXED», als dos costats:
+    el filtre de la migració de dades i el helper únic que guarda els camins d'escriptura."""
+
+    PREFIX = 'LZF'
+
+    def setUp(self):
+        super().setUp()
+        self.item = self._item()
+        self.ss = self._size_system('SS')
+        self.rs = GradingRuleSet.objects.create(nom=self._codi('RS'), size_system=self.ss)
+        self.talla_base = SizeDefinition.objects.filter(size_system=self.ss).first()
+
+    def _regla(self, codi, **kw):
+        return GradingRule.objects.create(
+            rule_set=self.rs, pom=self._pom(codi), talla_base=self.talla_base, **kw)
+
+    # ── el filtre de la migració 0042 (la conversió de dades, A2) ─────────────────────
+    def test_migracio_selecciona_LINEAR_zero_sense_break(self):
+        """El filtre de la migració agafa la degenerada i NO les seves veïnes legítimes."""
+        from importlib import import_module
+        mig = import_module('fhort.pom.migrations.0042_linear_zero_to_fixed')
+        degenerada = self._regla('DEG', logica='LINEAR', increment='0.00', increment_base='0.00')
+        # increment_base NULL + increment 0 → també degenerada (fallback legacy d'_apply_rule).
+        legacy = self._regla('LEG', logica='LINEAR', increment='0.00', increment_base=None)
+        # Delta real → gradua: intocable.
+        amb_delta = self._regla('DELTA', logica='LINEAR', increment='2.00', increment_base='2.00')
+        # EL BREAK ÉS SAGRAT: delta base 0 però trencament informat → segueix LINEAR.
+        amb_break = self._regla('BRK', logica='LINEAR', increment='0.00', increment_base='0.00',
+                                increment_break='1.50', talla_break_label='L')
+        # Break sense etiqueta però amb valor → també sagrat.
+        brk_valor = self._regla('BRKV', logica='LINEAR', increment='0.00', increment_base='0.00',
+                                increment_break='0.75')
+        # Altres règims no es toquen mai.
+        step = self._regla('STP', logica='STEP', increment='0.00', increment_base='0.00')
+
+        ids = set(mig._zero_delta_no_break(GradingRule.objects.all())
+                  .values_list('id', flat=True))
+        self.assertEqual(ids, {degenerada.id, legacy.id})
+        for r in (amb_delta, amb_break, brk_valor, step):
+            self.assertNotIn(r.id, ids)
+
+    def test_migracio_converteix_i_deixa_el_break_intacte(self):
+        """Aplicar la conversió: la degenerada passa a FIXED; la del break NO es mou."""
+        from importlib import import_module
+        mig = import_module('fhort.pom.migrations.0042_linear_zero_to_fixed')
+        degenerada = self._regla('C_DEG', logica='LINEAR', increment='0.00', increment_base='0.00')
+        amb_break = self._regla('C_BRK', logica='LINEAR', increment='0.00', increment_base='0.00',
+                                increment_break='1.50', talla_break_label='L')
+
+        mig._zero_delta_no_break(GradingRule.objects.all()).update(logica='FIXED')
+
+        degenerada.refresh_from_db(); amb_break.refresh_from_db()
+        self.assertEqual(degenerada.logica, 'FIXED')
+        self.assertEqual(amb_break.logica, 'LINEAR')
+        # La conversió NO toca cap valor: només l'etiqueta.
+        self.assertEqual(float(degenerada.increment_base), 0.0)
+
+    # ── el helper únic del backend (A3) ───────────────────────────────────────────────
+    def test_helper_classifica_igual_que_la_migracio(self):
+        from fhort.pom.grading_regime import es_linear_degenerada, normalitza_logica
+        self.assertTrue(es_linear_degenerada('LINEAR', increment_base=0, increment=0))
+        self.assertTrue(es_linear_degenerada('LINEAR', increment_base=None, increment=0))
+        self.assertTrue(es_linear_degenerada('LINEAR', increment_base=None, increment=None))
+        self.assertFalse(es_linear_degenerada('LINEAR', increment_base=2))
+        self.assertFalse(es_linear_degenerada('FIXED', increment_base=0))
+        self.assertFalse(es_linear_degenerada('STEP', increment_base=0))
+        # El break, per etiqueta o per valor, protegeix la regla.
+        self.assertFalse(es_linear_degenerada('LINEAR', increment_base=0, talla_break_label='L'))
+        self.assertFalse(es_linear_degenerada('LINEAR', increment_base=0, increment_break=1.5))
+        # increment_base poblat MANA sobre el fallback legacy.
+        self.assertTrue(es_linear_degenerada('LINEAR', increment_base=0, increment=5))
+        self.assertEqual(normalitza_logica('LINEAR', increment_base=0), 'FIXED')
+        self.assertEqual(normalitza_logica('LINEAR', increment_base=3), 'LINEAR')
+        self.assertEqual(normalitza_logica('STEP', increment_base=0), 'STEP')
+
+    def test_sembra_normalitza_no_rebutja(self):
+        """El camí de SEMBRA/IMPORT etiqueta FIXED en lloc de petar (no hi ha ningú a preguntar)."""
+        from fhort.models_app.services import materialize_model_grading_rules
+        self._regla('S_DEG', logica='LINEAR', increment='0.00', increment_base='0.00')
+        self._regla('S_BRK', logica='LINEAR', increment='0.00', increment_base='0.00',
+                    increment_break='1.50', talla_break_label='L')
+        model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type)
+
+        n = materialize_model_grading_rules(model, self.rs.regles.all(), 'CANONICAL')
+
+        self.assertEqual(n, 2)
+        logiques = dict(model.grading_rules.values_list('pom__codi_client', 'logica'))
+        self.assertEqual(logiques[self._codi('S_DEG')], 'FIXED')
+        self.assertEqual(logiques[self._codi('S_BRK')], 'LINEAR')   # el break és sagrat
+
+
+class PodaSoftTest(_BaseSembraTest):
+    """C1 + B1 — treure un POM del model és SOFT i deixa rastre. Mai un DELETE dur."""
+
+    PREFIX = 'PODA'
+
+    def setUp(self):
+        super().setUp()
+        self.item = self._item()
+        self.model = self._model(garment_type_item=self.item,
+                                 garment_type=self.item.garment_type)
+        self.pom = self._pom('P1')
+        self.bm = BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom, base_value_cm=60.0, origen='MANUAL', is_active=True)
+
+    def _desactivar(self, pom_id):
+        from fhort.models_app.views import desactivar_pom_view
+        req = APIRequestFactory().post(
+            f'/api/v1/models/{self.model.id}/pom/{pom_id}/desactivar/', {}, format='json')
+        force_authenticate(req, user=self.user)
+        return desactivar_pom_view(req, self.model.id, pom_id)
+
+    def test_poda_es_soft_i_la_fila_sobreviu(self):
+        resp = self._desactivar(self.pom.id)
+        self.assertEqual(resp.status_code, 200)
+        self.bm.refresh_from_db()
+        self.assertFalse(self.bm.is_active)
+        # SOFT: la fila NO s'ha esborrat i el valor es conserva (memòria del model).
+        self.assertTrue(BaseMeasurement.objects.filter(pk=self.bm.pk).exists())
+        self.assertEqual(self.bm.base_value_cm, 60.0)
+
+    def test_poda_registra_al_measurement_change_log(self):
+        """El forat cobert: fins ara una desactivació no deixava cap rastre enlloc."""
+        from fhort.models_app.models import MeasurementChangeLog
+        abans = MeasurementChangeLog.objects.filter(model=self.model, pom=self.pom).count()
+        self._desactivar(self.pom.id)
+        entrades = MeasurementChangeLog.objects.filter(model=self.model, pom=self.pom)
+        self.assertEqual(entrades.count(), abans + 1)
+        log = entrades.order_by('-id').first()
+        self.assertEqual(log.valor_anterior, 60.0)
+        self.assertIn('poda', log.motiu)
+
+    def test_poda_dun_pom_inexistent_es_404_no_un_ok_enganyos(self):
+        altre = self._pom('P2')
+        self.assertEqual(self._desactivar(altre.id).status_code, 404)
+
+    def test_poda_repetida_no_torna_a_registrar(self):
+        """Ja inactiva → 404: idempotent i sense inflar el log amb sorollositat."""
+        self.assertEqual(self._desactivar(self.pom.id).status_code, 200)
+        self.assertEqual(self._desactivar(self.pom.id).status_code, 404)
+
+    def test_altres_toggles_dis_active_no_generen_log(self):
+        """La promesa del signal es manté: només registra qui posa la marca `_desactivat`."""
+        from fhort.models_app.models import MeasurementChangeLog
+        abans = MeasurementChangeLog.objects.filter(model=self.model, pom=self.pom).count()
+        self.bm.is_active = False
+        self.bm.save(update_fields=['is_active'])
+        self.assertEqual(
+            MeasurementChangeLog.objects.filter(model=self.model, pom=self.pom).count(), abans)
+
+
+class ImportSorollTest(_BaseSembraTest):
+    """B1 + B2 — el PRINCIPI DEL SOROLL a l'import: res s'esborra sol, res sobreviu en silenci.
+
+    Cobreix el pre-flight de `confirmar/`: POMs vius que el document no menciona (proposta →
+    confirmació → soft) i files MANUAL amb valor que el document trepitjaria (precedència mínima).
+    """
+
+    PREFIX = 'IMPS'
+
+    def setUp(self):
+        super().setUp()
+        self.item = self._item()
+        self.ss = self._size_system('SS', talles=('S', 'M', 'L'))
+        self.model = self._model(
+            garment_type_item=self.item, garment_type=self.item.garment_type,
+            size_system=self.ss, size_run_model='S·M·L', base_size_label='M')
+        # POM que SÍ ve al document.
+        self.pom_doc = self._pom('DOC')
+        # POM viu al model que el document NO menciona (el soroll).
+        self.pom_orfe = self._pom('ORFE')
+        BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom_orfe, base_value_cm=42.0,
+            origen='ITEM_STANDARD', is_active=True)
+
+    def _sessio(self):
+        from fhort.models_app.models import ImportSession
+        return ImportSession.objects.create(
+            model=self.model, estat='MESURES_OK',
+            poms_extrets=[{'actiu': True, 'pom_master_id': self.pom_doc.id,
+                           'codi_fitxa': 'DOC', 'descripcio': 'POM del document'}],
+            run_conciliat={'talla_mapping': [{'document': 'M', 'model': 'M'}]},
+            resultat={'mesures': [{'pom_master_id': self.pom_doc.id,
+                                   'talla_label': 'M', 'valor': 60.0}]},
+        )
+
+    def _confirmar(self, sessio, body=None):
+        from fhort.models_app.extraction_views import import_session_confirmar_view
+        req = APIRequestFactory().post(
+            f'/api/v1/import-sessions/{sessio.token}/confirmar/', body or {}, format='json')
+        force_authenticate(req, user=self.user)
+        return import_session_confirmar_view(req, sessio.token)
+
+    # ── B1 · POMs que el document no menciona ────────────────────────────────────────
+    def test_poms_no_mencionats_es_PROPOSEN_no_s_apliquen_sols(self):
+        resp = self._confirmar(self._sessio())
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data['tipus'], 'poms_no_mencionats')
+        self.assertEqual(resp.data['n'], 1)
+        self.assertEqual(resp.data['poms'][0]['pom_id'], self.pom_orfe.id)
+        # RES s'ha tocat: el 409 és un pre-flight, no un fet consumat.
+        bm = BaseMeasurement.objects.get(model=self.model, pom=self.pom_orfe)
+        self.assertTrue(bm.is_active)
+
+    def test_poda_confirmada_desactiva_pero_NO_esborra(self):
+        resp = self._confirmar(self._sessio(), {'poda_choice': 'desactivar'})
+        self.assertEqual(resp.status_code, 201, getattr(resp, 'data', None))
+        self.assertEqual(resp.data['poms_podats'], 1)
+        bm = BaseMeasurement.objects.get(model=self.model, pom=self.pom_orfe)
+        self.assertFalse(bm.is_active)
+        self.assertEqual(bm.base_value_cm, 42.0)   # el valor es conserva: memòria del model
+
+    def test_poda_confirmada_deixa_rastre_al_log(self):
+        from fhort.models_app.models import MeasurementChangeLog
+        self._confirmar(self._sessio(), {'poda_choice': 'desactivar'})
+        self.assertTrue(MeasurementChangeLog.objects
+                        .filter(model=self.model, pom=self.pom_orfe).exists())
+
+    def test_conservar_deixa_la_fila_viva_i_ho_diu(self):
+        sessio = self._sessio()
+        resp = self._confirmar(sessio, {'poda_choice': 'conservar'})
+        self.assertEqual(resp.status_code, 201, getattr(resp, 'data', None))
+        self.assertEqual(resp.data['poms_podats'], 0)
+        self.assertEqual(resp.data['poms_conservats'], 1)
+        bm = BaseMeasurement.objects.get(model=self.model, pom=self.pom_orfe)
+        self.assertTrue(bm.is_active)
+        # La decisió CONSTA: conservar tampoc és silenciós.
+        self.assertTrue(any('CONSERVAT' in a for a in resp.data['grading_avisos']))
+
+    def test_sense_orfes_no_hi_ha_gat(self):
+        """Un model net no ha de veure mai el modal: el gat només salta si hi ha soroll."""
+        BaseMeasurement.objects.filter(model=self.model, pom=self.pom_orfe).delete()
+        resp = self._confirmar(self._sessio())
+        self.assertEqual(resp.status_code, 201, getattr(resp, 'data', None))
+
+    # ── B2 · precedència mínima: MANUAL protegit ─────────────────────────────────────
+    def test_manual_amb_valor_no_es_trepitja_sense_proposar_ho(self):
+        BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom_doc, base_value_cm=55.0,
+            origen='MANUAL', is_active=True)
+        resp = self._confirmar(self._sessio(), {'poda_choice': 'conservar'})
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data['tipus'], 'manual_trepitjat')
+        # La proposta és INFORMADA: mostra els dos valors.
+        self.assertEqual(resp.data['poms'][0]['valor_manual'], 55.0)
+        self.assertEqual(resp.data['poms'][0]['valor_document'], 60.0)
+        bm = BaseMeasurement.objects.get(model=self.model, pom=self.pom_doc)
+        self.assertEqual(bm.base_value_cm, 55.0)   # intacte
+
+    def test_respectar_manual_conserva_el_valor_a_ma(self):
+        BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom_doc, base_value_cm=55.0,
+            origen='MANUAL', is_active=True)
+        resp = self._confirmar(self._sessio(),
+                               {'poda_choice': 'conservar', 'manual_choice': 'respectar'})
+        self.assertEqual(resp.status_code, 201, getattr(resp, 'data', None))
+        self.assertEqual(resp.data['manual_respectats'], 1)
+        bm = BaseMeasurement.objects.get(model=self.model, pom=self.pom_doc)
+        self.assertEqual(bm.base_value_cm, 55.0)
+        self.assertEqual(bm.origen, 'MANUAL')
+
+    def test_sobreescriure_deixa_manar_el_document(self):
+        BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom_doc, base_value_cm=55.0,
+            origen='MANUAL', is_active=True)
+        resp = self._confirmar(self._sessio(),
+                               {'poda_choice': 'conservar', 'manual_choice': 'sobreescriure'})
+        self.assertEqual(resp.status_code, 201, getattr(resp, 'data', None))
+        bm = BaseMeasurement.objects.get(model=self.model, pom=self.pom_doc)
+        self.assertEqual(bm.base_value_cm, 60.0)
+        self.assertEqual(bm.origen, 'IMPORTED')
+
+    def test_importat_previ_NO_dispara_el_gat_de_manual(self):
+        """La protecció és per a MANUAL, no per a tot: un IMPORTED previ es refresca sol."""
+        BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom_doc, base_value_cm=55.0,
+            origen='IMPORTED', is_active=True)
+        resp = self._confirmar(self._sessio(), {'poda_choice': 'conservar'})
+        self.assertEqual(resp.status_code, 201, getattr(resp, 'data', None))
+        bm = BaseMeasurement.objects.get(model=self.model, pom=self.pom_doc)
+        self.assertEqual(bm.base_value_cm, 60.0)
+
+    # ── B1 · criteri de les files buides ─────────────────────────────────────────────
+    def test_fila_buida_de_plantilla_s_esborra_i_la_daltre_origen_es_soft(self):
+        pom_tpl = self._pom('TPL')
+        pom_man = self._pom('MANBUIT')
+        BaseMeasurement.objects.create(model=self.model, pom=pom_tpl,
+                                       base_value_cm=None, origen='TEMPLATE', is_active=True)
+        BaseMeasurement.objects.create(model=self.model, pom=pom_man,
+                                       base_value_cm=None, origen='MANUAL', is_active=True)
+
+        resp = self._confirmar(self._sessio(), {'poda_choice': 'conservar'})
+        self.assertEqual(resp.status_code, 201, getattr(resp, 'data', None))
+
+        # Bastida que mai va ser realitat → fora de la BD.
+        self.assertFalse(BaseMeasurement.objects.filter(model=self.model, pom=pom_tpl).exists())
+        # Creada conscientment → sobreviu inactiva.
+        bm_man = BaseMeasurement.objects.get(model=self.model, pom=pom_man)
+        self.assertFalse(bm_man.is_active)
+        self.assertEqual(resp.data['files_buides_desactivades'], 1)
