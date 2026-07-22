@@ -400,6 +400,27 @@
     "error": "Something went wrong. Please try again.",
     "throttled": "Too many attempts. Please wait a moment and try again."
   },
+  "entrar": {
+    "title": "Sign in to FHORT",
+    "subtitle": "Your email and your password. We'll take you to your workspace.",
+    "email_label": "Email",
+    "email_ph": "you@company.com",
+    "password_label": "Password",
+    "password_ph": "Your password",
+    "submit": "Sign in",
+    "submitting": "Checking…",
+    "entrant": "Signing in…",
+    "entrant_sub": "Opening your workspace.",
+    "tria_title": "Where do you want to go?",
+    "tria_sub": "You have access to more than one workspace. Pick one.",
+    "tria_enrere": "Sign in with another account",
+    "oblidat": "I don't remember my workspace",
+    "oblidat_aviat": "Coming soon",
+    "error_credencials": "Incorrect email or password.",
+    "error_generic": "Something went wrong. Please try again.",
+    "error_codi": "The access link has expired. Please try again.",
+    "error_throttled": "Too many attempts. Please wait a while and try again."
+  },
   "login": {
     "welcome": "Welcome",
     "welcome_sub": "Access your workspace",
@@ -3734,5 +3755,24 @@
     "sobrarien_help": "These are NOT deleted. They are listed so you can prune them by hand from item authoring if they no longer belong.",
     "sense_canvis": "Nothing to write: the template already says the same as the model.",
     "err": "The promotion failed."
+  },
+  "promocio_poms": {
+    "title": "Proposal to promote to the client catalogue",
+    "subtitle": "These POMs were saved to the model ONLY. The «{{contenidor}}» catalogue was left untouched.",
+    "bucket": {
+      "amplia": "not in the catalogue",
+      "conflicte": "differs from the catalogue"
+    },
+    "estat": {
+      "nomes_model": "Model only",
+      "promocionat": "Promoted to catalogue"
+    },
+    "accio": {
+      "nomes_model": "Keep on the model only",
+      "promocionar": "Promote to catalogue"
+    },
+    "aplicar": "Promote {{n}} POM(s)",
+    "nota_intocable": "Only the marked POMs will go into the catalogue.",
+    "err": "The promotion could not be applied. Please try again."
   }
 }

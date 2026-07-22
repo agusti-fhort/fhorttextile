@@ -64,6 +64,7 @@ try:
         import_session_library_prefill_view,
         import_session_teixit_view,
         import_session_confirmar_view,
+        promocionar_poms_view,
     )
     _sprint6_paths = [
         # P6 — camí d'import VELL retirat (0 consumidors al frontend; el wizard nou és l'únic camí).
@@ -87,6 +88,9 @@ try:
              name='import-session-teixit'),
         path('import-sessions/<uuid:token>/confirmar/', import_session_confirmar_view,
              name='import-session-confirmar'),
+        # D1 — l'altra meitat de la proposta de promoció: aplicar la decisió humana.
+        path('models/<int:model_id>/promocionar-poms/', promocionar_poms_view,
+             name='promocionar-poms'),
     ]
 except Exception:
     _sprint6_paths = []

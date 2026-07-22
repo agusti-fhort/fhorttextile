@@ -973,3 +973,51 @@ from .tech_sheet_models import TechSheetTemplate  # noqa: E402,F401
 
 # Sistema de documents .ftt: magatzem de plantilles + lock del document lògic.
 from .ftt_models import DocumentTemplate, FttDocumentLock  # noqa: E402,F401
+
+
+class AIUsage(models.Model):
+    """Cost d'una crida a l'API d'Anthropic feta pel pipeline d'import/extracció.
+
+    Decisió Agus 2026-07-22: «tot usage es loggeja». L'objectiu és que la pregunta "què ens
+    ha costat aquest import?" tingui resposta amb una consulta, i que el cribratge que ara
+    NO es fa (xlsx determinista) es vegi com el que és: una fila que no hi és.
+
+    Append-only per naturalesa: una crida feta no es desfà. No hi ha `update` enlloc del
+    codi; si una crida falla, es registra igual amb `ok=False` — una crida que peta també
+    s'ha pagat, i no registrar-la faria que el cost real quedés per sota del comptat.
+
+    Els tokens es desen crus (input/output/cache) i NO es converteixen a euros aquí: la
+    tarifa canvia amb el temps i per model, i una xifra en euros congelada al moment de la
+    inserció seria mentida sis mesos després. El preu es multiplica quan es consulta.
+    """
+    CAMI_CHOICES = [
+        ('cribratge', 'Cribratge'),
+        ('revisio', 'Revisió'),
+        ('extraccio', 'Extracció'),
+        ('fallback', 'Fallback'),
+    ]
+    cami = models.CharField(max_length=20, choices=CAMI_CHOICES, db_index=True)
+    model_ia = models.CharField(max_length=80, help_text="Model d'Anthropic (p.ex. claude-opus-4-7)")
+    import_session = models.ForeignKey('models_app.ImportSession', on_delete=models.SET_NULL,
+                                       null=True, blank=True, related_name='ai_usages')
+    model = models.ForeignKey('models_app.Model', on_delete=models.SET_NULL,
+                              null=True, blank=True, related_name='ai_usages')
+    input_tokens = models.IntegerField(default=0)
+    output_tokens = models.IntegerField(default=0)
+    # El caching de prompt és el gruix de l'estalvi de la via Opus: separat perquè es vegi.
+    cache_creation_tokens = models.IntegerField(default=0)
+    cache_read_tokens = models.IntegerField(default=0)
+    ok = models.BooleanField(default=True)
+    error = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='ai_usages')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Ús d\'IA'
+        verbose_name_plural = "Usos d'IA"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return (f'{self.cami} · {self.model_ia} · '
+                f'{self.input_tokens}in/{self.output_tokens}out')

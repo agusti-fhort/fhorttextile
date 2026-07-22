@@ -129,7 +129,37 @@ mateixa causa —
 `IntegrityError: duplicate key value violates unique constraint "fitting_sizefitting_model_id_numero_6dc01a35_uniq"`
 en el muntatge dels tests. Cap relació amb l'ordre del run. **🚩 Bandera: algú els ha de mirar.**
 
-Resultat de la suite sencera: vegeu §Q4-final al peu d'aquest document.
+### Suite sencera — prova formal
+
+**718 tests, 78 errors, TOTS PREEXISTENTS.** No és inferència: s'ha creat un `git worktree` a
+**`dee7998`** (el commit immediatament anterior al sprint) i s'hi han corregut els 5 mòduls que
+fallen.
+
+| mòdul | HEAD (post-sprint) | `dee7998` (pre-sprint) |
+|---|---|---|
+| `fhort.patterns.tests` | 25 | **25** |
+| `fhort.pom.test_g6_segell` | 17 | **17** |
+| `fhort.fitting.tests` | 16 | **16** |
+| `fhort.fitting.test_g6_estalitud` | 13 | **13** |
+| `fhort.pom.test_g6_grading_gates` | 7 | **7** |
+| **TOTAL** | **78** | **78** |
+
+Distribució idèntica mòdul a mòdul → **zero regressions d'aquest sprint**.
+
+### Causa arrel identificada
+
+Ve del commit **`a2d4222`** (*«fix(fitting): el signal crea SEMPRE el SizeFitting (forat universal
+B2)»*, **2026-07-20**, dos dies abans d'aquest sprint): el `post_save` de `Model` crea ara **sempre**
+un `SizeFitting` amb `numero=1` (`models_app/signals.py:105-137`). Els tests que al `setUp` fan
+`Model.objects.create(...)` i tot seguit `SizeFitting.objects.create(model=..., numero=1)` —p. ex.
+`pom/test_g6_segell.py:79` i `fitting/test_g6_estalitud.py:33`— hi xoquen.
+
+El fix de producte és correcte; el que ha quedat enrere són els **fixtures**, que encara creen a mà
+un SizeFitting que ara neix sol. La reparació sembla acotada (que el fixture agafi el SF que el
+signal ja ha creat), però és feina d'un altre encàrrec.
+
+**🚩 Bandera 0, la més urgent:** 78 tests vermells emmascaren qualsevol regressió futura a tot
+`patterns` i `fitting`.
 
 ---
 

@@ -10,6 +10,8 @@ from pathlib import Path
 
 import httpx
 
+from fhort.models_app.extraction_utils import registra_us_ia
+
 logger = logging.getLogger(__name__)
 
 EXTRACTION_PROMPT = """Ets un sistema especialitzat en extracció de dades de fitxes tècniques de moda.
@@ -168,11 +170,17 @@ def extract_from_file(file_bytes: bytes, filename: str, wizard_context: dict | N
             response.raise_for_status()
     except httpx.HTTPStatusError as e:
         logger.error(f"Claude API HTTP error: {e.response.status_code} — {e.response.text[:300]}")
+        registra_us_ia(cami='extraccio', model_ia=MODEL, ok=False,
+                       error=f'HTTP {e.response.status_code}')
         raise ValueError(f"Error de la API de Claude: {e.response.status_code}")
     except httpx.TimeoutException:
+        registra_us_ia(cami='extraccio', model_ia=MODEL, ok=False, error='timeout >120s')
         raise ValueError("Timeout en la crida a la API de Claude (>120s)")
 
     data = response.json()
+    # Aquest camí va per httpx cru, no pel SDK: el `usage` arriba dins del JSON, no com a
+    # atribut. `registra_us_ia` accepta les dues formes justament per això.
+    registra_us_ia(cami='extraccio', model_ia=MODEL, usage=data.get('usage'))
     raw_text = data['content'][0]['text']
 
     # Parse tolerant (fences markdown, prosa al voltant, comes finals, el·lipsis).

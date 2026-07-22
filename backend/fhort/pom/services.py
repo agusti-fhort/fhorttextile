@@ -209,6 +209,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     rules = _load_grading_rules(model)
     # Sprint 5B.3: per-model overrides from validated fittings (highest priority).
     model_overrides = _load_model_overrides(model.pk)
+    poms_nomes_override = _poms_amb_override(model_overrides)
 
     # Load base measurements
     base_measurements = _load_base_measurements(model.pk)
@@ -246,6 +247,13 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 # ni tan sols distingia quin dels dos forks havia guanyat. Jubilada.
                 graded_val = override
                 gt_applied = 'EXCEPTION'
+            elif pom_id in poms_nomes_override and i == base_idx:
+                # D2 — POM NOMÉS-OVERRIDE, cel·la de la talla BASE. Vegeu `_poms_amb_override`.
+                # L'import mai escriu override a la talla base (el seu valor viu a
+                # BaseMeasurement), de manera que aquesta és l'ÚNICA cel·la de la fila que la
+                # branca de dalt no pot cobrir. Sense això la fila sortia coixa pel centre.
+                graded_val = base_val
+                gt_applied = 'EXCEPTION'      # mateixa provinença que la resta de la fila
             elif rule is None:
                 # D2 — LLEI DE CEL·LA ABSENT: regla absent → CAP CEL·LA. Mai un FIXED fabricat.
                 # Abans aquí hi havia `graded_val = base_val; gt_applied = 'FIXED'`, que davant
@@ -253,7 +261,12 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 # i el reportava com a graduació legítima. És el que va deixar el model 163 amb
                 # 225 specs 100% FIXED i delta 0 retornant 200 OK (DIAGNOSI_REFACTOR_GRADING
                 # 2026-07-21, R3). Una regla que no existeix no gradua: no emet.
-                sense_regla.add(pom_id)
+                #
+                # Segueix valent per a les talles del run que el POM només-override no cobreix:
+                # el rescat de dalt és NOMÉS la base. Un POM que gradua pels seus overrides no
+                # és cobertura parcial per manca de regla → no entra a `sense_regla`.
+                if pom_id not in poms_nomes_override:
+                    sense_regla.add(pom_id)
                 continue
             else:
                 graded_val, gt_applied = _apply_rule(
@@ -347,6 +360,7 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
 
     rules = _load_grading_rules(model)
     model_overrides = _load_model_overrides(model.pk)
+    poms_nomes_override = _poms_amb_override(model_overrides)
 
     out = {}
     for pom_id, base_val in base_values.items():
@@ -364,6 +378,11 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
             override = model_overrides.get((pom_id, size_label))
             if override is not None:
                 graded_val = float(override)
+            elif pom_id in poms_nomes_override and i == base_idx:
+                # D2 — talla base d'un POM només-override. MATEIXA branca que el generador
+                # (v. `_poms_amb_override`): si el preview se la saltés, el wizard ensenyaria
+                # la fila coixa que la propagació després omple.
+                graded_val = base_val
             elif rule is None:
                 # D2 — regla absent → cel·la absent (mateixa llei que generate_graded_specs).
                 continue
@@ -700,6 +719,29 @@ def _load_model_overrides(model_id: int) -> dict:
     except Exception as e:
         logger.warning(f"Could not load ModelGradingOverride: {e}")
         return {}
+
+
+def _poms_amb_override(model_overrides: dict) -> set:
+    """POMs amb ALMENYS un override per-talla → la seva regla efectiva la fa el MODEL.
+
+    D2 (decisió Agus 2026-07-22) · **sobirania del model**. Un import sobre un contenidor de
+    client que ja té regles no toca el contenidor (llei M3, INTOCABLE): els POMs que hi
+    divergeixen (`conflicte`) o que no hi són (`amplia`) es desen com a `BaseMeasurement` +
+    `ModelGradingOverride` per-talla. Aquests POMs no tenen regla i, per tant, el motor els
+    tractava com a "sense regla → cap cel·la"... **excepte** allà on hi havia override.
+
+    El resultat era una fila coixa pel centre: l'import exclou explícitament la talla base de
+    l'override (el seu valor viu a `BaseMeasurement`), de manera que l'única cel·la que la
+    branca d'override no podia cobrir era precisament la base.
+
+    Els overrides SÓN la regla efectiva del POM; a la talla base la font és el valor base del
+    model. La resta de la llei D2 no s'afluixa: una talla del run sense override i sense ser
+    la base segueix sent **cel·la absent**, mai un valor fabricat.
+
+    El predicat viu en UNA funció perquè el generador i el preview no divergeixin — el mateix
+    criteri que ja obliga `_te_regles` i `escala_del_model` a ser fonts úniques.
+    """
+    return {pom_id for pom_id, _label in model_overrides}
 
 
 def _load_base_measurements(model_id: int) -> dict:

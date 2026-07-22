@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import client from '../api/client'
-import { me as meApi } from '../api/endpoints'
+import { authCentral, me as meApi } from '../api/endpoints'
 
 /**
  * L'estat de l'auth té TRES valors, no dos (D10).
@@ -24,6 +24,23 @@ const useAuthStore = create((set, get) => ({
   estatAuth: AUTH_DESCONEGUT,
 
   initAuth: () => {
+    // ATERRATGE AMB CODI (login únic, F2): arribar a /entrar amb un ?code= vol dir que aquí
+    // COMENÇA una sessió, no que se n'estigui reprenent una. El que hi hagués al localStorage
+    // d'aquest origen ja no compta i, sobretot, no pot competir-hi: si `initAuth` el donés per
+    // bo, `fetchMe()` sortiria amb un token ranci, cauria amb 401 i el camí de refresh acabaria
+    // a `tancaSessio()` — que esborra els DOS tokens, inclosos els que el bescanvi acaba
+    // d'escriure, i expulsa a /login. I com que el codi és d'un sol ús, ja s'hauria cremat: no
+    // hi hauria reintent possible. L'escenari no és marginal: és l'estat de tothom just després
+    // del deploy de F0, que invalida tots els tokens anteriors.
+    const arribaAmbCodi = window.location.pathname === '/entrar'
+      && new URLSearchParams(window.location.search).has('code')
+    if (arribaAmbCodi) {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      set({ token: null, user: null, isAuthenticated: false, estatAuth: AUTH_INVALID })
+      return
+    }
+
     const token = localStorage.getItem('access_token')
     if (token) {
       set({ token, isAuthenticated: true, estatAuth: AUTH_VALID })
@@ -36,6 +53,21 @@ const useAuthStore = create((set, get) => ({
 
   login: async (username, password) => {
     const res = await client.post('/api/token/', { username, password })
+    const { access, refresh } = res.data
+    localStorage.setItem('access_token', access)
+    localStorage.setItem('refresh_token', refresh)
+    set({ token: access, isAuthenticated: true, estatAuth: AUTH_VALID })
+    await get().fetchMe()
+    return res.data
+  },
+
+  // Login únic (F2): la sessió no neix d'unes credencials sinó d'un codi d'un sol ús que la
+  // porta central ha emès per a AQUEST tenant. A partir d'aquí tot és idèntic al login de
+  // sempre — el mateix parell de tokens, el mateix localStorage, el mateix fetchMe. És
+  // deliberat que passi per aquí i no per la pantalla: una segona manera de desar la sessió
+  // seria una segona manera d'oblidar-se de netejar-la.
+  entraAmbCodi: async (code) => {
+    const res = await authCentral.bescanvia(code)
     const { access, refresh } = res.data
     localStorage.setItem('access_token', access)
     localStorage.setItem('refresh_token', refresh)

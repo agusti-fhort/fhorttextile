@@ -9,6 +9,42 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+#: Precisió del domini de mesura: **0,1 mm = 2 decimals en cm**. Cap fitxa tècnica de
+#: confecció mesura més fi, i cap dels camins d'entrada (xlsx, paste, IA) té dret a
+#: introduir precisió que el domini no té.
+PRECISIO_CM = 2
+
+
+def normalitza_cm(v):
+    """Valor en cm a la precisió del domini (0,1 mm). `None` si no és un número.
+
+    D3 (Agus 2026-07-22) · **un sol punt de normalització per a tots els camins**. Els
+    valors entren al pipeline per tres portes —parse d'xlsx, enganxat i sortida d'IA— i
+    cada una arribava amb la seva pròpia brutícia: un `openpyxl` que torna 16.749999999999
+    per una cel·la que la fitxa mostra com a 16,75, un JSON d'IA amb el valor com a cadena,
+    un enganxat amb coma decimal.
+
+    La normalització va ABANS de derivar, no després: si els deltes es calculen sobre
+    valors bruts, la brutícia es multiplica (dues restes de sorolls diferents donen passos
+    que no casen) i després cap arrodoniment del delta la pot desfer — el pas real ja s'ha
+    perdut. Netejar els valors i derivar-ne els deltes preserva els passos de 0,25 que el
+    domini SÍ que té; arrodonir els deltes «a part», a 1 decimal, els destruiria.
+
+    Accepta coma decimal i cadenes amb espais (l'IA i l'enganxat en donen). Rebutja `bool`
+    perquè `True` és numèric en Python i una casella marcada no és una mesura.
+    """
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, str):
+        v = v.strip().replace(',', '.')
+        if not v:
+            return None
+    try:
+        return round(float(v), PRECISIO_CM)
+    except (TypeError, ValueError):
+        return None
+
+
 def _norm(label) -> str:
     """Normalitza una etiqueta per comparar (upper + strip), com fa el run."""
     return str(label or '').strip().upper()
@@ -185,7 +221,15 @@ def detect_grading(valors_per_talla, run_ordenat, base_label) -> dict:
                     f"Falta valor per calcular el delta de la talla {run_ordenat[j]}."
                 continue
             # format C: delta positiu en sentit de creixement cap enfora.
-            deltas[run_ordenat[j]] = round(sign * (float(v_out) - float(v_in)), 2)
+            # D3: els valors ja arriben nets (normalitza_cm a la porta d'entrada); això
+            # només neteja l'artefacte de la resta en coma flotant (12.60-12.35 →
+            # 0.25000000000000044). Mateix helper que la porta, no un round paral·lel.
+            nv_out, nv_in = normalitza_cm(v_out), normalitza_cm(v_in)
+            if nv_out is None or nv_in is None:
+                warning = (warning + ' ' if warning else '') + \
+                    f"Valor no numèric a la talla {run_ordenat[j]}."
+                continue
+            deltas[run_ordenat[j]] = normalitza_cm(sign * (nv_out - nv_in))
 
         if deltas:
             # deltes en ordre de run (dict construït iterant run_norm). Comptem punts de canvi

@@ -400,6 +400,27 @@
     "error": "No se ha podido completar. Inténtalo de nuevo.",
     "throttled": "Demasiados intentos. Espera un momento e inténtalo de nuevo."
   },
+  "entrar": {
+    "title": "Entra en FHORT",
+    "subtitle": "Tu correo y tu contraseña. Te llevamos a tu espacio de trabajo.",
+    "email_label": "Correo electrónico",
+    "email_ph": "tu@empresa.com",
+    "password_label": "Contraseña",
+    "password_ph": "Tu contraseña",
+    "submit": "Entrar",
+    "submitting": "Comprobando…",
+    "entrant": "Entrando…",
+    "entrant_sub": "Abriendo tu espacio de trabajo.",
+    "tria_title": "¿Dónde quieres entrar?",
+    "tria_sub": "Tienes acceso a más de un espacio de trabajo. Elige uno.",
+    "tria_enrere": "Entra con otra cuenta",
+    "oblidat": "No recuerdo mi espacio de trabajo",
+    "oblidat_aviat": "Disponible pronto",
+    "error_credencials": "Correo o contraseña incorrectos.",
+    "error_generic": "No se ha podido completar. Inténtalo de nuevo.",
+    "error_codi": "El enlace de acceso ha caducado. Inténtalo de nuevo.",
+    "error_throttled": "Demasiados intentos. Espera un poco e inténtalo de nuevo."
+  },
   "login": {
     "welcome": "Bienvenido/a",
     "welcome_sub": "Accede a tu espacio de trabajo",
@@ -3734,5 +3755,24 @@
     "sobrarien_help": "Estos NO se borran. Se listan para que los podes a mano desde la autoría de ítem si ya no pintan nada.",
     "sense_canvis": "No hay nada que escribir: la plantilla ya dice lo mismo que el modelo.",
     "err": "No se ha podido promover."
+  },
+  "promocio_poms": {
+    "title": "Propuesta de promoción al catálogo del cliente",
+    "subtitle": "Estos POMs se han guardado SOLO en el modelo. El catálogo «{{contenidor}}» no se ha tocado.",
+    "bucket": {
+      "amplia": "el catálogo no lo tiene",
+      "conflicte": "diverge del catálogo"
+    },
+    "estat": {
+      "nomes_model": "Solo en el modelo",
+      "promocionat": "Promocionado al catálogo"
+    },
+    "accio": {
+      "nomes_model": "Mantener solo en el modelo",
+      "promocionar": "Promocionar al catálogo"
+    },
+    "aplicar": "Promocionar {{n}} POM(s)",
+    "nota_intocable": "Solo subirán al catálogo los POMs marcados.",
+    "err": "No se ha podido aplicar la promoción. Inténtalo de nuevo."
   }
 }

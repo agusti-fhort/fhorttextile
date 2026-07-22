@@ -19,6 +19,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from fhort.auth_jwt import TenantTokenObtainPairSerializer
+from fhort.tenants.views_auth_central import AuthCentralTriaView, AuthCentralView
 from fhort.tenants.views_discovery import TenantDiscoveryView
 
 urlpatterns = [
@@ -34,6 +35,12 @@ urlpatterns = [
 
     # Tenant-discovery (porta única): email → correu amb els accessos. Públic, resposta uniforme.
     path('api/discovery/', TenantDiscoveryView.as_view(), name='tenant-discovery'),
+
+    # Login únic (F1): autenticació CENTRAL cross-schema. Prova les credencials dins de cada
+    # schema on l'email existeix i, si valen, emet un codi d'un sol ús per entrar-hi.
+    # També muntat a fhort/urls.py — la porta ha de respondre igual des d'un host de tenant.
+    path('api/auth/central/', AuthCentralView.as_view(), name='auth-central'),
+    path('api/auth/central/tria/', AuthCentralTriaView.as_view(), name='auth-central-tria'),
 
     # OpenAPI schema + docs
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
