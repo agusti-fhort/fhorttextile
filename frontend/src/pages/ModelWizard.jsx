@@ -7,7 +7,7 @@ import CustomerSelector from '../components/CustomerSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
 import { availableFitsStrict, matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS } from '../components/grading/gradingAxes'
 import useAuthStore from '../store/auth'
-import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes } from '../api/endpoints'
+import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, garmentTypeItems } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles + GRADUACIÓ.
@@ -57,6 +57,9 @@ export default function ModelWizard() {
   const [target, setTarget] = useState(null)
   const [family, setFamily] = useState(null)
   const [item, setItem] = useState(null)
+  // P6 — el ruleset que l'ITEM porta com a estàndard (V1). Només SUGGEREIX: es marca i puja
+  // al capdamunt del picker, mai s'assigna sol (això seria arrossegar, i el pas 4 no ho fa).
+  const [itemSuggestedRsId, setItemSuggestedRsId] = useState(null)
   const [picking, setPicking] = useState(false)
   // Navegació controlada del picker de peça (CascadeSelector single, grup→ítem). Es sembra des de
   // family/item en reobrir; onConfirm (triar ítem) commita a family/item i tanca.
@@ -270,6 +273,18 @@ export default function ModelWizard() {
     const cur = gradingRuleSets_.find(r => r.id === gradingRuleSetId)
     if (cur?.fit_type_codi) setFit(cur.fit_type_codi)
   }, [gradingRuleSets_, gradingRuleSetId, fit])
+
+  // P6 — l'estàndard de graduació de l'item (V1) es llegeix per SUGGERIR-LO al pas 4. És el primer
+  // lector real d'aquesta FK: fins ara ningú la consumia i només feia de semàfor al catàleg d'items.
+  // Si l'item no en porta, o la lectura falla, el picker es comporta exactament com abans.
+  useEffect(() => {
+    if (!item?.id) { setItemSuggestedRsId(null); return }
+    let viu = true
+    garmentTypeItems.get(item.id)
+      .then(({ data }) => { if (viu) setItemSuggestedRsId(data?.grading_rule_set ?? null) })
+      .catch(() => { if (viu) setItemSuggestedRsId(null) })
+    return () => { viu = false }
+  }, [item?.id])
 
   // Sprint ÀMBIT — el node de la peça (item → família → grup) viatja als eixos: un contenidor amb
   // àmbit aplica si el conté a ell o a un ancestre seu. Sense àmbit → fallback al garment_group.
@@ -694,6 +709,7 @@ export default function ModelWizard() {
                     strict
                     sizeSystemId={sizingResult?.size_system_id ?? null}
                     selectedId={gradingRuleSetId}
+                    suggestedId={itemSuggestedRsId}
                     actionLabel={t('model_sheet.use_ruleset')}
                     onPick={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false); setAutoProposed(false) }}
                   />

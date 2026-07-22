@@ -178,3 +178,12 @@ export function availableFitsStrict(ruleSets, fixed, garmentGroupCodiById, sizeS
   )
   return FITS.filter(f => set.has(f.codi))
 }
+
+// P6 — ordena els candidats posant al davant el SUGGERIT per l'item (V1), sense alterar el
+// conjunt: el ventall el decideix el matching d'eixos; això només és ordre de presentació.
+// Suggerir ≠ arrossegar — cap crida d'aquesta funció assigna res.
+export function orderWithSuggestedFirst(matches, suggestedId) {
+  if (suggestedId == null) return matches
+  const i = matches.findIndex(rs => rs.id === suggestedId)
+  return i <= 0 ? matches : [matches[i], ...matches.slice(0, i), ...matches.slice(i + 1)]
+}
