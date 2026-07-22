@@ -108,6 +108,38 @@ find backend/media/ ! -user www-data
 - Build: `cd frontend && npm run build` → genera `frontend/dist/` (vite neteja el `dist/` antic i
   emet hashes nous a cada build). nginx serveix aquest `dist/` directament.
 
+### `VITE_API_URL` — SAME-ORIGIN per defecte (un sol build per a tots els dominis)
+
+**El defecte és relatiu.** `client.js` exporta `apiBaseURL = import.meta.env.VITE_API_URL || ''`;
+amb `''` cada crida cau sobre **l'origen que ha servit la pàgina**, el `Host` real viatja tal qual
+i django-tenants resol el tenant per aquest `Host`. Conseqüència: **un sol `dist/` serveix
+qualsevol domini/tenant**.
+
+Fins al 2026-07-22 el `baseURL` era `VITE_API_URL` a seques i `frontend/.env` hi posava un domini
+**absolut**. Això CABLEJAVA el build a un host: qualsevol altre domini que servís el mateix `dist/`
+enviava igualment les crides al domini cablejat — amb el `Host` equivocat, és a dir el **tenant
+equivocat**. D'aquí naixien dues coses que ara deixen de ser necessàries:
+
+- **`dist-tenants/`** (un build per domini). Amb el `dist/` sense cap domini a dins, un domini de
+  tenant nou pot apuntar directament a `dist/` com qualsevol altre. *Migració pendent a PROD: no
+  la fa aquest sprint.*
+- **El CORS cap als dominis d'app.** El trànsit normal passa a ser same-origin i no en depèn.
+  `settings.py:249-258` es manté de moment com a xarxa de seguretat (el dev local a `:5173` sí
+  que el necessita); retirar-ne la part de `*.fhorttextile.tech` és feina d'un sprint d'infra.
+
+**Quan SÍ s'ha de definir `VITE_API_URL`:** només si el front i l'API **no comparteixen origen**.
+És el cas del dev local (front a `:5173`, back a `:8000`), que ja el porta `frontend/.env.development`.
+Definir-lo a `frontend/.env` torna a cablejar el build a un domini — no fer-ho sense un motiu.
+
+> `frontend/.env` està al `.gitignore`: **no viatja amb git**. En un entorn nou (o en un restore)
+> cal comprovar-ho a mà: `grep VITE_API_URL frontend/.env` ha de sortir buit o comentat.
+
+Verificació ràpida després d'un build (ha de tornar **0**):
+
+```bash
+grep -rho "https://[a-z0-9.-]*fhorttextile.tech" frontend/dist/assets/ | wc -l
+```
+
 ### Uploads multipart des del frontend — `Content-Type`
 
 Qualsevol client HTTP del frontend que pugi fitxers amb `FormData` ha de **sobreescriure
