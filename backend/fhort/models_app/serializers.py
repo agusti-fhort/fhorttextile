@@ -214,6 +214,38 @@ class ModelDetailSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(url) if request else url
         return None
 
+    def validate(self, attrs):
+        """PORTA ÚNICA DEL RUN (llei S24b) — la via oberta del CRUD genèric.
+
+        `fields = '__all__'` fa escrivible `size_run_model`, i aquest `ModelViewSet`
+        (`POST/PUT/PATCH /api/v1/models/[<pk>/]`) no passa per `_resolve_garment_def`: era
+        l'única via del cens que acceptava un run arbitrari sense cap guard. Es valida aquí i
+        no amb `read_only`, perquè un client legítim que vulgui desar el run per aquest camí
+        ha de poder fer-ho — el que no pot és desar-lo desordenat.
+
+        Va a `validate()` (nivell objecte) i no a `validate_size_run_model()` perquè cal el
+        `size_system`, que pot venir al MATEIX payload o ja viure a la instància.
+        """
+        attrs = super().validate(attrs)
+        if 'size_run_model' not in attrs or not attrs['size_run_model']:
+            return attrs
+
+        from fhort.pom.grading_utils import run_del_model
+
+        size_system = attrs.get('size_system') or getattr(self.instance, 'size_system', None)
+        run, desconegudes = run_del_model(
+            str(attrs['size_run_model']).replace(';', '·').split('·'), size_system,
+        )
+        if desconegudes:
+            raise serializers.ValidationError({
+                'size_run_model': (
+                    "Aquestes talles no pertanyen al sistema de talles del model: "
+                    + ', '.join(desconegudes)
+                ),
+            })
+        attrs['size_run_model'] = '·'.join(run)
+        return attrs
+
     class Meta:
         model = Model
         # 'fields = __all__' already includes the new fields origen_patro, versio,
