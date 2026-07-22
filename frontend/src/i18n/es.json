@@ -887,6 +887,7 @@
     "saving": "Guardando…",
     "grading_other_customer_confirm": "¿Quieres aplicarlo igualmente a este modelo?",
     "conn_error": "Error de conexión",
+    "unknown_sizes": "Estas tallas no pertenecen al sistema de tallas del modelo: {{sizes}}",
     "season_required": "Selecciona una temporada",
     "created_ok": "Modelo creado.",
     "no_item_warn": "Sin prenda (ítem) asignada: el esqueleto no activará el motor de tiempos hasta que asignes una.",

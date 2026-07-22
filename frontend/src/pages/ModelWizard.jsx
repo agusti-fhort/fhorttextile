@@ -375,8 +375,16 @@ export default function ModelWizard() {
 
   // D1 — el backend valida el grading ABANS d'assignar-lo i parla en clar: `message` és per a
   // la tècnica, no per al log. Abans es feia JSON.stringify(data) i el motiu quedava enterrat.
-  const errMsg = (e) => e.response?.data?.message
-    || (e.response?.data ? JSON.stringify(e.response.data) : t('model_wizard.conn_error'))
+  // S24b — la porta única del run rebutja les talles que el SizeSystem no coneix i envia la
+  // llista al payload (`codi`:'talles_desconegudes'). Es tradueix aquí: les etiquetes són
+  // dades de domini i no es tradueixen, el text que les envolta sí.
+  const errMsg = (e) => {
+    const d = e.response?.data
+    if (d?.codi === 'talles_desconegudes') {
+      return t('model_wizard.unknown_sizes', { sizes: (d.etiquetes_desconegudes || []).join(', ') })
+    }
+    return d?.message || d?.error || (d ? JSON.stringify(d) : t('model_wizard.conn_error'))
+  }
 
   // D1 — grading d'un ALTRE client: 409 que NO bloqueja. És un flux de taller legítim (aplicar
   // la forma d'un altre client), però ha de ser un acte conscient → es confirma i es reintenta.

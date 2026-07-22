@@ -887,6 +887,7 @@
     "saving": "Saving…",
     "grading_other_customer_confirm": "Do you want to apply it to this model anyway?",
     "conn_error": "Connection error",
+    "unknown_sizes": "These sizes do not belong to the model's size system: {{sizes}}",
     "season_required": "Select a season",
     "created_ok": "Model created.",
     "no_item_warn": "No item assigned: the skeleton will not enable the time engine until you assign one.",
