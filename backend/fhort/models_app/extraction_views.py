@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from fhort.pom.size_labels import canonical_size_label
+from fhort.pom.grading_utils import normalitza_cm
 
 
 def normalize_size_run(raw):
@@ -184,15 +185,14 @@ _MIN_FILES_ENTESA = 3
 
 
 def _num(v):
-    """float si v és numèric (accepta coma decimal); None altrament."""
-    if v is None or isinstance(v, bool):
-        return None
-    if isinstance(v, (int, float)):
-        return float(v)
-    try:
-        return float(str(v).strip().replace(',', '.'))
-    except (ValueError, TypeError):
-        return None
+    """Valor numèric d'una cel·la d'xlsx, ja normalitzat a 0,1 mm; None altrament.
+
+    D3 · porta d'entrada del camí XLSX. `openpyxl` retorna el float binari cru de la
+    cel·la (16.749999999999999 per un 16,75 escrit), i aquest era el valor que arribava
+    fins a `detect_grading`. Delega a `normalitza_cm` perquè els tres camins d'entrada
+    normalitzin al MATEIX lloc i amb la mateixa regla.
+    """
+    return normalitza_cm(v)
 
 
 def _etiqueta(v):
@@ -1393,10 +1393,14 @@ def import_session_extraccio_view(request, token):
             {
                 'codi_fitxa': msr.get('client_code') or msr.get('code') or '',
                 'descripcio': msr.get('description') or '',
-                'values': msr.get('values') or {},
+                # D3 · porta d'entrada del camí IA. El JSON del model pot donar el valor
+                # com a número o com a cadena ("16,75"); fins ara passava verbatim i el
+                # primer que el tocava era un `float()` dins de detect_grading.
+                'values': {k: normalitza_cm(v)
+                           for k, v in (msr.get('values') or {}).items()},
                 # B2: tolerància del document (None si absent).
-                'tol_minus': msr.get('tol_minus'),
-                'tol_plus': msr.get('tol_plus'),
+                'tol_minus': normalitza_cm(msr.get('tol_minus')),
+                'tol_plus': normalitza_cm(msr.get('tol_plus')),
             }
             for msr in measurements
         ],
@@ -1593,7 +1597,11 @@ def import_session_mesures_view(request, token):
         valor = m.get('valor')
         if pid is None or talla in (None, ''):
             continue
-        net.append({'pom_master_id': pid, 'talla_label': talla, 'valor': valor})
+        # D3 · porta d'entrada del camí ENGANXAT. Arribava el que el navegador hagués
+        # posat al JSON (el front fa `parseFloat`, que davant d'un "3,5" enganxat d'un
+        # Excel europeu dona 3). `normalitza_cm` entén la coma i talla a 0,1 mm.
+        net.append({'pom_master_id': pid, 'talla_label': talla,
+                    'valor': normalitza_cm(valor)})
 
     session.resultat = {**(session.resultat or {}), 'mesures': net}
     # 1C-2a: si el wizard declara el mode dels valors (absoluts/deltes), desar-lo per al W5.
