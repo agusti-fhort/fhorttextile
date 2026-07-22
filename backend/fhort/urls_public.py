@@ -18,13 +18,17 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 
+from fhort.auth_jwt import TenantTokenObtainPairSerializer
 from fhort.tenants.views_discovery import TenantDiscoveryView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
 
     # JWT (auth pròpia del backoffice — usat a partir del Sprint 1)
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # La vista és la de la llibreria; el que canvia és el serializer, que segella el token
+    # amb `tenant_schema` (fhort/auth_jwt.py). Un token només val a l'schema que l'ha emès.
+    path('api/token/', TokenObtainPairView.as_view(
+        serializer_class=TenantTokenObtainPairSerializer), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
 

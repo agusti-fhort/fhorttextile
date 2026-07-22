@@ -3,13 +3,20 @@ from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from fhort.auth_jwt import TenantClaimMixin
 
-class BackofficeTokenObtainSerializer(TokenObtainPairSerializer):
+
+class BackofficeTokenObtainSerializer(TenantClaimMixin, TokenObtainPairSerializer):
     """Emissió de token JWT restringida a usuaris amb BackofficeUser actiu.
 
     Afegeix `rol` i `nom` als claims del token perquè el frontend pugui pintar la
     UI sense una segona crida. La porta d'accés és validate(): qualsevol usuari
     del public sense perfil de backoffice (o desactivat) queda fora.
+
+    El `TenantClaimMixin` hi posa també `tenant_schema` (= 'public' aquí): el segell de
+    schema és UNIVERSAL, el backoffice no n'és excepció. Sense ell, els seus tokens
+    quedarien fora de la validació de `TenantJWTAuthentication` i, pitjor, un token del
+    backoffice podria entrar a un tenant per col·lisió de PK.
     """
 
     @classmethod

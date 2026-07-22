@@ -101,6 +101,68 @@ def sealed_active_version(sf_id):
 # GRADING
 # ─────────────────────────────────────────────────────────────────────────────
 
+def escala_del_model(model):
+    """ESPAI DE SISTEMA (llei S24b) → (size_run, run_sistema, pos, base_idx).
+
+    Font ÚNICA de la geometria de graduació d'un model, compartida pel generador i pel
+    preview. Si divergissin, el wizard ensenyaria una taula que el generador després no
+    reprodueix — el mateix criteri que ja obliga `_te_regles` a ser un sol predicat (G6/0b).
+
+    LLEI: **l'ordre i la distància entre talles els mana el SizeSystem.** El run del model és
+    un subconjunt, potencialment NO CONTIGU, que mai els redefineix. Abans d'això, el motor
+    comptava els passos per POSICIÓ dins la llista del run, i per tant:
+      - un run apendat (`XS·S·L·XXS·M`, model 166) graduava la XXS amb el SIGNE INVERTIT;
+      - un run amb forat (`XS·S·L`, sense M) comptava S→L com UN pas en comptes de DOS.
+
+    Retorna:
+      size_run:    les etiquetes del MODEL, reordenades en memòria per l'ordre del sistema.
+                   Es conserva l'ORTOGRAFIA del model (és el que va a `GradedSpec.size_label`);
+                   només se'n canvia l'ordre.
+      run_sistema: les etiquetes del SISTEMA, ordenades per `SizeDefinition.ordre`. És el
+                   referent sobre el qual `_apply_rule` recorre camins i resol el break.
+      pos:         etiqueta → índex dins `run_sistema` (pont `canonical_size_label`: XXL↔2XL).
+      base_idx:    posició de la talla base EN ESPAI DE SISTEMA.
+
+    La normalització de l'ordre és en MEMÒRIA i no persisteix res: la porta única d'escriptura
+    (S24b, `run_del_model`) és qui evita que n'entrin de nous. Això fa el motor robust davant
+    dels runs desordenats que ja hi ha a la BD i que el sanejament encara no ha tocat.
+
+    Alça `ValueError` si una etiqueta del run no pertany al sistema: un run que parla d'una
+    talla que el seu propi sistema no coneix no té geometria, i calcular-hi seria inventar-se
+    la distància en silenci.
+    """
+    from fhort.pom.grading_utils import run_sistema_de
+    from fhort.pom.size_labels import canonical_size_label
+
+    size_run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
+    base_size = model.base_size_label.strip()
+
+    if base_size not in size_run:
+        raise ValueError(f"La talla base '{base_size}' no és al size run: {size_run}")
+
+    run_sistema = run_sistema_de(model.size_system)
+    if not run_sistema:
+        raise ValueError(
+            f"El sistema de talles del model {model.codi_intern} no té cap talla definida: "
+            "no hi ha ordre ni distància contra què graduar."
+        )
+
+    pos = {canonical_size_label(e): i for i, e in enumerate(run_sistema)}
+
+    def _pos(label):
+        return pos.get(canonical_size_label(label))
+
+    fora = [l for l in size_run if _pos(l) is None]
+    if fora:
+        raise ValueError(
+            f"El size run del model {model.codi_intern} porta talles que el sistema "
+            f"'{model.size_system.codi}' no coneix: {', '.join(fora)}."
+        )
+
+    size_run = sorted(size_run, key=_pos)
+    return size_run, run_sistema, _pos, _pos(base_size)
+
+
 def generate_graded_specs(size_fitting_id: int) -> int:
     """
     Generate GradedSpec for every size of the Size & Fitting.
@@ -140,16 +202,8 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     if not model.base_size_label:
         raise ValueError(f"El model {model.codi_intern} no té base_size_label definit.")
 
-    # Parse the size run (separator ·)
-    size_run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
-    base_size = model.base_size_label.strip()
-
-    if base_size not in size_run:
-        raise ValueError(
-            f"La talla base '{base_size}' no és al size run: {size_run}"
-        )
-
-    base_idx = size_run.index(base_size)
+    # S24b — la geometria (ordre i distància) surt del SizeSystem, no de la llista del run.
+    size_run, run_sistema, _pos, base_idx = escala_del_model(model)
 
     # Load the RuleSet rules
     rules = _load_grading_rules(model)
@@ -178,7 +232,10 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     for pom_id, base_val in base_measurements.items():
         rule = rules.get(pom_id)
 
-        for i, size_label in enumerate(size_run):
+        for size_label in size_run:
+            # S24b: `i` és la posició EN ESPAI DE SISTEMA, no dins la llista del run. És
+            # l'única línia que fa que un run amb forat compti la distància real.
+            i = _pos(size_label)
             steps = i - base_idx  # negative = smaller size, positive = larger
 
             override = model_overrides.get((pom_id, size_label))
@@ -201,7 +258,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
             else:
                 graded_val, gt_applied = _apply_rule(
                     rule, base_val, steps, i, base_idx,
-                    size_run=size_run, warnings=warnings,
+                    size_run=run_sistema, warnings=warnings,
                 )
 
             if graded_val is None:
@@ -277,11 +334,16 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     # graduar?", el wizard ensenya una taula buida per a un model que després gradua igualment.
     if not (_te_regles(model) and model.size_run_model and model.base_size_label):
         return {}
-    size_run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
-    base_size = model.base_size_label.strip()
-    if base_size not in size_run:
+    # S24b — MATEIXA geometria que el generador, per la mateixa raó que el gate de dalt: si el
+    # preview comptés els passos per posició i el generador per ordre de sistema, la taula del
+    # wizard i la propagació dirien coses diferents per a un run amb forat. El preview no pot
+    # petar (només omple una taula): un run invàlid degrada a taula buida.
+    if not model.size_system_id:
         return {}
-    base_idx = size_run.index(base_size)
+    try:
+        size_run, run_sistema, _pos, base_idx = escala_del_model(model)
+    except ValueError:
+        return {}
 
     rules = _load_grading_rules(model)
     model_overrides = _load_model_overrides(model.pk)
@@ -296,7 +358,8 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
         base_val = float(base_val)
         rule = rules.get(pom_id)
         row = {}
-        for i, size_label in enumerate(size_run):
+        for size_label in size_run:
+            i = _pos(size_label)          # S24b: posició en espai de sistema
             steps = i - base_idx
             override = model_overrides.get((pom_id, size_label))
             if override is not None:
@@ -307,7 +370,7 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
             else:
                 graded_val, _ = _apply_rule(
                     rule, base_val, steps, i, base_idx,
-                    size_run=size_run, warnings=warnings,
+                    size_run=run_sistema, warnings=warnings,
                 )
             if graded_val is None:
                 # Validació dura STEP fallida: deixa la cel·la buida (sense fallback).
@@ -789,6 +852,15 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
     graded_value is None when the cell cannot be computed (hard STEP validation
     failure); the caller MUST skip it instead of falling back silently.
 
+    ⚠️ **ESPAI DE SISTEMA (llei S24b, 2026-07-22).** `size_run` és el run del **SIZE SYSTEM**
+    (totes les talles, ordenades per `SizeDefinition.ordre`), NO el run del model; i
+    `size_idx`/`base_idx` són posicions dins d'aquest. Ho prepara `escala_del_model`, i és el
+    que fa que la distància entre talles la mani el sistema: un model amb run `XS·S·L` (sense
+    M) compta S→L com DOS passos, perquè el camí es recorre sobre les talles del SISTEMA.
+    Abans, `size_run` era la llista del model i els índexs hi eren posicions: un run apendat
+    invertia el SIGNE de les talles petites (model 166) i un run amb forat col·lapsava la
+    distància. Cap fórmula d'aquesta funció ha canviat — només el referent que rep.
+
     Real Django fields: rule.logica (was grading_type), rule.increment (DecimalField),
     rule.valors_step (JSONField).
 
@@ -797,8 +869,13 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
       - STEP: `rule.valors_step` = {dest_label: delta}. Each delta is the increment
         between that label and its neighbour one step closer to the base; values
         accumulate outward from the base (added going up, subtracted going down).
-        Every non-base label of the run MUST have an entry — a missing one yields a
+        Every label the path CROSSES must have an entry — a missing one yields a
         warning and an uncomputed cell, never a silent fallback to `increment`.
+        S24b: el camí es recorre sobre les talles del SISTEMA. Un model amb run no
+        contigu, doncs, necessita el delta de la talla que ell no fabrica però que el
+        camí travessa (`XS·S·L` cap a L travessa la M): és la distància real. Sense
+        aquest delta la cel·la queda ABSENT, mai a zero ni col·lapsada — la mateixa llei
+        D2 de cel·la absent que ja regia aquí.
       - FIXED / ZERO / (default): unchanged.
     """
     grading_type = rule.logica

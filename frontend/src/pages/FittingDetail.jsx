@@ -9,18 +9,9 @@ import MeasureGrid from '../components/model/MeasureGrid'
 import EditorHeader from '../components/model/EditorHeader'
 import { buildFittingGroups, buildFittingRows, regimeLeadCol } from '../components/model/fittingGridAdapter'
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from './fittingShared'
+import { orderedSizes } from '../utils/sizeRun'
 
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
-
-// Ordre de talles segons el size run del model: split per '·' (U+00B7) o ';' + trim
-// (mateixa normalització que el backend, que desa amb '·' però admet ';').
-// Mai alfabètic. Talles presents a les línies que no surtin al run s'afegeixen al final.
-function orderedSizes(sizeRun, present) {
-  const run = (sizeRun || '').replace(/;/g, '·').split('·').map(s => s.trim()).filter(Boolean)
-  const ordered = run.filter(s => present.has(s))
-  const extras = [...present].filter(s => !run.includes(s))
-  return [...ordered, ...extras]
-}
 
 // Autosave d'un camp de context de la sessió (model_persona / lloc...). PATCH sessió.
 function useSessionField(sessionId, field) {

@@ -323,6 +323,21 @@ def resolve_row(cat, cells):
                 errors.append({'camp': 'piece_number',
                                'missatge_client': f"Columna 'piece_number': '{g('piece_number')}' no és un número."})
 
+    # PORTA ÚNICA DEL RUN (llei S24b): l'ordre de la cel·la d'Excel no mana. S'ordena aquí, en
+    # el punt on `run_labels` es construeix, perquè les dues escriptures que en pengen
+    # (`_build_model` i `_complement_existing`) rebin ja el run canònic sense duplicar la crida.
+    if labels and size_system is not None:
+        from fhort.pom.grading_utils import run_del_model
+        labels, _desconegudes = run_del_model(labels, size_system)
+        if _desconegudes:
+            errors.append({
+                'camp': 'run_talles',
+                'missatge_client': (
+                    f"Columna 'run_talles': aquestes talles no pertanyen al sistema "
+                    f"'{size_system.codi}': {', '.join(_desconegudes)}."
+                ),
+            })
+
     resolved.update({
         'nom_prenda': g('nom_prenda'), 'garment_type': fam, 'garment_type_item': item,
         'any': year, 'temporada': season, 'target': target_codi, 'construction': constr_codi,

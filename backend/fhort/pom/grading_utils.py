@@ -218,6 +218,153 @@ def detect_grading(valors_per_talla, run_ordenat, base_label) -> dict:
     }
 
 
+def run_del_document(values_per_fila, run_sistema):
+    """REFERENT DE DERIVACIÓ (llei S24, 2026-07-22): el run del DOCUMENT, no el del sistema.
+
+    Font única del `run` que alimenta ALHORA (a) el guard d'integritat («cap regla d'una
+    taula incompleta», 2026-07-08), (b) `detect_grading` i (c) `derive_break_fields`. Que
+    els tres comparteixin referent és el que impedeix les dues degradacions conegudes:
+      - referent MÉS AMPLE que el document (run del SizeSystem) → files marcades incompletes
+        i bloqueig fals (cas Meredith: doc XXS-L sobre un sistema de 8 talles);
+      - referent MÉS ESTRET que el document (run del model) → deltes col·lapsats i break
+        FABRICAT (bug model 166: S→L salta la M absent = 2 passos = fals «×2»).
+
+    Pur: cap I/O, cap persistència. El `run_sistema` el llegeix el cridador (ja té les
+    `SizeDefinition` a mà); aquí només s'ordena i es valida contra ell.
+
+    Args:
+        values_per_fila: iterable de dicts {etiqueta_document: valor} (una entrada per fila
+            del document). Les claus amb valor None compten com a etiqueta present: la
+            columna hi és, el que falta és el valor (això ho detecta el guard, no aquí).
+        run_sistema: llista ORDENADA d'etiquetes del sistema de talles (cas del tenant).
+            Buida = no hi ha sistema contra el qual validar (camí CREAR): s'accepta el
+            document tal com ve, en ordre de primera aparició.
+
+    Returns:
+        (doc_run, etiquetes_desconegudes):
+          - doc_run: etiquetes del TENANT presents al document, ordenades pel `run_sistema`
+            (sense duplicats). És el referent.
+          - etiquetes_desconegudes: etiquetes del document sense equivalència al sistema
+            (check (d)). No és una talla que falti: és una talla que el sistema no coneix
+            → error real, mai silenci.
+
+    El pont de comparació és `canonical_size_label` (pont ÚNIC, llei 2026-07-08): salva
+    XXL↔2XL, que `_norm` (upper+strip) no cobreix. Mai es persisteix la forma canònica:
+    `doc_run` torna SEMPRE l'etiqueta del tenant.
+    """
+    from fhort.pom.size_labels import canonical_size_label
+
+    # Etiquetes del document, en ordre de primera aparició (fallback sense sistema).
+    doc_labels = []
+    for fila in (values_per_fila or []):
+        for k in (fila or {}).keys():
+            if k not in doc_labels:
+                doc_labels.append(k)
+
+    if not run_sistema:
+        return doc_labels, []
+
+    canon_to_tenant = {canonical_size_label(e): e for e in run_sistema}
+    ordre = {e: i for i, e in enumerate(run_sistema)}
+
+    presents, desconegudes = set(), []
+    for lbl in doc_labels:
+        tenant = canon_to_tenant.get(canonical_size_label(lbl))
+        if tenant is None:
+            desconegudes.append(lbl)
+        else:
+            presents.add(tenant)
+
+    doc_run = sorted(presents, key=lambda e: ordre[e])
+    return doc_run, desconegudes
+
+
+def run_sistema_de(size_system):
+    """`SizeSystem` (o llista d'etiquetes, o None) → llista d'etiquetes ORDENADA per
+    `SizeDefinition.ordre`.
+
+    Adaptador únic perquè `run_del_model` es pugui cridar de les dues maneres: amb un
+    `SizeSystem` (com fan les vistes, que tenen el model a mà) o amb una llista ja llegida
+    (com fa `run_del_document`, i com fan els tests, que així no toquen BD). Una llista
+    entra i surt intacta: qui la passa ja assumeix la responsabilitat de l'ordre.
+    """
+    if size_system is None:
+        return []
+    if isinstance(size_system, (list, tuple)):
+        return [str(e).strip() for e in size_system if str(e).strip()]
+    return [t.etiqueta.strip()
+            for t in size_system.talles.order_by('ordre')
+            if (t.etiqueta or '').strip()]
+
+
+def run_del_model(etiquetes, size_system):
+    """REFERENT D'ESCALA (llei S24b, 2026-07-22): l'ordre del run del MODEL el mana el SISTEMA.
+
+    Germà de `run_del_document`, i el mateix principi aplicat a l'altre eix: allà el referent
+    de DERIVACIÓ de regles és el run del document; aquí el referent d'ORDRE del run del model
+    és la seqüència del `SizeSystem`. El run del model és un SUBCONJUNT — potencialment NO
+    CONTIGU (un client que no fabrica la M) — que mai redefineix ni l'ordre ni la distància.
+
+    Existeix perquè `Model.size_run_model` no tenia cap porta d'escriptura que ordenés: les 9
+    vies del cens desaven l'ordre d'entrada (clic de l'usuari al wizard, ordre del document,
+    ordre de la cel·la d'Excel). Amb el motor comptant els passos per POSICIÓ dins la llista,
+    un run apendat com `XS·S·L·XXS·M` feia que la XXS gradués amb el SIGNE INVERTIT (cas real
+    del model 166; vegeu `DIAGNOSI_ORDRE_RUN_MODEL_2026-07-22.md`).
+
+    Pur en el sentit que importa: cap escriptura, cap efecte, resultat determinista. Si es
+    passa una llista d'etiquetes com a `size_system` no toca BD en absolut (és així com el
+    proven els tests); si es passa un `SizeSystem`, `run_sistema_de` en llegeix les talles.
+
+    Args:
+        etiquetes: iterable d'etiquetes del run del model, en qualsevol ordre i amb possibles
+            duplicats (el toggle del wizard en pot produir). `None`/buides s'ignoren.
+        size_system: `SizeSystem`, llista d'etiquetes ja ordenada, o None. **None (o sistema
+            sense talles) = no hi ha res contra què ordenar**: es retornen les etiquetes tal
+            com vénen, deduplicades, i cap desconeguda. És el camí legacy (p. ex.
+            `tech_sheet_views`, que crea models sense sistema assignat): degradar amb gràcia,
+            mai petar un import que fins ara funcionava.
+
+    Returns:
+        (run_ordenat, etiquetes_desconegudes):
+          - run_ordenat: etiquetes del TENANT, sense duplicats, ordenades per
+            `SizeDefinition.ordre`. Els forats són LEGÍTIMS i es conserven.
+          - etiquetes_desconegudes: les que el sistema no coneix, en ordre d'aparició. NO
+            entren al run. El cridador decideix: 400 al camí de producte (coherent amb el
+            check (d) de la S24), avís al camí legacy.
+
+    El pont de comparació és `canonical_size_label` (pont ÚNIC, llei 2026-07-08): salva
+    XXL↔2XL, que un `upper+strip` no cobreix. Mai es persisteix la forma canònica: el run
+    torna SEMPRE amb l'etiqueta del tenant.
+    """
+    from fhort.pom.size_labels import canonical_size_label
+
+    # Etiquetes del model, en ordre d'aparició i sense duplicats (fallback sense sistema).
+    vistes, model_labels = set(), []
+    for e in (etiquetes or []):
+        lbl = str(e or '').strip()
+        if lbl and lbl not in vistes:
+            vistes.add(lbl)
+            model_labels.append(lbl)
+
+    run_sistema = run_sistema_de(size_system)
+    if not run_sistema:
+        return model_labels, []
+
+    canon_to_tenant = {canonical_size_label(e): e for e in run_sistema}
+    ordre = {e: i for i, e in enumerate(run_sistema)}
+
+    presents, desconegudes = set(), []
+    for lbl in model_labels:
+        tenant = canon_to_tenant.get(canonical_size_label(lbl))
+        if tenant is None:
+            desconegudes.append(lbl)
+        else:
+            presents.add(tenant)
+
+    run_ordenat = sorted(presents, key=lambda e: ordre[e])
+    return run_ordenat, desconegudes
+
+
 def derive_break_fields(logica, increment, valors_step, run_ordenat):
     """Forma canònica PEÇA A → (increment_base, increment_break, talla_break_label, talla_break_pos).
 
@@ -272,23 +419,58 @@ def _spec_from_detection(pm, res, base_def_id, run_ordenat):
     }
 
 
-def derive_rules_from_fitxa(*, size_run_model, base_size, valors, confirmed_pom_ids,
-                            size_system, avisos):
+def derive_rules_from_fitxa(*, run_document, base_size, valors, confirmed_pom_ids,
+                            size_system, avisos, bloqueigs=None):
     """DETECCIÓ pura de les regles d'una fitxa (sense persistència, sense ruleset).
 
     Reutilitza el motor de detecció (detect_grading per POM + derive_break_fields). Retorna
     una llista d'SPECS canònics uniformes (dicts), un per POM detectat; buida si no derivable.
     Substitueix el paper CREADOR de derive_grading_rule_set: aquí NOMÉS es detecta la forma;
     sembrar/afegir/materialitzar ho decideix el camí de la llei del contenidor a fora.
+
+    REFERENT (llei S24): `run_document` — les talles del DOCUMENT, en llengua-tenant (el
+    cridador hi ha aplicat el mateix aparellament que a `valors`). Abans el referent era
+    `model.size_run_model`: si el run del model era MÉS ESTRET que el document, els deltes
+    es calculaven entre veïns falsos i el break sortia FABRICAT. És el bug del model 166
+    (run XS·S·L contra document XXS-L: S→L salta la M i val 2 passos → fals «×2» amb
+    `talla_break_label='L'`). El referent final és la unió del run del document amb les
+    talles realment presents a `valors`, ordenada pel sistema de talles.
+
+    BLOQUEIG (llei d'integritat 2026-07-08, aquí per primer cop): una fila sense valor per a
+    alguna talla del referent NO deriva cap regla amb deltes parcials — s'apunta a
+    `bloqueigs` i el cridador ha d'aturar l'import. Abans només s'emetia un avís i la regla
+    es persistia igualment: era el forat pel qual la llei encara es podia trencar.
+
+    Args:
+        bloqueigs: llista out-param (com `avisos`). Entrades
+            {'tipus': 'fila_incompleta', 'pom_codi', 'missing_sizes'} o
+            {'tipus': 'talles_desconegudes', 'etiquetes'}. Si el cridador no la passa, el
+            comportament de bloqueig degrada a avís (cap cridador de producte ho fa).
     """
     from fhort.pom.models import SizeDefinition, POMMaster
-    run_ordenat = [
-        s.strip() for s in (size_run_model or '').replace(';', '·').split('·') if s.strip()]
+    if bloqueigs is None:
+        bloqueigs = []
     base_def = SizeDefinition.objects.filter(
         size_system=size_system, etiqueta__iexact=base_size,
     ).first() if (getattr(size_system, 'id', None) and base_size) else None
+
+    run_sistema = list(
+        SizeDefinition.objects.filter(size_system=size_system).order_by('ordre')
+        .values_list('etiqueta', flat=True)) if getattr(size_system, 'id', None) else []
+    # El document mana; les claus de `valors` hi entren perquè una columna amb valor és
+    # columna del document encara que l'extracció no l'hagi rotulada al run detectat.
+    files_ref = [{l: None for l in (run_document or [])}]
+    files_ref += [valors.get(pid) or {} for pid in dict.fromkeys(confirmed_pom_ids)]
+    run_ordenat, desconegudes = run_del_document(files_ref, run_sistema)
+    if desconegudes:
+        bloqueigs.append({'tipus': 'talles_desconegudes', 'etiquetes': desconegudes})
+        avisos.append(
+            "Talles del document sense equivalència al sistema de talles: "
+            + ', '.join(desconegudes))
+        return []
+
     if not run_ordenat or not base_size:
-        avisos.append("Grading no derivat: manca run o talla base al model.")
+        avisos.append("Grading no derivat: manca run del document o talla base.")
         return []
     if base_def is None:
         avisos.append(
@@ -299,8 +481,15 @@ def derive_rules_from_fitxa(*, size_run_model, base_size, valors, confirmed_pom_
         pm = POMMaster.objects.filter(id=pid).first()
         if not pm:
             continue
+        vals = valors.get(pid) or {}
+        # BLOQUEIG: cap regla d'una taula incompleta. Un forat intern amaga un break.
+        missing = [s for s in run_ordenat if vals.get(s) is None]
+        if missing:
+            bloqueigs.append({'tipus': 'fila_incompleta',
+                              'pom_codi': pm.codi_client, 'missing_sizes': missing})
+            continue
         try:
-            res = detect_grading(valors.get(pid) or {}, run_ordenat, base_size)
+            res = detect_grading(vals, run_ordenat, base_size)
         except Exception as e:
             avisos.append(f"POM {pm.codi_client}: detecció de grading fallida ({e}).")
             continue
@@ -310,7 +499,7 @@ def derive_rules_from_fitxa(*, size_run_model, base_size, valors, confirmed_pom_
             avisos.append(f"POM {pm.codi_client}: grading no detectat; regla omesa.")
             continue
         specs.append(_spec_from_detection(pm, res, base_def.id, run_ordenat))
-    if not specs:
+    if not specs and not bloqueigs:
         avisos.append("Cap regla de grading derivada dels valors.")
     return specs
 
