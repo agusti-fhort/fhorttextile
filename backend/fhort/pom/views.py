@@ -61,7 +61,9 @@ class SizeSystemViewSet(viewsets.ModelViewSet):
     serializer_class = SizeSystemSerializer
     # `targets` prefetchat: get_target_codis (serializers.py:113) el recorre per fila i
     # sense això costava 1 query per sistema (§B3.3).
-    queryset = SizeSystem.objects.prefetch_related('talles', 'targets').all()
+    # `order_by` explícit: sense ell la paginació no era determinista (l'atribut `ordering`
+    # és inert sense OrderingFilter). `id` de desempat.
+    queryset = SizeSystem.objects.prefetch_related('talles', 'targets').order_by('codi', 'id')
     filter_backends = [DjangoFilterBackend, SearchFilter]
     # LLEI 5 CAPES: el pas «Talles» del wizard llista SizeSystems PURS (escala, capa 3) filtrats
     # pel target de la peça. `targets` (M2M) additiu al filterset → GET size-systems/?targets=<id>.
@@ -186,7 +188,12 @@ class GradingRuleSetViewSet(viewsets.ModelViewSet):
             'targets',
             'scope_nodes__garment_group',
         )
-        .all()
+        # `order_by` explícit: l'atribut `ordering` de sota és INERT sense OrderingFilter al
+        # filter_backends, i el Meta.ordering del model és buit → DRF emetia
+        # UnorderedObjectListWarning i la paginació podia repetir o saltar files entre pàgines.
+        # `id` de desempat perquè `nom` no és únic. Mateix arranjament que a GarmentTypeViewSet
+        # i GarmentTypeItemViewSet. Sobreviu a l'annotate(Count) d'?amb_regles=1.
+        .order_by('nom', 'id')
     )
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['actiu', 'garment_group', 'size_system', 'customer']
@@ -396,7 +403,10 @@ class CustomerPOMAliasViewSet(viewsets.ModelViewSet):
     queryset = (
         CustomerPOMAlias.objects
         .select_related('customer', 'pom', 'pom__pom_global')
-        .all()
+        # `order_by` explícit: sense ell la paginació no era determinista (l'atribut
+        # `ordering` és inert sense OrderingFilter). `id` de desempat perquè el mateix
+        # `client_code` pot repetir-se entre clients.
+        .order_by('client_code', 'id')
     )
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['customer', 'pom', 'pendent_revisio', 'origen']
