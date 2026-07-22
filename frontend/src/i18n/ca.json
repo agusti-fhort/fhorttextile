@@ -400,6 +400,27 @@
     "error": "No s'ha pogut completar. Torna-ho a provar.",
     "throttled": "Massa intents. Espera una estona i torna-ho a provar."
   },
+  "entrar": {
+    "title": "Entra a FHORT",
+    "subtitle": "El teu correu i la teva contrasenya. T'acompanyem al teu espai de treball.",
+    "email_label": "Correu electrònic",
+    "email_ph": "tu@empresa.com",
+    "password_label": "Contrasenya",
+    "password_ph": "La teva contrasenya",
+    "submit": "Entra",
+    "submitting": "Comprovant…",
+    "entrant": "Entrant…",
+    "entrant_sub": "Obrint el teu espai de treball.",
+    "tria_title": "On vols entrar?",
+    "tria_sub": "Tens accés a més d'un espai de treball. Tria'n un.",
+    "tria_enrere": "Entra amb un altre compte",
+    "oblidat": "No recordo el meu espai de treball",
+    "oblidat_aviat": "Disponible aviat",
+    "error_credencials": "Correu o contrasenya incorrectes.",
+    "error_generic": "No s'ha pogut completar. Torna-ho a provar.",
+    "error_codi": "L'enllaç d'accés ha caducat. Torna-ho a provar.",
+    "error_throttled": "Massa intents. Espera una estona i torna-ho a provar."
+  },
   "login": {
     "welcome": "Benvingut/da",
     "welcome_sub": "Accedeix al teu espai de treball",

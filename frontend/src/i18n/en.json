@@ -400,6 +400,27 @@
     "error": "Something went wrong. Please try again.",
     "throttled": "Too many attempts. Please wait a moment and try again."
   },
+  "entrar": {
+    "title": "Sign in to FHORT",
+    "subtitle": "Your email and your password. We'll take you to your workspace.",
+    "email_label": "Email",
+    "email_ph": "you@company.com",
+    "password_label": "Password",
+    "password_ph": "Your password",
+    "submit": "Sign in",
+    "submitting": "Checking…",
+    "entrant": "Signing in…",
+    "entrant_sub": "Opening your workspace.",
+    "tria_title": "Where do you want to go?",
+    "tria_sub": "You have access to more than one workspace. Pick one.",
+    "tria_enrere": "Sign in with another account",
+    "oblidat": "I don't remember my workspace",
+    "oblidat_aviat": "Coming soon",
+    "error_credencials": "Incorrect email or password.",
+    "error_generic": "Couldn't complete. Please try again.",
+    "error_codi": "The access link has expired. Please try again.",
+    "error_throttled": "Too many attempts. Wait a while and try again."
+  },
   "login": {
     "welcome": "Welcome",
     "welcome_sub": "Access your workspace",

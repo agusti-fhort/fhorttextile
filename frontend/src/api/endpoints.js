@@ -46,6 +46,20 @@ export const tenantDiscovery = {
   submit: (email) => axios.post('/api/discovery/', { email }),
 }
 
+// Login únic (F1/F2). `axios` NU i rutes relatives, pel mateix motiu que el discovery: aquestes
+// tres crides han d'anar SEMPRE a l'origen que ha servit la pantalla, mai a un domini cablejat
+// per VITE_API_URL. Aquí no és una preferència sinó el disseny: el `bescanvia` ha de caure al
+// host del tenant per força, perquè és allà on ha de néixer la sessió (mateix origen que el
+// localStorage on anirà el token).
+export const authCentral = {
+  // {email, password} → {mena:'codi', workspace, code} | {mena:'seleccio', workspaces, seleccio}
+  entra: (email, password) => axios.post('/api/auth/central/', { email, password }),
+  // Multi-workspace: la tria va amb el tiquet, MAI re-enviant la contrasenya.
+  tria: (seleccio, schema) => axios.post('/api/auth/central/tria/', { seleccio, schema }),
+  // Codi → parell JWT. Same-origin obligatori (viu només a l'urlconf de tenant).
+  bescanvia: (code) => axios.post('/api/auth/bescanvi/', { code }),
+}
+
 export const models = {
   list: (params) => client.get('/api/v1/models/', { params }),
   get: (id) => client.get(`/api/v1/models/${id}/`),

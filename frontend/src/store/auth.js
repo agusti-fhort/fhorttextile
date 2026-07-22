@@ -44,6 +44,21 @@ const useAuthStore = create((set, get) => ({
     return res.data
   },
 
+  // Login únic (F2): la sessió no neix d'unes credencials sinó d'un codi d'un sol ús que la
+  // porta central ha emès per a AQUEST tenant. A partir d'aquí tot és idèntic al login de
+  // sempre — el mateix parell de tokens, el mateix localStorage, el mateix fetchMe. És
+  // deliberat que passi per aquí i no per la pantalla: una segona manera de desar la sessió
+  // seria una segona manera d'oblidar-se de netejar-la.
+  entraAmbCodi: async (code) => {
+    const res = await client.post('/api/auth/bescanvi/', { code })
+    const { access, refresh } = res.data
+    localStorage.setItem('access_token', access)
+    localStorage.setItem('refresh_token', refresh)
+    set({ token: access, isAuthenticated: true, estatAuth: AUTH_VALID })
+    await get().fetchMe()
+    return res.data
+  },
+
   // Carrega el perfil de l'usuari autenticat (me/) i en desa les capacitats.
   // Font única de `capabilities` per a tot el front (la UI les usa per amagar/deshabilitar).
   fetchMe: async () => {
