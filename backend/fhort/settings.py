@@ -203,7 +203,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ─────────────────────────────────────────────────────────────
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # NO és la JWTAuthentication de la llibreria: la nostra exigeix que el token porti
+        # el claim `tenant_schema` de l'schema actiu (fhort/auth_jwt.py). Sense això, un
+        # token d'un schema entrava en un altre per col·lisió de PK. Cap vista sobreescriu
+        # authentication_classes amb JWT (les úniques que la toquen la buiden per ser
+        # anònimes), així que canviar-ho aquí cobreix TOT el projecte, backoffice inclòs.
+        'fhort.auth_jwt.TenantJWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
