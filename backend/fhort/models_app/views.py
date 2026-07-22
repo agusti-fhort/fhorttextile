@@ -891,7 +891,18 @@ def materialize_poms_view(request, model_id):
 
     F2.2 — `pom_ids` (llista opcional al body): sembra NOMÉS aquests POMs, sempre que pertanyin al
     GarmentPOMMap de l'item. Sense el paràmetre, es sembra tot el mapa (comportament de sempre, cap
-    caller trencat). Un `pom_ids` present i buit és una petició sense feina, no "sembra-ho tot"."""
+    caller trencat). Un `pom_ids` present i buit és una petició sense feina, no "sembra-ho tot".
+
+    P1 — GUARD DE TALLA (2026-07-22, DIAGNOSI_ITEM_PLANTILLA §B1.5). Un valor de plantilla està
+    expressat EN UNA TALLA: la de `GarmentTypeItem.base_size_definition`. Fins ara aquesta vista
+    copiava valors item→model sense comparar-la mai amb `Model.base_size_label` — els valors podien
+    aterrar a `BaseMeasurement` expressats en una talla diferent de la del model, EN SILENCI. La
+    coherència de les dades d'avui és casualitat, no invariant (cap FK, cap constraint, cap codi).
+      · talles DIVERGENTS → NO es sembra cap valor; sí la PERTINENÇA (fila TEMPLATE buida), perquè
+        la pertinença de POMs és certa encara que la talla no quadri. Avís explícit a la resposta.
+      · `base_size_definition` NULL → se sembra com sempre, amb l'avís «talla de plantilla no
+        verificada». NO bloqueja: 59 dels 62 items de `fhort` la tenen NULL avui, i bloquejar
+        trencaria la sembra de tot el catàleg per una dada que ningú no ha omplert encara."""
     from django.db import transaction
     try:
         model = Model.objects.get(id=model_id)
@@ -929,11 +940,35 @@ def materialize_poms_view(request, model_id):
     ibms = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(
         garment_type_item=model.garment_type_item)}
 
+    # P1 — GUARD DE TALLA. Es resol UNA vegada, abans del bucle: la talla no depèn del POM.
+    item = model.garment_type_item
+    talla_item = (getattr(item.base_size_definition, 'etiqueta', None) or '').strip()
+    talla_model = (model.base_size_label or '').strip()
+    talla_avis = None
+    talla_divergent = False
+    if not talla_item:
+        talla_avis = ("Talla de plantilla NO VERIFICADA: l'item no té `base_size_definition`. "
+                      "Els valors s'han sembrat assumint que ja parlen la talla base del model "
+                      f"(«{talla_model or '—'}»), però ningú no ho ha declarat.")
+    elif not talla_model:
+        talla_divergent = True
+        talla_avis = (f"El model no té talla base definida i la plantilla parla en «{talla_item}»: "
+                      "no s'ha sembrat cap VALOR (sí la pertinença de POMs). Fixa la talla base "
+                      "del model i torna a sembrar.")
+    elif talla_item != talla_model:
+        talla_divergent = True
+        talla_avis = (f"TALLES DIVERGENTS: la plantilla de l'item està expressada en «{talla_item}» "
+                      f"i la talla base del model és «{talla_model}». NO s'ha sembrat cap VALOR "
+                      "(sí la pertinença de POMs, que és certa igualment). Un valor en una talla "
+                      "que no és la del model és una mesura falsa.")
+
     materialized = seeded = skipped = 0
     with transaction.atomic():
         for m in maps:
             ibm = ibms.get(m.pom_id)
-            has_value = ibm is not None and ibm.base_value_cm is not None
+            # P1 — amb talles divergents un valor de plantilla és una mesura FALSA: la pertinença
+            # sí es materialitza (fila TEMPLATE buida), el valor no viatja.
+            has_value = (not talla_divergent) and ibm is not None and ibm.base_value_cm is not None
             existing = BaseMeasurement.objects.filter(model=model, pom=m.pom).first()
 
             if existing is None:
@@ -973,6 +1008,13 @@ def materialize_poms_view(request, model_id):
 
     resposta = {'materialized': materialized, 'seeded': seeded, 'skipped': skipped,
                 'total_template': total_template}
+    # P1 — el veredicte de la talla mai és silenciós, ni quan deixa passar la sembra.
+    resposta['talla_item'] = talla_item or None
+    resposta['talla_model'] = talla_model or None
+    resposta['talla_verificada'] = bool(talla_item) and not talla_divergent
+    resposta['valors_bloquejats_per_talla'] = talla_divergent
+    if talla_avis:
+        resposta['talla_avis'] = talla_avis
     if subconjunt is not None:
         resposta['requested'] = len(subconjunt)
         if desconeguts:

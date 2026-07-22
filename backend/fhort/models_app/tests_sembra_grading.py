@@ -611,3 +611,103 @@ class ImportSorollTest(_BaseSembraTest):
         bm_man = BaseMeasurement.objects.get(model=self.model, pom=pom_man)
         self.assertFalse(bm_man.is_active)
         self.assertEqual(resp.data['files_buides_desactivades'], 1)
+
+
+class GuardDeTallaSembraTest(_BaseSembraTest):
+    """P1 — la sembra item→model compara la talla de la PLANTILLA amb la del MODEL.
+
+    Un `ItemBaseMeasurement` està expressat en la talla de `base_size_definition`. Copiar-lo a un
+    model amb una altra talla base produeix una mesura FALSA, i fins ara passava en silenci.
+    """
+
+    PREFIX = 'GTAL'
+
+    def setUp(self):
+        super().setUp()
+        self.item = self._item()
+        self.ss = self._size_system('SS', talles=('S', 'M', 'L'))
+        self.pom = self._pom('A')
+        GarmentPOMMap.objects.create(garment_type_item=self.item, pom=self.pom, ordre=0)
+        ItemBaseMeasurement.objects.create(
+            garment_type_item=self.item, pom=self.pom, base_value_cm='60.00', nom_fitxa='A')
+
+    def _talla(self, etiqueta):
+        return SizeDefinition.objects.get(size_system=self.ss, etiqueta=etiqueta)
+
+    def _model_amb_base(self, etiqueta):
+        return self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
+                           size_system=self.ss, size_run_model='S·M·L', base_size_label=etiqueta)
+
+    def test_talles_divergents_no_sembren_valors_pero_si_pertinenca(self):
+        self.item.base_size_definition = self._talla('M')
+        self.item.save(update_fields=['base_size_definition'])
+        model = self._model_amb_base('L')          # el model parla en L, la plantilla en M
+
+        resp = self._materialitzar(model)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['seeded'], 0)
+        self.assertEqual(resp.data['materialized'], 1)      # la PERTINENÇA sí viatja
+        self.assertTrue(resp.data['valors_bloquejats_per_talla'])
+        self.assertFalse(resp.data['talla_verificada'])
+        self.assertIn('DIVERGENTS', resp.data['talla_avis'])
+        self.assertEqual(resp.data['talla_item'], 'M')
+        self.assertEqual(resp.data['talla_model'], 'L')
+
+        bm = BaseMeasurement.objects.get(model=model, pom=self.pom)
+        self.assertEqual(bm.origen, 'TEMPLATE')
+        self.assertIsNone(bm.base_value_cm)                 # el VALOR no ha aterrat
+
+    def test_talles_coincidents_sembren_i_ho_declaren(self):
+        self.item.base_size_definition = self._talla('M')
+        self.item.save(update_fields=['base_size_definition'])
+        model = self._model_amb_base('M')
+
+        resp = self._materialitzar(model)
+
+        self.assertEqual(resp.data['seeded'], 1)
+        self.assertTrue(resp.data['talla_verificada'])
+        self.assertFalse(resp.data['valors_bloquejats_per_talla'])
+        self.assertNotIn('talla_avis', resp.data)
+        bm = BaseMeasurement.objects.get(model=model, pom=self.pom)
+        self.assertEqual(bm.origen, 'ITEM_STANDARD')
+        self.assertEqual(bm.base_value_cm, 60.0)
+
+    def test_base_size_definition_NULL_sembra_pero_avisa(self):
+        """59/62 items la tenen NULL: bloquejar trencaria el catàleg sencer. Avisa, no atura."""
+        model = self._model_amb_base('M')
+
+        resp = self._materialitzar(model)
+
+        self.assertEqual(resp.data['seeded'], 1)
+        self.assertFalse(resp.data['talla_verificada'])
+        self.assertFalse(resp.data['valors_bloquejats_per_talla'])
+        self.assertIn('NO VERIFICADA', resp.data['talla_avis'])
+
+    def test_model_sense_talla_base_no_rep_valors(self):
+        """Si el model no diu en quina talla parla, no es pot afirmar que la plantilla hi encaixi."""
+        self.item.base_size_definition = self._talla('M')
+        self.item.save(update_fields=['base_size_definition'])
+        model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type)
+
+        resp = self._materialitzar(model)
+
+        self.assertEqual(resp.data['seeded'], 0)
+        self.assertEqual(resp.data['materialized'], 1)
+        self.assertTrue(resp.data['valors_bloquejats_per_talla'])
+
+    def test_la_divergencia_no_trepitja_una_fila_ja_sembrada(self):
+        """La sobirania segueix manant: el guard no reobre files que el model ja posseeix."""
+        self.item.base_size_definition = self._talla('M')
+        self.item.save(update_fields=['base_size_definition'])
+        model = self._model_amb_base('M')
+        self._materialitzar(model)                       # sembra legítima en M
+
+        self.item.base_size_definition = self._talla('L')   # algú canvia la talla de la plantilla
+        self.item.save(update_fields=['base_size_definition'])
+        resp = self._materialitzar(model)
+
+        self.assertEqual(resp.data['seeded'], 0)
+        self.assertEqual(resp.data['skipped'], 1)
+        bm = BaseMeasurement.objects.get(model=model, pom=self.pom)
+        self.assertEqual(bm.base_value_cm, 60.0)          # intacte, no revertit
