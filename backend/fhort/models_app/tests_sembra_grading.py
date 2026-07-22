@@ -20,6 +20,7 @@ xocar amb el deute conegut de TenantTestCase entre classes germanes (col·lisió
 SizeFitting, que el signal de creació de Model dispara).
 """
 import datetime
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django_tenants.test.cases import TenantTestCase
@@ -711,3 +712,277 @@ class GuardDeTallaSembraTest(_BaseSembraTest):
         self.assertEqual(resp.data['skipped'], 1)
         bm = BaseMeasurement.objects.get(model=model, pom=self.pom)
         self.assertEqual(bm.base_value_cm, 60.0)          # intacte, no revertit
+
+
+class PromocioModelItemTest(_BaseSembraTest):
+    """P0+P2+P3 — l'acte de promoció model→item: gate, dry-run, escriptura i talla base.
+
+    LLEI: la sobirania del model és sobre els SEUS valors; l'estàndard del taller és un acte
+    separat, explícit i CONFIGURE. Aquests tests defensen precisament això: que no s'hi entra
+    sense capability, que simular no escriu, i que confirmar escriu SENCER o no escriu gens.
+    """
+
+    PREFIX = 'PROM'
+
+    def setUp(self):
+        super().setUp()
+        from fhort.accounts.models import UserProfile
+        # L'usuari base del bastidor no té CONFIGURE (rol per defecte = technician).
+        self.user_sense = self.user
+        # Usuari amb CONFIGURE per la via d'overrides (no cal inventar un rol).
+        self.user_amb = get_user_model().objects.create(username=f'cfg{self.PREFIX}')
+        UserProfile.objects.update_or_create(
+            user=self.user_amb,
+            defaults={'rol_nom': 'technician', 'permisos': {'grant': ['configure']}})
+        self.user_amb = get_user_model().objects.get(pk=self.user_amb.pk)
+
+        self.item = self._item()
+        self.ss = self._size_system('SS', talles=('S', 'M', 'L'))
+        self.rs = GradingRuleSet.objects.create(nom=self._codi('RS'), size_system=self.ss)
+        self.item.grading_rule_set = self.rs
+        self.item.save(update_fields=['grading_rule_set'])
+
+        self.pom_nou = self._pom('NOU')       # al model, no a la plantilla
+        self.pom_canvia = self._pom('CAN')    # als dos, amb valors diferents
+        self.pom_igual = self._pom('IGU')     # als dos, amb el mateix valor
+        self.pom_sobra = self._pom('SOB')     # a la plantilla, no al model
+
+        self.model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
+                                 size_system=self.ss, size_run_model='S·M·L', base_size_label='M')
+        for pom, val in ((self.pom_nou, 30.0), (self.pom_canvia, 40.0), (self.pom_igual, 50.0)):
+            BaseMeasurement.objects.create(model=self.model, pom=pom, base_value_cm=val,
+                                           origen='MANUAL', is_active=True)
+        ItemBaseMeasurement.objects.create(garment_type_item=self.item, pom=self.pom_canvia,
+                                           base_value_cm='45.00')
+        ItemBaseMeasurement.objects.create(garment_type_item=self.item, pom=self.pom_igual,
+                                           base_value_cm='50.00')
+        ItemBaseMeasurement.objects.create(garment_type_item=self.item, pom=self.pom_sobra,
+                                           base_value_cm='99.00')
+
+    def _promoure(self, body=None, user=None):
+        from fhort.models_app.views import promoure_a_item_view
+        req = APIRequestFactory().post(f'/api/v1/models/{self.model.id}/promoure-a-item/',
+                                       body or {}, format='json')
+        force_authenticate(req, user=user or self.user_amb)
+        return promoure_a_item_view(req, self.model.id)
+
+    def _talla(self, etiqueta):
+        return SizeDefinition.objects.get(size_system=self.ss, etiqueta=etiqueta)
+
+    # ── El gate ──────────────────────────────────────────────────────────────────────
+    def test_sense_capability_configure_es_403(self):
+        """La capa Item exigeix CONFIGURE: aquest endpoint no hereta el gate fluix del model."""
+        resp = self._promoure(user=self.user_sense)
+        self.assertEqual(resp.status_code, 403)
+        # I no ha escrit res de passada.
+        self.assertEqual(ItemBaseMeasurement.objects
+                         .get(garment_type_item=self.item, pom=self.pom_canvia).base_value_cm,
+                         Decimal('45.00'))
+
+    # ── Dry-run ──────────────────────────────────────────────────────────────────────
+    def test_dry_run_classifica_be_i_NO_escriu(self):
+        resp = self._promoure()
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['dry_run'])
+        self.assertEqual(resp.data['resum'],
+                         {'nous': 1, 'canvien': 1, 'iguals': 1, 'sobrarien': 1})
+        self.assertEqual(resp.data['nous'][0]['pom_id'], self.pom_nou.id)
+        canvi = resp.data['canvien'][0]
+        # El diff ensenya els DOS valors: sense això la confirmació seria cega.
+        self.assertEqual(canvi['valor_item'], 45.0)
+        self.assertEqual(canvi['valor_model'], 40.0)
+        self.assertEqual(resp.data['sobrarien'][0]['pom_id'], self.pom_sobra.id)
+        self.assertEqual(resp.data['talla_a_escriure'], 'M')
+
+        # CAP escriptura: ni valors, ni talla base.
+        self.assertEqual(ItemBaseMeasurement.objects.filter(garment_type_item=self.item).count(), 3)
+        self.assertEqual(ItemBaseMeasurement.objects
+                         .get(garment_type_item=self.item, pom=self.pom_canvia).base_value_cm,
+                         Decimal('45.00'))
+        self.item.refresh_from_db()
+        self.assertIsNone(self.item.base_size_definition_id)
+
+    # ── Confirm ──────────────────────────────────────────────────────────────────────
+    def test_confirm_escriu_amb_provinenca_i_autoria(self):
+        resp = self._promoure({'confirm': True})
+
+        self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+        self.assertFalse(resp.data['dry_run'])
+        self.assertEqual(resp.data['promoguts'], 3)
+
+        nou = ItemBaseMeasurement.objects.get(garment_type_item=self.item, pom=self.pom_nou)
+        self.assertEqual(nou.base_value_cm, Decimal('30.00'))
+        self.assertEqual(nou.origen, ItemBaseMeasurement.ORIGEN_PROMOTED)
+        self.assertEqual(nou.updated_by_id, self.user_amb.id)     # P9: ja no és anònim
+
+        canviat = ItemBaseMeasurement.objects.get(garment_type_item=self.item, pom=self.pom_canvia)
+        self.assertEqual(canviat.base_value_cm, Decimal('40.00'))  # mana el model
+        self.assertEqual(canviat.origen, ItemBaseMeasurement.ORIGEN_PROMOTED)
+
+    def test_confirm_escriu_la_talla_base_de_la_plantilla(self):
+        """P3 — la promoció és l'ÚNIC moment on el sistema SAP en quina talla parlen els valors."""
+        self._promoure({'confirm': True})
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.base_size_definition_id, self._talla('M').id)
+
+    def test_els_sobrants_es_llisten_pero_NO_s_esborren(self):
+        resp = self._promoure({'confirm': True})
+        self.assertEqual(len(resp.data['sobrarien']), 1)
+        # Segueix viu: ItemBaseMeasurement no té is_active i un DELETE dur no és una proposta.
+        sobrant = ItemBaseMeasurement.objects.get(garment_type_item=self.item, pom=self.pom_sobra)
+        self.assertEqual(sobrant.base_value_cm, Decimal('99.00'))
+        self.assertEqual(sobrant.origen, ItemBaseMeasurement.ORIGEN_MANUAL)   # ni re-signat
+
+    def test_la_talla_escrita_SEMPRE_es_del_sistema_del_ruleset(self):
+        """La invariant que fa que `clean()` no pugui petar: la talla es resol DINS del
+        size_system del ruleset de l'item, no del model. Si es resolgués del model, es podria
+        escriure una talla d'un sistema aliè i `clean()` rebotaria la promoció sencera.
+        """
+        altre_ss = self._size_system('ALTRE', talles=('S', 'M', 'L'))
+        self.rs.size_system = altre_ss                    # el ruleset canvia de sistema...
+        self.rs.save(update_fields=['size_system'])
+        # ...i el model segueix parlant el seu (self.ss), amb la MATEIXA etiqueta 'M'.
+
+        resp = self._promoure({'confirm': True})
+
+        self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+        self.item.refresh_from_db()
+        # La talla escrita és la de l'ALTRE sistema (el del ruleset), no la homònima del model.
+        self.assertEqual(self.item.base_size_definition.size_system_id, altre_ss.id)
+        self.assertEqual(self.item.base_size_definition.etiqueta, 'M')
+        self.assertNotEqual(self.item.base_size_definition.size_system_id, self.ss.id)
+        # I per tant clean() passa: la promoció no pot deixar l'item en estat invàlid.
+        self.item.full_clean()
+
+    def test_talla_del_model_absent_al_sistema_del_ruleset_no_escriu_talla(self):
+        """Si l'etiqueta del model no existeix al sistema del ruleset, la promoció NO inventa
+        cap talla: promou els valors i diu per què no ha pogut fixar-la."""
+        altre_ss = self._size_system('SENSE_M', talles=('XXL',))
+        self.rs.size_system = altre_ss
+        self.rs.save(update_fields=['size_system'])
+
+        resp = self._promoure({'confirm': True})
+
+        self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+        self.assertIsNone(resp.data['talla_escrita'])
+        self.assertIn('no existeix', resp.data['talla_motiu'])
+        self.item.refresh_from_db()
+        self.assertIsNone(self.item.base_size_definition_id)
+        # Els valors sí han viatjat: la talla és una peça del mateix acte, però no el bloqueja
+        # quan la seva absència és honesta i queda dita.
+        self.assertEqual(ItemBaseMeasurement.objects
+                         .get(garment_type_item=self.item, pom=self.pom_nou).origen,
+                         ItemBaseMeasurement.ORIGEN_PROMOTED)
+
+    def test_item_sense_ruleset_promou_valors_pero_no_toca_la_talla(self):
+        self.item.grading_rule_set = None
+        self.item.save(update_fields=['grading_rule_set'])
+
+        resp = self._promoure({'confirm': True})
+
+        self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+        self.assertIsNone(resp.data['talla_escrita'])
+        self.assertIsNotNone(resp.data['talla_motiu'])       # el perquè no es calla
+        self.item.refresh_from_db()
+        self.assertIsNone(self.item.base_size_definition_id)
+        self.assertEqual(ItemBaseMeasurement.objects
+                         .get(garment_type_item=self.item, pom=self.pom_nou).origen,
+                         ItemBaseMeasurement.ORIGEN_PROMOTED)
+
+    # ── Les portes d'entrada ─────────────────────────────────────────────────────────
+    def test_model_sense_talla_base_no_promou(self):
+        self.model.base_size_label = ''
+        self.model.save(update_fields=['base_size_label'])
+        resp = self._promoure({'confirm': True})
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.data['tipus'], 'model_sense_talla_base')
+
+    def test_nomes_promou_mesures_vives_i_amb_valor(self):
+        """No s'ascendeix el que no és realitat: files podades o buides no són patrimoni."""
+        BaseMeasurement.objects.filter(model=self.model, pom=self.pom_nou).update(is_active=False)
+        BaseMeasurement.objects.create(model=self.model, pom=self.pom_sobra,
+                                       base_value_cm=None, origen='TEMPLATE', is_active=True)
+        resp = self._promoure()
+        ids = {f['pom_id'] for f in resp.data['nous'] + resp.data['canvien'] + resp.data['iguals']}
+        self.assertNotIn(self.pom_nou.id, ids)      # desactivada
+        self.assertNotIn(self.pom_sobra.id, ids)    # sense valor
+
+    def test_model_sense_item_no_te_plantilla_on_promoure(self):
+        model = self._model(base_size_label='M')
+        from fhort.models_app.views import promoure_a_item_view
+        req = APIRequestFactory().post(f'/api/v1/models/{model.id}/promoure-a-item/', {},
+                                       format='json')
+        force_authenticate(req, user=self.user_amb)
+        self.assertEqual(promoure_a_item_view(req, model.id).status_code, 400)
+
+
+class ItemBaseMeasurementBasicsTest(_BaseSembraTest):
+    """P9/P10 — la taula de plantilla no tenia CAP test. Unicitat i provinença per camí."""
+
+    PREFIX = 'IBMB'
+
+    def setUp(self):
+        super().setUp()
+        from fhort.accounts.models import UserProfile
+        self.item = self._item()
+        self.pom = self._pom('P1')
+        self.user_amb = get_user_model().objects.create(username=f'cfg{self.PREFIX}')
+        UserProfile.objects.update_or_create(
+            user=self.user_amb,
+            defaults={'rol_nom': 'technician', 'permisos': {'grant': ['configure']}})
+        self.user_amb = get_user_model().objects.get(pk=self.user_amb.pk)
+
+    def _upsert(self, body, user=None):
+        from fhort.pom.views import ItemBaseMeasurementViewSet
+        req = APIRequestFactory().post('/api/v1/item-base-measurements/upsert/', body,
+                                       format='json')
+        force_authenticate(req, user=user or self.user_amb)
+        return ItemBaseMeasurementViewSet.as_view({'post': 'upsert'})(req)
+
+    def test_upsert_crea_amb_origen_manual_i_autoria(self):
+        resp = self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
+                             'base_value_cm': '60.00'})
+        self.assertEqual(resp.status_code, 201)
+        ibm = ItemBaseMeasurement.objects.get(garment_type_item=self.item, pom=self.pom)
+        self.assertEqual(ibm.origen, ItemBaseMeasurement.ORIGEN_MANUAL)
+        self.assertEqual(ibm.updated_by_id, self.user_amb.id)
+        self.assertIsNotNone(ibm.created_at)
+
+    def test_upsert_es_idempotent_per_item_pom(self):
+        """La clau és (item, pom): el segon upsert actualitza, no duplica."""
+        self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
+                      'base_value_cm': '60.00'})
+        resp = self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
+                             'base_value_cm': '61.00'})
+        self.assertEqual(resp.status_code, 200)          # update, no create
+        self.assertEqual(ItemBaseMeasurement.objects
+                         .filter(garment_type_item=self.item, pom=self.pom).count(), 1)
+        self.assertEqual(ItemBaseMeasurement.objects
+                         .get(garment_type_item=self.item, pom=self.pom).base_value_cm,
+                         Decimal('61.00'))
+
+    def test_origen_NO_s_accepta_del_body(self):
+        """Si `origen` fos escrivible, qualsevol client podria signar un valor com a promogut."""
+        self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
+                      'base_value_cm': '60.00', 'origen': 'PROMOTED'})
+        self.assertEqual(ItemBaseMeasurement.objects
+                         .get(garment_type_item=self.item, pom=self.pom).origen,
+                         ItemBaseMeasurement.ORIGEN_MANUAL)
+
+    def test_upsert_sense_capability_es_403(self):
+        resp = self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
+                             'base_value_cm': '60.00'}, user=self.user)
+        self.assertEqual(resp.status_code, 403)
+        self.assertFalse(ItemBaseMeasurement.objects.filter(garment_type_item=self.item).exists())
+
+    def test_reescriure_manual_sobre_un_promogut_el_torna_a_signar(self):
+        """La provinença diu com hi ha arribat el valor VIGENT, no com hi va arribar el primer."""
+        ItemBaseMeasurement.objects.create(
+            garment_type_item=self.item, pom=self.pom, base_value_cm='60.00',
+            origen=ItemBaseMeasurement.ORIGEN_PROMOTED)
+        self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
+                      'base_value_cm': '62.00'})
+        ibm = ItemBaseMeasurement.objects.get(garment_type_item=self.item, pom=self.pom)
+        self.assertEqual(ibm.origen, ItemBaseMeasurement.ORIGEN_MANUAL)
+        self.assertEqual(ibm.updated_by_id, self.user_amb.id)
