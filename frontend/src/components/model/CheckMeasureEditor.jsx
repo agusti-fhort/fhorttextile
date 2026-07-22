@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { models, sizeChecks, sizeCheckLines, baseMeasurements } from '../../api/endpoints'
+import { effectiveRegime } from '../../utils/gradingRegime'
 import MeasureGrid from './MeasureGrid'
 import EditorHeader from './EditorHeader'
 import DependencyPanel from './DependencyPanel'
@@ -110,6 +111,8 @@ const modal = { background: 'var(--white)', borderRadius: 8, padding: 24, maxWid
 function regleLabel(row, t) {
   if (row.logica == null) return ''
   if (row.logica === 'STEP') return t('fitting.grid.rule_free')
+  // LINEAR+0 sense break = FIXED: no té delta a ensenyar (§LLEI a utils/gradingRegime).
+  if (effectiveRegime(row) === 'FIXED') return ''
   if (row.increment_base == null) return ''
   if (row.increment_break != null && row.talla_break_label)
     return `+${row.increment_base} · ${t('fitting.grid.break')} ${row.talla_break_label} +${row.increment_break}`

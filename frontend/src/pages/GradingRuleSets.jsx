@@ -4,6 +4,7 @@ import useAuthStore from '../store/auth'
 import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
 import SizeAuthoringDrawer from '../components/SizeAuthoringDrawer'
 import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn, matchingRuleSetsStrict } from '../components/grading/gradingAxes'
+import { effectiveRegime } from '../utils/gradingRegime'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -464,9 +465,11 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
             </thead>
             <tbody>
               {visibleRules.map((r, i) => {
-                const logica = LOGICA_COLORS[r.logica] || LOGICA_COLORS.FIXED
+                // Règim EFECTIU (LINEAR+0 sense break es presenta com a FIXED), no el desat.
+                const regim = effectiveRegime(r)
+                const logica = LOGICA_COLORS[regim] || LOGICA_COLORS.FIXED
                 const aboveXl = r.valors_step?.above_xl
-                const isKey = r.increment > 0 && r.logica === 'LINEAR'
+                const isKey = r.increment > 0 && regim === 'LINEAR'
                 return (
                   <tr key={r.id} style={{ background: i % 2 === 0 ? 'var(--white)' : '#fafaf8' }}>
                     {/* CODI: codi global (POM-001) gris petit a sobre,
@@ -511,7 +514,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                         fontSize: 'var(--fs-label)', padding: '2px 6px', borderRadius: 3,
                         background: logica.bg, color: logica.color,
                         fontWeight: 600,
-                      }}>{r.logica}</span>
+                      }}>{regim}</span>
                     </td>
                     {/* Δ/talla — Peça A: forma canònica (increment_base) com a TEXT read-only;
                         regles no backfillades (increment_base null) → escalar editable (compat). */}
