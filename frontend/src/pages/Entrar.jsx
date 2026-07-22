@@ -114,16 +114,16 @@ export default function Entrar() {
     <div style={wrap}>
       <div style={card}>
         {entrant ? (
-          <div style={{ textAlign: 'center' }}>
+          <div style={{ textAlign: 'center' }} role="status" aria-live="polite">
             <i className="ti ti-loader-2" style={icona} aria-hidden="true" />
             <h1 style={title}>{t('entrar.entrant')}</h1>
             <p style={sub}>{t('entrar.entrant_sub')}</p>
           </div>
-        ) : estat === 'tria' ? (
+        ) : (estat === 'tria' || (estat === 'error' && tria)) ? (
           <>
-            <h1 style={title}>{t('entrar.tria_title')}</h1>
+            <h1 id="entrar-tria-title" style={title}>{t('entrar.tria_title')}</h1>
             <p style={sub}>{t('entrar.tria_sub')}</p>
-            <ul style={llista}>
+            <ul style={llista} aria-labelledby="entrar-tria-title">
               {tria.workspaces.map(w => (
                 <li key={w.schema}>
                   <button type="button" onClick={() => onTria(w.schema)} style={targeta}>
@@ -137,6 +137,7 @@ export default function Entrar() {
                 </li>
               ))}
             </ul>
+            {estat === 'error' && <div style={errBox} role="alert">{t(errKey)}</div>}
             <button type="button" onClick={tornaAlFormulari} style={linkBtn}>
               {t('entrar.tria_enrere')}
             </button>
@@ -169,10 +170,12 @@ export default function Entrar() {
                 el correu no surt — no hi ha SMTP (DIAGNOSI_LOGIN_UNIC §B2.3). Es mostra
                 desactivat en comptes d'amagat perquè la sortida existeixi a la vista de qui
                 s'hi encalla; s'activarà quan el correu sigui real. */}
-            <button type="button" disabled title={t('entrar.oblidat_aviat')}
-              style={linkDeshabilitat} aria-disabled="true">
-              {t('entrar.oblidat')}
-            </button>
+            <span title={t('entrar.oblidat_aviat')} style={{ display: 'block' }}>
+              <button type="button" disabled style={linkDeshabilitat}>
+                {t('entrar.oblidat')}
+              </button>
+              <span style={aviat}>{t('entrar.oblidat_aviat')}</span>
+            </span>
           </form>
         )}
       </div>
@@ -190,7 +193,10 @@ const submitBtn = { width: '100%', marginTop: 18, padding: '11px 14px', backgrou
 const linkBtn = { marginTop: 18, background: 'none', border: 'none', color: 'var(--gold)', fontSize: 'var(--fs-body)', fontFamily: MONO, cursor: 'pointer', textDecoration: 'underline' }
 const linkDeshabilitat = { ...linkBtn, display: 'block', width: '100%', marginTop: 16, color: 'var(--gray)', cursor: 'not-allowed', textDecoration: 'none' }
 const errBox = { marginTop: 12, padding: '8px 12px', borderRadius: 8, background: 'var(--err-bg)', color: 'var(--err)', fontSize: 'var(--fs-body)' }
-const icona = { fontSize: 40, color: 'var(--gold)' }
+// Un spinner que no gira es llegeix com una pantalla penjada, i aquest surt justament al
+// moment de més incertesa del flux. Convenció de la casa: index.css:70 (@keyframes spin).
+const icona = { fontSize: 40, color: 'var(--gold)', display: 'inline-block', animation: 'spin 0.8s linear infinite' }
+const aviat = { display: 'block', marginTop: 2, fontSize: 'var(--fs-label)', color: 'var(--gray)' }
 const llista = { listStyle: 'none', margin: '0 0 4px', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }
 const targeta = { width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)', cursor: 'pointer' }
 const iconaTargeta = { fontSize: 20, color: 'var(--gold)' }

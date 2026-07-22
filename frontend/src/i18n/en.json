@@ -417,9 +417,9 @@
     "oblidat": "I don't remember my workspace",
     "oblidat_aviat": "Coming soon",
     "error_credencials": "Incorrect email or password.",
-    "error_generic": "Couldn't complete. Please try again.",
+    "error_generic": "Something went wrong. Please try again.",
     "error_codi": "The access link has expired. Please try again.",
-    "error_throttled": "Too many attempts. Wait a while and try again."
+    "error_throttled": "Too many attempts. Please wait a while and try again."
   },
   "login": {
     "welcome": "Welcome",
