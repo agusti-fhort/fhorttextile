@@ -218,6 +218,67 @@ def detect_grading(valors_per_talla, run_ordenat, base_label) -> dict:
     }
 
 
+def run_del_document(values_per_fila, run_sistema):
+    """REFERENT DE DERIVACIÓ (llei S24, 2026-07-22): el run del DOCUMENT, no el del sistema.
+
+    Font única del `run` que alimenta ALHORA (a) el guard d'integritat («cap regla d'una
+    taula incompleta», 2026-07-08), (b) `detect_grading` i (c) `derive_break_fields`. Que
+    els tres comparteixin referent és el que impedeix les dues degradacions conegudes:
+      - referent MÉS AMPLE que el document (run del SizeSystem) → files marcades incompletes
+        i bloqueig fals (cas Meredith: doc XXS-L sobre un sistema de 8 talles);
+      - referent MÉS ESTRET que el document (run del model) → deltes col·lapsats i break
+        FABRICAT (bug model 166: S→L salta la M absent = 2 passos = fals «×2»).
+
+    Pur: cap I/O, cap persistència. El `run_sistema` el llegeix el cridador (ja té les
+    `SizeDefinition` a mà); aquí només s'ordena i es valida contra ell.
+
+    Args:
+        values_per_fila: iterable de dicts {etiqueta_document: valor} (una entrada per fila
+            del document). Les claus amb valor None compten com a etiqueta present: la
+            columna hi és, el que falta és el valor (això ho detecta el guard, no aquí).
+        run_sistema: llista ORDENADA d'etiquetes del sistema de talles (cas del tenant).
+            Buida = no hi ha sistema contra el qual validar (camí CREAR): s'accepta el
+            document tal com ve, en ordre de primera aparició.
+
+    Returns:
+        (doc_run, etiquetes_desconegudes):
+          - doc_run: etiquetes del TENANT presents al document, ordenades pel `run_sistema`
+            (sense duplicats). És el referent.
+          - etiquetes_desconegudes: etiquetes del document sense equivalència al sistema
+            (check (d)). No és una talla que falti: és una talla que el sistema no coneix
+            → error real, mai silenci.
+
+    El pont de comparació és `canonical_size_label` (pont ÚNIC, llei 2026-07-08): salva
+    XXL↔2XL, que `_norm` (upper+strip) no cobreix. Mai es persisteix la forma canònica:
+    `doc_run` torna SEMPRE l'etiqueta del tenant.
+    """
+    from fhort.pom.size_labels import canonical_size_label
+
+    # Etiquetes del document, en ordre de primera aparició (fallback sense sistema).
+    doc_labels = []
+    for fila in (values_per_fila or []):
+        for k in (fila or {}).keys():
+            if k not in doc_labels:
+                doc_labels.append(k)
+
+    if not run_sistema:
+        return doc_labels, []
+
+    canon_to_tenant = {canonical_size_label(e): e for e in run_sistema}
+    ordre = {e: i for i, e in enumerate(run_sistema)}
+
+    presents, desconegudes = set(), []
+    for lbl in doc_labels:
+        tenant = canon_to_tenant.get(canonical_size_label(lbl))
+        if tenant is None:
+            desconegudes.append(lbl)
+        else:
+            presents.add(tenant)
+
+    doc_run = sorted(presents, key=lambda e: ordre[e])
+    return doc_run, desconegudes
+
+
 def derive_break_fields(logica, increment, valors_step, run_ordenat):
     """Forma canònica PEÇA A → (increment_base, increment_break, talla_break_label, talla_break_pos).
 
