@@ -370,6 +370,10 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
         body_height_cm: x.body_height_cm === '' ? null : Number(x.body_height_cm),
       })),
       grading, perfils,
+      // REFERENT (llei S24): el run del DOCUMENT tal com el va tornar el preview. El create
+      // deriva el break sobre AQUESTA escala, no sobre el run del sistema — així preview i
+      // persistència parlen del mateix run i el break no es recol·loca en desar.
+      doc_run: wiz.gradingRun,
       // Sprint ÀMBIT — «aplica a» = «està disponible per a»: nodes multi-nivell (grup/família/item)
       // + multi-target (el M2M targets ja existia).
       applies_to: wiz.applies_to,

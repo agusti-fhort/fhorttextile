@@ -893,12 +893,41 @@ def size_map_create_view(request):
             if base_def is None and grading:
                 warnings.append("No s'ha pogut resoldre cap talla base; regles de grading omeses.")
             else:
-                # run ordenat del size system: MATEIXA font que el preview 3C (l.232-233) i que
-                # el run_of() del backfill — SizeDefinition de `ss` ordenades per `ordre`. Ja
-                # materialitzades al pas 2. Alimenta la forma canònica PEÇA A (increment_base...).
-                run_ordenat = list(
+                # REFERENT (llei S24): el run del DOCUMENT, el MATEIX que va usar el preview.
+                # Abans aquí es rellegia el run del SizeSystem sencer, així que `derive_break_fields`
+                # localitzava el break sobre una escala més ampla que la que el document prova.
+                # `run_sistema` conserva el paper d'ORDRE i de catàleg de validació.
+                run_sistema = list(
                     SizeDefinition.objects.filter(size_system=ss)
                     .order_by('ordre').values_list('etiqueta', flat=True))
+                # El frontend reenvia el `run` que li va tornar el preview; si no arriba (client
+                # antic), es reconstrueix de les claus de `valors_step` + la talla base —
+                # `detect_grading` no posa la base a `valors_step` (delta de la base amb ella
+                # mateixa no existeix), i el referent l'ha d'incloure igualment.
+                doc_run_payload = [str(x).strip() for x in (data.get('doc_run') or []) if str(x).strip()]
+                if doc_run_payload:
+                    files_ref = [{l: None for l in doc_run_payload}]
+                else:
+                    files_ref = [g.get('valors_step') or {} for g in grading]
+                    if base_size:
+                        files_ref.append({base_size: None})
+                run_ordenat, run_desconegudes = run_del_document(files_ref, run_sistema)
+                # Check (d), última porta abans d'escriure: etiqueta que el sistema no coneix = 400.
+                # `set_rollback` explícit: som DINS de l'atomic i un `return` net el confirmaria —
+                # el SizeSystem i el ruleset creats més amunt quedarien desats i el missatge
+                # «cap regla desada» seria mentida.
+                if run_desconegudes:
+                    transaction.set_rollback(True)
+                    return Response({
+                        'error': ("El document porta talles que el sistema no coneix: "
+                                  f"{', '.join(run_desconegudes)} (cap regla desada)."),
+                        'etiquetes_desconegudes': run_desconegudes,
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                # Sense cap talla derivable del document (p.ex. totes les regles planes, sense
+                # `valors_step`): es manté el run del sistema. El break és irrellevant en aquest
+                # cas, i deixar el referent buit seria pitjor que conservar el comportament d'ahir.
+                if not run_ordenat:
+                    run_ordenat = run_sistema
                 for g in grading:
                     pom_id = g.get('pom_id')
                     pom = POMMaster.objects.filter(pk=pom_id).first()
