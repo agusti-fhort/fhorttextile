@@ -6,7 +6,9 @@ import i18n from '../i18n';
 import { formatMinutes } from '../utils/format';
 import { taskTypeLabel } from '../utils/taskType';
 
-const API = import.meta.env.VITE_API_URL;
+// `|| ''` (com la resta de pàgines): sense ell, amb VITE_API_URL sense definir el fetch
+// sortiria literalment cap a `undefined/api/v1/...`. Buit = same-origin.
+const API = import.meta.env.VITE_API_URL || '';
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('access_token')}` });
 const fmtDate = (v) => v ? new Date(v).toLocaleDateString(i18n.language || 'ca', { dateStyle: 'medium' }) : '—';
 const PAGE_SIZE = 25;

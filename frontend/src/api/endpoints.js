@@ -1,5 +1,5 @@
 import axios from 'axios'
-import client from './client'
+import client, { apiBaseURL } from './client'
 
 // C4 — invalidació de les superfícies LECTORES del pla (Board + Gantt): quan una acció canvia
 // l'ordre materialitzat (reorder manual, o inici real que reancora), emetem un únic esdeveniment
@@ -30,7 +30,7 @@ export const tenantConfig = {
 // Client NET (sense interceptor Bearer) per a la recuperació de contrasenya pública:
 // la persona que recupera no està autenticada i no ha d'enviar cap token.
 const publicClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: apiBaseURL,
   headers: { 'Content-Type': 'application/json' },
 })
 export const passwordReset = {
@@ -39,8 +39,9 @@ export const passwordReset = {
 }
 
 // Tenant-discovery (porta única). SAME-ORIGIN a posta: l'endpoint /api/discovery/ viu al schema
-// PUBLIC del host que serveix la pantalla neutra (login.*), no al tenant fhort al qual apunta
-// VITE_API_URL. Ruta relativa → cau sobre l'origen actual. Resposta SEMPRE uniforme.
+// PUBLIC del host que serveix la pantalla neutra (login.*), no al tenant al qual pogués apuntar
+// un override de VITE_API_URL. Usa `axios` NU (no `client`/`publicClient`) justament per ser
+// immune a aquest override: ruta relativa → sempre l'origen actual. Resposta SEMPRE uniforme.
 export const tenantDiscovery = {
   submit: (email) => axios.post('/api/discovery/', { email }),
 }
