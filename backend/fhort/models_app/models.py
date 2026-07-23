@@ -151,6 +151,12 @@ class Model(models.Model):
     origen = models.CharField(
         max_length=20, choices=ORIGEN_CHOICES, default=ORIGEN_INTERN, db_index=True,
     )
+    # Federació v2 (P6) — assignació Brand→Studio: codi del tenant Studio autoritzat a
+    # instanciar aquest model. Buit = cap Studio. L'escriu el Brand; és la seva palanca de
+    # sobirania sobre cada model. Referència per codi nu (patró de la casa, mai FK): viu al
+    # schema del Brand i el Studio es resol per codi_tenant. Dues claus independents: el
+    # TenantLink autoritza el PONT, aquest camp autoritza CADA MODEL — sense assignació, res viatja.
+    studio_assignat = models.CharField(max_length=3, blank=True, default='', db_index=True)
 
     nom_prenda = models.CharField(max_length=200, blank=True, null=True)
     descripcio = models.TextField(null=True, blank=True)
