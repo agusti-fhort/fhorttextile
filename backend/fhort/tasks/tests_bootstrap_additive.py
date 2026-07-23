@@ -17,7 +17,7 @@ from django.db import connection
 from django_tenants.test.cases import TenantTestCase
 from django_tenants.utils import get_tenant_model, schema_context
 
-from fhort.pom.models import SizeSystem, Target
+from fhort.pom.models import POMCategory, POMMaster, SizeSystem, Target
 from fhort.tenants.models import Client
 
 
@@ -56,6 +56,12 @@ class BootstrapAdditiveTest(TenantTestCase):
             with schema_context(sch):
                 SizeSystem.objects.all().delete()
                 Target.objects.all().delete()
+                POMMaster.objects.all().delete()
+                POMCategory.objects.all().delete()
+
+    def _pom(self, schema, codi, categoria=None):
+        with schema_context(schema):
+            return POMMaster.objects.create(codi_client=codi, nom_client=codi, categoria=categoria)
 
     def _ss(self, schema, codi, nom, targets=()):
         with schema_context(schema):
@@ -119,6 +125,34 @@ class BootstrapAdditiveTest(TenantTestCase):
         self._run(additive=False)
         with schema_context(self.dest_schema):
             self.assertEqual(SizeSystem.objects.get(codi='SS-X').nom, 'SOURCE')   # sobreescrit
+
+    # ── clau AMBIGUA al destí (deute de dades): saltar i reportar, mai crear ───
+    def test_additiu_clau_ambigua_al_desti(self):
+        """Reprodueix el cas PROD: 2 POMMaster amb el mateix codi_client (categoria 13 i NULL)
+        al destí + un tercer amb el mateix codi a l'origen → saltat, reportat, cap 3a fila."""
+        with schema_context(self.dest_schema):
+            cat = POMCategory.objects.create(codi='C1')
+        self._pom(self.dest_schema, 'DUP-1', categoria=cat)   # categoria != NULL
+        self._pom(self.dest_schema, 'DUP-1', categoria=None)  # 2a fila, categoria NULL
+        self._pom('src', 'DUP-1')                             # origen: mateix codi
+
+        sortida = self._run(additive=True)
+
+        self.assertIn('ambigus_al_desti', sortida)
+        self.assertIn('DUP-1', sortida)
+        self.assertIn('2 coincidències', sortida)
+        with schema_context(self.dest_schema):
+            # Cap 3a fila creada; les 2 preexistents intactes.
+            self.assertEqual(POMMaster.objects.filter(codi_client='DUP-1').count(), 2)
+
+    def test_additiu_clau_unica_regressio(self):
+        """Clau única normal (0/1 coincidències): comportament de P5 sense canvis."""
+        self._pom(self.dest_schema, 'UNIQ')   # 1 al destí
+        self._pom('src', 'UNIQ')              # mateix codi a l'origen
+        sortida = self._run(additive=True)
+        self.assertNotIn('ambigus_al_desti', sortida)
+        with schema_context(self.dest_schema):
+            self.assertEqual(POMMaster.objects.filter(codi_client='UNIQ').count(), 1)  # saltat, no duplicat
 
     # ── additiu amb destí actiu: onboarding i template intactes ────────────────
     def test_additive_desti_actiu_no_tanca_onboarding(self):
