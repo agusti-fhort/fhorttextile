@@ -80,3 +80,17 @@ class OrigenExternTest(_TenantBase):
         m = self._model('BRW-SS27-0001', 1)   # sense origen= → default
         self.assertEqual(m.origen, Model.ORIGEN_INTERN)
         self.assertEqual(_real_max_seq(self.customer, 2027, 'SS'), 1)
+
+    # ── el camí del SIGNAL també exclou EXTERN (P2b) ───────────────────────────
+    def test_signal_max_ignora_extern(self):
+        """Un INTERN creat pel camí del signal (sense codi imposat) després d'un EXTERN de
+        sequencial alt agafa el següent del terra real, no l'espai del Brand (residual tancat)."""
+        self._model('BRW-SS27-0962', 962, origen=Model.ORIGEN_INTERN)   # terra real
+        self._model('LOS-SS27-5050', 5050, origen=Model.ORIGEN_EXTERN)  # sequencial del Brand
+
+        # Sense codi_intern → el signal genera codi i sequencial via MAX(sequencial).
+        nou = Model.objects.create(
+            customer=self.customer, codi_tenant='BRW', any=2027, temporada='SS',
+            nom_prenda='Wizard', origen=Model.ORIGEN_INTERN,
+        )
+        self.assertEqual(nou.sequencial, 963)   # 962+1, NO 5051
