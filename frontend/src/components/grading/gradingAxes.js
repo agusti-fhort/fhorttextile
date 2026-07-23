@@ -143,6 +143,35 @@ export function matchingRuleSets(ruleSets, axes, garmentGroupCodiById) {
   )
 }
 
+// ── LLEI DELS WIZARDS ELIMINATIUS (C5, 2026-07-23) ────────────────────────────
+// Dins d'una pantalla, seleccionar ATENUA I REORDENA: els compatibles vius i amunt, els
+// incompatibles grisos, avall i AMB MOTIU. MAI amaga. Generalitza la F1.4 del model 174: una
+// llista que es buida en silenci es llegeix com «el botó no respon», i una entitat mal informada
+// ha de ser un problema VISIBLE, no invisible.
+//
+// `classifyRuleSets` és la versió NO ELIMINATÒRIA de `matchingRuleSets`: mateixa aritmètica
+// d'eixos (lenient: un eix NULL al ruleset fa de comodí), però en comptes de filtrar retorna
+// TOTS els rulesets amb el veredicte i, si no casen, QUINS eixos els deixen fora. Un eix no
+// seleccionat no descarta ningú — el filtre és opcional, no un gate.
+//
+// Retorna [{ rs, compatible, motius }] amb els compatibles primer, conservant l'ordre d'entrada
+// dins de cada grup. `motius` són CODIS d'eix ('target'|'construction'|'fit'|'group'), mai text:
+// la traducció és del component.
+export function classifyRuleSets(ruleSets, axes, garmentGroupCodiById) {
+  const { target, construction, fit, garmentGroup } = axes || {}
+  const compatibles = []
+  const incompatibles = []
+  for (const rs of ruleSets) {
+    const motius = []
+    if (target && !matchesTarget(rs, target)) motius.push('target')
+    if (construction && rs.construction_codi && rs.construction_codi !== construction) motius.push('construction')
+    if (fit && rs.fit_type_codi && rs.fit_type_codi !== fit) motius.push('fit')
+    if (garmentGroup && !scopeApplies(rs, axes, garmentGroupCodiById)) motius.push('group')
+    ;(motius.length ? incompatibles : compatibles).push({ rs, compatible: !motius.length, motius })
+  }
+  return [...compatibles, ...incompatibles]
+}
+
 // ── Matching ESTRICTE (context WIZARD, sprint WIZARD-COMPLET) ──────────────────
 // A diferència del lenient: `size_system` és OBLIGATORI i coincident, i cap eix NULL fa de
 // comodí — un ruleset s'exclou si no declara explícitament target/construction/fit/grup/system
