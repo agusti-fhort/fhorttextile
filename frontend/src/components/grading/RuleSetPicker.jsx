@@ -15,9 +15,10 @@ import {
 //  - onPick(ruleSet): acció final (a l'item: assignar la FK grading_rule_set).
 //  - actionLabel: text del botó d'acció (p.ex. "Assignar").
 //  - selectedId: id del ruleset ja triat (per ressaltar-lo). Opcional.
-//  - suggestedId: id del ruleset que l'ITEM porta com a estàndard (V1, P6). SUGGERIR ≠ ARROSSEGAR:
-//    si és a la llista de candidats, se'l puja al capdamunt i se'l marca — però NO s'assigna sol.
-//    El tècnic clica igualment. Si no hi és (o l'item no en porta), no té cap efecte. Opcional.
+//  - suggestedId: id del ruleset que el CATÀLEG proposa per a la combinació (SizingProfile; abans
+//    del 2026-07-23, l'item). SUGGERIR ≠ ARROSSEGAR: si és a la llista de candidats, se'l puja al
+//    capdamunt i se'l marca — però NO s'assigna sol. El tècnic clica igualment. Si no hi és (o el
+//    perfil no en porta cap: C3, perfil d'àmbit pur), no té cap efecte. Opcional.
 //  - onEmptyAction + emptyActionLabel: acció de l'estat buit (p.ex. anar a Grading Rules). Opcional.
 //  - strict + sizeSystemId: mode WIZARD (sprint WIZARD-COMPLET). strict=true → matching ESTRICTE amb
 //    `sizeSystemId` obligatori i sense comodí NULL. Per defecte false → matching LENIENT (superfícies CRUD).
@@ -140,7 +141,7 @@ function PickCard({ rs, selected, suggested = false, motiu = null, actionLabel, 
         }}>
           {rs.nom}
           {suggested && (
-            <Pill bg="#fdf6ee" color="var(--gold)">{t('grading.suggested_by_item')}</Pill>
+            <Pill bg="#fdf6ee" color="var(--gold)">{t('grading.suggested_by_profile')}</Pill>
           )}
         </div>
         <div style={{

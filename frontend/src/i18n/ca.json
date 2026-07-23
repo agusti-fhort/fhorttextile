@@ -3109,7 +3109,7 @@
     "rules_count": "{{count}} regles",
     "rules_count_filtered": "{{count}}/{{total}} regles",
     "with_break": "{{count}} amb break",
-    "suggested_by_item": "Suggerit per l'item",
+    "suggested_by_profile": "Suggerit pel catàleg",
     "system": "Sistema",
     "custom": "Personalitzat",
     "active": "Actiu",

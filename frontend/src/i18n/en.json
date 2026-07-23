@@ -3109,7 +3109,7 @@
     "rules_count": "{{count}} rules",
     "rules_count_filtered": "{{count}}/{{total}} rules",
     "with_break": "{{count}} with break",
-    "suggested_by_item": "Suggested by the item",
+    "suggested_by_profile": "Suggested by the catalogue",
     "system": "System",
     "custom": "Custom",
     "active": "Active",

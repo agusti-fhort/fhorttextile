@@ -7,7 +7,7 @@ import CustomerSelector from '../components/CustomerSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
 import { availableFitsStrict, matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS } from '../components/grading/gradingAxes'
 import useAuthStore from '../store/auth'
-import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, garmentTypeItems } from '../api/endpoints'
+import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, sizingProfiles } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles + GRADUACIÓ.
@@ -66,9 +66,10 @@ export default function ModelWizard() {
   const [target, setTarget] = useState(null)
   const [family, setFamily] = useState(null)
   const [item, setItem] = useState(null)
-  // P6 — el ruleset que l'ITEM porta com a estàndard (V1). Només SUGGEREIX: es marca i puja
-  // al capdamunt del picker, mai s'assigna sol (això seria arrossegar, i el pas 4 no ho fa).
-  const [itemSuggestedRsId, setItemSuggestedRsId] = useState(null)
+  // El ruleset que el CATÀLEG proposa per a la combinació (SizingProfile). Només SUGGEREIX: es
+  // marca i puja al capdamunt del picker, mai s'assigna sol (això seria arrossegar, i el pas 4
+  // no ho fa). Fins al 2026-07-23 la font era `GarmentTypeItem.grading_rule_set` (C1).
+  const [perfilSuggestedRsId, setPerfilSuggestedRsId] = useState(null)
   const [picking, setPicking] = useState(false)
   // Navegació controlada del picker de peça (CascadeSelector single, grup→ítem). Es sembra des de
   // family/item en reobrir; onConfirm (triar ítem) commita a family/item i tanca.
@@ -283,17 +284,26 @@ export default function ModelWizard() {
     if (cur?.fit_type_codi) setFit(cur.fit_type_codi)
   }, [gradingRuleSets_, gradingRuleSetId, fit])
 
-  // P6 — l'estàndard de graduació de l'item (V1) es llegeix per SUGGERIR-LO al pas 4. És el primer
-  // lector real d'aquesta FK: fins ara ningú la consumia i només feia de semàfor al catàleg d'items.
-  // Si l'item no en porta, o la lectura falla, el picker es comporta exactament com abans.
+  // El suggeriment de graduació ve del PERFIL, no de l'item (C1, 2026-07-23). Abans es llegia
+  // `GarmentTypeItem.grading_rule_set`, que ja no existirà: el joc de regles s'assigna al MODEL i
+  // l'item no en porta. La font correcta és el `SizingProfile` de la combinació
+  // target×construcció×fit×família, que és exactament el preset que el catàleg proposa.
+  //
+  // Tolerant a NULL per disseny (C3): un perfil pot declarar només ÀMBIT i no portar graduació →
+  // cap suggeriment i cap error; el picker es comporta com si no n'hi hagués, que és el que és.
+  // SUGGERIR ≠ ARROSSEGAR segueix intacte: això només ordena el picker del pas 4.
   useEffect(() => {
-    if (!item?.id) { setItemSuggestedRsId(null); return }
+    if (!target || !construction || !fit || !family?.id) { setPerfilSuggestedRsId(null); return }
     let viu = true
-    garmentTypeItems.get(item.id)
-      .then(({ data }) => { if (viu) setItemSuggestedRsId(data?.grading_rule_set ?? null) })
-      .catch(() => { if (viu) setItemSuggestedRsId(null) })
+    sizingProfiles.list({ target, construction, fit, garment_type: family.id })
+      .then(({ data }) => {
+        if (!viu) return
+        const amb = (data?.results || []).find(p => p.grading_rule_set?.id != null)
+        setPerfilSuggestedRsId(amb?.grading_rule_set?.id ?? null)
+      })
+      .catch(() => { if (viu) setPerfilSuggestedRsId(null) })
     return () => { viu = false }
-  }, [item?.id])
+  }, [target, construction, fit, family?.id])
 
   // Sprint ÀMBIT — el node de la peça (item → família → grup) viatja als eixos: un contenidor amb
   // àmbit aplica si el conté a ell o a un ancestre seu. Sense àmbit → fallback al garment_group.
@@ -730,7 +740,7 @@ export default function ModelWizard() {
                     strict
                     sizeSystemId={sizingResult?.size_system_id ?? null}
                     selectedId={gradingRuleSetId}
-                    suggestedId={itemSuggestedRsId}
+                    suggestedId={perfilSuggestedRsId}
                     actionLabel={t('model_sheet.use_ruleset')}
                     onPick={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false); setAutoProposed(false) }}
                   />
