@@ -114,6 +114,18 @@ class Model(models.Model):
         ('Des de zero', 'Des de zero'),
     ]
 
+    # Provinença del model (Federació v2). INTERN = nascut en aquesta casa (el cas de sempre).
+    # EXTERN = instanciat des d'un altre tenant via el pont de federació: conserva el sequencial
+    # del Brand (dada real, útil per ordenar) però QUEDA EXCLÒS del càlcul de terra de seqüència,
+    # perquè el seu número viu en un altre espai de numeració i enverinaria el comptador local.
+    # NO és `origen_patro` (provinença del PATRÓ, no del model): eixos diferents, camps diferents.
+    ORIGEN_INTERN = 'INTERN'
+    ORIGEN_EXTERN = 'EXTERN'
+    ORIGEN_CHOICES = [
+        (ORIGEN_INTERN, 'Intern'),
+        (ORIGEN_EXTERN, 'Extern'),
+    ]
+
     codi_intern = models.CharField(max_length=40, unique=True)
     # SKU/referència pròpia del client per a aquest model (traçabilitat seva). Text lliure;
     # NO és prefix ni clau tècnica de codi-gen (això ho mana ara `customer`).
@@ -136,6 +148,9 @@ class Model(models.Model):
     any = models.PositiveSmallIntegerField()
     temporada = models.CharField(max_length=4, choices=TEMPORADA_CHOICES)
     sequencial = models.PositiveIntegerField()
+    origen = models.CharField(
+        max_length=20, choices=ORIGEN_CHOICES, default=ORIGEN_INTERN, db_index=True,
+    )
 
     nom_prenda = models.CharField(max_length=200, blank=True, null=True)
     descripcio = models.TextField(null=True, blank=True)

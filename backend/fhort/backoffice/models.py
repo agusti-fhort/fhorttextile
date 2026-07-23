@@ -85,6 +85,12 @@ class ModelConsumptionEvent(models.Model):
     period = models.CharField(max_length=7)         # 'YYYY-MM'
     opaque_ref = models.UUIDField(unique=True)      # SENSE default: el valor ve del tenant
     merited_at = models.DateTimeField()
+    # Federació v2 (P4) — ACTOR: el schema del tenant que va OBRIR la tasca (qui merita).
+    # Additiu i informatiu: `codi_client` NO canvia de semàntica (segueix sent el customer del
+    # model, dualitat P4-b de la diagnosi). L'actor pot no coincidir amb `codi_client` quan un
+    # Studio treballa el model d'un altre. La facturació futura filtrarà per actor; els
+    # consumidors d'avui (que filtren per codi_client) no es toquen. '' = actor desconegut.
+    actor_schema = models.CharField(max_length=63, blank=True, default='')
     # F-RECUR — anti-doble-cobrament PER BD, no per disciplina. Un event facturat apunta a
     # la seva línia; un event apuntat no re-entra mai a cap generació (el motor filtra
     # invoice_line__isnull=True). SET_NULL: si s'esborra un DRAFT no emès, els seus events

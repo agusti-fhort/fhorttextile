@@ -252,6 +252,16 @@ class Customer(models.Model):
         ordering = ['codi']
         verbose_name = 'Customer'
         verbose_name_plural = 'Customers'
+        constraints = [
+            # `codi_global` és el ganxo del registre global cross-tenant (Federació v2):
+            # etiqueta d'identitat, no vincle. Unicitat NOMÉS entre els no-NULL (els
+            # customers no-self viuen amb NULL fins que el TenantLink els resolgui).
+            models.UniqueConstraint(
+                fields=['codi_global'],
+                condition=models.Q(codi_global__isnull=False),
+                name='unic_codi_global_no_null',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.codi} · {self.nom}'

@@ -97,12 +97,39 @@ un decimal destruiria mig domini de confecció).
 
 ## Q4 · REGRESSIÓ SENCERA
 
-Els 24 vermells preexistents de `SizeFitting` no compten, i s'han identificat: totes les
-fallades del bloc són la mateixa `IntegrityError` de
-`fitting_sizefitting_model_id_numero_uniq` **dins del `setUp` dels tests aliens** (un signal
-de `Model` ja sembra el `SizeFitting numero=1` i el fixture n'hi crea un altre). No toquen
-`pom/services.py` ni cap fitxer d'aquest sprint. El fixture propi d'aquest sprint sí que ho
-contempla (reutilitza el SF sembrat).
+```
+Ran 788 tests in 1969.759s
+FAILED (errors=78)        ← 78 errors, 0 failures
+```
+
+**Els 78 errors són TOTS la mateixa causa i TOTS preexistents.** Cap ve d'aquest sprint.
+
+Signatura única: `IntegrityError` a
+`fitting_sizefitting_model_id_numero_6dc01a35_uniq`, sempre **dins del `setUp` de tests
+aliens** — un signal de `Model` ja sembra el `SizeFitting numero=1` i el fixture n'hi crea
+un altre a sobre. Repartits en 5 mòduls: `patterns.tests` (25), `pom.test_g6_segell` (17),
+`fitting.tests` (16), `fitting.test_g6_estalitud` (13), `pom.test_g6_grading_gates` (7).
+
+Verificat executant els mòduls afectats al commit **base `865c566`** (worktree aïllat,
+mateix venv i mateixa BD):
+
+| mòduls | al base `865c566` | a HEAD |
+|---|---|---|
+| `pom.test_g6_segell` + `pom.test_g6_grading_gates` | **24 errors** | 24 (17+7) |
+| `patterns.tests` + `fitting.tests` + `fitting.test_g6_estalitud` | **54 errors** | 54 (25+16+13) |
+| **total** | **78** | **78** |
+
+Mateix nombre, mateixos mòduls, mateixa excepció als dos costats: **el sprint no n'afegeix
+ni un**. Els 24 del primer bloc són exactament els «24 vermells SizeFitting preexistents»
+que el brief deia que no compten — el brief comptava els mòduls de `pom`.
+
+> ⚠️ **El nombre real de vermells preexistents del repo és 78, no 24.** El 24 del brief era
+> el subconjunt de `pom`. Val la pena arreglar el fixture compartit (reutilitzar el SF
+> sembrat pel signal en comptes de crear-ne un): és una sola línia per fitxer i recuperaria
+> 78 tests. **Anotat, no tocat** — fora de l'abast d'aquest sprint.
+
+El fixture propi d'aquest sprint sí que ho contempla (reutilitza el SF sembrat), i per això
+els 48 tests nous passen tots.
 
 Tests NOUS del sprint, tots verds:
 

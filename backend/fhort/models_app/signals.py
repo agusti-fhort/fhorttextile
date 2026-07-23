@@ -55,16 +55,19 @@ def generate_model_code(sender, instance, **kwargs):
     # MAX sequencial escopat per customer_id (Pas 4/1b) + any + temporada.
     from django.db import connection
     with connection.cursor() as cursor:
+        # Els EXTERN (federació) conserven el sequencial del Brand, que viu en un altre espai
+        # de numeració: excloure'ls del MAX perquè no enverinin el terra local (paritat amb
+        # _real_max_seq de services.py; tanca el residual del signal vist a l'assaig).
         if getattr(instance, 'customer_id', None):
             cursor.execute(
                 'SELECT MAX(sequencial) FROM models_app_model '
-                'WHERE customer_id = %s AND "any" = %s AND temporada = %s',
+                "WHERE customer_id = %s AND \"any\" = %s AND temporada = %s AND origen <> 'EXTERN'",
                 [instance.customer_id, instance.any, instance.temporada])
         else:
             # Cas degradat (sense self-customer sembrat encara): escopa pels orfes.
             cursor.execute(
                 'SELECT MAX(sequencial) FROM models_app_model '
-                'WHERE customer_id IS NULL AND "any" = %s AND temporada = %s',
+                "WHERE customer_id IS NULL AND \"any\" = %s AND temporada = %s AND origen <> 'EXTERN'",
                 [instance.any, instance.temporada])
         row = cursor.fetchone()
 

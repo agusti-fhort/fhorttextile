@@ -73,12 +73,17 @@ def reserve_sequence_range(customer, year, season, n):
 
 
 def _real_max_seq(customer, year, season):
-    """L'últim seqüencial que hi ha AL TERRENY (el que sigui que l'hagi escrit)."""
+    """L'últim seqüencial que hi ha AL TERRENY (el que sigui que l'hagi escrit).
+
+    Els models EXTERN (federació) queden EXCLOSOS: conserven el sequencial del Brand, que
+    viu en un altre espai de numeració; comptar-lo aquí enverinaria el comptador local
+    (Bandera 1 de la diagnosi). Només els INTERN defineixen el terra d'aquesta casa.
+    """
     from django.db.models import Max
     from fhort.models_app.models import Model
     return Model.objects.filter(
         customer=customer, any=year, temporada=season,
-    ).aggregate(m=Max('sequencial'))['m'] or 0
+    ).exclude(origen=Model.ORIGEN_EXTERN).aggregate(m=Max('sequencial'))['m'] or 0
 
 
 def sequence_floor(customer, year, season):

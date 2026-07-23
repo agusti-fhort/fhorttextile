@@ -1,5 +1,7 @@
+import secrets
 from datetime import timedelta
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django_tenants.models import DomainMixin, TenantMixin
 
@@ -314,3 +316,116 @@ class TenantContacte(models.Model):
 
     def __str__(self):
         return f'{self.nom} {self.cognom}'.strip()
+
+
+class TenantLink(models.Model):
+    """Pont de federació entre una Marca (Brand) i un Estudi (Studio).
+
+    LA LLEI: el token governa el PONT, mai la capacitat de treballar. El vincle
+    l'emet el Brand; mentre és viu (estat=ACTIU) el pont deixa passar; aturar-lo
+    o revocar-lo NO destrueix cap dada ni impedeix a l'Studio seguir treballant amb
+    el seu Customer intern. Són els 3 estats legítims de la relació (llei C1 de la
+    diagnosi): sense vincle / vincle viu / vincle aturat. El treball no depèn del pont.
+
+    PER QUÈ VIU A `tenants` I NO A `backoffice`: com `CodiAuth`, el vincle creua
+    orígens i ha de ser visible des dels dos costats. `fhort.tenants` és a SHARED_APPS
+    → les seves taules només existeixen a `public`, que és on un vincle cross-tenant
+    ha de viure. A més, `backoffice` depèn de `tenants` (no a la inversa): posar el
+    vincle a `backoffice` invertiria l'única frontera neta que queda (diagnosi §5.5).
+
+    PER QUÈ REFERÈNCIA PER CODI NU I NO PER FK: el vincle ha de sobreviure a la lectura
+    des de DINS d'un tenant, on `Client` no és consultable sense `schema_context`. El
+    precedent directe és `CodiAuth.tenant_schema` (un CharField, no una FK). Els
+    `codi_tenant` són identitat estable de 3 chars (`Client.codi_tenant`, unique).
+    """
+
+    ESTAT_ACTIU = 'ACTIU'
+    ESTAT_ATURAT = 'ATURAT'
+    ESTAT_REVOCAT = 'REVOCAT'
+    ESTAT_CHOICES = [
+        (ESTAT_ACTIU, 'Actiu'),
+        (ESTAT_ATURAT, 'Aturat'),
+        (ESTAT_REVOCAT, 'Revocat'),
+    ]
+
+    #: El Brand (tipologia='marca') que EMET el vincle i és la casa canònica.
+    brand_codi_tenant = models.CharField(max_length=3)
+    #: L'Studio (tipologia='estudi') que treballa el catàleg del Brand a través del pont.
+    studio_codi_tenant = models.CharField(max_length=3)
+
+    #: Secret opac del pont. 32 bytes d'entropia de `secrets`, generat en crear.
+    token = models.CharField(max_length=64, unique=True)
+    estat = models.CharField(max_length=10, choices=ESTAT_CHOICES, default=ESTAT_ACTIU)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    #: Moment de l'última aturada/revocació (NULL mentre no s'ha aturat mai).
+    aturat_at = models.DateTimeField(null=True, blank=True)
+    nota = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = 'Vincle de federació'
+        verbose_name_plural = 'Vincles de federació'
+        unique_together = [('brand_codi_tenant', 'studio_codi_tenant')]
+
+    def __str__(self):
+        return f'{self.brand_codi_tenant} ↔ {self.studio_codi_tenant} ({self.estat})'
+
+    @staticmethod
+    def genera_token():
+        return secrets.token_urlsafe(32)
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = self.genera_token()
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        """Els dos extrems han d'existir i tenir la tipologia correcta.
+
+        `tipologia` és aquí el primer consumidor de domini del camp (fins ara inert):
+        el Brand ha de ser 'marca' i l'Studio 'estudi'. Lectura de `Client` a public
+        (mateix schema: `tenants` és SHARED i `Client` és consultable sense context).
+        """
+        brand = Client.objects.filter(codi_tenant=self.brand_codi_tenant).first()
+        if brand is None:
+            raise ValidationError({'brand_codi_tenant': f"No existeix cap tenant '{self.brand_codi_tenant}'."})
+        if brand.tipologia != Client.TIPOLOGIA_MARCA:
+            raise ValidationError({'brand_codi_tenant': f"El tenant '{self.brand_codi_tenant}' no és una Marca (tipologia='{brand.tipologia}')."})
+
+        studio = Client.objects.filter(codi_tenant=self.studio_codi_tenant).first()
+        if studio is None:
+            raise ValidationError({'studio_codi_tenant': f"No existeix cap tenant '{self.studio_codi_tenant}'."})
+        if studio.tipologia != Client.TIPOLOGIA_ESTUDI:
+            raise ValidationError({'studio_codi_tenant': f"El tenant '{self.studio_codi_tenant}' no és un Estudi (tipologia='{studio.tipologia}')."})
+
+    def es_viu(self):
+        """El pont deixa passar (només ACTIU)."""
+        return self.estat == self.ESTAT_ACTIU
+
+    def aturar(self):
+        """Atura el pont sense destruir res. Només des d'ACTIU."""
+        if self.estat != self.ESTAT_ACTIU:
+            raise ValidationError(f"Només es pot aturar un vincle ACTIU (estat actual: {self.estat}).")
+        from django.utils import timezone
+        self.estat = self.ESTAT_ATURAT
+        self.aturat_at = timezone.now()
+        self.save(update_fields=['estat', 'aturat_at', 'updated_at'])
+
+    def reactivar(self):
+        """Reactiva un pont aturat. REVOCAT és terminal: no es pot reactivar."""
+        if self.estat != self.ESTAT_ATURAT:
+            raise ValidationError(f"Només es pot reactivar un vincle ATURAT (estat actual: {self.estat}).")
+        self.estat = self.ESTAT_ACTIU
+        self.aturat_at = None
+        self.save(update_fields=['estat', 'aturat_at', 'updated_at'])
+
+    def revocar(self):
+        """Talla el pont de manera definitiva (estat terminal). No destrueix cap dada."""
+        if self.estat == self.ESTAT_REVOCAT:
+            return
+        from django.utils import timezone
+        self.estat = self.ESTAT_REVOCAT
+        if self.aturat_at is None:
+            self.aturat_at = timezone.now()
+        self.save(update_fields=['estat', 'aturat_at', 'updated_at'])
