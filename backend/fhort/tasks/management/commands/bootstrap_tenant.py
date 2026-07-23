@@ -170,6 +170,9 @@ class Piece:
         self.name, self.created, self.updated, self.skipped, self.nulled = name, 0, 0, 0, 0
         # --additive: claus naturals que ja existien al destí i s'han deixat INTACTES.
         self.skipped_existents = 0
+        # --additive: claus naturals AMBIGÜES al destí (≥2 files) — saltades, mai resoltes en
+        # silenci. Llista de (lookup, n_coincidències). Deute de dades preexistent del destí.
+        self.ambigus = []
 
 
 class Command(BaseCommand):
@@ -322,19 +325,28 @@ class Command(BaseCommand):
                 att = model._meta.get_field(k).attname
                 lookup[att] = values.pop(att)
 
-            # --additive: get_or_create → si la clau ja existeix, es retorna INTACTA (no
-            # s'apliquen `defaults`). Sense additiu: update_or_create (sobreescriu, actual).
+            # --additive: NO assumeix que la clau natural és única al destí (el destí pot
+            # arrossegar deute de dades amb duplicats). count → 0: crear; ≥1: SALTAR intacte
+            # (mai triar-ne una per actualitzar, mai crear-ne una segona). Si >1, es reporta
+            # com a ambigu. Sense additiu: update_or_create (sobreescriu, comportament actual).
             if additive:
-                obj, created = model.objects.get_or_create(**lookup, defaults=values)
+                dst_pks = list(model.objects.filter(**lookup).values_list('pk', flat=True))
+                if not dst_pks:
+                    dst_pk, created = model.objects.create(**lookup, **values).pk, True
+                    p.created += 1
+                else:
+                    dst_pk, created = dst_pks[0], False
+                    p.skipped_existents += 1
+                    if len(dst_pks) > 1:
+                        p.ambigus.append((dict(lookup), len(dst_pks)))
             else:
                 obj, created = model.objects.update_or_create(**lookup, defaults=values)
-            maps.setdefault(model, {})[src_pk] = obj.pk
-            if created:
-                p.created += 1
-            elif additive:
-                p.skipped_existents += 1
-            else:
-                p.updated += 1
+                dst_pk = obj.pk
+                if created:
+                    p.created += 1
+                else:
+                    p.updated += 1
+            maps.setdefault(model, {})[src_pk] = dst_pk
             # Un objecte és "nostre" (per a M2M i auto-FK diferides) si l'hem creat aquí; sense
             # additiu, tota fila ho és (comportament actual). Els preexistents en additiu, no.
             if created or not additive:
@@ -458,9 +470,10 @@ class Command(BaseCommand):
                         extra = f" · {p.nulled} FK d'entitat → NULL" if p.nulled else ''
                         skip = f" · {p.skipped} saltats" if p.skipped else ''
                         exist = f"  {p.skipped_existents:>5} ja existien" if additive else ''
+                        amb = f" · {len(p.ambigus)} ambigus" if p.ambigus else ''
                         self.stdout.write(
                             f"  {p.name:22} {p.created:>5} creats  {p.updated:>5} actualitzats"
-                            f"{exist}{extra}{skip}")
+                            f"{exist}{extra}{skip}{amb}")
                         if p.skipped:
                             ok = False
 
@@ -509,6 +522,16 @@ class Command(BaseCommand):
         self.stdout.write(
             f"\n{'[DRY-RUN] ' if dry else ''}Total: {total_c} creats, {total_u} actualitzats, "
             f"{exist_txt}{total_n} FK d'entitat a NULL, {total_s} saltats.")
+
+        # --additive: claus ambigües al destí (deute de dades preexistent). Es reporten totes;
+        # no s'ha tocat res d'elles (ni triat, ni creat una segona). Cal netejar-les al destí.
+        ambigus = [(p.name, lk, n) for p in pieces for (lk, n) in p.ambigus]
+        if ambigus:
+            self.stdout.write(self.style.WARNING(
+                f"\nambigus_al_desti: {len(ambigus)} clau(s) natural(s) amb ≥2 files al destí "
+                f"(saltades intactes, deute de dades a resoldre):"))
+            for name, lk, n in ambigus:
+                self.stdout.write(f"    · {name} {lk} → {n} coincidències")
 
         if not ok:
             self.stdout.write(self.style.ERROR(
