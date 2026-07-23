@@ -796,9 +796,11 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
       const tIds = form.target_codis.map(c => codeToId(lookups.targets, c)).filter(v => v != null)
       const cId = codeToId(lookups.constructions, form.construction_codi_form)
       const fId = codeToId(lookups.fits, form.fit_type_codi_form)
-      // Envia el CONJUNT SENCER de targets (M2M) + el FK `target` legacy sincronitzat al primer,
-      // igual que el camí de creació. Sense selecció → no s'envia (PATCH deixa el M2M intacte).
-      if (tIds.length) { payload.targets = tIds; payload.target = tIds[0] }
+      // Envia el CONJUNT SENCER de targets (M2M), font única del ventall. Sense selecció → no
+      // s'envia (PATCH deixa el M2M intacte). El FK legacy `target` que aquí s'hi sincronitzava
+      // ja no existeix: retirat a la migració pom/0043 (P7, «un rol, un vincle»), i el serializer
+      // no el té — el camp viatjava i DRF l'ignorava en silenci.
+      if (tIds.length) payload.targets = tIds
       if (cId != null) payload.construction = cId
       if (fId != null) payload.fit_type = fId
       // Abast: en EDICIÓ (PATCH) només si l'usuari l'ha tocat (D1: no tocar → intacte). En CREACIÓ/CLON
