@@ -1,7 +1,7 @@
 """Sprint C: màquina d'estats del kanban del tècnic + timer server-side."""
 import logging
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils import timezone
 from .models import ModelTask, TimerEntrada, TaskTransition
 
@@ -177,6 +177,8 @@ def transition_task(task, to_status, profile, force=False):
                         period=record.period,
                         opaque_ref=record.opaque_ref,
                         merited_at=now,
+                        # P4 — ACTOR: el tenant actiu que obre la tasca (qui merita).
+                        actor_schema=connection.schema_name,
                     )
         except Exception:
             logger.exception("meritacio fallida model=%s task=%s", task.model_id, task.pk)

@@ -153,6 +153,8 @@ class Command(BaseCommand):
                                 period=period,
                                 opaque_ref=ref,
                                 merited_at=merited_at,
+                                # P4 — ACTOR: el schema del tenant que es reconcilia.
+                                actor_schema=tenant.schema_name,
                             )
 
                         self.stdout.write(
