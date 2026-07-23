@@ -955,6 +955,7 @@
     "grading_system": "Sistema de tallas",
     "no_grading": "Sin graduación (elegir más tarde)",
     "pick_fit": "Elige el fit",
+    "fit_sense_graduacio": "Ningún juego de reglas para este fit",
     "no_grading_available": "No hay ningún juego de reglas que coincida con esta combinación de prenda y tallas. Puedes continuar sin graduación y añadirla más tarde.",
     "grading_auto_proposed": "Propuesto automáticamente (única coincidencia). Puedes cambiarlo o elegir «Sin graduación».",
     "size_run_replace_confirm": "El sistema «{{sistema}}» no contiene todas las tallas del run actual. Esto sustituirá el run de {{from}} tallas por {{to}} tallas y reasignará la talla base. ¿Quieres continuar?",
@@ -3154,7 +3155,8 @@
     "axis_fit": "el fit",
     "axis_size_system": "el sistema de tallas",
     "picker_missing_axes": "Para listar juegos de reglas falta {{eixos}}.",
-    "picker_incompatible": "No encaja con: {{eixos}}"
+    "picker_incompatible": "No encaja con: {{eixos}}",
+    "compat_motiu": "Sin perfil de tallas para {{eix}}"
   },
   "model_phases": {
     "Nou": "Nuevo",

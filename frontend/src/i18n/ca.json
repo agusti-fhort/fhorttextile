@@ -955,6 +955,7 @@
     "grading_system": "Sistema de talles",
     "no_grading": "Sense graduació (triar més tard)",
     "pick_fit": "Tria el fit",
+    "fit_sense_graduacio": "Cap joc de regles per a aquest fit",
     "no_grading_available": "No hi ha cap joc de regles que casi amb aquesta combinació de peça i talles. Pots continuar sense graduació i afegir-la més tard.",
     "grading_auto_proposed": "Proposat automàticament (única coincidència). Pots canviar-lo o triar «Sense graduació».",
     "size_run_replace_confirm": "El sistema «{{sistema}}» no conté totes les talles del run actual. Això substituirà el run de {{from}} talles per {{to}} talles i reassignarà la talla base. Vols continuar?",
@@ -3154,7 +3155,8 @@
     "axis_fit": "el fit",
     "axis_size_system": "el sistema de talles",
     "picker_missing_axes": "Per llistar jocs de regles falta {{eixos}}.",
-    "picker_incompatible": "No encaixa amb: {{eixos}}"
+    "picker_incompatible": "No encaixa amb: {{eixos}}",
+    "compat_motiu": "Sense perfil de talles per a {{eix}}"
   },
   "model_phases": {
     "Nou": "Nou",

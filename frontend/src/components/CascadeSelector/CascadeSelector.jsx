@@ -26,6 +26,10 @@ import GroupPills from '../GarmentTypeSelector/GroupPills'
 //   stopPolicy?='free'      — 'free' = parar a qualsevol nivell (ítem és toggle) · 'require-item' = en
 //                             triar ítem crida onConfirm (emet-i-tanca, patró GarmentTypeSelector).
 //   onConfirm?              — (single, require-item) onConfirm({ value, family, item }) en triar ítem.
+//   compat?                 — (només single) LLEI C5: { construction?, fit? }. Quan s'informa, el
+//                             catàleg NO exclou res: les famílies/grups sense perfil de talles per a
+//                             la combinació surten ATENUATS i avall, amb el motiu, en comptes de
+//                             desaparèixer. Sense la prop, comportament històric (filtre excloent).
 //   showCounts?=false       — (només multi) mostra el comptador de models per node.
 //   counts?                 — (multi, showCounts) { by_type:{<garment_type_id>:n}, by_item:{<item_id>:n} }
 //                             injectat pel consumidor (endpoint /models/garment-counts/); el component NO fa fetch.
@@ -48,7 +52,7 @@ export default function CascadeSelector({ mode = 'single', ...rest }) {
 // ── MODE SINGLE — evolució d'AxesSelector: valor pla, patch complet amb neteja d'eixos inferiors,
 // gatings de visibilitat i toggle de família/ítem. Afegeix acotació minLevel/maxLevel i require-item.
 function SingleCascade({
-  ruleSets = [], value, onChange, target,
+  ruleSets = [], value, onChange, target, compat = null,
   minLevel = 'target', maxLevel = 'item', stopPolicy = 'free', onConfirm,
 }) {
   const { t, i18n } = useTranslation()
@@ -68,7 +72,7 @@ function SingleCascade({
   const constructions = useMemo(() => availableConstructions(ruleSets, vTarget), [ruleSets, vTarget])
   const fits = useMemo(() => availableFits(ruleSets, vTarget, construction), [ruleSets, vTarget, construction])
 
-  const { groups, familiesOf } = useGarmentCatalog(catalogTarget)
+  const { groups, familiesOf } = useGarmentCatalog(catalogTarget, compat)
   const families = familiesOf(garmentGroup)
   const [items, setItems] = useState([])
 
@@ -165,6 +169,7 @@ function SingleCascade({
                 label={g.nom_en}
                 sublabel={lang !== 'en' ? nomLocal(g, lang) : null}
                 selected={garmentGroup === g.codi}
+                motiu={motiuDe(g, t)}
                 onClick={() => pick({ garmentGroup: g.codi, garmentTypeId: null, garmentTypeItemId: null })}
               />
             ))}
@@ -182,6 +187,7 @@ function SingleCascade({
                 label={famLabel(f, lang)}
                 sublabel={f.codi_client || null}
                 selected={garmentTypeId === f.id}
+                motiu={motiuDe(f, t)}
                 onClick={() => pick({
                   garmentTypeId: garmentTypeId === f.id ? null : f.id, garmentTypeItemId: null })}
               />
@@ -404,17 +410,27 @@ function TargetCard({ target, selected, available, onClick }) {
   )
 }
 
-function SelectionButton({ label, sublabel, selected, onClick }) {
+// C5 — motiu traduït d'un node atenuat, o null si és compatible (o si no s'ha demanat compat).
+function motiuDe(node, t) {
+  if (node?.compat?.ok !== false) return null
+  return t('grading.compat_motiu', { eix: t(`grading.axis_${node.compat.motiu || 'target'}`) })
+}
+
+// `motiu` (C5): el node NO és compatible amb la combinació demanada. S'atenua i ho DIU — però
+// segueix clicable: l'eina s'ofereix sencera i s'acota amb informació, no amb ocultació ni bloqueig.
+function SelectionButton({ label, sublabel, selected, motiu = null, onClick }) {
   return (
     <button
       onClick={onClick}
+      title={motiu || undefined}
       style={{
         border: `1px solid ${selected ? 'var(--gold)' : 'var(--border)'}`,
-        borderRadius: 6, padding: sublabel ? '5px 12px' : '6px 14px',
+        borderRadius: 6, padding: sublabel || motiu ? '5px 12px' : '6px 14px',
         background: selected ? 'var(--gold-pale)' : 'var(--white)',
         color: selected ? 'var(--gold)' : 'var(--text-main)',
         fontWeight: selected ? 600 : 400, fontSize: 'var(--fs-body)',
         cursor: 'pointer', transition: 'all .15s', textAlign: 'left', lineHeight: 1.25,
+        opacity: motiu ? 0.5 : 1,
       }}
     >
       {label}
@@ -424,6 +440,14 @@ function SelectionButton({ label, sublabel, selected, onClick }) {
           color: selected ? 'var(--gold)' : 'var(--text-muted)', fontWeight: 400, marginTop: 1,
         }}>
           {sublabel}
+        </span>
+      )}
+      {motiu && (
+        <span style={{
+          display: 'block', fontSize: 'var(--fs-caption)',
+          color: 'var(--text-muted)', fontWeight: 400, marginTop: 1,
+        }}>
+          {motiu}
         </span>
       )}
     </button>
