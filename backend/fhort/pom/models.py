@@ -943,9 +943,20 @@ class SizingProfile(models.Model):
                          related_name='sizing_profiles')
     fit_type         = models.ForeignKey('FitType', on_delete=models.PROTECT,
                          related_name='sizing_profiles')
+    # L'àmbit SÍ que declara sistema de talles: un perfil diu en quina escala viu la combinació.
     size_system      = models.ForeignKey('SizeSystem', on_delete=models.PROTECT,
                          related_name='sizing_profiles')
+    # C3 (2026-07-23) — NULLABLE. Un SizingProfile és, abans que res, una declaració d'ÀMBIT
+    # (aquesta família aplica a aquest target amb aquesta construcció i aquest fit): és el que
+    # consumeix el filtre de compatibilitat del wizard (`pom/views.py:121-132`). La graduació és
+    # un SUGGERIMENT que el perfil pot portar, no la seva raó de ser. Obligar-la volia dir que
+    # declarar àmbit de catàleg exigia inventar-se una graduació — contradicció amb la llei de
+    # sobirania (el catàleg proposa, el model disposa). Mateix patró que el camp germà
+    # `GarmentTypeItem.grading_rule_set` (tasks/models.py:329). on_delete=PROTECT es manté:
+    # esborrar un ruleset referenciat segueix passant pel consentiment informat de
+    # `GradingRuleSetViewSet.destroy` (pom/views.py:218-253).
     grading_rule_set = models.ForeignKey('GradingRuleSet', on_delete=models.PROTECT,
+                         null=True, blank=True,
                          related_name='sizing_profiles')
     # Eix client (DIAGNOSI_BIBLIOTECA_CLIENT_2026-07-08): NULL = perfil genèric del tenant;
     # informat = perfil propi del client. db_constraint=False perquè `pom` és SHARED+TENANT i

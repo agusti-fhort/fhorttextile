@@ -95,7 +95,9 @@ class SizingProfileSerializer(serializers.Serializer):
     fit_type_nom = serializers.SerializerMethodField()
     fit_type_codi = serializers.SerializerMethodField()
     size_system = SizeSystemLightSerializer()
-    grading_rule_set = GradingRuleSetLightSerializer()
+    # C3 — el perfil pot no portar graduació (declaració d'àmbit pura). S'exposa `null`, que és
+    # el que el consumidor ha de saber llegir: «hi ha àmbit, no hi ha suggeriment».
+    grading_rule_set = GradingRuleSetLightSerializer(allow_null=True, required=False)
     is_default = serializers.BooleanField()
     is_custom = serializers.SerializerMethodField()
     version = serializers.IntegerField()

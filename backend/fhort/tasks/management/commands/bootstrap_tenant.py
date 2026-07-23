@@ -69,8 +69,10 @@ SEED_BLOCK_DEPS = {
     'garments':        {'base'},
     'pom_masters':     {'base', 'garments'},
     'grading':         {'base', 'size_systems', 'pom_masters', 'garments'},
-    # SizingProfile.grading_rule_set és PROTECT i NO nullable: un perfil de mesures
-    # exigeix un ruleset de grading al schema. Dependència DURA → arrossega grading.
+    # SizingProfile.grading_rule_set és PROTECT i, des de C3 (pom/0045), NULLABLE: un perfil pot
+    # declarar només àmbit. La dependència es manté DURA a posta — sembrar perfils amb la
+    # graduació buidada en silenci seria una pèrdua muda; qui vulgui àmbit sense graduació el
+    # crea (`crea_sizing_profiles`), no el sembra a mitges.
     'sizing_profiles': {'base', 'garments', 'size_systems', 'grading'},
     'time_seeds':      {'base', 'garments'},
 }

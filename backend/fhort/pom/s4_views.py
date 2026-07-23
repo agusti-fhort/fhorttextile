@@ -278,11 +278,21 @@ def restore_version_view(request, profile_id):
 
         original = profile.parent_profile
 
+        # C3 — restaurar és sincronitzar regles contra les del pare. Si algun dels dos perfils no
+        # porta graduació no hi ha res a sincronitzar: es diu, en comptes de tornar «0 regles
+        # restaurades» com si la feina s'hagués fet.
+        if not (original.grading_rule_set_id and profile.grading_rule_set_id):
+            return Response(
+                {'error': 'perfil_sense_graduacio',
+                 'message': ("Aquest perfil (o el seu estàndard) no porta graduació: no hi ha "
+                             "regles a restaurar.")},
+                status=400)
+
         # Sync the custom rules with the parent's
         original_rules = {r.pom_id: r for r in GradingRule.objects.filter(
-            rule_set=original.grading_rule_set
+            rule_set_id=original.grading_rule_set_id
         )}
-        custom_rules = GradingRule.objects.filter(rule_set=profile.grading_rule_set)
+        custom_rules = GradingRule.objects.filter(rule_set_id=profile.grading_rule_set_id)
 
         updated = 0
         for rule in custom_rules:
