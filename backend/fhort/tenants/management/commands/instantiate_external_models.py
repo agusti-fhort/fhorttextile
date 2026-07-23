@@ -57,21 +57,25 @@ class Command(BaseCommand):
         if studio_client is None:
             raise CommandError(f"No existeix cap tenant amb codi_tenant='{studio}'.")
 
-        # (b) Llegir el Brand com a DICTS (mai ORM viu fora del context).
-        rows = self._read_brand(brand_client.schema_name, limit)
+        # (b) Llegir el Brand com a DICTS (mai ORM viu fora del context). NOMÉS els models que
+        # el Brand ha ASSIGNAT a aquest Studio (studio_assignat). El pont obert no basta.
+        total_brand, n_assignats, rows = self._read_brand(brand_client.schema_name, studio, limit)
 
         # (c-d) Resoldre i (opcionalment) crear al Studio.
         report = self._write_studio(studio_client.schema_name, brand, rows, commit)
 
         # (e) Informe final.
-        self._print_report(brand, studio, commit, len(rows), report)
+        self._print_report(brand, studio, commit, total_brand, n_assignats, len(rows), report)
 
     # ── (b) lectura del Brand ──────────────────────────────────────────────────
-    def _read_brand(self, brand_schema, limit):
+    def _read_brand(self, brand_schema, studio, limit):
         from fhort.models_app.models import Model
         rows = []
         with schema_context(brand_schema):
-            qs = (Model.objects
+            total_brand = Model.objects.count()
+            assignats = Model.objects.filter(studio_assignat=studio)
+            n_assignats = assignats.count()
+            qs = (assignats
                   .select_related('garment_type_item__garment_type', 'size_system', 'grading_rule_set')
                   .order_by('sequencial', 'codi_intern'))
             if limit:
@@ -94,7 +98,7 @@ class Command(BaseCommand):
                     'size_system_codi': m.size_system.codi if m.size_system_id else None,
                     'grs_nom': m.grading_rule_set.nom if m.grading_rule_set_id else None,
                 })
-        return rows
+        return total_brand, n_assignats, rows
 
     # ── (c-d) escriptura al Studio ─────────────────────────────────────────────
     def _write_studio(self, studio_schema, brand, rows, commit):
@@ -170,11 +174,14 @@ class Command(BaseCommand):
         return {'creats': creats, 'saltats': saltats, 'unmatched': unmatched}
 
     # ── (e) informe ────────────────────────────────────────────────────────────
-    def _print_report(self, brand, studio, commit, n_llegits, report):
+    def _print_report(self, brand, studio, commit, total_brand, n_assignats, n_llegits, report):
         mode = 'COMMIT' if commit else 'DRY-RUN'
         verb = 'creats' if commit else 'a crear'
         self.stdout.write(f"\n[{mode}] instantiate_external_models {brand} → {studio}")
-        self.stdout.write(f"  llegits del Brand : {n_llegits}")
+        # N models al Brand, dels quals M assignats a aquest Studio: N-M existeixen però NO
+        # viatgen (és el cas correcte — sense assignació, cap traspàs).
+        self.stdout.write(f"  models al Brand   : {total_brand} · assignats a {studio}: {n_assignats}")
+        self.stdout.write(f"  llegits (assignats): {n_llegits}")
         self.stdout.write(f"  {verb:<17}: {len(report['creats'])}")
         self.stdout.write(f"  saltats (ja hi són): {len(report['saltats'])}")
 
