@@ -379,12 +379,17 @@ function Field({ label, children }) {
 }
 
 // Card curta d'item: porta d'entrada a la pàgina d'autoria + termòmetre de completesa
-// (POMs · grading · talla base). NO repeteix el detall que s'edita dins (B3).
+// (POMs · talla base). NO repeteix el detall que s'edita dins (B3).
+//
+// a4 (C1, 2026-07-23) — la GRADUACIÓ surt del termòmetre. Un item sense joc de regles no és un
+// item incomplet: el joc de regles s'assigna al MODEL, i el que l'item pot portar és només un
+// SUGGERIMENT. Comptar-lo com a mancança pintava de vermell l'estat normal de les 57 files de
+// PROD i era la pressió que empenyia a assignar-ne un «per passar». Segueix visible com a línia
+// informativa, sense semàfor.
 function ItemCard({ it, t, canEdit, onEdit, onDelete, onFiles, actiu = false }) {
-  const hasGrading = !!it.grading_rule_set_nom
   const hasBase = it.base_size_label != null
   const hasPoms = (it.poms_count || 0) > 0
-  const facets = [hasPoms, hasGrading, hasBase]
+  const facets = [hasPoms, hasBase]
   const done = facets.filter(Boolean).length
   return (
     <div style={{ border: `0.5px solid ${actiu ? 'var(--gold)' : 'var(--gray-l)'}`, borderRadius: 12, background: actiu ? 'var(--gold-pale)' : 'var(--white)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -395,8 +400,8 @@ function ItemCard({ it, t, canEdit, onEdit, onDelete, onFiles, actiu = false }) 
           </div>
           <div style={{ fontFamily: MONO, fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>{it.code}</div>
         </div>
-        {/* termòmetre: 3 punts (POMs · grading · talla base) */}
-        <div style={{ display: 'flex', gap: 3, flexShrink: 0, marginTop: 3 }} title={`${done}/3`}>
+        {/* termòmetre: 2 punts (POMs · talla base) — la graduació no hi compta (a4) */}
+        <div style={{ display: 'flex', gap: 3, flexShrink: 0, marginTop: 3 }} title={`${done}/2`}>
           {facets.map((on, i) => (
             <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: on ? 'var(--gold)' : 'transparent', border: `1px solid ${on ? 'var(--gold)' : 'var(--gray-l)'}` }} />
           ))}
@@ -404,7 +409,8 @@ function ItemCard({ it, t, canEdit, onEdit, onDelete, onFiles, actiu = false }) 
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontFamily: MONO }}>
         <StatusLine label={t('garment_types.card_poms')} value={String(it.poms_count ?? 0)} on={hasPoms} />
-        <StatusLine label={t('garment_types.card_grading')} value={it.grading_rule_set_nom || '—'} on={hasGrading} />
+        <StatusLine label={t('garment_types.card_grading_hint')}
+          value={it.grading_rule_set_nom || t('garment_types.card_grading_none')} informatiu />
         <StatusLine label={t('garment_types.card_basesize')} value={it.base_size_label || '—'} on={hasBase} />
       </div>
       {/* D21 — consulta de fitxers: gate de LECTURA (IsAuthenticated), no CONFIGURE. Qui pot veure
@@ -427,12 +433,14 @@ function ItemCard({ it, t, canEdit, onEdit, onDelete, onFiles, actiu = false }) 
   )
 }
 
-function StatusLine({ label, value, on }) {
+// `informatiu` (a4): línia SENSE semàfor — l'absència no és una mancança, només una dada.
+function StatusLine({ label, value, on, informatiu = false }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 'var(--fs-label)' }}>
       <span style={{ color: 'var(--text-muted)' }}>{label}</span>
       <span style={{
-        color: on ? 'var(--text-main)' : 'var(--gray)', fontWeight: on ? 600 : 400,
+        color: informatiu ? 'var(--text-muted)' : (on ? 'var(--text-main)' : 'var(--gray)'),
+        fontWeight: !informatiu && on ? 600 : 400,
         textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150,
       }}>{value}</span>
     </div>

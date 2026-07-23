@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { orderWithSuggestedFirst } from './gradingAxes.js'
+import { classifyRuleSets, orderWithSuggestedFirst } from './gradingAxes.js'
 
 const A = { id: 75, nom: 'EU Woven Woman Regular' }
 const B = { id: 115, nom: 'BRW · Blusa · ALPHA_EU_W' }
@@ -51,4 +51,44 @@ test('no altera mai el conjunt, només l’ordre', () => {
 
 test('llista buida → buida', () => {
   assert.deepEqual(orderWithSuggestedFirst([], 115), [])
+})
+
+// ── C5 · LLEI DELS WIZARDS ELIMINATIUS (2026-07-23) ────────────────────────────
+// La llei que defensen: seleccionar ATENUA I REORDENA, mai amaga. El conjunt de sortida ha de
+// tenir SEMPRE la mida del d'entrada; el que canvia és el veredicte i l'ordre.
+
+const RS = (id, extra = {}) => ({ id, nom: `RS${id}`, targets_codis: [], ...extra })
+
+test('cap eix triat → tot compatible, ordre intacte', () => {
+  const rss = [RS(1, { targets_codis: ['WOMAN'] }), RS(2, { construction_codi: 'KNIT' })]
+  const out = classifyRuleSets(rss, {}, {})
+  assert.deepEqual(out.map(x => x.rs.id), [1, 2])
+  assert.ok(out.every(x => x.compatible && x.motius.length === 0))
+})
+
+test('un eix que no casa → incompatible AMB MOTIU, mai fora de la llista', () => {
+  const rss = [RS(1, { targets_codis: ['MAN'] }), RS(2, { targets_codis: ['WOMAN'] })]
+  const out = classifyRuleSets(rss, { target: 'WOMAN' }, {})
+  assert.equal(out.length, 2)                       // res amagat
+  assert.deepEqual(out.map(x => x.rs.id), [2, 1])   // compatible amunt
+  assert.deepEqual(out[1].motius, ['target'])
+})
+
+test('acumula tots els motius, no només el primer', () => {
+  const rss = [RS(1, { targets_codis: ['MAN'], construction_codi: 'WOVEN', fit_type_codi: 'SLIM' })]
+  const out = classifyRuleSets(rss, { target: 'WOMAN', construction: 'KNIT', fit: 'REGULAR' }, {})
+  assert.deepEqual(out[0].motius, ['target', 'construction', 'fit'])
+})
+
+test('eix NULL al ruleset = comodí (lenient), com a matchingRuleSets', () => {
+  const rss = [RS(1, { construction_codi: null, fit_type_codi: null })]
+  const out = classifyRuleSets(rss, { target: 'WOMAN', construction: 'KNIT', fit: 'REGULAR' }, {})
+  assert.ok(out[0].compatible)
+})
+
+test('ordre estable dins de cada grup', () => {
+  const rss = [RS(1, { targets_codis: ['MAN'] }), RS(2, { targets_codis: ['WOMAN'] }),
+               RS(3, { targets_codis: ['MAN'] }), RS(4, { targets_codis: ['WOMAN'] })]
+  const out = classifyRuleSets(rss, { target: 'WOMAN' }, {})
+  assert.deepEqual(out.map(x => x.rs.id), [2, 4, 1, 3])
 })

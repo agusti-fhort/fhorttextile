@@ -120,6 +120,21 @@ class GarmentTypeSerializer(serializers.ModelSerializer):
     # Annotat al queryset del ViewSet (Count('items')). `default=0` perquè la resposta d'un
     # POST/PUT serialitza la instància desada, que no ve del queryset i no porta l'anotació.
     items_count = serializers.IntegerField(read_only=True, default=0)
+    # C5 — veredicte de compatibilitat amb la combinació demanada (`?compat_target=…`). NULL quan
+    # no s'ha demanat: el consumidor que no en sap res no en veu res. `motiu` és el codi de l'eix
+    # que la deixa fora (el PRIMER que falla, de fora cap a dins), mai text traduït.
+    compat = serializers.SerializerMethodField()
+
+    def get_compat(self, obj):
+        if not hasattr(obj, 'compat_target'):
+            return None
+        if not obj.compat_target:
+            return {'ok': False, 'motiu': 'target'}
+        if hasattr(obj, 'compat_construction') and not obj.compat_construction:
+            return {'ok': False, 'motiu': 'construction'}
+        if hasattr(obj, 'compat_fit') and not obj.compat_fit:
+            return {'ok': False, 'motiu': 'fit'}
+        return {'ok': True, 'motiu': None}
 
     class Meta:
         model = GarmentType

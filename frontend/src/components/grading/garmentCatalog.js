@@ -22,10 +22,15 @@ function normGroup(codi, bdNom) {
   return VOCAB[codi] || { codi, nom_en: bdNom || codi, nom_ca: bdNom || codi, nom_es: bdNom || codi }
 }
 
-export function useGarmentCatalog(target) {
+// `compat` (C5, 2026-07-23) — quan s'informa ({ construction, fit }, tots dos opcionals), el
+// catàleg passa a mode ANOTAT: NO s'exclou cap família; cadascuna arriba amb `.compat = {ok,
+// motiu}` i el consumidor l'atenua. És l'altra cara del mode històric (filtre excloent), que es
+// conserva per a les superfícies que encara no han rebut C5.
+export function useGarmentCatalog(target, compat = null) {
   const [registry, setRegistry] = useState([])   // /garment-groups/ (codi, nom, actiu)
   const [families, setFamilies] = useState([])    // GarmentType compatibles amb el target
   const [loading, setLoading] = useState(true)
+  const compatKey = compat ? `${compat.construction || ''}|${compat.fit || ''}` : null
 
   // Registre de grups de la BD (una vegada). Font de disponibilitat + noms de grups nous.
   useEffect(() => {
@@ -36,18 +41,28 @@ export function useGarmentCatalog(target) {
     return () => { alive = false }
   }, [])
 
-  // Famílies (catàleg sencer, filtrat pel target quan n'hi ha) — una sola crida.
+  // Famílies — una sola crida. Mode històric: filtrades pel target (excloent). Mode C5: totes,
+  // amb el veredicte de compatibilitat anotat pel backend.
   useEffect(() => {
     let alive = true
     setLoading(true)
-    garmentTypes.list({ actiu: 'true', page_size: 500, ...(target ? { target } : {}) })
+    const params = compatKey != null
+      ? {
+        ...(target ? { compat_target: target } : {}),
+        ...(compat?.construction ? { compat_construction: compat.construction } : {}),
+        ...(compat?.fit ? { compat_fit: compat.fit } : {}),
+      }
+      : (target ? { target } : {})
+    garmentTypes.list({ actiu: 'true', page_size: 500, ...params })
       .then(r => { if (alive) setFamilies(r.data?.results ?? r.data ?? []) })
       .catch(() => { if (alive) setFamilies([]) })
       .finally(() => { if (alive) setLoading(false) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => { alive = false }
-  }, [target])
+  }, [target, compatKey])
 
-  // Grups a mostrar: presents a les famílies compatibles ∩ actius al registre, ordre canònic.
+  // Grups a mostrar: presents a les famílies ∩ actius al registre, ordre canònic. En mode C5 un
+  // grup és compatible si ho és alguna de les seves famílies (i s'atenua, no s'amaga).
   const groups = useMemo(() => {
     const present = [...new Set(families.map(f => f.grup).filter(Boolean))]
     const activeCodis = new Set(registry.filter(g => g.actiu !== false).map(g => g.codi))
@@ -56,10 +71,22 @@ export function useGarmentCatalog(target) {
       // si el registre encara no ha carregat, no amaguem res (evita cascada buida transitòria)
       .filter(codi => activeCodis.size === 0 || activeCodis.has(codi))
       .sort((a, b) => (ORDER.indexOf(a) + 1 || 999) - (ORDER.indexOf(b) + 1 || 999))
-      .map(codi => normGroup(codi, bdNom[codi]))
-  }, [families, registry])
+      .map(codi => {
+        const g = normGroup(codi, bdNom[codi])
+        if (compatKey == null) return g
+        const seves = families.filter(f => f.grup === codi)
+        const ok = seves.some(f => f.compat?.ok !== false)
+        return { ...g, compat: { ok, motiu: ok ? null : (seves[0]?.compat?.motiu ?? 'target') } }
+      })
+  }, [families, registry, compatKey])
 
-  const familiesOf = (grupCodi) => families.filter(f => f.grup === grupCodi)
+  // C5 — dins del grup, els compatibles amunt i els atenuats avall (ordre estable dins de cada
+  // bloc). Sense mode compat, l'ordre és el del backend, intacte.
+  const familiesOf = (grupCodi) => {
+    const f = families.filter(x => x.grup === grupCodi)
+    if (compatKey == null) return f
+    return [...f.filter(x => x.compat?.ok !== false), ...f.filter(x => x.compat?.ok === false)]
+  }
 
   return { groups, familiesOf, families, loading }
 }

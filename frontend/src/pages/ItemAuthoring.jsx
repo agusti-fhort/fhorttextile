@@ -10,13 +10,24 @@ import MeasurementBaseGrid from '../components/MeasurementBaseGrid/MeasurementBa
 
 // ItemAuthoring — pàgina d'autoria d'Item (Sprint Llibreria d'Items, B3 + B3-fix). Viu DINS el
 // Shell (àrea de contingut). Wizard de 2 passos que RECOMBINA components existents:
-//   PAS 1 CONTEXT: identitat (nom; codi auto-slug) + AxesSelector (B2) + RuleSetPicker (B2, en
-//     viu, onPick=assignar FK via serializer B3a). [Slot d'import previst, inert.]
-//   PAS 2 CONSTRUCCIÓ: selector de talla base (valida amb clean d'A3) + MeasurementBaseGrid (B1).
+//   PAS 1 CONTEXT: identitat (nom; codi auto-slug) + cascada d'eixos (filtre OPCIONAL) +
+//     RuleSetPicker eliminatiu (C5), amb «Sense graduació» com a estat legítim.
+//   PAS 2 CONSTRUCCIÓ: talla base OPCIONAL (valida amb clean d'A3) + MeasurementBaseGrid (B1).
 // Serveix CREAR (/garment-type-items/nou/:typeId) i OBRIR-existent (/:itemId/editar).
+//
+// COMPLETESA PROGRESSIVA (C1/C2, 2026-07-23) — l'item és una PLANTILLA, i una plantilla es va
+// omplint. Fins avui la pàgina exigia assignar un GradingRuleSet per continuar i, pitjor, l'item
+// NOMÉS naixia dins d'aquella assignació: sense graduació no hi havia ni item. Ara:
+//   · el GRS és opcional i desassignable (C1: el joc de regles s'assigna al MODEL, no a l'item;
+//     el que l'item hi deixa és un SUGGERIMENT),
+//   · la talla base és opcional (C2: s'informa quan es carreguen mesures dels seus POMs),
+//   · els 4 eixos de la cascada són un filtre, no un gate (C4/C5).
+// Vegeu docs/diagnosis/DIAGNOSI_GATE_GRS_ITEM_2026-07-23.md.
 
 const MONO = 'IBM Plex Mono, monospace'
 const STEPS = ['step1_context', 'step2_construction']
+// C5 — el filtre buit és un estat vàlid i de rescat («mostra'ls tots»), no un estat inicial mort.
+const CAP_EIX = { target: null, construction: null, fit: null, garmentGroup: null }
 
 // Slug del nom → codi (SlugField max_length=60). Treu accents, no-alfanumèrics → guió.
 const slugify = (s) => (s || '').toLowerCase().trim()
@@ -35,6 +46,10 @@ const btnSecondary = {
 const inputS = {
   width: '100%', border: '0.5px solid var(--border)', borderRadius: 6, padding: '8px 10px',
   fontSize: 'var(--fs-body)', boxSizing: 'border-box', background: 'var(--white)',
+}
+const linkBtn = {
+  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+  color: 'var(--gold)', fontSize: 'var(--fs-body)', textDecoration: 'underline',
 }
 const sectionTitle = {
   fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--gold)',
@@ -56,7 +71,7 @@ export default function ItemAuthoring() {
 
   const [ruleSets, setRuleSets] = useState([])
   const [ggCodiById, setGgCodiById] = useState({})
-  const [axes, setAxes] = useState({ target: null, construction: null, fit: null, garmentGroup: null })
+  const [axes, setAxes] = useState(CAP_EIX)
   const [chosenRulesetId, setChosenRulesetId] = useState(null)
 
   const [sizeDefs, setSizeDefs] = useState([])
@@ -70,6 +85,7 @@ export default function ItemAuthoring() {
     () => ruleSets.find(r => r.id === chosenRulesetId) || null,
     [ruleSets, chosenRulesetId],
   )
+  const anyAxis = !!(axes.target || axes.construction || axes.fit || axes.garmentGroup)
   // Codi mostrat: en edició el real (immutable); en creació el slug derivat del nom.
   const shownCode = isEdit ? code : slugify(name)
 
@@ -118,18 +134,24 @@ export default function ItemAuthoring() {
     else setSizeDefs([])
   }, [chosenRuleset, loadSizeDefs])
 
-  // ── Pas 1: assignar ruleset. Crea l'item si encara no existeix (codi = slug del nom). ──
+  // ── L'item neix del NOM, no de la graduació (a1) ──────────────────────────────────────
+  // Abans la creació vivia dins d'`assignRuleset`: no triar ruleset volia dir no tenir item.
+  // Ara qualsevol acció que necessiti un id el garanteix aquí, i la primera és «Següent».
+  const ensureItem = async () => {
+    if (itemId) return itemId
+    const res = await garmentTypeItems.create({
+      garment_type: Number(typeId), code: slugify(name), name: name.trim(), active,
+    })
+    setItemId(res.data.id); setCode(res.data.code || slugify(name))
+    return res.data.id
+  }
+
+  // ── Pas 1: assignar ruleset (suggeriment de l'item, mai obligació) ──
   const assignRuleset = async (rs) => {
     if (!name.trim()) { setError(t('item_authoring.need_name')); return }
     setBusy(true); setError(null)
     try {
-      let id = itemId
-      if (!id) {
-        const res = await garmentTypeItems.create({
-          garment_type: Number(typeId), code: slugify(name), name: name.trim(), active,
-        })
-        id = res.data.id; setItemId(id); setCode(res.data.code || slugify(name))
-      }
+      const id = await ensureItem()
       const payload = { grading_rule_set: rs.id }
       const incompatible = baseSizeId && chosenRuleset && chosenRuleset.size_system !== rs.size_system
       if (incompatible) payload.base_size_definition = null
@@ -140,6 +162,22 @@ export default function ItemAuthoring() {
       setError(e?.response?.data?.code?.[0]
         || e?.response?.data?.base_size_definition?.[0]
         || e?.response?.data?.detail || t('item_authoring.save_error'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // ── a3 · «Sense graduació»: el camí de desassignació que no existia ──────────────────────
+  // Sense això, el dany d'una assignació era IRREVERSIBLE per UI (§3.3 de la diagnosi).
+  // La talla base NO es toca: és patrimoni de l'item, no del ruleset que se'n va.
+  const clearRuleset = async () => {
+    if (!itemId || chosenRulesetId == null) { setChosenRulesetId(null); return }
+    setBusy(true); setError(null)
+    try {
+      await garmentTypeItems.update(itemId, { grading_rule_set: null })
+      setChosenRulesetId(null)
+    } catch (e) {
+      setError(e?.response?.data?.detail || t('item_authoring.save_error'))
     } finally {
       setBusy(false)
     }
@@ -158,16 +196,20 @@ export default function ItemAuthoring() {
     }
   }
 
-  const canNext = step === 1 ? !!chosenRulesetId : false
+  // a2 — l'única condició per continuar és tenir un nom: és l'única cosa que un item NO pot no
+  // tenir (el codi se'n deriva). Tota la resta —graduació, talla base, POMs— és progressiva.
+  const canNext = step === 1 ? !!name.trim() : false
 
   const goNext = async () => {
     if (step !== 1) return
     setBusy(true); setError(null)
     try {
-      if (itemId) await garmentTypeItems.update(itemId, { name: name.trim(), active })  // desa nom (codi immutable)
+      const id = await ensureItem()
+      await garmentTypeItems.update(id, { name: name.trim(), active })  // desa nom (codi immutable)
       setStep(2)
     } catch (e) {
-      setError(e?.response?.data?.detail || t('item_authoring.save_error'))
+      setError(e?.response?.data?.code?.[0]
+        || e?.response?.data?.detail || t('item_authoring.save_error'))
     } finally {
       setBusy(false)
     }
@@ -253,14 +295,41 @@ export default function ItemAuthoring() {
             </label>
           </div>
 
+          {/* C4/C5 — els 4 eixos ja no són un gate: acoten la llista i es poden netejar. */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <p style={{ ...sectionTitle, marginBottom: 6 }}>{t('item_authoring.filter_optional')}</p>
+            {anyAxis && (
+              <button type="button" onClick={() => setAxes(CAP_EIX)} style={linkBtn}>
+                {t('item_authoring.filter_clear')}
+              </button>
+            )}
+          </div>
           <CascadeSelector mode="single" maxLevel="group" ruleSets={ruleSets} value={axes} onChange={setAxes} />
 
           <div style={{ marginTop: 8 }}>
             <p style={sectionTitle}>{t('item_authoring.pick_ruleset')}</p>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 10px' }}>
+              {t('item_authoring.ruleset_optional')}
+            </p>
+            {/* a3 — «Sense graduació» com a estat triable, no com a absència accidental. */}
+            <button type="button" onClick={clearRuleset} disabled={busy}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 12,
+                border: `1px solid ${chosenRulesetId == null ? 'var(--gold)' : 'var(--border)'}`,
+                background: chosenRulesetId == null ? '#fdf6ee' : 'var(--white)',
+                color: chosenRulesetId == null ? 'var(--gold)' : 'var(--text-muted)',
+                fontWeight: chosenRulesetId == null ? 600 : 400,
+                borderRadius: 8, padding: '8px 16px', fontSize: 'var(--fs-body)',
+                cursor: busy ? 'wait' : 'pointer',
+              }}>
+              <i className="ti ti-circle-off" aria-hidden="true" />
+              {chosenRulesetId == null ? t('item_authoring.no_grading_current') : t('item_authoring.no_grading')}
+            </button>
             <RuleSetPicker
               ruleSets={ruleSets}
               garmentGroupCodiById={ggCodiById}
               axes={axes}
+              eliminatiu
               selectedId={chosenRulesetId}
               actionLabel={t('item_authoring.assign')}
               onPick={assignRuleset}
@@ -297,11 +366,14 @@ export default function ItemAuthoring() {
             padding: 18, marginBottom: 20,
           }}>
             <p style={sectionTitle}>{t('item_authoring.confirm_basesize')}</p>
-            {chosenRuleset && (
-              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
-                {t('item_authoring.basesize_from', { system: chosenRuleset.size_system_nom || '' })}
-              </p>
-            )}
+            {/* C2 — completesa progressiva: la talla base s'informa quan es carreguen mesures dels
+                POMs de l'item, no abans. Sense graduació no hi ha d'on treure la llista de talles,
+                i això es DIU (no es deixa un buit mut ni es bloqueja el pas). */}
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
+              {chosenRuleset
+                ? t('item_authoring.basesize_from', { system: chosenRuleset.size_system_nom || '' })
+                : t('item_authoring.basesize_no_source')}
+            </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {sizeDefs.map(sd => (
                 <button key={sd.id} type="button" disabled={busy} onClick={() => pickBaseSize(sd)}
@@ -316,7 +388,7 @@ export default function ItemAuthoring() {
                   {sd.id === baseSizeId ? '★ ' : ''}{sd.etiqueta}
                 </button>
               ))}
-              {sizeDefs.length === 0 && (
+              {sizeDefs.length === 0 && chosenRuleset && (
                 <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
                   {t('item_authoring.basesize_none')}
                 </span>

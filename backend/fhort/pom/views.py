@@ -122,13 +122,34 @@ class GarmentTypeViewSet(viewsets.ModelViewSet):
         # `?target=<codi>` — cascada del wizard: només les famílies COMPATIBLES amb el target.
         # La compatibilitat target↔família viu a SizingProfile (target + garment_type poblats; vegeu
         # docs/diagnosis/DIAGNOSI_WIZARD_CASCADA_TARGET.md). Sense `target` → catàleg complet.
+        #
+        # MODE ANOTAT (C5, 2026-07-23) — `?compat_target=&compat_construction=&compat_fit=`:
+        # el backend INFORMA i no exclou; el frontend atenua. Una família sense perfil deixa de
+        # desaparèixer (que es llegia com «aquesta peça no existeix») i passa a ser un problema
+        # VISIBLE amb motiu. Es manté `?target` (excloent) perquè les superfícies que encara no
+        # han rebut C5 no canviïn de comportament sota els peus.
         qs = super().get_queryset()
         target = self.request.query_params.get('target')
+        compat_target = self.request.query_params.get('compat_target')
         if target:
             from fhort.pom.models import SizingProfile
             qs = qs.filter(id__in=SizingProfile.objects
                            .filter(target__codi=target)
                            .values('garment_type'))
+        if compat_target:
+            from django.db.models import Exists, OuterRef
+            from fhort.pom.models import SizingProfile
+            perfils = SizingProfile.objects.filter(
+                garment_type=OuterRef('pk'), target__codi=compat_target)
+            qs = qs.annotate(compat_target=Exists(perfils))
+            construction = self.request.query_params.get('compat_construction')
+            if construction:
+                qs = qs.annotate(compat_construction=Exists(
+                    perfils.filter(construction__codi=construction)))
+                fit = self.request.query_params.get('compat_fit')
+                if fit:
+                    qs = qs.annotate(compat_fit=Exists(perfils.filter(
+                        construction__codi=construction, fit_type__codi=fit)))
         return qs
 
     def get_permissions(self):

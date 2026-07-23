@@ -143,11 +143,14 @@ def sizing_profile_detail_view(request, pk):
 
         data = SizingProfileSerializer(profile).data
 
-        # All rules (not only KEY)
+        # All rules (not only KEY). C3 — un perfil sense graduació no té regles: llista buida,
+        # no una query amb `rule_set IS NULL` (que retornaria buit igualment, però mentint sobre
+        # la intenció).
         all_rules = GradingRule.objects.filter(
-            rule_set=profile.grading_rule_set,
+            rule_set_id=profile.grading_rule_set_id,
             actiu=True
-        ).select_related('pom', 'pom__pom_global').order_by('pom__codi_client')
+        ).select_related('pom', 'pom__pom_global').order_by('pom__codi_client') \
+            if profile.grading_rule_set_id else []
         data['grading_rules_all'] = GradingRuleLightSerializer(all_rules, many=True).data
 
         return Response(data)
@@ -171,6 +174,14 @@ def clone_sizing_profile_view(request, pk):
         from django.db import transaction
 
         original = SizingProfile.objects.get(pk=pk)
+        # C3 — clonar un perfil vol dir clonar-ne la GRADUACIÓ (ruleset + regles). Un perfil que
+        # només declara àmbit no en té: es diu clar, en comptes de petar amb un 500 dins l'atòmic.
+        if original.grading_rule_set_id is None:
+            return Response(
+                {'error': 'perfil_sense_graduacio',
+                 'message': ("Aquest perfil declara àmbit però no porta graduació: no hi ha res a "
+                             "clonar. Assigna-li un joc de regles abans de fer-ne una versió.")},
+                status=400)
         nom_client = request.data.get('nom_client', f"Custom v{original.version + 1}")
 
         # Atòmic: GradingRuleSet + regles + SizingProfile són un tot; una fallada
