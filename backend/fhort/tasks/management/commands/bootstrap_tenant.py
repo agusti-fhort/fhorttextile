@@ -168,6 +168,8 @@ class Piece:
     """Comptadors d'una peça."""
     def __init__(self, name):
         self.name, self.created, self.updated, self.skipped, self.nulled = name, 0, 0, 0, 0
+        # --additive: claus naturals que ja existien al destí i s'han deixat INTACTES.
+        self.skipped_existents = 0
 
 
 class Command(BaseCommand):
@@ -182,6 +184,11 @@ class Command(BaseCommand):
         parser.add_argument('--profile', dest='profile', type=int, default=None,
                             help='ID d\'un backoffice.SeedProfile: sembra NOMÉS els blocs '
                                  'seleccionats (+ dependències). Sense --profile: tot el catàleg.')
+        parser.add_argument('--additive', action='store_true',
+                            help='Materialització ESTRICTAMENT additiva: crea el que falta i NO '
+                                 'toca mai el que ja existeix (get_or_create). Per a un destí '
+                                 'poblat. Si el destí ja és actiu, no en tanca l\'onboarding ni '
+                                 'en regenera la Template.')
 
     # ------------------------------------------------------------------ utils
 
@@ -222,7 +229,8 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------ còpia
 
     def _copy_piece(self, model, key_fields, fk_strat, m2m_fields, transform,
-                    source, maps, natural_cache, deferred, source_filters=None):
+                    source, maps, natural_cache, deferred, source_filters=None,
+                    additive=False):
         p = Piece(model.__name__)
         rows = self._read_source(model, source, (source_filters or {}).get(model))
         if not rows:
@@ -235,9 +243,14 @@ class Command(BaseCommand):
                 natural_cache.setdefault(rel_model, self._natural_lookup(source, rel_model, attr))
 
         pending_parents = []
+        # --additive: src_pk dels objectes CREATS en aquesta passada (els "nostres"). Els
+        # preexistents no s'hi afegeixen → M2M i auto-FK diferides no els toquen. Sense additiu
+        # tot hi entra (comportament actual: tota fila és nostra).
+        created_this_pass = set()
         for row in rows:
             src_pk = row['__pk__']
             values, skip = {}, None
+            row_pending = []
 
             # `values` es construeix SEMPRE amb `attname` ('x_id' per a les FK): és el que
             # update_or_create espera quan es passen pks en lloc d'instàncies.
@@ -263,7 +276,7 @@ class Command(BaseCommand):
                     values[att] = None
                 elif strat is DEFER:
                     if old is not None:
-                        pending_parents.append((src_pk, name, old))
+                        row_pending.append((src_pk, name, old))
                     values[att] = None
                 elif isinstance(strat, tuple) and strat[0] == NATURAL:
                     if old is None:
@@ -309,19 +322,36 @@ class Command(BaseCommand):
                 att = model._meta.get_field(k).attname
                 lookup[att] = values.pop(att)
 
-            obj, created = model.objects.update_or_create(**lookup, defaults=values)
+            # --additive: get_or_create → si la clau ja existeix, es retorna INTACTA (no
+            # s'apliquen `defaults`). Sense additiu: update_or_create (sobreescriu, actual).
+            if additive:
+                obj, created = model.objects.get_or_create(**lookup, defaults=values)
+            else:
+                obj, created = model.objects.update_or_create(**lookup, defaults=values)
             maps.setdefault(model, {})[src_pk] = obj.pk
-            p.created += int(created)
-            p.updated += int(not created)
+            if created:
+                p.created += 1
+            elif additive:
+                p.skipped_existents += 1
+            else:
+                p.updated += 1
+            # Un objecte és "nostre" (per a M2M i auto-FK diferides) si l'hem creat aquí; sense
+            # additiu, tota fila ho és (comportament actual). Els preexistents en additiu, no.
+            if created or not additive:
+                created_this_pass.add(src_pk)
+                pending_parents.extend(row_pending)
 
         if pending_parents:
             deferred.append((model, pending_parents))
 
-        # M2M: després que totes les files existeixin.
+        # M2M: després que totes les files existeixin. En additiu, NOMÉS sobre objectes creats
+        # aquí (un preexistent conserva les seves M2M intactes).
         for field in m2m_fields:
             rel_model = model._meta.get_field(field).related_model
             src_m2m = self._read_m2m(model, field, source)
             for src_pk, rel_pks in src_m2m.items():
+                if src_pk not in created_this_pass:
+                    continue
                 dst_pk = maps.get(model, {}).get(src_pk)
                 if dst_pk is None:
                     continue
@@ -359,6 +389,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         schema, source, dry = options['schema'], options['source'], options['dry_run']
+        additive = options['additive']
         if schema == 'public':
             raise CommandError("El schema 'public' no és un tenant.")
         if schema == source:
@@ -370,6 +401,10 @@ class Command(BaseCommand):
             raise CommandError(f"Tenant '{schema}' no existeix.")
         if not TenantModel.objects.filter(schema_name=source).exists():
             raise CommandError(f"Tenant origen '{source}' no existeix.")
+
+        # --additive contra un destí ja actiu: no se'n toca ni l'onboarding ni la Template
+        # (són passos de tenant-verge). Es captura ABANS de qualsevol mutació de l'estat.
+        skip_onboarding = additive and client.estat == 'actiu'
 
         # ---- F3 P-FREE-SEED: selecció per perfil (blocs + gate de grading) -----
         # El SeedProfile viu a backoffice (SHARED/public); es llegeix des de public,
@@ -418,12 +453,14 @@ class Command(BaseCommand):
                     for model, key, fks, m2m, tr in spec:
                         p, _ = self._copy_piece(model, key, fks, m2m, tr,
                                                 source, maps, natural_cache, deferred,
-                                                source_filters)
+                                                source_filters, additive=additive)
                         pieces.append(p)
                         extra = f" · {p.nulled} FK d'entitat → NULL" if p.nulled else ''
                         skip = f" · {p.skipped} saltats" if p.skipped else ''
+                        exist = f"  {p.skipped_existents:>5} ja existien" if additive else ''
                         self.stdout.write(
-                            f"  {p.name:22} {p.created:>5} creats  {p.updated:>5} actualitzats{extra}{skip}")
+                            f"  {p.name:22} {p.created:>5} creats  {p.updated:>5} actualitzats"
+                            f"{exist}{extra}{skip}")
                         if p.skipped:
                             ok = False
 
@@ -435,6 +472,9 @@ class Command(BaseCommand):
                     # la media del tenant. Idempotent (regenera el fitxer). Respecta --dry-run.
                     if dry:
                         self.stdout.write(f"  {'Template FTT (mestra)':22} {'(generaria .fttpt)'}")
+                    elif skip_onboarding:
+                        self.stdout.write(
+                            f"  {'Template FTT (mestra)':22} (destí actiu: intacte)")
                     else:
                         from fhort.models_app.master_template import seed_master_template
                         _, created = seed_master_template()
@@ -442,10 +482,14 @@ class Command(BaseCommand):
                             f"  {'Template FTT (mestra)':22} "
                             f"{(1 if created else 0):>5} creats  {(0 if created else 1):>5} actualitzats")
 
-                    if ok and not dry:
+                    if ok and not dry and not skip_onboarding:
                         self._close_onboarding(client)
 
-                if ok and not dry:
+                if ok and not dry and skip_onboarding:
+                    self.stdout.write(self.style.NOTICE(
+                        "  destí actiu: onboarding i template intactes (--additive)."))
+
+                if ok and not dry and not skip_onboarding:
                     # public: tancar onboarding → actiu (DC-6)
                     client.onboarding_complet = True
                     client.estat = 'actiu'
@@ -460,9 +504,11 @@ class Command(BaseCommand):
         total_u = sum(p.updated for p in pieces)
         total_n = sum(p.nulled for p in pieces)
         total_s = sum(p.skipped for p in pieces)
+        total_e = sum(p.skipped_existents for p in pieces)
+        exist_txt = f"{total_e} ja existien (intactes), " if additive else ''
         self.stdout.write(
             f"\n{'[DRY-RUN] ' if dry else ''}Total: {total_c} creats, {total_u} actualitzats, "
-            f"{total_n} FK d'entitat a NULL, {total_s} saltats.")
+            f"{exist_txt}{total_n} FK d'entitat a NULL, {total_s} saltats.")
 
         if not ok:
             self.stdout.write(self.style.ERROR(
