@@ -87,9 +87,11 @@ class InstantiateExternalTest(TenantTestCase):
                 user=u, defaults={'nom_complet': 'Tècnic', 'rol_nom': 'patronista'})
 
     def _brand_model(self, codi, seq, size_system=None):
+        # P6: el traspàs exigeix assignació explícita del Brand a aquest Studio.
         return Model.objects.create(
             codi_intern=codi, codi_tenant=BRAND, any=2027, temporada='SS',
             sequencial=seq, nom_prenda=codi, size_system=size_system,
+            studio_assignat=STUDIO,
         )
 
     def _run(self, commit=False, limit=None, brand=BRAND, studio=STUDIO):
@@ -181,4 +183,4 @@ class InstantiateExternalTest(TenantTestCase):
 
     def test_limit(self):
         sortida = self._run(commit=False, limit=2)
-        self.assertIn('llegits del Brand : 2', sortida)
+        self.assertIn('llegits (assignats): 2', sortida)
