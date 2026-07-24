@@ -21,6 +21,8 @@ export default function CustomerSelector({ value, onChange, allowCreate = false,
   const [list, setList] = useState([])
   const [showModal, setShowModal] = useState(false)
 
+  // NO s'envia `exclude_self` A PROPÒSIT: el client propi ha de ser seleccionable (en una Marca
+  // és el titular dels seus propis models). Només la pàgina Clients filtra, i només si és Estudi.
   useEffect(() => {
     let alive = true
     customers.list({ ordering: 'codi', page_size: 500 })
