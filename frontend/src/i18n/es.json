@@ -331,7 +331,17 @@
     "load_dictionary": "Cargar diccionario",
     "dictionary_saved": "Diccionario guardado: {{linked}} vinculados · {{created}} POMs nuevos · {{skipped}} omitidos.",
     "self_badge": "Esta casa",
-    "self_badge_hint": "Tu propio tenant: de él cuelgan tus modelos y es la casa de la ficha técnica. No se puede desactivar ni borrar."
+    "self_badge_hint": "Tu propio tenant: de él cuelgan tus modelos y es la casa de la ficha técnica. No se puede desactivar ni borrar.",
+    "vincle_section": "Conexión con tenant",
+    "vincle_section_help": "Si este cliente trabaja con FHORT como marca propia, pega aquí el token que te ha hecho llegar. Sus encargos aparecerán en tu bandeja.",
+    "vincle_ph": "Pega el token del vínculo",
+    "vincle_connectar": "Conectar",
+    "vincle_connectat": "Conectado con el tenant {{codi}}",
+    "vincle_treure": "Desconectar",
+    "vincle_confirm_treure": "¿Desconectar este cliente del tenant «{{codi}}»? El vínculo no se borra: lo gobierna la marca.",
+    "vincle_ok": "Cliente conectado con su tenant.",
+    "vincle_tret": "Cliente desconectado.",
+    "vincle_no_connectat": "Este cliente no está conectado con ningún tenant."
   },
   "dictionary": {
     "title": "Diccionario de nomenclatura",
@@ -536,7 +546,8 @@
     "planning": "Planificación",
     "planning_calendar": "Calendario",
     "tech_sheet": "Ficha técnica",
-    "recursos": "Recursos"
+    "recursos": "Recursos",
+    "encarrecs": "Bandeja de encargos"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -1243,6 +1254,33 @@
     "token_copy": "Copiar",
     "token_copied": "Copiado ✓",
     "token_close": "Cerrar"
+  },
+  "encarrecs": {
+    "title": "Bandeja de encargos",
+    "subtitle": "Lo que las marcas vinculadas te han asignado. Nada viaja hasta que te lo llevas a casa.",
+    "subtitle_pendents": "{{n}} modelo(s) pendientes de traspasar.",
+    "comptador": "{{p}} pendientes de {{tot}}",
+    "estat_PENDENT": "Pendiente",
+    "estat_TRASPASSAT": "Traspasado",
+    "traspassar": "Traspasar",
+    "traspassar_n": "Traspasar ({{n}})",
+    "traspassar_tots": "Todos los pendientes",
+    "confirm_title": "Traspasar encargos",
+    "confirm_n": "{{n}} modelo(s) de {{brand}} se crearán en tu estudio.",
+    "confirm_tots": "Todos los modelos pendientes de {{brand}} se crearán en tu estudio.",
+    "confirm_help": "Los modelos llegan con identidad y configuración, nunca con trabajo: medidas, reglas y fichas nacen a cero y son tuyas. Los que ya tengas se saltarán.",
+    "informe_title": "Resultado del traspaso",
+    "informe_creats": "modelos creados en tu estudio.",
+    "informe_saltats": "saltados (ya los tenías).",
+    "informe_unmatched": "Configuración no emparejada en tu catálogo (el modelo se ha creado con el campo vacío):",
+    "brand_missing": "El tenant «{{codi}}» del vínculo ya no existe.",
+    "grup_buit": "Esta marca aún no te ha asignado ningún modelo.",
+    "empty": "Ninguna marca vinculada con encargos. Cuando una marca te vincule y te asigne modelos, aparecerán aquí.",
+    "loading": "Cargando encargos…",
+    "error": "No se ha podido completar la operación.",
+    "cancel": "Cancelar",
+    "tancar": "Cerrar",
+    "working": "Traspasando…"
   },
   "i18n_field": {
     "languages": "Idiomas",

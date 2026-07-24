@@ -331,7 +331,17 @@
     "load_dictionary": "Load dictionary",
     "dictionary_saved": "Dictionary saved: {{linked}} linked · {{created}} new POMs · {{skipped}} skipped.",
     "self_badge": "This house",
-    "self_badge_hint": "Your own tenant: your models hang from it and it is the home of the tech sheet. It cannot be deactivated or deleted."
+    "self_badge_hint": "Your own tenant: your models hang from it and it is the home of the tech sheet. It cannot be deactivated or deleted.",
+    "vincle_section": "Tenant connection",
+    "vincle_section_help": "If this client works with FHORT as its own brand, paste the token they sent you here. Their orders will show up in your inbox.",
+    "vincle_ph": "Paste the link token",
+    "vincle_connectar": "Connect",
+    "vincle_connectat": "Connected with tenant {{codi}}",
+    "vincle_treure": "Disconnect",
+    "vincle_confirm_treure": "Disconnect this client from tenant «{{codi}}»? The link itself is not deleted: the brand governs it.",
+    "vincle_ok": "Client connected with its tenant.",
+    "vincle_tret": "Client disconnected.",
+    "vincle_no_connectat": "This client is not connected with any tenant."
   },
   "dictionary": {
     "title": "Nomenclature dictionary",
@@ -536,7 +546,8 @@
     "planning": "Planning",
     "planning_calendar": "Calendar",
     "tech_sheet": "Tech sheet",
-    "recursos": "Resources"
+    "recursos": "Resources",
+    "encarrecs": "Order inbox"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -1243,6 +1254,33 @@
     "token_copy": "Copy",
     "token_copied": "Copied ✓",
     "token_close": "Close"
+  },
+  "encarrecs": {
+    "title": "Order inbox",
+    "subtitle": "What your linked brands have assigned to you. Nothing travels until you bring it home.",
+    "subtitle_pendents": "{{n}} model(s) pending transfer.",
+    "comptador": "{{p}} pending of {{tot}}",
+    "estat_PENDENT": "Pending",
+    "estat_TRASPASSAT": "Transferred",
+    "traspassar": "Transfer",
+    "traspassar_n": "Transfer ({{n}})",
+    "traspassar_tots": "All pending",
+    "confirm_title": "Transfer orders",
+    "confirm_n": "{{n}} model(s) from {{brand}} will be created in your studio.",
+    "confirm_tots": "All pending models from {{brand}} will be created in your studio.",
+    "confirm_help": "Models arrive with identity and configuration, never with work: measurements, rules and tech sheets start empty and are yours. Any you already have will be skipped.",
+    "informe_title": "Transfer result",
+    "informe_creats": "models created in your studio.",
+    "informe_saltats": "skipped (you already had them).",
+    "informe_unmatched": "Configuration not matched in your catalogue (the model was created with the field empty):",
+    "brand_missing": "The linked tenant «{{codi}}» no longer exists.",
+    "grup_buit": "This brand has not assigned you any model yet.",
+    "empty": "No linked brands with orders. When a brand links you and assigns models, they will show up here.",
+    "loading": "Loading orders…",
+    "error": "The operation could not be completed.",
+    "cancel": "Cancel",
+    "tancar": "Close",
+    "working": "Transferring…"
   },
   "i18n_field": {
     "languages": "Languages",

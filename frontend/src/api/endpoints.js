@@ -290,6 +290,10 @@ export const customers = {
   create: (data) => client.post('/api/v1/customers/', data),
   update: (id, data) => client.patch(`/api/v1/customers/${id}/`, data),
   remove: (id) => client.delete(`/api/v1/customers/${id}/`),
+  // P8 — aterratge del token del TenantLink: connecta aquest client amb el tenant Brand que
+  // l'ha emès (escriu codi_global). DELETE desconnecta i MAI toca el vincle (és del Brand).
+  vincularToken: (id, token) => client.post(`/api/v1/customers/${id}/vincular-token/`, { token }),
+  desvincular: (id) => client.delete(`/api/v1/customers/${id}/vincular-token/`),
 }
 
 // Biblioteca de nomenclatura del client (CustomerPOMAlias). Escriptura gated CONFIGURE.
@@ -682,6 +686,14 @@ export const recursos = {
   aturar: (id) => client.post(`/api/v1/recursos/${id}/aturar/`),
   reactivar: (id) => client.post(`/api/v1/recursos/${id}/reactivar/`),
   revocar: (id) => client.post(`/api/v1/recursos/${id}/revocar/`),   // terminal
+}
+
+// P8 (Federació v2) — els ENCÀRRECS d'un Studio: què li han assignat els Brands vinculats.
+// Mirall de `recursos`; només visible/operable des d'un tenant 'estudi' (403 altrament).
+export const encarrecs = {
+  list: () => client.get('/api/v1/encarrecs/'),
+  // {brand_codi, codis: [...] | 'tots_pendents'} → informe {creats, saltats, unmatched, n_*}
+  traspassar: (data) => client.post('/api/v1/encarrecs/traspassar/', data),
 }
 
 export const me = {

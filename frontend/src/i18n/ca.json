@@ -331,7 +331,17 @@
     "load_dictionary": "Carregar diccionari",
     "dictionary_saved": "Diccionari desat: {{linked}} vinculats · {{created}} POMs nous · {{skipped}} omesos.",
     "self_badge": "Aquesta casa",
-    "self_badge_hint": "El teu propi tenant: hi pengen els teus models i és la casa de la fitxa tècnica. No es pot desactivar ni esborrar."
+    "self_badge_hint": "El teu propi tenant: hi pengen els teus models i és la casa de la fitxa tècnica. No es pot desactivar ni esborrar.",
+    "vincle_section": "Connexió amb tenant",
+    "vincle_section_help": "Si aquest client treballa amb FHORT com a marca pròpia, enganxa aquí el token que t'ha fet arribar. Els seus encàrrecs apareixeran a la teva safata.",
+    "vincle_ph": "Enganxa el token del vincle",
+    "vincle_connectar": "Connectar",
+    "vincle_connectat": "Connectat amb el tenant {{codi}}",
+    "vincle_treure": "Desconnectar",
+    "vincle_confirm_treure": "Desconnectar aquest client del tenant «{{codi}}»? El vincle no s'esborra: el governa la marca.",
+    "vincle_ok": "Client connectat amb el seu tenant.",
+    "vincle_tret": "Client desconnectat.",
+    "vincle_no_connectat": "Aquest client no està connectat amb cap tenant."
   },
   "dictionary": {
     "title": "Diccionari de nomenclatura",
@@ -536,7 +546,8 @@
     "planning": "Planificació",
     "planning_calendar": "Calendari",
     "tech_sheet": "Fitxa tècnica",
-    "recursos": "Recursos"
+    "recursos": "Recursos",
+    "encarrecs": "Safata d'encàrrecs"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -1243,6 +1254,33 @@
     "token_copy": "Copiar",
     "token_copied": "Copiat ✓",
     "token_close": "Tancar"
+  },
+  "encarrecs": {
+    "title": "Safata d'encàrrecs",
+    "subtitle": "El que les marques vinculades t'han assignat. Res no viatja fins que te'l portes a casa.",
+    "subtitle_pendents": "{{n}} model(s) pendents de traspassar.",
+    "comptador": "{{p}} pendents de {{tot}}",
+    "estat_PENDENT": "Pendent",
+    "estat_TRASPASSAT": "Traspassat",
+    "traspassar": "Traspassar",
+    "traspassar_n": "Traspassar ({{n}})",
+    "traspassar_tots": "Tots els pendents",
+    "confirm_title": "Traspassar encàrrecs",
+    "confirm_n": "{{n}} model(s) de {{brand}} es crearan al teu estudi.",
+    "confirm_tots": "Tots els models pendents de {{brand}} es crearan al teu estudi.",
+    "confirm_help": "Els models arriben amb identitat i configuració, mai amb feina: mesures, regles i fitxes neixen a zero i són teves. Els que ja tinguis es saltaran.",
+    "informe_title": "Resultat del traspàs",
+    "informe_creats": "models creats al teu estudi.",
+    "informe_saltats": "saltats (ja els tenies).",
+    "informe_unmatched": "Configuració no aparellada al teu catàleg (el model s'ha creat amb el camp buit):",
+    "brand_missing": "El tenant «{{codi}}» del vincle ja no existeix.",
+    "grup_buit": "Aquesta marca encara no t'ha assignat cap model.",
+    "empty": "Cap marca vinculada amb encàrrecs. Quan una marca et vinculi i t'assigni models, apareixeran aquí.",
+    "loading": "Carregant encàrrecs…",
+    "error": "No s'ha pogut completar l'operació.",
+    "cancel": "Cancel·lar",
+    "tancar": "Tancar",
+    "working": "Traspassant…"
   },
   "i18n_field": {
     "languages": "Idiomes",
