@@ -803,6 +803,65 @@ class CustomerViewSet(viewsets.ModelViewSet):
         customer.save(update_fields=['logo'])
         return Response(self.get_serializer(customer, context={'request': request}).data)
 
+    @action(detail=True, methods=['post', 'delete'], url_path='vincular-token')
+    def vincular_token(self, request, pk=None):
+        """POST {token} — connecta aquest client amb el tenant Brand que l'ha emès. DELETE — desconnecta.
+
+        L'ATERRATGE DEL TOKEN. Fins ara el token del `TenantLink` només el podia consumir un
+        humà passant-lo a un command; aquí és on el Studio l'enganxa i el sistema resol tot sol
+        de QUIN Brand parla. `Customer.codi_global` era el ganxo previst per a això des de la
+        migració 0019 i fins avui no tenia cap consumidor real: aquest n'és el primer.
+
+        EL TOKEN IDENTIFICA, NO AUTORITZA A MÉS DEL QUE JA HI HA. Enganxar-lo no crea cap
+        vincle ni el reactiva: només diu "aquest client meu és aquell tenant". Qui emet,
+        atura i revoca el pont és el Brand (P7), i això no es toca des d'aquí.
+
+        TRES VALIDACIONS, TOTES NECESSÀRIES:
+          · el token existeix — si no, no hi ha res a connectar;
+          · el vincle és ACTIU — un pont aturat o revocat no s'ha de poder "reconnectar" per
+            la porta del darrere, que és exactament el que seria acceptar-ne el token;
+          · el vincle és MEU (`studio_codi_tenant` == el meu tenant) — un token filtrat no ha
+            de servir a un tercer per declarar-se destinatari d'un encàrrec que no és seu.
+        La resposta d'error és la MATEIXA per als tres casos (400 `token_invalid`): distingir-los
+        diria a qui prova un token robat QUÈ ha fallat, i "aquest token és d'un altre studio" ja
+        és una pista d'existència. Mateixa llei que el 401 mut del bescanvi (views_bescanvi.py).
+
+        DELETE NO TOCA EL VINCLE, només buida el meu `codi_global`. El pont és patrimoni del
+        Brand; el Studio decideix si l'ha mapat a un client seu, no si existeix.
+        """
+        from fhort.tenants.models import TenantLink
+
+        customer = self.get_object()
+
+        if request.method == 'DELETE':
+            customer.codi_global = None
+            customer.save(update_fields=['codi_global'])
+            return Response(self.get_serializer(customer, context={'request': request}).data)
+
+        token = (request.data.get('token') or '').strip()
+        meu_codi = getattr(getattr(request, 'tenant', None), 'codi_tenant', None)
+        link = TenantLink.objects.filter(token=token).first() if token else None
+        if (link is None
+                or not link.es_viu()
+                or meu_codi is None
+                or link.studio_codi_tenant != meu_codi):
+            return Response({'detail': 'Token invàlid, caducat o no destinat a aquest tenant.',
+                             'code': 'token_invalid'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # `codi_global` és únic quan no és NULL (constraint `unic_codi_global_no_null`): dos
+        # clients del mateix Studio no poden apuntar al mateix Brand. Es comprova abans per
+        # donar un 409 amb nom en comptes d'un IntegrityError.
+        ja = (Customer.objects
+              .filter(codi_global=link.brand_codi_tenant)
+              .exclude(pk=customer.pk).first())
+        if ja is not None:
+            return Response({'detail': f"El client '{ja.codi}' ja està connectat amb aquest tenant.",
+                             'code': 'codi_global_pres'}, status=status.HTTP_409_CONFLICT)
+
+        customer.codi_global = link.brand_codi_tenant
+        customer.save(update_fields=['codi_global'])
+        return Response(self.get_serializer(customer, context={'request': request}).data)
+
 
 class ProductionViewSet(viewsets.ReadOnlyModelViewSet):
     """Llistat/detall de confeccions. Creació i transicions via endpoints dedicats."""
