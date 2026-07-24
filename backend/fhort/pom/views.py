@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -32,6 +32,7 @@ from .serializers import (
     GradingRuleSerializer,
     GradingRuleSetSerializer,
     ItemBaseMeasurementSerializer,
+    ItemBaseSetSerializer,
     POMCategorySerializer,
     POMMasterSerializer,
     SizeDefinitionSerializer,
@@ -345,6 +346,62 @@ class GarmentPOMMapViewSet(viewsets.ModelViewSet):
     ordering = ['garment_type_item', 'ordre']
 
 
+class ItemBaseSetViewSet(viewsets.ModelViewSet):
+    """BaseSets d'un Item (B4). Lectura autenticada, escriptura gated CONFIGURE — mateix motlle
+    que GarmentPOMMapViewSet i ItemBaseMeasurementViewSet.
+
+    Llista per item via ?garment_type_item=<id>. Els comptes van ANOTATS a la BD: la columna del
+    cataleg pinta «#mesures» per cada set i un SerializerMethodField hi faria un N+1.
+    """
+    serializer_class = ItemBaseSetSerializer
+    queryset = (
+        ItemBaseSet.objects
+        .select_related('size_system', 'fit_type', 'base_size_definition', 'updated_by')
+        .annotate(
+            mesures_count=Count('measurements', distinct=True),
+            mesures_amb_valor=Count(
+                'measurements',
+                filter=Q(measurements__base_value_cm__isnull=False), distinct=True),
+        )
+    )
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        perm = HasCapability(); self.required_capability = CONFIGURE
+        return [perm]
+
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = {
+        'garment_type_item': ['exact'],
+        'size_system': ['exact'],
+        'fit_type': ['exact'],
+    }
+    ordering_fields = ['id', 'size_system', 'fit_type']
+    ordering = ['size_system', 'fit_type']
+
+    # El cataleg es ma humana: origen MANUAL i autoria, com a ItemBaseMeasurement. La via
+    # PROMOCIO te el seu propi endpoint i hi posa el seu origen.
+    def perform_create(self, serializer):
+        serializer.save(origen=ItemBaseSet.ORIGEN_MANUAL, updated_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        # Un set amb mesures no s'esborra d'un clic: el CASCADE se'n enduria el patrimoni del
+        # taller en silenci. Mateix esperit que el guard de SizeSystemViewSet.destroy.
+        instance = self.get_object()
+        if instance.measurements.exists():
+            return Response(
+                {'error': "Aquest set te mesures: buida-les abans d'esborrar-lo.",
+                 'code': 'base_set_amb_mesures',
+                 'mesures_count': instance.measurements.count()},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+
 class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
     """Valors base de plantilla per Item (Sprint Mesures Base per Item, P3). Motlle EXACTE de
     GarmentPOMMapViewSet: lectura autenticada, escriptura gated CONFIGURE (mateixa capability que
@@ -368,6 +425,7 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = {
         'garment_type_item': ['exact'],
+        'base_set': ['exact'],
         'pom': ['exact'],
     }
     ordering_fields = ['id', 'garment_type_item', 'pom']

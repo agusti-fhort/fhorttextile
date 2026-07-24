@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import EditableTable from '../EditableTable/EditableTable'
 import ImportWizard from '../ImportWizard/ImportWizard'
 import Modal from '../ui/Modal'
+import { IconBulb, IconX } from '@tabler/icons-react'
 import { models } from '../../api/endpoints'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -33,6 +34,11 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [seedOffer, setSeedOffer] = useState(false)
+  // B4 — quan la sembra retorna code='base_set_absent', el món del model (item × sistema de
+  // talles × fit) no té mesures estàndard. NO és un error i no bloqueja res: la sembra ha
+  // materialitzat la pertinença igualment. És una PROPOSTA, perquè l'acte real (la promoció) vol
+  // el model ja mesurat i no té sentit oferir-lo aquí.
+  const [baseSetAbsent, setBaseSetAbsent] = useState(null)
   // F2.1 — quina sembra s'ofereix: 'values' (l'item porta mides base → ITEM_STANDARD) o 'empty'
   // (l'item no en porta → llista de POMs buida, origen TEMPLATE). Les dues escriuen a BD, i per
   // tant les dues es CONFIRMEN. Entrar a mirar no escriu res.
@@ -93,7 +99,9 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
       // Els chips del modal SÓN la petició: el que es veu triat és el que s'escriu. Només es cau al
       // "sembra-ho tot" si no hem pogut carregar la llista de POMs suggerits (res per triar).
       const body = pomsSuggerits.length > 0 ? JSON.stringify({ pom_ids: seedPomIds }) : undefined
-      await fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders, body })
+      const res = await fetch(`${API}/api/v1/models/${id}/materialitzar-poms/`, { method: 'POST', headers: authHeaders, body })
+      const data = await res.json().catch(() => ({}))
+      setBaseSetAbsent(data?.base_set_absent || null)
       setSeedOffer(false)
       await reloadTable('manual')
     } catch {
@@ -222,6 +230,31 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
       {notice && (
         <div style={{ margin: '0 0 1rem', background: 'var(--warn-bg)', border: '1px solid var(--warn)', borderRadius: 8,
                       padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>{notice}</div>
+      )}
+
+      {baseSetAbsent && (
+        <div style={{ margin: '0 0 1rem', background: 'var(--white)', border: '0.5px solid var(--border)',
+                      borderRadius: 8, padding: '0.75rem 1rem', fontSize: 'var(--fs-body)',
+                      display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <IconBulb size={18} stroke={1.5} style={{ color: 'var(--gold)', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ color: 'var(--text-main)' }}>
+              {t('measures_entry.base_set_absent', {
+                system: baseSetAbsent.size_system || '—',
+                fit: baseSetAbsent.fit_type || t('base_set_panel.fit_regular'),
+              })}
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)', marginTop: 4 }}>
+              {t('measures_entry.base_set_absent_hint')}
+            </div>
+          </div>
+          <button type="button" onClick={() => setBaseSetAbsent(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                     color: 'var(--text-muted)', display: 'inline-flex' }}
+            title={t('common.close')}>
+            <IconX size={16} stroke={1.5} />
+          </button>
+        </div>
       )}
 
       {seedOffer && (

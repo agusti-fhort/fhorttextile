@@ -9,6 +9,7 @@ from .models import (
     GradingRule,
     GradingRuleSet,
     ItemBaseMeasurement,
+    ItemBaseSet,
     POMCategory,
     POMGlobal,
     POMMaster,
@@ -398,6 +399,48 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
             'body_measure_iso_codi', 'body_measure_iso_nom',
             'is_key', 'obligatori', 'ordre', 'pendent_revisio',
         )
+
+
+class ItemBaseSetSerializer(serializers.ModelSerializer):
+    """BaseSet condicionat d'un Item (B1). El món = size_system x fit; la talla base s'hi declara.
+
+    Els camps de display eviten que el catàleg hagi de fer una crida per set només per pintar
+    «ALPHA_EU_M · Regular · L · 37 mesures». `mesures_count` ve anotat del ViewSet, no per fila.
+    """
+    size_system_codi = serializers.CharField(source='size_system.codi', read_only=True)
+    fit_type_codi = serializers.CharField(source='fit_type.codi', read_only=True, default=None)
+    base_size_label = serializers.CharField(
+        source='base_size_definition.etiqueta', read_only=True)
+    mesures_count = serializers.IntegerField(read_only=True, default=0)
+    # Quantes en tenen VALOR: un set de 37 files buides no és el mateix que un de 37 mesurades,
+    # i la columna del cataleg ha de poder-ho dir sense obrir la graella.
+    mesures_amb_valor = serializers.IntegerField(read_only=True, default=0)
+    updated_by_nom = serializers.CharField(source='updated_by.username', read_only=True,
+                                           default=None)
+
+    class Meta:
+        model = ItemBaseSet
+        fields = (
+            'id', 'garment_type_item', 'size_system', 'size_system_codi',
+            'fit_type', 'fit_type_codi', 'base_size_definition', 'base_size_label',
+            'mesures_count', 'mesures_amb_valor',
+            # `origen` read_only: el determina el CAMI (promocio = PROMOCIO . cataleg = MANUAL .
+            # paquet = MASTER), mai el body — mateixa regla que a ItemBaseMeasurement.
+            'origen', 'created_at', 'updated_at', 'updated_by', 'updated_by_nom',
+        )
+        read_only_fields = ('origen', 'created_at', 'updated_at', 'updated_by')
+
+    def validate(self, attrs):
+        # La talla base ha de viure al sistema del set. clean() ho diu al model; aqui es fa
+        # explicit perque el DRF retorni 400 amb el camp assenyalat i no un 500 d'IntegrityError.
+        sistema = attrs.get('size_system') or getattr(self.instance, 'size_system', None)
+        talla = attrs.get('base_size_definition') or getattr(
+            self.instance, 'base_size_definition', None)
+        if sistema is not None and talla is not None and talla.size_system_id != sistema.pk:
+            raise serializers.ValidationError({
+                'base_size_definition': 'La talla base ha de pertanyer al sistema de talles del set.'
+            })
+        return attrs
 
 
 class ItemBaseMeasurementSerializer(serializers.ModelSerializer):

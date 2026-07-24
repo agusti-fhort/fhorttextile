@@ -9,6 +9,7 @@ from .views import (
     GradingRuleSetViewSet,
     GradingRuleViewSet,
     ItemBaseMeasurementViewSet,
+    ItemBaseSetViewSet,
     POMCategoryViewSet,
     POMMasterViewSet,
     SizeDefinitionViewSet,
@@ -26,6 +27,7 @@ router.register('grading-rule-sets', GradingRuleSetViewSet, basename='grading-ru
 router.register('grading-rules', GradingRuleViewSet, basename='grading-rule')
 router.register('garment-pom-maps', GarmentPOMMapViewSet, basename='garment-pom-map')
 router.register('item-base-measurements', ItemBaseMeasurementViewSet, basename='item-base-measurement')
+router.register('item-base-sets', ItemBaseSetViewSet, basename='item-base-set')
 router.register('customer-pom-aliases', CustomerPOMAliasViewSet, basename='customer-pom-alias')
 
 # Sprint 7A — POM wizard. The 'poms/suggerits/', 'poms/cerca/' and

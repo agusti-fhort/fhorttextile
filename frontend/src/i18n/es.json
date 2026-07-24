@@ -3879,5 +3879,36 @@
     "aplicar": "Promocionar {{n}} POM(s)",
     "nota_intocable": "Solo subirán al catálogo los POMs marcados.",
     "err": "No se ha podido aplicar la promoción. Inténtalo de nuevo."
+  },
+  "base_set_panel": {
+    "title": "Medidas estándar por mundo",
+    "intro": "El item no se parte: un solo juego de POMs. Las medidas estándar viven en un set por cada mundo (sistema de tallas × fit), y cada set declara su talla base.",
+    "empty": "Este item todavía no tiene ningún mundo con medidas estándar.",
+    "new": "Nuevo mundo",
+    "new_title": "Crear un mundo",
+    "create": "Crear",
+    "choose": "Elige…",
+    "col_system": "Sistema de tallas",
+    "col_fit": "Fit",
+    "col_base_size": "Talla base",
+    "col_measures": "Medidas",
+    "col_origin": "Origen",
+    "fit_regular": "Regular",
+    "measures_count": "{{amb}} de {{total}} con valor",
+    "origin_manual": "Manual",
+    "origin_promocio": "Promovido de un modelo",
+    "origin_master": "Máster de catálogo",
+    "base_size_hint": "La talla base se declara ahora y no se puede cambiar después: todas las medidas del set se expresan en ella. Por convención, la más pequeña del sistema, excepto en adultos (hombre M/42, mujer S/38).",
+    "grid_title": "Medidas de {{system}} · {{fit}} · talla base {{size}}",
+    "pick_one": "Elige un mundo para ver y editar sus medidas.",
+    "delete": "Borrar este mundo",
+    "delete_confirm": "¿Borrar el mundo {{system}} · {{fit}}?",
+    "delete_error": "No se ha podido borrar el mundo.",
+    "load_error": "No se han podido cargar los mundos del item.",
+    "create_error": "No se ha podido crear el mundo."
+  },
+  "measures_entry": {
+    "base_set_absent": "Este mundo ({{system}} · {{fit}}) todavía no tiene medidas estándar.",
+    "base_set_absent_hint": "Cuando este modelo esté medido, podrás promoverlo para crearlas desde él."
   }
 }

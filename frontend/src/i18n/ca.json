@@ -3879,5 +3879,36 @@
     "aplicar": "Promocionar {{n}} POM(s)",
     "nota_intocable": "Només pujaran al catàleg els POMs marcats.",
     "err": "No s'ha pogut aplicar la promoció. Torna-ho a provar."
+  },
+  "base_set_panel": {
+    "title": "Mesures estàndard per món",
+    "intro": "L'item no es parteix: un sol joc de POMs. Les mesures estàndard viuen en un set per cada món (sistema de talles × fit), i cada set declara la seva talla base.",
+    "empty": "Aquest item encara no té cap món amb mesures estàndard.",
+    "new": "Nou món",
+    "new_title": "Crear un món",
+    "create": "Crear",
+    "choose": "Tria…",
+    "col_system": "Sistema de talles",
+    "col_fit": "Fit",
+    "col_base_size": "Talla base",
+    "col_measures": "Mesures",
+    "col_origin": "Origen",
+    "fit_regular": "Regular",
+    "measures_count": "{{amb}} de {{total}} amb valor",
+    "origin_manual": "Manual",
+    "origin_promocio": "Promogut d'un model",
+    "origin_master": "Màster de catàleg",
+    "base_size_hint": "La talla base es declara ara i no es pot canviar després: totes les mesures del set s'hi expressen. Per convenció, la més petita del sistema, excepte en adults (home M/42, dona S/38).",
+    "grid_title": "Mesures de {{system}} · {{fit}} · talla base {{size}}",
+    "pick_one": "Tria un món per veure'n i editar-ne les mesures.",
+    "delete": "Esborrar aquest món",
+    "delete_confirm": "Vols esborrar el món {{system}} · {{fit}}?",
+    "delete_error": "No s'ha pogut esborrar el món.",
+    "load_error": "No s'han pogut carregar els mons de l'item.",
+    "create_error": "No s'ha pogut crear el món."
+  },
+  "measures_entry": {
+    "base_set_absent": "Aquest món ({{system}} · {{fit}}) encara no té mesures estàndard.",
+    "base_set_absent_hint": "Quan aquest model estigui mesurat, el podràs promoure per crear-les des d'ell."
   }
 }

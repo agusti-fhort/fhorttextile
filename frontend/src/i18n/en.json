@@ -3879,5 +3879,36 @@
     "aplicar": "Promote {{n}} POM(s)",
     "nota_intocable": "Only the marked POMs will go into the catalogue.",
     "err": "The promotion could not be applied. Please try again."
+  },
+  "base_set_panel": {
+    "title": "Standard measurements per world",
+    "intro": "The item is never split: a single POM set. Standard measurements live in one set per world (size system × fit), and each set declares its own base size.",
+    "empty": "This item has no world with standard measurements yet.",
+    "new": "New world",
+    "new_title": "Create a world",
+    "create": "Create",
+    "choose": "Choose…",
+    "col_system": "Size system",
+    "col_fit": "Fit",
+    "col_base_size": "Base size",
+    "col_measures": "Measurements",
+    "col_origin": "Origin",
+    "fit_regular": "Regular",
+    "measures_count": "{{amb}} of {{total}} with value",
+    "origin_manual": "Manual",
+    "origin_promocio": "Promoted from a model",
+    "origin_master": "Catalogue master",
+    "base_size_hint": "The base size is declared now and cannot be changed later: every measurement in the set is expressed in it. By convention, the smallest in the system, except for adults (men M/42, women S/38).",
+    "grid_title": "Measurements for {{system}} · {{fit}} · base size {{size}}",
+    "pick_one": "Pick a world to view and edit its measurements.",
+    "delete": "Delete this world",
+    "delete_confirm": "Delete the world {{system}} · {{fit}}?",
+    "delete_error": "The world could not be deleted.",
+    "load_error": "The item's worlds could not be loaded.",
+    "create_error": "The world could not be created."
+  },
+  "measures_entry": {
+    "base_set_absent": "This world ({{system}} · {{fit}}) has no standard measurements yet.",
+    "base_set_absent_hint": "Once this model is measured, you can promote it to create them from it."
   }
 }
