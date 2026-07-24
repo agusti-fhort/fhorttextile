@@ -3023,3 +3023,72 @@ REGLES:
    1853 LOS Man Knit — Tops                    LINEAR     0.80   0.80   None   None          M True
    1861 LOS Teen Girl Knit — Tops              LINEAR     0.50   0.50   1.00     14          8 True
 ```
+
+---
+
+# P5-FIX EXECUTAT — 2026-07-24
+
+`manage.py check` verd · dry-run → apply · **un sol `transaction.atomic()`** amb els guards dins.
+
+## A · rebateig net (`LOSPOM-558`)
+
+| | abans | després |
+|---|---|---|
+| pk=563 | `GL` · 8 regles · 36 maps | **`GCI`** · 8 regles · 36 maps · actiu |
+| pk=736 | `GCI` · 0/0 · actiu | `GCI` · 0/0 · **actiu=False** |
+| àlies (customer LOS) | `GL` | **`GCI`** |
+
+Patró P0 pur: cap fila esborrada, cap FK moguda.
+
+## B · fusió amb esborrat acotat
+
+| `pom_global` | supervivent | perdedor | esborrat |
+|---|---|---|---|
+| `POM-025` | pk=297 `SL OP` → **`H11L`** (25r/35m) | pk=740 `H11L` → actiu=False | **8 regles + 33 maps** |
+| `LOSPOM-681` | pk=686 `H.12` → **`H11S`** (2r) | pk=739 `H11S` → actiu=False | **2 regles** |
+
+**Totals: `GradingRule` 1.272 → 1.262 (−10) · `GarmentPOMMap` 1.914 → 1.881 (−33).**
+
+### Compliment de les 5 condicions
+
+1. **Timestamp** — ⚠️ **impossible**: `GradingRule`, `GarmentPOMMap` i `POMMaster` **no tenen cap
+   camp de data**. Substituït per **bloc de pk** (P5 va crear els 78 últims `GradingRule` i els 69
+   últims `GarmentPOMMap`): **8/8, 33/33 i 2/2** hi cauen. El guard és un `SystemExit` dins l'atòmic,
+   no una comprovació prèvia: si una sola fila hagués caigut fora, rollback total.
+2. **Bessona exacta** — comprovada **fila a fila DINS l'atòmic** amb la tupla completa
+   (`logica`, `increment`, `increment_base`, `increment_break`, `talla_break_label`, `actiu`) per a
+   les regles i (`obligatori`, `is_key`, `nivell`, `ordre`) per als maps. 10/10 i 33/33.
+3. **Un sol atòmic** — esborrat → `actiu=False` → assert de l'invariant, tot dins. L'assert va
+   córrer i va donar **0**.
+4. **Foto prèvia** — bolcat íntegre de les 43 files escrit a la secció anterior i **commitat abans**
+   de l'apply (`87d3f9e`).
+5. **Dry-run → informe → apply** — fet.
+
+## Invariant de sortida — verificat
+
+| `pom_global` | POMMaster **actius** | |
+|---|---|---|
+| `POM-025` | **1** → pk=297 `H11L` | ✔ |
+| `LOSPOM-681` | **1** → pk=686 `H11S` | ✔ |
+| `LOSPOM-558` | **1** → pk=563 `GCI` | ✔ |
+
+**Cap pèrdua de cobertura**: els 8 rule_sets que cobria la parella `POM-025` els cobreix el
+supervivent (que a més en té 25 de propis); els 2 de `LOSPOM-681`, igual. Els 33 items amb map del
+perdedor ja els tenia tots el supervivent.
+
+## Estat de `fhort` després
+
+| | |
+|---|---|
+| regles a POM `actiu=False` | **0** ✔ |
+| maps a POM `actiu=False` | **0** ✔ |
+| àlies que apunten a POM inactiu | **0** ✔ |
+| POMMaster actius / inactius | 418 / 5 |
+| `GradingRule` · `GarmentPOMMap` | 1.262 · 1.881 |
+
+`los` **no s'ha tocat** (control): 460 regles, 10 SizeSystem actius, 0 items sense nom,
+0 regles a POM inactiu.
+
+> Nota: els dos POMMaster inactius conserven el `codi_client` nou (`H11L`, `H11S`, `GCI`) igual que
+> el supervivent. Com que `codi_client` no és únic i el perdedor és inactiu i buit, no hi ha
+> ambigüitat funcional — però queda com a rastre visible de la fusió, que és el que es volia.
