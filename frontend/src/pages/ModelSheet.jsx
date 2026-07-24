@@ -11,6 +11,7 @@ import PropagatedEditor from './PropagatedEditor'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
 import { models, watchpoints, modelTasks, fittingSessions } from '../api/endpoints'
+import useAuthStore from '../store/auth'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
@@ -704,6 +705,7 @@ function TechSheetTab({ modelId, navigate }) {
 function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const isBrand = useAuthStore(s => s.tenant?.tipologia === 'marca')
   if (!model) return null
 
   return (
@@ -748,6 +750,19 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
         }} title={t('model_sheet.phase')}>
           {model.fase_actual ? t(`model_sheet.dashboard.phase.${model.fase_actual}`, model.fase_actual) : '—'}
         </span>
+        {/* P7 — el RECURS assignat. Només en una MARCA (és qui assigna) i només si n'hi ha un:
+            un model sense recurs no viatja enlloc, i dir-ho amb un '—' aquí seria soroll a la
+            capçalera. Qui l'ha de veure buit és la llista, que compara models entre ells. */}
+        {isBrand && model.studio_assignat && (
+          <span style={{
+            fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 20, fontWeight: 600,
+            fontFamily: 'IBM Plex Mono, monospace',
+            background: 'var(--gold-pale)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
+          }} title={t('model_sheet.assign_resource')}>
+            <i className="ti ti-affiliate" style={{ marginRight: 4 }} aria-hidden="true" />
+            {model.studio_assignat}
+          </span>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

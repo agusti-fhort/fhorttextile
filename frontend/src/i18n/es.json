@@ -233,7 +233,6 @@
     "col_delivery_notes": "Albaranes",
     "active": "Activo",
     "inactive": "Inactivo",
-    "self": "propio",
     "template": "Plantilla de ficha",
     "logo_upload": "Subir logo",
     "logo_replace": "Sustituir logo",
@@ -330,7 +329,9 @@
     "dades_section": "Identificación y datos fiscales",
     "dades_section_help": "Identidad, dirección de facturación y condiciones comerciales del cliente.",
     "load_dictionary": "Cargar diccionario",
-    "dictionary_saved": "Diccionario guardado: {{linked}} vinculados · {{created}} POMs nuevos · {{skipped}} omitidos."
+    "dictionary_saved": "Diccionario guardado: {{linked}} vinculados · {{created}} POMs nuevos · {{skipped}} omitidos.",
+    "self_badge": "Esta casa",
+    "self_badge_hint": "Tu propio tenant: de él cuelgan tus modelos y es la casa de la ficha técnica. No se puede desactivar ni borrar."
   },
   "dictionary": {
     "title": "Diccionario de nomenclatura",
@@ -534,7 +535,8 @@
     "company_calendar": "Calendario de empresa",
     "planning": "Planificación",
     "planning_calendar": "Calendario",
-    "tech_sheet": "Ficha técnica"
+    "tech_sheet": "Ficha técnica",
+    "recursos": "Recursos"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -868,7 +870,15 @@
     "no_grading_yet": "Este modelo aún no tiene graduación asignada.",
     "grading_pending": "— pendiente",
     "grading_origin": "Procedencia",
-    "grading_rules_label": "Reglas"
+    "grading_rules_label": "Reglas",
+    "assign_resource": "Asignar a recurso",
+    "assign_resource_confirm": "Asignar",
+    "assign_resource_pick": "Recurso",
+    "assign_resource_clear": "Retirar asignación",
+    "assign_resource_none": "Ningún recurso activo. Vincula un estudio desde Recursos.",
+    "assign_resource_done": "{{n}} modelo(s) asignado(s) al recurso.",
+    "assign_resource_cleared": "Asignación retirada de {{n}} modelo(s).",
+    "assign_resource_already": "{{n}} ya lo estaban."
   },
   "model_wizard": {
     "customer": "Cliente",
@@ -1002,7 +1012,8 @@
     "loading": "Cargando modelos…",
     "empty": "Sin modelos. ¡Crea el primero!",
     "empty_filtered": "Sin resultados con este filtro.",
-    "delete_error": "No se ha podido eliminar el modelo."
+    "delete_error": "No se ha podido eliminar el modelo.",
+    "col_recurs": "Recurso"
   },
   "models_filters": {
     "button": "Filtros",
@@ -1200,6 +1211,38 @@
     "email_contacte": "Email de contacto",
     "persona_contacte": "Persona de contacto",
     "telefon_contacte": "Teléfono de contacto"
+  },
+  "recursos": {
+    "title": "Recursos",
+    "subtitle": "Los estudios con los que tienes un puente abierto. Un recurso es un estudio, nunca las personas que trabajan en él.",
+    "new": "Nuevo recurso",
+    "new_title": "Vincular un estudio",
+    "new_help": "Introduce el código del estudio (3 letras). Al crear el vínculo se generará un token que solo verás una vez.",
+    "codi_ph": "FTT",
+    "col_codi": "Código",
+    "col_nom": "Estudio",
+    "col_estat": "Estado",
+    "col_data": "Vinculado el",
+    "estat_ACTIU": "Activo",
+    "estat_ATURAT": "Detenido",
+    "estat_REVOCAT": "Revocado",
+    "aturar": "Detener",
+    "reactivar": "Reactivar",
+    "revocar": "Revocar",
+    "done_aturar": "Puente detenido. El estudio conserva todo su trabajo.",
+    "done_reactivar": "Puente reactivado.",
+    "done_revocar": "Vínculo revocado definitivamente.",
+    "confirm_revocar": "¿Revocar el vínculo con «{{codi}}»? Es definitivo: no se podrá reactivar.",
+    "cancel": "Cancelar",
+    "create": "Crear vínculo",
+    "loading": "Cargando recursos…",
+    "empty": "Ningún recurso vinculado.",
+    "error": "No se ha podido completar la operación.",
+    "token_title": "Token del vínculo con {{codi}}",
+    "token_warn": "Este token solo se muestra ahora. Guárdalo en un lugar seguro: no se podrá volver a consultar. Si lo pierdes, revoca el vínculo y crea uno nuevo.",
+    "token_copy": "Copiar",
+    "token_copied": "Copiado ✓",
+    "token_close": "Cerrar"
   },
   "i18n_field": {
     "languages": "Idiomas",

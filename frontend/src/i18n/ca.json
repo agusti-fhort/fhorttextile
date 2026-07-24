@@ -233,7 +233,6 @@
     "col_delivery_notes": "Albarans",
     "active": "Actiu",
     "inactive": "Inactiu",
-    "self": "propi",
     "template": "Plantilla de fitxa",
     "logo_upload": "Pujar logo",
     "logo_replace": "Substituir logo",
@@ -330,7 +329,9 @@
     "dades_section": "Identificació i dades fiscals",
     "dades_section_help": "Identitat, adreça de facturació i condicions comercials del client.",
     "load_dictionary": "Carregar diccionari",
-    "dictionary_saved": "Diccionari desat: {{linked}} vinculats · {{created}} POMs nous · {{skipped}} omesos."
+    "dictionary_saved": "Diccionari desat: {{linked}} vinculats · {{created}} POMs nous · {{skipped}} omesos.",
+    "self_badge": "Aquesta casa",
+    "self_badge_hint": "El teu propi tenant: hi pengen els teus models i és la casa de la fitxa tècnica. No es pot desactivar ni esborrar."
   },
   "dictionary": {
     "title": "Diccionari de nomenclatura",
@@ -534,7 +535,8 @@
     "company_calendar": "Calendari d'empresa",
     "planning": "Planificació",
     "planning_calendar": "Calendari",
-    "tech_sheet": "Fitxa tècnica"
+    "tech_sheet": "Fitxa tècnica",
+    "recursos": "Recursos"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -868,7 +870,15 @@
     "no_grading_yet": "Aquest model encara no té graduació assignada.",
     "grading_pending": "— pendent",
     "grading_origin": "Provinença",
-    "grading_rules_label": "Regles"
+    "grading_rules_label": "Regles",
+    "assign_resource": "Assignar a recurs",
+    "assign_resource_confirm": "Assignar",
+    "assign_resource_pick": "Recurs",
+    "assign_resource_clear": "Retirar assignació",
+    "assign_resource_none": "Cap recurs actiu. Vincula un estudi des de Recursos.",
+    "assign_resource_done": "{{n}} model(s) assignat(s) al recurs.",
+    "assign_resource_cleared": "Assignació retirada de {{n}} model(s).",
+    "assign_resource_already": "{{n}} ja hi estaven."
   },
   "model_wizard": {
     "customer": "Client",
@@ -1002,7 +1012,8 @@
     "loading": "Carregant models…",
     "empty": "Sense models. Crea el primer!",
     "empty_filtered": "Sense resultats amb aquest filtre.",
-    "delete_error": "No s'ha pogut esborrar el model."
+    "delete_error": "No s'ha pogut esborrar el model.",
+    "col_recurs": "Recurs"
   },
   "models_filters": {
     "button": "Filtres",
@@ -1200,6 +1211,38 @@
     "email_contacte": "Email de contacte",
     "persona_contacte": "Persona de contacte",
     "telefon_contacte": "Telèfon de contacte"
+  },
+  "recursos": {
+    "title": "Recursos",
+    "subtitle": "Els estudis amb qui tens un pont obert. Un recurs és un estudi, mai les persones que hi treballen.",
+    "new": "Nou recurs",
+    "new_title": "Vincular un estudi",
+    "new_help": "Introdueix el codi de l'estudi (3 lletres). En crear el vincle es generarà un token que només veuràs un cop.",
+    "codi_ph": "FTT",
+    "col_codi": "Codi",
+    "col_nom": "Estudi",
+    "col_estat": "Estat",
+    "col_data": "Vinculat el",
+    "estat_ACTIU": "Actiu",
+    "estat_ATURAT": "Aturat",
+    "estat_REVOCAT": "Revocat",
+    "aturar": "Aturar",
+    "reactivar": "Reactivar",
+    "revocar": "Revocar",
+    "done_aturar": "Pont aturat. L'estudi conserva tota la seva feina.",
+    "done_reactivar": "Pont reactivat.",
+    "done_revocar": "Vincle revocat definitivament.",
+    "confirm_revocar": "Revocar el vincle amb «{{codi}}»? És definitiu: no es podrà reactivar.",
+    "cancel": "Cancel·lar",
+    "create": "Crear vincle",
+    "loading": "Carregant recursos…",
+    "empty": "Cap recurs vinculat.",
+    "error": "No s'ha pogut completar l'operació.",
+    "token_title": "Token del vincle amb {{codi}}",
+    "token_warn": "Aquest token només es mostra ara. Desa'l en un lloc segur: no es podrà tornar a consultar. Si el perds, revoca el vincle i crea'n un de nou.",
+    "token_copy": "Copiar",
+    "token_copied": "Copiat ✓",
+    "token_close": "Tancar"
   },
   "i18n_field": {
     "languages": "Idiomes",

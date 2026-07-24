@@ -51,4 +51,8 @@ urlpatterns = [
     path('api/v1/', include('fhort.planning.urls')),
     path('api/v1/', include('fhort.commerce.urls')),
     path('api/v1/', include('fhort.patterns.urls')),
+    # P7 — els RECURSOS del Brand (vincles de federació). App SHARED servida des de l'URLconf
+    # de tenant a posta: la taula és a `public` però qui la consulta és el tenant (vegeu
+    # fhort/tenants/urls.py). Cap ruta al public: un Brand mira els seus vincles des de casa.
+    path('api/v1/', include('fhort.tenants.urls')),
 ]

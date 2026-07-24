@@ -122,6 +122,10 @@ export const models = {
   // ModelFilter C1). Alimenta el CascadeSelector mode=multi (showCounts) del panell de filtres.
   // → {by_type:{<id>:n}, by_item:{<id>:n}, total}.
   garmentCounts: (params) => client.get('/api/v1/models/garment-counts/', { params }),
+  // P7 — la palanca del Brand: assignar N models a un RECURS (Studio). studio_codi:'' retira.
+  // Una sola crida (no per-model): l'escriptura és en bloc i el compte torna agregat
+  // {assignats, ja_hi_eren, no_trobats}. 409 si el vincle existeix però no és ACTIU.
+  assignarRecurs: (body) => client.post('/api/v1/models/assignar-recurs/', body),
 }
 
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).
@@ -669,6 +673,17 @@ export const timers = {
 }
 
 // Usuari autenticat (capabilities + rol_nom). El backend SÍ exposa /api/v1/me/.
+// P7 (Federació v2) — els RECURSOS d'una Marca: els Studios amb qui té pont obert.
+// Només visible/operable des d'un tenant 'marca' (403 altrament). El `token` NOMÉS arriba a
+// la resposta de create(): no el demanis mai més, no existeix cap endpoint que el torni.
+export const recursos = {
+  list: () => client.get('/api/v1/recursos/'),
+  create: (data) => client.post('/api/v1/recursos/', data),          // {studio_codi} → 201 amb token
+  aturar: (id) => client.post(`/api/v1/recursos/${id}/aturar/`),
+  reactivar: (id) => client.post(`/api/v1/recursos/${id}/reactivar/`),
+  revocar: (id) => client.post(`/api/v1/recursos/${id}/revocar/`),   // terminal
+}
+
 export const me = {
   get: () => client.get('/api/v1/me/'),
   changePassword: (data) => client.post('/api/v1/me/change-password/', data),   // {new_password, new_password_confirm}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan, commerce } from '../../api/endpoints'
+import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan, commerce, recursos as recursosApi } from '../../api/endpoints'
+import useAuthStore from '../../store/auth'
 import Modal from '../ui/Modal'
 import { selS } from '../ui/buttons'
 import TaskAssignWizard from '../TaskAssignWizard'
@@ -39,6 +40,11 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
   const [elegibles, setElegibles] = useState([])   // assistents amb schedule_fittings (modal fitting)
   const [loadingEleg, setLoadingEleg] = useState(false)
   const [orders, setOrders] = useState([])         // comandes OPEN del client (modal assign_order)
+  // P7 — l'assignació a un recurs només existeix en una MARCA: és la seva sobirania sobre
+  // qui pot treballar cada model. En un Estudi el camp `studio_assignat` no vol dir res.
+  const isBrand = useAuthStore(st => st.tenant?.tipologia === 'marca')
+  const canConfigure = useAuthStore(st => st.user?.capabilities?.includes('configure')) ?? false
+  const [recursosActius, setRecursosActius] = useState([])   // només ACTIU: la resta no deixa passar res
 
   // Clients distints de la selecció (l'assignació a comanda exigeix un sol client).
   const customerIds = [...new Set(list.map(m => m.customer).filter(Boolean))]
@@ -67,6 +73,14 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
         commerce.orders.list({ customer: customerIds[0], status: 'OPEN', page_size: 200 })
           .then(r => setOrders(r.data?.results ?? r.data ?? [])).catch(() => setOrders([]))
       }
+    }
+    if (kind === 'assign_resource') {
+      setForm({ studio_codi: '' })
+      // Es demanen en obrir i no en muntar: la immensa majoria d'obertures del menú no
+      // acaben aquí, i la llista de recursos no ha de costar una query a cada selecció.
+      recursosApi.list()
+        .then(r => setRecursosActius((r.data?.results ?? r.data ?? []).filter(x => x.estat === 'ACTIU')))
+        .catch(() => setRecursosActius([]))
     }
     if (kind === 'production') setForm({ supplier_id: '', phase: defaultPhase, expected_at: '', notes: '' })
     if (kind === 'fitting') {
@@ -193,6 +207,27 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
     runBulk(m => commerce.orderLines.assignModel(form.line_id, { model_id: m.id }))
   }
 
+  // P7 — UNA SOLA CRIDA, no runBulk: l'endpoint és en bloc i torna comptes agregats. El 409
+  // (vincle no ACTIU) ha d'arribar sencer a l'usuari: és la llei de les dues claus dient que
+  // el pont desmenteix l'assignació, no un error tècnic que es pugui resumir com a "omès".
+  const runAssignResource = () => {
+    setBusy(true)
+    modelsApi.assignarRecurs({ model_ids: list.map(m => m.id), studio_codi: form.studio_codi || '' })
+      .then(r => {
+        setBusy(false); setModal(null)
+        const { assignats = 0, ja_hi_eren = 0 } = r.data || {}
+        const key = form.studio_codi ? 'model_sheet.assign_resource_done' : 'model_sheet.assign_resource_cleared'
+        let txt = t(key, { n: assignats })
+        if (ja_hi_eren) txt += ' · ' + t('model_sheet.assign_resource_already', { n: ja_hi_eren })
+        onFeedback({ type: 'ok', text: txt })
+        onChanged && onChanged()
+      })
+      .catch(e => {
+        setBusy(false)
+        onFeedback({ type: 'err', text: e.response?.data?.error || 'error' })
+      })
+  }
+
   // B — La creació de Watchpoints (D-12) viu ara a l'overlay flotant de la capçalera del model
   // (WatchpointDrawer → WatchpointsPanel), única porta de creació. Aquí ja no hi ha "Fer comentari".
 
@@ -203,6 +238,12 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
     { key: 'production', label: t('model_sheet.send_to_production'), icon: 'ti-send', enabled: !conjunt && list.length > 0, hint: conjuntHint },
     { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: !conjunt && list.length > 0, hint: conjuntHint },
     { key: 'assign_order', label: t('model_sheet.assign_order'), icon: 'ti-clipboard-list', enabled: !conjunt && list.length > 0, hint: conjuntHint },
+    // Només en una Marca amb CONFIGURE. Fora del mode conjunt: l'endpoint pren model_ids
+    // explícits (no filtres), com production/fitting/assign_order.
+    ...((isBrand && canConfigure)
+      ? [{ key: 'assign_resource', label: t('model_sheet.assign_resource'), icon: 'ti-affiliate',
+           enabled: !conjunt && list.length > 0, hint: conjuntHint }]
+      : []),
     { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: !conjunt && someNext, hint: conjuntHint },
     { key: 'back', label: t('model_sheet.back_phase'), icon: 'ti-arrow-left', enabled: !conjunt && somePrev, hint: conjuntHint },
   ]
@@ -291,6 +332,31 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
                 </Row>
               )}
             </>
+          )}
+        </Modal>
+      )}
+
+      {modal === 'assign_resource' && (
+        <Modal title={t('model_sheet.assign_resource')}
+          confirmLabel={busy ? t('model_sheet.working') : t('model_sheet.assign_resource_confirm')}
+          cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy}
+          onConfirm={runAssignResource} onCancel={() => !busy && setModal(null)}>
+          {!single && <div style={infoBox}>{t('model_sheet.bulk_apply', { n: list.length })}</div>}
+          <Row label={t('model_sheet.assign_resource_pick')}>
+            <select style={fullSel} value={form.studio_codi}
+              onChange={e => setForm(f => ({ ...f, studio_codi: e.target.value }))}>
+              {/* El buit NO és "cap tria": és l'acció de RETIRAR, i el backend l'accepta
+                  sempre — també amb el pont tancat. Per això és una opció amb nom. */}
+              <option value="">— {t('model_sheet.assign_resource_clear')} —</option>
+              {recursosActius.map(r => (
+                <option key={r.id} value={r.studio_codi}>{r.studio_codi} · {r.studio_nom}</option>
+              ))}
+            </select>
+          </Row>
+          {recursosActius.length === 0 && (
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
+              {t('model_sheet.assign_resource_none')}
+            </div>
           )}
         </Modal>
       )}

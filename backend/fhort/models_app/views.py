@@ -179,6 +179,16 @@ class ModelViewSet(viewsets.ModelViewSet):
             queryset=ModelTask.objects.exclude(assignee__isnull=True).select_related('assignee'),
         ))
 
+    def get_permissions(self):
+        # `assignar-recurs` no és edició de model: és un acte de govern del Brand sobre qui
+        # pot treballar-lo. Va gatejat CONFIGURE, la mateixa capacitat que RecursViewSet i que
+        # els mestres del tenant. La resta del ViewSet conserva el seu permís de sempre.
+        if self.action == 'assignar_recurs':
+            perm = HasCapability()
+            self.required_capability = CONFIGURE
+            return [IsAuthenticated(), perm]
+        return super().get_permissions()
+
     def get_serializer_class(self):
         if self.action == 'list':
             return ModelListSerializer
@@ -237,6 +247,66 @@ class ModelViewSet(viewsets.ModelViewSet):
                    for r in qs.values('garment_type_item').annotate(n=Count('id'))
                    if r['garment_type_item'] is not None}
         return Response({'by_type': by_type, 'by_item': by_item, 'total': qs.count()})
+
+    @action(detail=False, methods=['post'], url_path='assignar-recurs')
+    def assignar_recurs(self, request):
+        """POST /api/v1/models/assignar-recurs/ — la palanca de sobirania del Brand.
+
+        Body: {model_ids:[...], studio_codi:'FTT'}  ·  studio_codi:'' = RETIRAR l'assignació.
+        Resposta: {assignats, ja_hi_eren, no_trobats, studio_codi}.
+
+        LA PORTA LEGÍTIMA. `Model.studio_assignat` és el camp que decideix què travessa el
+        pont, i fins ara al backend només l'escrivia un management command. Aquest endpoint és
+        el seu equivalent per a la persona que decideix, i afegeix el que el CRUD genèric no
+        fa: comprovar que el pont cap a aquest Studio existeix i és ACTIU abans d'escriure res.
+
+        DUES CLAUS INDEPENDENTS (llei de la federació): el TenantLink autoritza el PONT,
+        `studio_assignat` autoritza CADA MODEL. Per això assignar amb el vincle ATURAT és 409
+        i no un avís: assignar seria escriure una autorització que el pont tancat desmenteix.
+
+        RETIRAR NO DEMANA PONT. `studio_codi=''` buida el camp sense validar cap vincle: treure
+        una autorització sempre ha de ser possible, també — i sobretot — quan el pont ja no hi és.
+
+        EL BRAND ÉS EL DEL REQUEST. El vincle es busca amb `request.tenant.codi_tenant`; el
+        payload no diu mai en nom de qui s'assigna (mateixa llei que RecursViewSet).
+
+        NO ES COMPROVA SI EL MODEL JA S'HA TRASPASSAT: no es pot. La instància EXTERN viu al
+        schema del Studio i el Brand no hi ha de mirar mai. No cal: `instantiate_external_models`
+        és idempotent per `codi_intern` (salta el que ja existeix), així que reassignar un model
+        ja traspassat no en duplica cap. L'escriptura s'accepta sempre.
+        """
+        from fhort.tenants.models import TenantLink
+
+        model_ids = request.data.get('model_ids')
+        if not isinstance(model_ids, list) or not model_ids:
+            return Response({'error': 'model_ids ha de ser una llista no buida.',
+                             'code': 'model_ids_required'}, status=400)
+
+        studio_codi = (request.data.get('studio_codi') or '').strip().upper()
+        brand_codi = getattr(getattr(request, 'tenant', None), 'codi_tenant', None)
+
+        if studio_codi:
+            if brand_codi is None:
+                return Response({'error': "Aquest schema no té tenant de producte.",
+                                 'code': 'no_tenant'}, status=400)
+            link = TenantLink.objects.filter(
+                brand_codi_tenant=brand_codi, studio_codi_tenant=studio_codi).first()
+            if link is None:
+                return Response({'error': f"No hi ha cap vincle amb '{studio_codi}'.",
+                                 'code': 'link_missing'}, status=400)
+            if not link.es_viu():
+                return Response({'error': f"El vincle amb '{studio_codi}' no és ACTIU (estat={link.estat}).",
+                                 'code': 'link_not_active'}, status=409)
+
+        qs = Model.objects.filter(id__in=model_ids)
+        trobats = set(qs.values_list('id', flat=True))
+        no_trobats = [i for i in model_ids if i not in trobats]
+        # Compte honest: només és "assignat" el que CANVIA. Repetir l'acció no infla el número.
+        ja_hi_eren = qs.filter(studio_assignat=studio_codi).count()
+        assignats = qs.exclude(studio_assignat=studio_codi).update(studio_assignat=studio_codi)
+
+        return Response({'assignats': assignats, 'ja_hi_eren': ja_hi_eren,
+                         'no_trobats': no_trobats, 'studio_codi': studio_codi})
 
 
 class ModelFitxerFilter(django_filters.FilterSet):

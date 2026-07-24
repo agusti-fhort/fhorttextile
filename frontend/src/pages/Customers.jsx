@@ -126,8 +126,12 @@ export default function Customers() {
 
   const columns = [
     { key: 'codi', label: t('clients.col_codi'), render: r => (
-      <span style={{ fontFamily: MONO, fontWeight: 600 }}>
-        {r.codi}{r.is_self && <span style={{ marginLeft: 6, fontSize: 'var(--fs-caption)', color: 'var(--gray)' }}>({t('clients.self')})</span>}
+      <span style={{ fontFamily: MONO, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        {r.codi}
+        {/* El client propi és el tenant mateix. En una MARCA hi pengen els seus propis models, així
+            que conviu a la llista amb els clients de debò: sense una marca clara, la fila que ets TU
+            sembla una fila més. Un "(propi)" en gris no ho deia; un badge sí. */}
+        {r.is_self && <SelfBadge t={t} />}
       </span>
     ) },
     { key: 'nom', label: t('clients.col_nom'), render: r => r.nom },
@@ -200,5 +204,21 @@ export default function Customers() {
           onError={(text) => setFeedback({ type: 'err', text })} />
       )}
     </div>
+  )
+}
+
+// Marca visual del client propi. Viu aquí i s'importa a la fitxa: una sola definició, perquè
+// la llista i el detall no puguin divergir en el que és la identitat del tenant.
+export function SelfBadge({ t }) {
+  return (
+    <span style={{
+      fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '1px 7px', borderRadius: 999,
+      fontFamily: 'IBM Plex Mono, monospace',
+      background: 'var(--gold-pale)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
+      whiteSpace: 'nowrap',
+    }} title={t('clients.self_badge_hint')}>
+      <i className="ti ti-home" style={{ marginRight: 4 }} aria-hidden="true" />
+      {t('clients.self_badge')}
+    </span>
   )
 }

@@ -46,11 +46,26 @@ def me_view(request):
     legals vigents amb requereix_reacceptacio=True que el Client (empresa) encara no ha
     acceptat. El gate és PER-CLIENT (B2B): l'admin accepta en nom de l'empresa; la UI de
     tenant que consumeix aquesta dada és territori PLATAFORMA (handoff, no es construeix aquí).
+
+    P7 (Federació v2) — `tenant`: qui SÓC, no qui és l'usuari. Sense això cap superfície de
+    la SPA pot saber si és una Marca o un Estudi, i tota la superfície del Brand (Recursos,
+    assignació) depèn d'aquesta distinció. S'injecta aquí i no a `MeSerializer` perquè el
+    serializer és un ModelSerializer sobre User i no rep context: mateix camí que
+    `legal_pending`, que ja és la incursió al tenant d'aquesta view.
+
+    Surt de `request.tenant` — l'objecte Client que django-tenants ja ha resolt pel domini —
+    i mai d'una consulta cross-schema (precedent: pom/s2_serializers.py:191). Al schema
+    'public' no hi ha tenant de producte: la clau hi va a None, mai a un diccionari a mitges.
     """
     data = dict(MeSerializer(request.user).data)
     # Import local: evita cicle accounts↔backoffice en càrrega.
     from fhort.backoffice.legal_service import pending_versions_for_client
     client = getattr(request, 'tenant', None)
+    data['tenant'] = None if client is None else {
+        'nom': client.nom,
+        'codi_tenant': client.codi_tenant,
+        'tipologia': client.tipologia,
+    }
     pend = pending_versions_for_client(client, nomes_reacceptacio=True)
     data['legal_pending'] = [
         {'id': v.id, 'tipus': v.document.tipus, 'nom': v.document.nom,
