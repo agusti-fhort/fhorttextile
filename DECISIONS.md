@@ -368,12 +368,26 @@ run XS·S·M·L·XL·2XL·3XL, base S):
 | `0` | 'L' | 99.5 | 100 | **100.5** | 100.5 | 100.5 | 100.5 | 100.5 |
 | `0` | 'M' | 99.5 | 100 | **100** | 100 | 100 | 100 | 100 |
 
-**2. ⚠️ `talla_break_label` és la PRIMERA talla JA AFECTADA, no l'última que creix.** El bucle fa
-`total += brk if j >= break_idx else ib`, o sigui que el pas que **arriba** a la talla del break ja
-usa `increment_break`. Per expressar «creix fins a M i després pla» cal `talla_break_label='L'`, NO
-`'M'` — amb `'M'` la M val el mateix que la base. És un off-by-one silenciós: no peta, només dona una
-talla malament. **Qualsevol especificació que digui "pla a partir de X" s'ha de traduir a
-`talla_break_label` = la talla SEGÜENT a X.**
+**2. ⚠️ `talla_break_label` és la PRIMERA talla JA AFECTADA, no l'última que creix.**
+El bucle fa `total += brk if j >= break_idx else ib`: el pas que **arriba** a la talla del break ja
+usa `increment_break`.
+
+> **Correcció d'una afirmació anterior (Agus, 2026-07-24).** L'especificació original deia que
+> «pla a partir de M» s'escrivia `talla_break_label='M'`. **És incorrecte**: amb `'M'` la M val
+> exactament el mateix que la base. La forma correcta, confirmada per l'Agus després de la
+> verificació en viu del motor feta en aquesta sessió, és:
+>
+> | intenció | `talla_break_label` | `increment_break` |
+> |---|---|---|
+> | «creix fins a M, després pla» (base S) | **`'L'`** | `0` |
+>
+> Comprovat a la taula de dalt: amb `label='L'` → S=100, **M=100.5** (últim creixement),
+> L=100.5 (pla). **Regla general: `talla_break_label` = la talla SEGÜENT a l'última que creix.**
+
+⚠️ **Aquest off-by-one NO afecta el cas «canvi d'increment»**, només el cas «sostre». Quan el segon
+valor no és 0 sinó un increment diferent (p.ex. talles compostes que creixen el doble), el label
+**sí** que és la primera talla amb el nou increment, i això és el que es vol. Vegeu el STOP
+retroactiu a `DIAGNOSI_CENS_TENANT_LOS_2026-07-24.md`.
 
 **3. El break s'ancora per ETIQUETA contra el run del MODEL** (`size_run`), no contra el del ruleset.
 Si l'etiqueta del break no és al run del model, `break_idx=None` i la regla degrada a **lineal pura,
