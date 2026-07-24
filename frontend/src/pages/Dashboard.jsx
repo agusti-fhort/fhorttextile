@@ -179,7 +179,9 @@ function ModelBoard({ scope }) {
     return () => clearTimeout(id)
   }, [loadPage, buildParams])
 
-  // Opcions de client per al filtre (un sol cop).
+  // Opcions de client per al filtre (un sol cop). NO s'envia `exclude_self` A PROPÒSIT: el client
+  // propi ha de ser filtrable (en una Marca hi pengen els seus propis models, i sense ell no es
+  // podrien aïllar). Només la pàgina Clients filtra, i només si el tenant és un Estudi.
   useEffect(() => {
     customers.list({ page_size: 200 })
       .then(res => setCustomerOpts(res.data?.results ?? res.data ?? []))

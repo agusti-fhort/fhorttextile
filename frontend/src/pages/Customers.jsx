@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
-import { customers } from '../api/endpoints'
+import { customers, tenantConfig } from '../api/endpoints'
 import CustomerModal from '../components/CustomerModal'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
@@ -36,6 +36,10 @@ export default function Customers() {
   const [saving, setSaving] = useState(false)
   const [modal, setModal] = useState(null)   // { mode:'create'|'edit', customer? }
   const [search, setSearch] = useState('')
+  // Tipologia del tenant ('estudi'|'marca'|'enterprise'), de /api/v1/tenant-config/. `null` =
+  // encara no carregada: mentre ho estigui NO es demana el llistat, perquè fer-ho amb un valor
+  // endevinat pintaria la llista amb el filtre equivocat i després la corregiria (flash).
+  const [tipologia, setTipologia] = useState(null)
   // TS-4c: upload de logo. Un input global reutilitzat + id del client objectiu.
   const logoRef = useRef(null)
   const logoTargetRef = useRef(null)
@@ -60,11 +64,26 @@ export default function Customers() {
       .finally(() => setSaving(false))
   }
 
-  // exclude_self: la pàgina Clients amaga el customer propi (is_self); els altres consumidors del
-  // llistat (selectors de client) el segueixen veient. Cerca server-side (codi/nom).
+  // Tipologia del tenant: una sola lectura, en muntar. Si la crida falla es cau a 'estudi', que
+  // és el comportament històric de la pàgina (amagar el self) — mai deixar la llista penjada.
+  useEffect(() => {
+    let alive = true
+    tenantConfig.get()
+      .then(r => { if (alive) setTipologia(r.data?.tipologia || 'estudi') })
+      .catch(() => { if (alive) setTipologia('estudi') })
+    return () => { alive = false }
+  }, [])
+
+  // exclude_self: en un ESTUDI el customer propi és fontaneria del sistema i la pàgina l'amaga;
+  // en una MARCA el self és el seu propi patrimoni i s'ha de veure (amb el badge `(self)`), que
+  // si no la pàgina Clients d'una Marca pot sortir buida. Els altres consumidors del llistat
+  // (selectors de client, filtre del Dashboard) no envien mai el filtre. Cerca server-side
+  // (codi/nom): arrossega aquest mateix filtre, i per tant queda coherent amb la llista sola.
   const fetchList = useCallback(() => customers.list({
-    ordering: 'codi', page_size: 500, exclude_self: true, ...(search ? { search } : {}),
-  }).then(res => res.data?.results ?? (Array.isArray(res.data) ? res.data : [])), [search])
+    ordering: 'codi', page_size: 500,
+    ...(tipologia === 'marca' ? {} : { exclude_self: true }),
+    ...(search ? { search } : {}),
+  }).then(res => res.data?.results ?? (Array.isArray(res.data) ? res.data : [])), [search, tipologia])
 
   const load = useCallback(() => {
     setError(false)
@@ -72,7 +91,9 @@ export default function Customers() {
   }, [fetchList])
 
   // Càrrega inicial + recàrrega amb debounce quan canvia la cerca (loading només al primer cop).
+  // Espera la tipologia: sense ella no se sap si toca `exclude_self` (vegeu fetchList).
   useEffect(() => {
+    if (!tipologia) return
     let alive = true
     const id = setTimeout(() => {
       fetchList()
@@ -131,8 +152,13 @@ export default function Customers() {
           <i className="ti ti-photo" aria-hidden="true" style={{ fontSize: 13 }} />
         </button>
         <button onClick={() => navigate(`/clients/${r.id}`)} disabled={saving} style={actBtn}>{t('clients.open_sheet')}</button>
-        <button onClick={() => toggleActive(r)} disabled={saving} style={actBtn}>{r.active ? t('clients.deactivate') : t('clients.activate')}</button>
-        <button onClick={() => remove(r)} disabled={saving} style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>{t('clients.delete')}</button>
+        {/* El client propi no es pot desactivar ni esborrar: el tenant es quedaria sense casa.
+            Amagar-ho aquí és cortesia — qui blinda de debò és el backend (views_b.py, 409 amb
+            `code: self_customer_protected`). */}
+        {!r.is_self && <>
+          <button onClick={() => toggleActive(r)} disabled={saving} style={actBtn}>{r.active ? t('clients.deactivate') : t('clients.activate')}</button>
+          <button onClick={() => remove(r)} disabled={saving} style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>{t('clients.delete')}</button>
+        </>}
       </span>) }] : []),
   ]
 

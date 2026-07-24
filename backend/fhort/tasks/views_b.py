@@ -719,6 +719,19 @@ class SupplierViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT)
 
 
+# Codi discriminant de l'error de blindatge del customer propi (patró DA-30): el frontend
+# decideix per `code`, mai fent match sobre el text del `detail` (que és català monolingüe).
+SELF_CUSTOMER_PROTEGIT = 'self_customer_protected'
+
+
+def _vol_desactivar(data):
+    """El payload demana passar `active` a fals? Tolera el bool de JSON i el text de form-data."""
+    if 'active' not in data:
+        return False
+    v = data['active']
+    return v is False or v == 0 or str(v).strip().lower() in ('false', '0')
+
+
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
@@ -749,6 +762,15 @@ class CustomerViewSet(viewsets.ModelViewSet):
         return [p]
 
     def destroy(self, request, *args, **kwargs):
+        # El customer propi (is_self) és fontaneria del tenant, no un client qualsevol: fa de
+        # default de la TechSheet (models_app/services.py:13) i és la casa dels models propis.
+        # Esborrar-lo o desactivar-lo deixaria el tenant sense casa, així que el blindatge viu
+        # AQUÍ i no només amagant botons — la UI és cortesia, l'API és la porta de debò.
+        if self.get_object().is_self:
+            return Response(
+                {'detail': "No es pot esborrar el client propi del tenant.",
+                 'code': SELF_CUSTOMER_PROTEGIT},
+                status=status.HTTP_409_CONFLICT)
         # FK Model.customer = PROTECT → si té models, l'esborrat falla. 409 net (no 500).
         try:
             return super().destroy(request, *args, **kwargs)
@@ -756,6 +778,15 @@ class CustomerViewSet(viewsets.ModelViewSet):
             return Response(
                 {'detail': "No es pot esborrar: té models associats. Desactiva'l."},
                 status=status.HTTP_409_CONFLICT)
+
+    def update(self, request, *args, **kwargs):
+        # Cobreix PUT i PATCH: `partial_update` de DRF delega aquí amb partial=True.
+        if _vol_desactivar(request.data) and self.get_object().is_self:
+            return Response(
+                {'detail': "No es pot desactivar el client propi del tenant.",
+                 'code': SELF_CUSTOMER_PROTEGIT},
+                status=status.HTTP_409_CONFLICT)
+        return super().update(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'], url_path='upload-logo',
             parser_classes=[MultiPartParser, FormParser])

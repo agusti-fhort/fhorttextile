@@ -188,6 +188,16 @@ class TenantConfigSerializer(serializers.Serializer):
     phone = serializers.CharField(allow_blank=True, required=False)
     # F-FACT B1 — peu legal dels documents fiscals (editable, mai constant).
     legal_footer = serializers.CharField(allow_blank=True, required=False)
+    # Tipologia del tenant ('estudi'|'marca'|'enterprise') — READ-ONLY i NO editable des del
+    # tenant: la governa el backoffice (schema públic), aquí només s'exposa. Surt de
+    # `request.tenant` (l'objecte que django-tenants ja ha resolt), MAI d'una consulta
+    # cross-schema (precedent: pom/s9_views.py:119). Primer consumidor d'UI: la pàgina Clients,
+    # que només amaga el customer propi en tenants 'estudi' (una Marca és casa del seu patrimoni).
+    tipologia = serializers.SerializerMethodField()
+
+    def get_tipologia(self, obj):
+        req = self.context.get('request')
+        return getattr(getattr(req, 'tenant', None), 'tipologia', None)
 
     def get_logo_file(self, obj):
         f = getattr(obj, 'logo_file', None)
