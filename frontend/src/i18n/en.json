@@ -233,7 +233,6 @@
     "col_delivery_notes": "Delivery notes",
     "active": "Active",
     "inactive": "Inactive",
-    "self": "self",
     "template": "Tech sheet template",
     "logo_upload": "Upload logo",
     "logo_replace": "Replace logo",
@@ -330,7 +329,9 @@
     "dades_section": "Identity and fiscal data",
     "dades_section_help": "Client identity, billing address and commercial terms.",
     "load_dictionary": "Load dictionary",
-    "dictionary_saved": "Dictionary saved: {{linked}} linked · {{created}} new POMs · {{skipped}} skipped."
+    "dictionary_saved": "Dictionary saved: {{linked}} linked · {{created}} new POMs · {{skipped}} skipped.",
+    "self_badge": "This house",
+    "self_badge_hint": "Your own tenant: your models hang from it and it is the home of the tech sheet. It cannot be deactivated or deleted."
   },
   "dictionary": {
     "title": "Nomenclature dictionary",

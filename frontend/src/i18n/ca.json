@@ -233,7 +233,6 @@
     "col_delivery_notes": "Albarans",
     "active": "Actiu",
     "inactive": "Inactiu",
-    "self": "propi",
     "template": "Plantilla de fitxa",
     "logo_upload": "Pujar logo",
     "logo_replace": "Substituir logo",
@@ -330,7 +329,9 @@
     "dades_section": "Identificació i dades fiscals",
     "dades_section_help": "Identitat, adreça de facturació i condicions comercials del client.",
     "load_dictionary": "Carregar diccionari",
-    "dictionary_saved": "Diccionari desat: {{linked}} vinculats · {{created}} POMs nous · {{skipped}} omesos."
+    "dictionary_saved": "Diccionari desat: {{linked}} vinculats · {{created}} POMs nous · {{skipped}} omesos.",
+    "self_badge": "Aquesta casa",
+    "self_badge_hint": "El teu propi tenant: hi pengen els teus models i és la casa de la fitxa tècnica. No es pot desactivar ni esborrar."
   },
   "dictionary": {
     "title": "Diccionari de nomenclatura",

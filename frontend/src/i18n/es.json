@@ -233,7 +233,6 @@
     "col_delivery_notes": "Albaranes",
     "active": "Activo",
     "inactive": "Inactivo",
-    "self": "propio",
     "template": "Plantilla de ficha",
     "logo_upload": "Subir logo",
     "logo_replace": "Sustituir logo",
@@ -330,7 +329,9 @@
     "dades_section": "Identificación y datos fiscales",
     "dades_section_help": "Identidad, dirección de facturación y condiciones comerciales del cliente.",
     "load_dictionary": "Cargar diccionario",
-    "dictionary_saved": "Diccionario guardado: {{linked}} vinculados · {{created}} POMs nuevos · {{skipped}} omitidos."
+    "dictionary_saved": "Diccionario guardado: {{linked}} vinculados · {{created}} POMs nuevos · {{skipped}} omitidos.",
+    "self_badge": "Esta casa",
+    "self_badge_hint": "Tu propio tenant: de él cuelgan tus modelos y es la casa de la ficha técnica. No se puede desactivar ni borrar."
   },
   "dictionary": {
     "title": "Diccionario de nomenclatura",

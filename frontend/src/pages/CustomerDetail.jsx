@@ -6,6 +6,7 @@ import {
   customers, customerAliases, commerce, poms, gradingRuleSets, sizingProfiles,
 } from '../api/endpoints'
 import CustomerForm, { initCustomerForm, customerPayload, customerFormInvalid } from '../components/CustomerForm'
+import { SelfBadge } from './Customers'
 import DictionaryWizard from '../components/DictionaryWizard'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
@@ -88,6 +89,9 @@ export default function CustomerDetail() {
             fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px', borderRadius: 999, fontFamily: MONO,
             background: customer.active ? 'var(--ok-bg)' : 'var(--gray-l)', color: customer.active ? 'var(--ok)' : 'var(--gray)',
           }}>{customer.active ? t('clients.active') : t('clients.inactive')}</span>
+          {/* La fitxa del client propi no es distingia de cap altra: hi entraves i no sabies que
+              estaves mirant casa teva. Mateix badge que a la llista (definició única). */}
+          {customer.is_self && <SelfBadge t={t} />}
         </div>
       </div>
 
