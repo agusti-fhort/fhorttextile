@@ -2513,3 +2513,98 @@ desplegat.**
    (TargetPills), **SizingProfileSelector**, **CascadeSelector** — que hi surtin els 10 targets i
    que cap mostri `BOY`/`GIRL`/`TODDLER_*`/`BABY_*` amb el significat antic.
 7. Prova del cotó de §6.2: els combos han de seguir retornant **exactament 1** ruleset.
+
+---
+
+# P1→P6 · ESTAT D'EXECUCIÓ (2026-07-24)
+
+## P3 PAS 0 — el gate dur: RESOLT, el motor SÍ suporta el sostre
+
+Verificat executant `pom/services.py::_apply_rule` sobre runs de prova (no per lectura). Fet complet
+i taules a `DECISIONS.md`. Resum:
+
+- `increment_break=0` **explícit** dona sostre real: la línia `brk = float(increment_break) if
+  increment_break is not None else ib` distingeix **0** de **None**.
+- **⚠️ off-by-one**: `talla_break_label` és la **primera talla ja plana**, no l'última que creix.
+  L'especificació de P3 («D22 i M(long) plans a partir de M → `talla_break_label='M'`») faria que la
+  **M valgués igual que la base S**. Per «creix fins a M i després pla» cal `'L'`.
+  **A confirmar amb la Montse abans d'aplicar cap FORM.**
+- El break s'ancora per etiqueta contra el run del **model**; si l'etiqueta no hi és, degrada a
+  lineal pura **en silenci**.
+
+Per la regla del brief, el gate passa i P3 continuaria — però el CONTINGUT de P3 (els valors del
+màster WOMAN) no és accessible (§blocador 1).
+
+## P4 — EXECUTAT (5 operacions, totes soft, idempotent verificat)
+
+| # | operació | resultat |
+|---|---|---|
+| 1 | Ruleset residual (pk=55) | model pk=192 → `grading_rule_set=NULL` + Watchpoint `GRADING_PENDENT`; ruleset → `actiu=False` (les 12 regles es conserven) |
+| 2 | `SizeSystem GIRL_LOS_03` | → `actiu=False` (0 rulesets/profiles/models confirmat abans de tocar) |
+| 3 | `GarmentTypeItem.name` | **62 → 0** buits. Títol pla del `code`; única excepció `t_shirt` → «T-Shirt» |
+| 4 | SizingProfile BABY_BOY + BABY_UNISEX | **+6** (2 targets × 3 rulesets New Born), mirall exacte dels de BABY_GIRL |
+| 5 | GarmentGroup buits | 4 → `actiu=False` (`DRESSES-FULL`, `KNITWEAR`, `TOPS-KNIT`, `TOPS-WOVEN`) |
+
+Auditoria SQL: RuleSets 18 actius + 1 inactiu · SizeSystem 10 + 1 · GarmentGroup 8 + 4 ·
+items sense nom 0 · SizingProfile 24 · models sense grading 382 · Watchpoints `GRADING_PENDENT` 1.
+
+## P6 — QA parcial, tot verd
+
+| invariant | esperat | real |
+|---|---|---|
+| regles a POM `actiu=False` | 0 | **0** ✔ |
+| regles sense `pom_global` | 0 | **0** ✔ |
+| `talla_base` fora del `size_system` del ruleset | 0 | **0** ✔ |
+| **SizeSystem actius** | **10** | **10** ✔ |
+| `GarmentTypeItem` sense nom | 0 | **0** ✔ |
+| parells (item×system) amb 2+ rulesets no nuls | 0 | **0** ✔ (53 parells amb grading) |
+
+Models amb/sense grading: **579 / 382** (baseline 580/381 → delta −1/+1, exactament el model del
+ruleset residual).
+
+**Prova del cotó** (rèplica de `gradingAxes.js:180`) — i ara també per a `BABY_BOY`, que abans no
+tenia perfil:
+
+| combo | profiles | rulesets |
+|---|---|---|
+| BABY_GIRL + KNIT + NEWBORN · `baby_top` | 3 | **1** ✔ |
+| BABY_GIRL + KNIT + NEWBORN · `baby_leggings` | 3 | **1** ✔ |
+| **BABY_BOY** + KNIT + NEWBORN · `baby_top` | 3 | **1** ✔ *(nou, gràcies a P4.4)* |
+
+El combo Woman+WOVEN+Bottoms Alpha no es pot provar: P1 no s'ha executat.
+
+## BLOCADOR 1 — P1, P2 i P3-FORM: els documents font no existeixen
+
+| document | citat a | estat al servidor |
+|---|---|---|
+| `GRADING_SOURCES_LOSAN.md` (§TANDA 10, 11) | P1, P2, P3 | **NO EXISTEIX** (cercat a tot el disc) |
+| `FIL_NOMENCLATURA_GRADING_LOSAN.md` | P2 | **NO EXISTEIX** |
+| `DELTA_GRADING_MASTER_LOSAN.md` | P2, P4 | **NO EXISTEIX** |
+
+Sense els màsters no hi ha els increments (`C=3/3`, `D1=2.1/2.6`, les taules TOP-DRESS/BOTTOM…).
+El propi brief ho prohibeix: «Aplicar 1-a-1 contra la taula del màster, **mai per inferència**».
+Inventar-los posaria mesures falses en un PLM viu. **P1, P2, P3-FORM i P5 queden sense executar.**
+
+Conseqüències anotades:
+- El **watchpoint `MAN_ALPHA_BOTTOMS_SENSE_FONT`** (11 models) era part de P1 → **no creat**.
+- L'**invariant de sortida de P1** (0 models amb size_system alfa i ruleset numèric, excepte els 11)
+  **no es compleix**: segueixen els 41 de Z5 (30 dona + 11 home).
+- `INFORME_DIVERGENCIES_NEWBORN_MONTSE.md` (P2) **no s'ha generat**.
+- **P5** no té càrrega: no hi ha res nou de P1/P2 per replicar a `fhort`.
+
+## BLOCADOR 2 — git: `dev` local és estantís
+
+`dev` local és de **2026-07-14**, **1.351 commits enrere** de main, i té **1 commit propi no
+fusionat** (`61d2724`, seed Brownie FW26). `origin/dev` (2026-07-24, `5231dac`) sí que és al dia i
+ja està contingut a main.
+
+**No s'ha tocat `dev` local** (perdria aquell commit). El treball va a la branca
+**`losan/p0-p4-onboarding`**, creada sobre `origin/dev` en un **worktree separat** (`/root/dev-work`)
+perquè l'arbre de PROD no es mogui. **Commit `88ebf08`. Cap push.**
+
+## NOTA — `main` s'ha mogut durant la sessió
+
+L'Agus ha fusionat `origin/dev` a `main` a les **08:48** (13 commits, P7 federació):
+`4e32fe3` → `5a0e097`. Deploy verificat sa: **0 migracions pendents** als 3 schemas, `fhort.service`
+actiu, `dist` reconstruït a les 08:48 — i losan el rep automàticament gràcies al canvi de vhost
+d'aquest matí. Cap interferència amb el treball de dades d'aquesta sessió.
