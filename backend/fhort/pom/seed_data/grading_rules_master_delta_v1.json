@@ -63,7 +63,7 @@
       "origen": "CLIENT_RUN", "customer_codi": "LOS",
       "talla_base": "8", "talla_break_label": "14", "logica": "LINEAR",
       "crear_sizing_profile": true,
-      "font": "MÀSTER JUNIOR GIRL — full TOP-DRESS (regular). Full OVERSIZE ajornat.",
+      "font": "MÀSTER JUNIOR KID_GIRL — full TOP-DRESS (regular). Full OVERSIZE ajornat.",
       "regles": [
         {"codi_client": "K2",  "increment_base": 1.1, "increment_break": 1.1},
         {"codi_client": "K",   "increment_base": 0.4, "increment_break": 0.4},
@@ -92,7 +92,7 @@
     {
       "nom": "LOS Kids Boy Knit — Tops",
       "size_system_codi": "BOY_LOS_01",
-      "targets": ["BOY"], "construction": "KNIT", "fit_type": "REGULAR",
+      "targets": ["KID_BOY"], "construction": "KNIT", "fit_type": "REGULAR",
       "garment_group": "TOPS", "garment_type_item": null,
       "origen": "CLIENT_RUN", "customer_codi": "LOS",
       "talla_base": "2", "talla_break_label": "9/10", "logica": "LINEAR",
@@ -121,7 +121,7 @@
     {
       "nom": "LOS Kids Girl Knit — Tops",
       "size_system_codi": "GIRL_LOS_01",
-      "targets": ["GIRL"], "construction": "KNIT", "fit_type": "REGULAR",
+      "targets": ["KID_GIRL"], "construction": "KNIT", "fit_type": "REGULAR",
       "garment_group": "TOPS", "garment_type_item": null,
       "origen": "CLIENT_RUN", "customer_codi": "LOS",
       "talla_base": "2", "talla_break_label": "9/10", "logica": "LINEAR",

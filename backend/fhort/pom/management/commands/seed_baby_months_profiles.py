@@ -16,7 +16,7 @@ from django_tenants.utils import schema_context
 
 SIZE_SYSTEM_CODE = 'BABY_MONTHS_COM'
 RULE_SET_NAME = 'EU Knit Baby Months'
-TARGET_CODES = ['BABY_GIRL', 'BABY_BOY', 'BABY_UNISEX']
+TARGET_CODES = ['NEWBORN_GIRL', 'NEWBORN_BOY', 'NEWBORN_UNISEX']
 
 
 class Command(BaseCommand):

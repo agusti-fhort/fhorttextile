@@ -4,6 +4,7 @@ import {
   TARGETS, nomLocal,
   availableTargetCodes, availableConstructions, availableFits,
 } from '../grading/gradingAxes'
+import TargetLabel from '../grading/TargetLabel'
 import { useGarmentCatalog } from '../grading/garmentCatalog'
 import { garmentTypeItems } from '../../api/endpoints'
 import GroupPills from '../GarmentTypeSelector/GroupPills'
@@ -383,7 +384,6 @@ function StepSection({ number, title, children }) {
 }
 
 function TargetCard({ target, selected, available, onClick }) {
-  const { t } = useTranslation()
   return (
     <div
       onClick={available ? onClick : undefined}
@@ -399,12 +399,13 @@ function TargetCard({ target, selected, available, onClick }) {
         minWidth: 100, textAlign: 'center', transition: 'all .15s',
       }}
     >
-      <div style={{
-        fontSize: 'var(--fs-body)',
-        fontWeight: selected ? 600 : 400,
-        color: selected ? 'var(--gold)' : 'var(--text-main)',
-      }}>
-        {t(`model_wizard.target_${target.codi}`, target.nom_en)}
+      <div style={{ fontSize: 'var(--fs-body)' }}>
+        <TargetLabel
+          codi={target.codi}
+          nomFallback={target.nom_en}
+          fontWeight={selected ? 600 : 400}
+          color={selected ? 'var(--gold)' : 'var(--text-main)'}
+        />
       </div>
     </div>
   )

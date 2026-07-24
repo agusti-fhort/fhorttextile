@@ -4,6 +4,7 @@ import useAuthStore from '../store/auth'
 import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
 import SizeAuthoringDrawer from '../components/SizeAuthoringDrawer'
 import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn, matchingRuleSetsStrict } from '../components/grading/gradingAxes'
+import TargetLabel from '../components/grading/TargetLabel'
 import { effectiveRegime } from '../utils/gradingRegime'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -705,15 +706,22 @@ function TargetPills({ value, onToggle, disabled }) {
               key={tg.codi} type="button" disabled={disabled}
               onClick={() => onToggle(tg.codi)}
               style={{
-                padding: '5px 12px', borderRadius: 999, cursor: disabled ? 'default' : 'pointer',
-                fontSize: 'var(--fs-body)', fontWeight: on ? 600 : 400,
+                // Radi suau, no 999: el pill ara pot portar 2 línies (nom + franja) i una
+                // càpsula completament rodona al voltant d'un bloc de dues línies es llegeix
+                // com un error de layout.
+                padding: '5px 12px', borderRadius: 8, cursor: disabled ? 'default' : 'pointer',
+                fontSize: 'var(--fs-body)',
                 background: on ? 'var(--warn-bg)' : 'var(--white)',
-                color: on ? 'var(--warn)' : 'var(--text-main)',
                 border: `1px solid ${on ? 'var(--warn)' : 'var(--border)'}`,
                 opacity: disabled && !on ? 0.5 : 1,
               }}
             >
-              {t(`model_wizard.target_${tg.codi}`, tg.nom_en)}
+              <TargetLabel
+                codi={tg.codi}
+                nomFallback={tg.nom_en}
+                fontWeight={on ? 600 : 400}
+                color={on ? 'var(--warn)' : 'var(--text-main)'}
+              />
             </button>
           )
         })}

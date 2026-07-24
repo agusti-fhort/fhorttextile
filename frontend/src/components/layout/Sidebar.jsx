@@ -73,6 +73,9 @@ const navGroups = [
     // P7 — RECURSOS: els Studios amb qui la Marca té pont obert. Doble gate ('brand_configure'):
     // només en un tenant 'marca' I amb CONFIGURE. Un Estudi no emet vincles, els rep.
     { to: '/recursos', labelKey: 'nav.recursos', icon: 'ti-affiliate', cap: 'brand_configure' },
+    // P8 — ENCÀRRECS: què m'han assignat els Brands vinculats. Gate simètric del de Recursos
+    // ('studio_configure'): només en un tenant 'estudi' I amb CONFIGURE.
+    { to: '/encarrecs', labelKey: 'nav.encarrecs', icon: 'ti-inbox', cap: 'studio_configure' },
     { to: '/configuracio/calendari', labelKey: 'nav.company_calendar', icon: 'ti-calendar-cog', cap: 'configure' },
     { to: '/configuracio/usuaris', labelKey: 'nav.users', icon: 'ti-users', cap: 'manage_users' },
     // G9 "consulta sí / edició no": catàleg de tasques consultable per a tothom (sense `cap`).
@@ -203,6 +206,7 @@ export default function Sidebar() {
   const canConfigure = !!user?.capabilities?.includes('configure')
   // P7 — la naturalesa de la casa, no de la persona: viu al store al costat de `user`.
   const isBrand = useAuthStore(s => s.tenant?.tipologia === 'marca')
+  const isStudio = useAuthStore(s => s.tenant?.tipologia === 'estudi')
   const canPlan = !!user?.capabilities?.some(c => c === 'define_tasks' || c === 'configure')
   const canExecute = !!user?.capabilities?.includes('execute_tasks')
   const [expanded, setExpanded] = useState({['nav.models']: true})
@@ -241,6 +245,7 @@ export default function Sidebar() {
         case 'execute': return canExecute
         case 'configure': return canConfigure
         case 'brand_configure': return isBrand && canConfigure
+        case 'studio_configure': return isStudio && canConfigure
         case 'manage_users': return canManageUsers
         case 'onboarding': return onboardingPct < 100
         default: return true
@@ -249,7 +254,7 @@ export default function Sidebar() {
     return navGroups
       .map(g => ({ sectionKey: g.sectionKey, items: g.items.filter(allowed) }))
       .filter(g => g.items.length > 0)
-  }, [canPlan, canExecute, canConfigure, canManageUsers, isBrand, onboardingPct])
+  }, [canPlan, canExecute, canConfigure, canManageUsers, isBrand, isStudio, onboardingPct])
 
   const allItems = useMemo(() => groups.flatMap(g => g.items), [groups])
 

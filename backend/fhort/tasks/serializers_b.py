@@ -58,6 +58,9 @@ class CustomerSerializer(serializers.ModelSerializer):
     quotes_accepted = serializers.SerializerMethodField()
     orders_open = serializers.SerializerMethodField()
     delivery_notes_count = serializers.SerializerMethodField()
+    # P8 — l'estat del PONT amb el tenant connectat. Read-only i derivat: el vincle és
+    # patrimoni del Brand i el Studio només el consulta. None quan el client no està connectat.
+    vincle_estat = serializers.SerializerMethodField()
 
     class Meta:
         model = Customer
@@ -71,11 +74,36 @@ class CustomerSerializer(serializers.ModelSerializer):
                   # Comercial Studio (B3a) — règim fiscal + condicions de pagament per defecte.
                   'tax_regime', 'vat_number', 'payment_method', 'payment_terms',
                   # Pàgina Clients (annotate): ofertes presentades/acceptades, comandes obertes, albarans.
-                  'quotes_sent', 'quotes_accepted', 'orders_open', 'delivery_notes_count']
+                  'quotes_sent', 'quotes_accepted', 'orders_open', 'delivery_notes_count',
+                  # P8 (Federació v2) — connexió amb un tenant Brand. `codi_global` és el ganxo
+                  # (codi nu del Brand) i `vincle_estat` l'estat del pont, tots dos de lectura:
+                  # s'escriuen NOMÉS per l'acció `vincular-token`, que és qui valida el token.
+                  'codi_global', 'vincle_estat']
         # is_self: la sembra el fixa (migració 0020 / bootstrap_tenant / load_losan_package, tots
         # per ORM, cap via aquest serializer). Read-only perquè, si no, un PATCH `is_self:false`
         # desarmaria el blindatge d'esborrat/desactivació del client propi (views_b.py).
-        read_only_fields = ['logo', 'is_self']
+        # codi_global: escriure'l per PATCH permetria declarar-se connectat a un Brand sense
+        # presentar-ne mai el token — precisament el que l'acció `vincular-token` existeix per
+        # impedir. Read-only aquí, i l'única porta és aquella.
+        read_only_fields = ['logo', 'is_self', 'codi_global']
+
+    def get_vincle_estat(self, o):
+        """Estat del TenantLink entre el Brand connectat i AQUEST tenant. Sense connexió, None.
+
+        Es consulta a `public` sense schema_context: `tenants_tenantlink` només existeix allà i
+        el search_path del tenant ja hi arriba (diagnosi P7 §A1). Cap query per als clients no
+        connectats, que són la immensa majoria de la llista.
+        """
+        if not o.codi_global:
+            return None
+        from fhort.tenants.models import TenantLink
+        req = self.context.get('request')
+        meu = getattr(getattr(req, 'tenant', None), 'codi_tenant', None)
+        if meu is None:
+            return None
+        link = TenantLink.objects.filter(
+            brand_codi_tenant=o.codi_global, studio_codi_tenant=meu).only('estat').first()
+        return link.estat if link else None
 
     def get_quotes_sent(self, o):
         return getattr(o, 'cnt_quotes_sent', 0) or 0

@@ -64,6 +64,7 @@ export default function CustomerDetail() {
   if (loading) return <Center>{t('clients.loading')}</Center>
   if (error || !customer) return <Center>{t('clients.error')}</Center>
 
+  const isStudio = useAuthStore(st => st.tenant?.tipologia === 'estudi')
   // El client propi del tenant (is_self) no es ven res a si mateix: el tab Comercial no hi té
   // sentit i queda fora. `activeTab` es resol contra els tabs VISIBLES, de manera que entrar per
   // l'URL directa (?tab=comercial) tampoc hi cau — es queda a Dades.
@@ -110,9 +111,19 @@ export default function CustomerDetail() {
 
       <div style={{ maxWidth: 820 }}>
         {activeTab === 'dades' && (
-          <DadesTab customer={customer} canEdit={canEdit} t={t}
-            onSaved={(msg) => load().then(() => setFeedback({ type: 'ok', text: msg }))}
-            onError={(text) => setFeedback({ type: 'err', text })} />
+          <>
+            <DadesTab customer={customer} canEdit={canEdit} t={t}
+              onSaved={(msg) => load().then(() => setFeedback({ type: 'ok', text: msg }))}
+              onError={(text) => setFeedback({ type: 'err', text })} />
+            {/* P8 — la connexió amb el tenant del client. Només en un ESTUDI: qui enganxa el
+                token és qui rep encàrrecs. En una Marca aquesta secció no vol dir res (és ella
+                qui l'emet, des de Recursos), i el client propi no es connecta a si mateix. */}
+            {isStudio && !customer.is_self && (
+              <ConnexioTenant customer={customer} canEdit={canEdit} t={t}
+                onSaved={(msg) => load().then(() => setFeedback({ type: 'ok', text: msg }))}
+                onError={(text) => setFeedback({ type: 'err', text })} />
+            )}
+          </>
         )}
         {activeTab === 'tecnic' && (
           <TecnicTab customer={customer} canEdit={canEdit} t={t} navigate={navigate}
@@ -611,6 +622,88 @@ function EmptyContext({ t, help, actions = [], navigate }) {
           </button>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ── P8 · CONNEXIÓ AMB TENANT — l'aterratge del token del Brand ─────────────────────
+//
+// El Brand emet un token des de la seva pàgina Recursos i el fa arribar pel canal que vulgui.
+// Aquí el Studio l'enganxa i el sistema resol tot sol de quin tenant es tracta: no cal que
+// ningú escrigui codis a mà ni que les dues bandes es posin d'acord en cap identificador.
+//
+// El token NO es mostra mai un cop connectat, i no és que s'amagui: el backend no el torna.
+// El que es veu és l'ESTAT DEL PONT, que és l'única cosa que el Studio necessita saber-ne.
+function ConnexioTenant({ customer, canEdit, t, onSaved, onError }) {
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  const connectat = !!customer.codi_global
+
+  const vincula = () => {
+    if (!token.trim()) return
+    setBusy(true)
+    customers.vincularToken(customer.id, token.trim())
+      .then(() => { setToken(''); onSaved(t('clients.vincle_ok')) })
+      .catch(e => onError(e?.response?.data?.detail || t('clients.error')))
+      .finally(() => setBusy(false))
+  }
+
+  const desvincula = () => {
+    if (!window.confirm(t('clients.vincle_confirm_treure', { codi: customer.codi_global }))) return
+    setBusy(true)
+    customers.desvincular(customer.id)
+      .then(() => onSaved(t('clients.vincle_tret')))
+      .catch(e => onError(e?.response?.data?.detail || t('clients.error')))
+      .finally(() => setBusy(false))
+  }
+
+  const estat = customer.vincle_estat
+  const estatStyle = estat === 'ACTIU'
+    ? { background: 'var(--ok-bg)', color: 'var(--ok)' }
+    : { background: 'var(--warn-bg)', color: 'var(--warn)' }
+
+  return (
+    <div style={{ marginTop: 28, paddingTop: 20, borderTop: '0.5px solid var(--gray-l)' }}>
+      <SectionTitle t={t} title="clients.vincle_section" subtitle="clients.vincle_section_help" />
+      {connectat ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
+            <i className="ti ti-plug-connected" style={{ marginRight: 6, color: 'var(--gold)' }} aria-hidden="true" />
+            {t('clients.vincle_connectat', { codi: customer.codi_global })}
+          </span>
+          <span style={{ fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px',
+            borderRadius: 999, fontFamily: MONO, ...estatStyle }}>
+            {/* Un pont ATURAT es veu igual de clar que un d'ACTIU: el Studio ha de saber per què
+                han deixat d'arribar-li encàrrecs sense haver-ho d'endevinar. */}
+            {t(`recursos.estat_${estat}`, estat || '—')}
+          </span>
+          {canEdit && (
+            <button onClick={desvincula} disabled={busy}
+              style={{ background: 'none', border: '0.5px solid var(--err)', color: 'var(--err)',
+                borderRadius: 6, padding: '4px 10px', fontFamily: MONO,
+                fontSize: 'var(--fs-body)', cursor: busy ? 'not-allowed' : 'pointer' }}>
+              {t('clients.vincle_treure')}
+            </button>
+          )}
+        </div>
+      ) : canEdit ? (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input value={token} onChange={e => setToken(e.target.value)}
+            placeholder={t('clients.vincle_ph')} disabled={busy}
+            style={{ ...selS, flex: 1, minWidth: 260, fontFamily: MONO }} />
+          <button onClick={vincula} disabled={busy || !token.trim()}
+            style={{ ...primaryBtn, marginLeft: 0,
+              opacity: (busy || !token.trim()) ? 0.5 : 1,
+              cursor: (busy || !token.trim()) ? 'not-allowed' : 'pointer' }}>
+            <i className="ti ti-plug" style={{ fontSize: 14 }} aria-hidden="true" />
+            {t('clients.vincle_connectar')}
+          </button>
+        </div>
+      ) : (
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+          {t('clients.vincle_no_connectat')}
+        </div>
+      )}
     </div>
   )
 }

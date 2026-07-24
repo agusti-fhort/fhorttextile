@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { SizeSetCard } from "./SizeSetCard"
 import { constructionTypes, fitTypes, sizingProfiles } from "../api/endpoints"
 import { TARGETS } from "./grading/gradingAxes"
+import TargetLabel from "./grading/TargetLabel"
 
 // TARGETS: vocabulari ÚNIC (ordre + etiquetes) de gradingAxes — fora la còpia TARGET_ORDER + la crida
 // a targets/ (Onada 2). Les cerques de perfils van per CODI de target, no cal l'objecte de BD.
@@ -164,7 +165,11 @@ export function SizingProfileSelector({
                 minWidth: 90,
               }}
             >
-              <span style={{ fontWeight: selectedTarget === tg.codi ? 600 : 400 }}>{t(`model_wizard.target_${tg.codi}`, tg.nom_en)}</span>
+              <TargetLabel
+                codi={tg.codi}
+                nomFallback={tg.nom_en}
+                fontWeight={selectedTarget === tg.codi ? 600 : 400}
+              />
             </button>
           ))}
         </div>

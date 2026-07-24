@@ -10,8 +10,8 @@
       "actiu": true,
       "customer_codi": "LOS",
       "targets": [
-        "TODDLER_BOY",
-        "TODDLER_GIRL"
+        "BABY_BOY",
+        "BABY_GIRL"
       ],
       "parent": null
     },
@@ -21,7 +21,7 @@
       "actiu": true,
       "customer_codi": "LOS",
       "targets": [
-        "BOY"
+        "KID_BOY"
       ],
       "parent": null
     },
@@ -31,7 +31,7 @@
       "actiu": true,
       "customer_codi": "LOS",
       "targets": [
-        "GIRL"
+        "KID_GIRL"
       ],
       "parent": null
     },
@@ -41,7 +41,7 @@
       "actiu": true,
       "customer_codi": "LOS",
       "targets": [
-        "GIRL"
+        "KID_GIRL"
       ],
       "parent": null
     },
@@ -71,9 +71,9 @@
       "actiu": true,
       "customer_codi": "LOS",
       "targets": [
-        "BABY_BOY",
-        "BABY_GIRL",
-        "BABY_UNISEX"
+        "NEWBORN_BOY",
+        "NEWBORN_GIRL",
+        "NEWBORN_UNISEX"
       ],
       "parent": null
     },

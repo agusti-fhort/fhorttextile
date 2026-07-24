@@ -7,20 +7,23 @@
 //
 // codi = id (mai traduït); nom_en/nom_ca/nom_es = display bilingüe. Convenció de sector.
 
+// P0b (2026-07-24) — vocabulari alineat amb el sector: BOY→KID_BOY · GIRL→KID_GIRL ·
+// TODDLER_*→BABY_* · BABY_*→NEWBORN_*. Ha d'anar SEMPRE en paral·lel amb
+// Target.CODI_CHOICES (backend/fhort/pom/models.py) i amb les files de `pom_target`.
 export const TARGETS = [
-  { codi: 'WOMAN',         nom_en: 'Woman',         nom_ca: 'Dona',            nom_es: 'Mujer' },
-  { codi: 'MAN',           nom_en: 'Man',           nom_ca: 'Home',            nom_es: 'Hombre' },
-  { codi: 'UNISEX_ADULT',  nom_en: 'Unisex Adult',  nom_ca: 'Unisex adult',    nom_es: 'Unisex adulto' },
-  { codi: 'BABY_GIRL',     nom_en: 'Baby Girl',     nom_ca: 'Nadó nena',       nom_es: 'Bebé niña' },
-  { codi: 'BABY_BOY',      nom_en: 'Baby Boy',      nom_ca: 'Nadó nen',        nom_es: 'Bebé niño' },
-  { codi: 'BABY_UNISEX',   nom_en: 'Baby Unisex',   nom_ca: 'Nadó unisex',     nom_es: 'Bebé unisex' },
-  { codi: 'TODDLER_GIRL',  nom_en: 'Toddler Girl',  nom_ca: 'Nena toddler',    nom_es: 'Niña toddler' },
-  { codi: 'TODDLER_BOY',   nom_en: 'Toddler Boy',   nom_ca: 'Nen toddler',     nom_es: 'Niño toddler' },
-  { codi: 'GIRL',          nom_en: 'Girl',          nom_ca: 'Nena',            nom_es: 'Niña' },
-  { codi: 'BOY',           nom_en: 'Boy',           nom_ca: 'Nen',             nom_es: 'Niño' },
-  { codi: 'TEEN_GIRL',     nom_en: 'Teen Girl',     nom_ca: 'Adolescent nena', nom_es: 'Adolescente niña' },
-  { codi: 'TEEN_BOY',      nom_en: 'Teen Boy',      nom_ca: 'Adolescent nen',  nom_es: 'Adolescente niño' },
-  { codi: 'MATERNITY',     nom_en: 'Maternity',     nom_ca: 'Maternitat',      nom_es: 'Maternidad' },
+  { codi: 'WOMAN',          nom_en: 'Woman',          nom_ca: 'Dona',            nom_es: 'Mujer' },
+  { codi: 'MAN',            nom_en: 'Man',            nom_ca: 'Home',            nom_es: 'Hombre' },
+  { codi: 'UNISEX_ADULT',   nom_en: 'Unisex Adult',   nom_ca: 'Unisex adult',    nom_es: 'Unisex adulto' },
+  { codi: 'NEWBORN_GIRL',   nom_en: 'Newborn Girl',   nom_ca: 'Nadó nena',       nom_es: 'Bebé niña' },
+  { codi: 'NEWBORN_BOY',    nom_en: 'Newborn Boy',    nom_ca: 'Nadó nen',        nom_es: 'Bebé niño' },
+  { codi: 'NEWBORN_UNISEX', nom_en: 'Newborn Unisex', nom_ca: 'Nadó unisex',     nom_es: 'Bebé unisex' },
+  { codi: 'BABY_GIRL',      nom_en: 'Baby Girl',      nom_ca: 'Baby nena',       nom_es: 'Baby niña' },
+  { codi: 'BABY_BOY',       nom_en: 'Baby Boy',       nom_ca: 'Baby nen',        nom_es: 'Baby niño' },
+  { codi: 'KID_GIRL',       nom_en: 'Kid Girl',       nom_ca: 'Nena',            nom_es: 'Niña' },
+  { codi: 'KID_BOY',        nom_en: 'Kid Boy',        nom_ca: 'Nen',             nom_es: 'Niño' },
+  { codi: 'TEEN_GIRL',      nom_en: 'Teen Girl',      nom_ca: 'Adolescent nena', nom_es: 'Adolescente niña' },
+  { codi: 'TEEN_BOY',       nom_en: 'Teen Boy',       nom_ca: 'Adolescent nen',  nom_es: 'Adolescente niño' },
+  { codi: 'MATERNITY',      nom_en: 'Maternity',      nom_ca: 'Maternitat',      nom_es: 'Maternidad' },
 ]
 
 export const CONSTRUCTIONS = [
@@ -57,6 +60,24 @@ export const GARMENT_GROUPS = [
 export function nomLocal(obj, lang) {
   if (!obj) return ''
   return lang === 'es' ? (obj.nom_es || obj.nom_en) : lang === 'ca' ? (obj.nom_ca || obj.nom_en) : obj.nom_en
+}
+
+// ── Etiquetes de TARGET (font única — cap superfície resol la clau i18n pel seu compte) ──
+// El nom es resol per CODI via i18n (`model_wizard.target_<CODI>`), com `tasktype.<code>`
+// (DECISIONS.md §3): el codi és l'identitat, el nom pintat és presentació.
+export function targetLabel(t, codi, fallback) {
+  return codi ? t(`model_wizard.target_${codi}`, fallback || codi) : (fallback || '')
+}
+
+// Franja d'edat: informació SECUNDÀRIA, buida a propòsit per a MAN/WOMAN/UNISEX_ADULT/
+// MATERNITY. Qui la pinti ha d'ocultar la línia si torna '' — mai un guió ni un buit reservat.
+// Defensiu contra la config d'i18next: si `returnEmptyString` es desactivés algun dia, t()
+// tornaria la clau en cru i acabaríem pintant «model_wizard.target_franja_MAN» dins un pill.
+export function targetFranja(t, codi) {
+  if (!codi) return ''
+  const clau = `model_wizard.target_franja_${codi}`
+  const val = t(clau, '')
+  return !val || val === clau ? '' : val
 }
 
 // Etiqueta localitzada d'un GRUP de peça pel seu codi (vocabulari canònic; fallback al codi per a
