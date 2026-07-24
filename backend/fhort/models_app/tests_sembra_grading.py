@@ -29,7 +29,8 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from fhort.models_app.models import BaseMeasurement, Model, ModelGradingRule
 from fhort.models_app.views import materialize_poms_view, update_model_step2
 from fhort.pom.models import (GarmentPOMMap, GarmentType, GradingRule, GradingRuleSet,
-                              ItemBaseMeasurement, POMMaster, SizeDefinition, SizeSystem)
+                              ItemBaseMeasurement, ItemBaseSet, POMMaster, SizeDefinition,
+                              SizeSystem)
 from fhort.tasks.models import Customer, GarmentTypeItem
 
 
@@ -80,6 +81,22 @@ class _BaseSembraTest(TenantTestCase):
             SizeDefinition.objects.create(size_system=ss, etiqueta=et, ordre=i)
         return ss
 
+    def _base_set(self, item, size_system=None, base_size='M', fit=None):
+        """BaseSet del món (item x size_system x fit). B1: tota mesura base viu dins un set.
+
+        `fit=None` passa per normalize_fit_type, que en un schema sense FitType sembrat (el cas
+        d'aquests tests) deixa fit_type a NULL — el mateix slot on cau Model.fit_type='Regular'.
+        """
+        from fhort.pom.models import normalize_fit_type
+        if size_system is None:
+            size_system = self._size_system('BS')
+        return ItemBaseSet.objects.create(
+            garment_type_item=item, size_system=size_system,
+            fit_type=normalize_fit_type(fit),
+            base_size_definition=SizeDefinition.objects.get(
+                size_system=size_system, etiqueta=base_size),
+        )
+
     # ── crides ────────────────────────────────────────────────────────────────
     def _materialitzar(self, model, body=None):
         req = (APIRequestFactory().post(f'/api/v1/models/{model.id}/materialitzar-poms/', body,
@@ -109,11 +126,17 @@ class MaterialitzarPomsTest(_BaseSembraTest):
         for i, pom in enumerate([self.pom_amb_valor, self.pom_sense_valor]):
             GarmentPOMMap.objects.create(garment_type_item=self.item, pom=pom,
                                          is_key=(i == 0), ordre=i)
+        # B1 — tota mesura base viu dins un BaseSet. Aquests models no porten size_system, així
+        # que la sembra cau al camí LLEGAT (item inequívoc, 1 sol set) i el que defensen aquests
+        # tests — què copia, què respecta — no canvia.
+        self.base_set = self._base_set(self.item)
         # Només un dels dos POMs té valor a la plantilla de l'item.
         ItemBaseMeasurement.objects.create(
+            base_set=self.base_set,
             garment_type_item=self.item, pom=self.pom_amb_valor,
             base_value_cm='60.00', tol_minus='0.50', tol_plus='0.50', nom_fitxa='A')
         ItemBaseMeasurement.objects.create(
+            base_set=self.base_set,
             garment_type_item=self.item, pom=self.pom_sense_valor, base_value_cm=None)
         self.model = self._model(garment_type_item=self.item,
                                  garment_type=self.item.garment_type)
@@ -617,8 +640,13 @@ class ImportSorollTest(_BaseSembraTest):
 class GuardDeTallaSembraTest(_BaseSembraTest):
     """P1 — la sembra item→model compara la talla de la PLANTILLA amb la del MODEL.
 
-    Un `ItemBaseMeasurement` està expressat en la talla de `base_size_definition`. Copiar-lo a un
-    model amb una altra talla base produeix una mesura FALSA, i fins ara passava en silenci.
+    Un `ItemBaseMeasurement` està expressat en una talla base. Copiar-lo a un model amb una altra
+    talla base produeix una mesura FALSA, i abans de P1 passava en silenci.
+
+    B2 (2026-07-25) — el guard queda REORIENTAT AL SET: la talla de referència és la del BaseSet
+    del món del model (item × size_system × fit), no la de l'item pelat. Un item pot vestir-se en
+    diversos sistemes i cadascun té la SEVA talla base; llegir-la de l'item era llegir-ne una de
+    sola per a tots els mons.
     """
 
     PREFIX = 'GTAL'
@@ -629,20 +657,25 @@ class GuardDeTallaSembraTest(_BaseSembraTest):
         self.ss = self._size_system('SS', talles=('S', 'M', 'L'))
         self.pom = self._pom('A')
         GarmentPOMMap.objects.create(garment_type_item=self.item, pom=self.pom, ordre=0)
+        self.base_set = self._base_set(self.item, size_system=self.ss, base_size='M')
         ItemBaseMeasurement.objects.create(
-            garment_type_item=self.item, pom=self.pom, base_value_cm='60.00', nom_fitxa='A')
+            base_set=self.base_set, garment_type_item=self.item, pom=self.pom,
+            base_value_cm='60.00', nom_fitxa='A')
 
     def _talla(self, etiqueta):
         return SizeDefinition.objects.get(size_system=self.ss, etiqueta=etiqueta)
+
+    def _talla_base_del_set(self, etiqueta):
+        self.base_set.base_size_definition = self._talla(etiqueta)
+        self.base_set.save(update_fields=['base_size_definition'])
 
     def _model_amb_base(self, etiqueta):
         return self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
                            size_system=self.ss, size_run_model='S·M·L', base_size_label=etiqueta)
 
     def test_talles_divergents_no_sembren_valors_pero_si_pertinenca(self):
-        self.item.base_size_definition = self._talla('M')
-        self.item.save(update_fields=['base_size_definition'])
-        model = self._model_amb_base('L')          # el model parla en L, la plantilla en M
+        self._talla_base_del_set('M')
+        model = self._model_amb_base('L')          # el model parla en L, el set en M
 
         resp = self._materialitzar(model)
 
@@ -660,8 +693,7 @@ class GuardDeTallaSembraTest(_BaseSembraTest):
         self.assertIsNone(bm.base_value_cm)                 # el VALOR no ha aterrat
 
     def test_talles_coincidents_sembren_i_ho_declaren(self):
-        self.item.base_size_definition = self._talla('M')
-        self.item.save(update_fields=['base_size_definition'])
+        self._talla_base_del_set('M')
         model = self._model_amb_base('M')
 
         resp = self._materialitzar(model)
@@ -674,9 +706,15 @@ class GuardDeTallaSembraTest(_BaseSembraTest):
         self.assertEqual(bm.origen, 'ITEM_STANDARD')
         self.assertEqual(bm.base_value_cm, 60.0)
 
-    def test_base_size_definition_NULL_sembra_pero_avisa(self):
-        """59/62 items la tenen NULL: bloquejar trencaria el catàleg sencer. Avisa, no atura."""
-        model = self._model_amb_base('M')
+    def test_mon_sense_set_i_item_sense_talla_sembra_pero_avisa(self):
+        """CAMÍ LLEGAT: 59/62 items tenen base_size_definition NULL. Bloquejar trencaria el
+        catàleg sencer, i per això el guard avisa i deixa passar en comptes d'aturar.
+
+        El model viu en un sistema de talles ALTRE, on l'item no té BaseSet: el resolver no
+        troba res, la sembra cau al camí llegat (item inequívoc) i l'item no diu talla base."""
+        altre = self._size_system('ALT', talles=('S', 'M', 'L'))
+        model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
+                            size_system=altre, size_run_model='S·M·L', base_size_label='M')
 
         resp = self._materialitzar(model)
 
@@ -684,12 +722,45 @@ class GuardDeTallaSembraTest(_BaseSembraTest):
         self.assertFalse(resp.data['talla_verificada'])
         self.assertFalse(resp.data['valors_bloquejats_per_talla'])
         self.assertIn('NO VERIFICADA', resp.data['talla_avis'])
+        # B2 — el «món sense set» mai és silenciós: porta el context que B4 necessita.
+        self.assertEqual(resp.data['base_set_absent']['code'], 'base_set_absent')
+        self.assertEqual(resp.data['base_set_absent']['size_system_id'], altre.id)
+        self.assertIsNone(resp.data['base_set'])
+
+    def test_el_set_resolt_viatja_a_la_resposta(self):
+        """Quan el món SÍ té set, el frontend n'ha de saber la identitat sense tornar a preguntar."""
+        self._talla_base_del_set('M')
+        model = self._model_amb_base('M')
+
+        resp = self._materialitzar(model)
+
+        self.assertNotIn('base_set_absent', resp.data)
+        self.assertEqual(resp.data['base_set']['id'], self.base_set.id)
+        self.assertEqual(resp.data['base_set']['size_system'], self.ss.codi)
+        self.assertEqual(resp.data['base_set']['base_size_label'], 'M')
+
+    def test_un_altre_system_no_agafa_el_set_del_primer(self):
+        """El nucli de la llei: els sets són per MÓN. Dos sets al mateix item no es barregen."""
+        altre = self._size_system('ALT2', talles=('S', 'M', 'L'))
+        set_altre = self._base_set(self.item, size_system=altre, base_size='S')
+        ItemBaseMeasurement.objects.create(
+            base_set=set_altre, garment_type_item=self.item, pom=self.pom,
+            base_value_cm='42.00', nom_fitxa='A')
+        model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
+                            size_system=altre, size_run_model='S·M·L', base_size_label='S')
+
+        resp = self._materialitzar(model)
+
+        self.assertEqual(resp.data['base_set']['id'], set_altre.id)
+        self.assertEqual(resp.data['talla_item'], 'S')
+        bm = BaseMeasurement.objects.get(model=model, pom=self.pom)
+        self.assertEqual(bm.base_value_cm, 42.0)   # el valor de l'ALTRE món, no el de 60
 
     def test_model_sense_talla_base_no_rep_valors(self):
         """Si el model no diu en quina talla parla, no es pot afirmar que la plantilla hi encaixi."""
-        self.item.base_size_definition = self._talla('M')
-        self.item.save(update_fields=['base_size_definition'])
-        model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type)
+        self._talla_base_del_set('M')
+        model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
+                            size_system=self.ss)
 
         resp = self._materialitzar(model)
 
@@ -699,13 +770,11 @@ class GuardDeTallaSembraTest(_BaseSembraTest):
 
     def test_la_divergencia_no_trepitja_una_fila_ja_sembrada(self):
         """La sobirania segueix manant: el guard no reobre files que el model ja posseeix."""
-        self.item.base_size_definition = self._talla('M')
-        self.item.save(update_fields=['base_size_definition'])
+        self._talla_base_del_set('M')
         model = self._model_amb_base('M')
         self._materialitzar(model)                       # sembra legítima en M
 
-        self.item.base_size_definition = self._talla('L')   # algú canvia la talla de la plantilla
-        self.item.save(update_fields=['base_size_definition'])
+        self._talla_base_del_set('L')                    # algú canvia la talla base del set
         resp = self._materialitzar(model)
 
         self.assertEqual(resp.data['seeded'], 0)
@@ -715,11 +784,15 @@ class GuardDeTallaSembraTest(_BaseSembraTest):
 
 
 class PromocioModelItemTest(_BaseSembraTest):
-    """P0+P2+P3 — l'acte de promoció model→item: gate, dry-run, escriptura i talla base.
+    """B3 — l'acte de promoció model→BaseSet: gate, dry-run, forats, naixement i ampliació.
 
     LLEI: la sobirania del model és sobre els SEUS valors; l'estàndard del taller és un acte
-    separat, explícit i CONFIGURE. Aquests tests defensen precisament això: que no s'hi entra
-    sense capability, que simular no escriu, i que confirmar escriu SENCER o no escriu gens.
+    separat, explícit i CONFIGURE. B3 hi afegeix el que la llei del BaseSet exigeix:
+
+      · llei 4 — la promoció OMPLE FORATS i prou. Mai modifica un valor que el set ja té.
+      · llei 5 — la divergència és vida normal: es llista, no s'escriu, no alerta.
+      · llei 6 — ampliar el superset de POMs de l'item només AMB CONFIRMACIÓ.
+      · llei 7 — un món sense set és un naixement pendent, no un error sec.
     """
 
     PREFIX = 'PROM'
@@ -742,29 +815,36 @@ class PromocioModelItemTest(_BaseSembraTest):
         self.item.grading_rule_set = self.rs
         self.item.save(update_fields=['grading_rule_set'])
 
-        self.pom_nou = self._pom('NOU')       # al model, no a la plantilla
-        self.pom_canvia = self._pom('CAN')    # als dos, amb valors diferents
-        self.pom_igual = self._pom('IGU')     # als dos, amb el mateix valor
-        self.pom_sobra = self._pom('SOB')     # a la plantilla, no al model
+        self.pom_forat = self._pom('FOR')      # al superset i al model, sense valor al set
+        self.pom_divergent = self._pom('DIV')  # als dos, amb valors diferents
+        self.pom_igual = self._pom('IGU')      # als dos, amb el mateix valor
+        self.pom_sobra = self._pom('SOB')      # al set, no al model
+        self.pom_fora = self._pom('FRA')       # al model i FORA del superset de l'item
+        for i, pom in enumerate((self.pom_forat, self.pom_divergent, self.pom_igual,
+                                 self.pom_sobra)):
+            GarmentPOMMap.objects.create(garment_type_item=self.item, pom=pom, ordre=i)
 
+        self.base_set = self._base_set(self.item, size_system=self.ss, base_size='M')
         self.model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
                                  size_system=self.ss, size_run_model='S·M·L', base_size_label='M')
-        for pom, val in ((self.pom_nou, 30.0), (self.pom_canvia, 40.0), (self.pom_igual, 50.0)):
+        for pom, val in ((self.pom_forat, 30.0), (self.pom_divergent, 40.0),
+                         (self.pom_igual, 50.0), (self.pom_fora, 70.0)):
             BaseMeasurement.objects.create(model=self.model, pom=pom, base_value_cm=val,
                                            origen='MANUAL', is_active=True)
-        ItemBaseMeasurement.objects.create(garment_type_item=self.item, pom=self.pom_canvia,
-                                           base_value_cm='45.00')
-        ItemBaseMeasurement.objects.create(garment_type_item=self.item, pom=self.pom_igual,
-                                           base_value_cm='50.00')
-        ItemBaseMeasurement.objects.create(garment_type_item=self.item, pom=self.pom_sobra,
-                                           base_value_cm='99.00')
+        ItemBaseMeasurement.objects.create(base_set=self.base_set, garment_type_item=self.item,
+                                           pom=self.pom_divergent, base_value_cm='45.00')
+        ItemBaseMeasurement.objects.create(base_set=self.base_set, garment_type_item=self.item,
+                                           pom=self.pom_igual, base_value_cm='50.00')
+        ItemBaseMeasurement.objects.create(base_set=self.base_set, garment_type_item=self.item,
+                                           pom=self.pom_sobra, base_value_cm='99.00')
 
-    def _promoure(self, body=None, user=None):
+    def _promoure(self, body=None, user=None, model=None):
         from fhort.models_app.views import promoure_a_item_view
-        req = APIRequestFactory().post(f'/api/v1/models/{self.model.id}/promoure-a-item/',
+        model = model or self.model
+        req = APIRequestFactory().post(f'/api/v1/models/{model.id}/promoure-a-item/',
                                        body or {}, format='json')
         force_authenticate(req, user=user or self.user_amb)
-        return promoure_a_item_view(req, self.model.id)
+        return promoure_a_item_view(req, model.id)
 
     def _talla(self, etiqueta):
         return SizeDefinition.objects.get(size_system=self.ss, etiqueta=etiqueta)
@@ -776,7 +856,7 @@ class PromocioModelItemTest(_BaseSembraTest):
         self.assertEqual(resp.status_code, 403)
         # I no ha escrit res de passada.
         self.assertEqual(ItemBaseMeasurement.objects
-                         .get(garment_type_item=self.item, pom=self.pom_canvia).base_value_cm,
+                         .get(base_set=self.base_set, pom=self.pom_divergent).base_value_cm,
                          Decimal('45.00'))
 
     # ── Dry-run ──────────────────────────────────────────────────────────────────────
@@ -786,109 +866,153 @@ class PromocioModelItemTest(_BaseSembraTest):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['dry_run'])
         self.assertEqual(resp.data['resum'],
-                         {'nous': 1, 'canvien': 1, 'iguals': 1, 'sobrarien': 1})
-        self.assertEqual(resp.data['nous'][0]['pom_id'], self.pom_nou.id)
-        canvi = resp.data['canvien'][0]
+                         {'forats': 2, 'divergents': 1, 'iguals': 1, 'sobrarien': 1,
+                          'ampliaria_item': 1})
+        self.assertEqual({f['pom_id'] for f in resp.data['forats']},
+                         {self.pom_forat.id, self.pom_fora.id})
+        divergent = resp.data['divergents'][0]
         # El diff ensenya els DOS valors: sense això la confirmació seria cega.
-        self.assertEqual(canvi['valor_item'], 45.0)
-        self.assertEqual(canvi['valor_model'], 40.0)
+        self.assertEqual(divergent['valor_item'], 45.0)
+        self.assertEqual(divergent['valor_model'], 40.0)
         self.assertEqual(resp.data['sobrarien'][0]['pom_id'], self.pom_sobra.id)
-        self.assertEqual(resp.data['talla_a_escriure'], 'M')
+        self.assertEqual(resp.data['base_set']['id'], self.base_set.id)
+        self.assertIsNone(resp.data['naixement'])
 
-        # CAP escriptura: ni valors, ni talla base.
-        self.assertEqual(ItemBaseMeasurement.objects.filter(garment_type_item=self.item).count(), 3)
-        self.assertEqual(ItemBaseMeasurement.objects
-                         .get(garment_type_item=self.item, pom=self.pom_canvia).base_value_cm,
-                         Decimal('45.00'))
-        self.item.refresh_from_db()
-        self.assertIsNone(self.item.base_size_definition_id)
+        # CAP escriptura: ni valors nous, ni ampliació del superset.
+        self.assertEqual(ItemBaseMeasurement.objects.filter(base_set=self.base_set).count(), 3)
+        self.assertFalse(GarmentPOMMap.objects
+                         .filter(garment_type_item=self.item, pom=self.pom_fora).exists())
 
-    # ── Confirm ──────────────────────────────────────────────────────────────────────
-    def test_confirm_escriu_amb_provinenca_i_autoria(self):
+    # ── Llei 4: NOMÉS forats ─────────────────────────────────────────────────────────
+    def test_confirm_omple_forats_i_NO_toca_els_divergents(self):
+        """El cor de la llei 4. Abans d'B3 això mateix sobreescrivia amb update_or_create."""
         resp = self._promoure({'confirm': True})
 
         self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
         self.assertFalse(resp.data['dry_run'])
-        self.assertEqual(resp.data['promoguts'], 3)
+        self.assertEqual(resp.data['promoguts'], 2)          # els dos forats
 
-        nou = ItemBaseMeasurement.objects.get(garment_type_item=self.item, pom=self.pom_nou)
-        self.assertEqual(nou.base_value_cm, Decimal('30.00'))
-        self.assertEqual(nou.origen, ItemBaseMeasurement.ORIGEN_PROMOTED)
-        self.assertEqual(nou.updated_by_id, self.user_amb.id)     # P9: ja no és anònim
+        omplert = ItemBaseMeasurement.objects.get(base_set=self.base_set, pom=self.pom_forat)
+        self.assertEqual(omplert.base_value_cm, Decimal('30.00'))
+        self.assertEqual(omplert.origen, ItemBaseMeasurement.ORIGEN_PROMOTED)
+        self.assertEqual(omplert.updated_by_id, self.user_amb.id)     # P9: ja no és anònim
 
-        canviat = ItemBaseMeasurement.objects.get(garment_type_item=self.item, pom=self.pom_canvia)
-        self.assertEqual(canviat.base_value_cm, Decimal('40.00'))  # mana el model
-        self.assertEqual(canviat.origen, ItemBaseMeasurement.ORIGEN_PROMOTED)
+        # EL VALOR DIVERGENT SEGUEIX INTACTE: el model no és autoritat sobre l'estàndard.
+        divergent = ItemBaseMeasurement.objects.get(base_set=self.base_set,
+                                                    pom=self.pom_divergent)
+        self.assertEqual(divergent.base_value_cm, Decimal('45.00'))
+        self.assertEqual(divergent.origen, ItemBaseMeasurement.ORIGEN_MANUAL)   # ni re-signat
 
-    def test_confirm_escriu_la_talla_base_de_la_plantilla(self):
-        """P3 — la promoció és l'ÚNIC moment on el sistema SAP en quina talla parlen els valors."""
-        self._promoure({'confirm': True})
-        self.item.refresh_from_db()
-        self.assertEqual(self.item.base_size_definition_id, self._talla('M').id)
+    def test_una_fila_de_pertinenca_sense_valor_ES_un_forat(self):
+        """Omplir una fila buida no modifica res: la llei 4 hi deixa entrar."""
+        buida = ItemBaseMeasurement.objects.create(
+            base_set=self.base_set, garment_type_item=self.item, pom=self.pom_forat,
+            base_value_cm=None)
+        resp = self._promoure({'confirm': True})
+
+        self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+        buida.refresh_from_db()
+        self.assertEqual(buida.base_value_cm, Decimal('30.00'))
+        self.assertEqual(buida.origen, ItemBaseMeasurement.ORIGEN_PROMOTED)
 
     def test_els_sobrants_es_llisten_pero_NO_s_esborren(self):
         resp = self._promoure({'confirm': True})
         self.assertEqual(len(resp.data['sobrarien']), 1)
         # Segueix viu: ItemBaseMeasurement no té is_active i un DELETE dur no és una proposta.
-        sobrant = ItemBaseMeasurement.objects.get(garment_type_item=self.item, pom=self.pom_sobra)
+        sobrant = ItemBaseMeasurement.objects.get(base_set=self.base_set, pom=self.pom_sobra)
         self.assertEqual(sobrant.base_value_cm, Decimal('99.00'))
         self.assertEqual(sobrant.origen, ItemBaseMeasurement.ORIGEN_MANUAL)   # ni re-signat
 
-    def test_la_talla_escrita_SEMPRE_es_del_sistema_del_ruleset(self):
-        """La invariant que fa que `clean()` no pugui petar: la talla es resol DINS del
-        size_system del ruleset de l'item, no del model. Si es resolgués del model, es podria
-        escriure una talla d'un sistema aliè i `clean()` rebotaria la promoció sencera.
-        """
-        altre_ss = self._size_system('ALTRE', talles=('S', 'M', 'L'))
-        self.rs.size_system = altre_ss                    # el ruleset canvia de sistema...
-        self.rs.save(update_fields=['size_system'])
-        # ...i el model segueix parlant el seu (self.ss), amb la MATEIXA etiqueta 'M'.
+    # ── Llei 6: l'ampliació del superset ─────────────────────────────────────────────
+    def test_l_ampliacio_del_superset_va_en_seccio_propia_i_només_amb_confirm(self):
+        dry = self._promoure()
+        self.assertEqual([f['pom_id'] for f in dry.data['ampliaria_item']], [self.pom_fora.id])
+        self.assertFalse(GarmentPOMMap.objects
+                         .filter(garment_type_item=self.item, pom=self.pom_fora).exists())
+
+        resp = self._promoure({'confirm': True})
+
+        self.assertEqual(resp.data['ampliats'], 1)
+        mapa = GarmentPOMMap.objects.get(garment_type_item=self.item, pom=self.pom_fora)
+        # pendent_revisio=False: els confirma un tècnic amb gate CONFIGURE, no un clon automàtic.
+        self.assertFalse(mapa.pendent_revisio)
+
+    # ── Llei 7: el naixement mandrós ─────────────────────────────────────────────────
+    def test_mon_sense_set_proposa_el_naixement_i_NO_el_crea_sol(self):
+        altre = self._size_system('NOU', talles=('S', 'M', 'L'))
+        model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
+                            size_system=altre, size_run_model='S·M·L', base_size_label='S')
+        BaseMeasurement.objects.create(model=model, pom=self.pom_forat, base_value_cm=31.0,
+                                       origen='MANUAL', is_active=True)
+
+        dry = self._promoure(model=model)
+
+        self.assertEqual(dry.status_code, 200, getattr(dry, 'data', None))
+        self.assertIsNone(dry.data['base_set'])
+        self.assertEqual(dry.data['naixement']['code'], 'base_set_absent')
+        self.assertEqual(dry.data['naixement']['size_system_id'], altre.id)
+        self.assertEqual(dry.data['naixement']['origen'], ItemBaseSet.ORIGEN_PROMOCIO)
+        # El backend MAI crea el set sol.
+        self.assertFalse(ItemBaseSet.objects.filter(size_system=altre).exists())
+
+    def test_el_confirm_fa_neixer_el_set_amb_origen_promocio(self):
+        altre = self._size_system('NOU2', talles=('S', 'M', 'L'))
+        model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
+                            size_system=altre, size_run_model='S·M·L', base_size_label='S')
+        BaseMeasurement.objects.create(model=model, pom=self.pom_forat, base_value_cm=31.0,
+                                       origen='MANUAL', is_active=True)
+
+        resp = self._promoure({'confirm': True}, model=model)
+
+        self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+        self.assertTrue(resp.data['base_set_creat'])
+        nou_set = ItemBaseSet.objects.get(garment_type_item=self.item, size_system=altre)
+        self.assertEqual(nou_set.origen, ItemBaseSet.ORIGEN_PROMOCIO)
+        self.assertEqual(nou_set.base_size_definition.etiqueta, 'S')   # convenció: la més petita
+        self.assertEqual(nou_set.updated_by_id, self.user_amb.id)
+        # I el set del PRIMER món no s'ha tocat gens.
+        self.assertEqual(ItemBaseMeasurement.objects.filter(base_set=self.base_set).count(), 3)
+
+    def test_la_convencio_montse_suggereix_M_en_home_i_S_en_dona(self):
+        """Llei 2: la més petita, EXCEPTE adults (HOME M/42, DONA S/38)."""
+        from fhort.pom.models import suggerir_talla_base
+        ss = self._size_system('CONV', talles=('XS', 'S', 'M', 'L'))
+        self.assertEqual(suggerir_talla_base(ss, 'MAN').etiqueta, 'M')
+        self.assertEqual(suggerir_talla_base(ss, 'WOMAN').etiqueta, 'S')
+        self.assertEqual(suggerir_talla_base(ss, 'KID_BOY').etiqueta, 'XS')   # la més petita
+        self.assertEqual(suggerir_talla_base(ss, None).etiqueta, 'XS')
+
+    def test_la_talla_base_del_naixement_es_pot_triar_pero_ha_de_ser_del_sistema(self):
+        altre = self._size_system('NOU3', talles=('S', 'M', 'L'))
+        model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
+                            size_system=altre, size_run_model='S·M·L', base_size_label='L')
+        BaseMeasurement.objects.create(model=model, pom=self.pom_forat, base_value_cm=31.0,
+                                       origen='MANUAL', is_active=True)
+        forastera = self._talla('M')          # del sistema self.ss, no del d'aquest model
+
+        rebutjat = self._promoure({'confirm': True, 'base_size_definition': forastera.id},
+                                  model=model)
+        self.assertEqual(rebutjat.status_code, 422)
+        self.assertEqual(rebutjat.data['tipus'], 'talla_base_fora_del_sistema')
+
+        bona = SizeDefinition.objects.get(size_system=altre, etiqueta='L')
+        ok = self._promoure({'confirm': True, 'base_size_definition': bona.id}, model=model)
+        self.assertEqual(ok.status_code, 200, getattr(ok, 'data', None))
+        self.assertEqual(ItemBaseSet.objects.get(garment_type_item=self.item, size_system=altre)
+                         .base_size_definition_id, bona.id)
+
+    def test_talles_divergents_no_escriuen_cap_valor(self):
+        """Un valor del model en una talla que no és la del set és una mesura falsa."""
+        self.model.base_size_label = 'L'
+        self.model.save(update_fields=['base_size_label'])
 
         resp = self._promoure({'confirm': True})
 
         self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
-        self.item.refresh_from_db()
-        # La talla escrita és la de l'ALTRE sistema (el del ruleset), no la homònima del model.
-        self.assertEqual(self.item.base_size_definition.size_system_id, altre_ss.id)
-        self.assertEqual(self.item.base_size_definition.etiqueta, 'M')
-        self.assertNotEqual(self.item.base_size_definition.size_system_id, self.ss.id)
-        # I per tant clean() passa: la promoció no pot deixar l'item en estat invàlid.
-        self.item.full_clean()
-
-    def test_talla_del_model_absent_al_sistema_del_ruleset_no_escriu_talla(self):
-        """Si l'etiqueta del model no existeix al sistema del ruleset, la promoció NO inventa
-        cap talla: promou els valors i diu per què no ha pogut fixar-la."""
-        altre_ss = self._size_system('SENSE_M', talles=('XXL',))
-        self.rs.size_system = altre_ss
-        self.rs.save(update_fields=['size_system'])
-
-        resp = self._promoure({'confirm': True})
-
-        self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
-        self.assertIsNone(resp.data['talla_escrita'])
-        self.assertIn('no existeix', resp.data['talla_motiu'])
-        self.item.refresh_from_db()
-        self.assertIsNone(self.item.base_size_definition_id)
-        # Els valors sí han viatjat: la talla és una peça del mateix acte, però no el bloqueja
-        # quan la seva absència és honesta i queda dita.
-        self.assertEqual(ItemBaseMeasurement.objects
-                         .get(garment_type_item=self.item, pom=self.pom_nou).origen,
-                         ItemBaseMeasurement.ORIGEN_PROMOTED)
-
-    def test_item_sense_ruleset_promou_valors_pero_no_toca_la_talla(self):
-        self.item.grading_rule_set = None
-        self.item.save(update_fields=['grading_rule_set'])
-
-        resp = self._promoure({'confirm': True})
-
-        self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
-        self.assertIsNone(resp.data['talla_escrita'])
-        self.assertIsNotNone(resp.data['talla_motiu'])       # el perquè no es calla
-        self.item.refresh_from_db()
-        self.assertIsNone(self.item.base_size_definition_id)
-        self.assertEqual(ItemBaseMeasurement.objects
-                         .get(garment_type_item=self.item, pom=self.pom_nou).origen,
-                         ItemBaseMeasurement.ORIGEN_PROMOTED)
+        self.assertTrue(resp.data['talla_divergent'])
+        self.assertEqual(resp.data['promoguts'], 0)
+        self.assertFalse(ItemBaseMeasurement.objects
+                         .filter(base_set=self.base_set, pom=self.pom_forat).exists())
 
     # ── Les portes d'entrada ─────────────────────────────────────────────────────────
     def test_model_sense_talla_base_no_promou(self):
@@ -898,14 +1022,23 @@ class PromocioModelItemTest(_BaseSembraTest):
         self.assertEqual(resp.status_code, 422)
         self.assertEqual(resp.data['tipus'], 'model_sense_talla_base')
 
+    def test_model_sense_size_system_no_promou(self):
+        """Sense món no hi ha BaseSet on promoure."""
+        self.model.size_system = None
+        self.model.save(update_fields=['size_system'])
+        resp = self._promoure({'confirm': True})
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.data['tipus'], 'model_sense_size_system')
+
     def test_nomes_promou_mesures_vives_i_amb_valor(self):
         """No s'ascendeix el que no és realitat: files podades o buides no són patrimoni."""
-        BaseMeasurement.objects.filter(model=self.model, pom=self.pom_nou).update(is_active=False)
+        BaseMeasurement.objects.filter(model=self.model, pom=self.pom_forat).update(is_active=False)
         BaseMeasurement.objects.create(model=self.model, pom=self.pom_sobra,
                                        base_value_cm=None, origen='TEMPLATE', is_active=True)
         resp = self._promoure()
-        ids = {f['pom_id'] for f in resp.data['nous'] + resp.data['canvien'] + resp.data['iguals']}
-        self.assertNotIn(self.pom_nou.id, ids)      # desactivada
+        ids = {f['pom_id'] for f in
+               resp.data['forats'] + resp.data['divergents'] + resp.data['iguals']}
+        self.assertNotIn(self.pom_forat.id, ids)    # desactivada
         self.assertNotIn(self.pom_sobra.id, ids)    # sense valor
 
     def test_model_sense_item_no_te_plantilla_on_promoure(self):
@@ -915,6 +1048,83 @@ class PromocioModelItemTest(_BaseSembraTest):
                                        format='json')
         force_authenticate(req, user=self.user_amb)
         self.assertEqual(promoure_a_item_view(req, model.id).status_code, 400)
+
+
+class ActeCanonicBaseSetTest(_BaseSembraTest):
+    """B3 — l'acte canònic: modificar un valor que el set JA té.
+
+    La llei 4 el treu de la promoció a posta. Aquests tests defensen que és una porta pròpia,
+    signada i amb confirmació — i que NO serveix per omplir forats (per això hi ha la promoció).
+    """
+
+    PREFIX = 'CANO'
+
+    def setUp(self):
+        super().setUp()
+        from fhort.accounts.models import UserProfile
+        self.user_sense = self.user
+        self.user_amb = get_user_model().objects.create(username=f'cfg{self.PREFIX}')
+        UserProfile.objects.update_or_create(
+            user=self.user_amb,
+            defaults={'rol_nom': 'technician', 'permisos': {'grant': ['configure']}})
+        self.user_amb = get_user_model().objects.get(pk=self.user_amb.pk)
+
+        self.item = self._item()
+        self.ss = self._size_system('SS', talles=('S', 'M', 'L'))
+        self.base_set = self._base_set(self.item, size_system=self.ss, base_size='M')
+        self.pom_amb = self._pom('AMB')
+        self.pom_buit = self._pom('BUI')
+        self.ibm = ItemBaseMeasurement.objects.create(
+            base_set=self.base_set, garment_type_item=self.item, pom=self.pom_amb,
+            base_value_cm='45.00', origen=ItemBaseMeasurement.ORIGEN_PROMOTED)
+        ItemBaseMeasurement.objects.create(
+            base_set=self.base_set, garment_type_item=self.item, pom=self.pom_buit,
+            base_value_cm=None)
+
+    def _acte(self, body, user=None, base_set_id=None):
+        from fhort.models_app.views import acte_canonic_base_set_view
+        bs = base_set_id or self.base_set.id
+        req = APIRequestFactory().post(f'/api/v1/item-base-sets/{bs}/acte-canonic/',
+                                       body, format='json')
+        force_authenticate(req, user=user or self.user_amb)
+        return acte_canonic_base_set_view(req, bs)
+
+    def test_sense_capability_configure_es_403(self):
+        resp = self._acte({'pom': self.pom_amb.id, 'base_value_cm': '50.00', 'confirm': True},
+                          user=self.user_sense)
+        self.assertEqual(resp.status_code, 403)
+        self.ibm.refresh_from_db()
+        self.assertEqual(self.ibm.base_value_cm, Decimal('45.00'))
+
+    def test_dry_run_ensenya_l_anterior_i_el_nou_i_NO_escriu(self):
+        resp = self._acte({'pom': self.pom_amb.id, 'base_value_cm': '50.00'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['dry_run'])
+        self.assertEqual(resp.data['valor_anterior'], 45.0)
+        self.assertEqual(resp.data['valor_nou'], 50.0)
+        self.assertEqual(resp.data['talla_base'], 'M')
+        self.ibm.refresh_from_db()
+        self.assertEqual(self.ibm.base_value_cm, Decimal('45.00'))
+
+    def test_confirm_escriu_i_signa(self):
+        resp = self._acte({'pom': self.pom_amb.id, 'base_value_cm': '50.00', 'confirm': True})
+        self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+        self.ibm.refresh_from_db()
+        self.assertEqual(self.ibm.base_value_cm, Decimal('50.00'))
+        # L'acte canònic és mà humana: la provinença ho diu, no es queda a PROMOTED.
+        self.assertEqual(self.ibm.origen, ItemBaseMeasurement.ORIGEN_MANUAL)
+        self.assertEqual(self.ibm.updated_by_id, self.user_amb.id)
+
+    def test_un_forat_NO_es_acte_canonic(self):
+        """Omplir un buit és promoció, no acte canònic. Si compartissin porta, la llei 4 seria
+        una recomanació en comptes d'una invariant."""
+        resp = self._acte({'pom': self.pom_buit.id, 'base_value_cm': '50.00', 'confirm': True})
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.data['tipus'], 'no_hi_ha_valor_a_substituir')
+
+    def test_valor_no_numeric_es_400(self):
+        resp = self._acte({'pom': self.pom_amb.id, 'base_value_cm': 'ample', 'confirm': True})
+        self.assertEqual(resp.status_code, 400)
 
 
 class ItemBaseMeasurementBasicsTest(_BaseSembraTest):
@@ -927,6 +1137,9 @@ class ItemBaseMeasurementBasicsTest(_BaseSembraTest):
         from fhort.accounts.models import UserProfile
         self.item = self._item()
         self.pom = self._pom('P1')
+        # B1 — un valor base no pot existir fora d'un món. L'item en té UN, així que l'upsert
+        # el dedueix sol i els callers d'avui (columna ASSIGN del POMBrowser) no canvien.
+        self.base_set = self._base_set(self.item)
         self.user_amb = get_user_model().objects.create(username=f'cfg{self.PREFIX}')
         UserProfile.objects.update_or_create(
             user=self.user_amb,
@@ -949,8 +1162,8 @@ class ItemBaseMeasurementBasicsTest(_BaseSembraTest):
         self.assertEqual(ibm.updated_by_id, self.user_amb.id)
         self.assertIsNotNone(ibm.created_at)
 
-    def test_upsert_es_idempotent_per_item_pom(self):
-        """La clau és (item, pom): el segon upsert actualitza, no duplica."""
+    def test_upsert_es_idempotent_per_base_set_pom(self):
+        """La clau és (base_set, pom): el segon upsert actualitza, no duplica."""
         self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
                       'base_value_cm': '60.00'})
         resp = self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
@@ -970,6 +1183,42 @@ class ItemBaseMeasurementBasicsTest(_BaseSembraTest):
                          .get(garment_type_item=self.item, pom=self.pom).origen,
                          ItemBaseMeasurement.ORIGEN_MANUAL)
 
+    def test_upsert_sense_cap_set_es_400_amb_codi(self):
+        """Un valor base fora d'un món no existeix: es refusa amb senyal, no amb error sec."""
+        altre = self._item(code='altre')
+        resp = self._upsert({'garment_type_item': altre.id, 'pom': self.pom.id,
+                             'base_value_cm': '60.00'})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['code'], 'base_set_absent')
+
+    def test_upsert_amb_dos_sets_exigeix_dir_quin(self):
+        """Amb 2+ mons, endevinar-ne un seria escriure el valor a la peça equivocada."""
+        segon = self._base_set(self.item, size_system=self._size_system('BS2'))
+        resp = self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
+                             'base_value_cm': '60.00'})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['code'], 'base_set_ambigu')
+        self.assertEqual(len(resp.data['base_sets']), 2)
+
+        ok = self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
+                           'base_set': segon.id, 'base_value_cm': '60.00'})
+        self.assertEqual(ok.status_code, 201)
+        self.assertEqual(ItemBaseMeasurement.objects.get(base_set=segon, pom=self.pom)
+                         .base_value_cm, Decimal('60.00'))
+
+    def test_el_mateix_pom_pot_viure_a_dos_mons_amb_valors_diferents(self):
+        """El nucli de la llei: l'item no es parteix, i cada món té el seu valor del mateix POM."""
+        segon = self._base_set(self.item, size_system=self._size_system('BS3'))
+        self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
+                      'base_set': self.base_set.id, 'base_value_cm': '60.00'})
+        self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
+                      'base_set': segon.id, 'base_value_cm': '42.00'})
+        self.assertEqual(ItemBaseMeasurement.objects.filter(pom=self.pom).count(), 2)
+        self.assertEqual(ItemBaseMeasurement.objects.get(base_set=self.base_set, pom=self.pom)
+                         .base_value_cm, Decimal('60.00'))
+        self.assertEqual(ItemBaseMeasurement.objects.get(base_set=segon, pom=self.pom)
+                         .base_value_cm, Decimal('42.00'))
+
     def test_upsert_sense_capability_es_403(self):
         resp = self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
                              'base_value_cm': '60.00'}, user=self.user)
@@ -979,8 +1228,8 @@ class ItemBaseMeasurementBasicsTest(_BaseSembraTest):
     def test_reescriure_manual_sobre_un_promogut_el_torna_a_signar(self):
         """La provinença diu com hi ha arribat el valor VIGENT, no com hi va arribar el primer."""
         ItemBaseMeasurement.objects.create(
-            garment_type_item=self.item, pom=self.pom, base_value_cm='60.00',
-            origen=ItemBaseMeasurement.ORIGEN_PROMOTED)
+            base_set=self.base_set, garment_type_item=self.item, pom=self.pom,
+            base_value_cm='60.00', origen=ItemBaseMeasurement.ORIGEN_PROMOTED)
         self._upsert({'garment_type_item': self.item.id, 'pom': self.pom.id,
                       'base_value_cm': '62.00'})
         ibm = ItemBaseMeasurement.objects.get(garment_type_item=self.item, pom=self.pom)

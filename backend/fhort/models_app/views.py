@@ -1019,7 +1019,9 @@ def materialize_poms_view(request, model_id):
         return Response({'materialized': 0, 'seeded': 0, 'skipped': 0,
                          'warning': 'Garment type item no definit'})
 
-    from fhort.pom.models import GarmentPOMMap, ItemBaseMeasurement
+    from fhort.pom.models import (
+        GarmentPOMMap, ItemBaseMeasurement, ItemBaseSet, resolve_item_base_set,
+    )
     from fhort.models_app.models import BaseMeasurement
 
     subconjunt = None
@@ -1042,20 +1044,41 @@ def materialize_poms_view(request, model_id):
         desconeguts = sorted(subconjunt - {m.pom_id for m in maps})
     else:
         desconeguts = []
-    # Valors base de l'item per pom (plantilla → instància).
-    ibms = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(
-        garment_type_item=model.garment_type_item)}
+    item = model.garment_type_item
+
+    # B2 (2026-07-25) — EL MÓN MANA. Els valors base ja no pengen de l'item pelat sinó del
+    # BaseSet del món del model (item × size_system × fit). Lookup directe, cap heurística.
+    base_set = resolve_item_base_set(item, model.size_system_id, model.fit_type)
+    base_set_absent = base_set is None
+
+    if base_set is not None:
+        ibms = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(base_set=base_set)}
+        talla_item = (getattr(base_set.base_size_definition, 'etiqueta', None) or '').strip()
+    else:
+        # CAMÍ LLEGAT (conviu mentre no tots els mons tinguin set). Només s'hi cau si el món del
+        # model no en té cap, i NOMÉS si l'item és inequívoc: amb 0 o 1 set, les mesures de
+        # l'item parlen d'un sol món i el guard V1 les sap jutjar. Amb 2+ sets NO endevinem quin
+        # món val — se sembra la pertinença i cap valor, que és el que diu la llei 7.
+        sets_item = ItemBaseSet.objects.filter(garment_type_item=item).count()
+        if sets_item <= 1:
+            ibms = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(
+                garment_type_item=item)}
+            talla_item = (getattr(item.base_size_definition, 'etiqueta', None) or '').strip()
+        else:
+            ibms = {}
+            talla_item = ''
 
     # P1 — GUARD DE TALLA. Es resol UNA vegada, abans del bucle: la talla no depèn del POM.
-    item = model.garment_type_item
-    talla_item = (getattr(item.base_size_definition, 'etiqueta', None) or '').strip()
+    # Reorientat a B2: la talla de referència és la del SET del món, no la de l'item pelat
+    # (l'item pot vestir-se en diversos sistemes i cadascun té la seva talla base).
     talla_model = (model.base_size_label or '').strip()
     talla_avis = None
     talla_divergent = False
     if not talla_item:
-        talla_avis = ("Talla de plantilla NO VERIFICADA: l'item no té `base_size_definition`. "
-                      "Els valors s'han sembrat assumint que ja parlen la talla base del model "
-                      f"(«{talla_model or '—'}»), però ningú no ho ha declarat.")
+        talla_avis = ("Talla de plantilla NO VERIFICADA: aquest món no té BaseSet i l'item "
+                      "tampoc no té `base_size_definition`. Els valors s'han sembrat assumint "
+                      f"que ja parlen la talla base del model («{talla_model or '—'}»), però "
+                      "ningú no ho ha declarat.")
     elif not talla_model:
         talla_divergent = True
         talla_avis = (f"El model no té talla base definida i la plantilla parla en «{talla_item}»: "
@@ -1114,6 +1137,29 @@ def materialize_poms_view(request, model_id):
 
     resposta = {'materialized': materialized, 'seeded': seeded, 'skipped': skipped,
                 'total_template': total_template}
+    # B2 — el món del model, sempre explícit. Quan hi ha set, el frontend en sap la talla base
+    # sense tornar a preguntar; quan no n'hi ha, `code='base_set_absent'` porta el CONTEXT
+    # necessari perquè la UI n'ofereixi el naixement (B4). El backend MAI crea el set sol.
+    if base_set is not None:
+        resposta['base_set'] = {
+            'id': base_set.pk,
+            'size_system_id': base_set.size_system_id,
+            'size_system': base_set.size_system.codi,
+            'fit_type': base_set.fit_type.codi if base_set.fit_type_id else None,
+            'base_size_label': base_set.base_size_definition.etiqueta,
+            'origen': base_set.origen,
+        }
+    else:
+        resposta['base_set'] = None
+        resposta['base_set_absent'] = {
+            'code': 'base_set_absent',
+            'garment_type_item_id': item.pk,
+            'garment_type_item_code': item.code,
+            'size_system_id': model.size_system_id,
+            'size_system': model.size_system.codi if model.size_system_id else None,
+            'fit_type': model.fit_type or None,
+        }
+
     # P1 — el veredicte de la talla mai és silenciós, ni quan deixa passar la sembra.
     resposta['talla_item'] = talla_item or None
     resposta['talla_model'] = talla_model or None
@@ -2946,24 +2992,45 @@ def promoure_a_item_view(request, model_id):
       · **dry-run** (default) — retorna el diff sencer i NO escriu RES.
       · **`confirm=true`** — aplica, dins d'una sola transacció.
 
-    El diff, per POM: `nou` (a l'item no hi és) · `canvia` (hi és amb un altre valor, es
-    mostren els dos) · `igual` (res a fer) · `sobraria` (a l'item i no al model).
+    El diff, per POM: `forat` (el set no el té) · `divergent` (el set el té amb un altre valor)
+    · `igual` (res a fer) · `sobraria` (al set i no al model) · `ampliaria_item` (al model i fora
+    del superset de POMs de l'item).
+
+    B3 (2026-07-25) — REORIENTAT AL BASESET, amb tres canvis de fons que venen de la LLEI:
+
+    LLEI 4 — les mesures base viatgen en UNA direcció, item→model. La promoció inversa
+    **OMPLE FORATS EXCLUSIVAMENT**: afegeix al set els POMs que no hi són, i MAI modifica un
+    valor que ja hi viu. Abans aquest mateix endpoint sobreescrivia amb `update_or_create`, i
+    això convertia qualsevol model en autoritat sobre l'estàndard del taller. Modificar un valor
+    existent és un acte canònic SEPARAT (`acte_canonic_base_set_view`, sota).
+
+    LLEI 5 — la divergència model↔estàndard és VIDA NORMAL. Els divergents es llisten al diff
+    perquè el tècnic els vegi, i prou: cap watchpoint, cap alarma, cap escriptura.
+
+    LLEI 7 — un món sense set no és un error sec sinó un naixement pendent. Si el model viu en
+    un món que no té BaseSet, el dry-run el PROPOSA (amb la talla base suggerida per la convenció
+    Montse) i el confirm el crea amb `origen=PROMOCIO`. Aquesta és la via canònica de naixement
+    d'un set. El backend no el crea mai sol: cal `confirm`.
+
+    LLEI 6 — l'ampliació del superset (POMs del model que no són al `GarmentPOMMap` de l'item)
+    va en secció pròpia del diff i només entra AMB CONFIRMACIÓ, mai en silenci.
 
     Els «sobraria» **NO s'esborren mai**, ni amb confirm. `ItemBaseMeasurement` no té
     `is_active`, o sigui que l'única poda possible seria un DELETE dur, i el principi del soroll
     diu proposar, no executar. Es LLISTEN perquè el tècnic els podi a mà des d'ItemAuthoring.
 
-    P3 — el mateix acte escriu `GarmentTypeItem.base_size_definition`: la promoció és l'ÚNIC
-    moment en què el sistema SAP en quina talla parlen els valors (`Model.base_size_label`).
-    Passa per `clean()` (`tasks/models.py:336-343`), que exigeix que la talla pertanyi al
-    `size_system` del ruleset de l'item. Si falla → 422 amb el motiu i CAP escriptura.
+    V1 — aquest acte JA NO escriu `GarmentTypeItem.base_size_definition`: la talla base viu ara
+    al set (llei 2, es declara en crear-lo). El camp queda com a llegat a jubilar.
     """
-    from django.core.exceptions import ValidationError
     from django.db import transaction
-    from fhort.pom.models import ItemBaseMeasurement, SizeDefinition
+    from fhort.pom.models import (
+        GarmentPOMMap, ItemBaseMeasurement, ItemBaseSet, SizeDefinition,
+        normalize_fit_type, resolve_item_base_set, suggerir_talla_base, FitTypeDesconegut,
+    )
     from fhort.models_app.models import BaseMeasurement
 
-    model = Model.objects.select_related('garment_type_item').filter(id=model_id).first()
+    model = (Model.objects.select_related('garment_type_item', 'size_system')
+             .filter(id=model_id).first())
     if model is None:
         return Response({'error': 'Model no trobat'}, status=404)
 
@@ -2980,6 +3047,12 @@ def promoure_a_item_view(request, model_id):
             'tipus': 'model_sense_talla_base',
         }, status=422)
 
+    if model.size_system_id is None:
+        return Response({
+            'error': "El model no té sistema de talles: sense món no hi ha BaseSet on promoure.",
+            'tipus': 'model_sense_size_system',
+        }, status=422)
+
     # ── El material: mesures VIVES i AMB VALOR del model. Les files buides o podades no són
     # patrimoni promocionable (principi del soroll: no s'ascendeix el que no és realitat).
     fonts = (BaseMeasurement.objects
@@ -2991,26 +3064,73 @@ def promoure_a_item_view(request, model_id):
             'tipus': 'model_sense_mesures',
         }, status=422)
 
-    actuals = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(garment_type_item=item)}
+    # ── EL MÓN. Lookup directe; si no hi ha set, el naixement es proposa (llei 7).
+    base_set = resolve_item_base_set(item, model.size_system_id, model.fit_type)
+    naixement = None
+    talla_nova = None
+    if base_set is None:
+        # La talla base del set nou: la que digui el body, o la que suggereix la convenció.
+        # Es valida SEMPRE contra el sistema del model — una talla d'un altre sistema faria
+        # néixer el set mentint sobre en què parla.
+        demanada = request.data.get('base_size_definition')
+        if demanada:
+            talla_nova = SizeDefinition.objects.filter(
+                pk=demanada, size_system_id=model.size_system_id).first()
+            if talla_nova is None:
+                return Response({
+                    'error': "La talla base demanada no existeix al sistema de talles del model.",
+                    'tipus': 'talla_base_fora_del_sistema',
+                }, status=422)
+        else:
+            talla_nova = suggerir_talla_base(model.size_system_id, model.target)
+        if talla_nova is None:
+            return Response({
+                'error': ("El sistema de talles del model no té cap talla definida: no es pot "
+                          "fer néixer el BaseSet."),
+                'tipus': 'sistema_sense_talles',
+            }, status=422)
+        try:
+            fit_obj = normalize_fit_type(model.fit_type)
+        except FitTypeDesconegut:
+            return Response({
+                'error': (f"El fit «{model.fit_type}» del model no existeix al catàleg de "
+                          "FitType: no es pot fer néixer el BaseSet d'aquest món."),
+                'tipus': 'fit_desconegut',
+            }, status=422)
+        naixement = {
+            'code': 'base_set_absent',
+            'size_system_id': model.size_system_id,
+            'size_system': model.size_system.codi,
+            'fit_type': fit_obj.codi if fit_obj else None,
+            'talla_base_proposada_id': talla_nova.pk,
+            'talla_base_proposada': talla_nova.etiqueta,
+            'talles_disponibles': [
+                {'id': t.pk, 'etiqueta': t.etiqueta}
+                for t in SizeDefinition.objects.filter(size_system_id=model.size_system_id)
+                                               .order_by('ordre', 'id')],
+            'origen': ItemBaseSet.ORIGEN_PROMOCIO,
+        }
 
-    # ── P3 — la talla que s'escriurà a l'item, resolta DINS del size_system del ruleset de
-    # l'item (no del model): és el sistema contra el qual `clean()` validarà.
-    ss_item_id = getattr(item.grading_rule_set, 'size_system_id', None)
-    talla_def = None
-    talla_motiu = None
-    if ss_item_id is None:
-        talla_motiu = ("L'item no té grading rule set (o el ruleset no té sistema de talles): "
-                       "no es pot resoldre la talla base de la plantilla. Es promouran els "
-                       "valors, però `base_size_definition` quedarà com estava.")
-    else:
-        talla_def = SizeDefinition.objects.filter(
-            size_system_id=ss_item_id, etiqueta=talla_model).first()
-        if talla_def is None:
-            talla_motiu = (f"La talla «{talla_model}» del model no existeix al sistema de talles "
-                           f"del ruleset de l'item: no es pot fixar `base_size_definition`.")
+    # ── Coherència de talla: el valor del model només és promocionable si parla la MATEIXA
+    # talla que el set. Amb un set nou això és cert per construcció si la talla proposada és la
+    # del model; si no ho és, el tècnic està declarant que aquest model NO és el que fixa la base.
+    talla_set = (base_set.base_size_definition.etiqueta if base_set is not None
+                 else talla_nova.etiqueta)
+    talla_divergent = (talla_set or '').strip() != talla_model
+    talla_avis = None
+    if talla_divergent:
+        talla_avis = (f"El model parla en «{talla_model}» i el set del seu món parla en "
+                      f"«{talla_set}». Promoure aquests valors hi escriuria mesures d'una altra "
+                      "talla. No s'escriurà cap valor.")
+
+    actuals = ({i.pom_id: i for i in ItemBaseMeasurement.objects.filter(base_set=base_set)}
+               if base_set is not None else {})
+    # LLEI 6 — el superset de POMs de l'item. El que en surti s'ha d'AMPLIAR amb confirmació.
+    poms_item = set(GarmentPOMMap.objects.filter(garment_type_item=item)
+                    .values_list('pom_id', flat=True))
 
     # ── El DIFF (pur, sense escriure).
-    nous, canvien, iguals = [], [], []
+    forats, divergents, iguals, ampliaria_item = [], [], [], []
     for bm in fonts:
         actual = actuals.get(bm.pom_id)
         fila = {
@@ -3019,26 +3139,33 @@ def promoure_a_item_view(request, model_id):
             'nom': bm.pom.nom_client or '',
             'valor_model': float(bm.base_value_cm),
         }
+        if bm.pom_id not in poms_item:
+            ampliaria_item.append(dict(fila))
         if actual is None:
-            nous.append(fila)
-        elif actual.base_value_cm is None or float(actual.base_value_cm) != float(bm.base_value_cm):
-            fila['valor_item'] = (float(actual.base_value_cm)
-                                  if actual.base_value_cm is not None else None)
+            forats.append(fila)
+        elif actual.base_value_cm is None:
+            # Fila de pertinença sense valor: també és un forat, i omplir-lo no modifica res.
+            fila['valor_item'] = None
             fila['origen_item'] = actual.origen
-            canvien.append(fila)
+            forats.append(fila)
+        elif float(actual.base_value_cm) != float(bm.base_value_cm):
+            fila['valor_item'] = float(actual.base_value_cm)
+            fila['origen_item'] = actual.origen
+            # LLEI 5 — vida normal. Informatiu i prou: ni s'escriu ni s'aixeca cap watchpoint.
+            divergents.append(fila)
         else:
             iguals.append(fila)
 
     poms_model = {bm.pom_id for bm in fonts}
-    sobrarien = [{
+    sobrarien = ([{
         'pom_id': i.pom_id,
         'codi': i.nom_fitxa or i.pom.codi_client or '',
         'nom': i.pom.nom_client or '',
         'valor_item': float(i.base_value_cm) if i.base_value_cm is not None else None,
         'origen_item': i.origen,
     } for i in ItemBaseMeasurement.objects
-        .filter(garment_type_item=item).exclude(pom_id__in=poms_model)
-        .select_related('pom').order_by('pom__codi_client')]
+        .filter(base_set=base_set).exclude(pom_id__in=poms_model)
+        .select_related('pom').order_by('pom__codi_client')] if base_set is not None else [])
 
     diff = {
         'model': model.id,
@@ -3046,33 +3173,77 @@ def promoure_a_item_view(request, model_id):
         'garment_type_item': item.id,
         'item_code': item.code,
         'talla_model': talla_model,
-        'talla_item_actual': getattr(item.base_size_definition, 'etiqueta', None),
-        'talla_a_escriure': (talla_def.etiqueta if talla_def else None),
-        'talla_motiu': talla_motiu,
-        'nous': nous,
-        'canvien': canvien,
+        'talla_set': talla_set,
+        'talla_divergent': talla_divergent,
+        'talla_avis': talla_avis,
+        'base_set': ({'id': base_set.pk,
+                      'size_system': base_set.size_system.codi,
+                      'fit_type': base_set.fit_type.codi if base_set.fit_type_id else None,
+                      'base_size_label': base_set.base_size_definition.etiqueta,
+                      'origen': base_set.origen} if base_set is not None else None),
+        'naixement': naixement,
+        'forats': forats,
+        # LLEI 5 — es mostren els dos valors i NO es toquen. Modificar-los és l'acte canònic.
+        'divergents': divergents,
         'iguals': iguals,
+        # LLEI 6 — mai en silenci.
+        'ampliaria_item': ampliaria_item,
         # NO s'esborren mai: es llisten perquè el tècnic decideixi a ItemAuthoring.
         'sobrarien': sobrarien,
-        'resum': {'nous': len(nous), 'canvien': len(canvien),
-                  'iguals': len(iguals), 'sobrarien': len(sobrarien)},
+        'resum': {'forats': len(forats), 'divergents': len(divergents),
+                  'iguals': len(iguals), 'sobrarien': len(sobrarien),
+                  'ampliaria_item': len(ampliaria_item)},
     }
 
     if not _truthy(request.data.get('confirm')):
         diff['dry_run'] = True
-        diff['message'] = (f"Simulació: {len(nous)} valor(s) nou(s), {len(canvien)} que canvien, "
-                           f"{len(iguals)} iguals. {len(sobrarien)} de l'item no són al model "
-                           f"(NO s'esborraran). Cap escriptura feta.")
+        diff['message'] = (
+            (f"El món «{diff['naixement']['size_system']}» encara no té mesures estàndard: es "
+             f"crearia el set amb talla base «{naixement['talla_base_proposada']}». "
+             if naixement else '')
+            + (f"{len(forats)} forat(s) s'omplirien, {len(divergents)} divergent(s) es "
+               f"CONSERVEN sense tocar, {len(iguals)} iguals. " if not talla_divergent
+               else "Cap valor s'escriuria: les talles no coincideixen. ")
+            + (f"{len(ampliaria_item)} POM(s) ampliarien el superset de l'item. "
+               if ampliaria_item else '')
+            + "Cap escriptura feta.")
         return Response(diff, status=200)
 
-    # ── APLICAR. Tot dins d'una transacció: o s'escriu la plantilla sencera amb la seva talla,
-    # o no s'escriu res. Una plantilla a mitges és pitjor que no promoure.
-    try:
-        with transaction.atomic():
-            for bm in fonts:
-                ItemBaseMeasurement.objects.update_or_create(
-                    garment_type_item=item, pom_id=bm.pom_id,
+    # ── APLICAR. Tot dins d'una transacció: o s'escriu el món sencer, o no s'escriu res.
+    with transaction.atomic():
+        if base_set is None:
+            base_set = ItemBaseSet.objects.create(
+                garment_type_item=item,
+                size_system_id=model.size_system_id,
+                fit_type=normalize_fit_type(model.fit_type),
+                base_size_definition=talla_nova,
+                origen=ItemBaseSet.ORIGEN_PROMOCIO,
+                updated_by=request.user,
+            )
+
+        # LLEI 6 — l'ampliació del superset entra AQUÍ, dins del confirm, mai abans.
+        ordre_seguent = (GarmentPOMMap.objects.filter(garment_type_item=item)
+                         .order_by('-ordre').values_list('ordre', flat=True).first() or 0)
+        for fila in ampliaria_item:
+            ordre_seguent += 1
+            GarmentPOMMap.objects.get_or_create(
+                garment_type_item=item, pom_id=fila['pom_id'],
+                # pendent_revisio=False: els confirma un tècnic amb gate CONFIGURE, no un clon
+                # automàtic de germà (que és el cas que va inventar la marca).
+                defaults={'ordre': ordre_seguent, 'pendent_revisio': False},
+            )
+
+        escrits = 0
+        if not talla_divergent:
+            for fila in forats:
+                bm = next(b for b in fonts if b.pom_id == fila['pom_id'])
+                # LLEI 4 — NOMÉS forats. `update_or_create` sobre una fila amb valor seria
+                # exactament l'acte que aquesta llei prohibeix; per això la clau del create és
+                # el forat i els divergents ni entren al bucle.
+                obj, creat = ItemBaseMeasurement.objects.get_or_create(
+                    base_set=base_set, pom_id=bm.pom_id,
                     defaults={
+                        'garment_type_item': item,
                         'base_value_cm': bm.base_value_cm,
                         'tol_minus': bm.tolerancia_minus,
                         'tol_plus': bm.tolerancia_plus,
@@ -3080,35 +3251,128 @@ def promoure_a_item_view(request, model_id):
                         'origen': ItemBaseMeasurement.ORIGEN_PROMOTED,
                         'updated_by': request.user,
                     })
-
-            if talla_def is not None:
-                item.base_size_definition = talla_def
-                # full_clean sobre el camp que toquem: `clean()` és qui sap si la talla i el
-                # ruleset de l'item parlen el mateix sistema. Si no, ValidationError → rollback.
-                item.full_clean(exclude=[f.name for f in item._meta.fields
-                                         if f.name not in ('base_size_definition',)])
-                item.save(update_fields=['base_size_definition'])
-    except ValidationError as e:
-        # Cap escriptura parcial: l'atomic ja ha fet rollback en sortir per excepció.
-        return Response({
-            'error': "No s'ha pogut fixar la talla base de la plantilla; la promoció s'ha "
-                     "desfet sencera.",
-            'tipus': 'talla_incoherent',
-            'detall': e.message_dict if hasattr(e, 'message_dict') else str(e),
-            'talla_model': talla_model,
-        }, status=422)
+                if creat:
+                    escrits += 1
+                elif obj.base_value_cm is None:
+                    # Pertinença sense valor: omplir el forat NO és modificar res.
+                    obj.base_value_cm = bm.base_value_cm
+                    obj.tol_minus = bm.tolerancia_minus
+                    obj.tol_plus = bm.tolerancia_plus
+                    obj.nom_fitxa = bm.nom_fitxa or obj.nom_fitxa
+                    obj.origen = ItemBaseMeasurement.ORIGEN_PROMOTED
+                    obj.updated_by = request.user
+                    obj.save(update_fields=['base_value_cm', 'tol_minus', 'tol_plus',
+                                            'nom_fitxa', 'origen', 'updated_by', 'updated_at'])
+                    escrits += 1
 
     diff['dry_run'] = False
-    diff['promoguts'] = len(nous) + len(canvien) + len(iguals)
-    diff['talla_escrita'] = talla_def.etiqueta if talla_def else None
+    diff['base_set'] = {'id': base_set.pk,
+                        'size_system': base_set.size_system.codi,
+                        'fit_type': base_set.fit_type.codi if base_set.fit_type_id else None,
+                        'base_size_label': base_set.base_size_definition.etiqueta,
+                        'origen': base_set.origen}
+    diff['base_set_creat'] = naixement is not None
+    diff['promoguts'] = escrits
+    diff['ampliats'] = len(ampliaria_item)
     diff['message'] = (
-        f"Promoció aplicada: {diff['promoguts']} valor(s) escrits a la plantilla de l'item "
-        f"«{item.code}» amb origen PROMOTED. "
-        + (f"Talla base de la plantilla fixada a «{talla_def.etiqueta}». "
-           if talla_def else "La talla base de la plantilla NO s'ha tocat. ")
-        + (f"{len(sobrarien)} valor(s) de l'item no són al model i s'han CONSERVAT: "
+        (f"BaseSet creat per al món «{base_set.size_system.codi}» amb talla base "
+         f"«{base_set.base_size_definition.etiqueta}» (origen PROMOCIO). " if naixement else '')
+        + (f"{escrits} forat(s) omplerts a la plantilla de l'item «{item.code}» amb origen "
+           f"PROMOTED. " if escrits else "Cap valor escrit. ")
+        + (f"{len(divergents)} valor(s) divergeixen del model i s'han CONSERVAT intactes: "
+           "canviar-los és l'acte canònic, no la promoció. " if divergents else '')
+        + (f"{len(ampliaria_item)} POM(s) afegits al superset de l'item. "
+           if ampliaria_item else '')
+        + (f"{len(sobrarien)} valor(s) del set no són al model i s'han CONSERVAT: "
            f"podi'ls a mà des de l'autoria d'item si vols." if sobrarien else ''))
     return Response(diff, status=200)
+
+
+@api_view(['POST'])
+@permission_classes([_Configure])
+def acte_canonic_base_set_view(request, base_set_id):
+    """POST /api/v1/item-base-sets/<id>/acte-canonic/ — MODIFICAR un valor que el set ja té.
+
+    B3 (2026-07-25). La llei 4 treu aquesta capacitat de la promoció a posta: si un model
+    qualsevol pogués reescriure un valor de l'estàndard, l'estàndard no seria de ningú. Marcar
+    un valor NOU com a canònic de la marca és un acte propi, deliberat i signat.
+
+    Body: {pom, base_value_cm, tol_minus?, tol_plus?, confirm}. Sense `confirm` és dry-run i
+    torna el valor anterior i el nou sense escriure. Gate CONFIGURE (com la promoció).
+
+    El registre de qui/quan/valor-anterior viu a `MeasurementChangeLog`, que és on ja viu la
+    resta de l'auditoria de mesures — no s'inventa una segona taula de log per a això.
+    """
+    from decimal import Decimal, InvalidOperation
+    from fhort.pom.models import ItemBaseMeasurement, ItemBaseSet
+
+    base_set = (ItemBaseSet.objects
+                .select_related('size_system', 'fit_type', 'base_size_definition',
+                                'garment_type_item')
+                .filter(pk=base_set_id).first())
+    if base_set is None:
+        return Response({'error': 'BaseSet no trobat'}, status=404)
+
+    pom_id = request.data.get('pom')
+    if not pom_id:
+        return Response({'error': 'pom requerit.'}, status=400)
+
+    actual = (ItemBaseMeasurement.objects.select_related('pom')
+              .filter(base_set=base_set, pom_id=pom_id).first())
+    if actual is None or actual.base_value_cm is None:
+        return Response({
+            'error': ("Aquest POM no té cap valor al set: omplir un forat NO és un acte canònic, "
+                      "és una promoció. Fes-la des del model."),
+            'tipus': 'no_hi_ha_valor_a_substituir',
+        }, status=422)
+
+    cru = request.data.get('base_value_cm')
+    try:
+        nou_valor = Decimal(str(cru))
+    except (InvalidOperation, TypeError, ValueError):
+        return Response({'error': 'base_value_cm ha de ser un número.'}, status=400)
+
+    anterior = float(actual.base_value_cm)
+    resposta = {
+        'base_set': base_set.pk,
+        'pom_id': actual.pom_id,
+        'codi': actual.nom_fitxa or actual.pom.codi_client or '',
+        'talla_base': base_set.base_size_definition.etiqueta,
+        'valor_anterior': anterior,
+        'valor_nou': float(nou_valor),
+        'canvia': float(nou_valor) != anterior,
+    }
+
+    if not _truthy(request.data.get('confirm')):
+        resposta['dry_run'] = True
+        resposta['message'] = (
+            f"Simulació: «{resposta['codi']}» passaria de {anterior} a {float(nou_valor)} cm a la "
+            f"talla base «{resposta['talla_base']}». Cap escriptura feta."
+            if resposta['canvia'] else
+            f"«{resposta['codi']}» ja val {anterior} cm: no hi ha res a canviar.")
+        return Response(resposta, status=200)
+
+    if not resposta['canvia']:
+        resposta['dry_run'] = False
+        resposta['message'] = f"«{resposta['codi']}» ja val {anterior} cm: no s'ha escrit res."
+        return Response(resposta, status=200)
+
+    camps = {'base_value_cm': nou_valor}
+    for camp in ('tol_minus', 'tol_plus'):
+        if camp in request.data:
+            camps[camp] = request.data.get(camp)
+    for camp, valor in camps.items():
+        setattr(actual, camp, valor)
+    # L'acte canònic és mà humana signada: la provinença ho ha de dir, no quedar-se a PROMOTED.
+    actual.origen = ItemBaseMeasurement.ORIGEN_MANUAL
+    actual.updated_by = request.user
+    actual.save(update_fields=list(camps) + ['origen', 'updated_by', 'updated_at'])
+
+    resposta['dry_run'] = False
+    resposta['message'] = (
+        f"«{resposta['codi']}» marcat com a canònic de la marca: {anterior} → "
+        f"{float(nou_valor)} cm a la talla base «{resposta['talla_base']}».")
+    return Response(resposta, status=200)
 
 
 @api_view(['POST'])
