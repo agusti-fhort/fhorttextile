@@ -112,6 +112,9 @@ class ModelListSerializer(serializers.ModelSerializer):
             'customer',
             'customer_nom',
             'has_order',
+            # P7 — el RECURS assignat (codi nu del Studio, '' = cap). La llista del Brand
+            # n'ha de poder pintar una columna sense demanar el detall model a model.
+            'studio_assignat',
             'created_at',
             'garment_type',
             'garment_type_item_nom',
