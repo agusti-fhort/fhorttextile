@@ -351,6 +351,50 @@ deltes+breaks s'autoren · grading PROJECTA (conscient, D-10).
 
 ---
 
+### MOTOR DE GRADUACIÓ — semàntica del SOSTRE (`increment_break=0`) · VERIFICAT 2026-07-24
+
+Fet verificat empíricament contra `pom/services.py::_apply_rule` (branca canònica, la que s'activa
+quan `increment_base` està poblat i `logica != 'STEP'`), executant el motor real sobre runs de prova.
+
+**1. El motor SÍ suporta el sostre.** La línia clau és
+`brk = float(rule.increment_break) if rule.increment_break is not None else ib`: distingeix **0** de
+**None**. Amb `increment_break=0` explícit, tot pas a partir del break suma 0 → la mesura queda
+**plana**. Amb `increment_break=None` no hi ha break i el pas és uniforme. Mesurat (base=100, ib=0.5,
+run XS·S·M·L·XL·2XL·3XL, base S):
+
+| `increment_break` | `talla_break_label` | XS | S | M | L | XL | 2XL | 3XL |
+|---|---|---|---|---|---|---|---|---|
+| `None` | 'M' | 99.5 | 100 | 100.5 | 101 | 101.5 | 102 | 102.5 |
+| `0` | 'L' | 99.5 | 100 | **100.5** | 100.5 | 100.5 | 100.5 | 100.5 |
+| `0` | 'M' | 99.5 | 100 | **100** | 100 | 100 | 100 | 100 |
+
+**2. ⚠️ `talla_break_label` és la PRIMERA talla JA AFECTADA, no l'última que creix.**
+El bucle fa `total += brk if j >= break_idx else ib`: el pas que **arriba** a la talla del break ja
+usa `increment_break`.
+
+> **Correcció d'una afirmació anterior (Agus, 2026-07-24).** L'especificació original deia que
+> «pla a partir de M» s'escrivia `talla_break_label='M'`. **És incorrecte**: amb `'M'` la M val
+> exactament el mateix que la base. La forma correcta, confirmada per l'Agus després de la
+> verificació en viu del motor feta en aquesta sessió, és:
+>
+> | intenció | `talla_break_label` | `increment_break` |
+> |---|---|---|
+> | «creix fins a M, després pla» (base S) | **`'L'`** | `0` |
+>
+> Comprovat a la taula de dalt: amb `label='L'` → S=100, **M=100.5** (últim creixement),
+> L=100.5 (pla). **Regla general: `talla_break_label` = la talla SEGÜENT a l'última que creix.**
+
+⚠️ **Aquest off-by-one NO afecta el cas «canvi d'increment»**, només el cas «sostre». Quan el segon
+valor no és 0 sinó un increment diferent (p.ex. talles compostes que creixen el doble), el label
+**sí** que és la primera talla amb el nou increment, i això és el que es vol. Vegeu el STOP
+retroactiu a `DIAGNOSI_CENS_TENANT_LOS_2026-07-24.md`.
+
+**3. El break s'ancora per ETIQUETA contra el run del MODEL** (`size_run`), no contra el del ruleset.
+Si l'etiqueta del break no és al run del model, `break_idx=None` i la regla degrada a **lineal pura,
+en silenci**: un model amb run `XS·S·L·XL` i break `'M'` perd el sostre i segueix creixent. Mesurat.
+
+---
+
 ## 5. Deutes i peces pròpies anotades (no ara)
 
 - **Tolerància:** avui 2 valors; sempre simètrica ± → fusionar a 1 sola columna (p.ex. ±0.6). Sprint POMs.
