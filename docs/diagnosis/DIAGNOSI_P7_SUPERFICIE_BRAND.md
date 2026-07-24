@@ -180,6 +180,54 @@ Canviar-ho a "Proveïdors" seria una sola cadena a 3 fitxers si el CTO ho prefer
    un sprint d'higiene (avui `Customers.jsx` funciona i no es toca — codi mínim).
 3. **`los` és `estat='onboarding'`**, no `actiu`. No bloqueja res de P7 (cap gate de P7 llegeix
    `estat`), però és el que caldrà mirar abans del go-live del Brand a PROD.
+4. **🔴 FK cross-schema per id nu: `backoffice.BackofficeUser.usuari` → `auth_user`** (trobada
+   durant l'assaig del B7, en netejar un usuari de proves). `fhort.backoffice` és SHARED
+   (public-only) però `auth_user` viu a `public` **i** a cada tenant. Amb `search_path='<tenant>,
+   public'`, el *collector* d'esborrat de Django llegeix `backoffice_backofficeuser` de `public` i
+   l'aparella amb l'`auth_user` del TENANT **per id nu**. Comprovat en viu:
+
+   ```
+   los.auth_user:  id=2 → qa.p7@fhort.test      (usuari de tenant)
+   public.backoffice_backofficeuser: (id=1, usuari_id=2, 'ADMIN')  → a.devant, usuari de PUBLIC
+   → DELETE de l'usuari 2 de `los`:
+     ProtectedError: ... referenced through protected foreign keys: 'BackofficeUser.usuari'
+   ```
+   Aquí el resultat és **segur** (PROTECT bloqueja un esborrat legítim: soroll, no dany). El que
+   preocupa és el germà: **`AccioLog.usuari` és `SET_NULL`** (`backoffice/models.py:60`) — el
+   mateix encreuament, però en comptes de bloquejar, **posaria a NULL files del log del backoffice
+   quan s'esborra un usuari d'un tenant amb l'id coincident**, en silenci i sense cap traça.
+   Fora de l'abast de P7 (cap peça d'aquest sprint hi toca) i **no introduït per P7**, però és una
+   frontera cross-tenant trencada: `backoffice` hauria d'apuntar a un usuari de `public`
+   explícitament, no a `AUTH_USER_MODEL` resolt pel `search_path`. **Decisió del CTO.**
+
+---
+
+## Assaig manual a staging (B7) — executat 2026-07-24 amb el codi d'aquest sprint
+
+Servei `ftt-staging.service` reiniciat · `/api/schema/` 200 des dels dos hosts
+(`staging.fhorttextile.tech` → `fhort`/FTT · `los.fhorttextile.tech` → `los`/LOS).
+Usuari d'assaig `qa.p7@fhort.test` (rol admin) creat als dos schemas i **esborrat en acabar**.
+
+| # | Pas | Resultat real |
+|---|---|---|
+| 1 | `/me` com a LOS | `tenant = {'nom':'LOSAN','codi_tenant':'LOS','tipologia':'marca'}` ✓ |
+| 2 | `GET /api/v1/recursos/` | 1 recurs: `FTT · FHORT Management · ACTIU · 2026-07-23`. **0 aparicions de `token`** ✓ |
+| 3 | Guards de l'alta | duplicat → **409** `link_exists` · destí inexistent → **400** `invalid_studio` · auto-vincle → **400** `self_link` |
+| 4 | Models del Brand | 50 models a `los`, **tots amb `studio_assignat=''`** (línia base neta) |
+| 5 | Assignar 3 (ids 7, 55, 54) | `{assignats: 3, ja_hi_eren: 0, no_trobats: []}` |
+| 5b | Repetir la mateixa acció | `{assignats: 0, ja_hi_eren: 3}` — el compte no s'infla ✓ |
+| 6 | Auditoria a BD (`schema los`) | 3 files amb `studio_assignat='FTT'` (`LOS-ASSAIG-0002/0049/0050`) · 47 sense |
+| 7 | `instantiate_external_models --brand LOS --studio FTT` (dry-run) | `models al Brand: 50 · assignats a FTT: 3` · **`llegits (assignats): 3`** · `a crear: 0 · saltats (ja hi són): 3` |
+| 8 | **La llei de les dues claus, en viu** | aturar → `ATURAT` · assignar amb pont aturat → **409** `link_not_active` · **retirar** amb pont aturat → **200**, 1 retirat · reactivar → `ACTIU` · re-assignar → 1 ✓ |
+| 9 | Un ESTUDI (FTT) davant la superfície | `/me` diu `tipologia='estudi'` · `GET /recursos/` → **403** · `POST /recursos/` → **403** |
+
+**Nota del pas 7:** `a crear: 0` és correcte i esperat — l'assaig de federació del 2026-07-23 ja
+va instanciar els 50 models sintètics a `fhort`, i el command és idempotent per `codi_intern`. El
+que aquest sprint havia de demostrar és la xifra de l'esquerra: **el traspàs llegeix exactament
+els 3 models que el Brand ha assignat des de la UI**, no els 50 del pont.
+
+**Estat de staging en acabar (restaurat):** vincle `LOS→FTT` **ACTIU**, 3 models assignats a FTT,
+cap usuari d'assaig viu.
 
 ---
 
