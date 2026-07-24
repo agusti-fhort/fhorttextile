@@ -834,11 +834,17 @@ class FitType(models.Model):
 
 class Target(models.Model):
     """Target population of a garment. Public schema."""
+    # P0b (2026-07-24) — vocabulari alineat amb el sector: la franja que LOSAN diu «BABY» és
+    # la que aquí es deia TODDLER, i el que aquí es deia BABY és NEWBORN. Verificat contra la
+    # columna `seccio_client` de sembra_models_losan_ss27.csv (1:1 amb comptes exactes).
+    # Renames: BOY→KID_BOY · GIRL→KID_GIRL · TODDLER_*→BABY_* · BABY_*→NEWBORN_*.
+    # El rename de dades el fa backend/scripts_tmp/rename_targets_p0b.py als 3 schemas
+    # (els FK apunten a `id`, no a `codi` — cap referència es trenca).
     CODI_CHOICES = [
         ('WOMAN','Woman'),('MAN','Man'),('UNISEX_ADULT','Unisex Adult'),
-        ('BABY_GIRL','Baby Girl'),('BABY_BOY','Baby Boy'),('BABY_UNISEX','Baby Unisex'),
-        ('TODDLER_GIRL','Toddler Girl'),('TODDLER_BOY','Toddler Boy'),
-        ('GIRL','Girl'),('BOY','Boy'),
+        ('NEWBORN_GIRL','Newborn Girl'),('NEWBORN_BOY','Newborn Boy'),('NEWBORN_UNISEX','Newborn Unisex'),
+        ('BABY_GIRL','Baby Girl'),('BABY_BOY','Baby Boy'),
+        ('KID_GIRL','Kid Girl'),('KID_BOY','Kid Boy'),
         ('TEEN_GIRL','Teen Girl'),('TEEN_BOY','Teen Boy'),
         ('MATERNITY','Maternity'),
     ]
