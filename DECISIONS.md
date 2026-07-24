@@ -351,6 +351,36 @@ deltes+breaks s'autoren · grading PROJECTA (conscient, D-10).
 
 ---
 
+### MOTOR DE GRADUACIÓ — semàntica del SOSTRE (`increment_break=0`) · VERIFICAT 2026-07-24
+
+Fet verificat empíricament contra `pom/services.py::_apply_rule` (branca canònica, la que s'activa
+quan `increment_base` està poblat i `logica != 'STEP'`), executant el motor real sobre runs de prova.
+
+**1. El motor SÍ suporta el sostre.** La línia clau és
+`brk = float(rule.increment_break) if rule.increment_break is not None else ib`: distingeix **0** de
+**None**. Amb `increment_break=0` explícit, tot pas a partir del break suma 0 → la mesura queda
+**plana**. Amb `increment_break=None` no hi ha break i el pas és uniforme. Mesurat (base=100, ib=0.5,
+run XS·S·M·L·XL·2XL·3XL, base S):
+
+| `increment_break` | `talla_break_label` | XS | S | M | L | XL | 2XL | 3XL |
+|---|---|---|---|---|---|---|---|---|
+| `None` | 'M' | 99.5 | 100 | 100.5 | 101 | 101.5 | 102 | 102.5 |
+| `0` | 'L' | 99.5 | 100 | **100.5** | 100.5 | 100.5 | 100.5 | 100.5 |
+| `0` | 'M' | 99.5 | 100 | **100** | 100 | 100 | 100 | 100 |
+
+**2. ⚠️ `talla_break_label` és la PRIMERA talla JA AFECTADA, no l'última que creix.** El bucle fa
+`total += brk if j >= break_idx else ib`, o sigui que el pas que **arriba** a la talla del break ja
+usa `increment_break`. Per expressar «creix fins a M i després pla» cal `talla_break_label='L'`, NO
+`'M'` — amb `'M'` la M val el mateix que la base. És un off-by-one silenciós: no peta, només dona una
+talla malament. **Qualsevol especificació que digui "pla a partir de X" s'ha de traduir a
+`talla_break_label` = la talla SEGÜENT a X.**
+
+**3. El break s'ancora per ETIQUETA contra el run del MODEL** (`size_run`), no contra el del ruleset.
+Si l'etiqueta del break no és al run del model, `break_idx=None` i la regla degrada a **lineal pura,
+en silenci**: un model amb run `XS·S·L·XL` i break `'M'` perd el sostre i segueix creixent. Mesurat.
+
+---
+
 ## 5. Deutes i peces pròpies anotades (no ara)
 
 - **Tolerància:** avui 2 valors; sempre simètrica ± → fusionar a 1 sola columna (p.ex. ±0.6). Sprint POMs.
