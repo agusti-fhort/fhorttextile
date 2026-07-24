@@ -869,7 +869,15 @@
     "no_grading_yet": "This model has no grading assigned yet.",
     "grading_pending": "— pending",
     "grading_origin": "Origin",
-    "grading_rules_label": "Rules"
+    "grading_rules_label": "Rules",
+    "assign_resource": "Assign to resource",
+    "assign_resource_confirm": "Assign",
+    "assign_resource_pick": "Resource",
+    "assign_resource_clear": "Remove assignment",
+    "assign_resource_none": "No active resources. Link a studio from Resources.",
+    "assign_resource_done": "{{n}} model(s) assigned to the resource.",
+    "assign_resource_cleared": "Assignment removed from {{n}} model(s).",
+    "assign_resource_already": "{{n}} were already assigned."
   },
   "model_wizard": {
     "customer": "Customer",
@@ -1003,7 +1011,8 @@
     "loading": "Loading models…",
     "empty": "No models. Create the first one!",
     "empty_filtered": "No results with this filter.",
-    "delete_error": "Could not delete the model."
+    "delete_error": "Could not delete the model.",
+    "col_recurs": "Resource"
   },
   "models_filters": {
     "button": "Filters",

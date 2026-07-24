@@ -869,7 +869,15 @@
     "no_grading_yet": "Aquest model encara no té graduació assignada.",
     "grading_pending": "— pendent",
     "grading_origin": "Provinença",
-    "grading_rules_label": "Regles"
+    "grading_rules_label": "Regles",
+    "assign_resource": "Assignar a recurs",
+    "assign_resource_confirm": "Assignar",
+    "assign_resource_pick": "Recurs",
+    "assign_resource_clear": "Retirar assignació",
+    "assign_resource_none": "Cap recurs actiu. Vincula un estudi des de Recursos.",
+    "assign_resource_done": "{{n}} model(s) assignat(s) al recurs.",
+    "assign_resource_cleared": "Assignació retirada de {{n}} model(s).",
+    "assign_resource_already": "{{n}} ja hi estaven."
   },
   "model_wizard": {
     "customer": "Client",
@@ -1003,7 +1011,8 @@
     "loading": "Carregant models…",
     "empty": "Sense models. Crea el primer!",
     "empty_filtered": "Sense resultats amb aquest filtre.",
-    "delete_error": "No s'ha pogut esborrar el model."
+    "delete_error": "No s'ha pogut esborrar el model.",
+    "col_recurs": "Recurs"
   },
   "models_filters": {
     "button": "Filtres",

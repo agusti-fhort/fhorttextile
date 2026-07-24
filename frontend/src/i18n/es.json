@@ -869,7 +869,15 @@
     "no_grading_yet": "Este modelo aún no tiene graduación asignada.",
     "grading_pending": "— pendiente",
     "grading_origin": "Procedencia",
-    "grading_rules_label": "Reglas"
+    "grading_rules_label": "Reglas",
+    "assign_resource": "Asignar a recurso",
+    "assign_resource_confirm": "Asignar",
+    "assign_resource_pick": "Recurso",
+    "assign_resource_clear": "Retirar asignación",
+    "assign_resource_none": "Ningún recurso activo. Vincula un estudio desde Recursos.",
+    "assign_resource_done": "{{n}} modelo(s) asignado(s) al recurso.",
+    "assign_resource_cleared": "Asignación retirada de {{n}} modelo(s).",
+    "assign_resource_already": "{{n}} ya lo estaban."
   },
   "model_wizard": {
     "customer": "Cliente",
@@ -1003,7 +1011,8 @@
     "loading": "Cargando modelos…",
     "empty": "Sin modelos. ¡Crea el primero!",
     "empty_filtered": "Sin resultados con este filtro.",
-    "delete_error": "No se ha podido eliminar el modelo."
+    "delete_error": "No se ha podido eliminar el modelo.",
+    "col_recurs": "Recurso"
   },
   "models_filters": {
     "button": "Filtros",

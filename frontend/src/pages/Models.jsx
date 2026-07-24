@@ -6,6 +6,7 @@ import ActionsMenu, { PHASES } from '../components/model/ActionsMenu'
 import ModelsFilterPanel from '../components/model/ModelsFilterPanel'
 import { useFilterOptions, garmentTypeLabel, garmentGroupLabel } from '../components/model/filterOptions'
 import Feedback from '../components/ui/Feedback'
+import useAuthStore from '../store/auth'
 
 const MONO = 'IBM Plex Mono, monospace'
 const SEASONS = ['SS', 'FW', 'CO', 'SP']
@@ -26,6 +27,9 @@ export default function Models() {
   const { t, i18n } = useTranslation()
   const dateLocale = i18n.language === 'es' ? 'es-ES' : i18n.language === 'en' ? 'en-GB' : 'ca-ES'
 
+  // P7 — la columna Recurs només té sentit en una MARCA (és qui assigna). En un Estudi el
+  // camp `studio_assignat` dels seus models no vol dir res i la columna seria soroll.
+  const isBrand = useAuthStore(s => s.tenant?.tipologia === 'marca')
   const [items, setItems] = useState([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -335,7 +339,7 @@ export default function Models() {
           {visibleItems.map(m => (
             <ModelRow key={m.id} m={m} selected={rowChecked(m.id)} onToggle={() => rowToggle(m.id)}
               onOpen={intentMode ? () => rowToggle(m.id) : () => navigate(`/models/${m.id}`)}
-              onDelete={(e) => remove(m, e)} t={t} locale={dateLocale} intentMode={intentMode} />
+              onDelete={(e) => remove(m, e)} t={t} locale={dateLocale} intentMode={intentMode} isBrand={isBrand} />
           ))}
         </div>
       )}
@@ -446,7 +450,7 @@ function ActiveChips({ filterParams, sp, setParams, opts, t, lang, FILTER_KEYS, 
   )
 }
 
-function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale, intentMode }) {
+function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale, intentMode, isBrand }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'stretch', gap: 12, borderRadius: 8, background: 'var(--white)',
@@ -474,12 +478,14 @@ function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale, intentMo
           {!intentMode && <button onClick={onDelete} title={t('models_list.delete')} style={delBtn}><i className="ti ti-trash" /></button>}
         </div>
         {/* Fila 2 — operativa */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr 1.4fr', gap: 12, alignItems: 'center', fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isBrand ? 'auto 1fr 1fr 1fr 1.4fr 0.8fr' : 'auto 1fr 1fr 1fr 1.4fr', gap: 12, alignItems: 'center', fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
           <span style={faseBadge}>{m.fase_actual ? t(`model_sheet.dashboard.phase.${m.fase_actual}`, m.fase_actual) : '—'}</span>
           <Cell label={t('models_list.col_entrada')} value={fmtDate(m.entrada_prod, locale)} />
           <Cell label={t('models_list.col_proto')} value={fmtDate(m.arribada_proto, locale)} />
           <Cell label={t('models_list.col_fitting')} value={fmtDate(m.fitting_prev, locale)} />
           <Tecnic label={t('models_list.col_tecnic')} tecnics={m.tecnics} />
+          {/* P7 — el RECURS assignat: codi nu, o '—' si el model encara no viatja enlloc. */}
+          {isBrand && <Cell label={t('models_list.col_recurs')} value={m.studio_assignat || '—'} />}
         </div>
       </div>
     </div>
