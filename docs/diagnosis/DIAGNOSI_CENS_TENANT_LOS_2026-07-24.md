@@ -2608,3 +2608,135 @@ L'Agus ha fusionat `origin/dev` a `main` a les **08:48** (13 commits, P7 federac
 `4e32fe3` → `5a0e097`. Deploy verificat sa: **0 migracions pendents** als 3 schemas, `fhort.service`
 actiu, `dist` reconstruït a les 08:48 — i losan el rep automàticament gràcies al canvi de vhost
 d'aquest matí. Cap interferència amb el treball de dades d'aquesta sessió.
+
+---
+
+# P1/P2/P3 amb els màsters a disc — 2026-07-24 (2a tanda)
+
+Els tres màsters ja viuen al repo (`docs/diagnosis/GRADING_SOURCES_LOSAN.md`,
+`DELTA_GRADING_MASTER_LOSAN.md`, `FIL_NOMENCLATURA_GRADING_LOSAN.md`).
+
+## P2 — EXECUTAT (part additiva)
+
+**15 regles noves, LINEAR pur.** Regles del tenant: **402 → 417**.
+
+| contenidor | abans | després |
+|---|---|---|
+| New Born Tops | 37 | **43** |
+| New Born Bottoms | 20 | **22** |
+| New Born Onepieces | 38 | **45** |
+
+Invariant de P2 verificat: **creixement net, cap substitució** (assert dins l'atòmic).
+11 divergències **no escrites** + subtaula T-SHIRT + `S44` retingut →
+`INFORME_DIVERGENCIES_NEWBORN_MONTSE.md`.
+
+**Validació prèvia del mapeig** (abans d'escriure res): dels codis del màster que resolen a un POM
+real, **25 coincidien exactament** amb la BD (13 Tops + 5 Bottoms + 7 Onepieces). Això és el que em
+va donar confiança per sembrar; sense aquesta coincidència no hauria escrit.
+
+### Condició d'entrada — veredictes
+`D11H`/`D11W`, `T1W`/`T1H`, `T2W`/`T2H`, `ML`/`MS`/`MB`/`MO`: **conflicte real confirmat** dins d'un
+sol full → autoritzats. **No creats encara**: són POMs nous i el brief deia «reporta la decisió
+presa». `MT`/`MD` i `FL`/`FS`: sense conflicte → no crear.
+`GAL`/`GAS`: conflicte al màster **però contradiu la decisió explícita de naixement mandrós** → no creats.
+
+## P1 — ⛔ ATURAT (STOP definit pel propi brief) + validació fallida
+
+### STOP 1 · dos valors simultanis sobre un sol POM
+El brief deia: *«si calen dos valors simultanis pel mateix model, STOP i reportar»*. A BOTTOM ALFA:
+
+| màster | valor | POM únic disponible |
+|---|---|---|
+| `F(long)` | 0.5/0.5 | `LEG OP` |
+| `F(short)` | **2.1/2.6** | `LEG OP` ← **el mateix** |
+| `M(long)` | 0.5→pla | `M-M79` |
+| `M(short)` | **1/1** | `M-M79` ← **el mateix** |
+
+`GradingRule` té `unique_together=(rule_set, pom)`: **és físicament impossible** encabir els dos
+valors. `FL`/`FS`/`ML`/`MS` no existeixen (discard a P0).
+
+### STOP 2 · el mapeig NO valida contra el ruleset germà
+Contrastant **BOTTOM NUMÈRIC** del màster amb el ruleset numèric que ja existeix (id=54,
+`WOMAN_NUM_LOS_01`, base 38) — el seu equivalent directe:
+
+| màster | POM | esperat | a la BD | |
+|---|---|---|---|---|
+| `C` | `WA` | 2 | 2.00 | ✔ |
+| `D` | `HI PA` | 2 | 2.00 | ✔ |
+| `D22` | `D22` | 0.5 | 0.50 | ✔ |
+| `D2` | `KNE` | 0.7 | 0.70 | ✔ |
+| `F(long)` | `LEG OP` | 0.5 | 0.50 | ✔ |
+| `M(long)` | `M-M79` | 0.5 | 0.50 | ✔ |
+| **`D1`** | `THI` | **1.3** | **1.00** | ✘ |
+| **`T1`** | `RI FR` | **0.7** | **0.80** | ✘ |
+| **`T2`** | `RI BK` | **0.9** | **1.30** | ✘ |
+
+**6 de 9 quadren, 3 no.** O el meu mapeig de `D1`/`T1`/`T2` és erroni, o el ruleset numèric viu
+divergeix del màster. En qualsevol cas **no puc sembrar l'Alpha amb aquests tres valors** sense
+saber quin mana — i `T1`/`T2` són justament dos dels que P1 em demanava sembrar.
+
+### STOP 3 · repuntar els 30 models seria una regressió
+El ruleset numèric id=54 té **24 regles**; el màster BOTTOM ALFA només menciona **10 POMs**. Els 15
+POMs que el màster no menciona (`BR`, `CL`, `D.11-M79`, `O20`, `O25`, `O29`, `O30`, `O.21-M79`,
+`O.32-M79`, `R9`, `S.R6`, `S.R7`, `S13`, `S25`, `WB H`) **desapareixerien** per als 30 models
+repuntats. Repuntar-los a un contenidor més pobre és perdre graduació.
+
+**No s'ha creat cap ruleset, cap regla, cap perfil, i no s'ha repuntat cap model.**
+El watchpoint `MAN_ALPHA_BOTTOMS_SENSE_FONT` tampoc: era el pas final de P1.
+
+## P3 — FORM ajornat
+
+El **gate** (PAS 0) ja estava resolt i ara està corregit a `DECISIONS.md` amb la teva confirmació
+(`label='L'`, no `'M'`). Però:
+
+- El **FORM de Woman Bottoms Alpha** depèn del ruleset que P1 no ha pogut crear.
+- El **FORM de Woman Knit — Tops** (id=53) sí que és executable en principi, però el màster
+  WOMAN TOP/DRESS REGULAR té `G(long)=1/0`, `L3=0.5/0`, `L4=0.5/0`, `K1=0.2/0`, `L5=0.2/0` — cinc
+  POMs amb **segona columna 0**, o sigui **sostres**. I el màster diu «break a 2XL». Amb la
+  semàntica verificada, `talla_break_label='2XL'` vol dir que **la 2XL ja és plana** (=XL). Si la
+  intenció és «creix fins a 2XL i després pla», el label ha de ser `'3XL'`.
+  **Exactament l'ambigüitat que acabes de corregir per a Bottoms, sense resoldre per a Tops.**
+
+## STOP SEPARAT — l'off-by-one retroactiu dels 6 contenidors amb break
+
+Patró A read-only. **Res tocat.**
+
+| contenidor | run | break | posició | 2a columna |
+|---|---|---|---|---|
+| Kids Boy Knit — Tops | 2…11/12 | `9/10` | 7/8 | 15 `>base` · **1 = 0** · 1 `<base` |
+| Kids Boy Woven — Bottoms | 2…11/12 | `9/10` | 7/8 | 17 `>base` · **7 = 0** · 1 igual |
+| Kids Girl — Dresses | 2…11/12 | `9/10` | 7/8 | 15 `>base` · **3 = 0** |
+| Kids Girl Knit — Tops | 2…11/12 | `9/10` | 7/8 | 15 `>base` · **1 = 0** · 1 `<base` |
+| Teen Girl — Bottoms | 8…16 | `14` | 3/4 | 7 `>base` · 4 iguals · **1 = 0** |
+| Teen Girl Knit — Tops | 8…16 | `14` | 3/4 | 12 `>base` · 9 iguals · 1 `<base` |
+
+**Conclusió: NO és un bug generalitzat.** Per a la gran majoria (81 regles amb `break > base`) el
+label és **correcte**: les talles compostes (`9/10`, `11/12`) creixen el doble, i el pas que hi
+**arriba** ha de fer servir el segon valor. Coincideix amb el màster KIDS (`0.7/1.5` ≈ ×2).
+
+**Però hi ha 13 regles amb `increment_break = 0`** (sostre) repartides en 5 dels 6 contenidors. En
+aquestes, i només en aquestes, l'off-by-one **sí** que aplica: el creixement s'atura una talla abans
+del que una lectura natural de «break a 9/10» faria esperar.
+
+**Pendent de la Montse**, com vas dir. No barrejat amb el FORM de Woman.
+
+## P4 / P5 / P6
+
+- **P4** ja executat a la tanda anterior.
+- **P5** (mirall a `fhort`): les 15 regles noves de P2 són replicables, però **P1 no ha produït res**
+  i el gruix del mirall depenia d'ell. Ajornat fins que P1 es desbloquegi, per no fer dos passos.
+- **P6** recalculat sota.
+
+## P6 — invariants recalculats DESPRÉS de P2
+
+| invariant | esperat | real |
+|---|---|---|
+| regles a POM `actiu=False` | 0 | **0** ✔ |
+| regles sense `pom_global` | 0 | **0** ✔ |
+| `talla_base` fora del `size_system` del ruleset | 0 | **0** ✔ |
+| SizeSystem actius | 10 | **10** ✔ |
+| `GarmentTypeItem` sense nom | 0 | **0** ✔ |
+| parells (item×system) amb 2+ rulesets no nuls | 0 | **0** ✔ (53 parells) |
+
+Models amb/sense grading: **579 / 382** (sense canvi: P2 és additiu sobre contenidors existents,
+no reassigna cap model). Prova del cotó: **1 ruleset exacte** als 3 combos NEWBORN.
