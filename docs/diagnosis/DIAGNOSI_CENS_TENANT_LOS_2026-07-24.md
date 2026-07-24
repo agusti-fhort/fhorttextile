@@ -2886,3 +2886,68 @@ només de `los`** i el mirall aparella per nom, no per `pom_global`.
 
 L'opció 1 és coherent amb «un sol vocabulari» i es pot fer amb el mateix script de P0 apuntat a
 `fhort`. **Pendent de decisió.**
+
+---
+
+# P5-FIX — ANÀLISI DE LA FUSIÓ A `fhort` · **NO EXECUTAT** (STOP)
+
+Patró A read-only sobre `fhort`. Foto prèvia: `GradingRule`=1.272 · `GarmentPOMMap`=1.914 ·
+`POMMaster`=423. **Cap escriptura.**
+
+## El STOP s'ha disparat — però totes les col·lisions són IDÈNTIQUES
+
+| cas | sobreviu | desapareix | col·lisions regles | col·lisions maps |
+|---|---|---|---|---|
+| `POM-025` | pk=297 `SL OP` (25r+35m) | pk=740 `H11L` (8r+33m) | **8 de 8** | **33 de 33** |
+| `LOSPOM-681` | pk=686 `H.12` (2r) | pk=739 `H11S` (2r) | **2 de 2** | 0 |
+| `LOSPOM-558` | pk=563 `GL` (8r+36m) | pk=736 `GCI` (0r+0m) | **0** | **0** |
+
+**Les 10 col·lisions de regla són byte a byte iguals** (mateixa `logica`, `increment_base`,
+`increment_break` i `talla_break_label`). Exemples:
+
+```
+LOS Kids Boy Knit — Tops : guanyador LINEAR base=0.30 brk=0.20 lbl=9/10
+                           perdedor  LINEAR base=0.30 brk=0.20 lbl=9/10   (IDÈNTIQUES)
+LOS Teen Girl Knit — Tops: guanyador LINEAR base=0.50 brk=1.00 lbl=14
+                           perdedor  LINEAR base=0.50 brk=1.00 lbl=14     (IDÈNTIQUES)
+```
+
+El motiu del teu STOP era *«no hi ha manera automàtica segura de triar quina regla guanya»*. **Aquí no
+hi ha res a triar**: les dues diuen exactament el mateix. Però la conseqüència operativa canvia el
+mètode que havies escrit, i per això m'aturo.
+
+## Per què el mètode del brief no es pot aplicar tal com està
+
+El brief diu: *«Reassignar TOTES les GradingRule i GarmentPOMMap del perdedor cap al que sobreviu»* i
+després *«esborrar (actiu=False, mai DELETE dur) el perdedor un cop buit de referències»*.
+
+Amb **100% de col·lisió**, reassignar és **impossible**: `unique_together(rule_set, pom)` ho impedeix,
+i el mateix per als maps. El perdedor no es pot buidar movent; només **esborrant** les seves 8 regles
+i 33 maps (cas 1) i 2 regles (cas 2).
+
+I si es desactiva el perdedor **sense** buidar-lo, es trenca l'invariant de P6
+**«0 regles a POM `actiu=False`»** — que avui és verd als dos schemas.
+
+**Les files a esborrar són exactament les que `bootstrap_tenant` va crear avui**: esborrar-les torna
+`fhort` a l'estat pre-P5 per a aquests POMs. És defensable, però **és un DELETE dur a PROD** i no és
+el que autoritzava el brief. Per això m'aturo i t'ho pregunto.
+
+## Cas 3 — aquest sí que és net
+
+`LOSPOM-558`: el perdedor `GCI` (pk=736) té **0 regles i 0 maps**. No hi ha res a moure ni a
+esborrar: n'hi ha prou amb rebatejar `GL`→`GCI` (pk=563, conservant 8r+36m) i posar el buit a
+`actiu=False`. **És exactament el patró net de P0** i es pot fer ara mateix sense cap decisió nova.
+
+## Opcions
+
+| | què implica | risc |
+|---|---|---|
+| **A** · només el cas 3 | rebateig net `GL`→`GCI`, desactivar el buit | cap (patró P0 ja provat) |
+| **B** · els 3, esborrant els duplicats exactes | + esborrar 10 regles i 33 maps creats avui per P5 | DELETE dur a PROD, però només de files redundants d'avui |
+| **C** · els 3, sense esborrar | deixar el perdedor **actiu** amb el codi vell | no resol la duplicació; només la fa més confusa |
+| **D** · cap | acceptar dos vocabularis a `fhort` | el que hi ha ara |
+
+**Recomanació: A ara** (gratis i sense decisions), i **B en una segona passada** si confirmes que es
+poden esborrar les files que P5 va crear avui. La C no la recomano: deixa el pitjor dels dos mons.
+
+**No s'ha tocat res.**
