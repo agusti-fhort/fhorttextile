@@ -20,6 +20,10 @@ export const AUTH_INVALID = 'invalid'
 const useAuthStore = create((set, get) => ({
   token: null,
   user: null,            // { id, username, nom_complet, rol_nom, color_avatar, capabilities }
+  // P7 (Federació v2) — la CASA, no la persona: { nom, codi_tenant, tipologia }. Va a part de
+  // `user` a posta: no és un atribut de qui ha entrat sinó d'on ha entrat, i sobreviu igual a
+  // qualsevol usuari del mateix tenant. Null mentre /me no ha respost (i al schema public).
+  tenant: null,
   isAuthenticated: false,
   estatAuth: AUTH_DESCONEGUT,
 
@@ -37,7 +41,7 @@ const useAuthStore = create((set, get) => ({
     if (arribaAmbCodi) {
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
-      set({ token: null, user: null, isAuthenticated: false, estatAuth: AUTH_INVALID })
+      set({ token: null, user: null, tenant: null, isAuthenticated: false, estatAuth: AUTH_INVALID })
       return
     }
 
@@ -90,6 +94,7 @@ const useAuthStore = create((set, get) => ({
           color_avatar: data.color_avatar,
           capabilities: data.capabilities || [],
         },
+        tenant: data.tenant || null,
       })
       return data
     } catch (err) {
@@ -101,10 +106,16 @@ const useAuthStore = create((set, get) => ({
   // Helper cosmètic: el backend ja enforça; això només mostra/amaga accions a la UI.
   hasCapability: (cap) => get().user?.capabilities?.includes(cap) ?? false,
 
+  // P7 — la naturalesa de la casa. Derivats, mai desats: una segona còpia de `tipologia`
+  // seria una segona cosa a mantenir sincronitzada. Tots dos són FALSE mentre /me no ha
+  // arribat, que és el que toca: cap superfície del Brand s'ha de pintar per suposició.
+  isBrand: () => get().tenant?.tipologia === 'marca',
+  isStudio: () => get().tenant?.tipologia === 'estudi',
+
   logout: () => {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
-    set({ token: null, user: null, isAuthenticated: false, estatAuth: AUTH_INVALID })
+    set({ token: null, user: null, tenant: null, isAuthenticated: false, estatAuth: AUTH_INVALID })
     window.location.href = '/login'
   },
 }))
