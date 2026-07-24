@@ -14,10 +14,10 @@
       "garment_type_item": null,
       "construction": "KNIT",
       "fit_type": "REGULAR",
-      "target_legacy": "TODDLER_GIRL",
+      "target_legacy": "BABY_GIRL",
       "targets": [
-        "TODDLER_BOY",
-        "TODDLER_GIRL"
+        "BABY_BOY",
+        "BABY_GIRL"
       ],
       "version_number": 1,
       "codi_sistema": "",
@@ -33,9 +33,9 @@
       "garment_type_item": null,
       "construction": "KNIT",
       "fit_type": "REGULAR",
-      "target_legacy": "BOY",
+      "target_legacy": "KID_BOY",
       "targets": [
-        "BOY"
+        "KID_BOY"
       ],
       "version_number": 1,
       "codi_sistema": "",
@@ -51,9 +51,9 @@
       "garment_type_item": null,
       "construction": "WOVEN",
       "fit_type": "REGULAR",
-      "target_legacy": "BOY",
+      "target_legacy": "KID_BOY",
       "targets": [
-        "BOY"
+        "KID_BOY"
       ],
       "version_number": 1,
       "codi_sistema": "",
@@ -69,9 +69,9 @@
       "garment_type_item": null,
       "construction": "KNIT",
       "fit_type": "REGULAR",
-      "target_legacy": "GIRL",
+      "target_legacy": "KID_GIRL",
       "targets": [
-        "GIRL"
+        "KID_GIRL"
       ],
       "version_number": 1,
       "codi_sistema": "",
@@ -87,9 +87,9 @@
       "garment_type_item": null,
       "construction": "KNIT",
       "fit_type": "REGULAR",
-      "target_legacy": "GIRL",
+      "target_legacy": "KID_GIRL",
       "targets": [
-        "GIRL"
+        "KID_GIRL"
       ],
       "version_number": 1,
       "codi_sistema": "",
@@ -141,11 +141,11 @@
       "garment_type_item": null,
       "construction": "KNIT",
       "fit_type": "REGULAR",
-      "target_legacy": "BABY_GIRL",
+      "target_legacy": "NEWBORN_GIRL",
       "targets": [
-        "BABY_BOY",
-        "BABY_GIRL",
-        "BABY_UNISEX"
+        "NEWBORN_BOY",
+        "NEWBORN_GIRL",
+        "NEWBORN_UNISEX"
       ],
       "version_number": 1,
       "codi_sistema": "",
@@ -161,11 +161,11 @@
       "garment_type_item": null,
       "construction": "KNIT",
       "fit_type": "REGULAR",
-      "target_legacy": "BABY_GIRL",
+      "target_legacy": "NEWBORN_GIRL",
       "targets": [
-        "BABY_BOY",
-        "BABY_GIRL",
-        "BABY_UNISEX"
+        "NEWBORN_BOY",
+        "NEWBORN_GIRL",
+        "NEWBORN_UNISEX"
       ],
       "version_number": 1,
       "codi_sistema": "",
@@ -181,11 +181,11 @@
       "garment_type_item": null,
       "construction": "KNIT",
       "fit_type": "REGULAR",
-      "target_legacy": "BABY_GIRL",
+      "target_legacy": "NEWBORN_GIRL",
       "targets": [
-        "BABY_BOY",
-        "BABY_GIRL",
-        "BABY_UNISEX"
+        "NEWBORN_BOY",
+        "NEWBORN_GIRL",
+        "NEWBORN_UNISEX"
       ],
       "version_number": 1,
       "codi_sistema": "",

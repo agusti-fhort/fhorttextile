@@ -1,8 +1,8 @@
 """seed_kids_baby_target_map — Capa 0b-1: repara el mapa target→SizeSystem infantil/baby.
 
 Lliga els runs comercials NETS als seus targets i desactiva els sistemes TRENCATS:
-  - KIDS_AGE_COM (SS net, run '2..15/16')  → {GIRL, BOY}        (unisex: el gènere viu al grading, no al run)
-  - BABY_MONTHS_COM (SS net, run de mesos) → {BABY_GIRL, BABY_BOY, BABY_UNISEX}
+  - KIDS_AGE_COM (SS net, run '2..15/16')  → {KID_GIRL, KID_BOY}        (unisex: el gènere viu al grading, no al run)
+  - BABY_MONTHS_COM (SS net, run de mesos) → {NEWBORN_GIRL, NEWBORN_BOY, NEWBORN_UNISEX}
   - BABY_MONTHS, TODDLER_EU, KIDS_EU (trencats) → actiu=False   (només actiu; no es toquen els seus targets antics)
 
 Idempotent: re-executar no duplica lligams (.add() és idempotent + es comprova abans) ni
@@ -26,8 +26,8 @@ ALL_SCHEMAS = ['public', 'fhort']
 
 # (codi SizeSystem net, [codis Target a lligar])
 TARGET_LINKS = [
-    ('KIDS_AGE_COM',    ['GIRL', 'BOY']),
-    ('BABY_MONTHS_COM', ['BABY_GIRL', 'BABY_BOY', 'BABY_UNISEX']),
+    ('KIDS_AGE_COM',    ['KID_GIRL', 'KID_BOY']),
+    ('BABY_MONTHS_COM', ['NEWBORN_GIRL', 'NEWBORN_BOY', 'NEWBORN_UNISEX']),
 ]
 
 # codis SizeSystem trencats a desactivar (actiu=False; targets antics intactes)
@@ -35,7 +35,7 @@ DEACTIVATE = ['BABY_MONTHS', 'TODDLER_EU', 'KIDS_EU']
 
 
 class Command(BaseCommand):
-    help = ('Capa 0b-1: lliga SS41→{GIRL,BOY} i SS42→{BABY_GIRL,BABY_BOY,BABY_UNISEX} '
+    help = ('Capa 0b-1: lliga SS41→{KID_GIRL,KID_BOY} i SS42→{NEWBORN_GIRL,NEWBORN_BOY,NEWBORN_UNISEX} '
             'i desactiva els sistemes trencats SS34/SS36/SS37. Idempotent.')
 
     def add_arguments(self, parser):

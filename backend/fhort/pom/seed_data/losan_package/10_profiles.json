@@ -51,7 +51,7 @@
       "notes": ""
     },
     {
-      "target": "BABY_GIRL",
+      "target": "NEWBORN_GIRL",
       "garment_type": "NEWBORN",
       "construction": "KNIT",
       "fit_type": "REGULAR",
@@ -63,7 +63,7 @@
       "notes": ""
     },
     {
-      "target": "BABY_GIRL",
+      "target": "NEWBORN_GIRL",
       "garment_type": "NEWBORN",
       "construction": "KNIT",
       "fit_type": "REGULAR",
@@ -75,7 +75,7 @@
       "notes": ""
     },
     {
-      "target": "BABY_GIRL",
+      "target": "NEWBORN_GIRL",
       "garment_type": "NEWBORN",
       "construction": "KNIT",
       "fit_type": "REGULAR",
@@ -87,7 +87,7 @@
       "notes": ""
     },
     {
-      "target": "TODDLER_GIRL",
+      "target": "BABY_GIRL",
       "garment_type": "NEWBORN",
       "construction": "KNIT",
       "fit_type": "REGULAR",
@@ -99,7 +99,7 @@
       "notes": ""
     },
     {
-      "target": "GIRL",
+      "target": "KID_GIRL",
       "garment_type": "DRESSES",
       "construction": "KNIT",
       "fit_type": "REGULAR",
@@ -111,7 +111,7 @@
       "notes": ""
     },
     {
-      "target": "GIRL",
+      "target": "KID_GIRL",
       "garment_type": "JERSEY_TOPS",
       "construction": "KNIT",
       "fit_type": "REGULAR",
@@ -123,7 +123,7 @@
       "notes": ""
     },
     {
-      "target": "BOY",
+      "target": "KID_BOY",
       "garment_type": "JERSEY_TOPS",
       "construction": "KNIT",
       "fit_type": "REGULAR",
@@ -135,7 +135,7 @@
       "notes": ""
     },
     {
-      "target": "BOY",
+      "target": "KID_BOY",
       "garment_type": "TAILORED_PANTS",
       "construction": "WOVEN",
       "fit_type": "REGULAR",

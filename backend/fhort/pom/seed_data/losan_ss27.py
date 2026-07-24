@@ -62,17 +62,17 @@ DEACTIVATE_TYPES_WHEN_EMPTY = ['BABY_SEPARATES', 'BABY_ONEPIECES']
 SIZE_SYSTEMS = [
     {
         'codi': 'NEWBORN_LOS_01', 'nom': 'Newborn Losan', 'mon': 'Newborn',
-        'base_unit': 'MONTHS', 'targets': ['BABY_GIRL', 'BABY_BOY', 'BABY_UNISEX'],
+        'base_unit': 'MONTHS', 'targets': ['NEWBORN_GIRL', 'NEWBORN_BOY', 'NEWBORN_UNISEX'],
         'sizes': ['00/01', '01/03', '03/06', '06/09', '09/12', '12/18', '18/24'],
     },
     {
         'codi': 'BABY_LOS_01', 'nom': 'Baby Losan', 'mon': 'Baby',
-        'base_unit': 'MONTHS', 'targets': ['TODDLER_GIRL', 'TODDLER_BOY'],
+        'base_unit': 'MONTHS', 'targets': ['BABY_GIRL', 'BABY_BOY'],
         'sizes': ['03/06', '06/09', '09/12', '12/18', '18/24', '24/36'],
     },
     {
         'codi': 'BOY_LOS_01', 'nom': 'LOS Grading Kid Boy 2Y - 12Y', 'mon': 'Kids Boy',
-        'base_unit': 'AGE_YEARS', 'targets': ['BOY'],
+        'base_unit': 'AGE_YEARS', 'targets': ['KID_BOY'],
         'sizes': ['2', '3', '4', '5', '6', '7', '8', '9/10', '11/12'],
     },
     {
