@@ -534,7 +534,8 @@
     "company_calendar": "Company calendar",
     "planning": "Planning",
     "planning_calendar": "Calendar",
-    "tech_sheet": "Tech sheet"
+    "tech_sheet": "Tech sheet",
+    "recursos": "Resources"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -1200,6 +1201,38 @@
     "email_contacte": "Contact email",
     "persona_contacte": "Contact person",
     "telefon_contacte": "Contact phone"
+  },
+  "recursos": {
+    "title": "Resources",
+    "subtitle": "The studios you have an open bridge with. A resource is a studio, never the people working there.",
+    "new": "New resource",
+    "new_title": "Link a studio",
+    "new_help": "Enter the studio code (3 letters). Creating the link generates a token you will only see once.",
+    "codi_ph": "FTT",
+    "col_codi": "Code",
+    "col_nom": "Studio",
+    "col_estat": "Status",
+    "col_data": "Linked on",
+    "estat_ACTIU": "Active",
+    "estat_ATURAT": "Paused",
+    "estat_REVOCAT": "Revoked",
+    "aturar": "Pause",
+    "reactivar": "Reactivate",
+    "revocar": "Revoke",
+    "done_aturar": "Bridge paused. The studio keeps all its work.",
+    "done_reactivar": "Bridge reactivated.",
+    "done_revocar": "Link revoked permanently.",
+    "confirm_revocar": "Revoke the link with «{{codi}}»? This is permanent: it cannot be reactivated.",
+    "cancel": "Cancel",
+    "create": "Create link",
+    "loading": "Loading resources…",
+    "empty": "No linked resources.",
+    "error": "The operation could not be completed.",
+    "token_title": "Link token for {{codi}}",
+    "token_warn": "This token is shown only now. Store it somewhere safe: it cannot be retrieved again. If you lose it, revoke the link and create a new one.",
+    "token_copy": "Copy",
+    "token_copied": "Copied ✓",
+    "token_close": "Close"
   },
   "i18n_field": {
     "languages": "Languages",

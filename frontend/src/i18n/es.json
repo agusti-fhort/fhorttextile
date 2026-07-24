@@ -534,7 +534,8 @@
     "company_calendar": "Calendario de empresa",
     "planning": "Planificación",
     "planning_calendar": "Calendario",
-    "tech_sheet": "Ficha técnica"
+    "tech_sheet": "Ficha técnica",
+    "recursos": "Recursos"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -1200,6 +1201,38 @@
     "email_contacte": "Email de contacto",
     "persona_contacte": "Persona de contacto",
     "telefon_contacte": "Teléfono de contacto"
+  },
+  "recursos": {
+    "title": "Recursos",
+    "subtitle": "Los estudios con los que tienes un puente abierto. Un recurso es un estudio, nunca las personas que trabajan en él.",
+    "new": "Nuevo recurso",
+    "new_title": "Vincular un estudio",
+    "new_help": "Introduce el código del estudio (3 letras). Al crear el vínculo se generará un token que solo verás una vez.",
+    "codi_ph": "FTT",
+    "col_codi": "Código",
+    "col_nom": "Estudio",
+    "col_estat": "Estado",
+    "col_data": "Vinculado el",
+    "estat_ACTIU": "Activo",
+    "estat_ATURAT": "Detenido",
+    "estat_REVOCAT": "Revocado",
+    "aturar": "Detener",
+    "reactivar": "Reactivar",
+    "revocar": "Revocar",
+    "done_aturar": "Puente detenido. El estudio conserva todo su trabajo.",
+    "done_reactivar": "Puente reactivado.",
+    "done_revocar": "Vínculo revocado definitivamente.",
+    "confirm_revocar": "¿Revocar el vínculo con «{{codi}}»? Es definitivo: no se podrá reactivar.",
+    "cancel": "Cancelar",
+    "create": "Crear vínculo",
+    "loading": "Cargando recursos…",
+    "empty": "Ningún recurso vinculado.",
+    "error": "No se ha podido completar la operación.",
+    "token_title": "Token del vínculo con {{codi}}",
+    "token_warn": "Este token solo se muestra ahora. Guárdalo en un lugar seguro: no se podrá volver a consultar. Si lo pierdes, revoca el vínculo y crea uno nuevo.",
+    "token_copy": "Copiar",
+    "token_copied": "Copiado ✓",
+    "token_close": "Cerrar"
   },
   "i18n_field": {
     "languages": "Idiomas",

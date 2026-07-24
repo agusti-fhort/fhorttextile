@@ -534,7 +534,8 @@
     "company_calendar": "Calendari d'empresa",
     "planning": "Planificació",
     "planning_calendar": "Calendari",
-    "tech_sheet": "Fitxa tècnica"
+    "tech_sheet": "Fitxa tècnica",
+    "recursos": "Recursos"
   },
   "planning_calendar": {
     "title": "Planning Calendar",
@@ -1200,6 +1201,38 @@
     "email_contacte": "Email de contacte",
     "persona_contacte": "Persona de contacte",
     "telefon_contacte": "Telèfon de contacte"
+  },
+  "recursos": {
+    "title": "Recursos",
+    "subtitle": "Els estudis amb qui tens un pont obert. Un recurs és un estudi, mai les persones que hi treballen.",
+    "new": "Nou recurs",
+    "new_title": "Vincular un estudi",
+    "new_help": "Introdueix el codi de l'estudi (3 lletres). En crear el vincle es generarà un token que només veuràs un cop.",
+    "codi_ph": "FTT",
+    "col_codi": "Codi",
+    "col_nom": "Estudi",
+    "col_estat": "Estat",
+    "col_data": "Vinculat el",
+    "estat_ACTIU": "Actiu",
+    "estat_ATURAT": "Aturat",
+    "estat_REVOCAT": "Revocat",
+    "aturar": "Aturar",
+    "reactivar": "Reactivar",
+    "revocar": "Revocar",
+    "done_aturar": "Pont aturat. L'estudi conserva tota la seva feina.",
+    "done_reactivar": "Pont reactivat.",
+    "done_revocar": "Vincle revocat definitivament.",
+    "confirm_revocar": "Revocar el vincle amb «{{codi}}»? És definitiu: no es podrà reactivar.",
+    "cancel": "Cancel·lar",
+    "create": "Crear vincle",
+    "loading": "Carregant recursos…",
+    "empty": "Cap recurs vinculat.",
+    "error": "No s'ha pogut completar l'operació.",
+    "token_title": "Token del vincle amb {{codi}}",
+    "token_warn": "Aquest token només es mostra ara. Desa'l en un lloc segur: no es podrà tornar a consultar. Si el perds, revoca el vincle i crea'n un de nou.",
+    "token_copy": "Copiar",
+    "token_copied": "Copiat ✓",
+    "token_close": "Tancar"
   },
   "i18n_field": {
     "languages": "Idiomes",

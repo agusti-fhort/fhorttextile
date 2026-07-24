@@ -669,6 +669,17 @@ export const timers = {
 }
 
 // Usuari autenticat (capabilities + rol_nom). El backend SÍ exposa /api/v1/me/.
+// P7 (Federació v2) — els RECURSOS d'una Marca: els Studios amb qui té pont obert.
+// Només visible/operable des d'un tenant 'marca' (403 altrament). El `token` NOMÉS arriba a
+// la resposta de create(): no el demanis mai més, no existeix cap endpoint que el torni.
+export const recursos = {
+  list: () => client.get('/api/v1/recursos/'),
+  create: (data) => client.post('/api/v1/recursos/', data),          // {studio_codi} → 201 amb token
+  aturar: (id) => client.post(`/api/v1/recursos/${id}/aturar/`),
+  reactivar: (id) => client.post(`/api/v1/recursos/${id}/reactivar/`),
+  revocar: (id) => client.post(`/api/v1/recursos/${id}/revocar/`),   // terminal
+}
+
 export const me = {
   get: () => client.get('/api/v1/me/'),
   changePassword: (data) => client.post('/api/v1/me/change-password/', data),   // {new_password, new_password_confirm}

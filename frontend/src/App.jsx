@@ -12,6 +12,9 @@ const POMs = lazy(() => import('./pages/POMs'))
 const TaskTypes = lazy(() => import('./pages/TaskTypes'))
 const GarmentTypes = lazy(() => import('./pages/GarmentTypes'))
 const Suppliers = lazy(() => import('./pages/Suppliers'))
+// P7 — els RECURSOS del Brand (Studios amb pont obert). Ruta viva sempre; l'entrada de menú
+// la gateja isBrand() al Sidebar. Un Estudi que hi arribi per URL rep 403 del backend.
+const Recursos = lazy(() => import('./pages/Recursos'))
 const Customers = lazy(() => import('./pages/Customers'))
 const CustomerDetail = lazy(() => import('./pages/CustomerDetail'))
 const Products = lazy(() => import('./pages/Products'))
@@ -302,6 +305,7 @@ export default function App() {
           <Route path="garment-type-items/nou/:typeId" element={<ItemAuthoring />} />
           <Route path="garment-type-items/:itemId/editar" element={<ItemAuthoring />} />
           <Route path="suppliers" element={<Suppliers />} />
+          <Route path="recursos" element={<Recursos />} />
           <Route path="clients" element={<Customers />} />
           <Route path="clients/:id" element={<CustomerDetail />} />
           {/* Mòdul Comercial Studio (B1) — mestre d'articles. Gate de tier = B5. */}
