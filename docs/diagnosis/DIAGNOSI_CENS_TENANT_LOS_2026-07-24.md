@@ -2951,3 +2951,75 @@ esborrar: n'hi ha prou amb rebatejar `GL`→`GCI` (pk=563, conservant 8r+36m) i 
 poden esborrar les files que P5 va crear avui. La C no la recomano: deixa el pitjor dels dos mons.
 
 **No s'ha tocat res.**
+
+---
+
+# P5-FIX · FOTO PRÈVIA (abans de l'apply) — 2026-07-24
+
+Condicions verificades en read-only abans de tocar res:
+
+- **Condició 1 · timestamp**: ⚠️ `GradingRule`, `GarmentPOMMap` i `POMMaster` **no tenen cap camp de
+  data** al model. La verificació per timestamp és **impossible**; substituïda per **bloc de pk**:
+  P5 va crear els 78 últims `GradingRule` (pk≥1846) i els 69 últims `GarmentPOMMap` (pk≥3253).
+  **Totes** les files a esborrar hi cauen: 8/8, 33/33 i 2/2. ✔
+- **Condició 2 · bessona exacta**: cada fila té una bessona amb la **tupla completa** idèntica al
+  supervivent — regles 8/8 i 2/2, maps 33/33. ✔ (l'assert es repeteix DINS l'atòmic).
+
+## Bolcat complet de les files que s'esborraran
+
+```
+
+
+### POMMaster perdedor pk=740 · codi_client='H11L' · pom_global=POM-025 · nom='Sleeve opening / Cuff width'
+REGLES:
+     pk rule_set                               logica      inc   base  break    lbl talla_base act
+   1847 LOS Baby Knit — Tops                   LINEAR     0.30   0.30   None   None      03/06 True
+   1848 LOS Kids Boy Knit — Tops               LINEAR     0.30   0.30   0.20   9/10          2 True
+   1850 LOS Kids Girl — Dresses                LINEAR     0.20   0.20   0.30   9/10          2 True
+   1851 LOS Kids Girl Knit — Tops              LINEAR     0.30   0.30   0.20   9/10          2 True
+   1855 LOS New Born Knit — Onepieces          LINEAR     0.30   0.30   None   None      00/01 True
+   1857 LOS New Born Knit — Tops               LINEAR     0.30   0.30   None   None      00/01 True
+   1863 LOS Teen Girl Knit — Tops              LINEAR     0.50   0.50   0.50     14          8 True
+   1865 LOS Woman Knit — Tops                  LINEAR     0.50   0.50   None   None          S True
+MAPS:
+     pk item                   oblig  key    nivell   ordre pend_rev
+   3254 shirt_woven            True   False  M           19 True
+   3256 blouse                 True   False  M           19 False
+   3258 overshirt              True   False  M           19 True
+   3260 uniform_shirt          True   False  M           19 True
+   3262 t_shirt                True   False  M           18 False
+   3264 polo                   True   False  M           18 True
+   3266 top_sleeveless         True   False  M           18 True
+   3268 vest_top               True   False  M           18 True
+   3270 sweater                True   False  M           14 False
+   3272 twinset                True   False  M           14 False
+   3274 cardigan               True   False  M           14 False
+   3276 knit_gilet             True   False  M           14 False
+   3278 hoodie                 True   False  M           18 False
+   3280 fleece_jacket          True   False  M           18 False
+   3282 dress_simple           True   False  M           18 False
+   3284 shirt_dress            True   False  M           18 False
+   3286 dress_fancy            True   False  M           18 False
+   3288 dress_structured       True   False  M           18 False
+   3290 jumpsuit               True   False  M           18 False
+   3292 dungarees              True   False  M           18 False
+   3294 playsuit               True   False  M           18 False
+   3296 bodysuit               True   False  M           18 False
+   3298 thermal_top            True   False  M           18 False
+   3300 pyjama_set             True   False  M           18 False
+   3302 blazer                 True   False  M           19 False
+   3304 casual_jacket          True   False  M           19 True
+   3306 gilet                  True   False  M           18 True
+   3308 coat                   True   False  M           19 False
+   3310 trench                 True   False  M           19 False
+   3312 parka                  True   False  M           19 False
+   3314 leather_garment        True   False  M           19 False
+   3316 baby_sleepsuit         False  False  O            7 False
+   3320 baby_top               False  False  O           10 False
+
+### POMMaster perdedor pk=739 · codi_client='H11S' · pom_global=LOSPOM-681 · nom='SLEEVE SHORT OPENING'
+REGLES:
+     pk rule_set                               logica      inc   base  break    lbl talla_base act
+   1853 LOS Man Knit — Tops                    LINEAR     0.80   0.80   None   None          M True
+   1861 LOS Teen Girl Knit — Tops              LINEAR     0.50   0.50   1.00     14          8 True
+```
