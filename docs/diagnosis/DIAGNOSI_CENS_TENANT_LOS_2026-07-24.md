@@ -2839,3 +2839,50 @@ L'alfa i el numèric conviuen sense ambigüitat: **el `size_system` els separa**
 | SizingProfile | 18 | **25** |
 | Models amb/sense grading | 580/381 | **579/382** |
 | Watchpoints oberts | 750 | **791** *(+30 Alpha, +11 MAN)* |
+
+---
+
+# P5 — MIRALL A `fhort` · EXECUTAT (2026-07-24)
+
+`manage.py bootstrap_tenant fhort --from los --additive` (dry-run primer, després apply).
+
+## Els 4 invariants
+
+| # | invariant | resultat |
+|---|---|---|
+| 1 | **additiu pur** | **189 creats · 0 ACTUALITZATS · 2.811 intactes · 0 saltats** ✔ |
+| 2 | **`ambigus_al_desti` reportat, mai triat** | **12 claus** amb ≥2 files al destí, totes **saltades intactes** ✔ |
+| 3 | **pk pròpies a `fhort`** | ruleset Alpha: pk **56** a `los` / pk **145** a `fhort`. POMs nous: 738→744, 739→745, 740→746… ✔ |
+| 4 | **xifres coincidents** | Alpha 29/29 ✔ · New Born Bottoms 31/31 ✔ · els 23 POMs nous i rebatejats, **23/23 presents** ✔ |
+
+Els 12 ambigus són tots `POMMaster` per `codi_client` duplicat al destí (`A3`, `BJ`, `C1`, `E4`,
+`F1`, `F2`, `S`×2, `S2`, `U`, `U1`, `V`) — **deute preexistent de `fhort`**, no creat avui.
+
+`destí actiu: onboarding i template intactes` — l'onboarding de `fhort` no s'ha tocat.
+
+## ⚠️ Conseqüència no prevista: 3 POMMaster duplicats a `fhort`
+
+Dos contenidors New Born surten amb **2 regles de més a `fhort`** (Tops 47 vs 45, Onepieces 50 vs 48).
+Investigat: les extres són `SL` i `SL OP` — **els noms VELLS dels POMs que P0 va rebatejar només a
+`los`**. Com que `bootstrap_tenant` aparella `POMMaster` per `codi_client`, en copiar el `GL` de
+`los` no va trobar cap `GL`… i **en va crear un de nou**, al costat del que ja existia amb l'altre nom.
+
+| `pom_global` | a `fhort` ara | |
+|---|---|---|
+| `POM-025` | `SL OP` (pk 297, 25 regles, 35 maps) **+** `H11L` (pk 740, 8 regles, 33 maps) | ⚠️ duplicat |
+| `LOSPOM-681` | `H.12` (pk 686, 2 regles) **+** `H11S` (pk 739, 2 regles) | ⚠️ duplicat |
+| `LOSPOM-558` | `GL` (pk 563, 8 regles, 36 maps) **+** `GCI` (pk 736, 0/0) | ⚠️ duplicat |
+| `POM-020` | només `SL` (pk 292) | ✔ |
+| `LOSPOM-680` | només `GS` (pk 735) | ✔ |
+
+**Compleix la lletra del guard** (additiu, 0 sobreescriptures) **però duplica la semàntica**: la
+mateixa mesura viu sota dos `codi_client` al mateix schema. L'arrel és que **el rebateig de P0 va ser
+només de `los`** i el mirall aparella per nom, no per `pom_global`.
+
+**No ho toco.** Dues sortides possibles, totes dues decisió d'Agus:
+1. **Rebatejar els homòlegs a `fhort`** (`SL OP`→`H11L`, `H.12`→`H11S`, `GL`→`GCI`) i fusionar les
+   regles — el mateix patró de P0, ara al segon schema.
+2. **Deixar-ho** i acceptar que `fhort` parla el vocabulari vell mentre `los` parla el nou.
+
+L'opció 1 és coherent amb «un sol vocabulari» i es pot fer amb el mateix script de P0 apuntat a
+`fhort`. **Pendent de decisió.**
