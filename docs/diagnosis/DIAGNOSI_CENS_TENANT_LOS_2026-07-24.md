@@ -2740,3 +2740,102 @@ del que una lectura natural de «break a 9/10» faria esperar.
 
 Models amb/sense grading: **579 / 382** (sense canvi: P2 és additiu sobre contenidors existents,
 no reassigna cap model). Prova del cotó: **1 ruleset exacte** als 3 combos NEWBORN.
+
+---
+
+# P1 · P2b · P3-FORM — EXECUTATS (3a tanda, 2026-07-24)
+
+## Altes autoritzades — 13 POMs nous (`LOSPOM-688…700`)
+
+`D11H` `D11W` · `T1W` `T1H` `T2W` `T2H` · `ML` `MS` `MB` `MO` · `FL` `FS` · `MD`
+Tots amb POMGlobal + POMMaster + àlies del self. **`GAL`/`GAS` NO creats** (la llei és «un model
+concret ho exigeix», no el màster en abstracte).
+
+## P2b — sembra als contenidors NEWBORN (+14 regles)
+
+| contenidor | abans | després | afegits |
+|---|---|---|---|
+| New Born Tops | 43 | **45** | `D11H` `D11W` |
+| New Born Onepieces | 45 | **48** | `D11H` `D11W` `MD` |
+| New Born Bottoms | 22 | **31** | `D11W` `T1W` `T2W` `T1H` `T2H` `ML` `MS` `MB` `MO` |
+
+**`baby_dress` entra a l'àmbit d'Onepieces** (scope ITEM). `MD`=3.0 es justifica sol: Onepieces ja
+té `M-M79`=4.20 (llargada de pelele), que no és la d'un vestit.
+
+## P1 — `LOS Woman Woven — Bottoms (Alpha)` creat
+
+**29 regles**: 14 del màster BOTTOM ALFA + **15 heretades** del numèric id=54.
+`SizingProfile` creat · **30 models repuntats** (pks 739…776: `shorts` 13, `trousers` 12,
+`skirt_straight` 5) · **30 Watchpoints** `BOTTOMS_ALPHA_POMS_SENSE_FONT_PROPIA` amb la llista dels
+15 POMs prestats · **11 Watchpoints** `MAN_ALPHA_BOTTOMS_SENSE_FONT` (grading MAN **no** tocat).
+
+### ⚠️ El mecanisme de provinença demanat no existeix
+`GradingRuleSet.origen` té **choices tancats** (`CANONICAL`/`CLIENT_RUN`/`IMPORT`): afegir-hi
+`HERETAT_NUMERIC` és canvi de codi, impossible des de PROD. `GradingRule` **no té cap camp** de
+provinença. `Watchpoint` **exigeix FK a Model** — no es pot penjar d'un ruleset.
+**Adoptat**: ruleset amb `origen='CLIENT_RUN'` (que és cert) i el préstec visible als **30
+Watchpoints dels models**, amb els 15 codis a `dades`. És l'únic ancoratge que el model de dades
+permet avui. Si es vol al ruleset, cal afegir el choice a `dev`.
+
+## P3-FORM — 12 regles, distinció POM a POM
+
+| ruleset | regles amb break |
+|---|---|
+| LOS Woman Knit — Tops | **7** |
+| LOS Woman Woven — Bottoms (Alpha) | **5** |
+
+- **Ritme nou** (`2a col ≠ 0` → `label='2XL'`): `BJ` `B` `E` `H6` `H`.
+- **Sostre** (`2a col = 0` → `label='3XL'`): `L3` `L4`.
+- **Alpha** (creix fins a M, pla després → `label='L'`): `D22` `ML` `D11RH` `D11RM` `D11RL`.
+
+### 9 regles saltades: la 1a columna del màster no quadra amb la BD
+No s'ha tocat el seu `increment_base` (llei d'omplir forats) i, en conseqüència, **tampoc se'ls ha
+posat break**: queden LINEAR pures.
+
+| codi | POM | màster | BD |
+|---|---|---|---|
+| `K2` | `AC SH` | 1.2 | 2.0 |
+| `K` | `SH` | 0.4 | 0.8 |
+| `K1` | `SH DR` | 0.2 | 0.3 |
+| `L5` | `NK DR BK` | 0.2 | 0.0 |
+| `A1` | `AC FR` | 0.8 | 1.6 |
+| `A2` | `AC BK` | 0.8 | 1.6 |
+| `GL` | `GL` | 1.0 | 0.5 |
+| `H11L` | `H11L` | 0.3 | 0.5 |
+| `M` | `M-M79` | 1.5 | 1.3 |
+
+**Patró:** `A1`/`A2`/`K`/`K2` són exactament el DOBLE a la BD. Fa pensar en mesura sencera vs mitja
+(el `⚠️` del màster sobre `H=SLEEVE MUSCLE (1/2)` apunta al mateix). **Per a la Montse.**
+
+## P6 — invariants recalculats (post P1/P2b/P3)
+
+| invariant | esperat | real |
+|---|---|---|
+| regles a POM `actiu=False` | 0 | **0** ✔ |
+| regles sense `pom_global` | 0 | **0** ✔ |
+| `talla_base` fora del `size_system` | 0 | **0** ✔ |
+| SizeSystem actius | 10 | **10** ✔ |
+| items sense nom | 0 | **0** ✔ |
+| **parells (item×system) amb 2+ rulesets** | 0 | **0** ✔ (53 parells) |
+
+**Prova del cotó, els dos costats de Woman Bottoms:**
+
+| combo | profiles | rulesets |
+|---|---|---|
+| WOMAN+WOVEN+BOTTOMS · `trousers` · **WOMAN_LOS_01** | 1 | **1** ✔ `…(Alpha)` |
+| WOMAN+WOVEN+BOTTOMS · `trousers` · **WOMAN_NUM_LOS_01** | 1 | **1** ✔ `…Bottoms` |
+
+L'alfa i el numèric conviuen sense ambigüitat: **el `size_system` els separa**.
+
+## Xifres finals del tenant `los`
+
+| | inici de sessió | final |
+|---|---|---|
+| POMMaster | 246 | **262** |
+| POMGlobal `LOSPOM-*` | 149 | **165** |
+| CustomerPOMAlias | 196 | **212** |
+| **GradingRule** | 402 | **460** |
+| GradingRuleSet actius | 19 | **19** *(+1 Alpha, −1 residual)* |
+| SizingProfile | 18 | **25** |
+| Models amb/sense grading | 580/381 | **579/382** |
+| Watchpoints oberts | 750 | **791** *(+30 Alpha, +11 MAN)* |
