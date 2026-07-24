@@ -6,6 +6,7 @@ import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
 import CustomerSelector from '../components/CustomerSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
 import { availableFitsStrict, matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS, FITS } from '../components/grading/gradingAxes'
+import TargetLabel from '../components/grading/TargetLabel'
 import useAuthStore from '../store/auth'
 import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, sizingProfiles } from '../api/endpoints'
 
@@ -546,7 +547,13 @@ export default function ModelWizard() {
             <Field label={t('model_wizard.target')}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {TARGETS.map(tg => (
-                  <Chip key={tg.codi} active={target === tg.codi} onClick={() => onPickTarget(tg.codi)}>{t(`model_wizard.target_${tg.codi}`)}</Chip>
+                  <Chip key={tg.codi} active={target === tg.codi} onClick={() => onPickTarget(tg.codi)}>
+                    <TargetLabel
+                      codi={tg.codi}
+                      nomFallback={tg.nom_en}
+                      franjaColor={target === tg.codi ? 'var(--white)' : 'var(--text-muted)'}
+                    />
+                  </Chip>
                 ))}
               </div>
             </Field>
