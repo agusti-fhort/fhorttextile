@@ -594,6 +594,12 @@ def normalize_fit_type(fit=None):
         return obj
     codi = str(fit).strip().upper()
     codi = FIT_ALIES_MODEL.get(codi, codi)
+    if codi == 'REGULAR':
+        # REGULAR ≡ «cap fit»: és la mateixa branca que fit=None, no una de paral·lela. Sense
+        # això, un schema sense FitType sembrat (avui `los`, i els schemas de test) crearia els
+        # sets amb fit_type NULL i després no els trobaria mai, perquè Model.fit_type val
+        # 'Regular' per defecte (models_app/models.py:204) i seria un fit «desconegut».
+        return FitType.objects.filter(codi='REGULAR').first()
     obj = FitType.objects.filter(codi__iexact=codi).first()
     if obj is None:
         raise FitTypeDesconegut(f'FitType «{fit}» inexistent al catàleg')
@@ -621,6 +627,35 @@ def resolve_item_base_set(item, size_system, fit=None):
         size_system_id=system_id,
         fit_type=fit_obj,
     ).select_related('base_size_definition', 'size_system', 'fit_type').first()
+
+
+# Convenció Montse (llei 2 del BaseSet): la talla base d'un set és la MÉS PETITA del sistema,
+# excepte en adults, on el taller treballa en HOME M/42 i DONA S/38. És SUGGERIMENT de UI: qui
+# crea el set decideix, i el codi no imposa res — per això `suggerir_talla_base` retorna una
+# proposta i mai escriu.
+CONVENCIO_TALLA_BASE = {
+    'MAN': ('M', '42'),
+    'UNISEX_ADULT': ('M', '42'),
+    'WOMAN': ('S', '38'),
+    'MATERNITY': ('S', '38'),
+}
+
+
+def suggerir_talla_base(size_system, target_codi=None):
+    """Proposta de talla base per a un BaseSet nou. Retorna una SizeDefinition o None.
+
+    Cau a la més petita del sistema sempre que el target no sigui d'adult o que l'etiqueta de
+    convenció no existeixi en aquell sistema (p.ex. un sistema numèric on no hi ha cap «M»).
+    """
+    system_id = getattr(size_system, 'pk', size_system)
+    talles = SizeDefinition.objects.filter(size_system_id=system_id).order_by('ordre', 'id')
+    etiquetes = CONVENCIO_TALLA_BASE.get((target_codi or '').strip().upper())
+    if etiquetes:
+        for et in etiquetes:
+            trobada = talles.filter(etiqueta__iexact=et).first()
+            if trobada is not None:
+                return trobada
+    return talles.first()
 
 
 class ItemBaseMeasurement(models.Model):
@@ -685,7 +720,11 @@ class ItemBaseMeasurement(models.Model):
         verbose_name = 'Mesura base d\'item'
         verbose_name_plural = 'Mesures base d\'item'
         ordering = ['garment_type_item', 'pom']
-        unique_together = [('garment_type_item', 'pom')]
+        # B1 (2026-07-25) — la clau passa de (item, pom) a (base_set, pom). Amb la clau V1, un
+        # item amb DOS sets no podria tenir el mateix POM als dos, que és justament el que la
+        # llei del BaseSet condicionat demana (la mateixa peça vestida en dos mons, cadascun amb
+        # el seu valor per al mateix POM). El set ja porta l'item, així que no es perd unicitat.
+        unique_together = [('base_set', 'pom')]
 
     def __str__(self):
         anchor = self.garment_type_item.code if self.garment_type_item_id else '?'

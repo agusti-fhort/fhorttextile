@@ -412,7 +412,7 @@ class ItemBaseMeasurementSerializer(serializers.ModelSerializer):
     class Meta:
         model = ItemBaseMeasurement
         fields = (
-            'id', 'garment_type_item', 'pom', 'pom_codi', 'pom_nom',
+            'id', 'garment_type_item', 'base_set', 'pom', 'pom_codi', 'pom_nom',
             'base_value_cm', 'tol_minus', 'tol_plus', 'nom_fitxa',
             # P9 — PROVINENÇA: read_only sencera. `origen` el determina el CAMÍ d'escriptura
             # (ViewSet = MANUAL · promoció = PROMOTED · loader = IMPORTED), mai el body: si
