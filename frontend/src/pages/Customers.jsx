@@ -152,8 +152,13 @@ export default function Customers() {
           <i className="ti ti-photo" aria-hidden="true" style={{ fontSize: 13 }} />
         </button>
         <button onClick={() => navigate(`/clients/${r.id}`)} disabled={saving} style={actBtn}>{t('clients.open_sheet')}</button>
-        <button onClick={() => toggleActive(r)} disabled={saving} style={actBtn}>{r.active ? t('clients.deactivate') : t('clients.activate')}</button>
-        <button onClick={() => remove(r)} disabled={saving} style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>{t('clients.delete')}</button>
+        {/* El client propi no es pot desactivar ni esborrar: el tenant es quedaria sense casa.
+            Amagar-ho aquí és cortesia — qui blinda de debò és el backend (views_b.py, 409 amb
+            `code: self_customer_protected`). */}
+        {!r.is_self && <>
+          <button onClick={() => toggleActive(r)} disabled={saving} style={actBtn}>{r.active ? t('clients.deactivate') : t('clients.activate')}</button>
+          <button onClick={() => remove(r)} disabled={saving} style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>{t('clients.delete')}</button>
+        </>}
       </span>) }] : []),
   ]
 

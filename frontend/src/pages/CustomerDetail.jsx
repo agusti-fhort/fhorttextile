@@ -39,7 +39,6 @@ export default function CustomerDetail() {
 
   const [sp, setSp] = useSearchParams()
   const tabParam = sp.get('tab')
-  const activeTab = TABS.includes(tabParam) ? tabParam : 'dades'
   const setTab = (tab) => setSp({ tab })
 
   const [customer, setCustomer] = useState(null)
@@ -63,6 +62,12 @@ export default function CustomerDetail() {
 
   if (loading) return <Center>{t('clients.loading')}</Center>
   if (error || !customer) return <Center>{t('clients.error')}</Center>
+
+  // El client propi del tenant (is_self) no es ven res a si mateix: el tab Comercial no hi té
+  // sentit i queda fora. `activeTab` es resol contra els tabs VISIBLES, de manera que entrar per
+  // l'URL directa (?tab=comercial) tampoc hi cau — es queda a Dades.
+  const tabs = customer.is_self ? TABS.filter(x => x !== 'comercial') : TABS
+  const activeTab = tabs.includes(tabParam) ? tabParam : 'dades'
 
   return (
     <div style={{ minWidth: 0 }}>
@@ -88,7 +93,7 @@ export default function CustomerDetail() {
 
       {/* Barra de tabs */}
       <div style={{ display: 'flex', gap: 8, padding: '0.5rem 0', borderBottom: '0.5px solid var(--border)', marginBottom: '1.25rem' }}>
-        {TABS.map(tab => (
+        {tabs.map(tab => (
           <button key={tab} onClick={() => setTab(tab)} style={{
             fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 14px', cursor: 'pointer', borderRadius: 8, border: 'none',
             background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',

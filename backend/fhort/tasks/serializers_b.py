@@ -72,7 +72,10 @@ class CustomerSerializer(serializers.ModelSerializer):
                   'tax_regime', 'vat_number', 'payment_method', 'payment_terms',
                   # Pàgina Clients (annotate): ofertes presentades/acceptades, comandes obertes, albarans.
                   'quotes_sent', 'quotes_accepted', 'orders_open', 'delivery_notes_count']
-        read_only_fields = ['logo']
+        # is_self: la sembra el fixa (migració 0020 / bootstrap_tenant / load_losan_package, tots
+        # per ORM, cap via aquest serializer). Read-only perquè, si no, un PATCH `is_self:false`
+        # desarmaria el blindatge d'esborrat/desactivació del client propi (views_b.py).
+        read_only_fields = ['logo', 'is_self']
 
     def get_quotes_sent(self, o):
         return getattr(o, 'cnt_quotes_sent', 0) or 0
