@@ -37,6 +37,7 @@ export default function CustomerDetail() {
   const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
+  const isStudio = useAuthStore(st => st.tenant?.tipologia === 'estudi')
 
   const [sp, setSp] = useSearchParams()
   const tabParam = sp.get('tab')
@@ -64,7 +65,6 @@ export default function CustomerDetail() {
   if (loading) return <Center>{t('clients.loading')}</Center>
   if (error || !customer) return <Center>{t('clients.error')}</Center>
 
-  const isStudio = useAuthStore(st => st.tenant?.tipologia === 'estudi')
   // El client propi del tenant (is_self) no es ven res a si mateix: el tab Comercial no hi té
   // sentit i queda fora. `activeTab` es resol contra els tabs VISIBLES, de manera que entrar per
   // l'URL directa (?tab=comercial) tampoc hi cau — es queda a Dades.
