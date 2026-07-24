@@ -9,10 +9,15 @@ veure una cosa que és seva.
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from .views_encarrecs import EncarrecViewSet
 from .views_recursos import RecursViewSet
 
 router = DefaultRouter()
+# Les dues cares de la federació, servides des del mateix lloc perquè són la mateixa taula
+# vista des dels dos extrems: `recursos` és el que veu la Marca (amb qui pot comptar) i
+# `encarrecs` el que veu l'Estudi (què li han encomanat). Cadascuna té el seu 403.
 router.register('recursos', RecursViewSet, basename='recurs')
+router.register('encarrecs', EncarrecViewSet, basename='encarrec')
 
 urlpatterns = [
     path('', include(router.urls)),
