@@ -462,6 +462,167 @@ class GarmentPOMMap(models.Model):
         return f'{anchor} · {self.pom.codi_client}'
 
 
+class ItemBaseSet(models.Model):
+    """Sprint BaseSet condicionat (B1, 2026-07-25). Satèl·lit de mesures base de l'Item per MÓN.
+
+    LLEI (Patró C, Agus 2026-07-25): «L'item MAI es parteix. Un sol GTI per peça, un sol superset
+    de POMs. El món viu als satèl·lits: BaseSets condicionats per (item × size_system × fit).»
+    Això substitueix el pointer únic GarmentTypeItem.base_size_definition (V1, llegat a jubilar):
+    un item pot vestir-se en ALPHA_EU_M i en KIDS_CM alhora, i cada món té la seva talla base i
+    els seus valors, sense partir l'item ni duplicar el superset de POMs (GarmentPOMMap).
+
+    CAP scope-node, cap àmbit, cap cascada: el matching és un LOOKUP DIRECTE per la clau única
+    (garment_type_item, size_system, fit_type). Vegeu `resolve_item_base_set()`.
+
+    `fit_type` és NULLABLE per la llei, però la convenció de lookup és REGULAR: tant la creació
+    com el resolver passen pel mateix `normalize_fit_type()`, que tradueix «cap fit» → el FitType
+    REGULAR del schema. NULL només subsisteix en schemas que no tenen FitType sembrat (avui `los`).
+    Sense aquesta normalització compartida un set creat sense fit i una cerca sense fit podrien
+    caure en files diferents. Les DUES constraints d'unicitat (la normal i la parcial per a
+    fit_type IS NULL) hi són perquè a Postgres NULL no participa en un UNIQUE: sense la parcial,
+    dos sets «sense fit» del mateix món podrien conviure.
+
+    db_constraint=False al FK cap a 'tasks' pel mateix motiu que GarmentPOMMap i
+    ItemBaseMeasurement: 'pom' és app SHARED (taula també a 'public') i 'tasks' és tenant-only.
+    """
+    ORIGEN_PROMOCIO = 'PROMOCIO'  # nascut d'una promoció model→set (via canònica de naixement, B3)
+    ORIGEN_MASTER = 'MASTER'      # entrat per paquet/màster de catàleg
+    ORIGEN_MANUAL = 'MANUAL'      # creat a mà al catàleg (ItemAuthoring)
+    ORIGEN_CHOICES = [
+        (ORIGEN_PROMOCIO, 'Promogut des d\'un model'),
+        (ORIGEN_MASTER, 'Màster de catàleg'),
+        (ORIGEN_MANUAL, 'Creat manualment'),
+    ]
+
+    garment_type_item = models.ForeignKey('tasks.GarmentTypeItem', on_delete=models.CASCADE,
+                                          related_name='base_sets', db_constraint=False)
+    size_system = models.ForeignKey(SizeSystem, on_delete=models.PROTECT,
+                                    related_name='item_base_sets')
+    # PROTECT i no SET_NULL: el fit és part de la clau única. Un SET_NULL col·lapsaria el set
+    # dins l'slot «sense fit» del mateix món i podria xocar amb un que ja hi visqués.
+    # Referència per string: FitType es declara més avall en aquest mateix mòdul.
+    fit_type = models.ForeignKey('pom.FitType', on_delete=models.PROTECT, null=True, blank=True,
+                                 related_name='item_base_sets',
+                                 help_text="Buit = Regular (convenció de lookup).")
+    # OBLIGATÒRIA per la llei 2: la talla base es declara EN CREAR el set, i totes les mesures
+    # del set s'hi expressen. PROTECT: esborrar la talla base d'un set viu ha de BLOQUEJAR.
+    base_size_definition = models.ForeignKey('pom.SizeDefinition', on_delete=models.PROTECT,
+                                             related_name='base_set_for_items',
+                                             help_text="Talla base del set (on s'expressen els valors).")
+
+    # Provinença i autoria — mateix patró P9 que ItemBaseMeasurement (2026-07-22).
+    origen = models.CharField(max_length=20, choices=ORIGEN_CHOICES, default=ORIGEN_MANUAL)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='item_base_sets_updated',
+    )
+
+    class Meta:
+        verbose_name = 'Set de mesures base d\'item'
+        verbose_name_plural = 'Sets de mesures base d\'item'
+        ordering = ['garment_type_item', 'size_system', 'fit_type']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['garment_type_item', 'size_system', 'fit_type'],
+                name='uniq_itembaseset_item_system_fit',
+            ),
+            models.UniqueConstraint(
+                fields=['garment_type_item', 'size_system'],
+                condition=models.Q(fit_type__isnull=True),
+                name='uniq_itembaseset_item_system_nofit',
+            ),
+        ]
+
+    def clean(self):
+        # La talla base ha de viure al sistema del set. Mateix esperit que GarmentTypeItem.clean()
+        # (tasks/models.py:341): validació d'ORM, no constraint de BD (cross-table fràgil).
+        super().clean()
+        if self.base_size_definition_id and self.size_system_id:
+            if self.base_size_definition.size_system_id != self.size_system_id:
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    'base_size_definition': (
+                        "La talla base ha de pertànyer al sistema de talles del set.")
+                })
+
+    def __str__(self):
+        anchor = self.garment_type_item.code if self.garment_type_item_id else '?'
+        fit = self.fit_type.codi if self.fit_type_id else 'REGULAR'
+        return f'{anchor} · {self.size_system.codi} · {fit} @ {self.base_size_definition.etiqueta}'
+
+
+class FitTypeDesconegut(ValueError):
+    """El fit demanat no correspon a cap FitType del catàleg d'aquest schema.
+
+    NO és el mateix que «cap fit»: un fit desconegut que es degradés a None cauria a l'slot
+    REGULAR/NULL i el lookup retornaria el set d'un ALTRE món. Val més quedar-se sense set.
+    """
+
+
+# Pont de vocabularis. `Model.fit_type` (models_app/models.py:204) és un CharField amb valors
+# propis en CamelCase i NO coincideix amb `FitType.codi`, que és el catàleg real en majúscules.
+# Els tres primers els resol el match case-insensitive; aquests dos no, i sense el pont
+# «Oversize» seria un fit desconegut. «Tailored» NO hi és a posta: no té equivalent al catàleg
+# de FitType i inventar-l'hi seria decidir producte — vegeu la bandera CTO de l'informe.
+FIT_ALIES_MODEL = {
+    'OVERSIZE': 'OVERSIZED',
+}
+
+
+def normalize_fit_type(fit=None):
+    """Convenció de lookup del BaseSet: «cap fit» → FitType REGULAR d'aquest schema.
+
+    Font ÚNICA compartida per la creació i pel resolver (`resolve_item_base_set`): si les dues
+    bandes no normalitzessin igual, un set creat sense fit i una cerca sense fit cauria en files
+    diferents.
+
+    Accepta una instància de FitType, un id, un codi ('REGULAR', o el vocabulari de Model
+    'Regular'/'Oversize') o None. Retorna None NOMÉS quan no s'ha demanat cap fit i el schema no
+    té FitType REGULAR sembrat (avui `los`); llavors el set viu amb fit_type NULL, cobert per la
+    constraint parcial. Un fit demanat i no trobat aixeca FitTypeDesconegut.
+    """
+    if fit is None or fit == '':
+        return FitType.objects.filter(codi='REGULAR').first()
+    if isinstance(fit, FitType):
+        return fit
+    if isinstance(fit, int):
+        obj = FitType.objects.filter(pk=fit).first()
+        if obj is None:
+            raise FitTypeDesconegut(f'FitType id={fit} inexistent')
+        return obj
+    codi = str(fit).strip().upper()
+    codi = FIT_ALIES_MODEL.get(codi, codi)
+    obj = FitType.objects.filter(codi__iexact=codi).first()
+    if obj is None:
+        raise FitTypeDesconegut(f'FitType «{fit}» inexistent al catàleg')
+    return obj
+
+
+def resolve_item_base_set(item, size_system, fit=None):
+    """Lookup DIRECTE del BaseSet d'un món. Cap heurística, cap fuzzy, cap cascada (llei 1).
+
+    `item` i `size_system` accepten instància o id. `fit` passa per `normalize_fit_type()`.
+    Retorna l'ItemBaseSet o None — i el None és senyal de «món sense set» (naixement mandrós
+    pendent, llei 7), mai un error. Un fit fora de catàleg també és None: aquell món no té set
+    perquè aquell món no existeix al catàleg.
+    """
+    item_id = getattr(item, 'pk', item)
+    system_id = getattr(size_system, 'pk', size_system)
+    if item_id is None or system_id is None:
+        return None
+    try:
+        fit_obj = normalize_fit_type(fit)
+    except FitTypeDesconegut:
+        return None
+    return ItemBaseSet.objects.filter(
+        garment_type_item_id=item_id,
+        size_system_id=system_id,
+        fit_type=fit_obj,
+    ).select_related('base_size_definition', 'size_system', 'fit_type').first()
+
+
 class ItemBaseMeasurement(models.Model):
     """Sprint Mesures Base per Item (P2). Valors base TÍPICS de la plantilla de l'Item, per POM.
 
@@ -476,6 +637,13 @@ class ItemBaseMeasurement(models.Model):
     'public'. El FK és lògic (ORM); el CASCADE l'emula Django al collector."""
     garment_type_item = models.ForeignKey('tasks.GarmentTypeItem', on_delete=models.CASCADE,
                                           related_name='base_measurements', db_constraint=False)
+    # B1 (2026-07-25) — el valor ja no penja de l'item pelat sinó del SET del seu món.
+    # 0047 crea la columna nullable, 0048 hi repunta les files, 0049 la torna NOT NULL (0 òrfenes
+    # verificades a fhort/los/public). `garment_type_item` es manté com a denormalització: és
+    # redundant amb base_set.garment_type_item, però sosté l'unique_together històric i tots els
+    # consumidors V1 mentre convisquin les dues vies.
+    base_set = models.ForeignKey('pom.ItemBaseSet', on_delete=models.CASCADE,
+                                 related_name='measurements')
     pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='item_base_measurements')
     # Valor base a la talla base de l'Item (cm). NULL = POM de l'Item sense valor estàndard encara.
     base_value_cm = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
