@@ -85,6 +85,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const [step, setStep] = useState(1)
   const [sessionToken, setSessionToken] = useState(null)
   const [error, setError] = useState('')
+  // LLEI BEACH — resum no-bloquejant del pas 5: columnes del document fora del sistema de talles
+  // que s'han descartat (l'import ha escrit les conegudes; s'ha creat un watchpoint al model).
+  const [descartades, setDescartades] = useState(null)   // { etiquetes:[], system, model_id }
   const [confirmSizeMap, setConfirmSizeMap] = useState(false)   // 1C-3b: avís abans de saltar a la Library
   const [sizeMapPrefill, setSizeMapPrefill] = useState(null)   // ve de la resposta talles/ (estat PENDENT)
 
@@ -533,6 +536,13 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setConfirming(false); return }
       setGradingConflict(null); setContainerConflict(null); setSorollConflict(null); setManualConflict(null)
       decisionsRef.current = {}
+      // LLEI BEACH: si el backend ha descartat columnes fora del sistema, NO tanquem en silenci —
+      // ho mostrem com a avís (no error) i deixem que el tècnic ho confirmi abans de tancar.
+      if ((data.columnes_descartades || []).length) {
+        setDescartades({ etiquetes: data.columnes_descartades,
+                         system: data.size_system_codi || '', model_id: data.model_id })
+        setConfirming(false); return
+      }
       onComplete && onComplete(data.model_id)
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setConfirming(false)
@@ -547,6 +557,30 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         <div style={{ background: '#fff0f0', border: '1px solid #f0c0c0', color: '#a32d2d',
                       borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
           {error}
+        </div>
+      )}
+
+      {/* LLEI BEACH — avís (no error) del resum: columnes descartades per ser fora del sistema. */}
+      {descartades && (
+        <div style={{ background: 'var(--gold-pale)', border: '1px solid var(--gold)',
+                      color: 'var(--text-main)', borderRadius: 8, padding: '10px 14px',
+                      fontSize: 'var(--fs-body)', marginBottom: 12 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>
+            {t('import_wizard.cols_descartades_title')}
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            {t('import_wizard.cols_descartades_body', {
+              n: descartades.etiquetes.length,
+              system: descartades.system,
+              labels: descartades.etiquetes.join(', '),
+            })}
+          </div>
+          <button type="button"
+            onClick={() => { const id = descartades.model_id; setDescartades(null); onComplete && onComplete(id) }}
+            style={{ padding: '6px 14px', border: '1px solid var(--gold)', borderRadius: 6,
+                     background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
+            {t('import_wizard.cols_descartades_done')}
+          </button>
         </div>
       )}
 
