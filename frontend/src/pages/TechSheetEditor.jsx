@@ -283,6 +283,82 @@ export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, canonical, v
   }
 }
 
+// C1 — extrems REALS d'una cota (primer i últim node on-curve de la línia) i centre de
+// l'etiqueta, en mm de document. Serveix per pintar les nanses. Un `path` corbat pot tenir >2
+// nodes: l'extrem és el primer i l'últim, no segs[1] (cotaEndsMm assumeix recte, per al precedent).
+function cotaHandleEnds(g) {
+  if (!g || g.type !== 'group' || g.pomId == null) return null
+  const kids = g.children || []
+  const linia = kids.find(k => k.type === 'path' || k.type === 'arrow')
+  const text = kids.find(k => k.type === 'text')
+  if (!linia) return null
+  const ax = g.x || 0, ay = g.y || 0
+  let a, b
+  if (linia.type === 'path') {
+    const segs = (linia.paths && linia.paths[0] && linia.paths[0].segments) || []
+    if (segs.length < 2) return null
+    a = { x: ax + (segs[0].x || 0), y: ay + (segs[0].y || 0) }
+    b = { x: ax + (segs[segs.length - 1].x || 0), y: ay + (segs[segs.length - 1].y || 0) }
+  } else {
+    a = { x: ax + (linia.x || 0), y: ay + (linia.y || 0) }
+    b = { x: ax + (linia.x2 || 0), y: ay + (linia.y2 || 0) }
+  }
+  const lc = text
+    ? { x: ax + (text.x || 0) + (text.width || 0) / 2, y: ay + (text.y || 0) + (text.height || 0) / 2 }
+    : null
+  return { a, b, lc }
+}
+
+// C1 — moure UN extrem d'una cota (which='start'|'end') a la posició global (nx,ny) mm, movent
+// NOMÉS la geometria de la línia i mai escalant res. Manté l'invariant «origen del grup = extrem
+// A» (re-localitza tots els nodes) i reposiciona l'etiqueta al nou punt mig CONSERVANT el seu
+// desplaçament manual respecte del centre (el text no es deforma mai). Retorna el patch o null.
+function resizeCotaEndpoint(cota, which, nx, ny) {
+  const kids = cota.children || []
+  const ax = cota.x || 0, ay = cota.y || 0
+  const linia = kids.find(k => k.type === 'path' || k.type === 'arrow')
+  const text = kids.find(k => k.type === 'text')
+  if (!linia) return null
+  const isPath = linia.type === 'path'
+  // Nodes en GLOBAL (mm) abans de moure.
+  let origG
+  if (isPath) {
+    const segs = (linia.paths && linia.paths[0] && linia.paths[0].segments) || []
+    if (segs.length < 2) return null
+    origG = segs.map(s => ({ x: ax + (s.x || 0), y: ay + (s.y || 0) }))
+  } else {
+    origG = [{ x: ax + (linia.x || 0), y: ay + (linia.y || 0) }, { x: ax + (linia.x2 || 0), y: ay + (linia.y2 || 0) }]
+  }
+  const oldA = origG[0], oldB = origG[origG.length - 1]
+  const oldMid = { x: (oldA.x + oldB.x) / 2, y: (oldA.y + oldB.y) / 2 }
+  const oldLc = text
+    ? { x: ax + (text.x || 0) + (text.width || 0) / 2, y: ay + (text.y || 0) + (text.height || 0) / 2 }
+    : oldMid
+  const off = { x: oldLc.x - oldMid.x, y: oldLc.y - oldMid.y }
+  // Mou l'extrem triat; l'origen nou és el primer node (invariant).
+  const moveIdx = which === 'start' ? 0 : origG.length - 1
+  const newG = origG.map((n, i) => (i === moveIdx ? { x: nx, y: ny } : n))
+  const origin = newG[0]
+  const newMid = { x: (newG[0].x + newG[newG.length - 1].x) / 2, y: (newG[0].y + newG[newG.length - 1].y) / 2 }
+  const newLc = { x: newMid.x + off.x, y: newMid.y + off.y }
+  const local = newG.map(n => ({ x: n.x - origin.x, y: n.y - origin.y }))
+  const children = kids.map(k => {
+    if (k === linia) {
+      if (isPath) {
+        const segs = k.paths[0].segments
+        return { ...k, paths: [{ ...k.paths[0], segments: segs.map((s, i) => ({ ...s, x: local[i].x, y: local[i].y })) }] }
+      }
+      return { ...k, x: local[0].x, y: local[0].y, x2: local[1].x, y2: local[1].y }
+    }
+    if (k === text) {
+      const tw = k.width || 0, th = k.height || 0
+      return { ...k, x: (newLc.x - origin.x) - tw / 2, y: (newLc.y - origin.y) - th / 2 }
+    }
+    return k
+  })
+  return { x: origin.x, y: origin.y, children }
+}
+
 function serializeObject(obj) {
   const base = obj.type === 'data_block' ? (({ src, ...rest }) => rest)(obj) : obj
   return mapObjectTree(base, o => (o.type === 'data_block' ? (({ src, ...rest }) => rest)(o) : o))
@@ -1348,7 +1424,10 @@ function bakePathEntries(entries, sx, sy, deg) {
 }
 
 function blocksTransform(obj) {
-  return obj && (obj.type === 'line' || obj.type === 'arrow' || obj.type === 'field' || (obj.type === 'text' && obj.bgFill))
+  // C1 — una cota (grup amb pomId) NO fa servir el Transformer d'escala/rotació: s'edita amb
+  // nanses d'extrem (no escalat lliure que distorsioni el text ni la geometria).
+  return obj && (obj.type === 'line' || obj.type === 'arrow' || obj.type === 'field'
+    || (obj.type === 'text' && obj.bgFill) || (obj.type === 'group' && obj.pomId != null))
 }
 
 function commonValue(objects, key) {
@@ -1641,6 +1720,32 @@ function EndpointHandles({ obj, onEndpointDrag }) {
   return <>{mk('start', start)}{mk('end', end)}</>
 }
 
+// C1 — nanses d'una COTA seleccionada: dos extrems (cercles, com line/arrow) + una nansa
+// quadrada per arrossegar l'ETIQUETA sense tocar la línia. Substitueixen el Transformer d'escala
+// (que distorsionaria el text). Es pinten a l'espai del Layer (px de pàgina), sobre la cota.
+function CotaHandles({ obj, onEndpointDrag, onLabelDrag }) {
+  const ends = cotaHandleEnds(obj)
+  if (!ends) return null
+  const A = { x: toPx(ends.a.x), y: toPx(ends.a.y) }
+  const B = { x: toPx(ends.b.x), y: toPx(ends.b.y) }
+  const mk = (which, p) => (
+    <Circle key={which} x={p.x} y={p.y} radius={5} fill={KONVA_COL.white} stroke={KONVA_COL.gold} strokeWidth={1.5}
+      draggable onMouseDown={ev => { ev.cancelBubble = true }}
+      onDragMove={onEndpointDrag(which)} onDragEnd={onEndpointDrag(which)} />
+  )
+  return (
+    <>
+      {mk('start', A)}{mk('end', B)}
+      {ends.lc && onLabelDrag && (
+        <Rect x={toPx(ends.lc.x) - 4} y={toPx(ends.lc.y) - 4} width={8} height={8} cornerRadius={2}
+          fill={KONVA_COL.gold} stroke={KONVA_COL.white} strokeWidth={1}
+          draggable onMouseDown={ev => { ev.cancelBubble = true }}
+          onDragMove={onLabelDrag} onDragEnd={onLabelDrag} />
+      )}
+    </>
+  )
+}
+
 function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSelect, subpathTool }) {
   const paths = obj.paths || []
   return (
@@ -1780,7 +1885,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
       // Mentre es corba la fletxa d'una cota, l'etiqueta s'aparta: taparia els nodes que
       // s'estan tocant, justament al mig del traç. Torna sola en sortir de l'edició.
       .filter(child => child.visible !== false && !(hideTextChildren && child.type === 'text'))
-    return (
+    const groupNode = (
       <Group {...common} onDblClick={onDblGroup} onDblTap={onDblGroup}>
         {orderedChildren.map(child => (
           <ObjectNode key={child.id} obj={child} src={child.src}
@@ -1798,6 +1903,12 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
         ))}
       </Group>
     )
+    // C1 — cota seleccionada (i NO entrada per editar nodes): nanses d'extrem + drag d'etiqueta,
+    // mai el Transformer d'escala global. S'aplica a TOTES les cotes (manual, precedent o IA).
+    if (selected && !entered && obj.pomId != null && onCotaEndpointDrag) {
+      return <>{groupNode}<CotaHandles obj={obj} onEndpointDrag={onCotaEndpointDrag} onLabelDrag={onCotaLabelDrag} /></>
+    }
+    return groupNode
   }
   return null
 }
@@ -2683,12 +2794,15 @@ export default function TechSheetEditor() {
     const w = Math.max(0, b.maxX - b.minX)
     const h = Math.max(0, b.maxY - b.minY)
     const positionByBounds = obj.type === 'line' || obj.type === 'arrow'
+    // C1 — una cota (grup amb pomId) no és redimensionable pel panell (W/H escalarien i
+    // distorsionarien el text): s'edita amb nanses d'extrem. La posició X/Y sí mou tota la cota.
+    const esCota = obj.type === 'group' && obj.pomId != null
     return {
       width: w,
       height: h,
       x: positionByBounds ? b.minX : (obj.x || 0),
       y: positionByBounds ? b.minY : (obj.y || 0),
-      canResize: !['line', 'arrow'].includes(obj.type),
+      canResize: !['line', 'arrow'].includes(obj.type) && !esCota,
     }
   }
   const moveObjectTo = (obj, key, value) => {
@@ -3389,6 +3503,35 @@ export default function TechSheetEditor() {
       else { pts[pts.length - 2] = mx; pts[pts.length - 1] = my }
       updateObject(obj.id, { points: pts })
     }
+  }
+  // C1 — arrossegar la nansa d'un extrem de cota mou NOMÉS aquell extrem (la línia), mantenint
+  // l'etiqueta ancorada al punt mig sense deformar-la. Shift encaixa a 45° respecte l'altre extrem.
+  const handleCotaEndpointDrag = (obj) => (which) => (e) => {
+    const node = e.target
+    let px = { x: node.x(), y: node.y() }
+    if (e.evt?.shiftKey) {
+      const ends = cotaHandleEnds(obj)
+      if (ends) {
+        const other = which === 'start' ? ends.b : ends.a
+        px = snap45(toPx(other.x), toPx(other.y), px.x, px.y)
+      }
+    }
+    const patch = resizeCotaEndpoint(obj, which, toMm(px.x), toMm(px.y))
+    if (patch) updateObject(obj.id, patch)
+  }
+  // C1 — arrossegar la nansa de l'etiqueta la reposiciona (el text segueix l'ancoratge) sense
+  // tocar la línia. Es desa a l'offset local del fill text; mai n'escala la mida.
+  const handleCotaLabelDrag = (obj) => (e) => {
+    const node = e.target
+    const cx = toMm(node.x() + 4), cy = toMm(node.y() + 4)   // centre de la nansa (8×8)
+    const kids = obj.children || []
+    const ti = kids.findIndex(k => k.type === 'text')
+    if (ti < 0) return
+    const tobj = kids[ti]
+    const tw = tobj.width || 0, th = tobj.height || 0
+    const nk = kids.slice()
+    nk[ti] = { ...tobj, x: (cx - (obj.x || 0)) - tw / 2, y: (cy - (obj.y || 0)) - th / 2 }
+    updateObject(obj.id, { children: nk })
   }
   const handleTransformEnd = (obj) => (e) => {
     const node = e.target
@@ -5805,7 +5948,9 @@ export default function TechSheetEditor() {
                     activeSubIndex={activeSubpath?.objId === o.id ? activeSubpath.index : null}
                     subpathTool={tool === 'subpath'}
                     onSubSelect={(i) => { if (!selectedIds.includes(o.id)) selectOnly(o.id); setActiveSubpath({ objId: o.id, index: i }) }}
-                    onEndpointDrag={handleEndpointDrag(o)} />
+                    onEndpointDrag={handleEndpointDrag(o)}
+                    onCotaEndpointDrag={handleCotaEndpointDrag(o)}
+                    onCotaLabelDrag={handleCotaLabelDrag(o)} />
                 ))}
                 {/* Forma temporal mentre es dibuixa */}
                 {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}
