@@ -3730,7 +3730,10 @@ export default function TechSheetEditor() {
     const maxH = 78
     const width = ratio >= maxW / maxH ? maxW : maxH * ratio
     const height = width / ratio
-    if (['sketch_svg', 'path'].includes(selObj?.type)) {
+    // Reemplaçar l'SVG in-situ: també un grup-sketch (import amb rols separats) es pot rebuscar.
+    // El convertit clara les claus de la forma contrària (`paths`/`children` a `undefined`), així
+    // que el merge d'`updateObject` no deixa geometria rància ni de path ni de grup.
+    if (['sketch_svg', 'path'].includes(selObj?.type) || (selObj?.type === 'group' && selObj?.kind === 'sketch')) {
       const source = {
         id: selObj.id, type: 'sketch_svg', layer: selObj.layer || 'free',
         x: selObj.x || 54, y: selObj.y || 44,
@@ -3741,7 +3744,9 @@ export default function TechSheetEditor() {
       updateObject(selObj.id, { ...converted, ...extra })
       setEditingText(null)
       setTool('select')
-      setEditingFlatId(selObj.id)
+      // Un grup no és editable per nodes directament (cal entrar-hi i triar un fill): no hi obrim
+      // el sub-editor. Un path sí.
+      setEditingFlatId(converted.type === 'group' ? null : selObj.id)
       return
     }
     const source = {
@@ -4332,7 +4337,12 @@ export default function TechSheetEditor() {
   // ── F2 (precedent de col·locació de cotes) · enllaç OBJECT-LEVEL ────────────
   // Objectes del croquis de la pàgina actual. Un objecte participa en F2 si porta la seva
   // procedència de catàleg (`sourceItemFitxer`, posada a l'import) i una vista assignada.
-  const sketchObjs = curObjs.filter(o => SKETCH_OBJ_TYPES.includes(o.type))
+  // Un import SVG amb rols separables retorna un GRUP (`kind:'sketch'`) en comptes d'un path
+  // monolític; la seva metadata de procedència viu al grup i `objectBounds` ja en calcula la
+  // bbox del contingut, així que compta com a croquis igual que un path. El discriminant
+  // `kind==='sketch'` deixa fora les cotes (grups amb `pomId`) i els grups d'usuari.
+  const isSketchObj = (o) => SKETCH_OBJ_TYPES.includes(o.type) || (o.type === 'group' && o.kind === 'sketch')
+  const sketchObjs = curObjs.filter(isSketchObj)
   const assignaVista = (objId, slot) => updateObject(objId, { viewSlot: slot || undefined })
   // Es pot desar precedent si algun objecte del croquis ve del catàleg i té vista.
   const potDesarPrecedent = sketchObjs.some(o => o.sourceItemFitxer && o.viewSlot)
