@@ -75,7 +75,11 @@ const navGroups = [
     { to: '/recursos', labelKey: 'nav.recursos', icon: 'ti-affiliate', cap: 'brand_configure' },
     // P8 — ENCÀRRECS: què m'han assignat els Brands vinculats. Gate simètric del de Recursos
     // ('studio_configure'): només en un tenant 'estudi' I amb CONFIGURE.
-    { to: '/encarrecs', labelKey: 'nav.encarrecs', icon: 'ti-inbox', cap: 'studio_configure' },
+    // La safata és feina de TALLER, no de configuració: el backend (EncarrecViewSet.list) només
+    // demana EsEstudi, sense CONFIGURE. El menú s'alinea amb l'endpoint i es gateja amb `isStudio`
+    // sol — així un operari d'estudi sense CONFIGURE veu la seva safata (abans amagada tot i poder
+    // entrar-hi per URL). El cas 'studio_configure' es manté per a qui el necessiti.
+    { to: '/encarrecs', labelKey: 'nav.encarrecs', icon: 'ti-inbox', cap: 'studio' },
     { to: '/configuracio/calendari', labelKey: 'nav.company_calendar', icon: 'ti-calendar-cog', cap: 'configure' },
     { to: '/configuracio/usuaris', labelKey: 'nav.users', icon: 'ti-users', cap: 'manage_users' },
     // G9 "consulta sí / edició no": catàleg de tasques consultable per a tothom (sense `cap`).
@@ -245,6 +249,7 @@ export default function Sidebar() {
         case 'execute': return canExecute
         case 'configure': return canConfigure
         case 'brand_configure': return isBrand && canConfigure
+        case 'studio': return isStudio
         case 'studio_configure': return isStudio && canConfigure
         case 'manage_users': return canManageUsers
         case 'onboarding': return onboardingPct < 100
