@@ -1778,13 +1778,20 @@ function inlineSvgClassStyles(svgText) {
       return ''
     })
   })
-  const paintAttrs = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'fill-rule', 'clip-rule']
-  doc.querySelectorAll('path, polygon, polyline, line, rect').forEach(el => {
+  // `clip-path` s'inline perquè Paper importSVG NO llegeix classes CSS del <style>: sense
+  // inline-ar-lo, el clip d'un <g class> es perd i el que amagava (p.ex. la cua de la cremallera
+  // sota el baix) es fa visible. `g` entra a la llista perquè el clip viu típicament al grup.
+  const paintAttrs = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'fill-rule', 'clip-rule', 'clip-path']
+  const clipAttrs = ['clip-path', 'clip-rule']
+  doc.querySelectorAll('path, polygon, polyline, line, rect, g').forEach(el => {
     const merged = {}
     ;(el.getAttribute('class') || '').split(/\s+/).filter(Boolean).forEach(className => {
       Object.assign(merged, classStyles[className] || {})
     })
-    paintAttrs.forEach(attr => {
+    // Els <g> reben NOMÉS el clip (no la pintura, per no alterar l'herència de color dels fills);
+    // les formes reben tota la pintura + el clip. Acotat: cap atribut nou fora de clip-path.
+    const attrs = el.tagName.toLowerCase() === 'g' ? clipAttrs : paintAttrs
+    attrs.forEach(attr => {
       if (merged[attr] != null && !el.hasAttribute(attr)) el.setAttribute(attr, merged[attr])
     })
   })
@@ -1839,15 +1846,52 @@ async function legacySketchSvgToPath(obj, scope) {
       }
     })
   }
-  // Recorre l'arbre importat sense aplanar els CompoundPath (que porten els forats als fills).
-  const collect = (item, out) => {
+  // ── Retall del clipPath a l'IMPORT (cua de cremallera) ──────────────────────
+  // Paper conserva el clip com un Group amb `clipped=true` i una màscara (primer fill,
+  // `clipMask`). El clip NO es baixa a geometria en render → l'hem de COURE aquí (booleana)
+  // perquè el resultat sigui fidel als dos renders, al round-trip i al PDF de franc. Triatge per
+  // bounds (contenció): només els fills que CREUEN la vora fan intersect. Mai perdre geometria en
+  // silenci: si una booleana falla, es conserva el fill sencer i es compta.
+  let clipDins = 0, clipFora = 0, clipCreua = 0, clipFallits = 0
+  const retallaAmbMascara = (item, mask) => {
+    if (!mask) return item
+    let ib, mb
+    try { ib = item.bounds; mb = mask.bounds } catch { return item }
+    if (!mb.intersects(ib)) { clipFora += 1; return null }        // totalment FORA → descartar
+    if (mb.contains(ib)) { clipDins += 1; return item }           // totalment DINS → tal qual
+    clipCreua += 1
+    try {
+      const res = item.intersect(mask, { insert: false, trace: true })
+      if (!res) return null
+      if (typeof res.isEmpty === 'function' && res.isEmpty()) return null
+      res.style = item.style   // la booleana no sempre hereta la pintura de l'original
+      return res
+    } catch { clipFallits += 1; return item }                     // fallada → conservar sencer
+  }
+  // Recorre l'arbre sense aplanar els CompoundPath (forats als fills). En entrar en un grup
+  // clipat, aplica la seva màscara als fills; la màscara mai s'emet com a traç.
+  const collect = (item, out, mask) => {
+    if (item.clipMask) return                                     // una màscara no és contingut
     const cn = item.className
-    if (cn === 'CompoundPath') out.push({ compound: item })
-    else if (cn === 'Path') out.push({ path: item })
-    else if (item.children) item.children.forEach(c => collect(c, out))
+    if (cn === 'CompoundPath' || cn === 'Path') {
+      const r = retallaAmbMascara(item, mask)
+      if (r) out.push(r.className === 'CompoundPath' ? { compound: r } : { path: r })
+      return
+    }
+    const kids = item.children
+    if (!kids) return
+    // Grup clipat: 1r fill = màscara (clipMask), la resta = contingut que l'hereta. Sense clip,
+    // hereta la màscara del context. Nested-clip: preval la interior (aquest fitxer en té 1).
+    const teMascara = item.clipped && kids.length && kids[0].clipMask
+    const m = teMascara ? kids[0] : mask
+    ;(teMascara ? kids.slice(1) : kids).forEach(c => collect(c, out, m))
   }
   const collected = []
-  collect(imported, collected)
+  collect(imported, collected, null)
+  if (clipDins + clipFora + clipCreua + clipFallits > 0) {
+    // Report del triatge (visible a la consola del navegador; mai perdre geometria en silenci).
+    console.info(`[import SVG · clip] dins=${clipDins} fora=${clipFora} creuen=${clipCreua} fallits=${clipFallits}`)
+  }
   const paths = collected.map(entry => {
     if (entry.compound) {
       const compound = entry.compound
