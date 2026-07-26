@@ -1818,14 +1818,27 @@ async function legacySketchSvgToPath(obj, scope) {
   const scaleX = scale
   const scaleY = scale
   const strokeScale = scale
-  const mapSegs = (paperPath) => paperPath.segments.map(seg => ({
-    x: (seg.point.x - bounds.x) * scaleX,
-    y: (seg.point.y - bounds.y) * scaleY,
-    inX: seg.handleIn.x * scaleX,
-    inY: seg.handleIn.y * scaleY,
-    outX: seg.handleOut.x * scaleX,
-    outY: seg.handleOut.y * scaleY,
-  }))
+  const mapSegs = (paperPath) => {
+    // globalMatrix inclou els transforms que Paper conserva SENSE bakejar (p.ex. un <rect> rotat
+    // no pot ser una Shape paramètrica → li queda la matriu). Sense això, translate/rotate es
+    // perdien i l'element sortia desplaçat (cas cremallera VEGA-3, ANNEX de la diagnosi). És
+    // identitat si Paper ja havia coït el transform → no-op per als elements sense transform. Les
+    // nanses són VECTORS: transformar punt+nansa i restar el punt transformat.
+    const m = paperPath.globalMatrix
+    return paperPath.segments.map(seg => {
+      const p = m.transform(seg.point)
+      const hi = m.transform(seg.point.add(seg.handleIn)).subtract(p)
+      const ho = m.transform(seg.point.add(seg.handleOut)).subtract(p)
+      return {
+        x: (p.x - bounds.x) * scaleX,
+        y: (p.y - bounds.y) * scaleY,
+        inX: hi.x * scaleX,
+        inY: hi.y * scaleY,
+        outX: ho.x * scaleX,
+        outY: ho.y * scaleY,
+      }
+    })
+  }
   // Recorre l'arbre importat sense aplanar els CompoundPath (que porten els forats als fills).
   const collect = (item, out) => {
     const cn = item.className
