@@ -1356,6 +1356,44 @@ function commonValue(objects, key) {
   return objects.every(o => (o?.[key] ?? '') === first) ? first : ''
 }
 
+// ── S3 · Propietats de pintura comunes en multiselecció ─────────────────────────────────
+// Quins types suporten cada canal (REGLA 3 · aplicabilitat per type). Idèntics als filtres
+// que ja feia servir el panell, ara hoisted per compartir-los amb la lògica recursiva.
+const STROKE_PAINT_TYPES = ['rect', 'ellipse', 'line', 'arrow', 'path']
+const FILL_PAINT_TYPES = ['text', 'rect', 'ellipse', 'path']
+const paintTypeSupports = (type, key) => (key === 'fill' ? FILL_PAINT_TYPES : STROKE_PAINT_TYPES).includes(type)
+// Un grup (sketch inclòs) suporta un canal si algun descendent el suporta.
+function supportsPaint(o, key) {
+  return paintTypeSupports(o.type, key) || (o.type === 'group' && (o.children || []).some(c => supportsPaint(c, key)))
+}
+// Aplica un patch de pintura {stroke?|fill?|strokeWidth?} a un objecte respectant el contracte
+// de ftt/paint i, en grups, RECURSIVAMENT als fills (comportament Illustrator, REGLA 4). Només
+// escriu les claus del patch → canviar el color no arrossega gruix ni dash (REGLA 2). Els fills
+// que no suporten una clau l'ometen (REGLA 3). A un `path`, netejar els sobreescrits de subpath
+// perquè el valor nou no quedi amagat (mateixa llei que patchPintura del panell d'1 sol objecte).
+function applyPaintTree(o, patch) {
+  if (o.type === 'group') return { ...o, children: (o.children || []).map(c => applyPaintTree(c, patch)) }
+  const keys = {}
+  for (const k of Object.keys(patch)) if (paintTypeSupports(o.type, k)) keys[k] = patch[k]
+  if (o.type === 'arrow' && 'stroke' in keys) keys.fill = keys.stroke   // la punta segueix el traç
+  if (!Object.keys(keys).length) return o
+  return Array.isArray(o.paths)
+    ? { ...o, ...keys, paths: o.paths.map(p => sensePintura(p, Object.keys(keys))) }
+    : { ...o, ...keys }
+}
+// Lectura INDETERMINADA (REGLA 1): aplana l'arbre a fulles pintables i compara el valor RESOLT
+// (no el camp cru: un `path` hereta del subpath, un grup no té pintura pròpia). Difereixen → ''.
+const paintLeaves = (o) => (o.type === 'group' ? (o.children || []).flatMap(paintLeaves) : [o])
+function commonPaint(objects, key) {
+  const leaves = objects.flatMap(paintLeaves).filter(o => paintTypeSupports(o.type, key))
+  if (!leaves.length) return ''
+  const read = (o) => (key === 'fill' ? resolFill(o, o.paths?.[0])
+    : key === 'strokeWidth' ? resolStrokeWidth(o, o.paths?.[0])
+    : resolStroke(o, o.paths?.[0])) ?? ''
+  const first = read(leaves[0])
+  return leaves.every(o => read(o) === first) ? first : ''
+}
+
 async function addObjectToLayer(layer, obj, ctx) {
   if (obj.type === 'group') {
     const g = new Konva.Group({
@@ -4598,8 +4636,9 @@ export default function TechSheetEditor() {
   // sub-editor a `nodeSel` — ja hi era i no el llegia ningú.
   const pinturaViva = panelLockedForEdit && nodeSel?.strokeWidth != null ? nodeSel : null
   const multiSelected = selectedObjects.length > 1
-  const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
-  const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse', 'path'].includes(o.type))
+  // S3 · inclou grups (sketch inclòs): la pintura s'hi aplica recursivament (applyPaintTree).
+  const multiStroke = selectedObjects.filter(o => supportsPaint(o, 'stroke'))
+  const multiFill = selectedObjects.filter(o => supportsPaint(o, 'fill'))
   const multiPosition = selectedObjects.filter(o => o.type !== 'line' && o.type !== 'arrow')
   // B1 · UN BOTÓ, DOS MOTORS. Agrupar i Desagrupar no canvien de lloc ni es dupliquen: miren
   // què hi ha seleccionat i trien el motor. Tots els seleccionats són paths → compound
@@ -4643,8 +4682,9 @@ export default function TechSheetEditor() {
     if (major) leftTicks.push(<text key={`tl${mm}`} x={1} y={y + 8} fontSize={7} fill={COL.textMuted}>{mm}</text>)
   }
   if (cursorMm) leftTicks.push(<line key="cur" x1={0} y1={sy(cursorMm.y)} x2={RULER_SIZE} y2={sy(cursorMm.y)} stroke={COL.gold} strokeWidth={1} />)
-  const multiStrokeValue = commonValue(multiStroke, 'stroke')
-  const multiFillValue = commonValue(multiFill, 'fill')
+  const multiStrokeValue = commonPaint(multiStroke, 'stroke')
+  const multiFillValue = commonPaint(multiFill, 'fill')
+  const multiStrokeWValue = commonPaint(multiStroke, 'strokeWidth')   // S3 · gruix comú (indeterminat = '')
   const multiX = commonValue(multiPosition, 'x')
   const multiY = commonValue(multiPosition, 'y')
   const editingFlat = editingFlatId
@@ -5794,17 +5834,28 @@ export default function TechSheetEditor() {
               <>
                 <SectionTitle>{t('tech_sheet.selected_objects', { n: selectedObjects.length })}</SectionTitle>
                 {multiStroke.length > 0 && (
-                  <div style={propLabel}>{t('tech_sheet.stroke_color')}
-                    {!multiStrokeValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
-                    <ColorPicker docColors={docPalette} value={multiStrokeValue || KONVA_COL.textMain}
-                      onChange={c => updateObjects(multiStroke.map(o => o.id), o => ({ stroke: c, ...(o.type === 'arrow' ? { fill: c } : {}) }))} />
-                  </div>
+                  <>
+                    <div style={propLabel}>{t('tech_sheet.stroke_color')}
+                      {!multiStrokeValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
+                      <ColorPicker docColors={docPalette} value={multiStrokeValue || KONVA_COL.textMain}
+                        onChange={c => updateObjects(multiStroke.map(o => o.id), o => applyPaintTree(o, { stroke: c }))} />
+                    </div>
+                    {/* S3 · gruix comú: buit si difereixen (placeholder «—»), s'escriu només en tocar-lo. */}
+                    <label style={propLabel}>{t('tech_sheet.stroke_width')}
+                      <input type="number" min={0.1} max={5} step={0.1}
+                        value={multiStrokeWValue === '' ? '' : Math.round(Number(multiStrokeWValue) * 10) / 10}
+                        placeholder={t('tech_sheet.mixed_values')}
+                        onChange={e => { const n = Number(e.target.value)
+                          if (e.target.value === '' || !Number.isFinite(n)) return
+                          updateObjects(multiStroke.map(o => o.id), o => applyPaintTree(o, { strokeWidth: Math.max(0, n) })) }} style={propInput} />
+                    </label>
+                  </>
                 )}
                 {multiFill.length > 0 && (
                   <div style={propLabel}>{t('tech_sheet.fill')}
                     {!multiFillValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
                     <ColorPicker docColors={docPalette} value={multiFillValue || KONVA_COL.white}
-                      onChange={c => updateObjects(multiFill.map(o => o.id), { fill: c })} />
+                      onChange={c => updateObjects(multiFill.map(o => o.id), o => applyPaintTree(o, { fill: c }))} />
                   </div>
                 )}
                 {multiPosition.length === selectedObjects.length && (
