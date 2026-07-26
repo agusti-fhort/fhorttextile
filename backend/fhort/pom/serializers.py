@@ -15,6 +15,7 @@ from .models import (
     POMMaster,
     SizeDefinition,
     SizeSystem,
+    Target,
 )
 
 
@@ -102,17 +103,21 @@ class SizeDefinitionSerializer(serializers.ModelSerializer):
 
 class SizeSystemSerializer(serializers.ModelSerializer):
     talles = SizeDefinitionSerializer(many=True, read_only=True)
-    # LLEI 5 CAPES: codis de target aplicables (M2M) — read-only, additiu. Permet al pas «Talles»
-    # del wizard filtrar SizeSystems purs pel target de la peça sense un lookup codi→id extra.
-    # Llista buida = sistema universal (aplica a qualsevol target).
-    target_codis = serializers.SerializerMethodField()
+    # LLEI 5 CAPES: codis de target aplicables (M2M). Sprint TARGETS-EDITABLES (2026-07-26):
+    # passa a ESCRIVIBLE per codi (abans read-only SerializerMethodField) — un sistema pot servir
+    # múltiples targets sense clonar-lo (diagnosi DIAGNOSI_SIZE_SYSTEMS_CARDINALITAT). Zero contacte
+    # amb el motor de grading, que no llegeix mai `targets`. La forma JSON de lectura no canvia
+    # (llista de codis). Buit PERMÈS (M2M blank=True) però NO és "universal" per contracte: el
+    # wizard mostra només escales amb el target de la peça assignat (comportament actual intacte).
+    # SlugRelatedField ja valida que cada codi existeixi a Target.
+    target_codis = serializers.SlugRelatedField(
+        many=True, slug_field='codi', source='targets',
+        queryset=Target.objects.all(), required=False,
+    )
 
     class Meta:
         model = SizeSystem
         fields = ('id', 'codi', 'nom', 'descripcio', 'actiu', 'talles', 'target_codis', 'customer_codi')
-
-    def get_target_codis(self, obj):
-        return [tg.codi for tg in obj.targets.all()]
 
 
 class GarmentTypeSerializer(serializers.ModelSerializer):

@@ -784,10 +784,14 @@ def size_map_create_view(request):
                         age_months_max=d.age_months_max, body_height_cm=d.body_height_cm,
                     )
             else:  # CREAR
+                # Sprint TARGETS-EDITABLES (2026-07-26): el target JA NO es cus dins codi/nom d'un
+                # sistema NOU — un sistema serveix múltiples targets (M2M), coure'n un a la identitat
+                # és el que generava el clonatge per target (diagnosi CARDINALITAT). El vincle al
+                # target segueix vivint al M2M (sota). Els sistemes EXISTENTS no es reanomenen.
                 cust = _customer_label(customer_codi)
-                base_code = f"{target_codi or 'SYS'}_{customer_codi}" if customer_codi else (target_codi or 'SYS')
+                base_code = f"SYS_{customer_codi}" if customer_codi else 'SYS'
                 codi, nn = _unique_size_system_code(base_code)
-                nom = nom_custom or f"{(_target_nom(target) if target else target_codi) or 'Sistema'} {base_unit} — {cust} Run {nn:02d}".strip()
+                nom = nom_custom or f"Sistema {base_unit} — {cust} Run {nn:02d}".strip()
                 ss = SizeSystem.objects.create(
                     codi=codi, nom=nom, base_unit=base_unit,
                     actiu=True, customer_codi=customer_codi,
