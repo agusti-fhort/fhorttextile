@@ -102,7 +102,7 @@ export const COL = {
 // CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
 // build*Primitives, Rects de fons/selecció, text_box, previews) DEUEN usar aquests literals,
 // no COL (que és per al DOM, on var() sí resol). Valors = mateixos hex que els tokens de :root.
-// `pom` = vermell saturat de la COTA DE POM al croquis (fletxa + fons de l'etiqueta). Reusa el
+// `pom` = vermell saturat de la COTA DE POM al croquis (traç de la fletxa + text de l'etiqueta). Reusa el
 // literal que ja fa servir la columna de nomenclatura de les taules snapshot (TBL.REF, més avall)
 // per no introduir un segon vermell al mateix llenç.
 // Y2 — SNAP DE ROTACIÓ A 45° AMB SHIFT, el gest d'Illustrator/Figma: sense Shift, l'angle és
@@ -158,7 +158,6 @@ export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.r
 // obj.width — que és el que textBoxParts ja consumeix. Així el descriptor segueix sent una
 // funció pura de l'objecte i la paritat pantalla=PDF es manté per construcció.
 const TEXT_PAD_X_PX = 7    // marge lateral del fons, en px de pàgina
-const TEXT_PAD_Y_PX = 4    // marge vertical (l'aplica textBoxParts via bgPadding)
 export function measureTextWidthMm({ text, fontSize, fontFamily, fontStyle }) {
   const node = new Konva.Text({
     text: text || '', fontSize: fontSize || 11, fontFamily: fontFamily || FONT,
@@ -256,7 +255,7 @@ export function cotaEndsMm(g) {
 }
 
 // F2 — construeix una cota VIVA (mateixa forma que l'eina cota_pom de F1: grup amb path de
-// doble punta + text blanc sobre contenidor vermell) a partir dels extrems en mm. Un precedent
+// doble punta + etiqueta de TEXT VERMELL sense requadre) a partir dels extrems en mm. Un precedent
 // de peça GERMANA es marca amb traç discontinu (`derivat`).
 export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, canonical, viewSlot, derivat, labelDx = 0, labelDy = 0 }) {
   const col = KONVA_COL.pom
@@ -270,10 +269,12 @@ export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, canonical, v
       { x: 0, y: 0, inX: 0, inY: 0, outX: 0, outY: 0 },
       { x: dx, y: dy, inX: 0, inY: 0, outX: 0, outY: 0 }], stroke: col, strokeWidth: 1, fill: null }],
   }
+  // C2 (Patró C) — text vermell SENSE fons: cap camp per-cota fixa el requadre (l'estil de la
+  // cota és de render, no de dades). El color vermell viu al `fill` per coherència amb el traç.
   const text = {
     id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10,
-    text: label, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.white, fontStyle: 'bold',
-    align: 'center', bgFill: KONVA_COL.pom, bgPadding: toMm(TEXT_PAD_Y_PX),
+    text: label, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.pom, fontStyle: 'bold',
+    align: 'center',
   }
   return {
     id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0,
@@ -1394,7 +1395,7 @@ function commonPaint(objects, key) {
   return leaves.every(o => read(o) === first) ? first : ''
 }
 
-async function addObjectToLayer(layer, obj, ctx) {
+async function addObjectToLayer(layer, obj, ctx, cotaLabel) {
   if (obj.type === 'group') {
     const g = new Konva.Group({
       x: toPx(obj.x || 0), y: toPx(obj.y || 0), rotation: obj.rotation || 0,
@@ -1402,14 +1403,25 @@ async function addObjectToLayer(layer, obj, ctx) {
     })
     const orderedChildren = [...(obj.children || [])].sort(
       (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
+    // C2: els fills text d'una cota (grup amb pomId) es marquen com a etiqueta → estil de render.
+    const esCota = obj.pomId != null
     for (const child of orderedChildren) {
       if (child.visible === false) continue
-      await addObjectToLayer(g, child, ctx)
+      await addObjectToLayer(g, child, ctx, esCota && child.type === 'text')
     }
     layer.add(g)
     return
   }
   if (obj.type === 'text') {
+    // C2 — etiqueta de cota: text vermell sense requadre, ignorant bgFill/fill desats (migració
+    // visual de les cotes antigues). Paritat live↔PDF: aquest és el camí d'export/miniatura.
+    if (cotaLabel) {
+      const p = textBoxParts(obj)
+      const g = new Konva.Group(p.group)
+      g.add(new Konva.Text({ ...p.text, fill: KONVA_COL.pom, listening: false }))
+      layer.add(g)
+      return
+    }
     if (obj.bgFill) {
       const p = textBoxParts(obj)
       const g = new Konva.Group(p.group)
@@ -1657,7 +1669,7 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, subpathTool, onEndpointDrag, hideTextChildren }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, subpathTool, onEndpointDrag, onCotaEndpointDrag, onCotaLabelDrag, cotaLabel, hideTextChildren }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -1709,6 +1721,18 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     return <FieldChipNode obj={obj} groupProps={dataCommon} isSelected={selected} />
   }
   if (obj.type === 'text') {
+    // C2 (Patró C) — l'etiqueta d'una cota es pinta com a TEXT VERMELL SENSE requadre (la
+    // convenció real de les fitxes del client). És estil de RENDER: ignora qualsevol bgFill/fill
+    // desat a la dada, així les cotes antigues (fons vermell + text blanc) migren soles. Mateixa
+    // geometria que la caixa (textBoxParts) però sense el Rect → la posició no es mou.
+    if (cotaLabel) {
+      const p = textBoxParts(obj)
+      return (
+        <Group {...common} onDblClick={onDblText} onDblTap={onDblText}>
+          <Text {...p.text} fill={KONVA_COL.pom} listening={false} />
+        </Group>
+      )
+    }
     // Text amb fons (text_box): Group amb un Rect darrere; no redimensionable per Transformer.
     if (obj.bgFill) {
       const p = textBoxParts(obj)
@@ -1765,6 +1789,8 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
             // S1: dins d'un grup ENTRAT, els fills es poden seleccionar i moure (no rotar/redimensionar/editar).
             selected={entered ? child.id === selectedChildId : false}
             selectable={!!entered} draggable={!!entered}
+            // C2: el fill text d'una cota (grup amb pomId) es pinta amb l'estil d'etiqueta.
+            cotaLabel={obj.pomId != null && child.type === 'text'}
             onSelect={entered ? (e) => onChildSelect(e, child.id) : undefined}
             onDragEnd={entered ? onChildDragEnd(child) : undefined}
             onTransformEnd={undefined}
@@ -3493,7 +3519,7 @@ export default function TechSheetEditor() {
     const len = Math.hypot(dx, dy) || 1
     const px = -dy / len, py = dx / len   // perpendicular unitari (per desplaçar el text)
     // Cota PRE-CARREGADA des del contenidor de POMs: la fletxa i l'etiqueta van en vermell
-    // saturat i el text és l'ÀLIES DE CLIENT (o el codi canònic) del POM — la nomenclatura
+    // (C2 · text sense requadre) i el text és l'ÀLIES DE CLIENT (o el codi canònic) del POM — la nomenclatura
     // amb què el patronista anomena aquesta mesura al croquis.
     // FRONTERA G1 (F1 cota viva): el grup guarda pomId i bmId com a VINCLE DE NOMÉS LECTURA.
     // L'etiqueta es re-deriva del POM viu en carregar el document, però la cota MAI escriu
@@ -3510,12 +3536,13 @@ export default function TechSheetEditor() {
           paths: [{ closed: false, segments: [{ x: 0, y: 0, inX: 0, inY: 0, outX: 0, outY: 0 }, { x: dx, y: dy, inX: 0, inY: 0, outX: 0, outY: 0 }], stroke: col, strokeWidth: 1, fill: null }] }
       : { id: uid(), type: 'arrow', layer: 'free', x: 0, y: 0, x2: dx, y2: dy, stroke: col, fill: col, strokeWidth: 1, arrow2: true }
     // A4 — l'amplada surt de MESURAR el text, no d'un literal: una cota de POM pot dir "A" o
-    // "1/2 CHEST WIDTH" i el fons vermell s'hi ha d'ajustar. Es mesura un cop, aquí, i es desa.
+    // "1/2 CHEST WIDTH". Es mesura un cop, aquí, i es desa. C2 · l'etiqueta va en vermell SENSE
+    // requadre (cap camp per-cota fixa el fons): estil de convenció real de les fitxes.
     const etiqueta = pom ? pom.text : t('tech_sheet.preset_cota_text')
     const TW = measureTextWidthMm({ text: etiqueta, fontSize: 9, fontFamily: FONT, fontStyle: pom ? 'bold' : 'normal' })
     const mx = dx / 2 + px * 3, my = dy / 2 + py * 3   // punt mig desplaçat 3mm perpendicular
     const text = pom
-      ? { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.white, fontStyle: 'bold', align: 'center', bgFill: KONVA_COL.pom, bgPadding: toMm(TEXT_PAD_Y_PX) }
+      ? { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.pom, fontStyle: 'bold', align: 'center' }
       : { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
     addObject({
       id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0,
