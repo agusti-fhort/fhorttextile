@@ -1975,9 +1975,8 @@ export default function TechSheetEditor() {
   const [pomRows, setPomRows] = useState([])
   // Cota pre-carregada: {text} mentre l'usuari té un POM triat i encara no ha fet els dos clics.
   const [cotaPreset, setCotaPreset] = useState(null)
-  // F2 (precedent de col·locació): ItemFitxer d'origen del document (via derivat_de_item /
-  // cadena de versions) — null = el document no prové del catàleg → no es pot desar precedent.
-  const [origenItem, setOrigenItem] = useState(null)
+  // F2 (precedent de col·locació): enllaç OBJECT-LEVEL — la procedència viu a cada objecte
+  // sketch (`sourceItemFitxer`, posat a l'import des del catàleg), no al document.
   const [f2Msg, setF2Msg] = useState(null)   // resultat de col·locar/desar precedents
   const [importMode, setImportMode] = useState(null)     // IMP-1: null | 'image' | 'garment' (panell d'import al dock)
   const [importFile, setImportFile] = useState(null)     // IMP-2: fitxer triat (no s'insereix fins a "Inserir")
@@ -2650,7 +2649,6 @@ export default function TechSheetEditor() {
           fttHeadId.current = data.fitxer?.id || fitxerId
           setTemplateMode(data.manifest?.kind === 'template')
           setSheet(data.fitxer)   // versio ve de ModelFitxer.versio
-          setOrigenItem(data.fitxer?.derivat_de_item || null)   // F2: procedència de catàleg
           hydrate({ template_json: documentToV2(data.document_json, assets) })
           docCarregat.current = true   // a partir d'ara, i no abans, es pot desar
         }).catch(() => {})
@@ -3569,8 +3567,9 @@ export default function TechSheetEditor() {
   const endPan = () => { if (panDrag.current) { panDrag.current = null; setPanning(false) } }
 
   // ── Imatge: fitxer local (botó/drop) i fitxers del model ───────────────────
-  const addImageFromDataURL = (dataURL) => {
-    const obj = { id: uid(), type: 'image', layer: 'free', x: 50, y: 50, width: 120, height: 80, src: dataURL }
+  const addImageFromDataURL = (dataURL, extra = {}) => {
+    // F2: `extra` pot portar sourceItemFitxer (procedència de catàleg de l'sketch importat).
+    const obj = { id: uid(), type: 'image', layer: 'free', x: 50, y: 50, width: 120, height: 80, src: dataURL, ...extra }
     addObject(obj)
   }
   const handleFile = (file) => {
@@ -3617,7 +3616,7 @@ export default function TechSheetEditor() {
     addObject(obj)
     setEditingFlatId(obj.id)
   }
-  const importFlatSvgText = async (svgText) => {
+  const importFlatSvgText = async (svgText, extra = {}) => {
     if (!locked) return
     const ratio = svgAspectRatio(svgText)
     if (!ratio) {
@@ -3636,7 +3635,7 @@ export default function TechSheetEditor() {
         svg: svgText,
       }
       const converted = await convertLegacySketchSvgObject(source)
-      updateObject(selObj.id, converted)
+      updateObject(selObj.id, { ...converted, ...extra })
       setEditingText(null)
       setTool('select')
       setEditingFlatId(selObj.id)
@@ -3648,7 +3647,7 @@ export default function TechSheetEditor() {
       svg: svgText,
     }
     const obj = await convertLegacySketchSvgObject(source)
-    addObject(obj)
+    addObject({ ...obj, ...extra })
     setEditingFlatId(obj.id)
   }
   const handleFlatSvgFile = (file) => {
@@ -4220,35 +4219,35 @@ export default function TechSheetEditor() {
     return ids
   }, [pages])
 
-  // ── F2 (precedent de col·locació de cotes) ─────────────────────────────────
-  // Objectes del croquis de la pàgina actual (als quals s'assigna una vista).
+  // ── F2 (precedent de col·locació de cotes) · enllaç OBJECT-LEVEL ────────────
+  // Objectes del croquis de la pàgina actual. Un objecte participa en F2 si porta la seva
+  // procedència de catàleg (`sourceItemFitxer`, posada a l'import) i una vista assignada.
   const sketchObjs = curObjs.filter(o => SKETCH_OBJ_TYPES.includes(o.type))
   const assignaVista = (objId, slot) => updateObject(objId, { viewSlot: slot || undefined })
+  // Es pot desar precedent si algun objecte del croquis ve del catàleg i té vista.
+  const potDesarPrecedent = sketchObjs.some(o => o.sourceItemFitxer && o.viewSlot)
 
-  // Col·locar des de precedent: per cada vista assignada, demana la cascada i materialitza les
-  // cotes que encara no hi són com a cotes VIVES de F1 (desnormalitzant sobre la bbox de
-  // l'objecte). Les de peça germana arriben marcades (traç discontinu).
+  // Col·locar des de precedent: per cada objecte sketch amb procedència i vista, demana la
+  // cascada al seu ItemFitxer d'origen i materialitza les cotes que encara no hi són com a
+  // cotes VIVES de F1 (desnormalitzant sobre la bbox de l'objecte). Les de peça germana
+  // arriben marcades (traç discontinu).
   const colocarDesPrecedent = useCallback(async () => {
-    const mfId = fttHeadId.current
-    if (!mfId) return
-    const slots = [...new Set(sketchObjs.map(o => o.viewSlot).filter(Boolean))]
-    if (!slots.length) { setF2Msg(t('tech_sheet.f2_cap_vista')); return }
+    const ambOrigen = sketchObjs.filter(o => o.sourceItemFitxer && o.viewSlot)
+    if (!ambOrigen.length) { setF2Msg(t('tech_sheet.f2_cap_vista')); return }
     const bmById = new Map(pomRows.map(bm => [bm.id, bm]))
     const jaColocat = new Set(cotesColocades)   // pomIds ja col·locats (worklist F1)
     const nous = []
     let saltats = 0, germanes = 0
-    for (const slot of slots) {
+    for (const objSketch of ambOrigen) {
       let data
       try {
         const r = await fetch(
-          `${API}/api/v1/model-fitxers/${mfId}/pom-placements/?view_slot=${encodeURIComponent(slot)}`,
+          `${API}/api/v1/item-fitxers/${objSketch.sourceItemFitxer}/pom-placements/`
+          + `?view_slot=${encodeURIComponent(objSketch.viewSlot)}&model_id=${id}`,
           { headers: authHeaders })
         if (!r.ok) continue
         data = await r.json()
       } catch { continue }
-      if (data.origen_item_fitxer) setOrigenItem(data.origen_item_fitxer)
-      const objSketch = sketchObjs.find(o => o.viewSlot === slot)
-      if (!objSketch) continue
       const bb = objectBounds(objSketch)
       const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
       for (const p of (data.placements || [])) {
@@ -4261,20 +4260,18 @@ export default function TechSheetEditor() {
         nous.push(buildLiveCota({
           ax, ay, dx: bx - ax, dy: by - ay,
           label: cotaLabelDe(bm) || p.codi, pomId: p.pom_id, bmId: p.bm_id,
-          canonical: p.codi, viewSlot: slot, derivat: p.derivat,
+          canonical: p.codi, viewSlot: objSketch.viewSlot, derivat: p.derivat,
           labelDx: (p.label_dx || 0) * bw, labelDy: (p.label_dy || 0) * bh,
         }))
       }
     }
     if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
     setF2Msg(t('tech_sheet.f2_colocades', { n: nous.length, s: saltats, g: germanes }))
-  }, [sketchObjs, pomRows, cotesColocades, authHeaders, currentPage, updatePageObjects, t])
+  }, [sketchObjs, pomRows, cotesColocades, authHeaders, currentPage, updatePageObjects, id, t])
 
   // Desar col·locació com a precedent: puja cada cota viva a POMPlacement de l'ItemFitxer
-  // d'origen, normalitzant els extrems sobre la bbox de l'objecte sketch que la conté.
+  // d'ORIGEN DE L'OBJECTE sketch que la conté, normalitzant els extrems sobre la seva bbox.
   const desarPrecedent = useCallback(async () => {
-    const mfId = fttHeadId.current
-    if (!mfId || !origenItem) return
     const dins = (bb, pt) => pt.x >= bb.minX && pt.x <= bb.maxX && pt.y >= bb.minY && pt.y <= bb.maxY
     const cotes = curObjs.filter(o => o.type === 'group' && o.pomId != null)
     let desats = 0, senseVista = 0
@@ -4282,7 +4279,8 @@ export default function TechSheetEditor() {
       const e = cotaEndsMm(g)
       if (!e) continue
       const mid = { x: (e.ax + e.bx) / 2, y: (e.ay + e.by) / 2 }
-      const host = sketchObjs.find(o => o.viewSlot && dins(objectBounds(o), mid))
+      // objecte sketch amb procedència i vista que conté el punt mig de la cota
+      const host = sketchObjs.find(o => o.sourceItemFitxer && o.viewSlot && dins(objectBounds(o), mid))
       if (!host) { senseVista++; continue }
       const bb = objectBounds(host)
       const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
@@ -4295,13 +4293,13 @@ export default function TechSheetEditor() {
         source_kind: host.type === 'image' ? 'raster' : 'vector',
       }
       try {
-        const r = await fetch(`${API}/api/v1/model-fitxers/${mfId}/pom-placements/`, {
+        const r = await fetch(`${API}/api/v1/item-fitxers/${host.sourceItemFitxer}/pom-placements/`, {
           method: 'POST', headers: authHeaders, body: JSON.stringify(body) })
         if (r.ok) desats++
       } catch { /* continua amb la següent */ }
     }
     setF2Msg(t('tech_sheet.f2_desats', { n: desats, s: senseVista }))
-  }, [curObjs, sketchObjs, origenItem, authHeaders, t])
+  }, [curObjs, sketchObjs, authHeaders, t])
 
   const curGuides = pages[currentPage]?.guides || []   // S2: guies de la pàgina activa
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
@@ -4659,16 +4657,20 @@ export default function TechSheetEditor() {
     // endpoint de descarrega autenticat (D13); `url_extern` viu fora i no li enviem el token.
     const extern = !!f.url_extern
     const mon = f.garment_type_item != null ? 'item-fitxers' : 'model-fitxers'
+    // F2 (enllaç object-level): si l'sketch ve del CATÀLEG (ItemFitxer), l'objecte guarda la
+    // seva procedència. És la granularitat unívoca: una fitxa pot dur sketches de dos items. Un
+    // sketch pujat localment no en porta → «Desar precedent» hi queda deshabilitat amb motiu.
+    const extra = f.garment_type_item != null ? { sourceItemFitxer: f.id } : {}
     const url = extern ? f.url_extern : `${API}/api/v1/${mon}/${f.id}/download/`
     try {
       const r = await fetch(url, extern ? undefined : { headers: uploadHeaders })
       if (!r.ok) throw new Error('fetch')
       if (nom.endsWith('.svg')) {
-        await importFlatSvgText(await r.text())     // SVG → path editable, com el camí local
+        await importFlatSvgText(await r.text(), extra)   // SVG → path editable, com el camí local
       } else if (nom.endsWith('.dxf')) {
         flash(t('tech_sheet.import_dxf_soon'))      // el motor DXF segueix pendent
       } else {
-        addImageFromDataURL(await blobToDataURL(await r.blob()))
+        addImageFromDataURL(await blobToDataURL(await r.blob()), extra)
       }
       closeImport()
     } catch {
@@ -5144,7 +5146,9 @@ export default function TechSheetEditor() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
                 {sketchObjs.map((o, i) => (
                   <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <i className={`ti ${o.type === 'image' ? 'ti-photo' : 'ti-vector'}`} style={{ color: COL.textMuted, flexShrink: 0 }} />
+                    <i className={`ti ${o.sourceItemFitxer ? 'ti-link' : 'ti-link-off'}`}
+                      title={o.sourceItemFitxer ? t('tech_sheet.f2_amb_origen') : t('tech_sheet.f2_sense_origen')}
+                      style={{ color: o.sourceItemFitxer ? COL.textMain : COL.textMuted, flexShrink: 0 }} />
                     <span style={{ fontSize: 'var(--fs-caption)', color: COL.textMuted, flexShrink: 0 }}>{t('tech_sheet.f2_objecte', { n: i + 1 })}</span>
                     <input list="f2-view-slots" value={o.viewSlot || ''} placeholder={t('tech_sheet.f2_vista_ph')}
                       onChange={e => assignaVista(o.id, e.target.value.trim())}
@@ -5157,12 +5161,12 @@ export default function TechSheetEditor() {
                   style={{ cursor: 'pointer', padding: '0.35rem 0.5rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-copy" /> {t('tech_sheet.f2_colocar')}
                 </button>
-                <button type="button" onClick={desarPrecedent} disabled={!origenItem}
-                  title={origenItem ? '' : t('tech_sheet.f2_desar_off')}
-                  style={{ cursor: origenItem ? 'pointer' : 'not-allowed', opacity: origenItem ? 1 : 0.5, padding: '0.35rem 0.5rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button type="button" onClick={desarPrecedent} disabled={!potDesarPrecedent}
+                  title={potDesarPrecedent ? '' : t('tech_sheet.f2_desar_off')}
+                  style={{ cursor: potDesarPrecedent ? 'pointer' : 'not-allowed', opacity: potDesarPrecedent ? 1 : 0.5, padding: '0.35rem 0.5rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-bookmark" /> {t('tech_sheet.f2_desar')}
                 </button>
-                {!origenItem && <span style={{ fontSize: 'var(--fs-caption)', color: COL.textMuted }}>{t('tech_sheet.f2_desar_off')}</span>}
+                {!potDesarPrecedent && <span style={{ fontSize: 'var(--fs-caption)', color: COL.textMuted }}>{t('tech_sheet.f2_desar_off')}</span>}
                 {f2Msg && <span style={{ fontSize: 'var(--fs-caption)', color: COL.textMain }}>{f2Msg}</span>}
               </div>
             </Contenidor>
