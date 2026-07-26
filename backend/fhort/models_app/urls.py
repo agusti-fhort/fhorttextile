@@ -40,6 +40,7 @@ from .views import (
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
 from .ftt_template_views import DocumentTemplateViewSet
 from .item_fitxer_views import ItemFitxerViewSet
+from .pom_placement_views import model_fitxer_pom_placements_view
 
 router = DefaultRouter()
 router.register('models', ModelViewSet, basename='model')
@@ -196,6 +197,7 @@ except Exception:
 
 urlpatterns = (
     [
+        path('model-fitxers/<int:mf_id>/pom-placements/', model_fitxer_pom_placements_view),
         path('models/next-ref/', next_model_ref),
         path('models/create-wizard/', create_model_wizard),
         path('models/<int:model_id>/update-step2/', update_model_step2),
