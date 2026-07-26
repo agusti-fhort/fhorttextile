@@ -1,17 +1,29 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
-export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
-  const { t } = useTranslation()
+export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted, onTargetsSaved }) {
+  const { t, i18n } = useTranslation()
   const [definitions, setDefinitions] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
   const [draft, setDraft] = useState({})
+  // Sprint TARGETS-EDITABLES (2026-07-26) — targets aplicables del sistema (M2M editable).
+  const [allTargets, setAllTargets] = useState([])
+  const [selectedCodis, setSelectedCodis] = useState([])
+  const [savingTargets, setSavingTargets] = useState(false)
+  const [targetsMsg, setTargetsMsg] = useState(null)
 
   const authHeaders = () => {
     const token = localStorage.getItem('access_token')
     return token ? { Authorization: `Bearer ${token}` } : {}
   }
+
+  // Nom del target en l'idioma actiu (fallback a l'anglès).
+  const targetName = (tg) => (
+    i18n.language?.startsWith('ca') ? (tg.nom_cat || tg.nom_en)
+      : i18n.language?.startsWith('es') ? (tg.nom_es || tg.nom_en)
+        : tg.nom_en
+  )
 
   useEffect(() => {
     if (!sizeSystem) return
@@ -28,6 +40,54 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
       })
       .catch(() => setLoading(false))
   }, [sizeSystem?.id])
+
+  // Carrega el catàleg de targets i precarrega els ja assignats. La precàrrega ve del registre
+  // AUTORITATIU del sistema (GET /size-systems/{id}/), no del prop niat (pot no portar
+  // target_codis) — així «desar» mai buida targets per una precàrrega incompleta.
+  useEffect(() => {
+    if (!sizeSystem) return
+    setTargetsMsg(null)
+    setSelectedCodis(sizeSystem.target_codis || [])
+    fetch('/api/v1/targets/', { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => setAllTargets(d.results || d || []))
+      .catch(() => setAllTargets([]))
+    fetch(`/api/v1/size-systems/${sizeSystem.id}/`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d?.target_codis)) setSelectedCodis(d.target_codis) })
+      .catch(() => { /* fallback al prop ja aplicat sobre */ })
+  }, [sizeSystem?.id])
+
+  const toggleTarget = (codi) => {
+    setTargetsMsg(null)
+    setSelectedCodis(prev => (
+      prev.includes(codi) ? prev.filter(c => c !== codi) : [...prev, codi]
+    ))
+  }
+
+  const handleSaveTargets = async () => {
+    setSavingTargets(true)
+    setTargetsMsg(null)
+    try {
+      const res = await fetch(`/api/v1/size-systems/${sizeSystem.id}/`, {
+        method: 'PATCH',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_codis: selectedCodis }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setSelectedCodis(updated.target_codis || [])
+        setTargetsMsg({ ok: true, text: t('size_system.targets_saved') })
+        if (onTargetsSaved) onTargetsSaved(updated)
+      } else {
+        setTargetsMsg({ ok: false, text: t('size_system.err_save_targets') })
+      }
+    } catch {
+      setTargetsMsg({ ok: false, text: t('size_system.err_save_targets') })
+    } finally {
+      setSavingTargets(false)
+    }
+  }
 
   const handleEdit = (def) => {
     setEditingId(def.id)
@@ -153,6 +213,70 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted }) {
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: '1.25rem 1.5rem' }}>
+          {/* Sprint TARGETS-EDITABLES — targets aplicables (M2M). Un sistema pot servir-ne
+              diversos sense clonar-se; buit NO vol dir universal (el wizard només mostra
+              escales amb el target de la peça assignat). */}
+          <div style={{ marginBottom: '1.25rem' }}>
+            <p style={{
+              margin: '0 0 0.4rem', fontSize: '0.7rem', fontWeight: 600,
+              color: '#666', textTransform: 'uppercase',
+            }}>
+              {t('size_system.targets_label')}
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+              {allTargets.map(tg => {
+                const on = selectedCodis.includes(tg.codi)
+                return (
+                  <button
+                    key={tg.codi}
+                    type="button"
+                    onClick={() => toggleTarget(tg.codi)}
+                    style={{
+                      padding: '0.25rem 0.6rem', borderRadius: 999,
+                      border: `1px solid ${on ? 'var(--gold)' : '#ddd'}`,
+                      background: on ? 'var(--gold)' : 'var(--white)',
+                      color: on ? 'var(--white)' : '#666',
+                      cursor: 'pointer', fontSize: '0.75rem',
+                      fontWeight: on ? 600 : 400,
+                    }}
+                  >
+                    {targetName(tg)}
+                  </button>
+                )
+              })}
+              {allTargets.length === 0 && (
+                <span style={{ color: '#aaa', fontSize: '0.8rem' }}>{t('common.loading')}</span>
+              )}
+            </div>
+            <p style={{ margin: '0.45rem 0 0', fontSize: '0.7rem', color: '#999' }}>
+              {t('size_system.targets_hint')}
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={handleSaveTargets}
+                disabled={savingTargets}
+                style={{
+                  padding: '0.35rem 0.8rem', border: '1px solid var(--gold)',
+                  borderRadius: 6, background: 'var(--gold)', color: 'var(--white)',
+                  cursor: savingTargets ? 'default' : 'pointer',
+                  opacity: savingTargets ? 0.6 : 1,
+                  fontSize: '0.8rem', fontWeight: 500,
+                }}
+              >
+                {savingTargets ? t('common.loading') : t('size_system.save_targets')}
+              </button>
+              {targetsMsg && (
+                <span style={{
+                  fontSize: '0.75rem',
+                  color: targetsMsg.ok ? 'var(--gold)' : '#C0392B',
+                }}>
+                  {targetsMsg.text}
+                </span>
+              )}
+            </div>
+          </div>
+
           {loading ? (
             <p style={{ color: '#888', fontSize: '0.85rem' }}>{t('common.loading')}</p>
           ) : (

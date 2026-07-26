@@ -102,7 +102,7 @@ export const COL = {
 // CSS custom properties → var(--token) cau a #000 (negre). Els primitius Konva (ObjectNode,
 // build*Primitives, Rects de fons/selecció, text_box, previews) DEUEN usar aquests literals,
 // no COL (que és per al DOM, on var() sí resol). Valors = mateixos hex que els tokens de :root.
-// `pom` = vermell saturat de la COTA DE POM al croquis (fletxa + fons de l'etiqueta). Reusa el
+// `pom` = vermell saturat de la COTA DE POM al croquis (traç de la fletxa + text de l'etiqueta). Reusa el
 // literal que ja fa servir la columna de nomenclatura de les taules snapshot (TBL.REF, més avall)
 // per no introduir un segon vermell al mateix llenç.
 // Y2 — SNAP DE ROTACIÓ A 45° AMB SHIFT, el gest d'Illustrator/Figma: sense Shift, l'angle és
@@ -158,7 +158,6 @@ export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.r
 // obj.width — que és el que textBoxParts ja consumeix. Així el descriptor segueix sent una
 // funció pura de l'objecte i la paritat pantalla=PDF es manté per construcció.
 const TEXT_PAD_X_PX = 7    // marge lateral del fons, en px de pàgina
-const TEXT_PAD_Y_PX = 4    // marge vertical (l'aplica textBoxParts via bgPadding)
 export function measureTextWidthMm({ text, fontSize, fontFamily, fontStyle }) {
   const node = new Konva.Text({
     text: text || '', fontSize: fontSize || 11, fontFamily: fontFamily || FONT,
@@ -224,6 +223,190 @@ function mapObjectTree(obj, mapper) {
 
 function flattenObjects(objects = []) {
   return objects.flatMap(o => [o, ...flattenObjects(o.children || [])])
+}
+
+// F1 (cota viva) — etiqueta VISIBLE d'un POM a la cota: àlies de client si n'hi ha, si
+// no el codi canònic (pom_code_global). El codi canònic sempre queda com a metadada +
+// tooltip. Últim fallback a codi_client per no deixar mai l'etiqueta buida en POMs
+// tenant-only sense canònic ni àlies.
+export const cotaLabelDe = (bm) => (bm && (bm.client_alias || bm.pom_code_global || bm.codi_client)) || ''
+
+// F2 (precedent de col·locació) — objectes del croquis als quals el tècnic assigna una vista
+// (viewSlot) i sobre la bbox dels quals es normalitzen les cotes.
+export const SKETCH_OBJ_TYPES = ['path', 'image', 'sketch_svg', 'pattern_piece']
+
+// Extrems A→B (i centre d'etiqueta) d'una cota VIVA de F1, en mm de document. null si no ho és.
+export function cotaEndsMm(g) {
+  if (!g || g.type !== 'group' || g.pomId == null) return null
+  const kids = g.children || []
+  const linia = kids.find(k => k.type === 'path' || k.type === 'arrow')
+  const text = kids.find(k => k.type === 'text')
+  if (!linia) return null
+  let dx = 0, dy = 0
+  if (linia.type === 'path') {
+    const segs = (linia.paths && linia.paths[0] && linia.paths[0].segments) || []
+    if (segs.length >= 2) { dx = segs[1].x || 0; dy = segs[1].y || 0 }
+  } else { dx = (linia.x2 || 0) - (linia.x || 0); dy = (linia.y2 || 0) - (linia.y || 0) }
+  const ax = g.x || 0, ay = g.y || 0
+  const lc = text
+    ? { x: ax + (text.x || 0) + (text.width || 0) / 2, y: ay + (text.y || 0) + (text.height || 0) / 2 }
+    : null
+  return { ax, ay, bx: ax + dx, by: ay + dy, lc }
+}
+
+// C1-fix — l'etiqueta d'una cota MAI solapa el traç: es col·loca desplaçada PERPENDICULARMENT
+// del punt mig, del costat superior (horitzontal → a sobre; obliqua → perpendicular amunt) i a la
+// DRETA si la cota és vertical (mai girada 90°). El gap és constant en mm de document; `halfW/halfH`
+// són les mitges extensions REALS de l'etiqueta (mm) perquè el text quedi net del traç a qualsevol
+// angle (una cota vertical necessita netejar l'AMPLADA; una d'horitzontal, l'ALÇADA).
+const COTA_LABEL_GAP_MM = 1.5
+export const textHalfHeightMm = (fontSize) => toMm((fontSize || 9) * 1.2) / 2
+export function cotaLabelOffset(dx, dy, halfW, halfH) {
+  const len = Math.hypot(dx, dy) || 1
+  let nx = -dy / len, ny = dx / len
+  const EPS = 1e-6
+  if (ny > EPS || (Math.abs(ny) <= EPS && nx < 0)) { nx = -nx; ny = -ny }
+  const dist = COTA_LABEL_GAP_MM + Math.abs(nx) * halfW + Math.abs(ny) * halfH
+  return { x: nx * dist, y: ny * dist }
+}
+
+// F2 — construeix una cota VIVA (mateixa forma que l'eina cota_pom de F1: grup amb path de
+// doble punta + etiqueta de TEXT VERMELL sense requadre) a partir dels extrems en mm. Un precedent
+// de peça GERMANA es marca amb traç discontinu (`derivat`).
+export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, canonical, viewSlot, derivat }) {
+  const col = KONVA_COL.pom
+  const dash = derivat ? [3, 2] : undefined
+  const TW = measureTextWidthMm({ text: label, fontSize: 9, fontFamily: FONT, fontStyle: 'bold' })
+  // C1-fix: posició INICIAL de l'etiqueta = offset perpendicular automàtic (mai sobre el traç).
+  const hh = textHalfHeightMm(9)
+  const off = cotaLabelOffset(dx, dy, TW / 2, hh)
+  const cx = dx / 2 + off.x, cy = dy / 2 + off.y
+  const linia = {
+    id: uid(), type: 'path', layer: 'free', x: 0, y: 0, headStart: true, headEnd: true,
+    stroke: col, fill: null, strokeWidth: 1, dash,
+    paths: [{ closed: false, segments: [
+      { x: 0, y: 0, inX: 0, inY: 0, outX: 0, outY: 0 },
+      { x: dx, y: dy, inX: 0, inY: 0, outX: 0, outY: 0 }], stroke: col, strokeWidth: 1, fill: null }],
+  }
+  // C2 (Patró C) — text vermell SENSE fons: cap camp per-cota fixa el requadre (l'estil de la
+  // cota és de render, no de dades). El color vermell viu al `fill` per coherència amb el traç.
+  const text = {
+    id: uid(), type: 'text', layer: 'free', x: cx - TW / 2, y: cy - hh, width: TW, height: 10,
+    text: label, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.pom, fontStyle: 'bold',
+    align: 'center',
+  }
+  return {
+    id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0,
+    pomId, bmId, pomCanonical: canonical || '', viewSlot, precedentGermana: !!derivat,
+    children: [linia, text],
+  }
+}
+
+// C1 — extrems REALS d'una cota (primer i últim node on-curve de la línia) i centre de
+// l'etiqueta, en mm de document. Serveix per pintar les nanses. Un `path` corbat pot tenir >2
+// nodes: l'extrem és el primer i l'últim, no segs[1] (cotaEndsMm assumeix recte, per al precedent).
+function cotaHandleEnds(g) {
+  if (!g || g.type !== 'group' || g.pomId == null) return null
+  const kids = g.children || []
+  const linia = kids.find(k => k.type === 'path' || k.type === 'arrow')
+  const text = kids.find(k => k.type === 'text')
+  if (!linia) return null
+  const ax = g.x || 0, ay = g.y || 0
+  let a, b
+  if (linia.type === 'path') {
+    const segs = (linia.paths && linia.paths[0] && linia.paths[0].segments) || []
+    if (segs.length < 2) return null
+    a = { x: ax + (segs[0].x || 0), y: ay + (segs[0].y || 0) }
+    b = { x: ax + (segs[segs.length - 1].x || 0), y: ay + (segs[segs.length - 1].y || 0) }
+  } else {
+    a = { x: ax + (linia.x || 0), y: ay + (linia.y || 0) }
+    b = { x: ax + (linia.x2 || 0), y: ay + (linia.y2 || 0) }
+  }
+  // Centre real de l'etiqueta: mitja alçada REAL del text (no el camp nominal `height`), coherent
+  // amb com es col·loca a buildLiveCota/resize/auto-place → la nansa cau sobre el text de debò.
+  const lc = text
+    ? { x: ax + (text.x || 0) + (text.width || 0) / 2, y: ay + (text.y || 0) + textHalfHeightMm(text.fontSize) }
+    : null
+  return { a, b, lc }
+}
+
+// C1-fix — reposiciona l'etiqueta d'una cota al seu offset perpendicular automàtic (posició
+// INICIAL i de re-càlcul). Respecta `labelMoved`: si l'usuari l'ha arrossegada a mà, no la toca.
+// Migra les cotes existents (sense flag) en re-renderitzar. Retorna la MATEIXA cota si no cal
+// cap canvi (idempotent, perquè l'efecte que la crida no entri en bucle).
+function autoPlaceCotaLabel(cota) {
+  if (!cota || cota.type !== 'group' || cota.pomId == null || cota.labelMoved) return cota
+  const ends = cotaHandleEnds(cota)
+  if (!ends) return cota
+  const kids = cota.children || []
+  const ti = kids.findIndex(k => k.type === 'text')
+  if (ti < 0) return cota
+  const t = kids[ti]
+  const ax = cota.x || 0, ay = cota.y || 0
+  const dx = ends.b.x - ends.a.x, dy = ends.b.y - ends.a.y
+  const midX = (ends.a.x + ends.b.x) / 2, midY = (ends.a.y + ends.b.y) / 2
+  const hw = (t.width || 0) / 2, hh = textHalfHeightMm(t.fontSize)
+  const off = cotaLabelOffset(dx, dy, hw, hh)
+  const nx = (midX + off.x - ax) - hw, ny = (midY + off.y - ay) - hh
+  if (Math.abs((t.x || 0) - nx) < 0.05 && Math.abs((t.y || 0) - ny) < 0.05) return cota
+  const nk = kids.slice()
+  nk[ti] = { ...t, x: nx, y: ny }
+  return { ...cota, children: nk }
+}
+
+// C1 — moure UN extrem d'una cota (which='start'|'end') a la posició global (nx,ny) mm, movent
+// NOMÉS la geometria de la línia i mai escalant res. Manté l'invariant «origen del grup = extrem
+// A» (re-localitza tots els nodes) i reposiciona l'etiqueta al nou punt mig CONSERVANT el seu
+// desplaçament manual respecte del centre (el text no es deforma mai). Retorna el patch o null.
+function resizeCotaEndpoint(cota, which, nx, ny) {
+  const kids = cota.children || []
+  const ax = cota.x || 0, ay = cota.y || 0
+  const linia = kids.find(k => k.type === 'path' || k.type === 'arrow')
+  const text = kids.find(k => k.type === 'text')
+  if (!linia) return null
+  const isPath = linia.type === 'path'
+  // Nodes en GLOBAL (mm) abans de moure.
+  let origG
+  if (isPath) {
+    const segs = (linia.paths && linia.paths[0] && linia.paths[0].segments) || []
+    if (segs.length < 2) return null
+    origG = segs.map(s => ({ x: ax + (s.x || 0), y: ay + (s.y || 0) }))
+  } else {
+    origG = [{ x: ax + (linia.x || 0), y: ay + (linia.y || 0) }, { x: ax + (linia.x2 || 0), y: ay + (linia.y2 || 0) }]
+  }
+  const oldA = origG[0], oldB = origG[origG.length - 1]
+  const oldMid = { x: (oldA.x + oldB.x) / 2, y: (oldA.y + oldB.y) / 2 }
+  const tw = text ? (text.width || 0) : 0, hh = textHalfHeightMm(text && text.fontSize)
+  const oldLc = text
+    ? { x: ax + (text.x || 0) + tw / 2, y: ay + (text.y || 0) + hh }
+    : oldMid
+  // Desplaçament MANUAL a conservar només si l'usuari ha mogut l'etiqueta; si no, es re-col·loca
+  // amb l'offset perpendicular automàtic sobre la nova orientació (C1-fix).
+  const manualOff = { x: oldLc.x - oldMid.x, y: oldLc.y - oldMid.y }
+  // Mou l'extrem triat; l'origen nou és el primer node (invariant).
+  const moveIdx = which === 'start' ? 0 : origG.length - 1
+  const newG = origG.map((n, i) => (i === moveIdx ? { x: nx, y: ny } : n))
+  const origin = newG[0]
+  const newA = newG[0], newB = newG[newG.length - 1]
+  const newMid = { x: (newA.x + newB.x) / 2, y: (newA.y + newB.y) / 2 }
+  const autoOff = cotaLabelOffset(newB.x - newA.x, newB.y - newA.y, tw / 2, hh)
+  const off = cota.labelMoved ? manualOff : autoOff
+  const newLc = { x: newMid.x + off.x, y: newMid.y + off.y }
+  const local = newG.map(n => ({ x: n.x - origin.x, y: n.y - origin.y }))
+  const children = kids.map(k => {
+    if (k === linia) {
+      if (isPath) {
+        const segs = k.paths[0].segments
+        return { ...k, paths: [{ ...k.paths[0], segments: segs.map((s, i) => ({ ...s, x: local[i].x, y: local[i].y })) }] }
+      }
+      return { ...k, x: local[0].x, y: local[0].y, x2: local[1].x, y2: local[1].y }
+    }
+    if (k === text) {
+      return { ...k, x: (newLc.x - origin.x) - tw / 2, y: (newLc.y - origin.y) - hh }
+    }
+    return k
+  })
+  return { x: origin.x, y: origin.y, children }
 }
 
 function serializeObject(obj) {
@@ -593,11 +776,11 @@ function buildTableCellPrimitives(obj) {
     cols.forEach((c, i) => {
       const cell = norm(row[i])
       const wCell = cw[i] - 2 * T_PAD
-      // T2 — dues senyals que MAI comparteixen codificació:
-      //  · ESTRUCTURAL (jerarquia de taula): capçalera i primera columna, sempre en negreta.
-      //  · BREAK de grading (domini, `cell.bold` de cellForSize a T1b): negreta + subratllat
-      //    + vermell. El segon tret és el que el distingeix de l'estructural; el patró és el
-      //    mateix bold+underline amb què la capçalera marca la talla base al size run.
+      // ESTRUCTURAL (jerarquia de taula): capçalera i primera columna, sempre en negreta.
+      // `cell.bold` = marca de BREAK per-cel·la (vermell + subratllat). LEGACY des de S4: les T1b
+      // noves ja no la posen (les xifres van totes en negre i el break viu a la seva columna); es
+      // manté aquí perquè els SNAPSHOTS ja inserits abans de S4 segueixin pintant-se igual (no es
+      // migren). Cap taula nova entra per aquesta branca.
       const isBreak = !!cell.bold
       const bold = isBreak || i === 0
       const fill = isBreak ? TBL.BREAK : TBL.VAL
@@ -1188,6 +1371,9 @@ function pathChildProps(obj, path) {
     stroke: stroke || undefined,
     // Sense color de traç no hi ha traç: el gruix no s'ha ni de mirar.
     strokeWidth: stroke ? resolStrokeWidth(obj, path) : undefined,
+    // El dash (repunts) es desa en mm com la geometria; a px amb toPx, com el `data`. Només
+    // pinta si hi ha traç. Mateixa porta per al llenç viu i el PDF (tots dos passen per aquí).
+    ...(stroke && path.dash?.length ? { dash: path.dash.map(toPx) } : {}),
     fillRule: normalizeFillRule(path.fillRule),
     lineCap: 'round',
     lineJoin: 'round',
@@ -1288,7 +1474,10 @@ function bakePathEntries(entries, sx, sy, deg) {
 }
 
 function blocksTransform(obj) {
-  return obj && (obj.type === 'line' || obj.type === 'arrow' || obj.type === 'field' || (obj.type === 'text' && obj.bgFill))
+  // C1 — una cota (grup amb pomId) NO fa servir el Transformer d'escala/rotació: s'edita amb
+  // nanses d'extrem (no escalat lliure que distorsioni el text ni la geometria).
+  return obj && (obj.type === 'line' || obj.type === 'arrow' || obj.type === 'field'
+    || (obj.type === 'text' && obj.bgFill) || (obj.type === 'group' && obj.pomId != null))
 }
 
 function commonValue(objects, key) {
@@ -1297,7 +1486,45 @@ function commonValue(objects, key) {
   return objects.every(o => (o?.[key] ?? '') === first) ? first : ''
 }
 
-async function addObjectToLayer(layer, obj, ctx) {
+// ── S3 · Propietats de pintura comunes en multiselecció ─────────────────────────────────
+// Quins types suporten cada canal (REGLA 3 · aplicabilitat per type). Idèntics als filtres
+// que ja feia servir el panell, ara hoisted per compartir-los amb la lògica recursiva.
+const STROKE_PAINT_TYPES = ['rect', 'ellipse', 'line', 'arrow', 'path']
+const FILL_PAINT_TYPES = ['text', 'rect', 'ellipse', 'path']
+const paintTypeSupports = (type, key) => (key === 'fill' ? FILL_PAINT_TYPES : STROKE_PAINT_TYPES).includes(type)
+// Un grup (sketch inclòs) suporta un canal si algun descendent el suporta.
+function supportsPaint(o, key) {
+  return paintTypeSupports(o.type, key) || (o.type === 'group' && (o.children || []).some(c => supportsPaint(c, key)))
+}
+// Aplica un patch de pintura {stroke?|fill?|strokeWidth?} a un objecte respectant el contracte
+// de ftt/paint i, en grups, RECURSIVAMENT als fills (comportament Illustrator, REGLA 4). Només
+// escriu les claus del patch → canviar el color no arrossega gruix ni dash (REGLA 2). Els fills
+// que no suporten una clau l'ometen (REGLA 3). A un `path`, netejar els sobreescrits de subpath
+// perquè el valor nou no quedi amagat (mateixa llei que patchPintura del panell d'1 sol objecte).
+function applyPaintTree(o, patch) {
+  if (o.type === 'group') return { ...o, children: (o.children || []).map(c => applyPaintTree(c, patch)) }
+  const keys = {}
+  for (const k of Object.keys(patch)) if (paintTypeSupports(o.type, k)) keys[k] = patch[k]
+  if (o.type === 'arrow' && 'stroke' in keys) keys.fill = keys.stroke   // la punta segueix el traç
+  if (!Object.keys(keys).length) return o
+  return Array.isArray(o.paths)
+    ? { ...o, ...keys, paths: o.paths.map(p => sensePintura(p, Object.keys(keys))) }
+    : { ...o, ...keys }
+}
+// Lectura INDETERMINADA (REGLA 1): aplana l'arbre a fulles pintables i compara el valor RESOLT
+// (no el camp cru: un `path` hereta del subpath, un grup no té pintura pròpia). Difereixen → ''.
+const paintLeaves = (o) => (o.type === 'group' ? (o.children || []).flatMap(paintLeaves) : [o])
+function commonPaint(objects, key) {
+  const leaves = objects.flatMap(paintLeaves).filter(o => paintTypeSupports(o.type, key))
+  if (!leaves.length) return ''
+  const read = (o) => (key === 'fill' ? resolFill(o, o.paths?.[0])
+    : key === 'strokeWidth' ? resolStrokeWidth(o, o.paths?.[0])
+    : resolStroke(o, o.paths?.[0])) ?? ''
+  const first = read(leaves[0])
+  return leaves.every(o => read(o) === first) ? first : ''
+}
+
+async function addObjectToLayer(layer, obj, ctx, cotaLabel) {
   if (obj.type === 'group') {
     const g = new Konva.Group({
       x: toPx(obj.x || 0), y: toPx(obj.y || 0), rotation: obj.rotation || 0,
@@ -1305,14 +1532,25 @@ async function addObjectToLayer(layer, obj, ctx) {
     })
     const orderedChildren = [...(obj.children || [])].sort(
       (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
+    // C2: els fills text d'una cota (grup amb pomId) es marquen com a etiqueta → estil de render.
+    const esCota = obj.pomId != null
     for (const child of orderedChildren) {
       if (child.visible === false) continue
-      await addObjectToLayer(g, child, ctx)
+      await addObjectToLayer(g, child, ctx, esCota && child.type === 'text')
     }
     layer.add(g)
     return
   }
   if (obj.type === 'text') {
+    // C2 — etiqueta de cota: text vermell sense requadre, ignorant bgFill/fill desats (migració
+    // visual de les cotes antigues). Paritat live↔PDF: aquest és el camí d'export/miniatura.
+    if (cotaLabel) {
+      const p = textBoxParts(obj)
+      const g = new Konva.Group(p.group)
+      g.add(new Konva.Text({ ...p.text, fill: KONVA_COL.pom, listening: false }))
+      layer.add(g)
+      return
+    }
     if (obj.bgFill) {
       const p = textBoxParts(obj)
       const g = new Konva.Group(p.group)
@@ -1447,6 +1685,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
     (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   for (const o of ordered) {
     if (o.visible === false) continue
+    if (o.iaProposada) continue   // F3: cota PROPOSADA (pendent de revisió) — mai a l'export ni a miniatures
     await addObjectToLayer(layer, o, ctx)
   }
   layer.draw()
@@ -1460,7 +1699,9 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
 export function serializePages(pages) {
   return pages.map(p => ({
     id: p.id,
-    objects: (p.objects || []).map(serializeObject),
+    // F3: les cotes PROPOSADES per la IA (iaProposada) són NOMÉS pantalla fins a acceptar-les;
+    // no sobreviuen la sessió (decisió de codi mínim) → no entren al .ftt.
+    objects: (p.objects || []).filter(o => !o.iaProposada).map(serializeObject),
     guides: p.guides || [],   // S2: guies (no s'exporten a PDF)
   }))
 }
@@ -1529,6 +1770,32 @@ function EndpointHandles({ obj, onEndpointDrag }) {
   return <>{mk('start', start)}{mk('end', end)}</>
 }
 
+// C1 — nanses d'una COTA seleccionada: dos extrems (cercles, com line/arrow) + una nansa
+// quadrada per arrossegar l'ETIQUETA sense tocar la línia. Substitueixen el Transformer d'escala
+// (que distorsionaria el text). Es pinten a l'espai del Layer (px de pàgina), sobre la cota.
+function CotaHandles({ obj, onEndpointDrag, onLabelDrag }) {
+  const ends = cotaHandleEnds(obj)
+  if (!ends) return null
+  const A = { x: toPx(ends.a.x), y: toPx(ends.a.y) }
+  const B = { x: toPx(ends.b.x), y: toPx(ends.b.y) }
+  const mk = (which, p) => (
+    <Circle key={which} x={p.x} y={p.y} radius={5} fill={KONVA_COL.white} stroke={KONVA_COL.gold} strokeWidth={1.5}
+      draggable onMouseDown={ev => { ev.cancelBubble = true }}
+      onDragMove={onEndpointDrag(which)} onDragEnd={onEndpointDrag(which)} />
+  )
+  return (
+    <>
+      {mk('start', A)}{mk('end', B)}
+      {ends.lc && onLabelDrag && (
+        <Rect x={toPx(ends.lc.x) - 4} y={toPx(ends.lc.y) - 4} width={8} height={8} cornerRadius={2}
+          fill={KONVA_COL.gold} stroke={KONVA_COL.white} strokeWidth={1}
+          draggable onMouseDown={ev => { ev.cancelBubble = true }}
+          onDragMove={onLabelDrag} onDragEnd={onLabelDrag} />
+      )}
+    </>
+  )
+}
+
 function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSelect, subpathTool }) {
   const paths = obj.paths || []
   return (
@@ -1557,10 +1824,12 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, subpathTool, onEndpointDrag, hideTextChildren }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, subpathTool, onEndpointDrag, onCotaEndpointDrag, onCotaLabelDrag, cotaLabel, hideTextChildren }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
+    // F3: una cota PROPOSADA per la IA es pinta ATENUADA (encara no acceptada). Només al llenç viu.
+    opacity: obj.iaProposada ? 0.5 : undefined,
     draggable,
     onClick: selectable ? onSelect : undefined,
     onTap: selectable ? onSelect : undefined,
@@ -1607,6 +1876,20 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     return <FieldChipNode obj={obj} groupProps={dataCommon} isSelected={selected} />
   }
   if (obj.type === 'text') {
+    // C2 (Patró C) — l'etiqueta d'una cota es pinta com a TEXT VERMELL SENSE requadre (la
+    // convenció real de les fitxes del client). És estil de RENDER: ignora qualsevol bgFill/fill
+    // desat a la dada, així les cotes antigues (fons vermell + text blanc) migren soles. Mateixa
+    // geometria que la caixa (textBoxParts) però sense el Rect → la posició no es mou.
+    if (cotaLabel) {
+      const p = textBoxParts(obj)
+      // Sense el Rect de fons, el text ha de seguir captant el clic (bombolla al grup-cota per
+      // seleccionar-lo, com feia abans la caixa vermella): per això NO va amb listening={false}.
+      return (
+        <Group {...common} onDblClick={onDblText} onDblTap={onDblText}>
+          <Text {...p.text} fill={KONVA_COL.pom} />
+        </Group>
+      )
+    }
     // Text amb fons (text_box): Group amb un Rect darrere; no redimensionable per Transformer.
     if (obj.bgFill) {
       const p = textBoxParts(obj)
@@ -1654,7 +1937,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
       // Mentre es corba la fletxa d'una cota, l'etiqueta s'aparta: taparia els nodes que
       // s'estan tocant, justament al mig del traç. Torna sola en sortir de l'edició.
       .filter(child => child.visible !== false && !(hideTextChildren && child.type === 'text'))
-    return (
+    const groupNode = (
       <Group {...common} onDblClick={onDblGroup} onDblTap={onDblGroup}>
         {orderedChildren.map(child => (
           <ObjectNode key={child.id} obj={child} src={child.src}
@@ -1663,6 +1946,8 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
             // S1: dins d'un grup ENTRAT, els fills es poden seleccionar i moure (no rotar/redimensionar/editar).
             selected={entered ? child.id === selectedChildId : false}
             selectable={!!entered} draggable={!!entered}
+            // C2: el fill text d'una cota (grup amb pomId) es pinta amb l'estil d'etiqueta.
+            cotaLabel={obj.pomId != null && child.type === 'text'}
             onSelect={entered ? (e) => onChildSelect(e, child.id) : undefined}
             onDragEnd={entered ? onChildDragEnd(child) : undefined}
             onTransformEnd={undefined}
@@ -1670,6 +1955,12 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
         ))}
       </Group>
     )
+    // C1 — cota seleccionada (i NO entrada per editar nodes): nanses d'extrem + drag d'etiqueta,
+    // mai el Transformer d'escala global. S'aplica a TOTES les cotes (manual, precedent o IA).
+    if (selected && !entered && obj.pomId != null && onCotaEndpointDrag) {
+      return <>{groupNode}<CotaHandles obj={obj} onEndpointDrag={onCotaEndpointDrag} onLabelDrag={onCotaLabelDrag} /></>
+    }
+    return groupNode
   }
   return null
 }
@@ -1722,13 +2013,20 @@ function inlineSvgClassStyles(svgText) {
       return ''
     })
   })
-  const paintAttrs = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'fill-rule', 'clip-rule']
-  doc.querySelectorAll('path, polygon, polyline, line, rect').forEach(el => {
+  // `clip-path` s'inline perquè Paper importSVG NO llegeix classes CSS del <style>: sense
+  // inline-ar-lo, el clip d'un <g class> es perd i el que amagava (p.ex. la cua de la cremallera
+  // sota el baix) es fa visible. `g` entra a la llista perquè el clip viu típicament al grup.
+  const paintAttrs = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'fill-rule', 'clip-rule', 'clip-path']
+  const clipAttrs = ['clip-path', 'clip-rule']
+  doc.querySelectorAll('path, polygon, polyline, line, rect, g').forEach(el => {
     const merged = {}
     ;(el.getAttribute('class') || '').split(/\s+/).filter(Boolean).forEach(className => {
       Object.assign(merged, classStyles[className] || {})
     })
-    paintAttrs.forEach(attr => {
+    // Els <g> reben NOMÉS el clip (no la pintura, per no alterar l'herència de color dels fills);
+    // les formes reben tota la pintura + el clip. Acotat: cap atribut nou fora de clip-path.
+    const attrs = el.tagName.toLowerCase() === 'g' ? clipAttrs : paintAttrs
+    attrs.forEach(attr => {
       if (merged[attr] != null && !el.hasAttribute(attr)) el.setAttribute(attr, merged[attr])
     })
   })
@@ -1752,64 +2050,166 @@ async function legacySketchSvgToPath(obj, scope) {
   if (!bounds?.width || !bounds?.height) return obj
   const width = Math.max(2, obj.width || 80)
   const height = Math.max(2, obj.height || 60)
-  const scaleX = width / bounds.width
-  const scaleY = height / bounds.height
-  const strokeScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2
-  const mapSegs = (paperPath) => paperPath.segments.map(seg => ({
-    x: (seg.point.x - bounds.x) * scaleX,
-    y: (seg.point.y - bounds.y) * scaleY,
-    inX: seg.handleIn.x * scaleX,
-    inY: seg.handleIn.y * scaleY,
-    outX: seg.handleOut.x * scaleX,
-    outY: seg.handleOut.y * scaleY,
-  }))
-  // Recorre l'arbre importat sense aplanar els CompoundPath (que porten els forats als fills).
-  const collect = (item, out) => {
+  // Escala UNIFORME (fix proporció, DIAGNOSI_IMPORT_SVG_PROPORCIO): abans la caixa es
+  // dimensionava amb la ràtio del viewBox però el contingut s'hi encaixava amb scaleX/scaleY
+  // INDEPENDENTS (imported.bounds), deformant els SVG amb marge (exports Illustrator
+  // responsive). Un sol factor encaixa el contingut dins width×height PRESERVANT-NE la ràtio
+  // real; com que el retorn descarta width/height (type 'path' → manen les coordenades), la
+  // caixa de l'objecte queda amb la mida real del contingut escalat.
+  const scale = Math.min(width / bounds.width, height / bounds.height)
+  const scaleX = scale
+  const scaleY = scale
+  const strokeScale = scale
+  const mapSegs = (paperPath) => {
+    // globalMatrix inclou els transforms que Paper conserva SENSE bakejar (p.ex. un <rect> rotat
+    // no pot ser una Shape paramètrica → li queda la matriu). Sense això, translate/rotate es
+    // perdien i l'element sortia desplaçat (cas cremallera VEGA-3, ANNEX de la diagnosi). És
+    // identitat si Paper ja havia coït el transform → no-op per als elements sense transform. Les
+    // nanses són VECTORS: transformar punt+nansa i restar el punt transformat.
+    const m = paperPath.globalMatrix
+    return paperPath.segments.map(seg => {
+      const p = m.transform(seg.point)
+      const hi = m.transform(seg.point.add(seg.handleIn)).subtract(p)
+      const ho = m.transform(seg.point.add(seg.handleOut)).subtract(p)
+      return {
+        x: (p.x - bounds.x) * scaleX,
+        y: (p.y - bounds.y) * scaleY,
+        inX: hi.x * scaleX,
+        inY: hi.y * scaleY,
+        outX: ho.x * scaleX,
+        outY: ho.y * scaleY,
+      }
+    })
+  }
+  // ── Retall del clipPath a l'IMPORT (cua de cremallera) ──────────────────────
+  // Paper conserva el clip com un Group amb `clipped=true` i una màscara (primer fill,
+  // `clipMask`). El clip NO es baixa a geometria en render → l'hem de COURE aquí (booleana)
+  // perquè el resultat sigui fidel als dos renders, al round-trip i al PDF de franc. Triatge per
+  // bounds (contenció): només els fills que CREUEN la vora fan intersect. Mai perdre geometria en
+  // silenci: si una booleana falla, es conserva el fill sencer i es compta.
+  let clipDins = 0, clipFora = 0, clipCreua = 0, clipFallits = 0
+  const retallaAmbMascara = (item, mask) => {
+    if (!mask) return item
+    let ib, mb
+    try { ib = item.bounds; mb = mask.bounds } catch { return item }
+    if (!mb.intersects(ib)) { clipFora += 1; return null }        // totalment FORA → descartar
+    if (mb.contains(ib)) { clipDins += 1; return item }           // totalment DINS → tal qual
+    clipCreua += 1
+    try {
+      const res = item.intersect(mask, { insert: false, trace: true })
+      if (!res) return null
+      if (typeof res.isEmpty === 'function' && res.isEmpty()) return null
+      res.style = item.style   // la booleana no sempre hereta la pintura de l'original
+      return res
+    } catch { clipFallits += 1; return item }                     // fallada → conservar sencer
+  }
+  // Recorre l'arbre sense aplanar els CompoundPath (forats als fills). En entrar en un grup
+  // clipat, aplica la seva màscara als fills; la màscara mai s'emet com a traç.
+  const collect = (item, out, mask) => {
+    if (item.clipMask) return                                     // una màscara no és contingut
     const cn = item.className
-    if (cn === 'CompoundPath') out.push({ compound: item })
-    else if (cn === 'Path') out.push({ path: item })
-    else if (item.children) item.children.forEach(c => collect(c, out))
+    if (cn === 'CompoundPath' || cn === 'Path') {
+      const r = retallaAmbMascara(item, mask)
+      if (r) out.push(r.className === 'CompoundPath' ? { compound: r } : { path: r })
+      return
+    }
+    const kids = item.children
+    if (!kids) return
+    // Grup clipat: 1r fill = màscara (clipMask), la resta = contingut que l'hereta. Sense clip,
+    // hereta la màscara del context. Nested-clip: preval la interior (aquest fitxer en té 1).
+    const teMascara = item.clipped && kids.length && kids[0].clipMask
+    const m = teMascara ? kids[0] : mask
+    ;(teMascara ? kids.slice(1) : kids).forEach(c => collect(c, out, m))
   }
   const collected = []
-  collect(imported, collected)
-  const paths = collected.map(entry => {
+  collect(imported, collected, null)
+  if (clipDins + clipFora + clipCreua + clipFallits > 0) {
+    // Report del triatge (visible a la consola del navegador; mai perdre geometria en silenci).
+    console.info(`[import SVG · clip] dins=${clipDins} fora=${clipFora} creuen=${clipCreua} fallits=${clipFallits}`)
+  }
+  // El dasharray de l'SVG viu en unitats d'usuari; s'escala com la geometria (→ mm) i el render
+  // el passa a px amb toPx, igual que les coordenades. Recupera el bug conegut de pèrdua del dash
+  // (els repunts sortien continus); en abast NOMÉS per als traços que en porten (capa repunts).
+  const dashDe = (item) => {
+    const dash = item.dashArray
+    if (!Array.isArray(dash) || !dash.length) return undefined
+    const d = dash.map(v => v * strokeScale).filter(v => v > 0)
+    return d.length ? d : undefined
+  }
+  // ── Descriptor de pintura+geometria d'una entrada (path simple o compost amb forats) ──
+  const descriptorDe = (entry) => {
     if (entry.compound) {
       const compound = entry.compound
       const subpaths = compound.children
         .filter(c => c.className === 'Path' && c.segments?.length)
         .map(c => ({ closed: !!c.closed, segments: mapSegs(c) }))
       if (!subpaths.length) return null
+      const dash = dashDe(compound)
       return {
         fill: normalizePaint(compound.fillColor ? paperColorToCss(compound.fillColor, null) : null),
         fillRule: 'evenodd',
         stroke: normalizePaint(compound.strokeColor ? paperColorToCss(compound.strokeColor, null) : null),
         strokeWidth: Math.max(0.2, (compound.strokeWidth || 1) * strokeScale),
+        ...(dash ? { dash } : {}),
         subpaths,
       }
     }
     const path = entry.path
     if (!path.segments?.length) return null
+    const dash = dashDe(path)
     return {
       closed: !!path.closed,
       stroke: normalizePaint(path.strokeColor ? paperColorToCss(path.strokeColor, null) : null),
       fill: normalizePaint(path.fillColor ? paperColorToCss(path.fillColor, null) : null),
       fillRule: normalizeFillRule(path.fillRule),
       strokeWidth: Math.max(0.2, (path.strokeWidth || 1) * strokeScale),
+      ...(dash ? { dash } : {}),
       segments: mapSegs(path),
     }
-  }).filter(Boolean)
-  if (!paths.length) return obj
-  return {
-    ...obj,
-    type: 'path',
-    paths,
-    stroke: undefined,
-    fill: undefined,
-    strokeWidth: undefined,
-    svg: undefined,
-    width: undefined,
-    height: undefined,
   }
+
+  // ── Classificació per ROL (heurística d'ESTILS, determinista — mai geometria, mai IA) ──
+  // Cada traç recollit es reparteix a una de tres capes segons els atributs Paper resolts
+  // (post-inline de les classes CSS). RES es descarta: en cas de dubte, SILUETA (el pitjor cas
+  // és soroll dins la silueta, no un traç de peça perdut dins detall). Vegeu la diagnosi
+  // DIAGNOSI_IMPORT_SVG_PROPORCIO (§editabilitat / monolitisme). Llindars afinables:
+  const ROL = { SILUETA: 'silueta', REPUNTS: 'repunts', DETALL: 'detall' }
+  const DASH_MIN_GUIO = 0.01   // longitud mínima (unitats SVG) d'un guió perquè un traç sigui repunt
+  const teDash = (item) => Array.isArray(item.dashArray) && item.dashArray.some(d => d > DASH_MIN_GUIO)
+  const rolDe = (item) => {
+    if (teDash(item)) return ROL.REPUNTS                                   // stroke-dasharray → repunts
+    const teFill = !!(item.fillColor && (item.fillColor.gradient || paperColorToCss(item.fillColor, null)))
+    if (teFill) return ROL.DETALL                                         // fill sòlid o gradient → detall
+    return ROL.SILUETA                                                    // stroke + fill:none, i el dubte
+  }
+
+  const buckets = { [ROL.SILUETA]: [], [ROL.REPUNTS]: [], [ROL.DETALL]: [] }
+  for (const entry of collected) {
+    const desc = descriptorDe(entry)
+    if (!desc) continue
+    buckets[rolDe(entry.compound || entry.path)].push(desc)
+  }
+  const total = buckets.silueta.length + buckets.repunts.length + buckets.detall.length
+  if (!total) return obj
+
+  // Metadada comuna a tornar (id, x/y, sourceItemFitxer/viewSlot de F2a…), sense la forma vella.
+  const meta = { ...obj, stroke: undefined, fill: undefined, strokeWidth: undefined, svg: undefined, width: undefined, height: undefined }
+  // Ordre de pintat de les capes: DETALL al fons (cremallera/hardware plens), després la SILUETA
+  // i els REPUNTS al davant (traços i costures visibles sobre l'ompliment) — flat tècnic net.
+  const nonEmpty = [ROL.DETALL, ROL.SILUETA, ROL.REPUNTS].filter(rol => buckets[rol].length)
+
+  // Un sol rol (o res a separar) → 1 path monolític, EXACTAMENT com abans (mai un grup d'un fill).
+  if (nonEmpty.length <= 1) {
+    return { ...meta, type: 'path', paths: buckets[nonEmpty[0]], children: undefined, kind: undefined }
+  }
+  // Diversos rols → GRUP de capes-path, cada capa ciutadana normal del llenç (seleccionable/
+  // amagable/esborrable per separat en entrar al grup). Els fills neixen a x:0,y:0 amb les
+  // mateixes coordenades locals → objectBounds(grup) == bbox del contingut sencer, i F2a
+  // («Cotes des de precedent») opera sobre el grup igual que abans sobre el path (commit previ).
+  const children = nonEmpty.map(rol => ({
+    id: uid(), type: 'path', layer: 'free', role: rol, x: 0, y: 0, paths: buckets[rol],
+  }))
+  return { ...meta, type: 'group', kind: 'sketch', children, paths: undefined }
 }
 
 async function convertLegacySketchSvgs(pages) {
@@ -1866,6 +2266,7 @@ export default function TechSheetEditor() {
   const [pages, setPages] = useState([{ id: uid(), objects: [] }])
   const [currentPage, setCurrentPage] = useState(0)
   const [selectedIds, setSelectedIds] = useState([])
+  const [multiOutlines, setMultiOutlines] = useState([])  // C1: filets per membre en multiselecció (overlay VIU, mai export/.ftt)
   const [tool, setTool] = useState('select')
   // 'loading' | 'owned' | 'conflict' | 'error' | 'readonly'
   const [lockState, setLockState] = useState((isEditMode || fttMode) ? 'loading' : 'readonly')
@@ -1919,6 +2320,13 @@ export default function TechSheetEditor() {
   const [pomRows, setPomRows] = useState([])
   // Cota pre-carregada: {text} mentre l'usuari té un POM triat i encara no ha fet els dos clics.
   const [cotaPreset, setCotaPreset] = useState(null)
+  // F2 (precedent de col·locació): enllaç OBJECT-LEVEL — la procedència viu a cada objecte
+  // sketch (`sourceItemFitxer`, posat a l'import des del catàleg), no al document.
+  const [f2Msg, setF2Msg] = useState(null)   // resultat de col·locar/desar precedents
+  // F2 · propostes de col·locació agregades per pom_id (cascada del catàleg). El panell de POMs
+  // les llegeix per marcar cada POM com a PROPOSABLE; mai una crida per POM (agregació client).
+  const [propostes, setPropostes] = useState(() => new Map())   // pom_id → { p, derivat, hostId }
+  const [proposantIA, setProposantIA] = useState(false)   // F3: crida de visió en curs (segons, no ms)
   const [importMode, setImportMode] = useState(null)     // IMP-1: null | 'image' | 'garment' (panell d'import al dock)
   const [importFile, setImportFile] = useState(null)     // IMP-2: fitxer triat (no s'insereix fins a "Inserir")
   const [importNavOpen, setImportNavOpen] = useState(false)   // C5.3: AssetNavigator com a font "FTT"
@@ -1926,6 +2334,8 @@ export default function TechSheetEditor() {
   const [importDrag, setImportDrag] = useState(false)    // IMP-2: ressaltat de la drop zone
   const [ratioLocked, setRatioLocked] = useState(true)
   const [shiftHeld, setShiftHeld] = useState(false)   // S1: Shift premuda → resize proporcional
+  const [zoomModHeld, setZoomModHeld] = useState(false)  // C1: Ctrl/⌘ premut → cursor lupa (zoom amb roda)
+  const [zoomOutMod, setZoomOutMod] = useState(false)    // C1: Alt addicional → lupa d'allunyar
   // Grup contenidor quan el que s'edita per nodes és un FILL (cas cota de POM). null = el
   // que s'edita és un objecte de nivell superior, el cas de sempre.
   const [editingFlatGroupId, setEditingFlatGroupId] = useState(null)
@@ -2436,12 +2846,15 @@ export default function TechSheetEditor() {
     const w = Math.max(0, b.maxX - b.minX)
     const h = Math.max(0, b.maxY - b.minY)
     const positionByBounds = obj.type === 'line' || obj.type === 'arrow'
+    // C1 — una cota (grup amb pomId) no és redimensionable pel panell (W/H escalarien i
+    // distorsionarien el text): s'edita amb nanses d'extrem. La posició X/Y sí mou tota la cota.
+    const esCota = obj.type === 'group' && obj.pomId != null
     return {
       width: w,
       height: h,
       x: positionByBounds ? b.minX : (obj.x || 0),
       y: positionByBounds ? b.minY : (obj.y || 0),
-      canResize: !['line', 'arrow'].includes(obj.type),
+      canResize: !['line', 'arrow'].includes(obj.type) && !esCota,
     }
   }
   const moveObjectTo = (obj, key, value) => {
@@ -2703,6 +3116,60 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pages])
 
+  // ── F1 (cota viva) — re-deriva l'etiqueta de cada cota vinculada des del POM viu ──
+  // En carregar el document (o si canvia l'àlies del client) refresquem el text visible
+  // de la cota des de pomRows. Si el POM/BM ja no existeix, la cota DEGRADA a dibuix mort
+  // amb l'últim text conegut: mai crasha ni s'esborra. NOMÉS LECTURA: no toca cap dada del
+  // POM. Depèn de [pomRows, pages] perquè document i pomRows carreguen en ordre no
+  // determinista; és idempotent (si el text ja quadra, no hi ha setPages) i salta l'autosave
+  // (skipSave) per no encadenar una versió nova del .ftt en cada obertura.
+  useEffect(() => {
+    if (!pomRows.length) return
+    const bmById = new Map(pomRows.map(bm => [bm.id, bm]))
+    const bmByPom = new Map(pomRows.map(bm => [bm.pom_id, bm]))
+    let canvis = false
+    const nextPages = pages.map(p => {
+      const objects = (p.objects || []).map(o => {
+        if (o.type !== 'group' || o.pomId == null) return o
+        const bm = bmById.get(o.bmId) || bmByPom.get(o.pomId)
+        if (!bm) return o   // degradació elegant: el POM/BM ja no hi és
+        const nouText = cotaLabelDe(bm)
+        if (!nouText) return o
+        const kids = o.children || []
+        const ti = kids.findIndex(k => k.type === 'text')
+        if (ti < 0 || kids[ti].text === nouText) return o
+        const oldText = kids[ti]
+        const TW = measureTextWidthMm({ text: nouText, fontSize: 9, fontFamily: FONT, fontStyle: 'bold' })
+        const cx = (oldText.x || 0) + (oldText.width || 0) / 2   // manté el centre del text
+        const nouKids = kids.slice()
+        nouKids[ti] = { ...oldText, text: nouText, width: TW, x: cx - TW / 2 }
+        canvis = true
+        return { ...o, children: nouKids, pomCanonical: bm.pom_code_global || o.pomCanonical || '' }
+      })
+      return objects === p.objects ? p : { ...p, objects }
+    })
+    if (canvis) { skipSave.current = true; setPages(nextPages) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pomRows, pages])
+
+  // ── C1-fix — auto-col·locació de l'etiqueta de cada cota (offset perpendicular, mai sobre el
+  // traç). Migra les cotes existents sense flag de moviment manual en re-renderitzar (mateix
+  // patró que la re-derivació de text: idempotent + skipSave). `labelMoved` la deixa quieta.
+  useEffect(() => {
+    let canvis = false
+    const nextPages = pages.map(p => {
+      let pageCanvi = false
+      const objects = (p.objects || []).map(o => {
+        const no = autoPlaceCotaLabel(o)
+        if (no !== o) { pageCanvi = true; canvis = true }
+        return no
+      })
+      return pageCanvi ? { ...p, objects } : p
+    })
+    if (canvis) { skipSave.current = true; setPages(nextPages) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pages])
+
   // ── Autosave (debounce 2s; només amb lock; salta el primer load) ───────────
   useEffect(() => {
     if (!docCarregat.current) return   // el document encara no hi és: desar ara seria desar un full en blanc
@@ -2765,6 +3232,24 @@ export default function TechSheetEditor() {
     tr.getLayer()?.batchDraw()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, currentPage, pages, editingFlatId])
+
+  // ── C1: filet fi per element en multiselecció (estil Illustrator). Overlay VIU per BOUNDS
+  //    de cada membre (getClientRect, barat — no re-estil del path), a més del marc del
+  //    Transformer. Amb 1 sol objecte no fa res. Viu només al Stage viu: mai entra al camí
+  //    d'export (renderPageToDataURL) ni al .ftt. Es recalcula en canviar la selecció, la
+  //    geometria (pages) o la pàgina, i durant el drag (handleDragMove) perquè segueixi.
+  const syncMultiOutlines = useCallback(() => {
+    const stage = stageRef.current
+    if (!stage || editingFlatId || selectedIds.length < 2) { setMultiOutlines([]); return }
+    const outlines = selectedIds.map(id => {
+      const n = stage.findOne('#' + id)
+      if (!n) return null
+      const r = n.getClientRect({ relativeTo: n.getLayer() })
+      return { id, x: r.x, y: r.y, w: r.width, h: r.height }
+    }).filter(Boolean)
+    setMultiOutlines(outlines)
+  }, [selectedIds, editingFlatId])
+  useEffect(() => { syncMultiOutlines() }, [syncMultiOutlines, currentPage, pages])
 
   // ── Teclat: Delete/Backspace esborra l'objecte free seleccionat ────────────
   useEffect(() => {
@@ -2974,6 +3459,23 @@ export default function TechSheetEditor() {
     }
   }, [])
 
+  // ── C1: modificador de zoom (Ctrl/⌘) premut → cursor lupa al llenç (senyala «roda = zoom»).
+  //    Alt addicional → lupa d'allunyar. Reutilitza el mecanisme de cursor-per-eina (Peça C):
+  //    viewportCursor mira aquest estat i, en deixar anar, torna al cursor de l'eina activa.
+  useEffect(() => {
+    if (!locked) return undefined
+    const sync = (e) => { setZoomModHeld(e.ctrlKey || e.metaKey); setZoomOutMod(e.altKey) }
+    const clear = () => { setZoomModHeld(false); setZoomOutMod(false) }
+    window.addEventListener('keydown', sync)
+    window.addEventListener('keyup', sync)
+    window.addEventListener('blur', clear)
+    return () => {
+      window.removeEventListener('keydown', sync)
+      window.removeEventListener('keyup', sync)
+      window.removeEventListener('blur', clear)
+    }
+  }, [locked])
+
   // ── S1: nudge amb fletxes — translada un objecte (dx,dy en mm) segons el seu tipus ──
   const translate = (o, dx, dy) => {
     if (o.type === 'line') return { ...o, points: (o.points || []).map((v, i) => (i % 2 === 0 ? v + dx : v + dy)) }
@@ -3024,6 +3526,7 @@ export default function TechSheetEditor() {
   }
   // S2: a cada frame de drag, magnetitza el node contra els candidats (Cmd/Ctrl ho desactiva).
   const handleDragMove = (obj) => (e) => {
+    if (selectedIds.length >= 2) syncMultiOutlines()   // C1: els filets segueixen el moviment
     if (!snapCand.current) return
     if (e.evt?.ctrlKey || e.evt?.metaKey) { setSnapLines(null); return }
     const node = e.target
@@ -3070,6 +3573,37 @@ export default function TechSheetEditor() {
       else { pts[pts.length - 2] = mx; pts[pts.length - 1] = my }
       updateObject(obj.id, { points: pts })
     }
+  }
+  // C1 — arrossegar la nansa d'un extrem de cota mou NOMÉS aquell extrem (la línia), mantenint
+  // l'etiqueta ancorada al punt mig sense deformar-la. Shift encaixa a 45° respecte l'altre extrem.
+  const handleCotaEndpointDrag = (obj) => (which) => (e) => {
+    const node = e.target
+    let px = { x: node.x(), y: node.y() }
+    if (e.evt?.shiftKey) {
+      const ends = cotaHandleEnds(obj)
+      if (ends) {
+        const other = which === 'start' ? ends.b : ends.a
+        px = snap45(toPx(other.x), toPx(other.y), px.x, px.y)
+      }
+    }
+    const patch = resizeCotaEndpoint(obj, which, toMm(px.x), toMm(px.y))
+    if (patch) updateObject(obj.id, patch)
+  }
+  // C1 — arrossegar la nansa de l'etiqueta la reposiciona (el text segueix l'ancoratge) sense
+  // tocar la línia. Es desa a l'offset local del fill text; mai n'escala la mida.
+  const handleCotaLabelDrag = (obj) => (e) => {
+    const node = e.target
+    const cx = toMm(node.x() + 4), cy = toMm(node.y() + 4)   // centre de la nansa (8×8)
+    const kids = obj.children || []
+    const ti = kids.findIndex(k => k.type === 'text')
+    if (ti < 0) return
+    const tobj = kids[ti]
+    const tw = tobj.width || 0, hh = textHalfHeightMm(tobj.fontSize)
+    const nk = kids.slice()
+    nk[ti] = { ...tobj, x: (cx - (obj.x || 0)) - tw / 2, y: (cy - (obj.y || 0)) - hh }
+    // C1-fix: marca la cota com moguda a mà → l'offset automàtic ja no la re-col·loca (ni en
+    // estirar extrems ni la migració). Respectar on l'usuari l'ha deixada.
+    updateObject(obj.id, { children: nk, labelMoved: true })
   }
   const handleTransformEnd = (obj) => (e) => {
     const node = e.target
@@ -3197,12 +3731,13 @@ export default function TechSheetEditor() {
     // punta (arrow2) que marca els extrems A→B; substitueix els ticks perpendiculars.
     const ax = toMm(p1.x), ay = toMm(p1.y)
     const dx = toMm(p2.x) - ax, dy = toMm(p2.y) - ay
-    const len = Math.hypot(dx, dy) || 1
-    const px = -dy / len, py = dx / len   // perpendicular unitari (per desplaçar el text)
     // Cota PRE-CARREGADA des del contenidor de POMs: la fletxa i l'etiqueta van en vermell
-    // saturat i el text és el `nom_fitxa` del POM — la nomenclatura amb què el patronista
-    // anomena aquesta mesura al croquis. FRONTERA G1: entra com a STRING LITERAL, sense cap
-    // pom_id ni bm_id a l'objecte. La cota no és un binding viu; és un dibuix.
+    // (C2 · text sense requadre) i el text és l'ÀLIES DE CLIENT (o el codi canònic) del POM — la nomenclatura
+    // amb què el patronista anomena aquesta mesura al croquis.
+    // FRONTERA G1 (F1 cota viva): el grup guarda pomId i bmId com a VINCLE DE NOMÉS LECTURA.
+    // L'etiqueta es re-deriva del POM viu en carregar el document, però la cota MAI escriu
+    // cap valor de mesura ni res al POM/BaseMeasurement: el valor numèric no hi viu. Segueix
+    // sent un dibuix, ara vinculat per id — mai una escriptura de dades.
     const pom = cotaPreset
     const col = pom ? KONVA_COL.pom : KONVA_COL.textMain
     // La fletxa de la cota de POM és un `path` de dos nodes amb punta als dos extrems, no un
@@ -3214,14 +3749,24 @@ export default function TechSheetEditor() {
           paths: [{ closed: false, segments: [{ x: 0, y: 0, inX: 0, inY: 0, outX: 0, outY: 0 }, { x: dx, y: dy, inX: 0, inY: 0, outX: 0, outY: 0 }], stroke: col, strokeWidth: 1, fill: null }] }
       : { id: uid(), type: 'arrow', layer: 'free', x: 0, y: 0, x2: dx, y2: dy, stroke: col, fill: col, strokeWidth: 1, arrow2: true }
     // A4 — l'amplada surt de MESURAR el text, no d'un literal: una cota de POM pot dir "A" o
-    // "1/2 CHEST WIDTH" i el fons vermell s'hi ha d'ajustar. Es mesura un cop, aquí, i es desa.
+    // "1/2 CHEST WIDTH". Es mesura un cop, aquí, i es desa. C2 · l'etiqueta va en vermell SENSE
+    // requadre (cap camp per-cota fixa el fons): estil de convenció real de les fitxes.
     const etiqueta = pom ? pom.text : t('tech_sheet.preset_cota_text')
     const TW = measureTextWidthMm({ text: etiqueta, fontSize: 9, fontFamily: FONT, fontStyle: pom ? 'bold' : 'normal' })
-    const mx = dx / 2 + px * 3, my = dy / 2 + py * 3   // punt mig desplaçat 3mm perpendicular
+    // C1-fix: posició INICIAL de l'etiqueta = offset perpendicular automàtic (mai sobre el traç),
+    // dimensionat amb les extensions reals del text perquè netegi el traç a qualsevol orientació.
+    const hh = textHalfHeightMm(9)
+    const off = cotaLabelOffset(dx, dy, TW / 2, hh)
+    const mx = dx / 2 + off.x, my = dy / 2 + off.y
     const text = pom
-      ? { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.white, fontStyle: 'bold', align: 'center', bgFill: KONVA_COL.pom, bgPadding: toMm(TEXT_PAD_Y_PX) }
-      : { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
-    addObject({ id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0, children: [linia, text] })
+      ? { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - hh, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.pom, fontStyle: 'bold', align: 'center' }
+      : { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - hh, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
+    addObject({
+      id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0,
+      // F1: vincle de només-lectura al POM viu (escalars → round-trip .ftt lliure, no host-ref).
+      ...(pom?.pomId != null ? { pomId: pom.pomId, bmId: pom.bmId, pomCanonical: pom.canonical || '' } : {}),
+      children: [linia, text],
+    })
     setCotaPreset(null)
   }
   const onStageMouseDown = (e) => {
@@ -3464,8 +4009,9 @@ export default function TechSheetEditor() {
   const endPan = () => { if (panDrag.current) { panDrag.current = null; setPanning(false) } }
 
   // ── Imatge: fitxer local (botó/drop) i fitxers del model ───────────────────
-  const addImageFromDataURL = (dataURL) => {
-    const obj = { id: uid(), type: 'image', layer: 'free', x: 50, y: 50, width: 120, height: 80, src: dataURL }
+  const addImageFromDataURL = (dataURL, extra = {}) => {
+    // F2: `extra` pot portar sourceItemFitxer (procedència de catàleg de l'sketch importat).
+    const obj = { id: uid(), type: 'image', layer: 'free', x: 50, y: 50, width: 120, height: 80, src: dataURL, ...extra }
     addObject(obj)
   }
   const handleFile = (file) => {
@@ -3512,7 +4058,7 @@ export default function TechSheetEditor() {
     addObject(obj)
     setEditingFlatId(obj.id)
   }
-  const importFlatSvgText = async (svgText) => {
+  const importFlatSvgText = async (svgText, extra = {}) => {
     if (!locked) return
     const ratio = svgAspectRatio(svgText)
     if (!ratio) {
@@ -3523,7 +4069,10 @@ export default function TechSheetEditor() {
     const maxH = 78
     const width = ratio >= maxW / maxH ? maxW : maxH * ratio
     const height = width / ratio
-    if (['sketch_svg', 'path'].includes(selObj?.type)) {
+    // Reemplaçar l'SVG in-situ: també un grup-sketch (import amb rols separats) es pot rebuscar.
+    // El convertit clara les claus de la forma contrària (`paths`/`children` a `undefined`), així
+    // que el merge d'`updateObject` no deixa geometria rància ni de path ni de grup.
+    if (['sketch_svg', 'path'].includes(selObj?.type) || (selObj?.type === 'group' && selObj?.kind === 'sketch')) {
       const source = {
         id: selObj.id, type: 'sketch_svg', layer: selObj.layer || 'free',
         x: selObj.x || 54, y: selObj.y || 44,
@@ -3531,10 +4080,12 @@ export default function TechSheetEditor() {
         svg: svgText,
       }
       const converted = await convertLegacySketchSvgObject(source)
-      updateObject(selObj.id, converted)
+      updateObject(selObj.id, { ...converted, ...extra })
       setEditingText(null)
       setTool('select')
-      setEditingFlatId(selObj.id)
+      // Un grup no és editable per nodes directament (cal entrar-hi i triar un fill): no hi obrim
+      // el sub-editor. Un path sí.
+      setEditingFlatId(converted.type === 'group' ? null : selObj.id)
       return
     }
     const source = {
@@ -3543,8 +4094,14 @@ export default function TechSheetEditor() {
       svg: svgText,
     }
     const obj = await convertLegacySketchSvgObject(source)
-    addObject(obj)
-    setEditingFlatId(obj.id)
+    addObject({ ...obj, ...extra })   // addObject ja deixa l'objecte SELECCIONAT
+    // Un import amb rols separats retorna un GRUP. Un grup NO és editable per nodes directament
+    // (cal entrar-hi i triar un fill-path); deixar-hi `editingFlatId` posava l'editor en mode
+    // node SENSE objectiu vàlid (`editingFlat` no resol un 'group'), i aquest estat suprimeix el
+    // Transformer (:2962) i els filets de multiselecció (:2986) → el grup importat quedava sense
+    // cap contenidor de selecció. Només un path/sketch entra al sub-editor; el grup queda
+    // seleccionat i prou (el Transformer s'hi lliga tot sol).
+    if (obj.type !== 'group') setEditingFlatId(obj.id)
   }
   const handleFlatSvgFile = (file) => {
     if (!file || !locked) return
@@ -3696,21 +4253,28 @@ export default function TechSheetEditor() {
   }
   const addModelFitxer = async (f) => {
     if (!locked) return
+    const nom = (f.nom_fitxer || '').toLowerCase()
     // D13: aquest fetch SÍ pot portar Authorization → va per l'endpoint AUTENTICAT, no pel
     // signat. Abans apuntava directament a /media/ (servit per nginx, sense cap gate).
     // url_extern viu en un altre origen: s'hi va sense capçalera (no li enviem el token).
     const extern = !!f.url_extern
     const url = extern ? f.url_extern : (f.id ? `${API}/api/v1/model-fitxers/${f.id}/download/` : null)
     if (!url) return
+    // F2a — procedència de catàleg: per a un fitxer de MODEL viu a `derivat_de_item` (l'ItemFitxer
+    // origen), NO a f.id (que és un ModelFitxer). Consistent amb importarDelTenant, que per a un
+    // ItemFitxer usa f.id. Sense origen de catàleg → sense procedència. (Abans, aquest camí no en
+    // portava mai.)
+    const extra = f.derivat_de_item ? { sourceItemFitxer: f.derivat_de_item } : {}
     try {
-      const blob = await fetch(url, extern ? undefined : { headers: uploadHeaders })
-        .then(r => { if (!r.ok) throw new Error('fetch'); return r.blob() })
-      const dataURL = await new Promise((res, rej) => {
-        const fr = new FileReader()
-        fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('fr'))
-        fr.readAsDataURL(blob)
-      })
-      addImageFromDataURL(dataURL)
+      const r = await fetch(url, extern ? undefined : { headers: uploadHeaders })
+      if (!r.ok) throw new Error('fetch')
+      if (nom.endsWith('.svg')) {
+        // Q1: un .svg entra VECTORIAL (importFlatSvgText → escala uniforme, editable), no ràster.
+        // Mateixa bifurcació que importarDelTenant; abans aquí tot queia a addImageFromDataURL.
+        await importFlatSvgText(await r.text(), extra)
+      } else {
+        addImageFromDataURL(await blobToDataURL(await r.blob()), extra)
+      }
     } catch { /* silenci */ }
   }
 
@@ -3807,7 +4371,11 @@ export default function TechSheetEditor() {
     setTablePicker(null)
   }
 
-  // T1b — grading final: talles + Δ, amb els breaks (canvi d'increment) en negreta.
+  // T1b — grading final: talles + Δ + columna Break. Les xifres graduades van TOTES en negre
+  // (Patró C, deroga T2): el break ja no es codifica a la cel·la (ni vermell ni subratllat ni
+  // negreta), sinó que es resumeix en una columna pròpia al final. Es conserva la negreta
+  // estructural (capçalera + 1a columna) i les franges de la talla base. El color a les dades
+  // queda reservat per a senyals d'EXCEPCIÓ futures. Snapshot congelat: només afecta reinsercions.
   const insertTableT1b = async (sfId) => {
     if (!locked) return
     let data
@@ -3829,21 +4397,27 @@ export default function TechSheetEditor() {
         ? { key: sl, label: `${sl}*`, width: 16, base: true }
         : { key: sl, label: sl, width: 16 })),
       { key: 'delta', label: 'Δ', width: 16 },
+      // Ordre final: ...talles... · Δ · Break. Amplada mínima suficient per a un resum curt.
+      { key: 'break', label: t('tech_sheet.tbl_col_break'), width: 22 },
     ]
-    // Break = talla on el delta CANVIA respecte a la talla anterior (ordre de size_labels).
-    const cellForSize = (row, sl, prevSl) => {
-      const v = row.valors?.[sl]
-      const text = fmtMeasure(v, unit) ?? '–'
+    // Break = talla on el delta CANVIA respecte a la talla anterior (ordre de size_labels). Ara
+    // NOMÉS alimenta la columna resum; la cel·la de la talla es queda en negre pla (C1).
+    const esBreak = (row, sl, prevSl) => {
       const d = row.deltas?.[sl]
       const dPrev = prevSl != null ? row.deltas?.[prevSl] : undefined
-      const isBreak = prevSl != null && d != null && dPrev != null && d !== dPrev
-      return isBreak ? { text, bold: true } : text
+      return prevSl != null && d != null && dPrev != null && d !== dPrev
     }
+    const cellForSize = (row, sl) => fmtMeasure(row.valors?.[sl], unit) ?? '–'
+    // Resum de breaks de la fila: buit si cap · una talla ("9/10") · llista compacta ("6 · 9/10").
+    const breakResum = (row) => sizeLabels
+      .filter((sl, si) => esBreak(row, sl, si > 0 ? sizeLabels[si - 1] : null))
+      .join(' · ')
     const rows = data.rows.map(row => [
       row.ref || row.abbreviation || row.codi || '',
       { text: row.nom_en || '', sub: row.nom_ca || '' },
-      ...sizeLabels.map((sl, si) => cellForSize(row, sl, si > 0 ? sizeLabels[si - 1] : null)),
+      ...sizeLabels.map(sl => cellForSize(row, sl)),
       rowDelta(row, data.base_size, sizeLabels),
+      breakResum(row),
     ])
     const obj = fitTableObj({
       id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
@@ -4103,15 +4677,258 @@ export default function TechSheetEditor() {
     return vist
   }, [pages])
 
+  // F1 (cota viva): una cota compta com a col·locada pel seu pomId (vincle viu), no pel
+  // text. Les cotes antigues sense pomId (pre-F1) no hi compten — degradació acceptada.
   const cotesColocades = useMemo(() => {
-    const noms = new Set()
+    const ids = new Set()
     for (const p of pages) {
       for (const o of flattenObjects(p.objects || [])) {
-        if (o.type === 'text' && o.text) noms.add(String(o.text).trim())
+        // F3: una proposta IA pendent NO compta com a col·locada — encara ha de passar revisió.
+        if (o.pomId != null && !o.iaProposada) ids.add(o.pomId)
       }
     }
-    return noms
+    return ids
   }, [pages])
+  // F3: pomIds amb una cota PROPOSADA-IA viva a la pàgina actual (pendent d'acceptar/descartar).
+  const iaCotesByPom = useMemo(() => {
+    const ids = new Set()
+    for (const o of (pages[currentPage]?.objects || [])) {
+      if (o.type === 'group' && o.pomId != null && o.iaProposada) ids.add(o.pomId)
+    }
+    return ids
+  }, [pages, currentPage])
+  const iaPropostesVives = useMemo(
+    () => (pages[currentPage]?.objects || []).filter(o => o.type === 'group' && o.pomId != null && o.iaProposada),
+    [pages, currentPage])
+
+  // ── F2 (precedent de col·locació de cotes) · enllaç OBJECT-LEVEL ────────────
+  // Objectes del croquis de la pàgina actual. Un objecte participa en F2 si porta la seva
+  // procedència de catàleg (`sourceItemFitxer`, posada a l'import) i una vista assignada.
+  // Un import SVG amb rols separables retorna un GRUP (`kind:'sketch'`) en comptes d'un path
+  // monolític; la seva metadata de procedència viu al grup i `objectBounds` ja en calcula la
+  // bbox del contingut, així que compta com a croquis igual que un path. El discriminant
+  // `kind==='sketch'` deixa fora les cotes (grups amb `pomId`) i els grups d'usuari.
+  const isSketchObj = (o) => SKETCH_OBJ_TYPES.includes(o.type) || (o.type === 'group' && o.kind === 'sketch')
+  const sketchObjs = curObjs.filter(isSketchObj)
+  // Assignar la vista a un objecte sketch (des de Propietats de l'objecte, UX-COTES). El col·locar
+  // i el desar massius de l'antic contenidor «Cotes des de precedent» han mort: el col·locar viu
+  // ara per-POM al panell (posarProposta/posarTotesPropostes) i el desar per-cota (desarUnaPrecedent).
+  const assignaVista = (objId, slot) => updateObject(objId, { viewSlot: slot || undefined })
+
+  // ── F2 · PROPOSTES agregades per pom_id ─────────────────────────────────────
+  // Fonts = objectes sketch amb procedència de catàleg + vista assignada (la vista viu a
+  // Propietats de l'objecte, no a cap llista). Signatura estable (id+item+vista) perquè l'efecte
+  // re-demani NOMÉS quan canvien les fonts, no a cada render ni a cada tecleig de geometria.
+  const propFontsSig = JSON.stringify(
+    sketchObjs.filter(o => o.sourceItemFitxer && o.viewSlot).map(o => [o.id, o.sourceItemFitxer, o.viewSlot]))
+  const propFonts = useMemo(
+    () => sketchObjs.filter(o => o.sourceItemFitxer && o.viewSlot)
+      .map(o => ({ hostId: o.id, item: o.sourceItemFitxer, slot: o.viewSlot })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [propFontsSig])
+  useEffect(() => {
+    if (!id || !propFonts.length) { setPropostes(new Map()); return undefined }
+    let cancelled = false
+    ;(async () => {
+      const acc = new Map()   // pom_id → { p, derivat, hostId }; l'EXACTE (derivat=false) guanya la germana
+      for (const f of propFonts) {
+        try {
+          const r = await fetch(
+            `${API}/api/v1/item-fitxers/${f.item}/pom-placements/`
+            + `?view_slot=${encodeURIComponent(f.slot)}&model_id=${id}`, { headers: authHeaders })
+          if (!r.ok) continue
+          const data = await r.json()
+          for (const p of (data.placements || [])) {
+            const prev = acc.get(p.pom_id)
+            if (prev && !prev.derivat) continue      // ja hi ha exacte per aquest POM → no el trepitgem
+            acc.set(p.pom_id, { p, derivat: !!p.derivat, hostId: f.hostId })
+          }
+        } catch { /* continua amb la següent font */ }
+      }
+      if (!cancelled) setPropostes(acc)
+    })()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, propFonts])
+
+  // Construeix la cota VIVA de F1 d'una proposta, desnormalitzant sobre la bbox ACTUAL del seu
+  // objecte-sketch host (si s'ha mogut/redimensionat, la cota hi cau bé igualment). null si el
+  // host ja no hi és. La vista es resol SOLA: la del host, mai demanada per endavant.
+  const buildCotaDeProposta = useCallback((pomId, prop) => {
+    const host = curObjs.find(o => o.id === prop.hostId)
+    if (!host) return null
+    const bb = objectBounds(host)
+    const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
+    const bm = pomRows.find(r => r.pom_id === pomId)
+    const p = prop.p
+    const ax = bb.minX + p.x1 * bw, ay = bb.minY + p.y1 * bh
+    const bx = bb.minX + p.x2 * bw, by = bb.minY + p.y2 * bh
+    return buildLiveCota({
+      ax, ay, dx: bx - ax, dy: by - ay,
+      label: cotaLabelDe(bm) || p.codi, pomId, bmId: p.bm_id,
+      canonical: p.codi, viewSlot: host.viewSlot, derivat: prop.derivat,
+      // C1-fix: l'etiqueta es col·loca amb l'offset perpendicular automàtic (buildLiveCota), no
+      // amb la posició normalitzada del precedent → mai sobre el traç.
+    })
+  }, [curObjs, pomRows])
+
+  // «Posar» LA cota d'un POM proposable (mecànica de colocarDesPrecedent, però per POM). La cota
+  // neix VIVA de F1: arrossegable, editable; el panell la veurà tot seguit com a COL·LOCAT.
+  const posarProposta = useCallback((pomId) => {
+    const prop = propostes.get(pomId)
+    if (!prop) return
+    const cota = buildCotaDeProposta(pomId, prop)
+    if (cota) updatePageObjects(currentPage, objs => [...objs, cota])
+  }, [propostes, buildCotaDeProposta, currentPage, updatePageObjects])
+
+  // Acció de grup: posar TOTES les proposables que encara no són al document.
+  const posarTotesPropostes = useCallback(() => {
+    const nous = []
+    for (const [pomId, prop] of propostes) {
+      if (cotesColocades.has(pomId)) continue
+      const cota = buildCotaDeProposta(pomId, prop)
+      if (cota) nous.push(cota)
+    }
+    if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
+    setF2Msg(t('tech_sheet.pom_posades', { n: nous.length }))
+  }, [propostes, cotesColocades, buildCotaDeProposta, currentPage, updatePageObjects, t])
+  // Nombre de POMs proposables encara NO col·locats (per a l'acció de grup del panell).
+  const proposablesCount = pomRows.filter(
+    bm => bm.pom_id != null && !cotesColocades.has(bm.pom_id) && propostes.has(bm.pom_id)).length
+
+  // Desar UNA cota com a precedent del catàleg (acte CONSCIENT, D1) — des de Propietats de la
+  // cota. Resol el host sketch pel punt mig de la cota; la vista es pren del host. Substitueix
+  // l'antic «Desar col·locació» massiu del contenidor mort.
+  // Nucli compartit: resol el host sketch (per contenció del punt mig) i normalitza els extrems
+  // sobre la seva bbox. null si la cota no cau sobre cap croquis de catàleg amb vista → sense
+  // precedent (i sense error). El fan servir tant «desar precedent» (conscient) com l'acceptació
+  // d'una proposta IA (llei de convivència: acceptar escriu precedent).
+  const construirPrecedentCota = useCallback((cota) => {
+    const e = cotaEndsMm(cota)
+    if (!e) return null
+    const mid = { x: (e.ax + e.bx) / 2, y: (e.ay + e.by) / 2 }
+    const dins = (bb, pt) => pt.x >= bb.minX && pt.x <= bb.maxX && pt.y >= bb.minY && pt.y <= bb.maxY
+    const host = sketchObjs.find(o => o.sourceItemFitxer && o.viewSlot && dins(objectBounds(o), mid))
+    if (!host) return null
+    const bb = objectBounds(host)
+    const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
+    return {
+      host,
+      body: {
+        pom_id: cota.pomId, view_slot: host.viewSlot,
+        x1: (e.ax - bb.minX) / bw, y1: (e.ay - bb.minY) / bh,
+        x2: (e.bx - bb.minX) / bw, y2: (e.by - bb.minY) / bh,
+        label_dx: e.lc ? (e.lc.x - mid.x) / bw : 0,
+        label_dy: e.lc ? (e.lc.y - mid.y) / bh : 0,
+        source_kind: host.type === 'image' ? 'raster' : 'vector',
+      },
+    }
+  }, [sketchObjs])
+  const desarUnaPrecedent = useCallback(async (cota) => {
+    const built = construirPrecedentCota(cota)
+    if (!built) { setF2Msg(t('tech_sheet.f2_desar_sense_host')); return }
+    try {
+      const r = await fetch(`${API}/api/v1/item-fitxers/${built.host.sourceItemFitxer}/pom-placements/`, {
+        method: 'POST', headers: authHeaders, body: JSON.stringify(built.body) })
+      setF2Msg(r.ok ? t('tech_sheet.f2_desar_ok') : t('tech_sheet.f2_desar_err'))
+    } catch { setF2Msg(t('tech_sheet.f2_desar_err')) }
+  }, [construirPrecedentCota, authHeaders, t])
+  // Llei de convivència (D1): ACCEPTAR una proposta escriu precedent al catàleg — SILENCIÓS i
+  // sense error si no hi ha origen (només queda la cota viva). El sistema aprèn de l'acceptació.
+  const escriurePrecedentSilent = useCallback(async (cota) => {
+    const built = construirPrecedentCota(cota)
+    if (!built) return
+    try {
+      await fetch(`${API}/api/v1/item-fitxers/${built.host.sourceItemFitxer}/pom-placements/`, {
+        method: 'POST', headers: authHeaders, body: JSON.stringify(built.body) })
+    } catch { /* acceptar no ha de petar si el precedent no es pot desar */ }
+  }, [construirPrecedentCota, authHeaders])
+
+  // ── F3 · PROPOSAR cotes amb IA de visió ─────────────────────────────────────
+  // Rasteritza la pàgina SENSE cotes (ni col·locades ni proposades) ni overlays, envia els
+  // objectes sketch (bbox 0..1 de la pàgina) + els POMs PENDENT, i materialitza les propostes
+  // com a cotes VIVES en estat PROPOSAT (iaProposada): atenuades, NOMÉS pantalla, manipulables.
+  const proposarCotesIA = useCallback(async () => {
+    const pendents = pomRows.filter(bm => bm.pom_id != null
+      && !cotesColocades.has(bm.pom_id) && !iaCotesByPom.has(bm.pom_id))
+    if (!pendents.length) { setF2Msg(t('tech_sheet.ia_cap_pendent')); return }
+    const hosts = sketchObjs
+    if (!hosts.length) { setF2Msg(t('tech_sheet.ia_cap_sketch')); return }
+    setProposantIA(true)
+    setF2Msg(t('tech_sheet.ia_proposant'))
+    try {
+      const netaObjs = (curObjs || []).filter(o => !(o.type === 'group' && o.pomId != null))
+      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl }
+      const pageImage = await renderPageToDataURL({ ...pages[currentPage], objects: netaObjs }, 1.5, ctx)
+      const sketches = hosts.map(o => {
+        const bb = objectBounds(o)
+        return {
+          object_id: o.id, view_slot: o.viewSlot || null,
+          bbox_norm: { x: bb.minX / fmt.w, y: bb.minY / fmt.h,
+            w: (bb.maxX - bb.minX) / fmt.w, h: (bb.maxY - bb.minY) / fmt.h },
+        }
+      })
+      const poms = pendents.map(bm => ({
+        pom_id: bm.pom_id, code: bm.codi_client,
+        canonical_name: bm.nom_en || bm.pom_code_global || '',
+        client_alias: bm.client_alias || null, definition: bm.definicio || null,
+      }))
+      const r = await fetch(`${API}/api/v1/models/${id}/proposar-cotes/`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({ page_image: pageImage, sketches, poms }) })
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}))
+        setF2Msg(e.error || t('tech_sheet.ia_error')); return
+      }
+      const data = await r.json()
+      const hostById = new Map(hosts.map(o => [o.id, o]))
+      const bmByPom = new Map(pomRows.map(bm => [bm.pom_id, bm]))
+      const nous = []
+      for (const p of (data.placements || [])) {
+        const host = hostById.get(p.object_id)
+        if (!host || cotesColocades.has(p.pom_id) || iaCotesByPom.has(p.pom_id)) continue
+        const bb = objectBounds(host)
+        const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
+        const bm = bmByPom.get(p.pom_id)
+        const ax = bb.minX + (p.x1 || 0) * bw, ay = bb.minY + (p.y1 || 0) * bh
+        const bx = bb.minX + (p.x2 || 0) * bw, by = bb.minY + (p.y2 || 0) * bh
+        const cota = buildLiveCota({
+          ax, ay, dx: bx - ax, dy: by - ay,
+          label: cotaLabelDe(bm) || String(p.pom_id), pomId: p.pom_id, bmId: bm?.id,
+          canonical: bm?.pom_code_global || '', viewSlot: host.viewSlot,
+          // C1-fix: offset perpendicular automàtic (buildLiveCota), no la posició proposada per la IA.
+        })
+        nous.push({ ...cota, iaProposada: true, iaConfidence: p.confidence || 'mitjana' })
+      }
+      if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
+      const skip = (data.skip || []).length
+      setF2Msg(t('tech_sheet.ia_proposades', { n: nous.length, s: skip }))
+    } catch {
+      setF2Msg(t('tech_sheet.ia_error'))
+    } finally {
+      setProposantIA(false)
+    }
+  }, [pomRows, cotesColocades, iaCotesByPom, sketchObjs, curObjs, pages, currentPage,
+      tableData, model, sheet, pageW, pageH, customerLogoUrl, fmt, id, authHeaders, updatePageObjects, t])
+
+  // Acceptar UNA proposta: la cota esdevé cota viva normal (F1) I, si el seu croquis ve del
+  // catàleg amb vista, escriu precedent (el sistema aprèn de l'acceptació).
+  const acceptarProposta = useCallback((cota) => {
+    updateObject(cota.id, { iaProposada: undefined, iaConfidence: undefined })
+    escriurePrecedentSilent(cota)
+  }, [updateObject, escriurePrecedentSilent])
+  const descartarProposta = useCallback((cotaId) => { deleteObject(cotaId) }, [deleteObject])
+  const acceptarTotesPropostes = useCallback(() => {
+    iaPropostesVives.forEach(escriurePrecedentSilent)
+    updatePageObjects(currentPage, objs => objs.map(o => (
+      o.iaProposada ? { ...o, iaProposada: undefined, iaConfidence: undefined } : o)))
+    setF2Msg(t('tech_sheet.ia_acceptades'))
+  }, [iaPropostesVives, escriurePrecedentSilent, currentPage, updatePageObjects, t])
+  const descartarTotesPropostes = useCallback(() => {
+    updatePageObjects(currentPage, objs => objs.filter(o => !o.iaProposada))
+    setF2Msg(t('tech_sheet.ia_descartades'))
+  }, [currentPage, updatePageObjects, t])
+
   const curGuides = pages[currentPage]?.guides || []   // S2: guies de la pàgina activa
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   const selectedSet = new Set(selectedIds)
@@ -4235,8 +5052,9 @@ export default function TechSheetEditor() {
   // sub-editor a `nodeSel` — ja hi era i no el llegia ningú.
   const pinturaViva = panelLockedForEdit && nodeSel?.strokeWidth != null ? nodeSel : null
   const multiSelected = selectedObjects.length > 1
-  const multiStroke = selectedObjects.filter(o => ['rect', 'ellipse', 'line', 'arrow', 'path'].includes(o.type))
-  const multiFill = selectedObjects.filter(o => ['text', 'rect', 'ellipse', 'path'].includes(o.type))
+  // S3 · inclou grups (sketch inclòs): la pintura s'hi aplica recursivament (applyPaintTree).
+  const multiStroke = selectedObjects.filter(o => supportsPaint(o, 'stroke'))
+  const multiFill = selectedObjects.filter(o => supportsPaint(o, 'fill'))
   const multiPosition = selectedObjects.filter(o => o.type !== 'line' && o.type !== 'arrow')
   // B1 · UN BOTÓ, DOS MOTORS. Agrupar i Desagrupar no canvien de lloc ni es dupliquen: miren
   // què hi ha seleccionat i trien el motor. Tots els seleccionats són paths → compound
@@ -4280,8 +5098,9 @@ export default function TechSheetEditor() {
     if (major) leftTicks.push(<text key={`tl${mm}`} x={1} y={y + 8} fontSize={7} fill={COL.textMuted}>{mm}</text>)
   }
   if (cursorMm) leftTicks.push(<line key="cur" x1={0} y1={sy(cursorMm.y)} x2={RULER_SIZE} y2={sy(cursorMm.y)} stroke={COL.gold} strokeWidth={1} />)
-  const multiStrokeValue = commonValue(multiStroke, 'stroke')
-  const multiFillValue = commonValue(multiFill, 'fill')
+  const multiStrokeValue = commonPaint(multiStroke, 'stroke')
+  const multiFillValue = commonPaint(multiFill, 'fill')
+  const multiStrokeWValue = commonPaint(multiStroke, 'strokeWidth')   // S3 · gruix comú (indeterminat = '')
   const multiX = commonValue(multiPosition, 'x')
   const multiY = commonValue(multiPosition, 'y')
   const editingFlat = editingFlatId
@@ -4468,16 +5287,20 @@ export default function TechSheetEditor() {
     // endpoint de descarrega autenticat (D13); `url_extern` viu fora i no li enviem el token.
     const extern = !!f.url_extern
     const mon = f.garment_type_item != null ? 'item-fitxers' : 'model-fitxers'
+    // F2 (enllaç object-level): si l'sketch ve del CATÀLEG (ItemFitxer), l'objecte guarda la
+    // seva procedència. És la granularitat unívoca: una fitxa pot dur sketches de dos items. Un
+    // sketch pujat localment no en porta → «Desar precedent» hi queda deshabilitat amb motiu.
+    const extra = f.garment_type_item != null ? { sourceItemFitxer: f.id } : {}
     const url = extern ? f.url_extern : `${API}/api/v1/${mon}/${f.id}/download/`
     try {
       const r = await fetch(url, extern ? undefined : { headers: uploadHeaders })
       if (!r.ok) throw new Error('fetch')
       if (nom.endsWith('.svg')) {
-        await importFlatSvgText(await r.text())     // SVG → path editable, com el camí local
+        await importFlatSvgText(await r.text(), extra)   // SVG → path editable, com el camí local
       } else if (nom.endsWith('.dxf')) {
         flash(t('tech_sheet.import_dxf_soon'))      // el motor DXF segueix pendent
       } else {
-        addImageFromDataURL(await blobToDataURL(await r.blob()))
+        addImageFromDataURL(await blobToDataURL(await r.blob()), extra)
       }
       closeImport()
     } catch {
@@ -4648,6 +5471,10 @@ export default function TechSheetEditor() {
         <span key="sep-cota" style={ribbonSep} />,
         eina('cota_pom', 'ti-ruler-measure', t('tech_sheet.tool_cota_pom')),
         eina('note', 'ti-arrow-guide', t('tech_sheet.tool_note')),
+        // F3 · proposar cotes amb IA (decisió Agus: també aquí, no només al panell). Mateix handler.
+        ribbonTool({ key: 'ia-cotes', icon: proposantIA ? 'ti-loader-2' : 'ti-sparkles',
+          label: t('tech_sheet.ia_proposar'), onClick: proposarCotesIA,
+          disabled: !locked || proposantIA || sketchObjs.length === 0 }),
         <span key="sep-pre" style={ribbonSep} />,
         eina('preset_callout', 'ti-message-2-share', t('tech_sheet.preset_callout')),
         eina('preset_detail_circle', 'ti-circle-dashed', t('tech_sheet.preset_detail_circle')),
@@ -4823,6 +5650,7 @@ export default function TechSheetEditor() {
   // PEÇA P/C: pan actiu (eina 'pan' o espai) i cursor del viewport segons l'eina activa.
   const panActive = locked && (tool === 'pan' || spaceHeld)
   const viewportCursor = !locked ? 'default'
+    : zoomModHeld ? (zoomOutMod ? 'zoom-out' : 'zoom-in')   // C1: modificador de zoom → lupa
     : panActive ? (panning ? 'grabbing' : 'grab')
     : (tool === 'node' || tool === 'subpath') ? 'pointer'   // S3b: eines de selecció, no de dibuix
     : CROSSHAIR_TOOLS.includes(tool) ? 'crosshair'
@@ -4942,51 +5770,144 @@ export default function TechSheetEditor() {
               de borderLeft, codi de client en mono manant, nom canònic EN al costat, badge
               amb el nom_fitxa. És la primera persiana de la biblioteca i ve
               OBERTA: acotar és la feina que porta algú a obrir aquesta fitxa. Un clic arma l'eina de cota amb el text ja resolt. */}
+          {/* El vell contenidor «Cotes des de precedent» (llista massiva per objecte + selects de
+              vista) ha mort: exposava l'esquelet tècnic. La superfície de l'usuari és el panell de
+              POMs (proposta per-POM), la vista viu a Propietats de l'objecte i «desar precedent» a
+              Propietats de la cota. Vegeu DECISIÓ Agus 2026-07-26 (Patró C). */}
+
           {pomRows.length > 0 && (
             <Contenidor
               titol={t('tech_sheet.poms_of_model', { n: pomRows.length })}
               icona="ti-ruler-measure" pes={2}
             >
               <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.poms_hint')}</p>
+              {/* Acció de grup: posar TOTES les proposables que encara no són al document. */}
+              {proposablesCount > 0 && (
+                <button type="button" onClick={posarTotesPropostes}
+                  title={t('tech_sheet.pom_posar_totes', { n: proposablesCount })}
+                  style={{ width: '100%', marginBottom: 6, cursor: 'pointer', padding: '0.35rem 0.5rem', background: COL.goldPale, border: `1px solid ${COL.gold}`, borderRadius: 4, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <i className="ti ti-copy" /> {t('tech_sheet.pom_posar_totes', { n: proposablesCount })}
+                </button>
+              )}
+              {/* F3 · proposar cotes amb IA per als PENDENT (sobre els croquis de la pàgina). */}
+              {sketchObjs.length > 0 && (
+                <button type="button" onClick={proposarCotesIA} disabled={proposantIA}
+                  title={t('tech_sheet.ia_proposar')}
+                  style={{ width: '100%', marginBottom: 6, cursor: proposantIA ? 'default' : 'pointer', opacity: proposantIA ? 0.6 : 1, padding: '0.35rem 0.5rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <i className={`ti ${proposantIA ? 'ti-loader-2' : 'ti-sparkles'}`} /> {proposantIA ? t('tech_sheet.ia_proposant') : t('tech_sheet.ia_proposar')}
+                </button>
+              )}
+              {/* Barra de revisió de propostes IA vives (acceptar/descartar en bloc). */}
+              {iaPropostesVives.length > 0 && (
+                <div style={{ marginBottom: 6, padding: '0.35rem 0.5rem', background: COL.goldPale, border: `1px dashed ${COL.gold}`, borderRadius: 4 }}>
+                  <p style={{ fontSize: 'var(--fs-caption)', color: COL.textMain, margin: '0 0 5px', fontWeight: 600 }}>{t('tech_sheet.ia_revisio', { n: iaPropostesVives.length })}</p>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button type="button" onClick={acceptarTotesPropostes} title={t('tech_sheet.ia_acceptar_totes')}
+                      style={{ flex: 1, cursor: 'pointer', padding: '0.25rem', background: COL.bg, border: `1px solid ${COL.ok}`, borderRadius: 4, color: COL.ok, fontFamily: FONT, fontSize: 'var(--fs-label)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                      <i className="ti ti-check" /> {t('tech_sheet.ia_acceptar_totes')}
+                    </button>
+                    <button type="button" onClick={descartarTotesPropostes} title={t('tech_sheet.ia_descartar_totes')}
+                      style={{ flex: 1, cursor: 'pointer', padding: '0.25rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, color: COL.textMuted, fontFamily: FONT, fontSize: 'var(--fs-label)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                      <i className="ti ti-x" /> {t('tech_sheet.ia_descartar_totes')}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {f2Msg && <p style={{ fontSize: 'var(--fs-caption)', color: COL.textMain, margin: '0 0 6px' }}>{f2Msg}</p>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {pomRows.map(bm => {
-                  const etiqueta = bm.nom_fitxa || bm.pom_abbreviation || bm.codi_client || ''
-                  const colocat = !!etiqueta && cotesColocades.has(etiqueta)
-                  const armat = cotaPreset?.text === etiqueta && tool === 'cota_pom'
+                  // F1 (cota viva): etiqueta = àlies de client || codi canònic; el vincle
+                  // viatja per pom_id/bm_id, no pel text.
+                  const etiqueta = cotaLabelDe(bm)
+                  const esAlies = !!bm.client_alias
+                  const canonic = bm.pom_code_global || ''
+                  // NOMENCLATURA UNIFICADA — mateixa llei que l'etiqueta de la cota (F1: client_alias
+                  // || canònic || codi_client, via cotaLabelDe) i que la taula de Mesures: la línia 1
+                  // porta el CODI CLIENT + nom canònic EN (PomNamePair). El badge mostra el codi que
+                  // NO és a la línia 1 — el canònic quan la línia porta client — mai un tercer
+                  // vocabulari (el nom_fitxa del croquis ja no hi surt: no és nomenclatura de POM).
+                  const canonicBadge = esAlies && canonic && canonic !== etiqueta ? canonic : ''
+                  const colocat = bm.pom_id != null && cotesColocades.has(bm.pom_id)
+                  const armat = cotaPreset?.bmId === bm.id && tool === 'cota_pom'
+                  // PROPOSADA-IA: hi ha una cota de visió pendent de revisió per aquest POM.
+                  const iaProp = !colocat && bm.pom_id != null && iaCotesByPom.has(bm.pom_id)
+                  // PROPOSABLE (precedent): la cascada en té col·locació i la cota encara no hi és.
+                  // Fiabilitat: exacte (precedent del mateix item) > germana (transposat).
+                  const prop = !colocat && !iaProp && bm.pom_id != null ? propostes.get(bm.pom_id) : null
+                  const exacte = prop && !prop.derivat
+                  // Semàfor: col·locat (verd) · IA/proposable/armat (gold) · pendent (gris).
+                  const accent = colocat ? COL.ok : (armat || iaProp || prop) ? COL.gold : COL.border
+                  const stateIcon = colocat ? 'ti-circle-check' : armat ? 'ti-crosshair' : iaProp ? 'ti-sparkles' : prop ? 'ti-copy' : 'ti-circle-dashed'
+                  const stateCol = colocat ? COL.ok : (armat || iaProp || prop) ? COL.gold : COL.textMuted
                   return (
-                    <button key={bm.id} type="button"
-                      onClick={() => { setCotaPreset({ text: etiqueta }); setTool('cota_pom') }}
-                      aria-pressed={armat}
-                      title={t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
-                      style={{
-                        textAlign: 'left', width: '100%', cursor: 'pointer',
-                        background: armat ? 'var(--gold-pale)' : 'var(--bg-card)',
-                        border: `1px solid ${armat ? COL.gold : COL.border}`,
-                        borderLeft: `3px solid ${colocat ? COL.ok : armat ? COL.gold : COL.border}`,
-                        borderRadius: 4, padding: '0.3rem 0.5rem',
-                        display: 'flex', alignItems: 'center', gap: '0.4rem',
-                        fontFamily: FONT,
-                      }}>
-                      <i className={`ti ${colocat ? 'ti-circle-check' : armat ? 'ti-crosshair' : 'ti-circle-dashed'}`}
-                        style={{ color: colocat ? COL.ok : armat ? COL.gold : COL.textMuted, flexShrink: 0, fontSize: 14 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
-                          <span>{bm.codi_client}</span>
-                          <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <PomNamePair en={bm.nom_en} local={bm.nom_ca || bm.nom_client} />
-                          </span>
-                          {bm.nom_fitxa && (
-                            <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: COL.textMuted, border: `1px solid ${COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
-                              {bm.nom_fitxa}
+                    <div key={bm.id} style={{ display: 'flex', alignItems: 'stretch', gap: 4 }}>
+                      <button type="button"
+                        // C3 · GUARD DE DUPLICATS: un POM amb cota viva al document no es pot
+                        // re-acotar. La fila COL·LOCAT queda no-clicable (el «selector» de l'eina
+                        // Cota POM l'exclou); esborrar la cota el torna PENDENT/PROPOSABLE. No es fa
+                        // servir `disabled` per no perdre el tooltip explicatiu (Chrome l'amaga en
+                        // botons disabled): click a buit + cursor per defecte.
+                        onClick={colocat ? undefined : () => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, canonical: canonic }); setTool('cota_pom') }}
+                        aria-pressed={armat}
+                        title={colocat
+                          ? t('tech_sheet.pom_cota_ja_colocat')
+                          : esAlies && canonic
+                            ? `${t('tech_sheet.pom_cota_hint', { nom: etiqueta })} · ${t('tech_sheet.pom_canonical_tip', { codi: canonic })}`
+                            : t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
+                        style={{
+                          textAlign: 'left', flex: 1, minWidth: 0, cursor: colocat ? 'default' : 'pointer',
+                          background: armat ? 'var(--gold-pale)' : 'var(--bg-card)',
+                          border: `1px solid ${armat ? COL.gold : COL.border}`,
+                          borderLeft: `3px solid ${accent}`,
+                          borderRadius: 4, padding: '0.3rem 0.5rem',
+                          display: 'flex', alignItems: 'center', gap: '0.4rem',
+                          fontFamily: FONT,
+                        }}>
+                        <i className={`ti ${stateIcon}`} style={{ color: stateCol, flexShrink: 0, fontSize: 14 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
+                            <span>{etiqueta || bm.codi_client}</span>
+                            <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <PomNamePair en={bm.nom_en} local={bm.nom_ca || bm.nom_client} />
                             </span>
-                          )}
+                            {/* Badge PROPOSADA-IA (pendent de revisió): distint d'exacte/germana. */}
+                            {iaProp && (
+                              <span title={t('tech_sheet.ia_badge_tip')}
+                                style={{ fontSize: 'var(--fs-caption)', fontWeight: 500, color: COL.gold, border: `1px solid ${COL.gold}`, borderRadius: 8, padding: '0 5px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                <i className="ti ti-sparkles" style={{ fontSize: 11 }} />{t('tech_sheet.ia_badge')}
+                              </span>
+                            )}
+                            {/* Badge de fiabilitat DISCRET (mai percentatge): exacte vs germana. */}
+                            {prop && (
+                              <span title={t(exacte ? 'tech_sheet.pom_rel_exacte_tip' : 'tech_sheet.pom_rel_germana_tip')}
+                                style={{ fontSize: 'var(--fs-caption)', fontWeight: 500, color: exacte ? COL.gold : COL.textMuted, border: `1px solid ${exacte ? COL.gold : COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
+                                {t(exacte ? 'tech_sheet.pom_rel_exacte' : 'tech_sheet.pom_rel_germana')}
+                              </span>
+                            )}
+                            {/* Badge = codi CANÒNIC (l'altre codi), només quan la línia 1 porta el
+                                client. Mai el nom_fitxa (nomenclatura del croquis, no del POM). */}
+                            {canonicBadge && (
+                              <span title={t('tech_sheet.pom_canonical_tip', { codi: canonicBadge })}
+                                style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: COL.textMuted, border: `1px solid ${COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
+                                {canonicBadge}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      {/* La xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
-                      {bm.base_value_cm != null && (
-                        <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0 }}>{bm.base_value_cm}</span>
+                        {/* La xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
+                        {bm.base_value_cm != null && (
+                          <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0 }}>{bm.base_value_cm}</span>
+                        )}
+                      </button>
+                      {/* «Posar»: col·loca LA cota des del precedent (queda viva F1, arrossegable). */}
+                      {prop && (
+                        <button type="button" onClick={() => posarProposta(bm.pom_id)}
+                          title={t('tech_sheet.pom_posar')}
+                          style={{ flexShrink: 0, width: 32, cursor: 'pointer', border: `1px solid ${COL.gold}`, borderRadius: 4, background: COL.goldPale, color: COL.gold, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <i className="ti ti-copy" style={{ fontSize: 15 }} />
+                        </button>
                       )}
-                    </button>
+                    </div>
                   )
                 })}
               </div>
@@ -5119,7 +6040,9 @@ export default function TechSheetEditor() {
                     activeSubIndex={activeSubpath?.objId === o.id ? activeSubpath.index : null}
                     subpathTool={tool === 'subpath'}
                     onSubSelect={(i) => { if (!selectedIds.includes(o.id)) selectOnly(o.id); setActiveSubpath({ objId: o.id, index: i }) }}
-                    onEndpointDrag={handleEndpointDrag(o)} />
+                    onEndpointDrag={handleEndpointDrag(o)}
+                    onCotaEndpointDrag={handleCotaEndpointDrag(o)}
+                    onCotaLabelDrag={handleCotaLabelDrag(o)} />
                 ))}
                 {/* Forma temporal mentre es dibuixa */}
                 {(drawTemp?.type === 'rect' || drawTemp?.type === 'rect_round') && <Rect x={drawTemp.x} y={drawTemp.y} width={drawTemp.w} height={drawTemp.h} stroke={KONVA_COL.gold} strokeWidth={1} dash={[4, 4]} cornerRadius={drawTemp.type === 'rect_round' ? 8 : 0} listening={false} />}
@@ -5162,6 +6085,12 @@ export default function TechSheetEditor() {
                     ? <Line x={toPx(creatingGuide.pos)} y={0} points={[0, 0, 0, pageH]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
                     : <Line x={0} y={toPx(creatingGuide.pos)} points={[0, 0, pageW, 0]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
                 )}
+                {/* C1: filet fi per membre en multiselecció (>1) — a més del marc del Transformer.
+                    Overlay del render VIU, per bounds (getClientRect); MAI a l'export ni al .ftt. */}
+                {multiOutlines.map(b => (
+                  <Rect key={'sel-' + b.id} x={b.x} y={b.y} width={b.w} height={b.h}
+                    stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} listening={false} />
+                ))}
                 <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && (selObj?.type === 'data_block' || selObj?.type === 'table' || selObj?.type === 'pattern_piece'))}
                   rotationSnaps={shiftHeld ? ROT_SNAPS : SENSE_SNAP} rotationSnapTolerance={ROT_SNAP_TOL}
                   padding={5}
@@ -5288,6 +6217,36 @@ export default function TechSheetEditor() {
               com a l'esquerra i com al Taller: una gramàtica de zones, no tres. */}
           {/* padding inferior extra: clearança per als botons flotants de Chrome (IA/cerca) */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px 64px' }}>
+            {/* PÀGINES (C2) — abans una tira inferior horitzontal; ara una persiana del dock,
+                la mateixa gramàtica de zones que Capes/Camps (D2). Miniatures VERTICALS, pàgina
+                activa marcada, +afegeix i esborrar. Cap lògica nova: reutilitza els handlers
+                existents (setCurrentPage/clearSelection/addPage/removePage). El plegat es recorda
+                mentre l'editor viu (estat intern del Contenidor), com a la resta de persianes. */}
+            <Contenidor titol={t('tech_sheet.dock_pages')} icona="ti-files" defaultOpen fitContent>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {pages.map((p, i) => (
+                  <div key={p.id} onClick={() => { setCurrentPage(i); clearSelection() }}
+                    title={t('tech_sheet.page_n', { n: i + 1 })}
+                    style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, padding: 5, borderRadius: 5, cursor: 'pointer', background: currentPage === i ? COL.goldPale : 'transparent', border: `1px solid ${currentPage === i ? COL.gold : COL.border}` }}>
+                    <div style={{ width: 48, height: 34, flexShrink: 0, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: `1px solid ${COL.border}` }}>
+                      {thumbnails[i] && <img src={thumbnails[i]} alt={t('tech_sheet.page_n', { n: i + 1 })} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
+                    </div>
+                    <span style={{ flex: 1, fontSize: 'var(--fs-label)', color: currentPage === i ? COL.gold : COL.textMain, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t('tech_sheet.page_n', { n: i + 1 })}</span>
+                    {locked && pages.length > 1 && (
+                      <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title={t('tech_sheet.delete_page')}
+                        style={{ flexShrink: 0, border: 'none', background: 'transparent', color: COL.textMuted, cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className="ti ti-trash" style={{ fontSize: 14 }} /></button>
+                    )}
+                  </div>
+                ))}
+                {locked && (
+                  <button onClick={addPage} title={t('tech_sheet.add_page')}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', padding: '7px 8px', border: `1px dashed ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-label)', cursor: 'pointer' }}>
+                    <i className="ti ti-plus" style={{ fontSize: 14 }} /><span>{t('tech_sheet.add_page')}</span>
+                  </button>
+                )}
+              </div>
+            </Contenidor>
+
             {/* CAPES — llista d'objectes de la pàgina (front a dalt) + z-order. */}
             <Contenidor titol={t('tech_sheet.dock_layers')} icona="ti-stack-2" defaultOpen={false} fitContent>
             {(ordered.length === 0 ? (
@@ -5347,17 +6306,28 @@ export default function TechSheetEditor() {
               <>
                 <SectionTitle>{t('tech_sheet.selected_objects', { n: selectedObjects.length })}</SectionTitle>
                 {multiStroke.length > 0 && (
-                  <div style={propLabel}>{t('tech_sheet.stroke_color')}
-                    {!multiStrokeValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
-                    <ColorPicker docColors={docPalette} value={multiStrokeValue || KONVA_COL.textMain}
-                      onChange={c => updateObjects(multiStroke.map(o => o.id), o => ({ stroke: c, ...(o.type === 'arrow' ? { fill: c } : {}) }))} />
-                  </div>
+                  <>
+                    <div style={propLabel}>{t('tech_sheet.stroke_color')}
+                      {!multiStrokeValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
+                      <ColorPicker docColors={docPalette} value={multiStrokeValue || KONVA_COL.textMain}
+                        onChange={c => updateObjects(multiStroke.map(o => o.id), o => applyPaintTree(o, { stroke: c }))} />
+                    </div>
+                    {/* S3 · gruix comú: buit si difereixen (placeholder «—»), s'escriu només en tocar-lo. */}
+                    <label style={propLabel}>{t('tech_sheet.stroke_width')}
+                      <input type="number" min={0.1} max={5} step={0.1}
+                        value={multiStrokeWValue === '' ? '' : Math.round(Number(multiStrokeWValue) * 10) / 10}
+                        placeholder={t('tech_sheet.mixed_values')}
+                        onChange={e => { const n = Number(e.target.value)
+                          if (e.target.value === '' || !Number.isFinite(n)) return
+                          updateObjects(multiStroke.map(o => o.id), o => applyPaintTree(o, { strokeWidth: Math.max(0, n) })) }} style={propInput} />
+                    </label>
+                  </>
                 )}
                 {multiFill.length > 0 && (
                   <div style={propLabel}>{t('tech_sheet.fill')}
                     {!multiFillValue && <span style={{ display: 'block', color: COL.textMuted, marginTop: 2 }}>{t('tech_sheet.mixed_values')}</span>}
                     <ColorPicker docColors={docPalette} value={multiFillValue || KONVA_COL.white}
-                      onChange={c => updateObjects(multiFill.map(o => o.id), { fill: c })} />
+                      onChange={c => updateObjects(multiFill.map(o => o.id), o => applyPaintTree(o, { fill: c }))} />
                   </div>
                 )}
                 {multiPosition.length === selectedObjects.length && (
@@ -5379,6 +6349,45 @@ export default function TechSheetEditor() {
             {selObj && locked && (
               <>
                 <SectionTitle>{t('tech_sheet.element')} · {selObj.type}</SectionTitle>
+                {/* F2 · vista de l'objecte sketch de catàleg (view_slot). Abans vivia en una llista
+                    massiva al panell esquerre; ara és un camp discret aquí, on es toca l'objecte. */}
+                {isSketchObj(selObj) && selObj.sourceItemFitxer && (
+                  <Contenidor titol={t('tech_sheet.sketch_view')} icona="ti-arrow-guide" fitContent>
+                    <datalist id="sketch-view-slots"><option value="front" /><option value="back" /><option value="detail" /></datalist>
+                    <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 4px' }}>{t('tech_sheet.sketch_view_hint')}</p>
+                    <input list="sketch-view-slots" value={selObj.viewSlot || ''} placeholder={t('tech_sheet.sketch_view_ph')}
+                      onChange={e => assignaVista(selObj.id, e.target.value.trim())} style={propInput} />
+                  </Contenidor>
+                )}
+                {/* F3 · revisió d'una cota PROPOSADA per la IA: acceptar (→ cota viva) o descartar.
+                    Es poden ajustar els extrems abans d'acceptar (ja és un objecte manipulable). */}
+                {selObj.type === 'group' && selObj.pomId != null && selObj.iaProposada && (
+                  <Contenidor titol={t('tech_sheet.ia_cota_titol')} icona="ti-sparkles" fitContent>
+                    <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.ia_cota_hint')}</p>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button type="button" onClick={() => acceptarProposta(selObj)}
+                        style={{ flex: 1, cursor: 'pointer', padding: '0.35rem', background: COL.bg, border: `1px solid ${COL.ok}`, borderRadius: 4, color: COL.ok, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                        <i className="ti ti-check" /> {t('tech_sheet.ia_acceptar')}
+                      </button>
+                      <button type="button" onClick={() => descartarProposta(selObj.id)}
+                        style={{ flex: 1, cursor: 'pointer', padding: '0.35rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, color: COL.textMuted, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                        <i className="ti ti-x" /> {t('tech_sheet.ia_descartar')}
+                      </button>
+                    </div>
+                  </Contenidor>
+                )}
+                {/* F2 · desar AQUESTA cota com a precedent del catàleg (acte conscient, D1). Una cota
+                    encara PROPOSADA no es pot desar com a precedent: primer s'accepta. */}
+                {selObj.type === 'group' && selObj.pomId != null && !selObj.iaProposada && (
+                  <Contenidor titol={t('tech_sheet.cota_precedent')} icona="ti-bookmark" fitContent>
+                    <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 4px' }}>{t('tech_sheet.cota_precedent_hint')}</p>
+                    <button type="button" onClick={() => desarUnaPrecedent(selObj)}
+                      style={{ width: '100%', cursor: 'pointer', padding: '0.35rem 0.5rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      <i className="ti ti-bookmark" /> {t('tech_sheet.cota_desar_precedent')}
+                    </button>
+                    {f2Msg && <p style={{ fontSize: 'var(--fs-caption)', color: COL.textMain, margin: '4px 0 0' }}>{f2Msg}</p>}
+                  </Contenidor>
+                )}
                 {selDim && (
                   <Contenidor titol={t('tech_sheet.dimensions_position')} icona="ti-ruler-2" fitContent>
                     <BlocEnPausa pausa={panelLockedForEdit} motiu={t('tech_sheet.panel_paused_editing')}>
@@ -5667,24 +6676,8 @@ export default function TechSheetEditor() {
         </aside>
       </main>
 
-      {/* ── Tira de pàgines horitzontal (C3) ── */}
-      <div style={{ flexShrink: 0, background: COL.bg, borderTop: `1px solid ${COL.border}`, display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', overflowX: 'auto' }}>
-        <span style={{ flexShrink: 0, color: COL.gold, fontSize: 'var(--fs-caption)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tech_sheet.pages')}</span>
-        {pages.map((p, i) => (
-          <div key={p.id} onClick={() => { setCurrentPage(i); clearSelection() }} title={t('tech_sheet.page_n', { n: i + 1 })} style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
-            <div style={{ width: 56, height: 40, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
-              {thumbnails[i] && <img src={thumbnails[i]} alt={t('tech_sheet.page_n', { n: i + 1 })} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
-            </div>
-            {locked && pages.length > 1 && (
-              <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title={t('tech_sheet.delete_page')}
-                style={{ position: 'absolute', top: -4, right: -4, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 'var(--fs-caption)', lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: '50%', cursor: 'pointer' }}>×</button>
-            )}
-          </div>
-        ))}
-        {locked && (
-          <button onClick={addPage} title={t('tech_sheet.add_page')} style={{ flexShrink: 0, width: 56, height: 40, border: `1px dashed ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>+</button>
-        )}
-      </div>
+      {/* Tira de pàgines horitzontal retirada (C2): les pàgines viuen ara a la persiana
+          PÀGINES del dock dret. No es duplica l'afordança. */}
 
       {/* ── Menú contextual del bloc capçalera mestra ancorat (B3) ── */}
       {headerMenu && (<>

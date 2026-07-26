@@ -6,7 +6,7 @@ import {
 } from '../api/endpoints'
 import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
 import RuleSetPicker from '../components/grading/RuleSetPicker'
-import MeasurementBaseGrid from '../components/MeasurementBaseGrid/MeasurementBaseGrid'
+import BaseSetPanel from '../components/BaseSetPanel/BaseSetPanel'
 
 // ItemAuthoring — pàgina d'autoria d'Item (Sprint Llibreria d'Items, B3 + B3-fix). Viu DINS el
 // Shell (àrea de contingut). Wizard de 2 passos que RECOMBINA components existents:
@@ -396,8 +396,11 @@ export default function ItemAuthoring() {
             </div>
           </div>
 
-          <p style={sectionTitle}>{t('item_authoring.measurements')}</p>
-          <MeasurementBaseGrid garmentTypeItemId={itemId} />
+          {/* B4 — la graella ja no penja de l'item pelat sinó del MÓN. BaseSetPanel llista els
+              BaseSets (system · fit · talla base · #mesures), en deixa néixer de nous i escopa
+              la graella al seleccionat. Un item pot vestir-se en diversos sistemes i cadascun
+              té la SEVA talla base: una graella sense món seria una taula sense talla base. */}
+          <BaseSetPanel garmentTypeItemId={itemId} />
         </div>
       )}
 

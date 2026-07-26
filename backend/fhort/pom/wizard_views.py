@@ -306,13 +306,29 @@ def base_measurements_view(request, model_id):
     Return the model's current BaseMeasurements with POM data.
     """
     try:
-        from fhort.models_app.models import BaseMeasurement
+        from fhort.models_app.models import BaseMeasurement, Model
+        from fhort.pom.models import CustomerPOMAlias
 
         bms = BaseMeasurement.objects.filter(
             model_id=model_id, is_active=True
         ).select_related('pom', 'pom__pom_global', 'pom__categoria').order_by(
             'pom__categoria__display_order', 'pom__codi_client'
         )
+
+        # F1 (cota viva) — àlies de client per pom_id, resolt amb UN sol prefetch (mai
+        # find_pom_master per fila; l'N+1 està documentat a DIAGNOSI_COTES_POM_SKETCH.md
+        # §B3). Un client pot tenir DIVERSOS codis per al mateix POM (unicitat
+        # (customer, client_code), no (customer, pom)) → triem deterministicament el
+        # no-pendent-de-revisió (ordre pendent_revisio, client_code). Model sense
+        # customer o POM sense àlies → None. NOMÉS LECTURA: no s'escriu res.
+        customer_id = Model.objects.filter(
+            id=model_id).values_list('customer_id', flat=True).first()
+        alias_by_pom = {}
+        if customer_id:
+            for pom_id, client_code in CustomerPOMAlias.objects.filter(
+                customer_id=customer_id, pom__isnull=False
+            ).order_by('pendent_revisio', 'client_code').values_list('pom_id', 'client_code'):
+                alias_by_pom.setdefault(pom_id, client_code)
 
         data = [{
             'id': bm.id,
@@ -332,6 +348,8 @@ def base_measurements_view(request, model_id):
             'pom_abbreviation': bm.pom.pom_global.abbreviation if bm.pom.pom_global_id else '',
             'pom_code_global': bm.pom.pom_global.codi if bm.pom.pom_global_id else '',
             'pom_is_key': bool(bm.pom.pom_global.is_key) if bm.pom.pom_global_id else False,
+            # F1 (cota viva): nomenclatura del client per a l'etiqueta de la cota, o None.
+            'client_alias': alias_by_pom.get(bm.pom_id),
         } for bm in bms]
 
         return Response({'count': len(data), 'results': data})

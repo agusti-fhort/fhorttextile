@@ -33,12 +33,15 @@ from .views import (
     measurements_chat_view,
     set_pom_regim_view,
     desactivar_pom_view,
+    acte_canonic_base_set_view,
     promoure_a_item_view,
 )
 
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
 from .ftt_template_views import DocumentTemplateViewSet
 from .item_fitxer_views import ItemFitxerViewSet
+from .pom_placement_views import item_fitxer_pom_placements_view
+from .pom_vision_views import proposar_cotes_view
 
 router = DefaultRouter()
 router.register('models', ModelViewSet, basename='model')
@@ -195,11 +198,13 @@ except Exception:
 
 urlpatterns = (
     [
+        path('item-fitxers/<int:item_id>/pom-placements/', item_fitxer_pom_placements_view),
         path('models/next-ref/', next_model_ref),
         path('models/create-wizard/', create_model_wizard),
         path('models/<int:model_id>/update-step2/', update_model_step2),
         path('models/<int:model_id>/poms-suggerits/', suggested_poms_view),
         path('models/<int:model_id>/materialitzar-poms/', materialize_poms_view),
+        path('models/<int:model_id>/proposar-cotes/', proposar_cotes_view),
         path('models/<int:model_id>/gravar-pom/', gravar_pom_view),
         path('models/<int:model_id>/tancar-taula/', close_table_view),
         path('models/<int:model_id>/taula-mesures/', measurements_table_view),
@@ -220,6 +225,9 @@ urlpatterns = (
         path('models/<int:model_id>/pom/<int:pom_id>/desactivar/', desactivar_pom_view),
         # P0+P2+P3 — l'acte de PROMOCIÓ model→item (gate CONFIGURE propi, dry-run per defecte).
         path('models/<int:model_id>/promoure-a-item/', promoure_a_item_view),
+        # B3 — l'acte canònic viu SEPARAT de la promoció (llei 4): modificar un valor que el
+        # set ja té no és omplir un forat, i no ha de compartir-hi porta.
+        path('item-base-sets/<int:base_set_id>/acte-canonic/', acte_canonic_base_set_view),
         path('models/iso-shrinkage/', iso_shrinkage_view),
         path('models/<int:model_id>/update-fabric/', update_fabric_view),
         path('models/<int:model_id>/albara/', consumption_delivery_view),

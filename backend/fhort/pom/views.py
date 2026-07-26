@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -17,6 +17,7 @@ from .models import (
     GradingRule,
     GradingRuleSet,
     ItemBaseMeasurement,
+    ItemBaseSet,
     POMCategory,
     POMMaster,
     SizeDefinition,
@@ -31,6 +32,7 @@ from .serializers import (
     GradingRuleSerializer,
     GradingRuleSetSerializer,
     ItemBaseMeasurementSerializer,
+    ItemBaseSetSerializer,
     POMCategorySerializer,
     POMMasterSerializer,
     SizeDefinitionSerializer,
@@ -344,6 +346,62 @@ class GarmentPOMMapViewSet(viewsets.ModelViewSet):
     ordering = ['garment_type_item', 'ordre']
 
 
+class ItemBaseSetViewSet(viewsets.ModelViewSet):
+    """BaseSets d'un Item (B4). Lectura autenticada, escriptura gated CONFIGURE — mateix motlle
+    que GarmentPOMMapViewSet i ItemBaseMeasurementViewSet.
+
+    Llista per item via ?garment_type_item=<id>. Els comptes van ANOTATS a la BD: la columna del
+    cataleg pinta «#mesures» per cada set i un SerializerMethodField hi faria un N+1.
+    """
+    serializer_class = ItemBaseSetSerializer
+    queryset = (
+        ItemBaseSet.objects
+        .select_related('size_system', 'fit_type', 'base_size_definition', 'updated_by')
+        .annotate(
+            mesures_count=Count('measurements', distinct=True),
+            mesures_amb_valor=Count(
+                'measurements',
+                filter=Q(measurements__base_value_cm__isnull=False), distinct=True),
+        )
+    )
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        perm = HasCapability(); self.required_capability = CONFIGURE
+        return [perm]
+
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = {
+        'garment_type_item': ['exact'],
+        'size_system': ['exact'],
+        'fit_type': ['exact'],
+    }
+    ordering_fields = ['id', 'size_system', 'fit_type']
+    ordering = ['size_system', 'fit_type']
+
+    # El cataleg es ma humana: origen MANUAL i autoria, com a ItemBaseMeasurement. La via
+    # PROMOCIO te el seu propi endpoint i hi posa el seu origen.
+    def perform_create(self, serializer):
+        serializer.save(origen=ItemBaseSet.ORIGEN_MANUAL, updated_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        # Un set amb mesures no s'esborra d'un clic: el CASCADE se'n enduria el patrimoni del
+        # taller en silenci. Mateix esperit que el guard de SizeSystemViewSet.destroy.
+        instance = self.get_object()
+        if instance.measurements.exists():
+            return Response(
+                {'error': "Aquest set te mesures: buida-les abans d'esborrar-lo.",
+                 'code': 'base_set_amb_mesures',
+                 'mesures_count': instance.measurements.count()},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+
 class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
     """Valors base de plantilla per Item (Sprint Mesures Base per Item, P3). Motlle EXACTE de
     GarmentPOMMapViewSet: lectura autenticada, escriptura gated CONFIGURE (mateixa capability que
@@ -367,6 +425,7 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = {
         'garment_type_item': ['exact'],
+        'base_set': ['exact'],
         'pom': ['exact'],
     }
     ordering_fields = ['id', 'garment_type_item', 'pom']
@@ -383,9 +442,14 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='upsert')
     def upsert(self, request):
-        """POST /api/v1/item-base-measurements/upsert/  Body: {garment_type_item, pom,
-        base_value_cm?, tol_minus?, tol_plus?, nom_fitxa?}. update_or_create per (item, pom). Gated
-        CONFIGURE (l'acció no és list/retrieve → get_permissions retorna CONFIGURE)."""
+        """POST /api/v1/item-base-measurements/upsert/  Body: {garment_type_item, pom, base_set?,
+        base_value_cm?, tol_minus?, tol_plus?, nom_fitxa?}. update_or_create per (base_set, pom).
+        Gated CONFIGURE (l'acció no és list/retrieve → get_permissions retorna CONFIGURE).
+
+        B1 (2026-07-25) — la clau és ara el SET, no l'item pelat. `base_set` és opcional i es
+        dedueix quan l'item només en té un (el cas de tots els callers d'avui, i el que manté
+        viva la columna ASSIGN del POMBrowser sense tocar-la). Amb 2+ sets el body l'ha de dir:
+        endevinar el món seria escriure el valor a la peça equivocada."""
         from fhort.tasks.models import GarmentTypeItem
         item_id = request.data.get('garment_type_item')
         pom_id = request.data.get('pom')
@@ -400,9 +464,41 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
         if not POMMaster.objects.filter(pk=pom_id).exists():
             return Response({'error': 'pom inexistent.'},
                             status=status.HTTP_400_BAD_REQUEST)
+
+        sets_item = ItemBaseSet.objects.filter(garment_type_item_id=item_id)
+        base_set_id = request.data.get('base_set')
+        if base_set_id:
+            base_set = sets_item.filter(pk=base_set_id).first()
+            if base_set is None:
+                return Response({'error': "base_set inexistent o d'un altre item."},
+                                status=status.HTTP_400_BAD_REQUEST)
+        else:
+            candidats = list(sets_item[:2])
+            if len(candidats) == 1:
+                base_set = candidats[0]
+            elif not candidats:
+                return Response({
+                    'error': ("Aquest item no té cap BaseSet: un valor base no pot existir "
+                              "fora d'un món. Crea'l abans (sistema de talles + fit + talla base)."),
+                    'code': 'base_set_absent',
+                    'garment_type_item_id': int(item_id),
+                }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({
+                    'error': ("Aquest item té més d'un BaseSet: cal dir `base_set` al body, "
+                              "perquè el valor pertany a un món concret."),
+                    'code': 'base_set_ambigu',
+                    'base_sets': [{'id': s.pk, 'size_system': s.size_system.codi,
+                                   'fit_type': s.fit_type.codi if s.fit_type_id else None,
+                                   'base_size_label': s.base_size_definition.etiqueta}
+                                  for s in sets_item],
+                }, status=status.HTTP_400_BAD_REQUEST)
+
         defaults = {f: request.data.get(f)
                     for f in ('base_value_cm', 'tol_minus', 'tol_plus', 'nom_fitxa')
                     if f in request.data}
+        # L'item es manté com a denormalització coherent amb el set (V1 encara el llegeix).
+        defaults['garment_type_item_id'] = item_id
         # P9 (2026-07-22) — PROVINENÇA I AUTORIA. Aquest camí és mà humana per definició
         # (gate CONFIGURE): origen MANUAL sempre. Qui l'escriu queda registrat; `origen` NO
         # s'accepta del body — el determina el CAMÍ, no qui crida. La promoció model→item té
@@ -410,7 +506,7 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
         defaults['origen'] = ItemBaseMeasurement.ORIGEN_MANUAL
         defaults['updated_by'] = request.user
         obj, created = ItemBaseMeasurement.objects.update_or_create(
-            garment_type_item_id=item_id, pom_id=pom_id, defaults=defaults)
+            base_set=base_set, pom_id=pom_id, defaults=defaults)
         return Response(self.get_serializer(obj).data,
                         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 

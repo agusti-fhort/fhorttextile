@@ -566,9 +566,19 @@ export const garmentPomMaps = {
 // Sprint Llibreria d'Items — valors base de l'Item (item-base-measurements/, ModelViewSet + upsert).
 // upsert keyed (garment_type_item, pom): base_value_cm, tol_minus, tol_plus, nom_fitxa. Gated CONFIGURE.
 export const itemBaseMeasurements = {
-  list: (params) => client.get('/api/v1/item-base-measurements/', { params }),   // ?garment_type_item & pom
+  list: (params) => client.get('/api/v1/item-base-measurements/', { params }),   // ?garment_type_item & base_set & pom
   upsert: (data) => client.post('/api/v1/item-base-measurements/upsert/', data),
   remove: (id) => client.delete(`/api/v1/item-base-measurements/${id}/`),
+}
+
+// BaseSets condicionats de l'Item (B1/B4). El món = size_system x fit; la talla base s'hi
+// declara en crear-lo. `acteCanonic` NO viu al ViewSet: modificar un valor que el set ja té és
+// un acte propi i separat de la promoció (llei 4), i per això té endpoint propi a models_app.
+export const itemBaseSets = {
+  list: (params) => client.get('/api/v1/item-base-sets/', { params }),   // ?garment_type_item
+  create: (data) => client.post('/api/v1/item-base-sets/', data),
+  remove: (id) => client.delete(`/api/v1/item-base-sets/${id}/`),
+  acteCanonic: (id, data) => client.post(`/api/v1/item-base-sets/${id}/acte-canonic/`, data),
 }
 
 // Capa de Projecte — matriu de temps (task-time-estimates/, ModelViewSet).

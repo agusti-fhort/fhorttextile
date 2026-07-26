@@ -353,9 +353,34 @@ class Command(BaseCommand):
             if not (gti and pom):
                 self._warn(f"itembase {ib['garment_type_item']}→{ib['pom']}: no resolt → saltat")
                 continue
-            self._upsert(ItemBaseMeasurement, {'garment_type_item': gti, 'pom': pom},
-                         {'base_value_cm': ib['base_value_cm'], 'nom_fitxa': ib['nom_fitxa']}, s)
+            # B1 (2026-07-25) — un valor base viu SEMPRE dins d'un BaseSet. El format del paquet
+            # (06_pom_maps.json) és anterior al BaseSet i no en porta cap: el món es dedueix del
+            # `base_size_definition` de l'item, exactament com fa la migració 0048. Si l'item no
+            # el té, no hi ha món declarat i NO se n'inventa cap — s'avisa i se salta el valor.
+            base_set = self._resolve_base_set(gti)
+            if base_set is None:
+                self._warn(f"itembase {ib['garment_type_item']}→{ib['pom']}: l'item no té talla "
+                           "base i el paquet no porta BaseSet → saltat")
+                continue
+            self._upsert(ItemBaseMeasurement, {'base_set': base_set, 'pom': pom},
+                         {'garment_type_item': gti,
+                          'base_value_cm': ib['base_value_cm'], 'nom_fitxa': ib['nom_fitxa']}, s)
         return s
+
+    def _resolve_base_set(self, gti):
+        """BaseSet del món de l'item per al paquet. Idempotent; origen MASTER (ve de catàleg)."""
+        from fhort.pom.models import ItemBaseSet, normalize_fit_type
+        if gti.base_size_definition_id is None:
+            return None
+        base_size = gti.base_size_definition
+        base_set, _ = ItemBaseSet.objects.get_or_create(
+            garment_type_item=gti,
+            size_system_id=base_size.size_system_id,
+            fit_type=normalize_fit_type(None),
+            defaults={'base_size_definition_id': base_size.pk,
+                      'origen': ItemBaseSet.ORIGEN_MASTER},
+        )
+        return base_set
 
     def _load_rulesets(self):
         s = Stats()

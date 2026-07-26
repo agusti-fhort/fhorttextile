@@ -1016,6 +1016,7 @@ class AIUsage(models.Model):
         ('revisio', 'Revisió'),
         ('extraccio', 'Extracció'),
         ('fallback', 'Fallback'),
+        ('proposta_cotes', 'Proposta de cotes (IA visió · F3)'),
     ]
     cami = models.CharField(max_length=20, choices=CAMI_CHOICES, db_index=True)
     model_ia = models.CharField(max_length=80, help_text="Model d'Anthropic (p.ex. claude-opus-4-7)")
@@ -1030,6 +1031,12 @@ class AIUsage(models.Model):
     cache_read_tokens = models.IntegerField(default=0)
     ok = models.BooleanField(default=True)
     error = models.TextField(blank=True, default='')
+    # Vision F3 (proposta de cotes): recompte de la proposta perquè el mesurament d'ús no sigui
+    # només tokens. Null als camins que no proposen (extracció/cribratge): no és una fila que hi
+    # falti, és una dimensió que no aplica. Unifiquem al ledger d'AIUsage en comptes d'una taula
+    # nova (llei "tot usage es loggeja" en UN sol lloc).
+    n_proposades = models.IntegerField(null=True, blank=True, help_text="F3: cotes proposades en aquesta crida")
+    n_skip = models.IntegerField(null=True, blank=True, help_text="F3: POMs omesos (la IA no ho ha vist clar)")
     created_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
                                    null=True, blank=True, related_name='ai_usages')
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -1042,3 +1049,68 @@ class AIUsage(models.Model):
     def __str__(self):
         return (f'{self.cami} · {self.model_ia} · '
                 f'{self.input_tokens}in/{self.output_tokens}out')
+
+
+class POMPlacement(models.Model):
+    """Precedent de COL·LOCACIÓ d'una cota POM sobre un sketch de CATÀLEG (F2).
+
+    La col·locació viu al CATÀLEG (ItemFitxer), no al model: una sola veritat que els
+    documents nascuts de l'item hereten via `ModelFitxer.derivat_de_item` (D1). Els extrems
+    estan NORMALITZATS 0..1 respecte de la BOUNDING BOX DE L'OBJECTE SKETCH que la cota
+    anota — NO de la pàgina ni de la silueta.
+
+    ⚠️ bbox-d'objecte ≠ silueta: els marges buits dins una imatge (ràster sobretot) poden
+    desviar la col·locació respecte del contorn real de la peça. Acceptat a v1 i traçat per
+    `source_kind` (mai jerarquia; només qualitat de l'origen).
+
+    NOMÉS és un precedent geomètric: MAI escriu cap valor de mesura (frontera G1). El vincle
+    al POM és de LECTURA (PROTECT, com BaseMeasurement/PatternPOM); esborrar un POM
+    referenciat dona 409, no arrossega la col·locació.
+    """
+    SOURCE_VECTOR = 'vector'
+    SOURCE_RASTER = 'raster'
+    SOURCE_KIND_CHOICES = [(SOURCE_VECTOR, 'Vector'), (SOURCE_RASTER, 'Ràster')]
+
+    # CASCADE: el precedent és del fitxer de catàleg; si el sketch d'origen desapareix, els
+    # seus precedents no tenen sentit. (D1: la casa del precedent és l'ItemFitxer.)
+    item_fitxer = models.ForeignKey(
+        ItemFitxer, on_delete=models.CASCADE, related_name='pom_placements')
+    pom = models.ForeignKey(
+        'pom.POMMaster', on_delete=models.PROTECT, related_name='placements')
+    # Slug de vista dins la pàgina: canònics 'front'/'back'/'detail', sufix lliure
+    # ('detail-coll'). NO és un enum tancat (D4): el vocabulari de vistes el fixa el producte.
+    view_slot = models.SlugField(max_length=40)
+    # Extrems A→B de la cota, normalitzats 0..1 sobre la bbox de l'objecte sketch.
+    x1 = models.FloatField()
+    y1 = models.FloatField()
+    x2 = models.FloatField()
+    y2 = models.FloatField()
+    # Offset del centre de l'etiqueta respecte del punt mig del segment, normalitzat sobre les
+    # dimensions de la bbox (captura un arrossegament manual del contenidor vermell; 0,0 = default).
+    label_dx = models.FloatField(default=0)
+    label_dy = models.FloatField(default=0)
+    # Traça de qualitat de l'origen (mai jerarquia): 'vector' és exacte; 'raster' depèn de la
+    # bbox de la imatge (v. avís bbox≠silueta).
+    source_kind = models.CharField(
+        max_length=8, choices=SOURCE_KIND_CHOICES, default=SOURCE_VECTOR)
+    creat_per = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pom_placements_creats')
+    creat_el = models.DateTimeField(auto_now_add=True)
+    actualitzat_el = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Col·locació de cota POM (precedent)'
+        verbose_name_plural = 'Col·locacions de cota POM (precedent)'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['item_fitxer', 'pom', 'view_slot'],
+                name='uniq_pomplacement_item_pom_view'),
+        ]
+        indexes = [
+            models.Index(fields=['item_fitxer', 'view_slot'],
+                         name='idx_pomplacement_item_view'),
+        ]
+
+    def __str__(self):
+        return f'{self.item_fitxer_id} · POM {self.pom_id} @ {self.view_slot}'

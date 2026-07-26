@@ -153,7 +153,7 @@ def salvage_measurements(text):
 
 
 def registra_us_ia(*, cami, model_ia, usage=None, import_session=None, model=None,
-                   created_by=None, ok=True, error=''):
+                   created_by=None, ok=True, error='', n_proposades=None, n_skip=None):
     """Desa el cost d'UNA crida a l'API d'Anthropic. Mai peta el camí de negoci.
 
     Decisió Agus 2026-07-22: «tot usage es loggeja». `usage` és l'objecte `response.usage`
@@ -179,6 +179,7 @@ def registra_us_ia(*, cami, model_ia, usage=None, import_session=None, model=Non
             cache_creation_tokens=_t('cache_creation_input_tokens'),
             cache_read_tokens=_t('cache_read_input_tokens'),
             ok=ok, error=(error or '')[:2000],
+            n_proposades=n_proposades, n_skip=n_skip,
         )
     except Exception:
         _logging.getLogger(__name__).exception(

@@ -38,7 +38,11 @@ const numOrNull = (v) => {
   return Number.isNaN(n) ? null : n
 }
 
-export default function MeasurementBaseGrid({ garmentTypeItemId, readOnly = false, onSaved }) {
+// B4 (2026-07-25) — `baseSetId` escopa la graella al MÓN. Sense ell la graella segueix llegint
+// per item, que és el que fan els callers V1 mentre l'item només té un set. Amb ell, llegeix i
+// escriu NOMÉS les mesures d'aquell món: dos sets del mateix item tenen valors diferents per al
+// mateix POM, i barrejar-los seria pintar mesures d'una altra talla base.
+export default function MeasurementBaseGrid({ garmentTypeItemId, baseSetId = null, readOnly = false, onSaved }) {
   const { t } = useTranslation()
   const [rows, setRows] = useState([])
   const [removed, setRemoved] = useState([])   // {mapId, ibmId} de files esborrades (pendents de persistir)
@@ -53,7 +57,9 @@ export default function MeasurementBaseGrid({ garmentTypeItemId, readOnly = fals
     try {
       const [mapsRes, valsRes] = await Promise.all([
         garmentPomMaps.list({ garment_type_item: garmentTypeItemId, ordering: 'ordre', page_size: 500 }),
-        itemBaseMeasurements.list({ garment_type_item: garmentTypeItemId, page_size: 500 }),
+        itemBaseMeasurements.list(baseSetId
+          ? { base_set: baseSetId, page_size: 500 }
+          : { garment_type_item: garmentTypeItemId, page_size: 500 }),
       ])
       const maps = mapsRes.data.results || mapsRes.data || []
       const vals = valsRes.data.results || valsRes.data || []
@@ -86,7 +92,7 @@ export default function MeasurementBaseGrid({ garmentTypeItemId, readOnly = fals
     } finally {
       setLoading(false)
     }
-  }, [garmentTypeItemId, t])
+  }, [garmentTypeItemId, baseSetId, t])
 
   useEffect(() => { load() }, [load])
 
@@ -163,6 +169,7 @@ export default function MeasurementBaseGrid({ garmentTypeItemId, readOnly = fals
         }
         await itemBaseMeasurements.upsert({
           garment_type_item: garmentTypeItemId,
+          ...(baseSetId ? { base_set: baseSetId } : {}),
           pom: r.pom_id,
           base_value_cm: r.base_value_cm,
           tol_minus: r.tol_minus,
