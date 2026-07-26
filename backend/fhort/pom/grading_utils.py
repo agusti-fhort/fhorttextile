@@ -464,7 +464,7 @@ def _spec_from_detection(pm, res, base_def_id, run_ordenat):
 
 
 def derive_rules_from_fitxa(*, run_document, base_size, valors, confirmed_pom_ids,
-                            size_system, avisos, bloqueigs=None):
+                            size_system, avisos, bloqueigs=None, descartades=None):
     """DETECCIÓ pura de les regles d'una fitxa (sense persistència, sense ruleset).
 
     Reutilitza el motor de detecció (detect_grading per POM + derive_break_fields). Retorna
@@ -490,10 +490,17 @@ def derive_rules_from_fitxa(*, run_document, base_size, valors, confirmed_pom_id
             {'tipus': 'fila_incompleta', 'pom_codi', 'missing_sizes'} o
             {'tipus': 'talles_desconegudes', 'etiquetes'}. Si el cridador no la passa, el
             comportament de bloqueig degrada a avís (cap cridador de producte ho fa).
+        descartades: llista out-param (com `avisos`). Etiquetes del document que el sistema
+            no coneix i que NO són la base → columnes FORA del sistema, descartades de la
+            derivació (llei BEACH 2026-07-26). No bloquegen: l'import escriu les conegudes i
+            el cridador n'avisa + obre un Watchpoint. La BASE desconeguda, en canvi, SÍ que va
+            a `bloqueigs` (corrupció real, 422 al cridador).
     """
     from fhort.pom.models import SizeDefinition, POMMaster
     if bloqueigs is None:
         bloqueigs = []
+    if descartades is None:
+        descartades = []
     base_def = SizeDefinition.objects.filter(
         size_system=size_system, etiqueta__iexact=base_size,
     ).first() if (getattr(size_system, 'id', None) and base_size) else None
@@ -507,11 +514,30 @@ def derive_rules_from_fitxa(*, run_document, base_size, valors, confirmed_pom_id
     files_ref += [valors.get(pid) or {} for pid in dict.fromkeys(confirmed_pom_ids)]
     run_ordenat, desconegudes = run_del_document(files_ref, run_sistema)
     if desconegudes:
-        bloqueigs.append({'tipus': 'talles_desconegudes', 'etiquetes': desconegudes})
-        avisos.append(
-            "Talles del document sense equivalència al sistema de talles: "
-            + ', '.join(desconegudes))
-        return []
+        # LLEI BEACH (2026-07-26): una talla que el sistema no coneix no tomba tot l'import per
+        # ella mateixa. Es discrimina per si és la BASE del model:
+        #   · BASE desconeguda → corrupció real → BLOQUEIG (el cridador retorna 422, com abans).
+        #   · NO-base desconeguda → columna d'un altre sistema (p.ex. una talla BABY en un model
+        #     NEWBORN) → es DESCARTA: `run_del_document` ja l'ha exclosa de `run_ordenat`, aquí
+        #     només se n'apunta l'etiqueta a `descartades` i la derivació CONTINUA amb el run
+        #     conegut. El cridador n'avisa i obre un Watchpoint.
+        from fhort.pom.size_labels import canonical_size_label
+        base_canon = canonical_size_label(base_size) if base_size else None
+        desc_base = [d for d in desconegudes
+                     if base_canon and canonical_size_label(d) == base_canon]
+        if desc_base:
+            bloqueigs.append({'tipus': 'talles_desconegudes', 'etiquetes': desc_base})
+            avisos.append(
+                "La talla BASE del document no és al sistema de talles: "
+                + ', '.join(desc_base))
+            return []
+        desc_nobase = [d for d in desconegudes if d not in desc_base]
+        if desc_nobase:
+            descartades.extend(desc_nobase)
+            avisos.append(
+                "Columnes del document fora del sistema de talles (descartades): "
+                + ', '.join(desc_nobase))
+        # (segueix amb `run_ordenat`, que ja NO conté cap desconeguda)
 
     if not run_ordenat or not base_size:
         avisos.append("Grading no derivat: manca run del document o talla base.")

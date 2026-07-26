@@ -2101,6 +2101,7 @@ def import_session_confirmar_view(request, token):
         watchpoint_promocio = None
         grading_avisos = []
         grading_bloqueigs = []
+        grading_descartades = []   # LLEI BEACH: columnes del document fora del sistema (no-base)
         # REFERENT (llei S24): el run del DOCUMENT en llengua-tenant. Es passa pel MATEIX
         # aparellament que ja s'ha aplicat a `valors` més amunt (taula de la sessió si n'hi ha,
         # remap canònic si no) perquè referent i valors parlin la mateixa llengua. Abans aquí
@@ -2115,7 +2116,18 @@ def import_session_confirmar_view(request, token):
         fitxa_specs = derive_rules_from_fitxa(
             run_document=run_document, base_size=base_size, valors=valors,
             confirmed_pom_ids=confirmed_pom_ids, size_system=model.size_system,
-            avisos=grading_avisos, bloqueigs=grading_bloqueigs)
+            avisos=grading_avisos, bloqueigs=grading_bloqueigs,
+            descartades=grading_descartades)
+        # LLEI BEACH (2026-07-26): les columnes fora del sistema (no-base) es descarten també de
+        # `valors`, perquè cap escriptura de sota en depengui — en particular el bucle de
+        # ModelGradingOverride (que itera TOTES les etiquetes de `valors`) no ha de persistir un
+        # override per a una talla d'un altre sistema. `run_ordenat` ja les excloïa del grading;
+        # aquí es tanca el forat de l'escriptura d'overrides.
+        if grading_descartades:
+            _desc_canon = {canonical_size_label(x) for x in grading_descartades}
+            valors = {pid: {k: v for k, v in d.items()
+                            if canonical_size_label(k) not in _desc_canon}
+                      for pid, d in valors.items()}
         # BLOQUEIG d'integritat (llei 2026-07-08): cap regla d'una taula incompleta. Abans
         # aquest camí només avisava i persistia igualment — el forat del bug 166. 422 ABANS de
         # cap escriptura de grading; `set_rollback` perquè som dins de l'atomic i les mesures
@@ -2424,6 +2436,25 @@ def import_session_confirmar_view(request, token):
                 f"⚠️ S'han desat {n_bm} POM(s) SENSE cap valor de talla base "
                 f"(base '{base_size}'): revisa l'alineació d'etiquetes de la fitxa.")
 
+        # ── BEACH (2026-07-26). Columnes del document fora del sistema de talles (no-base): NO és
+        # error — la fitxa portava una talla d'un altre sistema (p.ex. una BABY en un model
+        # NEWBORN). S'han importat les conegudes; aquí en queda constància DURABLE (Watchpoint,
+        # visible al WatchpointsPanel del model) + avís al resum del pas 5.
+        columnes_descartades = list(dict.fromkeys(grading_descartades))
+        if columnes_descartades:
+            _ss_codi = model.size_system.codi if model.size_system_id else ''
+            _etq = ', '.join(columnes_descartades)
+            grading_avisos.append(
+                f"{len(columnes_descartades)} columna/es descartada/es: {_etq} "
+                f"(fora del sistema '{_ss_codi}'). S'han importat les talles conegudes.")
+            Watchpoint.objects.create(
+                model=model, task=None, created_by=user_profile,
+                text=(f"Import: {len(columnes_descartades)} columna/es del document fora del "
+                      f"sistema de talles '{_ss_codi}' descartada/es: {_etq}."),
+                dades={'tipus': 'talles_descartades', 'etiquetes': columnes_descartades,
+                       'size_system': _ss_codi},
+            )
+
         if grading_avisos:
             session.avisos = (session.avisos or []) + grading_avisos
 
@@ -2486,6 +2517,9 @@ def import_session_confirmar_view(request, token):
         'grading_rule_set': (new_rule_set.nom if new_rule_set else None),
         'grading_rules': n_rules,
         'grading_avisos': grading_avisos,
+        # BEACH — columnes del document fora del sistema, descartades (no bloqueja; watchpoint creat).
+        'columnes_descartades': columnes_descartades,
+        'size_system_codi': (model.size_system.codi if model.size_system_id else None),
         # D1 — la proposta viatja també a la resposta perquè el wizard la pugui ensenyar
         # a l'acte; la font persistent, però, és el Watchpoint (sobreviu al tancament del
         # wizard, que és justament on abans es perdia tot).
