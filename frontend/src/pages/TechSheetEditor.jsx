@@ -5218,6 +5218,10 @@ export default function TechSheetEditor() {
         <span key="sep-cota" style={ribbonSep} />,
         eina('cota_pom', 'ti-ruler-measure', t('tech_sheet.tool_cota_pom')),
         eina('note', 'ti-arrow-guide', t('tech_sheet.tool_note')),
+        // F3 · proposar cotes amb IA (decisió Agus: també aquí, no només al panell). Mateix handler.
+        ribbonTool({ key: 'ia-cotes', icon: proposantIA ? 'ti-loader-2' : 'ti-sparkles',
+          label: t('tech_sheet.ia_proposar'), onClick: proposarCotesIA,
+          disabled: !locked || proposantIA || sketchObjs.length === 0 }),
         <span key="sep-pre" style={ribbonSep} />,
         eina('preset_callout', 'ti-message-2-share', t('tech_sheet.preset_callout')),
         eina('preset_detail_circle', 'ti-circle-dashed', t('tech_sheet.preset_detail_circle')),
