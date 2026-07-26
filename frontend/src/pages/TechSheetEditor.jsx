@@ -1832,9 +1832,11 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     // geometria que la caixa (textBoxParts) però sense el Rect → la posició no es mou.
     if (cotaLabel) {
       const p = textBoxParts(obj)
+      // Sense el Rect de fons, el text ha de seguir captant el clic (bombolla al grup-cota per
+      // seleccionar-lo, com feia abans la caixa vermella): per això NO va amb listening={false}.
       return (
         <Group {...common} onDblClick={onDblText} onDblTap={onDblText}>
-          <Text {...p.text} fill={KONVA_COL.pom} listening={false} />
+          <Text {...p.text} fill={KONVA_COL.pom} />
         </Group>
       )
     }
