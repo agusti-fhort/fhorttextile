@@ -3330,6 +3330,11 @@
     "empty": "No sizes defined",
     "add_size": "+ Add size",
     "delete_system": "Delete system",
+    "targets_label": "Applicable targets",
+    "targets_hint": "A system can serve several targets. Empty does not mean universal: the wizard only shows the scale for the assigned targets.",
+    "save_targets": "Save targets",
+    "targets_saved": "Targets saved",
+    "err_save_targets": "Could not save the targets",
     "col": {
       "size": "Size",
       "height": "Height",

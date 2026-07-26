@@ -3330,6 +3330,11 @@
     "empty": "Sin tallas definidas",
     "add_size": "+ Añadir talla",
     "delete_system": "Eliminar sistema",
+    "targets_label": "Targets aplicables",
+    "targets_hint": "Un sistema puede servir varios targets. Vacío no significa universal: el asistente solo muestra la escala para los targets asignados.",
+    "save_targets": "Guardar targets",
+    "targets_saved": "Targets guardados",
+    "err_save_targets": "No se han podido guardar los targets",
     "col": {
       "size": "Talla",
       "height": "Altura",

@@ -3330,6 +3330,11 @@
     "empty": "Sense talles definides",
     "add_size": "+ Afegir talla",
     "delete_system": "Esborrar sistema",
+    "targets_label": "Targets aplicables",
+    "targets_hint": "Un sistema pot servir diversos targets. Buit no vol dir universal: el wizard només mostra l'escala per als targets assignats.",
+    "save_targets": "Desar targets",
+    "targets_saved": "Targets desats",
+    "err_save_targets": "No s'han pogut desar els targets",
     "col": {
       "size": "Talla",
       "height": "Alçada",
