@@ -776,11 +776,11 @@ function buildTableCellPrimitives(obj) {
     cols.forEach((c, i) => {
       const cell = norm(row[i])
       const wCell = cw[i] - 2 * T_PAD
-      // T2 — dues senyals que MAI comparteixen codificació:
-      //  · ESTRUCTURAL (jerarquia de taula): capçalera i primera columna, sempre en negreta.
-      //  · BREAK de grading (domini, `cell.bold` de cellForSize a T1b): negreta + subratllat
-      //    + vermell. El segon tret és el que el distingeix de l'estructural; el patró és el
-      //    mateix bold+underline amb què la capçalera marca la talla base al size run.
+      // ESTRUCTURAL (jerarquia de taula): capçalera i primera columna, sempre en negreta.
+      // `cell.bold` = marca de BREAK per-cel·la (vermell + subratllat). LEGACY des de S4: les T1b
+      // noves ja no la posen (les xifres van totes en negre i el break viu a la seva columna); es
+      // manté aquí perquè els SNAPSHOTS ja inserits abans de S4 segueixin pintant-se igual (no es
+      // migren). Cap taula nova entra per aquesta branca.
       const isBreak = !!cell.bold
       const bold = isBreak || i === 0
       const fill = isBreak ? TBL.BREAK : TBL.VAL
@@ -4371,7 +4371,11 @@ export default function TechSheetEditor() {
     setTablePicker(null)
   }
 
-  // T1b — grading final: talles + Δ, amb els breaks (canvi d'increment) en negreta.
+  // T1b — grading final: talles + Δ + columna Break. Les xifres graduades van TOTES en negre
+  // (Patró C, deroga T2): el break ja no es codifica a la cel·la (ni vermell ni subratllat ni
+  // negreta), sinó que es resumeix en una columna pròpia al final. Es conserva la negreta
+  // estructural (capçalera + 1a columna) i les franges de la talla base. El color a les dades
+  // queda reservat per a senyals d'EXCEPCIÓ futures. Snapshot congelat: només afecta reinsercions.
   const insertTableT1b = async (sfId) => {
     if (!locked) return
     let data
@@ -4393,21 +4397,27 @@ export default function TechSheetEditor() {
         ? { key: sl, label: `${sl}*`, width: 16, base: true }
         : { key: sl, label: sl, width: 16 })),
       { key: 'delta', label: 'Δ', width: 16 },
+      // Ordre final: ...talles... · Δ · Break. Amplada mínima suficient per a un resum curt.
+      { key: 'break', label: t('tech_sheet.tbl_col_break'), width: 22 },
     ]
-    // Break = talla on el delta CANVIA respecte a la talla anterior (ordre de size_labels).
-    const cellForSize = (row, sl, prevSl) => {
-      const v = row.valors?.[sl]
-      const text = fmtMeasure(v, unit) ?? '–'
+    // Break = talla on el delta CANVIA respecte a la talla anterior (ordre de size_labels). Ara
+    // NOMÉS alimenta la columna resum; la cel·la de la talla es queda en negre pla (C1).
+    const esBreak = (row, sl, prevSl) => {
       const d = row.deltas?.[sl]
       const dPrev = prevSl != null ? row.deltas?.[prevSl] : undefined
-      const isBreak = prevSl != null && d != null && dPrev != null && d !== dPrev
-      return isBreak ? { text, bold: true } : text
+      return prevSl != null && d != null && dPrev != null && d !== dPrev
     }
+    const cellForSize = (row, sl) => fmtMeasure(row.valors?.[sl], unit) ?? '–'
+    // Resum de breaks de la fila: buit si cap · una talla ("9/10") · llista compacta ("6 · 9/10").
+    const breakResum = (row) => sizeLabels
+      .filter((sl, si) => esBreak(row, sl, si > 0 ? sizeLabels[si - 1] : null))
+      .join(' · ')
     const rows = data.rows.map(row => [
       row.ref || row.abbreviation || row.codi || '',
       { text: row.nom_en || '', sub: row.nom_ca || '' },
-      ...sizeLabels.map((sl, si) => cellForSize(row, sl, si > 0 ? sizeLabels[si - 1] : null)),
+      ...sizeLabels.map(sl => cellForSize(row, sl)),
       rowDelta(row, data.base_size, sizeLabels),
+      breakResum(row),
     ])
     const obj = fitTableObj({
       id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
