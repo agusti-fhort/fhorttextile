@@ -1,0 +1,4945 @@
+{
+  "generated_at": "2026-07-22",
+  "repo_commit": "d7a63866db186696f2e0df3b9138aeb9b6c546be",
+  "repo_branch": "dev",
+  "repo_root": "/var/www/ftt-staging",
+  "apps": [
+    {
+      "name": "tenants",
+      "path": "backend/fhort/tenants/",
+      "purpose": "Definició multi-tenant (Client/Domain de django-tenants i Plan) i el servei de tenant-discovery que, donat un email, localitza els workspaces on té compte i l'hi comunica per correu sense revelar-ho a l'API.",
+      "schema_scope": "SHARED (public only) — TENANT_MODEL/TENANT_DOMAIN_MODEL de django-tenants",
+      "models": [
+        {
+          "name": "Plan",
+          "table": "tenants_plan",
+          "key_fields": [
+            "nom",
+            "tipologia",
+            "max_models_actius",
+            "actiu",
+            "models_inclosos",
+            "preu_model_extra",
+            "stripe_lookup_model"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 2
+          }
+        },
+        {
+          "name": "Client",
+          "table": "tenants_client",
+          "key_fields": [
+            "plan",
+            "tipologia",
+            "actiu",
+            "unitats",
+            "codi_tenant",
+            "estat",
+            "estat_provincia",
+            "codi_postal",
+            "tipus_client",
+            "regim_vat",
+            "metode_pagament",
+            "gratis_fins"
+          ],
+          "foreign_keys": [
+            {
+              "field": "plan",
+              "to_app": "tenants",
+              "to_model": "Plan",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 3
+          },
+          "notable": "TENANT_MODEL de django-tenants. 3 files a public: FHORT System (public), FHORT Management (fhort), LOSAN (los)."
+        },
+        {
+          "name": "Domain",
+          "table": "tenants_domain",
+          "key_fields": [
+            "tenant",
+            "is_primary"
+          ],
+          "foreign_keys": [
+            {
+              "field": "tenant",
+              "to_app": "tenants",
+              "to_model": "Client",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 7
+          }
+        },
+        {
+          "name": "TenantContacte",
+          "table": "tenants_tenantcontacte",
+          "key_fields": [
+            "client"
+          ],
+          "foreign_keys": [
+            {
+              "field": "client",
+              "to_app": "tenants",
+              "to_model": "Client",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0
+          }
+        }
+      ],
+      "key_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/discovery/",
+          "view": "TenantDiscoveryView",
+          "auth": "AllowAny + DiscoveryRateThrottle (10/hour per IP), authentication_classes=[]",
+          "purpose": "Donat un email, cerca els tenants on existeix i envia els accessos per correu; resposta sempre uniforme per no revelar existència."
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "name": "pom",
+      "path": "backend/fhort/pom/",
+      "purpose": "App de catàleg i motor de mesures: defineix POMs (punts de mesura) globals i de tenant, categories, sistemes i definicions de talla, tipus/grups de peça, jocs de regles de grading i perfils de sizing, i hi implementa els serveis de grading (generació de graded specs, tancament de base, versionat segellat) més els wizards de setup (size map, diccionari de nomenclatura del client, onboarding).",
+      "schema_scope": "SHARED + TENANT — els models *Global viuen a public i la resta es repliquen a cada tenant per a FKs cross-schema",
+      "models": [
+        {
+          "name": "POMGlobal",
+          "table": "pom_pomglobal",
+          "key_fields": [
+            "codi",
+            "unitat",
+            "actiu",
+            "scope",
+            "orientation",
+            "state",
+            "line",
+            "body_section",
+            "is_key",
+            "body_measure_iso"
+          ],
+          "foreign_keys": [
+            {
+              "field": "body_measure_iso",
+              "to_app": "pom",
+              "to_model": "BodyMeasurementISO",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 125,
+            "fhort": 274,
+            "los": 0
+          },
+          "notable": "Catàleg POM canònic al schema public; es replica al tenant. Patró de referència citat a G9 per al futur trasllat de TaskType a public."
+        },
+        {
+          "name": "GarmentTypeGlobal",
+          "table": "pom_garmenttypeglobal",
+          "key_fields": [
+            "codi",
+            "actiu",
+            "is_system"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 59,
+            "fhort": 59,
+            "los": 0
+          }
+        },
+        {
+          "name": "POMEstadisticaGlobal",
+          "table": "pom_pomestadisticaglobal",
+          "key_fields": [
+            "pom_global",
+            "garment_type_global"
+          ],
+          "foreign_keys": [
+            {
+              "field": "pom_global",
+              "to_app": "pom",
+              "to_model": "POMGlobal",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_type_global",
+              "to_app": "pom",
+              "to_model": "GarmentTypeGlobal",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "POMCategory",
+          "table": "pom_pomcategory",
+          "key_fields": [
+            "codi",
+            "actiu"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 15,
+            "fhort": 28,
+            "los": 0
+          }
+        },
+        {
+          "name": "POMMaster",
+          "table": "pom_pommaster",
+          "key_fields": [
+            "pom_global",
+            "categoria",
+            "codi_client",
+            "actiu",
+            "origen_import"
+          ],
+          "foreign_keys": [
+            {
+              "field": "pom_global",
+              "to_app": "pom",
+              "to_model": "POMGlobal",
+              "db_constraint": true
+            },
+            {
+              "field": "categoria",
+              "to_app": "pom",
+              "to_model": "POMCategory",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 364,
+            "los": 0
+          }
+        },
+        {
+          "name": "POMEstadisticaTenant",
+          "table": "pom_pomestadisticatenant",
+          "key_fields": [
+            "pom",
+            "garment_type"
+          ],
+          "foreign_keys": [
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "CustomerPOMAlias",
+          "table": "pom_customerpomalias",
+          "key_fields": [
+            "customer",
+            "pom",
+            "client_code",
+            "origen"
+          ],
+          "foreign_keys": [
+            {
+              "field": "customer",
+              "to_app": "tasks",
+              "to_model": "Customer",
+              "db_constraint": false
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 310,
+            "los": 0
+          },
+          "notable": "Diccionari de nomenclatura del client (àlies POM). Es desa via dictionary/commit amb update_or_create idempotent per customer+client_code."
+        },
+        {
+          "name": "SizeSystem",
+          "table": "pom_sizesystem",
+          "key_fields": [
+            "codi",
+            "actiu",
+            "base_unit",
+            "parent",
+            "customer_codi",
+            "targets"
+          ],
+          "foreign_keys": [
+            {
+              "field": "parent",
+              "to_app": "pom",
+              "to_model": "SizeSystem",
+              "db_constraint": true
+            },
+            {
+              "field": "targets",
+              "to_app": "pom",
+              "to_model": "Target",
+              "db_constraint": true,
+              "kind": "m2m"
+            }
+          ],
+          "row_count": {
+            "public": 14,
+            "fhort": 28,
+            "los": 0
+          }
+        },
+        {
+          "name": "SizeDefinition",
+          "table": "pom_sizedefinition",
+          "key_fields": [
+            "size_system"
+          ],
+          "foreign_keys": [
+            {
+              "field": "size_system",
+              "to_app": "pom",
+              "to_model": "SizeSystem",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 70,
+            "fhort": 175,
+            "los": 0
+          }
+        },
+        {
+          "name": "GarmentGroup",
+          "table": "pom_garmentgroup",
+          "key_fields": [
+            "codi",
+            "actiu"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 8,
+            "fhort": 12,
+            "los": 0
+          }
+        },
+        {
+          "name": "GarmentType",
+          "table": "pom_garmenttype",
+          "key_fields": [
+            "garment_type_global",
+            "codi_client",
+            "actiu",
+            "is_system"
+          ],
+          "foreign_keys": [
+            {
+              "field": "garment_type_global",
+              "to_app": "pom",
+              "to_model": "GarmentTypeGlobal",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 21,
+            "los": 0
+          }
+        },
+        {
+          "name": "GarmentPOMMap",
+          "table": "pom_garmentpommap",
+          "key_fields": [
+            "garment_type_item",
+            "pom",
+            "is_key",
+            "nivell"
+          ],
+          "foreign_keys": [
+            {
+              "field": "garment_type_item",
+              "to_app": "tasks",
+              "to_model": "GarmentTypeItem",
+              "db_constraint": false
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 1748,
+            "los": 0
+          }
+        },
+        {
+          "name": "ItemBaseMeasurement",
+          "table": "pom_itembasemeasurement",
+          "key_fields": [
+            "garment_type_item",
+            "pom",
+            "origen",
+            "updated_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "garment_type_item",
+              "to_app": "tasks",
+              "to_model": "GarmentTypeItem",
+              "db_constraint": false
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            },
+            {
+              "field": "updated_by",
+              "to_app": "auth",
+              "to_model": "User",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 37,
+            "los": 0
+          },
+          "notable": "Valors base estàndard de l'Item — peça del paquet ITEM-PLANTILLA-COMPLETA i de la promoció model→item."
+        },
+        {
+          "name": "GradingRuleSet",
+          "table": "pom_gradingruleset",
+          "key_fields": [
+            "origen",
+            "garment_group",
+            "size_system",
+            "garment_type_item",
+            "actiu",
+            "customer",
+            "construction",
+            "fit_type",
+            "is_system_default",
+            "parent_version",
+            "version_number",
+            "codi_sistema",
+            "targets"
+          ],
+          "foreign_keys": [
+            {
+              "field": "garment_group",
+              "to_app": "pom",
+              "to_model": "GarmentGroup",
+              "db_constraint": true
+            },
+            {
+              "field": "size_system",
+              "to_app": "pom",
+              "to_model": "SizeSystem",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_type_item",
+              "to_app": "tasks",
+              "to_model": "GarmentTypeItem",
+              "db_constraint": false
+            },
+            {
+              "field": "customer",
+              "to_app": "tasks",
+              "to_model": "Customer",
+              "db_constraint": false
+            },
+            {
+              "field": "construction",
+              "to_app": "pom",
+              "to_model": "ConstructionType",
+              "db_constraint": true
+            },
+            {
+              "field": "fit_type",
+              "to_app": "pom",
+              "to_model": "FitType",
+              "db_constraint": true
+            },
+            {
+              "field": "parent_version",
+              "to_app": "pom",
+              "to_model": "GradingRuleSet",
+              "db_constraint": true
+            },
+            {
+              "field": "targets",
+              "to_app": "pom",
+              "to_model": "Target",
+              "db_constraint": true,
+              "kind": "m2m"
+            }
+          ],
+          "row_count": {
+            "public": 14,
+            "fhort": 45,
+            "los": 0
+          },
+          "notable": "Peça central del refactor de grading (G6). Llei del CONTENIDOR ACUMULATIU ÚNIC: la identitat del contenidor de client és customer+size_system+garment_type_item+fit. El ruleset 115 (BRW · Blusa · ALPHA_EU_W, origen CLIENT_RUN) és el golden case validat de punta a punta a l'S10 (105/105 GradedSpec exactes)."
+        },
+        {
+          "name": "RuleSetScopeNode",
+          "table": "pom_rulesetscopenode",
+          "key_fields": [
+            "rule_set",
+            "node_type",
+            "garment_group",
+            "garment_type",
+            "garment_type_item"
+          ],
+          "foreign_keys": [
+            {
+              "field": "rule_set",
+              "to_app": "pom",
+              "to_model": "GradingRuleSet",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_group",
+              "to_app": "pom",
+              "to_model": "GarmentGroup",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_type",
+              "to_app": "pom",
+              "to_model": "GarmentType",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_type_item",
+              "to_app": "tasks",
+              "to_model": "GarmentTypeItem",
+              "db_constraint": false
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 11,
+            "los": 0
+          },
+          "notable": "Aplicabilitat multi-node del contenidor (tanca el fork de la cascada). FK cap a tasks.GarmentTypeItem amb db_constraint=False per ser cross-schema."
+        },
+        {
+          "name": "GradingRule",
+          "table": "pom_gradingrule",
+          "key_fields": [
+            "rule_set",
+            "pom",
+            "talla_base",
+            "logica",
+            "actiu"
+          ],
+          "foreign_keys": [
+            {
+              "field": "rule_set",
+              "to_app": "pom",
+              "to_model": "GradingRuleSet",
+              "db_constraint": true
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            },
+            {
+              "field": "talla_base",
+              "to_app": "pom",
+              "to_model": "SizeDefinition",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 1148,
+            "los": 0
+          },
+          "notable": "Les regles residents del contenidor. Diagnosi 2026-07-21: el ruleset 108 BUIT feia que el wipe deixés 0 regles i el motor emetés FIXED amb 200 OK (símptoma del model 163). Sprint MELÓ: 127 regles LINEAR amb valor 0 convertides a FIXED."
+        },
+        {
+          "name": "ClientMesuraPerfil",
+          "table": "pom_clientmesuraperfil",
+          "key_fields": [
+            "client",
+            "codi_client",
+            "garment_type",
+            "pom"
+          ],
+          "foreign_keys": [
+            {
+              "field": "client",
+              "to_app": "tenants",
+              "to_model": "Client",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_type",
+              "to_app": "pom",
+              "to_model": "GarmentType",
+              "db_constraint": true
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 17,
+            "los": 0
+          }
+        },
+        {
+          "name": "FitType",
+          "table": "pom_fittype",
+          "key_fields": [
+            "codi"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 10,
+            "fhort": 10,
+            "los": 0
+          }
+        },
+        {
+          "name": "Target",
+          "table": "pom_target",
+          "key_fields": [
+            "codi",
+            "primary_dimension"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 13,
+            "fhort": 13,
+            "los": 0
+          }
+        },
+        {
+          "name": "ConstructionType",
+          "table": "pom_constructiontype",
+          "key_fields": [
+            "codi"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 4,
+            "fhort": 4,
+            "los": 0
+          }
+        },
+        {
+          "name": "BodyMeasurementISO",
+          "table": "pom_bodymeasurementiso",
+          "key_fields": [
+            "codi_iso",
+            "codi_intern",
+            "categoria",
+            "actiu"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 0,
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "SizingProfile",
+          "table": "pom_sizingprofile",
+          "key_fields": [
+            "target",
+            "garment_type",
+            "construction",
+            "fit_type",
+            "size_system",
+            "grading_rule_set",
+            "customer",
+            "is_default",
+            "parent_profile",
+            "version"
+          ],
+          "foreign_keys": [
+            {
+              "field": "target",
+              "to_app": "pom",
+              "to_model": "Target",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_type",
+              "to_app": "pom",
+              "to_model": "GarmentType",
+              "db_constraint": true
+            },
+            {
+              "field": "construction",
+              "to_app": "pom",
+              "to_model": "ConstructionType",
+              "db_constraint": true
+            },
+            {
+              "field": "fit_type",
+              "to_app": "pom",
+              "to_model": "FitType",
+              "db_constraint": true
+            },
+            {
+              "field": "size_system",
+              "to_app": "pom",
+              "to_model": "SizeSystem",
+              "db_constraint": true
+            },
+            {
+              "field": "grading_rule_set",
+              "to_app": "pom",
+              "to_model": "GradingRuleSet",
+              "db_constraint": true
+            },
+            {
+              "field": "customer",
+              "to_app": "tasks",
+              "to_model": "Customer",
+              "db_constraint": false
+            },
+            {
+              "field": "parent_profile",
+              "to_app": "pom",
+              "to_model": "SizingProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 45,
+            "los": 0
+          },
+          "notable": "Font única de la cascada del wizard (NO els targets recomanats) — decisió de l'onada 1 del wizard unificat."
+        },
+        {
+          "name": "GradingRuleHistory",
+          "table": "pom_gradingrulehistory",
+          "key_fields": [
+            "rule_set",
+            "pom",
+            "pom_codi"
+          ],
+          "foreign_keys": [
+            {
+              "field": "rule_set",
+              "to_app": "pom",
+              "to_model": "GradingRuleSet",
+              "db_constraint": true
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMGlobal",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0,
+            "fhort": 0,
+            "los": 0
+          }
+        }
+      ],
+      "key_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/size-map/grading-preview/",
+          "view": "size_map_grading_preview_view",
+          "auth": "_Configure (HasCapability, capacitat CONFIGURE)",
+          "purpose": "Detecta la lògica de grading (LINEAR/STEP/FIXED) per POM a partir de la taula de talles del client i en retorna la previsualització sense persistir."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/size-map/grading-preview-file/",
+          "view": "size_map_grading_preview_file_view",
+          "auth": "_Configure (capacitat CONFIGURE)",
+          "purpose": "Igual que grading-preview però partint d'un fitxer Excel/PDF multipart, reutilitzant l'extractor de capçaleres de l'ImportWizard."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/size-map/create/",
+          "view": "size_map_create_view",
+          "auth": "_Configure (capacitat CONFIGURE)",
+          "purpose": "Materialitza el size map dins una transacció: crea/actualitza SizeSystem, GradingRuleSet, GradingRule i SizingProfiles."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/size-map/match/",
+          "view": "size_map_match_view",
+          "auth": "_Configure (capacitat CONFIGURE)",
+          "purpose": "Compara les etiquetes de talla rebudes amb els SizeSystems existents i recomana REUTILITZAR / CLONAR / CREAR."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/pom/customers/{customer_id}/dictionary/preview/",
+          "view": "dictionary_preview_view",
+          "auth": "_Configure (capacitat CONFIGURE)",
+          "purpose": "Parseja el fitxer del diccionari de nomenclatura del client i proposa el matching POM sense desar res."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/pom/customers/{customer_id}/dictionary/commit/",
+          "view": "dictionary_commit_view",
+          "auth": "_Configure (capacitat CONFIGURE)",
+          "purpose": "Desa els àlies de nomenclatura validats per l'humà (update_or_create idempotent per customer+client_code), sense re-resoldre el matching."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/onboarding/setup-from-excel/",
+          "view": "setup_tenant_from_excel_view",
+          "auth": "IsAuthenticated",
+          "purpose": "Sembra el tenant sencer (catàleg POM, talles, regles) a partir d'un Excel Master Data Reference."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/item-base-measurements/upsert/",
+          "view": "ItemBaseMeasurementViewSet.upsert",
+          "auth": "HasCapability amb CONFIGURE (get_permissions: només list/retrieve són IsAuthenticated)",
+          "purpose": "Crea o actualitza en bloc els valors base estàndard d'un item, marcant sempre origen MANUAL i registrant qui l'escriu."
+        }
+      ],
+      "depends_on": [
+        "accounts",
+        "fitting",
+        "models_app",
+        "tasks"
+      ]
+    },
+    {
+      "name": "backoffice",
+      "path": "backend/fhort/backoffice/",
+      "purpose": "Aplicació interna de FHORT al schema public: RBAC pròpia del personal, gestió de tenants i plans, contractes i catàleg de serveis, pricing, facturació (sèries, IVA, factures, tancament de període, rectificatives) i documents legals amb versions i acceptacions.",
+      "schema_scope": "SHARED (public only) — mai a TENANT_APPS",
+      "models": [
+        {
+          "name": "BackofficeUser",
+          "table": "backoffice_backofficeuser",
+          "key_fields": [
+            "usuari",
+            "rol",
+            "actiu"
+          ],
+          "foreign_keys": [
+            {
+              "field": "usuari",
+              "to_app": "auth",
+              "to_model": "User",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 1
+          }
+        },
+        {
+          "name": "BackofficeActionLog",
+          "table": "backoffice_backofficeactionlog",
+          "key_fields": [
+            "usuari",
+            "objecte_tipus"
+          ],
+          "foreign_keys": [
+            {
+              "field": "usuari",
+              "to_app": "backoffice",
+              "to_model": "BackofficeUser",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 4
+          }
+        },
+        {
+          "name": "ModelConsumptionEvent",
+          "table": "backoffice_modelconsumptionevent",
+          "key_fields": [
+            "codi_client",
+            "invoice_line"
+          ],
+          "foreign_keys": [
+            {
+              "field": "invoice_line",
+              "to_app": "backoffice",
+              "to_model": "InvoiceLine",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 31
+          },
+          "notable": "Base del càlcul de consum facturable per tenant i període."
+        },
+        {
+          "name": "InvoiceSerie",
+          "table": "backoffice_invoiceserie",
+          "key_fields": [
+            "codi"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 1
+          }
+        },
+        {
+          "name": "VATRate",
+          "table": "backoffice_vatrate",
+          "key_fields": [
+            "codi",
+            "actiu"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 1
+          }
+        },
+        {
+          "name": "ServiceCatalog",
+          "table": "backoffice_servicecatalog",
+          "key_fields": [
+            "code",
+            "tipus",
+            "actiu"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 5
+          }
+        },
+        {
+          "name": "TenantContract",
+          "table": "backoffice_tenantcontract",
+          "key_fields": [
+            "client",
+            "periodicitat",
+            "actiu"
+          ],
+          "foreign_keys": [
+            {
+              "field": "client",
+              "to_app": "tenants",
+              "to_model": "Client",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 1
+          }
+        },
+        {
+          "name": "ContractLine",
+          "table": "backoffice_contractline",
+          "key_fields": [
+            "contract",
+            "service",
+            "actiu"
+          ],
+          "foreign_keys": [
+            {
+              "field": "contract",
+              "to_app": "backoffice",
+              "to_model": "TenantContract",
+              "db_constraint": true
+            },
+            {
+              "field": "service",
+              "to_app": "backoffice",
+              "to_model": "ServiceCatalog",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 3
+          }
+        },
+        {
+          "name": "Invoice",
+          "table": "backoffice_invoice",
+          "key_fields": [
+            "client",
+            "tipus",
+            "estat",
+            "serie",
+            "rectifica"
+          ],
+          "foreign_keys": [
+            {
+              "field": "client",
+              "to_app": "tenants",
+              "to_model": "Client",
+              "db_constraint": true
+            },
+            {
+              "field": "serie",
+              "to_app": "backoffice",
+              "to_model": "InvoiceSerie",
+              "db_constraint": true
+            },
+            {
+              "field": "rectifica",
+              "to_app": "backoffice",
+              "to_model": "Invoice",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 3
+          }
+        },
+        {
+          "name": "SeedProfile",
+          "table": "backoffice_seedprofile",
+          "key_fields": [
+            "is_default_free",
+            "actiu"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 0
+          },
+          "notable": "Gate de la sembra automàtica d'un tenant Free (F3). Watchpoint conegut: 0 SeedProfile a staging."
+        },
+        {
+          "name": "InvoiceLine",
+          "table": "backoffice_invoiceline",
+          "key_fields": [
+            "invoice",
+            "service",
+            "vat_rate"
+          ],
+          "foreign_keys": [
+            {
+              "field": "invoice",
+              "to_app": "backoffice",
+              "to_model": "Invoice",
+              "db_constraint": true
+            },
+            {
+              "field": "service",
+              "to_app": "backoffice",
+              "to_model": "ServiceCatalog",
+              "db_constraint": true
+            },
+            {
+              "field": "vat_rate",
+              "to_app": "backoffice",
+              "to_model": "VATRate",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 6
+          }
+        },
+        {
+          "name": "LegalDocument",
+          "table": "backoffice_legaldocument",
+          "key_fields": [
+            "tipus",
+            "actiu"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "public": 0
+          }
+        },
+        {
+          "name": "LegalDocumentVersion",
+          "table": "backoffice_legaldocumentversion",
+          "key_fields": [
+            "document",
+            "estat"
+          ],
+          "foreign_keys": [
+            {
+              "field": "document",
+              "to_app": "backoffice",
+              "to_model": "LegalDocument",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0
+          },
+          "notable": "Documents legals amb hash SHA-256 canònic en publicar (F4); les acceptacions són append-only."
+        },
+        {
+          "name": "LegalAcceptance",
+          "table": "backoffice_legalacceptance",
+          "key_fields": [
+            "client",
+            "versio",
+            "metode"
+          ],
+          "foreign_keys": [
+            {
+              "field": "client",
+              "to_app": "tenants",
+              "to_model": "Client",
+              "db_constraint": true
+            },
+            {
+              "field": "versio",
+              "to_app": "backoffice",
+              "to_model": "LegalDocumentVersion",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "public": 0
+          }
+        }
+      ],
+      "key_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/backoffice/v1/auth/login/",
+          "view": "BackofficeTokenObtainView",
+          "auth": "AllowAny (JWT)",
+          "purpose": "Login JWT del backoffice; segella ultim_acces del perfil en emetre el token."
+        },
+        {
+          "method": "POST",
+          "path": "/api/backoffice/v1/tenants/{codi_tenant}/update_estat/",
+          "view": "ClientViewSet.update_estat",
+          "auth": "IsAuthenticated + HasBackofficeRole(['ADMIN'])",
+          "purpose": "Canvia l'estat del cicle de vida del tenant (onboarding/actiu/suspes/baixa), segella dates i audita."
+        },
+        {
+          "method": "POST",
+          "path": "/api/backoffice/v1/facturacio/generar/",
+          "view": "generate_invoice_view",
+          "auth": "IsAuthenticated + HasBackofficeRole()",
+          "purpose": "Genera factura a partir dels contractes/consum d'un client."
+        },
+        {
+          "method": "GET|POST",
+          "path": "/api/backoffice/v1/facturacio/tancament-periode/",
+          "view": "TancamentPeriodeView",
+          "auth": "IsAuthenticated + HasBackofficeRole() en GET, HasBackofficeRole(['ADMIN']) en POST",
+          "purpose": "Tancament de període recurrent: GET fa dry-run informatiu, POST genera els DRAFTs de forma idempotent."
+        },
+        {
+          "method": "POST",
+          "path": "/api/backoffice/v1/facturacio/factures/{pk}/emetre/",
+          "view": "InvoiceViewSet.emetre",
+          "auth": "IsAuthenticated + HasBackofficeRole(['ADMIN'])",
+          "purpose": "Emet la factura assignant número de sèrie i congelant els imports."
+        },
+        {
+          "method": "POST",
+          "path": "/api/backoffice/v1/facturacio/factures/{pk}/rectificar/",
+          "view": "InvoiceViewSet.rectificar",
+          "auth": "IsAuthenticated + HasBackofficeRole(['ADMIN'])",
+          "purpose": "Crea una factura rectificativa enllaçada a l'original."
+        },
+        {
+          "method": "GET",
+          "path": "/api/backoffice/v1/facturacio/consum/{codi_tenant}/",
+          "view": "ClientConsumView",
+          "auth": "IsAuthenticated (qualsevol perfil de backoffice)",
+          "purpose": "Consum d'un client per període agrupat en facturat/pendent/exclòs a partir dels ModelConsumptionEvent."
+        },
+        {
+          "method": "POST",
+          "path": "/api/backoffice/v1/legal/versions/{pk}/publish/",
+          "view": "LegalDocumentVersionViewSet.publish",
+          "auth": "IsAuthenticated + HasBackofficeRole(['ADMIN'])",
+          "purpose": "Publica una versió de document legal calculant-ne el hash SHA-256 canònic."
+        }
+      ],
+      "depends_on": [
+        "accounts",
+        "commerce",
+        "models_app",
+        "tasks",
+        "tenants"
+      ]
+    },
+    {
+      "name": "accounts",
+      "path": "backend/fhort/accounts/",
+      "purpose": "Usuaris i perfils del tenant: autenticació/perfil propi, gestió administrativa d'usuaris (rols, permisos, altes massives) i el vocabulari de capacitats que actua com a font única dels gates de permisos de tota l'API.",
+      "schema_scope": "TENANT",
+      "models": [
+        {
+          "name": "UserProfile",
+          "table": "accounts_userprofile",
+          "key_fields": [
+            "user",
+            "rol_nom",
+            "actiu"
+          ],
+          "foreign_keys": [
+            {
+              "field": "user",
+              "to_app": "auth",
+              "to_model": "User",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 4,
+            "los": 0
+          }
+        },
+        {
+          "name": "TenantConfig",
+          "table": "accounts_tenantconfig",
+          "key_fields": [
+            "unitat_mesura",
+            "norma_referencia",
+            "postal_code"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "fhort": 1,
+            "los": 0
+          }
+        }
+      ],
+      "key_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/v1/me/",
+          "view": "me_view",
+          "auth": "IsAuthenticated",
+          "purpose": "Perfil de l'usuari autenticat amb les seves capacitats resoltes."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/me/change-password/",
+          "view": "me_change_password",
+          "auth": "IsAuthenticated",
+          "purpose": "Canvi de contrasenya propi amb validació de polítiques de Django."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/users/bulk/",
+          "view": "UserViewSet.bulk",
+          "auth": "HasCapability(MANAGE_USERS)",
+          "purpose": "Accions massives sobre usuaris: set_role, set_task, set_active."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/users/{pk}/reset-link/",
+          "view": "UserViewSet.reset_link",
+          "auth": "HasCapability(MANAGE_USERS)",
+          "purpose": "Genera un enllaç de recuperació de contrasenya (no envia correu), amb el domini del tenant."
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/password-reset/validate/",
+          "view": "password_reset_validate",
+          "auth": "AllowAny",
+          "purpose": "Valida uid+token d'un enllaç de recuperació abans de mostrar el formulari."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/password-reset/confirm/",
+          "view": "password_reset_confirm",
+          "auth": "AllowAny",
+          "purpose": "Confirma el reset: verifica token i fixa la nova contrasenya validada."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/legal/accept/",
+          "view": "backoffice.views_legal_tenant.legal_accept_tenant_view",
+          "auth": "IsAuthenticated (admin del tenant)",
+          "purpose": "Acceptació de documents legals per part de l'admin del tenant (única ruta legal al schema tenant; la vista viu a backoffice però es munta des d'accounts/urls.py)."
+        }
+      ],
+      "depends_on": [
+        "backoffice",
+        "tasks"
+      ]
+    },
+    {
+      "name": "models_app",
+      "path": "backend/fhort/models_app/",
+      "purpose": "App central del cicle de vida del model/peça: models, fitxers adjunts (.ftt, fitxes tècniques), mesures base i taules de mesures, generació de grading, importació assistida per IA de fitxes tècniques (wizard de sessions d'import, xat d'extracció, import massiu per Excel), size checks i promoció d'un model a estàndard d'item.",
+      "schema_scope": "TENANT",
+      "models": [
+        {
+          "name": "Contracte",
+          "table": "models_app_contracte",
+          "key_fields": [
+            "actiu"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "LiniaContracte",
+          "table": "models_app_liniacontracte",
+          "key_fields": [
+            "contracte",
+            "actiu"
+          ],
+          "foreign_keys": [
+            {
+              "field": "contracte",
+              "to_app": "models_app",
+              "to_model": "Contracte",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "GarmentSet",
+          "table": "models_app_garmentset",
+          "key_fields": [
+            "codi_base"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "Model",
+          "table": "models_app_model",
+          "key_fields": [
+            "codi_intern",
+            "codi_client",
+            "customer",
+            "codi_tenant",
+            "temporada",
+            "garment_type",
+            "garment_group",
+            "garment_type_item",
+            "garment_set",
+            "fit_type",
+            "size_system",
+            "grading_rule_set",
+            "estat",
+            "fase_actual",
+            "responsable",
+            "created_by",
+            "contracte",
+            "linia_contracte",
+            "origen_patro",
+            "size_run_model",
+            "measurements_version",
+            "design_freeze_by",
+            "shrinkage_type"
+          ],
+          "foreign_keys": [
+            {
+              "field": "customer",
+              "to_app": "tasks",
+              "to_model": "Customer",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_type",
+              "to_app": "pom",
+              "to_model": "GarmentType",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_group",
+              "to_app": "pom",
+              "to_model": "GarmentGroup",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_type_item",
+              "to_app": "tasks",
+              "to_model": "GarmentTypeItem",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_set",
+              "to_app": "models_app",
+              "to_model": "GarmentSet",
+              "db_constraint": true
+            },
+            {
+              "field": "size_system",
+              "to_app": "pom",
+              "to_model": "SizeSystem",
+              "db_constraint": true
+            },
+            {
+              "field": "grading_rule_set",
+              "to_app": "pom",
+              "to_model": "GradingRuleSet",
+              "db_constraint": true
+            },
+            {
+              "field": "responsable",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "contracte",
+              "to_app": "models_app",
+              "to_model": "Contracte",
+              "db_constraint": true
+            },
+            {
+              "field": "linia_contracte",
+              "to_app": "models_app",
+              "to_model": "LiniaContracte",
+              "db_constraint": true
+            },
+            {
+              "field": "design_freeze_by",
+              "to_app": "auth",
+              "to_model": "User",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 1005,
+            "los": 0
+          },
+          "notable": "Entitat central del PLM. Golden cases recurrents de les diagnosis: 163 (grading), 174 (wizard d'edició), 179 (capa 0), 182 [QA-SC] (Size Check, segellat), 185 (dades corruptes, RESOLT), 268 Blusa POP (S10), 396 (import de mesures)."
+        },
+        {
+          "name": "ModelFitxer",
+          "table": "models_app_modelfitxer",
+          "key_fields": [
+            "model",
+            "categoria",
+            "tipus",
+            "is_current",
+            "versio_anterior",
+            "generat_des_de",
+            "derivat_de_item",
+            "derivat_de_model",
+            "pujat_per",
+            "mimetype",
+            "origen"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "versio_anterior",
+              "to_app": "models_app",
+              "to_model": "ModelFitxer",
+              "db_constraint": true
+            },
+            {
+              "field": "generat_des_de",
+              "to_app": "models_app",
+              "to_model": "ModelFitxer",
+              "db_constraint": true
+            },
+            {
+              "field": "derivat_de_item",
+              "to_app": "models_app",
+              "to_model": "ItemFitxer",
+              "db_constraint": true
+            },
+            {
+              "field": "derivat_de_model",
+              "to_app": "models_app",
+              "to_model": "ModelFitxer",
+              "db_constraint": true
+            },
+            {
+              "field": "pujat_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 476,
+            "los": 0
+          }
+        },
+        {
+          "name": "ItemFitxer",
+          "table": "models_app_itemfitxer",
+          "key_fields": [
+            "garment_type_item",
+            "tipus",
+            "is_current",
+            "versio_anterior",
+            "pujat_per",
+            "mimetype"
+          ],
+          "foreign_keys": [
+            {
+              "field": "garment_type_item",
+              "to_app": "tasks",
+              "to_model": "GarmentTypeItem",
+              "db_constraint": true
+            },
+            {
+              "field": "versio_anterior",
+              "to_app": "models_app",
+              "to_model": "ItemFitxer",
+              "db_constraint": true
+            },
+            {
+              "field": "pujat_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "ImportSession",
+          "table": "models_app_importsession",
+          "key_fields": [
+            "creat_per",
+            "estat",
+            "model",
+            "model_detectat",
+            "tipologia_confirmada"
+          ],
+          "foreign_keys": [
+            {
+              "field": "creat_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "tipologia_confirmada",
+              "to_app": "tasks",
+              "to_model": "GarmentTypeItem",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 21,
+            "los": 0
+          }
+        },
+        {
+          "name": "BaseMeasurement",
+          "table": "models_app_basemeasurement",
+          "key_fields": [
+            "model",
+            "pom",
+            "is_key",
+            "is_active",
+            "created_by",
+            "origen"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "auth",
+              "to_model": "User",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 621,
+            "los": 0
+          }
+        },
+        {
+          "name": "MeasurementChangeLog",
+          "table": "models_app_measurementchangelog",
+          "key_fields": [
+            "model",
+            "pom",
+            "base_measurement",
+            "fitting_ref",
+            "created_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            },
+            {
+              "field": "base_measurement",
+              "to_app": "models_app",
+              "to_model": "BaseMeasurement",
+              "db_constraint": true
+            },
+            {
+              "field": "fitting_ref",
+              "to_app": "fitting",
+              "to_model": "SizeFitting",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "auth",
+              "to_model": "User",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 237,
+            "los": 0
+          }
+        },
+        {
+          "name": "ModelGradingOverride",
+          "table": "models_app_modelgradingoverride",
+          "key_fields": [
+            "model",
+            "pom",
+            "fitting_ref",
+            "created_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            },
+            {
+              "field": "fitting_ref",
+              "to_app": "fitting",
+              "to_model": "PieceFitting",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "ModelGradingRule",
+          "table": "models_app_modelgradingrule",
+          "key_fields": [
+            "model",
+            "pom",
+            "logica",
+            "origen",
+            "actiu"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": false
+            }
+          ],
+          "row_count": {
+            "fhort": 412,
+            "los": 0
+          },
+          "notable": "Regla propagada/resident a nivell de model — llei de SOBIRANIA DE LA REGLA: l'import reté la regla, no el propagat."
+        },
+        {
+          "name": "ModelSequence",
+          "table": "models_app_modelsequence",
+          "key_fields": [
+            "customer",
+            "season"
+          ],
+          "foreign_keys": [
+            {
+              "field": "customer",
+              "to_app": "tasks",
+              "to_model": "Customer",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 3,
+            "los": 0
+          }
+        },
+        {
+          "name": "BulkCollectionImport",
+          "table": "models_app_bulkcollectionimport",
+          "key_fields": [
+            "customer",
+            "estat",
+            "creat_per"
+          ],
+          "foreign_keys": [
+            {
+              "field": "customer",
+              "to_app": "tasks",
+              "to_model": "Customer",
+              "db_constraint": true
+            },
+            {
+              "field": "creat_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 3,
+            "los": 0
+          }
+        },
+        {
+          "name": "BulkCollectionRow",
+          "table": "models_app_bulkcollectionrow",
+          "key_fields": [
+            "importacio",
+            "estat",
+            "model_creat"
+          ],
+          "foreign_keys": [
+            {
+              "field": "importacio",
+              "to_app": "models_app",
+              "to_model": "BulkCollectionImport",
+              "db_constraint": true
+            },
+            {
+              "field": "model_creat",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 37,
+            "los": 0
+          }
+        },
+        {
+          "name": "ConsumptionRecord",
+          "table": "models_app_consumptionrecord",
+          "key_fields": [
+            "model",
+            "code_snapshot"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 26,
+            "los": 0
+          }
+        },
+        {
+          "name": "SizeCheck",
+          "table": "models_app_sizecheck",
+          "key_fields": [
+            "model",
+            "estat",
+            "created_by",
+            "resolt_per"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "resolt_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 12,
+            "los": 0
+          },
+          "notable": "El motor resolve_size_check queda intacte com a cas d'ús de la superfície unificada de mesura (G1). QA golden al model [QA-SC] pk=182."
+        },
+        {
+          "name": "SizeCheckLine",
+          "table": "models_app_sizecheckline",
+          "key_fields": [
+            "size_check",
+            "pom",
+            "decisio"
+          ],
+          "foreign_keys": [
+            {
+              "field": "size_check",
+              "to_app": "models_app",
+              "to_model": "SizeCheck",
+              "db_constraint": true
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": false
+            }
+          ],
+          "row_count": {
+            "fhort": 92,
+            "los": 0
+          }
+        },
+        {
+          "name": "Watchpoint",
+          "table": "models_app_watchpoint",
+          "key_fields": [
+            "model",
+            "task",
+            "estat",
+            "created_by",
+            "resolved_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "task",
+              "to_app": "tasks",
+              "to_model": "ModelTask",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "resolved_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 779,
+            "los": 0
+          },
+          "notable": "Punts de vigilància del model; una de les 3 peces del sprint 3 FRONTS."
+        },
+        {
+          "name": "TechSheetTemplate",
+          "table": "models_app_techsheettemplate",
+          "key_fields": [
+            "customer",
+            "actiu"
+          ],
+          "foreign_keys": [
+            {
+              "field": "customer",
+              "to_app": "tasks",
+              "to_model": "Customer",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          },
+          "notable": "Jubilat (S4): 0 files, sense ruta ni botó al frontend. Pendent de poda."
+        },
+        {
+          "name": "FttDocumentLock",
+          "table": "models_app_fttdocumentlock",
+          "key_fields": [
+            "document_root",
+            "locked_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "document_root",
+              "to_app": "models_app",
+              "to_model": "ModelFitxer",
+              "db_constraint": true
+            },
+            {
+              "field": "locked_by",
+              "to_app": "auth",
+              "to_model": "User",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 19,
+            "los": 0
+          },
+          "notable": "Bloqueig del document .ftt. Deute observat i no tocat: obrir la fitxa encadena una versió nova cada cop (ftt version churn)."
+        },
+        {
+          "name": "DocumentTemplate",
+          "table": "models_app_documenttemplate",
+          "key_fields": [
+            "is_sample",
+            "origen",
+            "actiu",
+            "created_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 1,
+            "los": 0
+          },
+          "notable": "El camí VIU de la fitxa tècnica (Konva + pdf-lib). La fitxa NO és reportlab i TechSheetTemplate està jubilat."
+        }
+      ],
+      "key_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/models/create-wizard/",
+          "view": "create_model_wizard",
+          "auth": "IsAuthenticated",
+          "purpose": "Creació unificada de l'esquelet complet del model (identificació + definició de peça + talles) en un sol POST, amb validació del ruleset assignable."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/models/{model_id}/generar-grading/",
+          "view": "generate_grading_view",
+          "auth": "IsAuthenticated",
+          "purpose": "Invoca el motor de grading de pom.services per generar les graded specs del model, amb els gates de regles residents/de set i de versió segellada."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/models/{model_id}/promoure-a-item/",
+          "view": "promoure_a_item_view",
+          "auth": "_Configure (HasCapability, capacitat CONFIGURE)",
+          "purpose": "Acte explícit de promoció model→estàndard d'item, amb dry-run per defecte que retorna el diff i confirmació en dues fases per sobreescriure."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/models/{model_id}/materialitzar-poms/",
+          "view": "materialize_poms_view",
+          "auth": "IsAuthenticated",
+          "purpose": "Instancia els POMs de la plantilla GarmentPOMMap com a BaseMeasurement del model, copiant els valors base de l'item si existeixen (origen ITEM_STANDARD)."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/import-sessions/{token}/extraccio/",
+          "view": "import_session_extraccio_view",
+          "auth": "IsAuthenticated",
+          "purpose": "Pas W2 del wizard d'import: extracció completa amb visió (POMs, valors i grading) del document de la sessió i matching de cada POM contra el màster."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/import-sessions/{token}/confirmar/",
+          "view": "import_session_confirmar_view",
+          "auth": "IsAuthenticated",
+          "purpose": "Pas W5: desament definitiu de la sessió d'import, creant només les BaseMeasurement dels POMs confirmats per l'usuari."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/bulk-import/{import_id}/commit/",
+          "view": "commit_view (bulk_import_views)",
+          "auth": "IsAuthenticated",
+          "purpose": "Commit parcial de l'import massiu d'Excel: crea els Models i size fittings de les files vàlides."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/models/{model_id}/xat-mesures/",
+          "view": "measurements_chat_view",
+          "auth": "IsAuthenticated",
+          "purpose": "Xat amb l'API d'Anthropic sobre la taula de mesures del model, mantenint historial de conversa i context del document."
+        }
+      ],
+      "depends_on": [
+        "accounts",
+        "commerce",
+        "fitting",
+        "planning",
+        "pom",
+        "tasks"
+      ]
+    },
+    {
+      "name": "fitting",
+      "path": "backend/fhort/fitting/",
+      "purpose": "Gestiona el cicle de fittings/provadors: convocatòries de sessió (FittingSession), peces provades i les seves línies de mesura (PieceFitting/PieceFittingLine), versions de grading segellables amb detecció d'obsolescència (staleness) i alertes POM.",
+      "schema_scope": "TENANT",
+      "models": [
+        {
+          "name": "SizeFitting",
+          "table": "fitting_sizefitting",
+          "key_fields": [
+            "model",
+            "codi",
+            "tipus",
+            "sf_pare",
+            "estat",
+            "creat_per"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "sf_pare",
+              "to_app": "fitting",
+              "to_model": "SizeFitting",
+              "db_constraint": true
+            },
+            {
+              "field": "creat_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 48,
+            "los": 0
+          },
+          "notable": "Contenidor del grading d'un model. El forat de SizeFitting va ser una de les 3 peces del sprint 3 FRONTS."
+        },
+        {
+          "name": "GradingVersion",
+          "table": "fitting_gradingversion",
+          "key_fields": [
+            "size_fitting",
+            "creat_per",
+            "version_number",
+            "is_active",
+            "aprovada_per"
+          ],
+          "foreign_keys": [
+            {
+              "field": "size_fitting",
+              "to_app": "fitting",
+              "to_model": "SizeFitting",
+              "db_constraint": true
+            },
+            {
+              "field": "creat_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "aprovada_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 33,
+            "los": 0
+          },
+          "notable": "Objecte de segellat del grading. G6-B: el segell ja no menteix, però queda un 7è camí obert (resolve_size_check). El guard de segellat existeix als dos camins amb allow_reopen_sealed."
+        },
+        {
+          "name": "POMAlert",
+          "table": "fitting_pomalert",
+          "key_fields": [
+            "model",
+            "size_fitting",
+            "pom",
+            "tipus",
+            "estat",
+            "resolt_per",
+            "origen"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "size_fitting",
+              "to_app": "fitting",
+              "to_model": "SizeFitting",
+              "db_constraint": true
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            },
+            {
+              "field": "resolt_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "GradedSpec",
+          "table": "fitting_gradedspec",
+          "key_fields": [
+            "grading_version",
+            "pom",
+            "grading_type_applied",
+            "is_active",
+            "generated_from_version"
+          ],
+          "foreign_keys": [
+            {
+              "field": "grading_version",
+              "to_app": "fitting",
+              "to_model": "GradingVersion",
+              "db_constraint": true
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 1827,
+            "los": 0
+          },
+          "notable": "Sortida del motor de grau (POM × talla). Golden case S10: 105/105 exactes (±0,01) contra el SIZE SET real del client."
+        },
+        {
+          "name": "FittingSession",
+          "table": "fitting_fittingsession",
+          "key_fields": [
+            "garment_set",
+            "model",
+            "fase",
+            "model_persona",
+            "responsable",
+            "estat",
+            "created_by",
+            "attendees"
+          ],
+          "foreign_keys": [
+            {
+              "field": "garment_set",
+              "to_app": "models_app",
+              "to_model": "GarmentSet",
+              "db_constraint": true
+            },
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "responsable",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "attendees",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true,
+              "kind": "m2m"
+            }
+          ],
+          "row_count": {
+            "fhort": 24,
+            "los": 0
+          }
+        },
+        {
+          "name": "PieceFitting",
+          "table": "fitting_piecefitting",
+          "key_fields": [
+            "session",
+            "model",
+            "grading_version",
+            "gate",
+            "gate_per",
+            "created_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "session",
+              "to_app": "fitting",
+              "to_model": "FittingSession",
+              "db_constraint": true
+            },
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "grading_version",
+              "to_app": "fitting",
+              "to_model": "GradingVersion",
+              "db_constraint": true
+            },
+            {
+              "field": "gate_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 5,
+            "los": 0
+          }
+        },
+        {
+          "name": "PieceFittingLine",
+          "table": "fitting_piecefittingline",
+          "key_fields": [
+            "piece_fitting",
+            "pom"
+          ],
+          "foreign_keys": [
+            {
+              "field": "piece_fitting",
+              "to_app": "fitting",
+              "to_model": "PieceFitting",
+              "db_constraint": true
+            },
+            {
+              "field": "pom",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 153,
+            "los": 0
+          }
+        },
+        {
+          "name": "FittingPhoto",
+          "table": "fitting_fittingphoto",
+          "key_fields": [
+            "session",
+            "piece_fitting"
+          ],
+          "foreign_keys": [
+            {
+              "field": "session",
+              "to_app": "fitting",
+              "to_model": "FittingSession",
+              "db_constraint": true
+            },
+            {
+              "field": "piece_fitting",
+              "to_app": "fitting",
+              "to_model": "PieceFitting",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "FittingDurationStat",
+          "table": "fitting_fittingdurationstat",
+          "key_fields": [],
+          "foreign_keys": [],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        }
+      ],
+      "key_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/fitting-sessions/schedule/",
+          "view": "FittingSessionViewSet.schedule",
+          "auth": "HasCapability SCHEDULE_FITTINGS (_ScheduleFittingsPerm)",
+          "purpose": "Programa una sessió de fitting (fase, data, responsable, model o garment_set, lloc, horari, assistents)."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/fitting-sessions/schedule-bulk/",
+          "view": "FittingSessionViewSet.schedule_bulk",
+          "auth": "HasCapability SCHEDULE_FITTINGS",
+          "purpose": "Programa en bloc diverses sessions sota una mateixa convocatòria."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/fitting-sessions/{pk}/create-piece/",
+          "view": "FittingSessionViewSet.create_piece",
+          "auth": "IsAuthenticated",
+          "purpose": "Crea la peça d'un model dins la sessió i materialitza les seves línies de mesura via services.create_piece_fitting."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/fitting-sessions/{pk}/advance-phase/",
+          "view": "FittingSessionViewSet.advance_phase",
+          "auth": "IsAuthenticated",
+          "purpose": "Fa avançar la sessió a la fase indicada cridant services.advance_phase."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/piece-fittings/{pk}/close/",
+          "view": "PieceFittingViewSet.close",
+          "auth": "IsAuthenticated",
+          "purpose": "Tanca la peça i consolida mesures; pot reobrir un grading segellat amb allow_reopen_sealed (retorna code grading_sealed si està bloquejat)."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/piece-fitting-lines/{pk}/propagar/",
+          "view": "PieceFittingLineViewSet.propagar",
+          "auth": "IsAuthenticated",
+          "purpose": "Desa el valor_real d'una cel·la i, si el règim de graduació és lineal, propaga el delta a les línies germanes del mateix POM."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/grading-versions/{pk}/approve/",
+          "view": "GradingVersionViewSet.approve",
+          "auth": "HasCapability CLOSE_GATES (_CloseGates)",
+          "purpose": "Segella (aprova) una versió de grading via services.seal_grading_version."
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/fitting/{sf_id}/graded-table/",
+          "view": "GradedSpecTableView",
+          "auth": "IsAuthenticated",
+          "purpose": "Retorna la taula POM x talla de la GradingVersion vigent d'un SizeFitting, enriquida amb nomenclatura POM, per a la fitxa tècnica."
+        }
+      ],
+      "depends_on": [
+        "accounts",
+        "models_app",
+        "patterns",
+        "planning",
+        "pom",
+        "tasks"
+      ]
+    },
+    {
+      "name": "tasks",
+      "path": "backend/fhort/tasks/",
+      "purpose": "Catàleg i execució de tasques de model (TaskType/ModelTask): definició i assignació de tasques per model, transicions d'estat amb timers, gates d'avanç de fase, peticions de producció a proveïdors i anàlisi de temps estimat vs real.",
+      "schema_scope": "TENANT",
+      "models": [
+        {
+          "name": "TimerEntrada",
+          "table": "tasks_timerentrada",
+          "key_fields": [
+            "model_task",
+            "tecnic",
+            "actiu"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model_task",
+              "to_app": "tasks",
+              "to_model": "ModelTask",
+              "db_constraint": true
+            },
+            {
+              "field": "tecnic",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 216,
+            "los": 0
+          }
+        },
+        {
+          "name": "TaskType",
+          "table": "tasks_tasktype",
+          "key_fields": [
+            "code",
+            "active",
+            "fase",
+            "tipus",
+            "mode"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "fhort": 14,
+            "los": 14
+          },
+          "notable": "Sota congelació viva (G9, governance transversal): cap escriptor/editabilitat nou al tenant, referències sempre per `code` i mai per PK. Tall futur previst = moure la definició a public."
+        },
+        {
+          "name": "ModelTask",
+          "table": "tasks_modeltask",
+          "key_fields": [
+            "model",
+            "task_type",
+            "status",
+            "origen",
+            "assignee",
+            "work_order",
+            "fitting_session"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "task_type",
+              "to_app": "tasks",
+              "to_model": "TaskType",
+              "db_constraint": true
+            },
+            {
+              "field": "assignee",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "work_order",
+              "to_app": "commerce",
+              "to_model": "WorkOrder",
+              "db_constraint": true
+            },
+            {
+              "field": "fitting_session",
+              "to_app": "fitting",
+              "to_model": "FittingSession",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 106,
+            "los": 0
+          },
+          "notable": "Superfície unificada de tasques; el fitting i el size check hi conviuen com a ModelTask (size_check pk=20 al tenant fhort)."
+        },
+        {
+          "name": "TaskTransition",
+          "table": "tasks_tasktransition",
+          "key_fields": [
+            "model_task",
+            "from_status",
+            "to_status",
+            "by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model_task",
+              "to_app": "tasks",
+              "to_model": "ModelTask",
+              "db_constraint": true
+            },
+            {
+              "field": "by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 433,
+            "los": 0
+          }
+        },
+        {
+          "name": "GateEvent",
+          "table": "tasks_gateevent",
+          "key_fields": [
+            "model",
+            "from_phase",
+            "to_phase",
+            "kind",
+            "by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 16,
+            "los": 0
+          }
+        },
+        {
+          "name": "Supplier",
+          "table": "tasks_supplier",
+          "key_fields": [
+            "type",
+            "active",
+            "codi_postal"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "fhort": 1,
+            "los": 0
+          }
+        },
+        {
+          "name": "Customer",
+          "table": "tasks_customer",
+          "key_fields": [
+            "codi",
+            "active",
+            "is_self",
+            "codi_global",
+            "codi_postal",
+            "tax_regime",
+            "payment_method",
+            "payment_terms"
+          ],
+          "foreign_keys": [
+            {
+              "field": "payment_terms",
+              "to_app": "commerce",
+              "to_model": "PaymentTerms",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 3,
+            "los": 1
+          },
+          "notable": "Font del prefix de codi-gen dels models i eix del contenidor de grading de client. És tenant-only, per això les FK des de `pom` (SHARED) porten db_constraint=False."
+        },
+        {
+          "name": "Production",
+          "table": "tasks_production",
+          "key_fields": [
+            "model",
+            "phase",
+            "supplier",
+            "status",
+            "requested_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "supplier",
+              "to_app": "tasks",
+              "to_model": "Supplier",
+              "db_constraint": true
+            },
+            {
+              "field": "requested_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 6,
+            "los": 0
+          }
+        },
+        {
+          "name": "GarmentTypeItem",
+          "table": "tasks_garmenttypeitem",
+          "key_fields": [
+            "garment_type",
+            "code",
+            "active",
+            "base_size_definition",
+            "grading_rule_set"
+          ],
+          "foreign_keys": [
+            {
+              "field": "garment_type",
+              "to_app": "pom",
+              "to_model": "GarmentType",
+              "db_constraint": true
+            },
+            {
+              "field": "base_size_definition",
+              "to_app": "pom",
+              "to_model": "SizeDefinition",
+              "db_constraint": true
+            },
+            {
+              "field": "grading_rule_set",
+              "to_app": "pom",
+              "to_model": "GradingRuleSet",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 62,
+            "los": 0
+          },
+          "notable": "Eix de client i node fi de la identitat del contenidor de grading. Diagnosi GTI-PLANTILLA (2026-07-21): funciona com a plantilla completa, amb 3 de 4 peces ja construïdes; GarmentTypeItemAsset NO ha existit mai."
+        },
+        {
+          "name": "TaskTimeEstimate",
+          "table": "tasks_tasktimeestimate",
+          "key_fields": [
+            "garment_type_item",
+            "task_type"
+          ],
+          "foreign_keys": [
+            {
+              "field": "garment_type_item",
+              "to_app": "tasks",
+              "to_model": "GarmentTypeItem",
+              "db_constraint": true
+            },
+            {
+              "field": "task_type",
+              "to_app": "tasks",
+              "to_model": "TaskType",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 460,
+            "los": 0
+          }
+        },
+        {
+          "name": "PlanSnapshot",
+          "table": "tasks_plansnapshot",
+          "key_fields": [
+            "computed_by",
+            "model_sequence"
+          ],
+          "foreign_keys": [
+            {
+              "field": "computed_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 1,
+            "los": 0
+          }
+        },
+        {
+          "name": "TimeSeed",
+          "table": "tasks_timeseed",
+          "key_fields": [
+            "scope",
+            "origen",
+            "updated_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "updated_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 8,
+            "los": 0
+          }
+        }
+      ],
+      "key_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/models/{model_id}/define-tasks/",
+          "view": "define_model_tasks_view",
+          "auth": "HasCapability DEFINE_TASKS (_DefineTasks)",
+          "purpose": "Crea en bloc les ModelTask del model a partir d'una llista de task_type_ids, en l'ordre per defecte del tipus."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/model-task-items/{pk}/transition/",
+          "view": "transition_task_view",
+          "auth": "HasCapability EXECUTE_TASKS (_ExecuteTasks)",
+          "purpose": "Canvia l'estat d'una tasca via services_c.transition_task (auto-assign, timer, exclusió d'un sol InProgress)."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/models/{model_id}/open-task/",
+          "view": "open_model_task_view",
+          "auth": "HasCapability EXECUTE_TASKS",
+          "purpose": "Obre una tasca concreta del model per codi: la crea si falta i la posa En curs reusant transition_task."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/models/{model_id}/assign/",
+          "view": "assign_model_view",
+          "auth": "HasCapability DEFINE_TASKS",
+          "purpose": "Assigna un model sencer a un tècnic recomputant la seva cua de tasques."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/models/{model_id}/gate/",
+          "view": "gate_model_view",
+          "auth": "HasCapability CLOSE_GATES (_CloseGates)",
+          "purpose": "Avança la fase del model mitjançant el gate del responsable (services_d.advance_phase_gate)."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/models/{model_id}/request-production/",
+          "view": "request_production_view",
+          "auth": "HasCapability SCHEDULE_FITTINGS (_ScheduleFittings)",
+          "purpose": "Demana una producció de confecció a un proveïdor via services_e.request_production."
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/time-analysis/tree/",
+          "view": "time_tree_view",
+          "auth": "HasCapability VIEW_TEAM_TASKS (_ViewTeamTasks)",
+          "purpose": "Arbre drill-down de temps estimat/real amb maduresa per fase i tipus de tasca."
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/model-task-items/by-model/",
+          "view": "ModelTaskViewSet.by_model",
+          "auth": "IsAuthenticated + row-level scope (sense VIEW_TEAM_TASKS només les pròpies); escriptura gated DEFINE_TASKS",
+          "purpose": "Agregador del Kanban: agrupa per model les tasques visibles amb comptadors per estat calculats a la BD."
+        }
+      ],
+      "depends_on": [
+        "accounts",
+        "backoffice",
+        "commerce",
+        "fitting",
+        "models_app",
+        "planning",
+        "pom"
+      ]
+    },
+    {
+      "name": "planning",
+      "path": "backend/fhort/planning/",
+      "purpose": "Calendari laboral del tenant (jornades, festius, absències) i motor determinista de planificació que col·loca les tasques dels tècnics sobre aquest calendari, amb preview/apply i vistes de calendari i Gantt.",
+      "schema_scope": "TENANT",
+      "models": [
+        {
+          "name": "CompanyCalendar",
+          "table": "planning_companycalendar",
+          "key_fields": [],
+          "foreign_keys": [],
+          "row_count": {
+            "fhort": 1,
+            "los": 0
+          }
+        },
+        {
+          "name": "Absencia",
+          "table": "planning_absencia",
+          "key_fields": [
+            "user_profile"
+          ],
+          "foreign_keys": [
+            {
+              "field": "user_profile",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "TechnicianQueueOrder",
+          "table": "planning_technicianqueueorder",
+          "key_fields": [
+            "profile",
+            "model"
+          ],
+          "foreign_keys": [
+            {
+              "field": "profile",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 27,
+            "los": 0
+          }
+        }
+      ],
+      "key_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/plan/compute/",
+          "view": "plan_compute_view",
+          "auth": "HasCapability(CONFIGURE)",
+          "purpose": "Planifica un conjunt de tasques amb el motor determinista, escriu planned_* i desa un PlanSnapshot."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/plan/preview/",
+          "view": "plan_preview_view",
+          "auth": "HasCapability(CONFIGURE)",
+          "purpose": "Simula una reposició de tasca (save=False) i retorna l'impacte sobre la cua sense escriure."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/plan/apply/",
+          "view": "plan_apply_view",
+          "auth": "HasCapability(CONFIGURE)",
+          "purpose": "Aplica una proposta acceptada: fixa la tasca moguda i desa el recàlcul + snapshot."
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/plan/current/",
+          "view": "plan_current_view",
+          "auth": "IsAuthenticated (filtrat per dades segons capacitats)",
+          "purpose": "Retorna la planificació vigent visible per l'usuari."
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/calendar/events/",
+          "view": "calendar_events_view",
+          "auth": "IsAuthenticated",
+          "purpose": "Construeix els esdeveniments de calendari (tasques planificades, absències, festius)."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/plan/reorder/",
+          "view": "plan_reorder_view",
+          "auth": "HasCapability(DEFINE_TASKS)",
+          "purpose": "Reordena la cua de tasques d'un tècnic i recalcula la planificació."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/plan/assign-batch/",
+          "view": "plan_assign_batch_view",
+          "auth": "HasCapability(DEFINE_TASKS)",
+          "purpose": "Assignació massiva del wizard (task_type × persona × data opcional)."
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/plan/gantt/",
+          "view": "gantt_view",
+          "auth": "IsAuthenticated (dades ampliades amb VIEW_TEAM_TASKS)",
+          "purpose": "Calendari-Gantt de projecte: una barra per model en dies, amb responsable efectiu."
+        }
+      ],
+      "depends_on": [
+        "accounts",
+        "fitting",
+        "models_app",
+        "pom",
+        "tasks"
+      ]
+    },
+    {
+      "name": "commerce",
+      "path": "backend/fhort/commerce/",
+      "purpose": "Mòdul comercial del tenant: mestre d'articles/preus i tot el pipeline documental oferta→comanda→encàrrec→albarà (amb numeració atòmica, càlcul de preu proposat i generació de PDFs).",
+      "schema_scope": "TENANT",
+      "models": [
+        {
+          "name": "DocumentSequence",
+          "table": "commerce_documentsequence",
+          "key_fields": [
+            "doc_type"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "fhort": 4,
+            "los": 0
+          }
+        },
+        {
+          "name": "Unit",
+          "table": "commerce_unit",
+          "key_fields": [
+            "code",
+            "active"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "fhort": 7,
+            "los": 7
+          }
+        },
+        {
+          "name": "Product",
+          "table": "commerce_product",
+          "key_fields": [
+            "code",
+            "nature",
+            "price_mode",
+            "unit",
+            "active"
+          ],
+          "foreign_keys": [
+            {
+              "field": "unit",
+              "to_app": "commerce",
+              "to_model": "Unit",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 1,
+            "los": 0
+          }
+        },
+        {
+          "name": "ProductRecipe",
+          "table": "commerce_productrecipe",
+          "key_fields": [
+            "product",
+            "task_code"
+          ],
+          "foreign_keys": [
+            {
+              "field": "product",
+              "to_app": "commerce",
+              "to_model": "Product",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 3,
+            "los": 0
+          }
+        },
+        {
+          "name": "ProductSupplier",
+          "table": "commerce_productsupplier",
+          "key_fields": [
+            "product",
+            "supplier",
+            "is_default"
+          ],
+          "foreign_keys": [
+            {
+              "field": "product",
+              "to_app": "commerce",
+              "to_model": "Product",
+              "db_constraint": true
+            },
+            {
+              "field": "supplier",
+              "to_app": "tasks",
+              "to_model": "Supplier",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "ProductComponent",
+          "table": "commerce_productcomponent",
+          "key_fields": [
+            "pack",
+            "component"
+          ],
+          "foreign_keys": [
+            {
+              "field": "pack",
+              "to_app": "commerce",
+              "to_model": "Product",
+              "db_constraint": true
+            },
+            {
+              "field": "component",
+              "to_app": "commerce",
+              "to_model": "Product",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "ProductPriceGTI",
+          "table": "commerce_productpricegti",
+          "key_fields": [
+            "product",
+            "garment_type_item"
+          ],
+          "foreign_keys": [
+            {
+              "field": "product",
+              "to_app": "commerce",
+              "to_model": "Product",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_type_item",
+              "to_app": "tasks",
+              "to_model": "GarmentTypeItem",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "Quote",
+          "table": "commerce_quote",
+          "key_fields": [
+            "doc_type",
+            "customer",
+            "status",
+            "payment_terms",
+            "created_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "customer",
+              "to_app": "tasks",
+              "to_model": "Customer",
+              "db_constraint": true
+            },
+            {
+              "field": "payment_terms",
+              "to_app": "commerce",
+              "to_model": "PaymentTerms",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 8,
+            "los": 0
+          }
+        },
+        {
+          "name": "QuoteLine",
+          "table": "commerce_quoteline",
+          "key_fields": [
+            "product",
+            "quote"
+          ],
+          "foreign_keys": [
+            {
+              "field": "product",
+              "to_app": "commerce",
+              "to_model": "Product",
+              "db_constraint": true
+            },
+            {
+              "field": "quote",
+              "to_app": "commerce",
+              "to_model": "Quote",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 13,
+            "los": 0
+          }
+        },
+        {
+          "name": "QuoteLineModelIntent",
+          "table": "commerce_quotelinemodelintent",
+          "key_fields": [
+            "quote_line",
+            "model",
+            "created_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "quote_line",
+              "to_app": "commerce",
+              "to_model": "QuoteLine",
+              "db_constraint": true
+            },
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 4,
+            "los": 0
+          },
+          "notable": "Vincle preparatori model↔línia d'oferta (peça del paquet de conversió de Quote)."
+        },
+        {
+          "name": "SalesOrder",
+          "table": "commerce_salesorder",
+          "key_fields": [
+            "doc_type",
+            "customer",
+            "payment_terms",
+            "created_by",
+            "source_quote",
+            "status"
+          ],
+          "foreign_keys": [
+            {
+              "field": "customer",
+              "to_app": "tasks",
+              "to_model": "Customer",
+              "db_constraint": true
+            },
+            {
+              "field": "payment_terms",
+              "to_app": "commerce",
+              "to_model": "PaymentTerms",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "source_quote",
+              "to_app": "commerce",
+              "to_model": "Quote",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 2,
+            "los": 0
+          }
+        },
+        {
+          "name": "SalesOrderLine",
+          "table": "commerce_salesorderline",
+          "key_fields": [
+            "product",
+            "order"
+          ],
+          "foreign_keys": [
+            {
+              "field": "product",
+              "to_app": "commerce",
+              "to_model": "Product",
+              "db_constraint": true
+            },
+            {
+              "field": "order",
+              "to_app": "commerce",
+              "to_model": "SalesOrder",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 3,
+            "los": 0
+          }
+        },
+        {
+          "name": "PaymentTerms",
+          "table": "commerce_paymentterms",
+          "key_fields": [
+            "code",
+            "active"
+          ],
+          "foreign_keys": [],
+          "row_count": {
+            "fhort": 3,
+            "los": 3
+          }
+        },
+        {
+          "name": "PaymentTermLine",
+          "table": "commerce_paymenttermline",
+          "key_fields": [
+            "terms"
+          ],
+          "foreign_keys": [
+            {
+              "field": "terms",
+              "to_app": "commerce",
+              "to_model": "PaymentTerms",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 4,
+            "los": 4
+          }
+        },
+        {
+          "name": "DocumentDueDate",
+          "table": "commerce_documentduedate",
+          "key_fields": [
+            "quote",
+            "sales_order"
+          ],
+          "foreign_keys": [
+            {
+              "field": "quote",
+              "to_app": "commerce",
+              "to_model": "Quote",
+              "db_constraint": true
+            },
+            {
+              "field": "sales_order",
+              "to_app": "commerce",
+              "to_model": "SalesOrder",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "WorkOrder",
+          "table": "commerce_workorder",
+          "key_fields": [
+            "customer",
+            "model",
+            "order_line",
+            "orphaned_from_line",
+            "kind",
+            "origin",
+            "status",
+            "delivery_note",
+            "closed_by",
+            "created_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "customer",
+              "to_app": "tasks",
+              "to_model": "Customer",
+              "db_constraint": true
+            },
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "order_line",
+              "to_app": "commerce",
+              "to_model": "SalesOrderLine",
+              "db_constraint": true
+            },
+            {
+              "field": "orphaned_from_line",
+              "to_app": "commerce",
+              "to_model": "SalesOrderLine",
+              "db_constraint": true
+            },
+            {
+              "field": "delivery_note",
+              "to_app": "commerce",
+              "to_model": "DeliveryNote",
+              "db_constraint": true
+            },
+            {
+              "field": "closed_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 3,
+            "los": 0
+          }
+        },
+        {
+          "name": "WorkOrderAdjustment",
+          "table": "commerce_workorderadjustment",
+          "key_fields": [
+            "work_order",
+            "model_task",
+            "kind",
+            "resolved_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "work_order",
+              "to_app": "commerce",
+              "to_model": "WorkOrder",
+              "db_constraint": true
+            },
+            {
+              "field": "model_task",
+              "to_app": "tasks",
+              "to_model": "ModelTask",
+              "db_constraint": true
+            },
+            {
+              "field": "resolved_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "Expense",
+          "table": "commerce_expense",
+          "key_fields": [
+            "work_order",
+            "product",
+            "supplier",
+            "created_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "work_order",
+              "to_app": "commerce",
+              "to_model": "WorkOrder",
+              "db_constraint": true
+            },
+            {
+              "field": "product",
+              "to_app": "commerce",
+              "to_model": "Product",
+              "db_constraint": true
+            },
+            {
+              "field": "supplier",
+              "to_app": "tasks",
+              "to_model": "Supplier",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "DeliveryNote",
+          "table": "commerce_deliverynote",
+          "key_fields": [
+            "doc_type",
+            "customer",
+            "payment_terms",
+            "created_by",
+            "status",
+            "issued_by",
+            "invoiced_by"
+          ],
+          "foreign_keys": [
+            {
+              "field": "customer",
+              "to_app": "tasks",
+              "to_model": "Customer",
+              "db_constraint": true
+            },
+            {
+              "field": "payment_terms",
+              "to_app": "commerce",
+              "to_model": "PaymentTerms",
+              "db_constraint": true
+            },
+            {
+              "field": "created_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "issued_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "invoiced_by",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 2,
+            "los": 0
+          }
+        },
+        {
+          "name": "DeliveryNoteLine",
+          "table": "commerce_deliverynoteline",
+          "key_fields": [
+            "delivery_note",
+            "product",
+            "work_order",
+            "model_task",
+            "expense",
+            "adjustment",
+            "line_kind",
+            "model"
+          ],
+          "foreign_keys": [
+            {
+              "field": "delivery_note",
+              "to_app": "commerce",
+              "to_model": "DeliveryNote",
+              "db_constraint": true
+            },
+            {
+              "field": "product",
+              "to_app": "commerce",
+              "to_model": "Product",
+              "db_constraint": true
+            },
+            {
+              "field": "work_order",
+              "to_app": "commerce",
+              "to_model": "WorkOrder",
+              "db_constraint": true
+            },
+            {
+              "field": "model_task",
+              "to_app": "tasks",
+              "to_model": "ModelTask",
+              "db_constraint": true
+            },
+            {
+              "field": "expense",
+              "to_app": "commerce",
+              "to_model": "Expense",
+              "db_constraint": true
+            },
+            {
+              "field": "adjustment",
+              "to_app": "commerce",
+              "to_model": "WorkOrderAdjustment",
+              "db_constraint": true
+            },
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 4,
+            "los": 0
+          }
+        }
+      ],
+      "key_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/commerce/quotes/{pk}/send/",
+          "view": "QuoteViewSet.send",
+          "auth": "HasCapability(CONFIGURE)",
+          "purpose": "Transiciona l'oferta DRAFT→SENT validant que tingui almenys una línia."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/commerce/quotes/{pk}/convert/",
+          "view": "QuoteViewSet.convert",
+          "auth": "HasCapability(CONFIGURE)",
+          "purpose": "Converteix una oferta acceptada en SalesOrder (amb línies i venciments)."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/commerce/quote-line-intents/bulk/",
+          "view": "QuoteLineModelIntentViewSet.bulk",
+          "auth": "HasCapability(CONFIGURE)",
+          "purpose": "Alta massiva de vincles preparatoris model↔línia d'oferta."
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/commerce/order-lines/{pk}/allocation/",
+          "view": "SalesOrderLineViewSet.allocation",
+          "auth": "IsAuthenticated",
+          "purpose": "Estat d'assignació de models a una línia de comanda (quantitat coberta/pendent)."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/commerce/order-lines/{pk}/assign-models/",
+          "view": "SalesOrderLineViewSet.assign_models",
+          "auth": "HasCapability(CONFIGURE)",
+          "purpose": "Assigna en lot models a la línia de comanda i crea/actualitza els WorkOrder derivats."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/commerce/work-orders/{pk}/close/",
+          "view": "WorkOrderViewSet.close",
+          "auth": "HasCapability(DEFINE_TASKS)",
+          "purpose": "Tanca l'encàrrec consolidant costos/despeses i el deixa facturable."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/commerce/delivery-notes/generate/",
+          "view": "DeliveryNoteViewSet.generate",
+          "auth": "HasCapability(CONFIGURE)",
+          "purpose": "Genera un albarà agregant 1..N WorkOrder CLOSED del mateix client."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/commerce/delivery-notes/{pk}/issue/",
+          "view": "DeliveryNoteViewSet.issue",
+          "auth": "HasCapability(CONFIGURE)",
+          "purpose": "Emet l'albarà (DRAFT→ISSUED) reservant número de document de forma atòmica."
+        }
+      ],
+      "depends_on": [
+        "accounts",
+        "i18n_content",
+        "models_app",
+        "tasks"
+      ]
+    },
+    {
+      "name": "patterns",
+      "path": "backend/fhort/patterns/",
+      "purpose": "Motor de patrons CAD: puja i versiona fitxers DXF/RUL, en persisteix la geometria (peces, punts, segments), permet anotar-hi POMs, costures i pinces amb propostes automàtiques i control de tolerància, i n'exporta niades graduades amb gate de reconeixement.",
+      "schema_scope": "TENANT",
+      "models": [
+        {
+          "name": "PatternFile",
+          "table": "patterns_patternfile",
+          "key_fields": [
+            "model",
+            "garment_type_item",
+            "source_asset",
+            "is_current",
+            "versio_anterior",
+            "mimetype",
+            "pujat_per"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "garment_type_item",
+              "to_app": "tasks",
+              "to_model": "GarmentTypeItem",
+              "db_constraint": true
+            },
+            {
+              "field": "source_asset",
+              "to_app": "models_app",
+              "to_model": "ItemFitxer",
+              "db_constraint": true
+            },
+            {
+              "field": "versio_anterior",
+              "to_app": "patterns",
+              "to_model": "PatternFile",
+              "db_constraint": true
+            },
+            {
+              "field": "pujat_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 5,
+            "los": 0
+          }
+        },
+        {
+          "name": "PatternPiece",
+          "table": "patterns_patternpiece",
+          "key_fields": [
+            "pattern_file",
+            "rol",
+            "doblec_original"
+          ],
+          "foreign_keys": [
+            {
+              "field": "pattern_file",
+              "to_app": "patterns",
+              "to_model": "PatternFile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 38,
+            "los": 0
+          }
+        },
+        {
+          "name": "PatternPoint",
+          "table": "patterns_patternpoint",
+          "key_fields": [
+            "piece",
+            "mena",
+            "tipus"
+          ],
+          "foreign_keys": [
+            {
+              "field": "piece",
+              "to_app": "patterns",
+              "to_model": "PatternPiece",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 4655,
+            "los": 0
+          },
+          "notable": "Geometria del patró. QA-TALLER-A: puntsDelSegment curat; la màscara de PIQUETS és el que sosté els trams naturals (llindar 22°)."
+        },
+        {
+          "name": "PatternSegment",
+          "table": "patterns_patternsegment",
+          "key_fields": [
+            "piece",
+            "tipus_vora",
+            "origen"
+          ],
+          "foreign_keys": [
+            {
+              "field": "piece",
+              "to_app": "patterns",
+              "to_model": "PatternPiece",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 580,
+            "los": 0
+          }
+        },
+        {
+          "name": "PatternPOM",
+          "table": "patterns_patternpom",
+          "key_fields": [
+            "pattern_piece",
+            "pom_master",
+            "metode",
+            "creat_per"
+          ],
+          "foreign_keys": [
+            {
+              "field": "pattern_piece",
+              "to_app": "patterns",
+              "to_model": "PatternPiece",
+              "db_constraint": true
+            },
+            {
+              "field": "pom_master",
+              "to_app": "pom",
+              "to_model": "POMMaster",
+              "db_constraint": true
+            },
+            {
+              "field": "creat_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 6,
+            "los": 0
+          }
+        },
+        {
+          "name": "ExportAcknowledgement",
+          "table": "patterns_exportacknowledgement",
+          "key_fields": [
+            "pattern_file",
+            "grading_version",
+            "usuari"
+          ],
+          "foreign_keys": [
+            {
+              "field": "pattern_file",
+              "to_app": "patterns",
+              "to_model": "PatternFile",
+              "db_constraint": true
+            },
+            {
+              "field": "grading_version",
+              "to_app": "fitting",
+              "to_model": "GradingVersion",
+              "db_constraint": true
+            },
+            {
+              "field": "usuari",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 1,
+            "los": 0
+          }
+        },
+        {
+          "name": "SewRelation",
+          "table": "patterns_sewrelation",
+          "key_fields": [
+            "model",
+            "tipus",
+            "creat_per",
+            "segments_a",
+            "segments_b"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "creat_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "segments_a",
+              "to_app": "patterns",
+              "to_model": "PatternSegment",
+              "db_constraint": true,
+              "kind": "m2m"
+            },
+            {
+              "field": "segments_b",
+              "to_app": "patterns",
+              "to_model": "PatternSegment",
+              "db_constraint": true,
+              "kind": "m2m"
+            }
+          ],
+          "row_count": {
+            "fhort": 12,
+            "los": 0
+          },
+          "notable": "Costures i pinces. QA-TALLER-B/W4b: la pinça del Tate té costats desiguals (32,13 − 2,34 = 29,79 casa). TOLERANCIA_CM = 0,1."
+        },
+        {
+          "name": "SewProposalRejection",
+          "table": "patterns_sewproposalrejection",
+          "key_fields": [
+            "model",
+            "segment_a",
+            "segment_b",
+            "rebutjat_per"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "segment_a",
+              "to_app": "patterns",
+              "to_model": "PatternSegment",
+              "db_constraint": true
+            },
+            {
+              "field": "segment_b",
+              "to_app": "patterns",
+              "to_model": "PatternSegment",
+              "db_constraint": true
+            },
+            {
+              "field": "rebutjat_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 13,
+            "los": 0
+          }
+        },
+        {
+          "name": "DartProposalRejection",
+          "table": "patterns_dartproposalrejection",
+          "key_fields": [
+            "model",
+            "punt_a",
+            "punt_vertex",
+            "punt_b",
+            "rebutjat_per"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "punt_a",
+              "to_app": "patterns",
+              "to_model": "PatternPoint",
+              "db_constraint": true
+            },
+            {
+              "field": "punt_vertex",
+              "to_app": "patterns",
+              "to_model": "PatternPoint",
+              "db_constraint": true
+            },
+            {
+              "field": "punt_b",
+              "to_app": "patterns",
+              "to_model": "PatternPoint",
+              "db_constraint": true
+            },
+            {
+              "field": "rebutjat_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        },
+        {
+          "name": "SegmentPreference",
+          "table": "patterns_segmentpreference",
+          "key_fields": [
+            "rol",
+            "accio",
+            "apres_de",
+            "apres_a"
+          ],
+          "foreign_keys": [
+            {
+              "field": "apres_de",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            },
+            {
+              "field": "apres_a",
+              "to_app": "patterns",
+              "to_model": "PatternFile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 22,
+            "los": 0
+          }
+        },
+        {
+          "name": "SewToleranceAcceptance",
+          "table": "patterns_sewtoleranceacceptance",
+          "key_fields": [
+            "model",
+            "sew_relation",
+            "accio",
+            "tipus_relacio",
+            "decidit_per"
+          ],
+          "foreign_keys": [
+            {
+              "field": "model",
+              "to_app": "models_app",
+              "to_model": "Model",
+              "db_constraint": true
+            },
+            {
+              "field": "sew_relation",
+              "to_app": "patterns",
+              "to_model": "SewRelation",
+              "db_constraint": true
+            },
+            {
+              "field": "decidit_per",
+              "to_app": "accounts",
+              "to_model": "UserProfile",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 2,
+            "los": 0
+          },
+          "notable": "Acceptació append-only del veredicte de tolerància (QA-TALLER H) — primera baula d'auditoria del taller."
+        }
+      ],
+      "key_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/patterns/pattern-files/",
+          "view": "PatternFileViewSet.create",
+          "auth": "IsAuthenticated (default DRF)",
+          "purpose": "Puja un DXF (+RUL) i el desa via services.save_pattern_file mantenint la cadena de versions; un parse fallit retorna 422 amb detall."
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/patterns/pattern-files/{pk}/model-poms/",
+          "view": "PatternFileViewSet.model_poms",
+          "auth": "IsAuthenticated (default DRF)",
+          "purpose": "Creua les mesures POM del model amb l'estat d'ancoratge real en aquest patró."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/patterns/pattern-files/{pk}/export-preview/",
+          "view": "PatternFileViewSet.export_preview",
+          "auth": "IsAuthenticated (default DRF)",
+          "purpose": "Executa el pipeline d'exportació (projecció + autovalidació) sense generar bytes; bloqueig retorna 422 ExportBlocked."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/patterns/pattern-files/{pk}/export/",
+          "view": "PatternFileViewSet.export",
+          "auth": "IsAuthenticated (default DRF); gate dur: body acknowledged=true (403 si falta)",
+          "purpose": "Genera el DXF de la niada graduada per a un destination_profile."
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/patterns/pattern-files/{pk}/download-signed/",
+          "view": "PatternFileViewSet.download_signed",
+          "auth": "authentication_classes=[] — gate per token signat amb salt propi, TTL 900 s",
+          "purpose": "Serveix els bytes del DXF a partir d'un enllaç signat, sense capçalera Authorization."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/patterns/sew-relations/pinca/",
+          "view": "SewRelationViewSet.pinca",
+          "auth": "IsAuthenticated",
+          "purpose": "Marca una pinça a partir de tres punts creant els dos trams declarats i la SewRelation de tipus pinça."
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/patterns/sew-relations/propostes/",
+          "view": "SewRelationViewSet.propostes",
+          "auth": "IsAuthenticated",
+          "purpose": "Recalcula i retorna les costures que el motor proposa per al patró (només lectura, sense persistir)."
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/patterns/sew-relations/confirmar-proposta/",
+          "view": "SewRelationViewSet.confirmar_proposta",
+          "auth": "IsAuthenticated",
+          "purpose": "Confirma una proposta promovent els trams a DECLARATS i creant la SewRelation equivalent a una costura manual."
+        }
+      ],
+      "depends_on": [
+        "accounts",
+        "fitting",
+        "models_app",
+        "pom",
+        "tasks"
+      ]
+    },
+    {
+      "name": "i18n_content",
+      "path": "backend/fhort/i18n_content/",
+      "purpose": "Taula genèrica de traduccions per objectes de tenant via GenericForeignKey (patró híbrid: camp canònic EN a la taula original com a fallback, idiomes addicionals aquí), escalable a N idiomes sense afegir columnes.",
+      "schema_scope": "TENANT",
+      "models": [
+        {
+          "name": "Translation",
+          "table": "i18n_content_translation",
+          "key_fields": [
+            "content_type"
+          ],
+          "foreign_keys": [
+            {
+              "field": "content_type",
+              "to_app": "contenttypes",
+              "to_model": "ContentType",
+              "db_constraint": true
+            }
+          ],
+          "row_count": {
+            "fhort": 0,
+            "los": 0
+          }
+        }
+      ],
+      "key_endpoints": [],
+      "depends_on": []
+    }
+  ],
+  "frontend": {
+    "framework": "React 19.2.6 + Vite 8.0.12 (react-router-dom 7.15.1)",
+    "pages": [
+      {
+        "path": "frontend/src/pages/BulkImportWizard.jsx",
+        "route": "/models/importar-colleccio",
+        "purpose": "Wizard de 4 passos per a l'import massiu de models des d'un Excel (client+fitxer, preview, confirmació, resultat).",
+        "key_components_used": [
+          "CustomerSelector",
+          "BulkImportReconciliation"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/CommercialKitDemo.jsx",
+        "route": "/comercial/_kit",
+        "purpose": "Banc de proves temporal dels components del sistema visual comercial.",
+        "key_components_used": [
+          "commercial (index)",
+          "ui/Badge",
+          "ui/PdfButton",
+          "ui/buttons"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/CompanyCalendar.jsx",
+        "route": "/configuracio/calendari",
+        "purpose": "Editor del calendari d'empresa: trams horaris per dia i festius extra del tenant.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/CustomerDetail.jsx",
+        "route": "/clients/:id",
+        "purpose": "Fitxa completa del client amb tabs Dades / Tècnic (àlies POM, graduacions) / Comercial.",
+        "key_components_used": [
+          "CustomerForm",
+          "DictionaryWizard",
+          "ui/Table",
+          "ui/Badge",
+          "ui/Feedback",
+          "ui/Center"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/Customers.jsx",
+        "route": "/clients",
+        "purpose": "Llistat de clients amb alta/edició via modal.",
+        "key_components_used": [
+          "CustomerModal",
+          "ui/Table",
+          "ui/Feedback",
+          "ui/Center",
+          "ui/buttons"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/Dashboard.jsx",
+        "route": "/",
+        "purpose": "Home del tècnic: abast, KPIs i board de tasques, més un tab de Gantt personal.",
+        "key_components_used": [
+          "planning/ProjectGantt"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/DeliveryNoteDetail.jsx",
+        "route": "/comercial/albarans/:id",
+        "purpose": "Detall/edició d'un albarà (DeliveryNote) amb exportació PDF.",
+        "key_components_used": [
+          "commercial (DocumentHeader/LineTable/DocumentSummary)",
+          "ui/PdfButton",
+          "ui/Badge",
+          "ui/Feedback",
+          "ui/Center"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/DeliveryNotes.jsx",
+        "route": "/comercial/albarans",
+        "purpose": "Llistat d'albarans.",
+        "key_components_used": [
+          "ui/Table",
+          "ui/Badge",
+          "ui/Center",
+          "ui/buttons"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/DissenyPlaceholder.jsx",
+        "route": "/disseny/documents",
+        "purpose": "Placeholder del grup Disseny fins que arribin les pàgines reals.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/Entrar.jsx",
+        "route": "/entrar",
+        "purpose": "Porta única de tenant-discovery: l'usuari introdueix el correu i rep l'accés per email.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/FittingConvocatoriaSheet.jsx",
+        "route": "/fittings/convocatoria/:uuid",
+        "purpose": "Fulla de convocatòria: projecció de lectura d'una sessió de grup (models del dia, hora, estat, watchpoints).",
+        "key_components_used": [
+          "model/AddModelToGroupModal",
+          "BackButton",
+          "ui/Card",
+          "ui/Badge"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/FittingDetail.jsx",
+        "route": "/fittings/:id",
+        "purpose": "Detall d'una sessió de fitting amb la graella de mesures editable.",
+        "key_components_used": [
+          "model/MeasureGrid",
+          "model/EditorHeader",
+          "model/fittingGridAdapter",
+          "ui/Card",
+          "ui/Badge"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/FittingSessionList.jsx",
+        "route": "/fittings",
+        "purpose": "Llistat/gestió de sessions de fitting amb KPIs i creació de convocatòries.",
+        "key_components_used": [
+          "model/AddModelToGroupModal",
+          "ui/StatCard",
+          "ui/Card",
+          "ui/Modal",
+          "ui/Badge"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/fittingShared.jsx",
+        "route": null,
+        "purpose": "NO és una pàgina: helpers compartits dels editors de mesures (useUnit, useDebouncedSave, SaveStatus, fmtMeasure, thStyle), consumits per FittingDetail, TechSheetEditor, TallerPatro, MeasureGrid i SessionPanel.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/ftt/history.js",
+        "route": null,
+        "purpose": "NO és una pàgina: mòdul d'undo/redo i clonatge d'objectes del document .ftt (usat per TechSheetEditor).",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/ftt/paint.js",
+        "route": null,
+        "purpose": "NO és una pàgina: resolució de traç/farciment/gruix de la pintura del document .ftt.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/ftt/paperbool.js",
+        "route": null,
+        "purpose": "NO és una pàgina: operacions booleanes amb paper.js i gestió d'scope.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/ftt/paperOps.js",
+        "route": null,
+        "purpose": "NO és una pàgina: operacions geomètriques sobre nodes/subpaths (paper.js) per als editors.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/ftt/snapping.js",
+        "route": null,
+        "purpose": "NO és una pàgina: motor de snapping (candidats i càlcul) del llenç .ftt.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/GarmentTypes.jsx",
+        "route": "/garment-types",
+        "purpose": "Catàleg de tipus de peça, amb fitxers associats i agrupació per grups.",
+        "key_components_used": [
+          "assets/FileList",
+          "GarmentTypeSelector/GroupPills",
+          "grading/garmentCatalog",
+          "ui/Modal",
+          "ui/Feedback"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/GeneralConfig.jsx",
+        "route": "/configuracio/general",
+        "purpose": "Configuració general del tenant (TenantConfig): tarifa horària de cost i dades bàsiques de l'estudi.",
+        "key_components_used": [
+          "ui/Center",
+          "ui/Feedback",
+          "ui/buttons"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/GradingRuleSets.jsx",
+        "route": "/poms/grading",
+        "purpose": "Gestió de conjunts de regles d'escalat (GradingRuleSet) amb vocabulari controlat d'eixos.",
+        "key_components_used": [
+          "CascadeSelector/CascadeSelector",
+          "SizeAuthoringDrawer",
+          "grading/gradingAxes"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/ItemAuthoring.jsx",
+        "route": "/garment-type-items/nou/:typeId i /garment-type-items/:itemId/editar",
+        "purpose": "Wizard de 2 passos d'autoria d'Item de la llibreria (context + mesures base).",
+        "key_components_used": [
+          "CascadeSelector/CascadeSelector",
+          "grading/RuleSetPicker",
+          "MeasurementBaseGrid/MeasurementBaseGrid"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/Login.jsx",
+        "route": "/login",
+        "purpose": "Pantalla d'accés amb usuari/contrasenya i selector d'idioma.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/ModelFabric.jsx",
+        "route": "/models/:id/teixit",
+        "purpose": "Edició de les dades de teixit d'un model.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/ModelSheet.jsx",
+        "route": "/models/:id (i variants /models/:id/escalat, /models/:id/fitxers)",
+        "purpose": "Fitxa del model: contenidor de tabs (Dashboard, Tasques, Mesures, Escalat, Patró, Fitxers, Registre).",
+        "key_components_used": [
+          "model/DashboardTab",
+          "model/TasksTab",
+          "pattern/PatternTab",
+          "model/MeasuresEntryPanel",
+          "model/ActionsMenu",
+          "model/WatchpointDrawer"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/Models.jsx",
+        "route": "/models",
+        "purpose": "Llistat de models amb filtres, paginació i menú d'accions per fase.",
+        "key_components_used": [
+          "model/ActionsMenu",
+          "model/ModelsFilterPanel",
+          "model/filterOptions",
+          "ui/Feedback"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/ModelWizard.jsx",
+        "route": "/models/nou i /models/:id/editar",
+        "purpose": "Wizard d'alta/edició d'un model (client, tipus de peça, escalat).",
+        "key_components_used": [
+          "CascadeSelector/CascadeSelector",
+          "CustomerSelector",
+          "grading/RuleSetPicker",
+          "grading/gradingAxes"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/OnboardingWizard.jsx",
+        "route": "/onboarding",
+        "purpose": "Wizard d'alta inicial del tenant/usuari per passos.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/OrderDetail.jsx",
+        "route": "/comercial/comandes/:id",
+        "purpose": "Detall/edició d'una comanda de venda (SalesOrder) amb PDF.",
+        "key_components_used": [
+          "commercial (DocumentHeader/LineTable/DocumentSummary)",
+          "ui/PdfButton",
+          "ui/Feedback",
+          "ui/Center",
+          "ui/buttons"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/Orders.jsx",
+        "route": "/comercial/comandes",
+        "purpose": "Llistat de comandes de venda.",
+        "key_components_used": [
+          "ui/Table",
+          "ui/Badge",
+          "ui/Feedback",
+          "ui/Center",
+          "ui/buttons"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/OrphanedWorkOrders.jsx",
+        "route": "/comercial/orfes",
+        "purpose": "Informe d'encàrrecs orfes (desassignats, pendents de reassignar).",
+        "key_components_used": [
+          "ui/Table",
+          "ui/Badge",
+          "ui/Center"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/PaperFlatEditor.jsx",
+        "route": null,
+        "purpose": "No enrutat directament: sub-editor de traçats paper.js carregat mandrosament (lazy) des de TechSheetEditor.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/PaymentTerms.jsx",
+        "route": "/comercial/condicions-pagament",
+        "purpose": "CRUD de condicions de pagament amb camps traduïbles.",
+        "key_components_used": [
+          "ui/Table",
+          "ui/Modal",
+          "ui/TranslatableField",
+          "ui/Feedback",
+          "ui/Center"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/Planning.jsx",
+        "route": "/planificacio",
+        "purpose": "Mòdul de planificació: Gantt de projectes, panell de governança, informes i registre d'activitat.",
+        "key_components_used": [
+          "planning/ProjectGantt",
+          "planning/DashboardGovPanel",
+          "planning/InformesPanel",
+          "TaskAssignWizard",
+          "ui/Feedback"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/PlanningCalendar.jsx",
+        "route": "/planificacio/calendari",
+        "purpose": "Calendari/agenda propi en lectura, amb graella laboral, esdeveniments i filtre per tècnic.",
+        "key_components_used": [
+          "ui/Center"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/POMs.jsx",
+        "route": "/poms",
+        "purpose": "Punts de mesura: tabs Browser i Catalogue.",
+        "key_components_used": [
+          "POMBrowser/POMBrowser",
+          "POMBrowser/POMCatalogue"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/ProductDetail.jsx",
+        "route": "/comercial/productes/:id",
+        "purpose": "Fitxa d'article del mestre comercial amb camps traduïbles.",
+        "key_components_used": [
+          "ui/TranslatableField",
+          "ui/Feedback",
+          "ui/Center",
+          "ui/buttons"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/Products.jsx",
+        "route": "/comercial/productes",
+        "purpose": "Mestre d'articles del mòdul comercial (llistat i alta ràpida).",
+        "key_components_used": [
+          "commercial (index)",
+          "ui/Modal",
+          "ui/Badge",
+          "ui/TranslatableField",
+          "ui/Feedback"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/PropagatedEditor.jsx",
+        "route": null,
+        "purpose": "No enrutat: editor de la taula propagada d'escalat (totes les talles), muntat dins ModelSheet (tab Escalat).",
+        "key_components_used": [
+          "model/MeasureGrid",
+          "model/EditorHeader",
+          "model/fittingGridAdapter"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/QuoteDetail.jsx",
+        "route": "/comercial/ofertes/:id",
+        "purpose": "Detall/edició d'una oferta (Quote) amb línies, resum i PDF.",
+        "key_components_used": [
+          "commercial (DocumentHeader/LineTable/DocumentSummary)",
+          "ui/PdfButton",
+          "ui/Modal",
+          "ui/Feedback",
+          "ui/Center"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/Quotes.jsx",
+        "route": "/comercial/ofertes",
+        "purpose": "Llistat d'ofertes comercials.",
+        "key_components_used": [
+          "ui/Table",
+          "ui/Modal",
+          "ui/Badge",
+          "ui/Feedback",
+          "ui/Center"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/RegistreActivitat.jsx",
+        "route": null,
+        "purpose": "No enrutat com a pàgina standalone (ruta retirada): es munta com a tab dins Planning.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/ResetPassword.jsx",
+        "route": "/reset-password/:uid/:token",
+        "purpose": "Pàgina pública de recuperació de contrasenya mediada per admin.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/SizeLibrary.jsx",
+        "route": "/size-library",
+        "purpose": "Biblioteca de talles: selector de perfils de tallatge i detall dels size sets.",
+        "key_components_used": [
+          "SizeSetDetail",
+          "SizingProfileSelector",
+          "SizeAuthoringDrawer"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/SizeMapSetup.jsx",
+        "route": null,
+        "purpose": "No enrutat: wizard de 5 passos per derivar un SizeSystem des d'una taula de mides de client; s'exporta el seu Wizard i es consumeix des de SizeAuthoringDrawer.",
+        "key_components_used": [
+          "CustomerSelector",
+          "SizeSystem/SizeSystemSelector",
+          "CascadeSelector/CascadeSelector",
+          "ui/Table",
+          "ui/Badge"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/Suppliers.jsx",
+        "route": "/suppliers",
+        "purpose": "CRUD de proveïdors amb modal d'edició.",
+        "key_components_used": [
+          "ui/Table",
+          "ui/Modal",
+          "ui/Feedback",
+          "ui/Center",
+          "ui/buttons"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/TallerPatro.jsx",
+        "route": "/models/:id/patro/taller",
+        "purpose": "Taller de patró a pantalla completa (fora del Shell): visor, peces, relacions POM, costures i segments.",
+        "key_components_used": [
+          "pattern/PatternViewer",
+          "pattern/PieceList",
+          "pattern/RelationsPanel",
+          "pattern/SewEditor",
+          "pattern/SegmentEditor",
+          "pattern/ModelPomList"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/TaskTypes.jsx",
+        "route": "/task-types",
+        "purpose": "Catàleg de tipus de tasca.",
+        "key_components_used": [
+          "ui/Table",
+          "ui/Center"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/TechSheetEditor.jsx",
+        "route": "/models/:id/ftt/:fitxerId",
+        "purpose": "Editor del document .ftt (fitxa tècnica) a pantalla completa, amb llenç Konva/paper, snapping, historial i export PDF.",
+        "key_components_used": [
+          "assets/AssetNavigator",
+          "POMBrowser/POMBrowser",
+          "model/FilePicker",
+          "ui/Contenidor",
+          "brand/FhortLogo"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/TechSheetEntry.jsx",
+        "route": "/fitxa-tecnica",
+        "purpose": "Porta-menú de la fitxa tècnica: tria model, obre tasca i navega a l'editor .ftt.",
+        "key_components_used": [
+          "assets/AssetNavigator"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/TechSheetTemplateEditor.jsx",
+        "route": null,
+        "purpose": "Jubilat (S4): editor del TechSheetTemplate deprecat; sense ruta ni botó, conservat pendent de poda.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/TimeTracking.jsx",
+        "route": "/temps",
+        "purpose": "Control d'imputació de temps amb cronòmetre i resum de dedicacions.",
+        "key_components_used": [
+          "ui/TimerWidget",
+          "ui/Card"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/UserProfilePage.jsx",
+        "route": "/perfil",
+        "purpose": "Perfil de l'usuari autenticat.",
+        "key_components_used": [
+          "ui/Card"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/UsersRoles.jsx",
+        "route": "/configuracio/usuaris",
+        "purpose": "Gestió d'usuaris i rols: matriu editable de capacitats/tasques amb filtres i accions massives.",
+        "key_components_used": []
+      },
+      {
+        "path": "frontend/src/pages/WorkOrderDetail.jsx",
+        "route": "/comercial/encarrecs/:id",
+        "purpose": "Detall d'un encàrrec / ordre de treball (WorkOrder).",
+        "key_components_used": [
+          "commercial (DocumentHeader/LineTable/DocumentSummary)",
+          "ui/Badge",
+          "ui/Feedback",
+          "ui/Center",
+          "ui/buttons"
+        ]
+      },
+      {
+        "path": "frontend/src/pages/WorkOrders.jsx",
+        "route": "/comercial/encarrecs",
+        "purpose": "Llistat d'encàrrecs / ordres de treball.",
+        "key_components_used": [
+          "ui/Table",
+          "ui/Badge",
+          "ui/Center",
+          "ui/buttons"
+        ]
+      }
+    ],
+    "key_shared_components": [
+      {
+        "path": "frontend/src/components/ui/Center.jsx",
+        "used_by": [
+          "pages/CustomerDetail.jsx",
+          "pages/Customers.jsx",
+          "pages/DeliveryNoteDetail.jsx",
+          "pages/DeliveryNotes.jsx",
+          "pages/GarmentTypes.jsx",
+          "pages/GeneralConfig.jsx",
+          "pages/OrderDetail.jsx",
+          "pages/Orders.jsx",
+          "pages/OrphanedWorkOrders.jsx",
+          "pages/PaymentTerms.jsx",
+          "pages/PlanningCalendar.jsx",
+          "pages/Planning.jsx",
+          "pages/ProductDetail.jsx",
+          "pages/Products.jsx",
+          "pages/QuoteDetail.jsx",
+          "pages/Quotes.jsx",
+          "pages/SizeMapSetup.jsx",
+          "pages/Suppliers.jsx",
+          "pages/TaskTypes.jsx",
+          "pages/WorkOrderDetail.jsx",
+          "pages/WorkOrders.jsx",
+          "components/planning/DashboardGovPanel.jsx",
+          "components/planning/InformesPanel.jsx",
+          "components/planning/PhaseTimeStrip.jsx",
+          "components/planning/ProjectGantt.jsx",
+          "components/planning/TimeTree.jsx"
+        ],
+        "purpose": "Contenidor centrat per a estats de càrrega, buit i error."
+      },
+      {
+        "path": "frontend/src/components/ui/buttons.js",
+        "used_by": [
+          "pages/CommercialKitDemo.jsx",
+          "pages/CustomerDetail.jsx",
+          "pages/Customers.jsx",
+          "pages/DeliveryNoteDetail.jsx",
+          "pages/DeliveryNotes.jsx",
+          "pages/FittingSessionList.jsx",
+          "pages/GarmentTypes.jsx",
+          "pages/GeneralConfig.jsx",
+          "pages/OrderDetail.jsx",
+          "pages/Orders.jsx",
+          "pages/PaymentTerms.jsx",
+          "pages/Planning.jsx",
+          "pages/ProductDetail.jsx",
+          "pages/Products.jsx",
+          "pages/QuoteDetail.jsx",
+          "pages/Quotes.jsx",
+          "pages/SizeMapSetup.jsx",
+          "pages/Suppliers.jsx",
+          "pages/WorkOrderDetail.jsx",
+          "pages/WorkOrders.jsx",
+          "components/model/ActionsMenu.jsx",
+          "components/planning/DashboardGovPanel.jsx"
+        ],
+        "purpose": "Estils/variants de botó compartits del design system (no és un component JSX)."
+      },
+      {
+        "path": "frontend/src/components/ui/Feedback.jsx",
+        "used_by": [
+          "pages/CustomerDetail.jsx",
+          "pages/Customers.jsx",
+          "pages/DeliveryNoteDetail.jsx",
+          "pages/GarmentTypes.jsx",
+          "pages/GeneralConfig.jsx",
+          "pages/ModelSheet.jsx",
+          "pages/Models.jsx",
+          "pages/OrderDetail.jsx",
+          "pages/Orders.jsx",
+          "pages/PaymentTerms.jsx",
+          "pages/Planning.jsx",
+          "pages/ProductDetail.jsx",
+          "pages/Products.jsx",
+          "pages/QuoteDetail.jsx",
+          "pages/Quotes.jsx",
+          "pages/SizeMapSetup.jsx",
+          "pages/Suppliers.jsx",
+          "pages/WorkOrderDetail.jsx",
+          "components/planning/DashboardGovPanel.jsx",
+          "components/planning/TimeTree.jsx"
+        ],
+        "purpose": "Missatges d'èxit/error i toasts unificats."
+      },
+      {
+        "path": "frontend/src/components/ui/Badge.jsx",
+        "used_by": [
+          "pages/CommercialKitDemo.jsx",
+          "pages/CustomerDetail.jsx",
+          "pages/DeliveryNoteDetail.jsx",
+          "pages/DeliveryNotes.jsx",
+          "pages/FittingConvocatoriaSheet.jsx",
+          "pages/FittingDetail.jsx",
+          "pages/FittingSessionList.jsx",
+          "pages/Orders.jsx",
+          "pages/OrphanedWorkOrders.jsx",
+          "pages/Products.jsx",
+          "pages/Quotes.jsx",
+          "pages/SizeMapSetup.jsx",
+          "pages/WorkOrderDetail.jsx",
+          "pages/WorkOrders.jsx",
+          "components/model/DashboardTab.jsx",
+          "components/model/ModelTimeline.jsx",
+          "components/model/RegistreActivitatTab.jsx",
+          "components/model/TaskTree.jsx",
+          "components/model/WorkPlan.jsx"
+        ],
+        "purpose": "Etiqueta d'estat/categoria amb colors del design system."
+      },
+      {
+        "path": "frontend/src/components/ui/Table.jsx",
+        "used_by": [
+          "pages/CustomerDetail.jsx",
+          "pages/Customers.jsx",
+          "pages/DeliveryNotes.jsx",
+          "pages/Orders.jsx",
+          "pages/OrphanedWorkOrders.jsx",
+          "pages/PaymentTerms.jsx",
+          "pages/Quotes.jsx",
+          "pages/SizeMapSetup.jsx",
+          "pages/Suppliers.jsx",
+          "pages/TaskTypes.jsx",
+          "pages/WorkOrders.jsx",
+          "components/model/FittingTab.jsx",
+          "components/model/ProductionTab.jsx",
+          "components/model/RegistreActivitatTab.jsx",
+          "components/model/TaskLog.jsx"
+        ],
+        "purpose": "Taula estàndard de llistats (capçaleres, files, estats buits)."
+      },
+      {
+        "path": "frontend/src/components/ui/Modal.jsx",
+        "used_by": [
+          "pages/FittingSessionList.jsx",
+          "pages/GarmentTypes.jsx",
+          "pages/ModelSheet.jsx",
+          "pages/PaymentTerms.jsx",
+          "pages/Products.jsx",
+          "pages/QuoteDetail.jsx",
+          "pages/Quotes.jsx",
+          "pages/Suppliers.jsx",
+          "components/ImportWizard/ImportWizard.jsx",
+          "components/model/ActionsMenu.jsx",
+          "components/model/AddModelToGroupModal.jsx",
+          "components/model/MeasuresEntryPanel.jsx",
+          "components/model/PromoteToItemButton.jsx",
+          "components/model/WorkPlan.jsx",
+          "components/pattern/PatternTab.jsx",
+          "components/pattern/RelationsPanel.jsx"
+        ],
+        "purpose": "Diàleg modal genèric amb overlay i gestió de tancament."
+      },
+      {
+        "path": "frontend/src/components/commercial/index.js",
+        "used_by": [
+          "pages/CommercialKitDemo.jsx",
+          "pages/DeliveryNoteDetail.jsx",
+          "pages/OrderDetail.jsx",
+          "pages/Products.jsx",
+          "pages/QuoteDetail.jsx",
+          "pages/WorkOrderDetail.jsx"
+        ],
+        "purpose": "Barrel del kit visual comercial (DocumentHeader, LineTable, DocumentSummary, EntityCard, RowBtn, format)."
+      },
+      {
+        "path": "frontend/src/components/CascadeSelector/CascadeSelector.jsx",
+        "used_by": [
+          "pages/ModelWizard.jsx",
+          "pages/SizeMapSetup.jsx",
+          "pages/GradingRuleSets.jsx",
+          "pages/ItemAuthoring.jsx",
+          "components/POMBrowser/POMBrowser.jsx",
+          "components/model/ModelsFilterPanel.jsx"
+        ],
+        "purpose": "Selector en cascada de grup/tipus de peça i eixos d'escalat."
+      },
+      {
+        "path": "frontend/src/components/ui/Card.jsx",
+        "used_by": [
+          "pages/FittingConvocatoriaSheet.jsx",
+          "pages/FittingDetail.jsx",
+          "pages/FittingSessionList.jsx",
+          "pages/TimeTracking.jsx",
+          "pages/UserProfilePage.jsx"
+        ],
+        "purpose": "Targeta contenidora amb capçalera i cos."
+      },
+      {
+        "path": "frontend/src/components/ui/PdfButton.jsx",
+        "used_by": [
+          "pages/CommercialKitDemo.jsx",
+          "pages/DeliveryNoteDetail.jsx",
+          "pages/OrderDetail.jsx",
+          "pages/QuoteDetail.jsx"
+        ],
+        "purpose": "Botó de descàrrega/generació del PDF d'un document comercial."
+      },
+      {
+        "path": "frontend/src/components/ui/TranslatableField.jsx",
+        "used_by": [
+          "pages/PaymentTerms.jsx",
+          "pages/ProductDetail.jsx",
+          "pages/Products.jsx"
+        ],
+        "purpose": "Camp d'entrada multiidioma per a textos traduïbles."
+      },
+      {
+        "path": "frontend/src/components/CustomerSelector.jsx",
+        "used_by": [
+          "pages/BulkImportWizard.jsx",
+          "pages/ModelWizard.jsx",
+          "pages/SizeMapSetup.jsx"
+        ],
+        "purpose": "Cercador/selector de client reutilitzable en wizards."
+      }
+    ]
+  },
+  "cross_cutting": {
+    "auth": "JWT amb djangorestframework-simplejwt: /api/token/ (obtain), /api/token/refresh/, /api/token/verify/, muntats tant a fhort/urls.py (tenant) com a fhort/urls_public.py (backoffice). Backend d'autenticació propi accounts/backends.py:EmailOrUsernameBackend — accepta username exacte o, si falla, email case-insensitive d'un usuari ACTIU (duplicat o inexistent → no autentica). L'autorització fina és per CAPACITATS, no per permisos de Django: accounts/capabilities.py és la font de veritat única amb 7 capacitats (execute_tasks, define_tasks, schedule_fittings, close_gates, configure, view_team_tasks, manage_users) i 4 rols base (technician, product_manager, manager, admin), més overrides per usuari al JSON UserProfile.permisos ({\"grant\": [...], \"revoke\": [...]}). El permís DRF HasCapability llegeix view.required_capability; sense declarar-la es comporta com IsAuthenticated. Patró dominant a l'API de tenant: lectura oberta a qualsevol autenticat, escriptura gated CONFIGURE. El backoffice (public) té RBAC pròpia i separada: BackofficeUser + HasBackofficeRole(['ADMIN', ...]). Dues excepcions notables al JWT: /api/discovery/ (AllowAny, authentication_classes=[], throttle 10/hora per IP) i patterns download-signed (authentication_classes=[], token signat amb salt propi i TTL 900 s).",
+    "multi_tenant": "django-tenants amb TenantMainMiddleware i resolució per Host. TENANT_MODEL=tenants.Client, TENANT_DOMAIN_MODEL=tenants.Domain, DATABASE_ROUTERS=['django_tenants.routers.TenantSyncRouter'], ROOT_URLCONF=fhort.urls i PUBLIC_SCHEMA_URLCONF=fhort.urls_public. Schemas REALS a staging (SELECT sobre information_schema.schemata): public, fhort, los. Clients (tenants_client): 1=public 'FHORT System', 2=fhort 'FHORT Management', 13=los 'LOSAN'. Dominis (tenants_domain): localhost i backoffice.fhorttextile.tech i stagingbackoffice.fhorttextile.tech → tenant 1 (public); fhorttextile.tech (primary), staging.fhorttextile.tech i 178.105.217.125 → tenant 2 (fhort); los.fhorttextile.tech (primary) → tenant 13 (los). Conseqüència operativa: qualsevol crida a l'API de tenant des del servidor necessita capçalera Host explícita. El tenant 'los' està sembrat de catàleg (TaskType 14, Unit 7, PaymentTerms 3, Customer 1) però encara sense dades de producte (0 Model). SHARED_APPS conté tenants, pom i backoffice; pom viu als DOS costats (models *Global a public, la resta replicats a cada tenant) i això obliga a db_constraint=False a totes les FK de pom cap a tasks (Customer, GarmentTypeItem), que és tenant-only — hi ha 6 FK lògiques cross-schema d'aquest tipus a pom/models.py.",
+    "known_debts": [
+      "G1 — SUPERFÍCIE UNIFICADA de mesura resolta: convergir size check + fitting en un sol editor/layout/contracte. La referència és l'editor de fitting; el motor resolve_size_check queda intacte com a cas d'ús. Abast: models_app + fitting + frontend.",
+      "G2 — estat del model (refactor pendent).",
+      "G3 — import vell (refactor pendent).",
+      "G4 — POM-editor vell + vistes òrfenes (refactor pendent).",
+      "G5 — codi mort transversal (refactor pendent).",
+      "G6 — grading, l'últim dels grossos: guard de segellat de GradingVersion i col·lisions de grading. Estat: G6-A tancat (fork 4, gate del 163, GradingException enterrada), G6-B tancat (el segell ja no menteix) però queda un 7è camí obert a resolve_size_check. Abast: pom + fitting + models_app.",
+      "G7 — bug de calendari (planning).",
+      "G8 — higiene frontend.",
+      "G9 — TaskType governance (lent transversal, actiu): congelació viva de tot escriptor/editabilitat nou de TaskType al tenant, referències sempre per `code` i mai per PK. Tall futur = moure la definició de TaskType a public (patró POMGlobal), deixant TaskTimeEstimate al tenant com a FK cross-schema i repensant on_delete (CASCADE/PROTECT no valen cross-schema). Bloquejat per crear stagingbackoffice.fhorttextile.tech.",
+      "Frontera G1↔G6: la unificació de mesures toca el que escriu grading propagat (GradedSpec/GradingVersion); la diagnosi de convergència ha de MARCAR la frontera, no colar-s'hi.",
+      "Zoom-out: el motor NO es toca en sessió pròpia abans del zoom-out; Grading-com-a-tasca (successor del fitting) es tanca dins d'aquell. Prerequisit bloquejant = diagnosi de paritat fitting→Grading.",
+      "Facturació/backoffice + meritació: APARCAT a un sprint futur (tier `estudi`); no es toca res.",
+      "Deute observat i no tocat: obrir la fitxa .ftt encadena una versió nova cada cop (ftt version churn).",
+      "TechSheetTemplate jubilat (S4) però encara al codi i al frontend sense ruta — pendent de poda (entra a G5)."
+    ],
+    "notes": [
+      "Aquest mapa és una foto ESTRUCTURAL a data de generació, no una auditoria de correcció. Els row_count són del servidor de STAGING, no de PROD.",
+      "El working tree tenia canvis sense commitar en el moment de generar-lo (DECISIONS.md modificat i diagnosis noves sense afegir); el repo_commit descriu HEAD, no el working tree.",
+      "L'app `i18n_content` no exposa cap URL pròpia: es consumeix via GenericForeignKey des dels serializers d'altres apps (commerce).",
+      "El frontend inventariat és `frontend/` (SPA de tenant). Existeix també `frontend-backoffice/`, NO cobert per aquest mapa."
+    ]
+  }
+}
