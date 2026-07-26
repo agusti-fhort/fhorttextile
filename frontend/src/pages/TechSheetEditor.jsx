@@ -1808,9 +1808,16 @@ async function legacySketchSvgToPath(obj, scope) {
   if (!bounds?.width || !bounds?.height) return obj
   const width = Math.max(2, obj.width || 80)
   const height = Math.max(2, obj.height || 60)
-  const scaleX = width / bounds.width
-  const scaleY = height / bounds.height
-  const strokeScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2
+  // Escala UNIFORME (fix proporció, DIAGNOSI_IMPORT_SVG_PROPORCIO): abans la caixa es
+  // dimensionava amb la ràtio del viewBox però el contingut s'hi encaixava amb scaleX/scaleY
+  // INDEPENDENTS (imported.bounds), deformant els SVG amb marge (exports Illustrator
+  // responsive). Un sol factor encaixa el contingut dins width×height PRESERVANT-NE la ràtio
+  // real; com que el retorn descarta width/height (type 'path' → manen les coordenades), la
+  // caixa de l'objecte queda amb la mida real del contingut escalat.
+  const scale = Math.min(width / bounds.width, height / bounds.height)
+  const scaleX = scale
+  const scaleY = scale
+  const strokeScale = scale
   const mapSegs = (paperPath) => paperPath.segments.map(seg => ({
     x: (seg.point.x - bounds.x) * scaleX,
     y: (seg.point.y - bounds.y) * scaleY,
