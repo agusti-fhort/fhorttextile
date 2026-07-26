@@ -2574,6 +2574,7 @@
     "layers": "Capes",
     "dock_layers": "Capes",
     "dock_fields": "Camps",
+    "dock_pages": "Pàgines",
     "fields_hint": "Els camps es resolen en crear un document des de la plantilla.",
     "field_nom_prenda": "Nom del model",
     "field_codi_intern": "Codi intern",

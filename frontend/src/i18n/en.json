@@ -2574,6 +2574,7 @@
     "layers": "Layers",
     "dock_layers": "Layers",
     "dock_fields": "Fields",
+    "dock_pages": "Pages",
     "fields_hint": "Fields are resolved when a document is created from the template.",
     "field_nom_prenda": "Model name",
     "field_codi_intern": "Internal code",

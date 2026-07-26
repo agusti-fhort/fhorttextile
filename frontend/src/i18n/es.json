@@ -2574,6 +2574,7 @@
     "layers": "Capas",
     "dock_layers": "Capas",
     "dock_fields": "Campos",
+    "dock_pages": "Páginas",
     "fields_hint": "Los campos se resuelven al crear un documento desde la plantilla.",
     "field_nom_prenda": "Nombre del modelo",
     "field_codi_intern": "Código interno",

@@ -5571,6 +5571,36 @@ export default function TechSheetEditor() {
               com a l'esquerra i com al Taller: una gramàtica de zones, no tres. */}
           {/* padding inferior extra: clearança per als botons flotants de Chrome (IA/cerca) */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px 64px' }}>
+            {/* PÀGINES (C2) — abans una tira inferior horitzontal; ara una persiana del dock,
+                la mateixa gramàtica de zones que Capes/Camps (D2). Miniatures VERTICALS, pàgina
+                activa marcada, +afegeix i esborrar. Cap lògica nova: reutilitza els handlers
+                existents (setCurrentPage/clearSelection/addPage/removePage). El plegat es recorda
+                mentre l'editor viu (estat intern del Contenidor), com a la resta de persianes. */}
+            <Contenidor titol={t('tech_sheet.dock_pages')} icona="ti-files" defaultOpen fitContent>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {pages.map((p, i) => (
+                  <div key={p.id} onClick={() => { setCurrentPage(i); clearSelection() }}
+                    title={t('tech_sheet.page_n', { n: i + 1 })}
+                    style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, padding: 5, borderRadius: 5, cursor: 'pointer', background: currentPage === i ? COL.goldPale : 'transparent', border: `1px solid ${currentPage === i ? COL.gold : COL.border}` }}>
+                    <div style={{ width: 48, height: 34, flexShrink: 0, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: `1px solid ${COL.border}` }}>
+                      {thumbnails[i] && <img src={thumbnails[i]} alt={t('tech_sheet.page_n', { n: i + 1 })} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
+                    </div>
+                    <span style={{ flex: 1, fontSize: 'var(--fs-label)', color: currentPage === i ? COL.gold : COL.textMain, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t('tech_sheet.page_n', { n: i + 1 })}</span>
+                    {locked && pages.length > 1 && (
+                      <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title={t('tech_sheet.delete_page')}
+                        style={{ flexShrink: 0, border: 'none', background: 'transparent', color: COL.textMuted, cursor: 'pointer', padding: 0, lineHeight: 1 }}><i className="ti ti-trash" style={{ fontSize: 14 }} /></button>
+                    )}
+                  </div>
+                ))}
+                {locked && (
+                  <button onClick={addPage} title={t('tech_sheet.add_page')}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', padding: '7px 8px', border: `1px dashed ${COL.gold}`, borderRadius: 5, background: 'transparent', color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-label)', cursor: 'pointer' }}>
+                    <i className="ti ti-plus" style={{ fontSize: 14 }} /><span>{t('tech_sheet.add_page')}</span>
+                  </button>
+                )}
+              </div>
+            </Contenidor>
+
             {/* CAPES — llista d'objectes de la pàgina (front a dalt) + z-order. */}
             <Contenidor titol={t('tech_sheet.dock_layers')} icona="ti-stack-2" defaultOpen={false} fitContent>
             {(ordered.length === 0 ? (
@@ -5950,24 +5980,8 @@ export default function TechSheetEditor() {
         </aside>
       </main>
 
-      {/* ── Tira de pàgines horitzontal (C3) ── */}
-      <div style={{ flexShrink: 0, background: COL.bg, borderTop: `1px solid ${COL.border}`, display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', overflowX: 'auto' }}>
-        <span style={{ flexShrink: 0, color: COL.gold, fontSize: 'var(--fs-caption)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tech_sheet.pages')}</span>
-        {pages.map((p, i) => (
-          <div key={p.id} onClick={() => { setCurrentPage(i); clearSelection() }} title={t('tech_sheet.page_n', { n: i + 1 })} style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
-            <div style={{ width: 56, height: 40, borderRadius: 3, overflow: 'hidden', background: 'var(--white)', border: currentPage === i ? `2px solid ${COL.gold}` : `1px solid ${COL.border}` }}>
-              {thumbnails[i] && <img src={thumbnails[i]} alt={t('tech_sheet.page_n', { n: i + 1 })} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />}
-            </div>
-            {locked && pages.length > 1 && (
-              <button onClick={(e) => { e.stopPropagation(); removePage(i) }} title={t('tech_sheet.delete_page')}
-                style={{ position: 'absolute', top: -4, right: -4, background: '#e74c3c', color: 'var(--white)', border: 'none', fontSize: 'var(--fs-caption)', lineHeight: '14px', width: 14, height: 14, padding: 0, borderRadius: '50%', cursor: 'pointer' }}>×</button>
-            )}
-          </div>
-        ))}
-        {locked && (
-          <button onClick={addPage} title={t('tech_sheet.add_page')} style={{ flexShrink: 0, width: 56, height: 40, border: `1px dashed ${COL.gold}`, borderRadius: 4, background: 'transparent', color: COL.gold, fontFamily: FONT, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>+</button>
-        )}
-      </div>
+      {/* Tira de pàgines horitzontal retirada (C2): les pàgines viuen ara a la persiana
+          PÀGINES del dock dret. No es duplica l'afordança. */}
 
       {/* ── Menú contextual del bloc capçalera mestra ancorat (B3) ── */}
       {headerMenu && (<>
