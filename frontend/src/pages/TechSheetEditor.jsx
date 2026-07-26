@@ -254,14 +254,33 @@ export function cotaEndsMm(g) {
   return { ax, ay, bx: ax + dx, by: ay + dy, lc }
 }
 
+// C1-fix — l'etiqueta d'una cota MAI solapa el traç: es col·loca desplaçada PERPENDICULARMENT
+// del punt mig, del costat superior (horitzontal → a sobre; obliqua → perpendicular amunt) i a la
+// DRETA si la cota és vertical (mai girada 90°). El gap és constant en mm de document; `halfW/halfH`
+// són les mitges extensions REALS de l'etiqueta (mm) perquè el text quedi net del traç a qualsevol
+// angle (una cota vertical necessita netejar l'AMPLADA; una d'horitzontal, l'ALÇADA).
+const COTA_LABEL_GAP_MM = 1.5
+export const textHalfHeightMm = (fontSize) => toMm((fontSize || 9) * 1.2) / 2
+export function cotaLabelOffset(dx, dy, halfW, halfH) {
+  const len = Math.hypot(dx, dy) || 1
+  let nx = -dy / len, ny = dx / len
+  const EPS = 1e-6
+  if (ny > EPS || (Math.abs(ny) <= EPS && nx < 0)) { nx = -nx; ny = -ny }
+  const dist = COTA_LABEL_GAP_MM + Math.abs(nx) * halfW + Math.abs(ny) * halfH
+  return { x: nx * dist, y: ny * dist }
+}
+
 // F2 — construeix una cota VIVA (mateixa forma que l'eina cota_pom de F1: grup amb path de
 // doble punta + etiqueta de TEXT VERMELL sense requadre) a partir dels extrems en mm. Un precedent
 // de peça GERMANA es marca amb traç discontinu (`derivat`).
-export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, canonical, viewSlot, derivat, labelDx = 0, labelDy = 0 }) {
+export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, canonical, viewSlot, derivat }) {
   const col = KONVA_COL.pom
   const dash = derivat ? [3, 2] : undefined
   const TW = measureTextWidthMm({ text: label, fontSize: 9, fontFamily: FONT, fontStyle: 'bold' })
-  const mx = dx / 2 + labelDx, my = dy / 2 + labelDy
+  // C1-fix: posició INICIAL de l'etiqueta = offset perpendicular automàtic (mai sobre el traç).
+  const hh = textHalfHeightMm(9)
+  const off = cotaLabelOffset(dx, dy, TW / 2, hh)
+  const cx = dx / 2 + off.x, cy = dy / 2 + off.y
   const linia = {
     id: uid(), type: 'path', layer: 'free', x: 0, y: 0, headStart: true, headEnd: true,
     stroke: col, fill: null, strokeWidth: 1, dash,
@@ -272,7 +291,7 @@ export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, canonical, v
   // C2 (Patró C) — text vermell SENSE fons: cap camp per-cota fixa el requadre (l'estil de la
   // cota és de render, no de dades). El color vermell viu al `fill` per coherència amb el traç.
   const text = {
-    id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10,
+    id: uid(), type: 'text', layer: 'free', x: cx - TW / 2, y: cy - hh, width: TW, height: 10,
     text: label, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.pom, fontStyle: 'bold',
     align: 'center',
   }
@@ -303,10 +322,36 @@ function cotaHandleEnds(g) {
     a = { x: ax + (linia.x || 0), y: ay + (linia.y || 0) }
     b = { x: ax + (linia.x2 || 0), y: ay + (linia.y2 || 0) }
   }
+  // Centre real de l'etiqueta: mitja alçada REAL del text (no el camp nominal `height`), coherent
+  // amb com es col·loca a buildLiveCota/resize/auto-place → la nansa cau sobre el text de debò.
   const lc = text
-    ? { x: ax + (text.x || 0) + (text.width || 0) / 2, y: ay + (text.y || 0) + (text.height || 0) / 2 }
+    ? { x: ax + (text.x || 0) + (text.width || 0) / 2, y: ay + (text.y || 0) + textHalfHeightMm(text.fontSize) }
     : null
   return { a, b, lc }
+}
+
+// C1-fix — reposiciona l'etiqueta d'una cota al seu offset perpendicular automàtic (posició
+// INICIAL i de re-càlcul). Respecta `labelMoved`: si l'usuari l'ha arrossegada a mà, no la toca.
+// Migra les cotes existents (sense flag) en re-renderitzar. Retorna la MATEIXA cota si no cal
+// cap canvi (idempotent, perquè l'efecte que la crida no entri en bucle).
+function autoPlaceCotaLabel(cota) {
+  if (!cota || cota.type !== 'group' || cota.pomId == null || cota.labelMoved) return cota
+  const ends = cotaHandleEnds(cota)
+  if (!ends) return cota
+  const kids = cota.children || []
+  const ti = kids.findIndex(k => k.type === 'text')
+  if (ti < 0) return cota
+  const t = kids[ti]
+  const ax = cota.x || 0, ay = cota.y || 0
+  const dx = ends.b.x - ends.a.x, dy = ends.b.y - ends.a.y
+  const midX = (ends.a.x + ends.b.x) / 2, midY = (ends.a.y + ends.b.y) / 2
+  const hw = (t.width || 0) / 2, hh = textHalfHeightMm(t.fontSize)
+  const off = cotaLabelOffset(dx, dy, hw, hh)
+  const nx = (midX + off.x - ax) - hw, ny = (midY + off.y - ay) - hh
+  if (Math.abs((t.x || 0) - nx) < 0.05 && Math.abs((t.y || 0) - ny) < 0.05) return cota
+  const nk = kids.slice()
+  nk[ti] = { ...t, x: nx, y: ny }
+  return { ...cota, children: nk }
 }
 
 // C1 — moure UN extrem d'una cota (which='start'|'end') a la posició global (nx,ny) mm, movent
@@ -331,15 +376,21 @@ function resizeCotaEndpoint(cota, which, nx, ny) {
   }
   const oldA = origG[0], oldB = origG[origG.length - 1]
   const oldMid = { x: (oldA.x + oldB.x) / 2, y: (oldA.y + oldB.y) / 2 }
+  const tw = text ? (text.width || 0) : 0, hh = textHalfHeightMm(text && text.fontSize)
   const oldLc = text
-    ? { x: ax + (text.x || 0) + (text.width || 0) / 2, y: ay + (text.y || 0) + (text.height || 0) / 2 }
+    ? { x: ax + (text.x || 0) + tw / 2, y: ay + (text.y || 0) + hh }
     : oldMid
-  const off = { x: oldLc.x - oldMid.x, y: oldLc.y - oldMid.y }
+  // Desplaçament MANUAL a conservar només si l'usuari ha mogut l'etiqueta; si no, es re-col·loca
+  // amb l'offset perpendicular automàtic sobre la nova orientació (C1-fix).
+  const manualOff = { x: oldLc.x - oldMid.x, y: oldLc.y - oldMid.y }
   // Mou l'extrem triat; l'origen nou és el primer node (invariant).
   const moveIdx = which === 'start' ? 0 : origG.length - 1
   const newG = origG.map((n, i) => (i === moveIdx ? { x: nx, y: ny } : n))
   const origin = newG[0]
-  const newMid = { x: (newG[0].x + newG[newG.length - 1].x) / 2, y: (newG[0].y + newG[newG.length - 1].y) / 2 }
+  const newA = newG[0], newB = newG[newG.length - 1]
+  const newMid = { x: (newA.x + newB.x) / 2, y: (newA.y + newB.y) / 2 }
+  const autoOff = cotaLabelOffset(newB.x - newA.x, newB.y - newA.y, tw / 2, hh)
+  const off = cota.labelMoved ? manualOff : autoOff
   const newLc = { x: newMid.x + off.x, y: newMid.y + off.y }
   const local = newG.map(n => ({ x: n.x - origin.x, y: n.y - origin.y }))
   const children = kids.map(k => {
@@ -351,8 +402,7 @@ function resizeCotaEndpoint(cota, which, nx, ny) {
       return { ...k, x: local[0].x, y: local[0].y, x2: local[1].x, y2: local[1].y }
     }
     if (k === text) {
-      const tw = k.width || 0, th = k.height || 0
-      return { ...k, x: (newLc.x - origin.x) - tw / 2, y: (newLc.y - origin.y) - th / 2 }
+      return { ...k, x: (newLc.x - origin.x) - tw / 2, y: (newLc.y - origin.y) - hh }
     }
     return k
   })
@@ -3102,6 +3152,24 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pomRows, pages])
 
+  // ── C1-fix — auto-col·locació de l'etiqueta de cada cota (offset perpendicular, mai sobre el
+  // traç). Migra les cotes existents sense flag de moviment manual en re-renderitzar (mateix
+  // patró que la re-derivació de text: idempotent + skipSave). `labelMoved` la deixa quieta.
+  useEffect(() => {
+    let canvis = false
+    const nextPages = pages.map(p => {
+      let pageCanvi = false
+      const objects = (p.objects || []).map(o => {
+        const no = autoPlaceCotaLabel(o)
+        if (no !== o) { pageCanvi = true; canvis = true }
+        return no
+      })
+      return pageCanvi ? { ...p, objects } : p
+    })
+    if (canvis) { skipSave.current = true; setPages(nextPages) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pages])
+
   // ── Autosave (debounce 2s; només amb lock; salta el primer load) ───────────
   useEffect(() => {
     if (!docCarregat.current) return   // el document encara no hi és: desar ara seria desar un full en blanc
@@ -3530,10 +3598,12 @@ export default function TechSheetEditor() {
     const ti = kids.findIndex(k => k.type === 'text')
     if (ti < 0) return
     const tobj = kids[ti]
-    const tw = tobj.width || 0, th = tobj.height || 0
+    const tw = tobj.width || 0, hh = textHalfHeightMm(tobj.fontSize)
     const nk = kids.slice()
-    nk[ti] = { ...tobj, x: (cx - (obj.x || 0)) - tw / 2, y: (cy - (obj.y || 0)) - th / 2 }
-    updateObject(obj.id, { children: nk })
+    nk[ti] = { ...tobj, x: (cx - (obj.x || 0)) - tw / 2, y: (cy - (obj.y || 0)) - hh }
+    // C1-fix: marca la cota com moguda a mà → l'offset automàtic ja no la re-col·loca (ni en
+    // estirar extrems ni la migració). Respectar on l'usuari l'ha deixada.
+    updateObject(obj.id, { children: nk, labelMoved: true })
   }
   const handleTransformEnd = (obj) => (e) => {
     const node = e.target
@@ -3661,8 +3731,6 @@ export default function TechSheetEditor() {
     // punta (arrow2) que marca els extrems A→B; substitueix els ticks perpendiculars.
     const ax = toMm(p1.x), ay = toMm(p1.y)
     const dx = toMm(p2.x) - ax, dy = toMm(p2.y) - ay
-    const len = Math.hypot(dx, dy) || 1
-    const px = -dy / len, py = dx / len   // perpendicular unitari (per desplaçar el text)
     // Cota PRE-CARREGADA des del contenidor de POMs: la fletxa i l'etiqueta van en vermell
     // (C2 · text sense requadre) i el text és l'ÀLIES DE CLIENT (o el codi canònic) del POM — la nomenclatura
     // amb què el patronista anomena aquesta mesura al croquis.
@@ -3685,10 +3753,14 @@ export default function TechSheetEditor() {
     // requadre (cap camp per-cota fixa el fons): estil de convenció real de les fitxes.
     const etiqueta = pom ? pom.text : t('tech_sheet.preset_cota_text')
     const TW = measureTextWidthMm({ text: etiqueta, fontSize: 9, fontFamily: FONT, fontStyle: pom ? 'bold' : 'normal' })
-    const mx = dx / 2 + px * 3, my = dy / 2 + py * 3   // punt mig desplaçat 3mm perpendicular
+    // C1-fix: posició INICIAL de l'etiqueta = offset perpendicular automàtic (mai sobre el traç),
+    // dimensionat amb les extensions reals del text perquè netegi el traç a qualsevol orientació.
+    const hh = textHalfHeightMm(9)
+    const off = cotaLabelOffset(dx, dy, TW / 2, hh)
+    const mx = dx / 2 + off.x, my = dy / 2 + off.y
     const text = pom
-      ? { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.pom, fontStyle: 'bold', align: 'center' }
-      : { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
+      ? { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - hh, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.pom, fontStyle: 'bold', align: 'center' }
+      : { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - hh, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
     addObject({
       id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0,
       // F1: vincle de només-lectura al POM viu (escalars → round-trip .ftt lliure, no host-ref).
@@ -4685,7 +4757,8 @@ export default function TechSheetEditor() {
       ax, ay, dx: bx - ax, dy: by - ay,
       label: cotaLabelDe(bm) || p.codi, pomId, bmId: p.bm_id,
       canonical: p.codi, viewSlot: host.viewSlot, derivat: prop.derivat,
-      labelDx: (p.label_dx || 0) * bw, labelDy: (p.label_dy || 0) * bh,
+      // C1-fix: l'etiqueta es col·loca amb l'offset perpendicular automàtic (buildLiveCota), no
+      // amb la posició normalitzada del precedent → mai sobre el traç.
     })
   }, [curObjs, pomRows])
 
@@ -4809,13 +4882,11 @@ export default function TechSheetEditor() {
         const bm = bmByPom.get(p.pom_id)
         const ax = bb.minX + (p.x1 || 0) * bw, ay = bb.minY + (p.y1 || 0) * bh
         const bx = bb.minX + (p.x2 || 0) * bw, by = bb.minY + (p.y2 || 0) * bh
-        const mx = (ax + bx) / 2, my = (ay + by) / 2
         const cota = buildLiveCota({
           ax, ay, dx: bx - ax, dy: by - ay,
           label: cotaLabelDe(bm) || String(p.pom_id), pomId: p.pom_id, bmId: bm?.id,
           canonical: bm?.pom_code_global || '', viewSlot: host.viewSlot,
-          labelDx: p.label_x != null ? (bb.minX + p.label_x * bw - mx) : 0,
-          labelDy: p.label_y != null ? (bb.minY + p.label_y * bh - my) : 0,
+          // C1-fix: offset perpendicular automàtic (buildLiveCota), no la posició proposada per la IA.
         })
         nous.push({ ...cota, iaProposada: true, iaConfidence: p.confidence || 'mitjana' })
       }
