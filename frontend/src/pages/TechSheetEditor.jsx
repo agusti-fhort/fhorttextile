@@ -4438,83 +4438,10 @@ export default function TechSheetEditor() {
   // `kind==='sketch'` deixa fora les cotes (grups amb `pomId`) i els grups d'usuari.
   const isSketchObj = (o) => SKETCH_OBJ_TYPES.includes(o.type) || (o.type === 'group' && o.kind === 'sketch')
   const sketchObjs = curObjs.filter(isSketchObj)
+  // Assignar la vista a un objecte sketch (des de Propietats de l'objecte, UX-COTES). El col·locar
+  // i el desar massius de l'antic contenidor «Cotes des de precedent» han mort: el col·locar viu
+  // ara per-POM al panell (posarProposta/posarTotesPropostes) i el desar per-cota (desarUnaPrecedent).
   const assignaVista = (objId, slot) => updateObject(objId, { viewSlot: slot || undefined })
-  // Es pot desar precedent si algun objecte del croquis ve del catàleg i té vista.
-  const potDesarPrecedent = sketchObjs.some(o => o.sourceItemFitxer && o.viewSlot)
-
-  // Col·locar des de precedent: per cada objecte sketch amb procedència i vista, demana la
-  // cascada al seu ItemFitxer d'origen i materialitza les cotes que encara no hi són com a
-  // cotes VIVES de F1 (desnormalitzant sobre la bbox de l'objecte). Les de peça germana
-  // arriben marcades (traç discontinu).
-  const colocarDesPrecedent = useCallback(async () => {
-    const ambOrigen = sketchObjs.filter(o => o.sourceItemFitxer && o.viewSlot)
-    if (!ambOrigen.length) { setF2Msg(t('tech_sheet.f2_cap_vista')); return }
-    const bmById = new Map(pomRows.map(bm => [bm.id, bm]))
-    const jaColocat = new Set(cotesColocades)   // pomIds ja col·locats (worklist F1)
-    const nous = []
-    let saltats = 0, germanes = 0
-    for (const objSketch of ambOrigen) {
-      let data
-      try {
-        const r = await fetch(
-          `${API}/api/v1/item-fitxers/${objSketch.sourceItemFitxer}/pom-placements/`
-          + `?view_slot=${encodeURIComponent(objSketch.viewSlot)}&model_id=${id}`,
-          { headers: authHeaders })
-        if (!r.ok) continue
-        data = await r.json()
-      } catch { continue }
-      const bb = objectBounds(objSketch)
-      const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
-      for (const p of (data.placements || [])) {
-        if (jaColocat.has(p.pom_id)) { saltats++; continue }
-        jaColocat.add(p.pom_id)
-        const bm = bmById.get(p.bm_id)
-        const ax = bb.minX + p.x1 * bw, ay = bb.minY + p.y1 * bh
-        const bx = bb.minX + p.x2 * bw, by = bb.minY + p.y2 * bh
-        if (p.derivat) germanes++
-        nous.push(buildLiveCota({
-          ax, ay, dx: bx - ax, dy: by - ay,
-          label: cotaLabelDe(bm) || p.codi, pomId: p.pom_id, bmId: p.bm_id,
-          canonical: p.codi, viewSlot: objSketch.viewSlot, derivat: p.derivat,
-          labelDx: (p.label_dx || 0) * bw, labelDy: (p.label_dy || 0) * bh,
-        }))
-      }
-    }
-    if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
-    setF2Msg(t('tech_sheet.f2_colocades', { n: nous.length, s: saltats, g: germanes }))
-  }, [sketchObjs, pomRows, cotesColocades, authHeaders, currentPage, updatePageObjects, id, t])
-
-  // Desar col·locació com a precedent: puja cada cota viva a POMPlacement de l'ItemFitxer
-  // d'ORIGEN DE L'OBJECTE sketch que la conté, normalitzant els extrems sobre la seva bbox.
-  const desarPrecedent = useCallback(async () => {
-    const dins = (bb, pt) => pt.x >= bb.minX && pt.x <= bb.maxX && pt.y >= bb.minY && pt.y <= bb.maxY
-    const cotes = curObjs.filter(o => o.type === 'group' && o.pomId != null)
-    let desats = 0, senseVista = 0
-    for (const g of cotes) {
-      const e = cotaEndsMm(g)
-      if (!e) continue
-      const mid = { x: (e.ax + e.bx) / 2, y: (e.ay + e.by) / 2 }
-      // objecte sketch amb procedència i vista que conté el punt mig de la cota
-      const host = sketchObjs.find(o => o.sourceItemFitxer && o.viewSlot && dins(objectBounds(o), mid))
-      if (!host) { senseVista++; continue }
-      const bb = objectBounds(host)
-      const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
-      const body = {
-        pom_id: g.pomId, view_slot: host.viewSlot,
-        x1: (e.ax - bb.minX) / bw, y1: (e.ay - bb.minY) / bh,
-        x2: (e.bx - bb.minX) / bw, y2: (e.by - bb.minY) / bh,
-        label_dx: e.lc ? (e.lc.x - mid.x) / bw : 0,
-        label_dy: e.lc ? (e.lc.y - mid.y) / bh : 0,
-        source_kind: host.type === 'image' ? 'raster' : 'vector',
-      }
-      try {
-        const r = await fetch(`${API}/api/v1/item-fitxers/${host.sourceItemFitxer}/pom-placements/`, {
-          method: 'POST', headers: authHeaders, body: JSON.stringify(body) })
-        if (r.ok) desats++
-      } catch { /* continua amb la següent */ }
-    }
-    setF2Msg(t('tech_sheet.f2_desats', { n: desats, s: senseVista }))
-  }, [curObjs, sketchObjs, authHeaders, t])
 
   // ── F2 · PROPOSTES agregades per pom_id ─────────────────────────────────────
   // Fonts = objectes sketch amb procedència de catàleg + vista assignada (la vista viu a
@@ -5460,42 +5387,10 @@ export default function TechSheetEditor() {
               de borderLeft, codi de client en mono manant, nom canònic EN al costat, badge
               amb el nom_fitxa. És la primera persiana de la biblioteca i ve
               OBERTA: acotar és la feina que porta algú a obrir aquesta fitxa. Un clic arma l'eina de cota amb el text ja resolt. */}
-          {/* F2 — precedent de col·locació: assigna una vista a cada objecte del croquis i
-              col·loca/desa cotes des del catàleg. Nomes visible si hi ha croquis. */}
-          {sketchObjs.length > 0 && (
-            <Contenidor titol={t('tech_sheet.f2_titol')} icona="ti-arrow-guide" defaultOpen={false} pes={1}>
-              <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.f2_hint')}</p>
-              <datalist id="f2-view-slots">
-                <option value="front" /><option value="back" /><option value="detail" />
-              </datalist>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-                {sketchObjs.map((o, i) => (
-                  <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <i className={`ti ${o.sourceItemFitxer ? 'ti-link' : 'ti-link-off'}`}
-                      title={o.sourceItemFitxer ? t('tech_sheet.f2_amb_origen') : t('tech_sheet.f2_sense_origen')}
-                      style={{ color: o.sourceItemFitxer ? COL.textMain : COL.textMuted, flexShrink: 0 }} />
-                    <span style={{ fontSize: 'var(--fs-caption)', color: COL.textMuted, flexShrink: 0 }}>{t('tech_sheet.f2_objecte', { n: i + 1 })}</span>
-                    <input list="f2-view-slots" value={o.viewSlot || ''} placeholder={t('tech_sheet.f2_vista_ph')}
-                      onChange={e => assignaVista(o.id, e.target.value.trim())}
-                      style={{ flex: 1, minWidth: 0, fontFamily: FONT, fontSize: 'var(--fs-caption)', padding: '2px 6px', border: `1px solid ${COL.border}`, borderRadius: 4 }} />
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <button type="button" onClick={colocarDesPrecedent}
-                  style={{ cursor: 'pointer', padding: '0.35rem 0.5rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <i className="ti ti-copy" /> {t('tech_sheet.f2_colocar')}
-                </button>
-                <button type="button" onClick={desarPrecedent} disabled={!potDesarPrecedent}
-                  title={potDesarPrecedent ? '' : t('tech_sheet.f2_desar_off')}
-                  style={{ cursor: potDesarPrecedent ? 'pointer' : 'not-allowed', opacity: potDesarPrecedent ? 1 : 0.5, padding: '0.35rem 0.5rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <i className="ti ti-bookmark" /> {t('tech_sheet.f2_desar')}
-                </button>
-                {!potDesarPrecedent && <span style={{ fontSize: 'var(--fs-caption)', color: COL.textMuted }}>{t('tech_sheet.f2_desar_off')}</span>}
-                {f2Msg && <span style={{ fontSize: 'var(--fs-caption)', color: COL.textMain }}>{f2Msg}</span>}
-              </div>
-            </Contenidor>
-          )}
+          {/* El vell contenidor «Cotes des de precedent» (llista massiva per objecte + selects de
+              vista) ha mort: exposava l'esquelet tècnic. La superfície de l'usuari és el panell de
+              POMs (proposta per-POM), la vista viu a Propietats de l'objecte i «desar precedent» a
+              Propietats de la cota. Vegeu DECISIÓ Agus 2026-07-26 (Patró C). */}
 
           {pomRows.length > 0 && (
             <Contenidor
