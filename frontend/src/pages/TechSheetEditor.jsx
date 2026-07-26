@@ -1986,6 +1986,7 @@ export default function TechSheetEditor() {
   const [pages, setPages] = useState([{ id: uid(), objects: [] }])
   const [currentPage, setCurrentPage] = useState(0)
   const [selectedIds, setSelectedIds] = useState([])
+  const [multiOutlines, setMultiOutlines] = useState([])  // C1: filets per membre en multiselecció (overlay VIU, mai export/.ftt)
   const [tool, setTool] = useState('select')
   // 'loading' | 'owned' | 'conflict' | 'error' | 'readonly'
   const [lockState, setLockState] = useState((isEditMode || fttMode) ? 'loading' : 'readonly')
@@ -2927,6 +2928,24 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, currentPage, pages, editingFlatId])
 
+  // ── C1: filet fi per element en multiselecció (estil Illustrator). Overlay VIU per BOUNDS
+  //    de cada membre (getClientRect, barat — no re-estil del path), a més del marc del
+  //    Transformer. Amb 1 sol objecte no fa res. Viu només al Stage viu: mai entra al camí
+  //    d'export (renderPageToDataURL) ni al .ftt. Es recalcula en canviar la selecció, la
+  //    geometria (pages) o la pàgina, i durant el drag (handleDragMove) perquè segueixi.
+  const syncMultiOutlines = useCallback(() => {
+    const stage = stageRef.current
+    if (!stage || editingFlatId || selectedIds.length < 2) { setMultiOutlines([]); return }
+    const outlines = selectedIds.map(id => {
+      const n = stage.findOne('#' + id)
+      if (!n) return null
+      const r = n.getClientRect({ relativeTo: n.getLayer() })
+      return { id, x: r.x, y: r.y, w: r.width, h: r.height }
+    }).filter(Boolean)
+    setMultiOutlines(outlines)
+  }, [selectedIds, editingFlatId])
+  useEffect(() => { syncMultiOutlines() }, [syncMultiOutlines, currentPage, pages])
+
   // ── Teclat: Delete/Backspace esborra l'objecte free seleccionat ────────────
   useEffect(() => {
     const onKey = (e) => {
@@ -3202,6 +3221,7 @@ export default function TechSheetEditor() {
   }
   // S2: a cada frame de drag, magnetitza el node contra els candidats (Cmd/Ctrl ho desactiva).
   const handleDragMove = (obj) => (e) => {
+    if (selectedIds.length >= 2) syncMultiOutlines()   // C1: els filets segueixen el moviment
     if (!snapCand.current) return
     if (e.evt?.ctrlKey || e.evt?.metaKey) { setSnapLines(null); return }
     const node = e.target
@@ -5489,6 +5509,12 @@ export default function TechSheetEditor() {
                     ? <Line x={toPx(creatingGuide.pos)} y={0} points={[0, 0, 0, pageH]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
                     : <Line x={0} y={toPx(creatingGuide.pos)} points={[0, 0, pageW, 0]} stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} dash={[6, 3]} listening={false} />
                 )}
+                {/* C1: filet fi per membre en multiselecció (>1) — a més del marc del Transformer.
+                    Overlay del render VIU, per bounds (getClientRect); MAI a l'export ni al .ftt. */}
+                {multiOutlines.map(b => (
+                  <Rect key={'sel-' + b.id} x={b.x} y={b.y} width={b.w} height={b.h}
+                    stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} listening={false} />
+                ))}
                 <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && (selObj?.type === 'data_block' || selObj?.type === 'table' || selObj?.type === 'pattern_piece'))}
                   rotationSnaps={shiftHeld ? ROT_SNAPS : SENSE_SNAP} rotationSnapTolerance={ROT_SNAP_TOL}
                   padding={5}
