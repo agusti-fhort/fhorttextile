@@ -9,7 +9,6 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
 
   const sysName = profile?.size_system?.nom || "—"
   const sizes = profile?.size_definitions || []
-  const baseSize = sizes.find((_, i) => i === Math.floor(sizes.length / 2))?.size_label
   const rules = profile?.grading_rules_preview || []
   const isCustom = profile?.is_custom
   // FIX 2 — el badge "Estàndard ISO" només per a rulesets canònics de debò (is_system_default).
@@ -60,23 +59,22 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
         </div>
       </div>
 
-      {/* Size run */}
+      {/* Size run — escala PURA, sense marca de base. La talla base viu al context del
+          GradingRuleSet (model.base_size_label), no a l'escala: la UI d'escales no ha
+          d'inventar-ne cap (decisió FORA-LA-BASE-DE-L'ESCALA, 2026-07-26). */}
       {sizes.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
-          {sizes.map((s, i) => {
-            const isBase = s.size_label === baseSize
-            return (
-              <span key={i} style={{
-                padding: "3px 9px", borderRadius: 4, fontSize: 'var(--fs-body)',
-                background: isBase ? "#f5e6d0" : "#f5f0ea",
-                color: isBase ? "var(--gold)" : "var(--text-main)",
-                border: `1px solid ${isBase ? "var(--gold)" : "var(--border)"}`,
-                fontWeight: isBase ? 600 : 400,
-              }}>
-                {s.size_label}{isBase ? " ★" : ""}
-              </span>
-            )
-          })}
+          {sizes.map((s, i) => (
+            <span key={i} style={{
+              padding: "3px 9px", borderRadius: 4, fontSize: 'var(--fs-body)',
+              background: "#f5f0ea",
+              color: "var(--text-main)",
+              border: "1px solid var(--border)",
+              fontWeight: 400,
+            }}>
+              {s.size_label}
+            </span>
+          ))}
         </div>
       )}
 
