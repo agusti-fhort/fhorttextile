@@ -3803,8 +3803,14 @@ export default function TechSheetEditor() {
       svg: svgText,
     }
     const obj = await convertLegacySketchSvgObject(source)
-    addObject({ ...obj, ...extra })
-    setEditingFlatId(obj.id)
+    addObject({ ...obj, ...extra })   // addObject ja deixa l'objecte SELECCIONAT
+    // Un import amb rols separats retorna un GRUP. Un grup NO és editable per nodes directament
+    // (cal entrar-hi i triar un fill-path); deixar-hi `editingFlatId` posava l'editor en mode
+    // node SENSE objectiu vàlid (`editingFlat` no resol un 'group'), i aquest estat suprimeix el
+    // Transformer (:2962) i els filets de multiselecció (:2986) → el grup importat quedava sense
+    // cap contenidor de selecció. Només un path/sketch entra al sub-editor; el grup queda
+    // seleccionat i prou (el Transformer s'hi lliga tot sol).
+    if (obj.type !== 'group') setEditingFlatId(obj.id)
   }
   const handleFlatSvgFile = (file) => {
     if (!file || !locked) return
