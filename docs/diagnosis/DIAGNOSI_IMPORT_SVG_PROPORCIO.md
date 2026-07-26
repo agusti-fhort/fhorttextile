@@ -163,5 +163,104 @@ amb la correcció de proporció. S'anota, no es dimensiona aquí.
 
 ---
 
-*Diagnosi read-only. Cap codi tocat. Números de línia del HEAD `aa99a74` (branca `dev`) el
-2026-07-26. Mesures de contingut via render cairosvg+PIL (determinista, còpia de `imported.bounds`).*
+# ANNEX — 2 CAMINS D'IMPORT + TRANSFORMS (2026-07-26, post fix B `95823a0`)
+
+> Evidència de l'usuari: **pujada directa = correcte** (proporció bona); **"Arxius del model" =
+> DEFORMAT** com abans del fix; i, al camí bo, **la cremallera del davant surt desplaçada/allargada
+> fora de la peça**. Read-only, cap codi tocat.
+
+## Q1 — DOS CAMINS D'IMPORT (la deformació NO és el mateix bug que Q1 original)
+
+**No hi ha un càlcul de mida duplicat: hi ha DUES funcions d'import diferents, una VECTORIAL i
+una RÀSTER.** El fitxer de model no passa pel camí corregit.
+
+| Camí | Funció | Mecanisme | Resultat |
+|---|---|---|---|
+| Pujada directa (arrossegar SVG / botó) | `handleFlatSvgFile` → **`importFlatSvgText`** (`:3626`) | vectorial → `legacySketchSvgToPath` (amb fix B) | ✅ correcte, 110×47,3 (ràtio 2,326), editable |
+| Navegador "Explora el tenant" (FTT) | **`importarDelTenant`** (`:4659`) → `.svg` → `importFlatSvgText` (`:4676`) | mateix camí vectorial | ✅ correcte |
+| **"Arxius del model" / biblioteca de croquis lateral** | **`addModelFitxer`** (`:3808`) → **`addImageFromDataURL`** (`:3824`) | **RÀSTER** | ❌ deformat + no editable |
+
+- `addModelFitxer` (`:3808-3826`) baixa el blob i **sempre** el passa a `addImageFromDataURL`
+  (`:3824`), **sense mirar l'extensió**: un `.svg` es tracta com una imatge.
+- `addImageFromDataURL` (`:3577`) crea `{type:'image', width:120, height:80, src:dataURL}` —
+  **caixa FIXA 120×80 (ràtio 1,50)**. El Konva.Image estira l'SVG (ràtio real 1,864) fins a
+  omplir 120×80 → **compressió horitzontal al 80,4%** (o estirament vertical ×1,24). Coincideix
+  en magnitud amb el bug pre-fix, però l'ORIGEN és un altre: no és l'escalat no uniforme de
+  `legacySketchSvgToPath`, és que **aquest camí ni tan sols és vectorial** → el fix B no l'afecta.
+- **Consumidors de `addModelFitxer`** (tots ràster): botons de la biblioteca lateral de croquis
+  (`:5242`) i d'arxius (`:5268`), i `FilePicker` (`onInsert`, `:5117`). El `importarDelTenant`
+  (vectorial) només s'arriba per l'`AssetNavigator` (`onPick`, `:5128`).
+
+**On divergeix exactament:** a la font. `importarDelTenant` **bifurca per extensió** (`.svg` →
+`importFlatSvgText`, `:4675-4676`); `addModelFitxer` **NO bifurca** → tot a ràster.
+
+### Fix mínim Q1
+Que `addModelFitxer` bifurqui per extensió com ja fa `importarDelTenant`: si
+`f.nom_fitxer` acaba en `.svg`, baixar el TEXT i cridar `importFlatSvgText(text)` (vectorial,
+amb fix B i editable) en comptes de rasteritzar. La resta d'extensions segueixen a
+`addImageFromDataURL`. Un sol `if` a `:3808-3826`. (Alternativa DRY més gran, fora de mínim:
+unificar `addModelFitxer` i `importarDelTenant` en una sola funció de descàrrega+dispatch.)
+
+## Q2 — CREMALLERA DESPLAÇADA (camí vectorial "bo") — TRANSFORMS PERDUTS
+
+**Arrel: `mapSegs` llegeix les coordenades LOCALS dels segments i ignora la matriu de
+transformació que Paper conserva sense «bakejar» als elements transformats (les barres de la
+cremallera).**
+
+### Evidència
+- El fitxer té **4 transforms** `translate(tx,ty) rotate(θ)` sobre `<rect>` (les barres de la
+  cremallera): `rotate(-70.1°)` (cremallera davant) i `rotate(-19.9°)` — rotació al voltant de
+  l'origen + translació (patró estàndard d'Illustrator).
+- **cairosvg (que aplica bé els transforms) renderitza la cremallera AL SEU LLOC** — bbox del
+  contingut 777×334, sense desbordament. → **la font és correcta**; el problema és a la lectura
+  post-import.
+- `mapSegs` (`:1821-1828`) llegeix `seg.point.x`, `seg.handleIn.x`, `seg.handleOut.x` — **espai
+  LOCAL del path**, sense multiplicar per `paperPath.globalMatrix`. `collect` (`:1830-1835`)
+  baixa als fills dels grups però tampoc arrossega cap matriu d'ancestre.
+- Paper, per defecte, **cou** (`applyMatrix=true`) els transforms als paths-fulla sense
+  transform → per això els elements SENSE transform (silueta) surten bé (local==global). Però un
+  `<rect>` ROTAT no pot ser una Shape paramètrica: Paper li conserva la **matriu** (grup/shape amb
+  `applyMatrix=false`). En llegir-ne els segments locals, el `translate/rotate` es **perd** → la
+  barra apareix a la seva posició SENSE rotar ni traslladar = desplaçada i "allargada" fora de la
+  peça.
+
+### Respostes a les sub-preguntes
+- **`imported.bounds` inclou o exclou el contingut transformat/clipat?** INCLOU el transformat:
+  `bounds` es calcula amb la matriu global, o sigui amb la cremallera a la seva posició CORRECTA.
+  El desajust és intern: `bounds` (global, correcte) vs `segments` (local, sense transform) →
+  la barra s'ubica malament DINS d'un bbox que sí que la comptava bé. El **clipPath NO hi té
+  part**: render amb i sense `clip-path` dona el MATEIX bbox (777×334); a més Paper ja l'aplana
+  (watchpoint conegut, Q2 original).
+- **El fix B ha canviat el comportament dels elements amb transform?** **NO.** El fix B només va
+  tocar `scaleX`/`scaleY` (uniforme vs independent). La pèrdua de matriu és **ortogonal i
+  preexistent**. El que va fer el fix B és tornar la proporció FIDEL, i sobre una proporció fidel
+  el desplaçament de la cremallera es veu més (abans, l'esclafament no uniforme ho barrejava tot).
+  Fix B no en té la culpa.
+
+### Fix mínim Q2
+A `mapSegs`, transformar cada punt i nansa per la matriu global del path abans d'aplicar
+`bounds`/`scale`:
+```
+const m = paperPath.globalMatrix            // identitat si Paper ja ha bakejat → no-op
+const p  = m.transform(seg.point)
+const hi = m.transform(seg.point.add(seg.handleIn)).subtract(p)   // nanses com a vectors
+const ho = m.transform(seg.point.add(seg.handleOut)).subtract(p)
+// x=(p.x-bounds.x)*scaleX … inX=hi.x*scaleX …
+```
+És segur tant si Paper havia bakejat (matriu = identitat) com si no (aplica el transform que
+faltava). Independent del fix B i del grup de rols. ⚠️ **Confirmació a píxel pendent de
+navegador**: Paper `importSVG` requereix `DOMParser` (jsdom), absent a l'entorn headless, així que
+la reproducció exacta de `imported.bounds`/segments de Paper no s'ha pogut córrer aquí; la hipòtesi
+se sosté sobre (a) cairosvg mostra la font correcta, (b) el codi llegeix coords locals, (c) només
+els elements amb transform es desplacen.
+
+## Ordre de fix recomanat
+1. **Q1** (bifurcar `addModelFitxer` per extensió) — trivial, alt impacte: unifica els dos camins.
+2. **Q2** (`globalMatrix` a `mapSegs`) — corregeix la cremallera per a TOTS els camins vectorials;
+   verificar a navegador amb VEGA-3 (cremallera a lloc, no allargada).
+Cap dels dos toca el fix B ni F2a.
+
+---
+
+*Diagnosi read-only. Cap codi tocat. Números de línia del HEAD `95823a0` (branca `dev`, annex) i
+`aa99a74` (cos). Mesures via render cairosvg+PIL; Paper no s'ha pogut córrer headless (sense jsdom).*
