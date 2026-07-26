@@ -1544,6 +1544,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
     (a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   for (const o of ordered) {
     if (o.visible === false) continue
+    if (o.iaProposada) continue   // F3: cota PROPOSADA (pendent de revisió) — mai a l'export ni a miniatures
     await addObjectToLayer(layer, o, ctx)
   }
   layer.draw()
@@ -1557,7 +1558,9 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
 export function serializePages(pages) {
   return pages.map(p => ({
     id: p.id,
-    objects: (p.objects || []).map(serializeObject),
+    // F3: les cotes PROPOSADES per la IA (iaProposada) són NOMÉS pantalla fins a acceptar-les;
+    // no sobreviuen la sessió (decisió de codi mínim) → no entren al .ftt.
+    objects: (p.objects || []).filter(o => !o.iaProposada).map(serializeObject),
     guides: p.guides || [],   // S2: guies (no s'exporten a PDF)
   }))
 }
@@ -1658,6 +1661,8 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
+    // F3: una cota PROPOSADA per la IA es pinta ATENUADA (encara no acceptada). Només al llenç viu.
+    opacity: obj.iaProposada ? 0.5 : undefined,
     draggable,
     onClick: selectable ? onSelect : undefined,
     onTap: selectable ? onSelect : undefined,
@@ -2132,6 +2137,7 @@ export default function TechSheetEditor() {
   // F2 · propostes de col·locació agregades per pom_id (cascada del catàleg). El panell de POMs
   // les llegeix per marcar cada POM com a PROPOSABLE; mai una crida per POM (agregació client).
   const [propostes, setPropostes] = useState(() => new Map())   // pom_id → { p, derivat, hostId }
+  const [proposantIA, setProposantIA] = useState(false)   // F3: crida de visió en curs (segons, no ms)
   const [importMode, setImportMode] = useState(null)     // IMP-1: null | 'image' | 'garment' (panell d'import al dock)
   const [importFile, setImportFile] = useState(null)     // IMP-2: fitxer triat (no s'insereix fins a "Inserir")
   const [importNavOpen, setImportNavOpen] = useState(false)   // C5.3: AssetNavigator com a font "FTT"
@@ -4423,11 +4429,23 @@ export default function TechSheetEditor() {
     const ids = new Set()
     for (const p of pages) {
       for (const o of flattenObjects(p.objects || [])) {
-        if (o.pomId != null) ids.add(o.pomId)
+        // F3: una proposta IA pendent NO compta com a col·locada — encara ha de passar revisió.
+        if (o.pomId != null && !o.iaProposada) ids.add(o.pomId)
       }
     }
     return ids
   }, [pages])
+  // F3: pomIds amb una cota PROPOSADA-IA viva a la pàgina actual (pendent d'acceptar/descartar).
+  const iaCotesByPom = useMemo(() => {
+    const ids = new Set()
+    for (const o of (pages[currentPage]?.objects || [])) {
+      if (o.type === 'group' && o.pomId != null && o.iaProposada) ids.add(o.pomId)
+    }
+    return ids
+  }, [pages, currentPage])
+  const iaPropostesVives = useMemo(
+    () => (pages[currentPage]?.objects || []).filter(o => o.type === 'group' && o.pomId != null && o.iaProposada),
+    [pages, currentPage])
 
   // ── F2 (precedent de col·locació de cotes) · enllaç OBJECT-LEVEL ────────────
   // Objectes del croquis de la pàgina actual. Un objecte participa en F2 si porta la seva
@@ -4549,6 +4567,90 @@ export default function TechSheetEditor() {
       setF2Msg(r.ok ? t('tech_sheet.f2_desar_ok') : t('tech_sheet.f2_desar_err'))
     } catch { setF2Msg(t('tech_sheet.f2_desar_err')) }
   }, [sketchObjs, authHeaders, t])
+
+  // ── F3 · PROPOSAR cotes amb IA de visió ─────────────────────────────────────
+  // Rasteritza la pàgina SENSE cotes (ni col·locades ni proposades) ni overlays, envia els
+  // objectes sketch (bbox 0..1 de la pàgina) + els POMs PENDENT, i materialitza les propostes
+  // com a cotes VIVES en estat PROPOSAT (iaProposada): atenuades, NOMÉS pantalla, manipulables.
+  const proposarCotesIA = useCallback(async () => {
+    const pendents = pomRows.filter(bm => bm.pom_id != null
+      && !cotesColocades.has(bm.pom_id) && !iaCotesByPom.has(bm.pom_id))
+    if (!pendents.length) { setF2Msg(t('tech_sheet.ia_cap_pendent')); return }
+    const hosts = sketchObjs
+    if (!hosts.length) { setF2Msg(t('tech_sheet.ia_cap_sketch')); return }
+    setProposantIA(true)
+    setF2Msg(t('tech_sheet.ia_proposant'))
+    try {
+      const netaObjs = (curObjs || []).filter(o => !(o.type === 'group' && o.pomId != null))
+      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl }
+      const pageImage = await renderPageToDataURL({ ...pages[currentPage], objects: netaObjs }, 1.5, ctx)
+      const sketches = hosts.map(o => {
+        const bb = objectBounds(o)
+        return {
+          object_id: o.id, view_slot: o.viewSlot || null,
+          bbox_norm: { x: bb.minX / fmt.w, y: bb.minY / fmt.h,
+            w: (bb.maxX - bb.minX) / fmt.w, h: (bb.maxY - bb.minY) / fmt.h },
+        }
+      })
+      const poms = pendents.map(bm => ({
+        pom_id: bm.pom_id, code: bm.codi_client,
+        canonical_name: bm.nom_en || bm.pom_code_global || '',
+        client_alias: bm.client_alias || null, definition: bm.definicio || null,
+      }))
+      const r = await fetch(`${API}/api/v1/models/${id}/proposar-cotes/`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({ page_image: pageImage, sketches, poms }) })
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}))
+        setF2Msg(e.error || t('tech_sheet.ia_error')); return
+      }
+      const data = await r.json()
+      const hostById = new Map(hosts.map(o => [o.id, o]))
+      const bmByPom = new Map(pomRows.map(bm => [bm.pom_id, bm]))
+      const nous = []
+      for (const p of (data.placements || [])) {
+        const host = hostById.get(p.object_id)
+        if (!host || cotesColocades.has(p.pom_id) || iaCotesByPom.has(p.pom_id)) continue
+        const bb = objectBounds(host)
+        const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
+        const bm = bmByPom.get(p.pom_id)
+        const ax = bb.minX + (p.x1 || 0) * bw, ay = bb.minY + (p.y1 || 0) * bh
+        const bx = bb.minX + (p.x2 || 0) * bw, by = bb.minY + (p.y2 || 0) * bh
+        const mx = (ax + bx) / 2, my = (ay + by) / 2
+        const cota = buildLiveCota({
+          ax, ay, dx: bx - ax, dy: by - ay,
+          label: cotaLabelDe(bm) || String(p.pom_id), pomId: p.pom_id, bmId: bm?.id,
+          canonical: bm?.pom_code_global || '', viewSlot: host.viewSlot,
+          labelDx: p.label_x != null ? (bb.minX + p.label_x * bw - mx) : 0,
+          labelDy: p.label_y != null ? (bb.minY + p.label_y * bh - my) : 0,
+        })
+        nous.push({ ...cota, iaProposada: true, iaConfidence: p.confidence || 'mitjana' })
+      }
+      if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
+      const skip = (data.skip || []).length
+      setF2Msg(t('tech_sheet.ia_proposades', { n: nous.length, s: skip }))
+    } catch {
+      setF2Msg(t('tech_sheet.ia_error'))
+    } finally {
+      setProposantIA(false)
+    }
+  }, [pomRows, cotesColocades, iaCotesByPom, sketchObjs, curObjs, pages, currentPage,
+      tableData, model, sheet, pageW, pageH, customerLogoUrl, fmt, id, authHeaders, updatePageObjects, t])
+
+  // Acceptar UNA proposta: la cota deixa d'estar proposada i esdevé cota viva normal (F1).
+  const acceptarProposta = useCallback((cotaId) => {
+    updateObject(cotaId, { iaProposada: undefined, iaConfidence: undefined })
+  }, [updateObject])
+  const descartarProposta = useCallback((cotaId) => { deleteObject(cotaId) }, [deleteObject])
+  const acceptarTotesPropostes = useCallback(() => {
+    updatePageObjects(currentPage, objs => objs.map(o => (
+      o.iaProposada ? { ...o, iaProposada: undefined, iaConfidence: undefined } : o)))
+    setF2Msg(t('tech_sheet.ia_acceptades'))
+  }, [currentPage, updatePageObjects, t])
+  const descartarTotesPropostes = useCallback(() => {
+    updatePageObjects(currentPage, objs => objs.filter(o => !o.iaProposada))
+    setF2Msg(t('tech_sheet.ia_descartades'))
+  }, [currentPage, updatePageObjects, t])
 
   const curGuides = pages[currentPage]?.guides || []   // S2: guies de la pàgina activa
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
@@ -5406,6 +5508,30 @@ export default function TechSheetEditor() {
                   <i className="ti ti-copy" /> {t('tech_sheet.pom_posar_totes', { n: proposablesCount })}
                 </button>
               )}
+              {/* F3 · proposar cotes amb IA per als PENDENT (sobre els croquis de la pàgina). */}
+              {sketchObjs.length > 0 && (
+                <button type="button" onClick={proposarCotesIA} disabled={proposantIA}
+                  title={t('tech_sheet.ia_proposar')}
+                  style={{ width: '100%', marginBottom: 6, cursor: proposantIA ? 'default' : 'pointer', opacity: proposantIA ? 0.6 : 1, padding: '0.35rem 0.5rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <i className={`ti ${proposantIA ? 'ti-loader-2' : 'ti-sparkles'}`} /> {proposantIA ? t('tech_sheet.ia_proposant') : t('tech_sheet.ia_proposar')}
+                </button>
+              )}
+              {/* Barra de revisió de propostes IA vives (acceptar/descartar en bloc). */}
+              {iaPropostesVives.length > 0 && (
+                <div style={{ marginBottom: 6, padding: '0.35rem 0.5rem', background: COL.goldPale, border: `1px dashed ${COL.gold}`, borderRadius: 4 }}>
+                  <p style={{ fontSize: 'var(--fs-caption)', color: COL.textMain, margin: '0 0 5px', fontWeight: 600 }}>{t('tech_sheet.ia_revisio', { n: iaPropostesVives.length })}</p>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button type="button" onClick={acceptarTotesPropostes} title={t('tech_sheet.ia_acceptar_totes')}
+                      style={{ flex: 1, cursor: 'pointer', padding: '0.25rem', background: COL.bg, border: `1px solid ${COL.ok}`, borderRadius: 4, color: COL.ok, fontFamily: FONT, fontSize: 'var(--fs-label)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                      <i className="ti ti-check" /> {t('tech_sheet.ia_acceptar_totes')}
+                    </button>
+                    <button type="button" onClick={descartarTotesPropostes} title={t('tech_sheet.ia_descartar_totes')}
+                      style={{ flex: 1, cursor: 'pointer', padding: '0.25rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, color: COL.textMuted, fontFamily: FONT, fontSize: 'var(--fs-label)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                      <i className="ti ti-x" /> {t('tech_sheet.ia_descartar_totes')}
+                    </button>
+                  </div>
+                </div>
+              )}
               {f2Msg && <p style={{ fontSize: 'var(--fs-caption)', color: COL.textMain, margin: '0 0 6px' }}>{f2Msg}</p>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {pomRows.map(bm => {
@@ -5416,14 +5542,16 @@ export default function TechSheetEditor() {
                   const canonic = bm.pom_code_global || ''
                   const colocat = bm.pom_id != null && cotesColocades.has(bm.pom_id)
                   const armat = cotaPreset?.bmId === bm.id && tool === 'cota_pom'
-                  // PROPOSABLE: la cascada en té col·locació i la cota encara no és al document.
+                  // PROPOSADA-IA: hi ha una cota de visió pendent de revisió per aquest POM.
+                  const iaProp = !colocat && bm.pom_id != null && iaCotesByPom.has(bm.pom_id)
+                  // PROPOSABLE (precedent): la cascada en té col·locació i la cota encara no hi és.
                   // Fiabilitat: exacte (precedent del mateix item) > germana (transposat).
-                  const prop = !colocat && bm.pom_id != null ? propostes.get(bm.pom_id) : null
+                  const prop = !colocat && !iaProp && bm.pom_id != null ? propostes.get(bm.pom_id) : null
                   const exacte = prop && !prop.derivat
-                  // Semàfor: col·locat (verd) · proposable/armat (gold) · pendent (gris).
-                  const accent = colocat ? COL.ok : (armat || prop) ? COL.gold : COL.border
-                  const stateIcon = colocat ? 'ti-circle-check' : armat ? 'ti-crosshair' : prop ? 'ti-copy' : 'ti-circle-dashed'
-                  const stateCol = colocat ? COL.ok : armat ? COL.gold : prop ? COL.gold : COL.textMuted
+                  // Semàfor: col·locat (verd) · IA/proposable/armat (gold) · pendent (gris).
+                  const accent = colocat ? COL.ok : (armat || iaProp || prop) ? COL.gold : COL.border
+                  const stateIcon = colocat ? 'ti-circle-check' : armat ? 'ti-crosshair' : iaProp ? 'ti-sparkles' : prop ? 'ti-copy' : 'ti-circle-dashed'
+                  const stateCol = colocat ? COL.ok : (armat || iaProp || prop) ? COL.gold : COL.textMuted
                   return (
                     <div key={bm.id} style={{ display: 'flex', alignItems: 'stretch', gap: 4 }}>
                       <button type="button"
@@ -5448,6 +5576,13 @@ export default function TechSheetEditor() {
                             <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               <PomNamePair en={bm.nom_en} local={bm.nom_ca || bm.nom_client} />
                             </span>
+                            {/* Badge PROPOSADA-IA (pendent de revisió): distint d'exacte/germana. */}
+                            {iaProp && (
+                              <span title={t('tech_sheet.ia_badge_tip')}
+                                style={{ fontSize: 'var(--fs-caption)', fontWeight: 500, color: COL.gold, border: `1px solid ${COL.gold}`, borderRadius: 8, padding: '0 5px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                <i className="ti ti-sparkles" style={{ fontSize: 11 }} />{t('tech_sheet.ia_badge')}
+                              </span>
+                            )}
                             {/* Badge de fiabilitat DISCRET (mai percentatge): exacte vs germana. */}
                             {prop && (
                               <span title={t(exacte ? 'tech_sheet.pom_rel_exacte_tip' : 'tech_sheet.pom_rel_germana_tip')}
@@ -5925,8 +6060,26 @@ export default function TechSheetEditor() {
                       onChange={e => assignaVista(selObj.id, e.target.value.trim())} style={propInput} />
                   </Contenidor>
                 )}
-                {/* F2 · desar AQUESTA cota com a precedent del catàleg (acte conscient, D1). */}
-                {selObj.type === 'group' && selObj.pomId != null && (
+                {/* F3 · revisió d'una cota PROPOSADA per la IA: acceptar (→ cota viva) o descartar.
+                    Es poden ajustar els extrems abans d'acceptar (ja és un objecte manipulable). */}
+                {selObj.type === 'group' && selObj.pomId != null && selObj.iaProposada && (
+                  <Contenidor titol={t('tech_sheet.ia_cota_titol')} icona="ti-sparkles" fitContent>
+                    <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.ia_cota_hint')}</p>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button type="button" onClick={() => acceptarProposta(selObj.id)}
+                        style={{ flex: 1, cursor: 'pointer', padding: '0.35rem', background: COL.bg, border: `1px solid ${COL.ok}`, borderRadius: 4, color: COL.ok, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                        <i className="ti ti-check" /> {t('tech_sheet.ia_acceptar')}
+                      </button>
+                      <button type="button" onClick={() => descartarProposta(selObj.id)}
+                        style={{ flex: 1, cursor: 'pointer', padding: '0.35rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, color: COL.textMuted, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                        <i className="ti ti-x" /> {t('tech_sheet.ia_descartar')}
+                      </button>
+                    </div>
+                  </Contenidor>
+                )}
+                {/* F2 · desar AQUESTA cota com a precedent del catàleg (acte conscient, D1). Una cota
+                    encara PROPOSADA no es pot desar com a precedent: primer s'accepta. */}
+                {selObj.type === 'group' && selObj.pomId != null && !selObj.iaProposada && (
                   <Contenidor titol={t('tech_sheet.cota_precedent')} icona="ti-bookmark" fitContent>
                     <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 4px' }}>{t('tech_sheet.cota_precedent_hint')}</p>
                     <button type="button" onClick={() => desarUnaPrecedent(selObj)}
