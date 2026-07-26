@@ -2716,6 +2716,7 @@
     "lib_pieces": "Pattern pieces",
     "lib_pieces_none": "No pattern piece in this model.",
     "pom_cota_hint": "Dimension \"{{nom}}\": two clicks on the canvas (A → B)",
+    "pom_canonical_tip": "Canonical code: {{codi}}",
     "keep_ratio": "Keep ratio",
     "pos_x": "X (mm)",
     "pos_y": "Y (mm)",

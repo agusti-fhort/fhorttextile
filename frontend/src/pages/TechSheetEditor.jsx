@@ -226,6 +226,12 @@ function flattenObjects(objects = []) {
   return objects.flatMap(o => [o, ...flattenObjects(o.children || [])])
 }
 
+// F1 (cota viva) — etiqueta VISIBLE d'un POM a la cota: àlies de client si n'hi ha, si
+// no el codi canònic (pom_code_global). El codi canònic sempre queda com a metadada +
+// tooltip. Últim fallback a codi_client per no deixar mai l'etiqueta buida en POMs
+// tenant-only sense canònic ni àlies.
+export const cotaLabelDe = (bm) => (bm && (bm.client_alias || bm.pom_code_global || bm.codi_client)) || ''
+
 function serializeObject(obj) {
   const base = obj.type === 'data_block' ? (({ src, ...rest }) => rest)(obj) : obj
   return mapObjectTree(base, o => (o.type === 'data_block' ? (({ src, ...rest }) => rest)(o) : o))
@@ -2703,6 +2709,42 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pages])
 
+  // ── F1 (cota viva) — re-deriva l'etiqueta de cada cota vinculada des del POM viu ──
+  // En carregar el document (o si canvia l'àlies del client) refresquem el text visible
+  // de la cota des de pomRows. Si el POM/BM ja no existeix, la cota DEGRADA a dibuix mort
+  // amb l'últim text conegut: mai crasha ni s'esborra. NOMÉS LECTURA: no toca cap dada del
+  // POM. Depèn de [pomRows, pages] perquè document i pomRows carreguen en ordre no
+  // determinista; és idempotent (si el text ja quadra, no hi ha setPages) i salta l'autosave
+  // (skipSave) per no encadenar una versió nova del .ftt en cada obertura.
+  useEffect(() => {
+    if (!pomRows.length) return
+    const bmById = new Map(pomRows.map(bm => [bm.id, bm]))
+    const bmByPom = new Map(pomRows.map(bm => [bm.pom_id, bm]))
+    let canvis = false
+    const nextPages = pages.map(p => {
+      const objects = (p.objects || []).map(o => {
+        if (o.type !== 'group' || o.pomId == null) return o
+        const bm = bmById.get(o.bmId) || bmByPom.get(o.pomId)
+        if (!bm) return o   // degradació elegant: el POM/BM ja no hi és
+        const nouText = cotaLabelDe(bm)
+        if (!nouText) return o
+        const kids = o.children || []
+        const ti = kids.findIndex(k => k.type === 'text')
+        if (ti < 0 || kids[ti].text === nouText) return o
+        const oldText = kids[ti]
+        const TW = measureTextWidthMm({ text: nouText, fontSize: 9, fontFamily: FONT, fontStyle: 'bold' })
+        const cx = (oldText.x || 0) + (oldText.width || 0) / 2   // manté el centre del text
+        const nouKids = kids.slice()
+        nouKids[ti] = { ...oldText, text: nouText, width: TW, x: cx - TW / 2 }
+        canvis = true
+        return { ...o, children: nouKids, pomCanonical: bm.pom_code_global || o.pomCanonical || '' }
+      })
+      return objects === p.objects ? p : { ...p, objects }
+    })
+    if (canvis) { skipSave.current = true; setPages(nextPages) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pomRows, pages])
+
   // ── Autosave (debounce 2s; només amb lock; salta el primer load) ───────────
   useEffect(() => {
     if (!docCarregat.current) return   // el document encara no hi és: desar ara seria desar un full en blanc
@@ -3200,9 +3242,12 @@ export default function TechSheetEditor() {
     const len = Math.hypot(dx, dy) || 1
     const px = -dy / len, py = dx / len   // perpendicular unitari (per desplaçar el text)
     // Cota PRE-CARREGADA des del contenidor de POMs: la fletxa i l'etiqueta van en vermell
-    // saturat i el text és el `nom_fitxa` del POM — la nomenclatura amb què el patronista
-    // anomena aquesta mesura al croquis. FRONTERA G1: entra com a STRING LITERAL, sense cap
-    // pom_id ni bm_id a l'objecte. La cota no és un binding viu; és un dibuix.
+    // saturat i el text és l'ÀLIES DE CLIENT (o el codi canònic) del POM — la nomenclatura
+    // amb què el patronista anomena aquesta mesura al croquis.
+    // FRONTERA G1 (F1 cota viva): el grup guarda pomId i bmId com a VINCLE DE NOMÉS LECTURA.
+    // L'etiqueta es re-deriva del POM viu en carregar el document, però la cota MAI escriu
+    // cap valor de mesura ni res al POM/BaseMeasurement: el valor numèric no hi viu. Segueix
+    // sent un dibuix, ara vinculat per id — mai una escriptura de dades.
     const pom = cotaPreset
     const col = pom ? KONVA_COL.pom : KONVA_COL.textMain
     // La fletxa de la cota de POM és un `path` de dos nodes amb punta als dos extrems, no un
@@ -3221,7 +3266,12 @@ export default function TechSheetEditor() {
     const text = pom
       ? { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.white, fontStyle: 'bold', align: 'center', bgFill: KONVA_COL.pom, bgPadding: toMm(TEXT_PAD_Y_PX) }
       : { id: uid(), type: 'text', layer: 'free', x: mx - TW / 2, y: my - 5, width: TW, height: 10, text: etiqueta, fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain, align: 'center' }
-    addObject({ id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0, children: [linia, text] })
+    addObject({
+      id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0,
+      // F1: vincle de només-lectura al POM viu (escalars → round-trip .ftt lliure, no host-ref).
+      ...(pom?.pomId != null ? { pomId: pom.pomId, bmId: pom.bmId, pomCanonical: pom.canonical || '' } : {}),
+      children: [linia, text],
+    })
     setCotaPreset(null)
   }
   const onStageMouseDown = (e) => {
@@ -4103,14 +4153,16 @@ export default function TechSheetEditor() {
     return vist
   }, [pages])
 
+  // F1 (cota viva): una cota compta com a col·locada pel seu pomId (vincle viu), no pel
+  // text. Les cotes antigues sense pomId (pre-F1) no hi compten — degradació acceptada.
   const cotesColocades = useMemo(() => {
-    const noms = new Set()
+    const ids = new Set()
     for (const p of pages) {
       for (const o of flattenObjects(p.objects || [])) {
-        if (o.type === 'text' && o.text) noms.add(String(o.text).trim())
+        if (o.pomId != null) ids.add(o.pomId)
       }
     }
-    return noms
+    return ids
   }, [pages])
   const curGuides = pages[currentPage]?.guides || []   // S2: guies de la pàgina activa
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
@@ -4950,14 +5002,20 @@ export default function TechSheetEditor() {
               <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.poms_hint')}</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {pomRows.map(bm => {
-                  const etiqueta = bm.nom_fitxa || bm.pom_abbreviation || bm.codi_client || ''
-                  const colocat = !!etiqueta && cotesColocades.has(etiqueta)
-                  const armat = cotaPreset?.text === etiqueta && tool === 'cota_pom'
+                  // F1 (cota viva): etiqueta = àlies de client || codi canònic; el vincle
+                  // viatja per pom_id/bm_id, no pel text.
+                  const etiqueta = cotaLabelDe(bm)
+                  const esAlies = !!bm.client_alias
+                  const canonic = bm.pom_code_global || ''
+                  const colocat = bm.pom_id != null && cotesColocades.has(bm.pom_id)
+                  const armat = cotaPreset?.bmId === bm.id && tool === 'cota_pom'
                   return (
                     <button key={bm.id} type="button"
-                      onClick={() => { setCotaPreset({ text: etiqueta }); setTool('cota_pom') }}
+                      onClick={() => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, canonical: canonic }); setTool('cota_pom') }}
                       aria-pressed={armat}
-                      title={t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
+                      title={esAlies && canonic
+                        ? `${t('tech_sheet.pom_cota_hint', { nom: etiqueta })} · ${t('tech_sheet.pom_canonical_tip', { codi: canonic })}`
+                        : t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
                       style={{
                         textAlign: 'left', width: '100%', cursor: 'pointer',
                         background: armat ? 'var(--gold-pale)' : 'var(--bg-card)',

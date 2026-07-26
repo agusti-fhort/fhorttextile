@@ -2716,6 +2716,7 @@
     "lib_pieces": "Piezas de patrón",
     "lib_pieces_none": "Ninguna pieza de patrón en el modelo.",
     "pom_cota_hint": "Acotar «{{nom}}»: dos clics en el lienzo (A → B)",
+    "pom_canonical_tip": "Código canónico: {{codi}}",
     "keep_ratio": "Mantener proporción",
     "pos_x": "X (mm)",
     "pos_y": "Y (mm)",
