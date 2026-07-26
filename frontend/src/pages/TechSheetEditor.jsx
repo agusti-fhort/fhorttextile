@@ -4596,6 +4596,33 @@ export default function TechSheetEditor() {
   const proposablesCount = pomRows.filter(
     bm => bm.pom_id != null && !cotesColocades.has(bm.pom_id) && propostes.has(bm.pom_id)).length
 
+  // Desar UNA cota com a precedent del catàleg (acte CONSCIENT, D1) — des de Propietats de la
+  // cota. Resol el host sketch pel punt mig de la cota; la vista es pren del host. Substitueix
+  // l'antic «Desar col·locació» massiu del contenidor mort.
+  const desarUnaPrecedent = useCallback(async (cota) => {
+    const e = cotaEndsMm(cota)
+    if (!e) { setF2Msg(t('tech_sheet.f2_desar_err')); return }
+    const mid = { x: (e.ax + e.bx) / 2, y: (e.ay + e.by) / 2 }
+    const dins = (bb, pt) => pt.x >= bb.minX && pt.x <= bb.maxX && pt.y >= bb.minY && pt.y <= bb.maxY
+    const host = sketchObjs.find(o => o.sourceItemFitxer && o.viewSlot && dins(objectBounds(o), mid))
+    if (!host) { setF2Msg(t('tech_sheet.f2_desar_sense_host')); return }
+    const bb = objectBounds(host)
+    const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
+    const body = {
+      pom_id: cota.pomId, view_slot: host.viewSlot,
+      x1: (e.ax - bb.minX) / bw, y1: (e.ay - bb.minY) / bh,
+      x2: (e.bx - bb.minX) / bw, y2: (e.by - bb.minY) / bh,
+      label_dx: e.lc ? (e.lc.x - mid.x) / bw : 0,
+      label_dy: e.lc ? (e.lc.y - mid.y) / bh : 0,
+      source_kind: host.type === 'image' ? 'raster' : 'vector',
+    }
+    try {
+      const r = await fetch(`${API}/api/v1/item-fitxers/${host.sourceItemFitxer}/pom-placements/`, {
+        method: 'POST', headers: authHeaders, body: JSON.stringify(body) })
+      setF2Msg(r.ok ? t('tech_sheet.f2_desar_ok') : t('tech_sheet.f2_desar_err'))
+    } catch { setF2Msg(t('tech_sheet.f2_desar_err')) }
+  }, [sketchObjs, authHeaders, t])
+
   const curGuides = pages[currentPage]?.guides || []   // S2: guies de la pàgina activa
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   const selectedSet = new Set(selectedIds)
@@ -5993,6 +6020,27 @@ export default function TechSheetEditor() {
             {selObj && locked && (
               <>
                 <SectionTitle>{t('tech_sheet.element')} · {selObj.type}</SectionTitle>
+                {/* F2 · vista de l'objecte sketch de catàleg (view_slot). Abans vivia en una llista
+                    massiva al panell esquerre; ara és un camp discret aquí, on es toca l'objecte. */}
+                {isSketchObj(selObj) && selObj.sourceItemFitxer && (
+                  <Contenidor titol={t('tech_sheet.sketch_view')} icona="ti-arrow-guide" fitContent>
+                    <datalist id="sketch-view-slots"><option value="front" /><option value="back" /><option value="detail" /></datalist>
+                    <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 4px' }}>{t('tech_sheet.sketch_view_hint')}</p>
+                    <input list="sketch-view-slots" value={selObj.viewSlot || ''} placeholder={t('tech_sheet.sketch_view_ph')}
+                      onChange={e => assignaVista(selObj.id, e.target.value.trim())} style={propInput} />
+                  </Contenidor>
+                )}
+                {/* F2 · desar AQUESTA cota com a precedent del catàleg (acte conscient, D1). */}
+                {selObj.type === 'group' && selObj.pomId != null && (
+                  <Contenidor titol={t('tech_sheet.cota_precedent')} icona="ti-bookmark" fitContent>
+                    <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 4px' }}>{t('tech_sheet.cota_precedent_hint')}</p>
+                    <button type="button" onClick={() => desarUnaPrecedent(selObj)}
+                      style={{ width: '100%', cursor: 'pointer', padding: '0.35rem 0.5rem', background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 4, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      <i className="ti ti-bookmark" /> {t('tech_sheet.cota_desar_precedent')}
+                    </button>
+                    {f2Msg && <p style={{ fontSize: 'var(--fs-caption)', color: COL.textMain, margin: '4px 0 0' }}>{f2Msg}</p>}
+                  </Contenidor>
+                )}
                 {selDim && (
                   <Contenidor titol={t('tech_sheet.dimensions_position')} icona="ti-ruler-2" fitContent>
                     <BlocEnPausa pausa={panelLockedForEdit} motiu={t('tech_sheet.panel_paused_editing')}>
