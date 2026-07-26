@@ -1892,7 +1892,8 @@ async function legacySketchSvgToPath(obj, scope) {
     // Report del triatge (visible a la consola del navegador; mai perdre geometria en silenci).
     console.info(`[import SVG · clip] dins=${clipDins} fora=${clipFora} creuen=${clipCreua} fallits=${clipFallits}`)
   }
-  const paths = collected.map(entry => {
+  // ── Descriptor de pintura+geometria d'una entrada (path simple o compost amb forats) ──
+  const descriptorDe = (entry) => {
     if (entry.compound) {
       const compound = entry.compound
       const subpaths = compound.children
@@ -1917,19 +1918,50 @@ async function legacySketchSvgToPath(obj, scope) {
       strokeWidth: Math.max(0.2, (path.strokeWidth || 1) * strokeScale),
       segments: mapSegs(path),
     }
-  }).filter(Boolean)
-  if (!paths.length) return obj
-  return {
-    ...obj,
-    type: 'path',
-    paths,
-    stroke: undefined,
-    fill: undefined,
-    strokeWidth: undefined,
-    svg: undefined,
-    width: undefined,
-    height: undefined,
   }
+
+  // ── Classificació per ROL (heurística d'ESTILS, determinista — mai geometria, mai IA) ──
+  // Cada traç recollit es reparteix a una de tres capes segons els atributs Paper resolts
+  // (post-inline de les classes CSS). RES es descarta: en cas de dubte, SILUETA (el pitjor cas
+  // és soroll dins la silueta, no un traç de peça perdut dins detall). Vegeu la diagnosi
+  // DIAGNOSI_IMPORT_SVG_PROPORCIO (§editabilitat / monolitisme). Llindars afinables:
+  const ROL = { SILUETA: 'silueta', REPUNTS: 'repunts', DETALL: 'detall' }
+  const DASH_MIN_GUIO = 0.01   // longitud mínima (unitats SVG) d'un guió perquè un traç sigui repunt
+  const teDash = (item) => Array.isArray(item.dashArray) && item.dashArray.some(d => d > DASH_MIN_GUIO)
+  const rolDe = (item) => {
+    if (teDash(item)) return ROL.REPUNTS                                   // stroke-dasharray → repunts
+    const teFill = !!(item.fillColor && (item.fillColor.gradient || paperColorToCss(item.fillColor, null)))
+    if (teFill) return ROL.DETALL                                         // fill sòlid o gradient → detall
+    return ROL.SILUETA                                                    // stroke + fill:none, i el dubte
+  }
+
+  const buckets = { [ROL.SILUETA]: [], [ROL.REPUNTS]: [], [ROL.DETALL]: [] }
+  for (const entry of collected) {
+    const desc = descriptorDe(entry)
+    if (!desc) continue
+    buckets[rolDe(entry.compound || entry.path)].push(desc)
+  }
+  const total = buckets.silueta.length + buckets.repunts.length + buckets.detall.length
+  if (!total) return obj
+
+  // Metadada comuna a tornar (id, x/y, sourceItemFitxer/viewSlot de F2a…), sense la forma vella.
+  const meta = { ...obj, stroke: undefined, fill: undefined, strokeWidth: undefined, svg: undefined, width: undefined, height: undefined }
+  // Ordre de pintat de les capes: DETALL al fons (cremallera/hardware plens), després la SILUETA
+  // i els REPUNTS al davant (traços i costures visibles sobre l'ompliment) — flat tècnic net.
+  const nonEmpty = [ROL.DETALL, ROL.SILUETA, ROL.REPUNTS].filter(rol => buckets[rol].length)
+
+  // Un sol rol (o res a separar) → 1 path monolític, EXACTAMENT com abans (mai un grup d'un fill).
+  if (nonEmpty.length <= 1) {
+    return { ...meta, type: 'path', paths: buckets[nonEmpty[0]], children: undefined, kind: undefined }
+  }
+  // Diversos rols → GRUP de capes-path, cada capa ciutadana normal del llenç (seleccionable/
+  // amagable/esborrable per separat en entrar al grup). Els fills neixen a x:0,y:0 amb les
+  // mateixes coordenades locals → objectBounds(grup) == bbox del contingut sencer, i F2a
+  // («Cotes des de precedent») opera sobre el grup igual que abans sobre el path (commit previ).
+  const children = nonEmpty.map(rol => ({
+    id: uid(), type: 'path', layer: 'free', role: rol, x: 0, y: 0, paths: buckets[rol],
+  }))
+  return { ...meta, type: 'group', kind: 'sketch', children, paths: undefined }
 }
 
 async function convertLegacySketchSvgs(pages) {
