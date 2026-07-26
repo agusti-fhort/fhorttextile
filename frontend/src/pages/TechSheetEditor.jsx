@@ -2129,6 +2129,9 @@ export default function TechSheetEditor() {
   // F2 (precedent de col·locació): enllaç OBJECT-LEVEL — la procedència viu a cada objecte
   // sketch (`sourceItemFitxer`, posat a l'import des del catàleg), no al document.
   const [f2Msg, setF2Msg] = useState(null)   // resultat de col·locar/desar precedents
+  // F2 · propostes de col·locació agregades per pom_id (cascada del catàleg). El panell de POMs
+  // les llegeix per marcar cada POM com a PROPOSABLE; mai una crida per POM (agregació client).
+  const [propostes, setPropostes] = useState(() => new Map())   // pom_id → { p, derivat, hostId }
   const [importMode, setImportMode] = useState(null)     // IMP-1: null | 'image' | 'garment' (panell d'import al dock)
   const [importFile, setImportFile] = useState(null)     // IMP-2: fitxer triat (no s'insereix fins a "Inserir")
   const [importNavOpen, setImportNavOpen] = useState(false)   // C5.3: AssetNavigator com a font "FTT"
@@ -4513,6 +4516,86 @@ export default function TechSheetEditor() {
     setF2Msg(t('tech_sheet.f2_desats', { n: desats, s: senseVista }))
   }, [curObjs, sketchObjs, authHeaders, t])
 
+  // ── F2 · PROPOSTES agregades per pom_id ─────────────────────────────────────
+  // Fonts = objectes sketch amb procedència de catàleg + vista assignada (la vista viu a
+  // Propietats de l'objecte, no a cap llista). Signatura estable (id+item+vista) perquè l'efecte
+  // re-demani NOMÉS quan canvien les fonts, no a cada render ni a cada tecleig de geometria.
+  const propFontsSig = JSON.stringify(
+    sketchObjs.filter(o => o.sourceItemFitxer && o.viewSlot).map(o => [o.id, o.sourceItemFitxer, o.viewSlot]))
+  const propFonts = useMemo(
+    () => sketchObjs.filter(o => o.sourceItemFitxer && o.viewSlot)
+      .map(o => ({ hostId: o.id, item: o.sourceItemFitxer, slot: o.viewSlot })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [propFontsSig])
+  useEffect(() => {
+    if (!id || !propFonts.length) { setPropostes(new Map()); return undefined }
+    let cancelled = false
+    ;(async () => {
+      const acc = new Map()   // pom_id → { p, derivat, hostId }; l'EXACTE (derivat=false) guanya la germana
+      for (const f of propFonts) {
+        try {
+          const r = await fetch(
+            `${API}/api/v1/item-fitxers/${f.item}/pom-placements/`
+            + `?view_slot=${encodeURIComponent(f.slot)}&model_id=${id}`, { headers: authHeaders })
+          if (!r.ok) continue
+          const data = await r.json()
+          for (const p of (data.placements || [])) {
+            const prev = acc.get(p.pom_id)
+            if (prev && !prev.derivat) continue      // ja hi ha exacte per aquest POM → no el trepitgem
+            acc.set(p.pom_id, { p, derivat: !!p.derivat, hostId: f.hostId })
+          }
+        } catch { /* continua amb la següent font */ }
+      }
+      if (!cancelled) setPropostes(acc)
+    })()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, propFonts])
+
+  // Construeix la cota VIVA de F1 d'una proposta, desnormalitzant sobre la bbox ACTUAL del seu
+  // objecte-sketch host (si s'ha mogut/redimensionat, la cota hi cau bé igualment). null si el
+  // host ja no hi és. La vista es resol SOLA: la del host, mai demanada per endavant.
+  const buildCotaDeProposta = useCallback((pomId, prop) => {
+    const host = curObjs.find(o => o.id === prop.hostId)
+    if (!host) return null
+    const bb = objectBounds(host)
+    const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
+    const bm = pomRows.find(r => r.pom_id === pomId)
+    const p = prop.p
+    const ax = bb.minX + p.x1 * bw, ay = bb.minY + p.y1 * bh
+    const bx = bb.minX + p.x2 * bw, by = bb.minY + p.y2 * bh
+    return buildLiveCota({
+      ax, ay, dx: bx - ax, dy: by - ay,
+      label: cotaLabelDe(bm) || p.codi, pomId, bmId: p.bm_id,
+      canonical: p.codi, viewSlot: host.viewSlot, derivat: prop.derivat,
+      labelDx: (p.label_dx || 0) * bw, labelDy: (p.label_dy || 0) * bh,
+    })
+  }, [curObjs, pomRows])
+
+  // «Posar» LA cota d'un POM proposable (mecànica de colocarDesPrecedent, però per POM). La cota
+  // neix VIVA de F1: arrossegable, editable; el panell la veurà tot seguit com a COL·LOCAT.
+  const posarProposta = useCallback((pomId) => {
+    const prop = propostes.get(pomId)
+    if (!prop) return
+    const cota = buildCotaDeProposta(pomId, prop)
+    if (cota) updatePageObjects(currentPage, objs => [...objs, cota])
+  }, [propostes, buildCotaDeProposta, currentPage, updatePageObjects])
+
+  // Acció de grup: posar TOTES les proposables que encara no són al document.
+  const posarTotesPropostes = useCallback(() => {
+    const nous = []
+    for (const [pomId, prop] of propostes) {
+      if (cotesColocades.has(pomId)) continue
+      const cota = buildCotaDeProposta(pomId, prop)
+      if (cota) nous.push(cota)
+    }
+    if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
+    setF2Msg(t('tech_sheet.pom_posades', { n: nous.length }))
+  }, [propostes, cotesColocades, buildCotaDeProposta, currentPage, updatePageObjects, t])
+  // Nombre de POMs proposables encara NO col·locats (per a l'acció de grup del panell).
+  const proposablesCount = pomRows.filter(
+    bm => bm.pom_id != null && !cotesColocades.has(bm.pom_id) && propostes.has(bm.pom_id)).length
+
   const curGuides = pages[currentPage]?.guides || []   // S2: guies de la pàgina activa
   const ordered = [...curObjs].sort((a, b) => (LAYER_ORDER[a.layer] ?? 2) - (LAYER_ORDER[b.layer] ?? 2))
   const selectedSet = new Set(selectedIds)
@@ -5393,6 +5476,15 @@ export default function TechSheetEditor() {
               icona="ti-ruler-measure" pes={2}
             >
               <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.poms_hint')}</p>
+              {/* Acció de grup: posar TOTES les proposables que encara no són al document. */}
+              {proposablesCount > 0 && (
+                <button type="button" onClick={posarTotesPropostes}
+                  title={t('tech_sheet.pom_posar_totes', { n: proposablesCount })}
+                  style={{ width: '100%', marginBottom: 6, cursor: 'pointer', padding: '0.35rem 0.5rem', background: COL.goldPale, border: `1px solid ${COL.gold}`, borderRadius: 4, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <i className="ti ti-copy" /> {t('tech_sheet.pom_posar_totes', { n: proposablesCount })}
+                </button>
+              )}
+              {f2Msg && <p style={{ fontSize: 'var(--fs-caption)', color: COL.textMain, margin: '0 0 6px' }}>{f2Msg}</p>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {pomRows.map(bm => {
                   // F1 (cota viva): etiqueta = àlies de client || codi canònic; el vincle
@@ -5402,42 +5494,66 @@ export default function TechSheetEditor() {
                   const canonic = bm.pom_code_global || ''
                   const colocat = bm.pom_id != null && cotesColocades.has(bm.pom_id)
                   const armat = cotaPreset?.bmId === bm.id && tool === 'cota_pom'
+                  // PROPOSABLE: la cascada en té col·locació i la cota encara no és al document.
+                  // Fiabilitat: exacte (precedent del mateix item) > germana (transposat).
+                  const prop = !colocat && bm.pom_id != null ? propostes.get(bm.pom_id) : null
+                  const exacte = prop && !prop.derivat
+                  // Semàfor: col·locat (verd) · proposable/armat (gold) · pendent (gris).
+                  const accent = colocat ? COL.ok : (armat || prop) ? COL.gold : COL.border
+                  const stateIcon = colocat ? 'ti-circle-check' : armat ? 'ti-crosshair' : prop ? 'ti-copy' : 'ti-circle-dashed'
+                  const stateCol = colocat ? COL.ok : armat ? COL.gold : prop ? COL.gold : COL.textMuted
                   return (
-                    <button key={bm.id} type="button"
-                      onClick={() => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, canonical: canonic }); setTool('cota_pom') }}
-                      aria-pressed={armat}
-                      title={esAlies && canonic
-                        ? `${t('tech_sheet.pom_cota_hint', { nom: etiqueta })} · ${t('tech_sheet.pom_canonical_tip', { codi: canonic })}`
-                        : t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
-                      style={{
-                        textAlign: 'left', width: '100%', cursor: 'pointer',
-                        background: armat ? 'var(--gold-pale)' : 'var(--bg-card)',
-                        border: `1px solid ${armat ? COL.gold : COL.border}`,
-                        borderLeft: `3px solid ${colocat ? COL.ok : armat ? COL.gold : COL.border}`,
-                        borderRadius: 4, padding: '0.3rem 0.5rem',
-                        display: 'flex', alignItems: 'center', gap: '0.4rem',
-                        fontFamily: FONT,
-                      }}>
-                      <i className={`ti ${colocat ? 'ti-circle-check' : armat ? 'ti-crosshair' : 'ti-circle-dashed'}`}
-                        style={{ color: colocat ? COL.ok : armat ? COL.gold : COL.textMuted, flexShrink: 0, fontSize: 14 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
-                          <span>{bm.codi_client}</span>
-                          <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <PomNamePair en={bm.nom_en} local={bm.nom_ca || bm.nom_client} />
-                          </span>
-                          {bm.nom_fitxa && (
-                            <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: COL.textMuted, border: `1px solid ${COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
-                              {bm.nom_fitxa}
+                    <div key={bm.id} style={{ display: 'flex', alignItems: 'stretch', gap: 4 }}>
+                      <button type="button"
+                        onClick={() => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, canonical: canonic }); setTool('cota_pom') }}
+                        aria-pressed={armat}
+                        title={esAlies && canonic
+                          ? `${t('tech_sheet.pom_cota_hint', { nom: etiqueta })} · ${t('tech_sheet.pom_canonical_tip', { codi: canonic })}`
+                          : t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
+                        style={{
+                          textAlign: 'left', flex: 1, minWidth: 0, cursor: 'pointer',
+                          background: armat ? 'var(--gold-pale)' : 'var(--bg-card)',
+                          border: `1px solid ${armat ? COL.gold : COL.border}`,
+                          borderLeft: `3px solid ${accent}`,
+                          borderRadius: 4, padding: '0.3rem 0.5rem',
+                          display: 'flex', alignItems: 'center', gap: '0.4rem',
+                          fontFamily: FONT,
+                        }}>
+                        <i className={`ti ${stateIcon}`} style={{ color: stateCol, flexShrink: 0, fontSize: 14 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
+                            <span>{bm.codi_client}</span>
+                            <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <PomNamePair en={bm.nom_en} local={bm.nom_ca || bm.nom_client} />
                             </span>
-                          )}
+                            {/* Badge de fiabilitat DISCRET (mai percentatge): exacte vs germana. */}
+                            {prop && (
+                              <span title={t(exacte ? 'tech_sheet.pom_rel_exacte_tip' : 'tech_sheet.pom_rel_germana_tip')}
+                                style={{ fontSize: 'var(--fs-caption)', fontWeight: 500, color: exacte ? COL.gold : COL.textMuted, border: `1px solid ${exacte ? COL.gold : COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
+                                {t(exacte ? 'tech_sheet.pom_rel_exacte' : 'tech_sheet.pom_rel_germana')}
+                              </span>
+                            )}
+                            {bm.nom_fitxa && (
+                              <span style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: COL.textMuted, border: `1px solid ${COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
+                                {bm.nom_fitxa}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      {/* La xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
-                      {bm.base_value_cm != null && (
-                        <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0 }}>{bm.base_value_cm}</span>
+                        {/* La xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
+                        {bm.base_value_cm != null && (
+                          <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0 }}>{bm.base_value_cm}</span>
+                        )}
+                      </button>
+                      {/* «Posar»: col·loca LA cota des del precedent (queda viva F1, arrossegable). */}
+                      {prop && (
+                        <button type="button" onClick={() => posarProposta(bm.pom_id)}
+                          title={t('tech_sheet.pom_posar')}
+                          style={{ flexShrink: 0, width: 32, cursor: 'pointer', border: `1px solid ${COL.gold}`, borderRadius: 4, background: COL.goldPale, color: COL.gold, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <i className="ti ti-copy" style={{ fontSize: 15 }} />
+                        </button>
                       )}
-                    </button>
+                    </div>
                   )
                 })}
               </div>
