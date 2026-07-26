@@ -2750,6 +2750,7 @@
     "lib_pieces": "Pattern pieces",
     "lib_pieces_none": "No pattern piece in this model.",
     "pom_cota_hint": "Dimension \"{{nom}}\": two clicks on the canvas (A → B)",
+    "pom_cota_ja_colocat": "Already placed — delete the dimension to re-dimension",
     "pom_canonical_tip": "Canonical code: {{codi}}",
     "f2_titol": "Dimensions from precedent",
     "f2_hint": "Assign a view to each sketch object, then place the catalogue dimensions or save the current ones as a precedent.",

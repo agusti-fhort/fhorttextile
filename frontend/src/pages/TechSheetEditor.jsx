@@ -5610,13 +5610,20 @@ export default function TechSheetEditor() {
                   return (
                     <div key={bm.id} style={{ display: 'flex', alignItems: 'stretch', gap: 4 }}>
                       <button type="button"
-                        onClick={() => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, canonical: canonic }); setTool('cota_pom') }}
+                        // C3 · GUARD DE DUPLICATS: un POM amb cota viva al document no es pot
+                        // re-acotar. La fila COL·LOCAT queda no-clicable (el «selector» de l'eina
+                        // Cota POM l'exclou); esborrar la cota el torna PENDENT/PROPOSABLE. No es fa
+                        // servir `disabled` per no perdre el tooltip explicatiu (Chrome l'amaga en
+                        // botons disabled): click a buit + cursor per defecte.
+                        onClick={colocat ? undefined : () => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, canonical: canonic }); setTool('cota_pom') }}
                         aria-pressed={armat}
-                        title={esAlies && canonic
-                          ? `${t('tech_sheet.pom_cota_hint', { nom: etiqueta })} · ${t('tech_sheet.pom_canonical_tip', { codi: canonic })}`
-                          : t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
+                        title={colocat
+                          ? t('tech_sheet.pom_cota_ja_colocat')
+                          : esAlies && canonic
+                            ? `${t('tech_sheet.pom_cota_hint', { nom: etiqueta })} · ${t('tech_sheet.pom_canonical_tip', { codi: canonic })}`
+                            : t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
                         style={{
-                          textAlign: 'left', flex: 1, minWidth: 0, cursor: 'pointer',
+                          textAlign: 'left', flex: 1, minWidth: 0, cursor: colocat ? 'default' : 'pointer',
                           background: armat ? 'var(--gold-pale)' : 'var(--bg-card)',
                           border: `1px solid ${armat ? COL.gold : COL.border}`,
                           borderLeft: `3px solid ${accent}`,

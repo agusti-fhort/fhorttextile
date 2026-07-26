@@ -2750,6 +2750,7 @@
     "lib_pieces": "Peces de patró",
     "lib_pieces_none": "Cap peça de patró al model.",
     "pom_cota_hint": "Acotar «{{nom}}»: dos clics al llenç (A → B)",
+    "pom_cota_ja_colocat": "Ja col·locat — elimina la cota per re-acotar",
     "pom_canonical_tip": "Codi canònic: {{codi}}",
     "f2_titol": "Cotes des de precedent",
     "f2_hint": "Assigna una vista a cada objecte del croquis; després col·loca les cotes del catàleg o desa les actuals com a precedent.",

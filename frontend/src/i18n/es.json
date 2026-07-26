@@ -2750,6 +2750,7 @@
     "lib_pieces": "Piezas de patrón",
     "lib_pieces_none": "Ninguna pieza de patrón en el modelo.",
     "pom_cota_hint": "Acotar «{{nom}}»: dos clics en el lienzo (A → B)",
+    "pom_cota_ja_colocat": "Ya colocado — elimina la cota para volver a acotar",
     "pom_canonical_tip": "Código canónico: {{codi}}",
     "f2_titol": "Cotas desde precedente",
     "f2_hint": "Asigna una vista a cada objeto del croquis; luego coloca las cotas del catálogo o guarda las actuales como precedente.",
