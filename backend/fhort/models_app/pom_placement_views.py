@@ -23,6 +23,23 @@ from rest_framework.response import Response
 from .models import BaseMeasurement, ModelFitxer, POMPlacement
 
 
+def _resolve_item_fitxer(mf):
+    """L'ItemFitxer d'origen del document, resseguint la cadena de versions.
+
+    `save_model_file` NO propaga `derivat_de_item` als fitxers-versió (només el porta el que
+    va crear `usar_al_model`), però sí encadena `versio_anterior`. Sense aquest recorregut, un
+    document que s'ha desat un cop perdria la seva procedència de catàleg. Retorna l'ItemFitxer
+    o None."""
+    seen = set()
+    cur = mf
+    while cur is not None and cur.id not in seen:
+        if cur.derivat_de_item_id:
+            return cur.derivat_de_item
+        seen.add(cur.id)
+        cur = cur.versio_anterior
+    return None
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def model_fitxer_pom_placements_view(request, mf_id):
@@ -39,7 +56,7 @@ def _cascada(request, mf):
     if not view_slot:
         return Response({'error': 'view_slot és obligatori.'}, status=400)
 
-    item = mf.derivat_de_item
+    item = _resolve_item_fitxer(mf)
     gti_id = item.garment_type_item_id if item else mf.model.garment_type_item_id
 
     qs = POMPlacement.objects.filter(view_slot=view_slot).select_related(
@@ -98,7 +115,7 @@ def _desar_precedent(request, mf):
             {'error': "Cal la capacitat 'configure' per desar un precedent de catàleg."},
             status=403)
 
-    item = mf.derivat_de_item
+    item = _resolve_item_fitxer(mf)
     if item is None:
         return Response(
             {'error': "Aquest document no prové d'un sketch de catàleg "
