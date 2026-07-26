@@ -1244,6 +1244,9 @@ function pathChildProps(obj, path) {
     stroke: stroke || undefined,
     // Sense color de traç no hi ha traç: el gruix no s'ha ni de mirar.
     strokeWidth: stroke ? resolStrokeWidth(obj, path) : undefined,
+    // El dash (repunts) es desa en mm com la geometria; a px amb toPx, com el `data`. Només
+    // pinta si hi ha traç. Mateixa porta per al llenç viu i el PDF (tots dos passen per aquí).
+    ...(stroke && path.dash?.length ? { dash: path.dash.map(toPx) } : {}),
     fillRule: normalizeFillRule(path.fillRule),
     lineCap: 'round',
     lineJoin: 'round',
@@ -1892,6 +1895,15 @@ async function legacySketchSvgToPath(obj, scope) {
     // Report del triatge (visible a la consola del navegador; mai perdre geometria en silenci).
     console.info(`[import SVG · clip] dins=${clipDins} fora=${clipFora} creuen=${clipCreua} fallits=${clipFallits}`)
   }
+  // El dasharray de l'SVG viu en unitats d'usuari; s'escala com la geometria (→ mm) i el render
+  // el passa a px amb toPx, igual que les coordenades. Recupera el bug conegut de pèrdua del dash
+  // (els repunts sortien continus); en abast NOMÉS per als traços que en porten (capa repunts).
+  const dashDe = (item) => {
+    const dash = item.dashArray
+    if (!Array.isArray(dash) || !dash.length) return undefined
+    const d = dash.map(v => v * strokeScale).filter(v => v > 0)
+    return d.length ? d : undefined
+  }
   // ── Descriptor de pintura+geometria d'una entrada (path simple o compost amb forats) ──
   const descriptorDe = (entry) => {
     if (entry.compound) {
@@ -1900,22 +1912,26 @@ async function legacySketchSvgToPath(obj, scope) {
         .filter(c => c.className === 'Path' && c.segments?.length)
         .map(c => ({ closed: !!c.closed, segments: mapSegs(c) }))
       if (!subpaths.length) return null
+      const dash = dashDe(compound)
       return {
         fill: normalizePaint(compound.fillColor ? paperColorToCss(compound.fillColor, null) : null),
         fillRule: 'evenodd',
         stroke: normalizePaint(compound.strokeColor ? paperColorToCss(compound.strokeColor, null) : null),
         strokeWidth: Math.max(0.2, (compound.strokeWidth || 1) * strokeScale),
+        ...(dash ? { dash } : {}),
         subpaths,
       }
     }
     const path = entry.path
     if (!path.segments?.length) return null
+    const dash = dashDe(path)
     return {
       closed: !!path.closed,
       stroke: normalizePaint(path.strokeColor ? paperColorToCss(path.strokeColor, null) : null),
       fill: normalizePaint(path.fillColor ? paperColorToCss(path.fillColor, null) : null),
       fillRule: normalizeFillRule(path.fillRule),
       strokeWidth: Math.max(0.2, (path.strokeWidth || 1) * strokeScale),
+      ...(dash ? { dash } : {}),
       segments: mapSegs(path),
     }
   }
