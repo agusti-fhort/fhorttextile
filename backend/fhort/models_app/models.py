@@ -1016,6 +1016,7 @@ class AIUsage(models.Model):
         ('revisio', 'Revisió'),
         ('extraccio', 'Extracció'),
         ('fallback', 'Fallback'),
+        ('proposta_cotes', 'Proposta de cotes (IA visió · F3)'),
     ]
     cami = models.CharField(max_length=20, choices=CAMI_CHOICES, db_index=True)
     model_ia = models.CharField(max_length=80, help_text="Model d'Anthropic (p.ex. claude-opus-4-7)")
@@ -1030,6 +1031,12 @@ class AIUsage(models.Model):
     cache_read_tokens = models.IntegerField(default=0)
     ok = models.BooleanField(default=True)
     error = models.TextField(blank=True, default='')
+    # Vision F3 (proposta de cotes): recompte de la proposta perquè el mesurament d'ús no sigui
+    # només tokens. Null als camins que no proposen (extracció/cribratge): no és una fila que hi
+    # falti, és una dimensió que no aplica. Unifiquem al ledger d'AIUsage en comptes d'una taula
+    # nova (llei "tot usage es loggeja" en UN sol lloc).
+    n_proposades = models.IntegerField(null=True, blank=True, help_text="F3: cotes proposades en aquesta crida")
+    n_skip = models.IntegerField(null=True, blank=True, help_text="F3: POMs omesos (la IA no ho ha vist clar)")
     created_by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
                                    null=True, blank=True, related_name='ai_usages')
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

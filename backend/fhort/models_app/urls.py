@@ -41,6 +41,7 @@ from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
 from .ftt_template_views import DocumentTemplateViewSet
 from .item_fitxer_views import ItemFitxerViewSet
 from .pom_placement_views import item_fitxer_pom_placements_view
+from .pom_vision_views import proposar_cotes_view
 
 router = DefaultRouter()
 router.register('models', ModelViewSet, basename='model')
@@ -203,6 +204,7 @@ urlpatterns = (
         path('models/<int:model_id>/update-step2/', update_model_step2),
         path('models/<int:model_id>/poms-suggerits/', suggested_poms_view),
         path('models/<int:model_id>/materialitzar-poms/', materialize_poms_view),
+        path('models/<int:model_id>/proposar-cotes/', proposar_cotes_view),
         path('models/<int:model_id>/gravar-pom/', gravar_pom_view),
         path('models/<int:model_id>/tancar-taula/', close_table_view),
         path('models/<int:model_id>/taula-mesures/', measurements_table_view),
