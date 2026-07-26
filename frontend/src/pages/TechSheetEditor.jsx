@@ -2005,6 +2005,8 @@ export default function TechSheetEditor() {
   const [importDrag, setImportDrag] = useState(false)    // IMP-2: ressaltat de la drop zone
   const [ratioLocked, setRatioLocked] = useState(true)
   const [shiftHeld, setShiftHeld] = useState(false)   // S1: Shift premuda → resize proporcional
+  const [zoomModHeld, setZoomModHeld] = useState(false)  // C1: Ctrl/⌘ premut → cursor lupa (zoom amb roda)
+  const [zoomOutMod, setZoomOutMod] = useState(false)    // C1: Alt addicional → lupa d'allunyar
   // Grup contenidor quan el que s'edita per nodes és un FILL (cas cota de POM). null = el
   // que s'edita és un objecte de nivell superior, el cas de sempre.
   const [editingFlatGroupId, setEditingFlatGroupId] = useState(null)
@@ -3088,6 +3090,23 @@ export default function TechSheetEditor() {
       window.removeEventListener('blur', onBlur)
     }
   }, [])
+
+  // ── C1: modificador de zoom (Ctrl/⌘) premut → cursor lupa al llenç (senyala «roda = zoom»).
+  //    Alt addicional → lupa d'allunyar. Reutilitza el mecanisme de cursor-per-eina (Peça C):
+  //    viewportCursor mira aquest estat i, en deixar anar, torna al cursor de l'eina activa.
+  useEffect(() => {
+    if (!locked) return undefined
+    const sync = (e) => { setZoomModHeld(e.ctrlKey || e.metaKey); setZoomOutMod(e.altKey) }
+    const clear = () => { setZoomModHeld(false); setZoomOutMod(false) }
+    window.addEventListener('keydown', sync)
+    window.addEventListener('keyup', sync)
+    window.addEventListener('blur', clear)
+    return () => {
+      window.removeEventListener('keydown', sync)
+      window.removeEventListener('keyup', sync)
+      window.removeEventListener('blur', clear)
+    }
+  }, [locked])
 
   // ── S1: nudge amb fletxes — translada un objecte (dx,dy en mm) segons el seu tipus ──
   const translate = (o, dx, dy) => {
@@ -5043,6 +5062,7 @@ export default function TechSheetEditor() {
   // PEÇA P/C: pan actiu (eina 'pan' o espai) i cursor del viewport segons l'eina activa.
   const panActive = locked && (tool === 'pan' || spaceHeld)
   const viewportCursor = !locked ? 'default'
+    : zoomModHeld ? (zoomOutMod ? 'zoom-out' : 'zoom-in')   // C1: modificador de zoom → lupa
     : panActive ? (panning ? 'grabbing' : 'grab')
     : (tool === 'node' || tool === 'subpath') ? 'pointer'   // S3b: eines de selecció, no de dibuix
     : CROSSHAIR_TOOLS.includes(tool) ? 'crosshair'
