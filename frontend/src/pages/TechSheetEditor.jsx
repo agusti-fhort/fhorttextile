@@ -4544,29 +4544,50 @@ export default function TechSheetEditor() {
   // Desar UNA cota com a precedent del catàleg (acte CONSCIENT, D1) — des de Propietats de la
   // cota. Resol el host sketch pel punt mig de la cota; la vista es pren del host. Substitueix
   // l'antic «Desar col·locació» massiu del contenidor mort.
-  const desarUnaPrecedent = useCallback(async (cota) => {
+  // Nucli compartit: resol el host sketch (per contenció del punt mig) i normalitza els extrems
+  // sobre la seva bbox. null si la cota no cau sobre cap croquis de catàleg amb vista → sense
+  // precedent (i sense error). El fan servir tant «desar precedent» (conscient) com l'acceptació
+  // d'una proposta IA (llei de convivència: acceptar escriu precedent).
+  const construirPrecedentCota = useCallback((cota) => {
     const e = cotaEndsMm(cota)
-    if (!e) { setF2Msg(t('tech_sheet.f2_desar_err')); return }
+    if (!e) return null
     const mid = { x: (e.ax + e.bx) / 2, y: (e.ay + e.by) / 2 }
     const dins = (bb, pt) => pt.x >= bb.minX && pt.x <= bb.maxX && pt.y >= bb.minY && pt.y <= bb.maxY
     const host = sketchObjs.find(o => o.sourceItemFitxer && o.viewSlot && dins(objectBounds(o), mid))
-    if (!host) { setF2Msg(t('tech_sheet.f2_desar_sense_host')); return }
+    if (!host) return null
     const bb = objectBounds(host)
     const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
-    const body = {
-      pom_id: cota.pomId, view_slot: host.viewSlot,
-      x1: (e.ax - bb.minX) / bw, y1: (e.ay - bb.minY) / bh,
-      x2: (e.bx - bb.minX) / bw, y2: (e.by - bb.minY) / bh,
-      label_dx: e.lc ? (e.lc.x - mid.x) / bw : 0,
-      label_dy: e.lc ? (e.lc.y - mid.y) / bh : 0,
-      source_kind: host.type === 'image' ? 'raster' : 'vector',
+    return {
+      host,
+      body: {
+        pom_id: cota.pomId, view_slot: host.viewSlot,
+        x1: (e.ax - bb.minX) / bw, y1: (e.ay - bb.minY) / bh,
+        x2: (e.bx - bb.minX) / bw, y2: (e.by - bb.minY) / bh,
+        label_dx: e.lc ? (e.lc.x - mid.x) / bw : 0,
+        label_dy: e.lc ? (e.lc.y - mid.y) / bh : 0,
+        source_kind: host.type === 'image' ? 'raster' : 'vector',
+      },
     }
+  }, [sketchObjs])
+  const desarUnaPrecedent = useCallback(async (cota) => {
+    const built = construirPrecedentCota(cota)
+    if (!built) { setF2Msg(t('tech_sheet.f2_desar_sense_host')); return }
     try {
-      const r = await fetch(`${API}/api/v1/item-fitxers/${host.sourceItemFitxer}/pom-placements/`, {
-        method: 'POST', headers: authHeaders, body: JSON.stringify(body) })
+      const r = await fetch(`${API}/api/v1/item-fitxers/${built.host.sourceItemFitxer}/pom-placements/`, {
+        method: 'POST', headers: authHeaders, body: JSON.stringify(built.body) })
       setF2Msg(r.ok ? t('tech_sheet.f2_desar_ok') : t('tech_sheet.f2_desar_err'))
     } catch { setF2Msg(t('tech_sheet.f2_desar_err')) }
-  }, [sketchObjs, authHeaders, t])
+  }, [construirPrecedentCota, authHeaders, t])
+  // Llei de convivència (D1): ACCEPTAR una proposta escriu precedent al catàleg — SILENCIÓS i
+  // sense error si no hi ha origen (només queda la cota viva). El sistema aprèn de l'acceptació.
+  const escriurePrecedentSilent = useCallback(async (cota) => {
+    const built = construirPrecedentCota(cota)
+    if (!built) return
+    try {
+      await fetch(`${API}/api/v1/item-fitxers/${built.host.sourceItemFitxer}/pom-placements/`, {
+        method: 'POST', headers: authHeaders, body: JSON.stringify(built.body) })
+    } catch { /* acceptar no ha de petar si el precedent no es pot desar */ }
+  }, [construirPrecedentCota, authHeaders])
 
   // ── F3 · PROPOSAR cotes amb IA de visió ─────────────────────────────────────
   // Rasteritza la pàgina SENSE cotes (ni col·locades ni proposades) ni overlays, envia els
@@ -4637,16 +4658,19 @@ export default function TechSheetEditor() {
   }, [pomRows, cotesColocades, iaCotesByPom, sketchObjs, curObjs, pages, currentPage,
       tableData, model, sheet, pageW, pageH, customerLogoUrl, fmt, id, authHeaders, updatePageObjects, t])
 
-  // Acceptar UNA proposta: la cota deixa d'estar proposada i esdevé cota viva normal (F1).
-  const acceptarProposta = useCallback((cotaId) => {
-    updateObject(cotaId, { iaProposada: undefined, iaConfidence: undefined })
-  }, [updateObject])
+  // Acceptar UNA proposta: la cota esdevé cota viva normal (F1) I, si el seu croquis ve del
+  // catàleg amb vista, escriu precedent (el sistema aprèn de l'acceptació).
+  const acceptarProposta = useCallback((cota) => {
+    updateObject(cota.id, { iaProposada: undefined, iaConfidence: undefined })
+    escriurePrecedentSilent(cota)
+  }, [updateObject, escriurePrecedentSilent])
   const descartarProposta = useCallback((cotaId) => { deleteObject(cotaId) }, [deleteObject])
   const acceptarTotesPropostes = useCallback(() => {
+    iaPropostesVives.forEach(escriurePrecedentSilent)
     updatePageObjects(currentPage, objs => objs.map(o => (
       o.iaProposada ? { ...o, iaProposada: undefined, iaConfidence: undefined } : o)))
     setF2Msg(t('tech_sheet.ia_acceptades'))
-  }, [currentPage, updatePageObjects, t])
+  }, [iaPropostesVives, escriurePrecedentSilent, currentPage, updatePageObjects, t])
   const descartarTotesPropostes = useCallback(() => {
     updatePageObjects(currentPage, objs => objs.filter(o => !o.iaProposada))
     setF2Msg(t('tech_sheet.ia_descartades'))
@@ -6066,7 +6090,7 @@ export default function TechSheetEditor() {
                   <Contenidor titol={t('tech_sheet.ia_cota_titol')} icona="ti-sparkles" fitContent>
                     <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.ia_cota_hint')}</p>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button type="button" onClick={() => acceptarProposta(selObj.id)}
+                      <button type="button" onClick={() => acceptarProposta(selObj)}
                         style={{ flex: 1, cursor: 'pointer', padding: '0.35rem', background: COL.bg, border: `1px solid ${COL.ok}`, borderRadius: 4, color: COL.ok, fontFamily: FONT, fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
                         <i className="ti ti-check" /> {t('tech_sheet.ia_acceptar')}
                       </button>
