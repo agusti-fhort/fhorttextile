@@ -3807,21 +3807,28 @@ export default function TechSheetEditor() {
   }
   const addModelFitxer = async (f) => {
     if (!locked) return
+    const nom = (f.nom_fitxer || '').toLowerCase()
     // D13: aquest fetch SÍ pot portar Authorization → va per l'endpoint AUTENTICAT, no pel
     // signat. Abans apuntava directament a /media/ (servit per nginx, sense cap gate).
     // url_extern viu en un altre origen: s'hi va sense capçalera (no li enviem el token).
     const extern = !!f.url_extern
     const url = extern ? f.url_extern : (f.id ? `${API}/api/v1/model-fitxers/${f.id}/download/` : null)
     if (!url) return
+    // F2a — procedència de catàleg: per a un fitxer de MODEL viu a `derivat_de_item` (l'ItemFitxer
+    // origen), NO a f.id (que és un ModelFitxer). Consistent amb importarDelTenant, que per a un
+    // ItemFitxer usa f.id. Sense origen de catàleg → sense procedència. (Abans, aquest camí no en
+    // portava mai.)
+    const extra = f.derivat_de_item ? { sourceItemFitxer: f.derivat_de_item } : {}
     try {
-      const blob = await fetch(url, extern ? undefined : { headers: uploadHeaders })
-        .then(r => { if (!r.ok) throw new Error('fetch'); return r.blob() })
-      const dataURL = await new Promise((res, rej) => {
-        const fr = new FileReader()
-        fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('fr'))
-        fr.readAsDataURL(blob)
-      })
-      addImageFromDataURL(dataURL)
+      const r = await fetch(url, extern ? undefined : { headers: uploadHeaders })
+      if (!r.ok) throw new Error('fetch')
+      if (nom.endsWith('.svg')) {
+        // Q1: un .svg entra VECTORIAL (importFlatSvgText → escala uniforme, editable), no ràster.
+        // Mateixa bifurcació que importarDelTenant; abans aquí tot queia a addImageFromDataURL.
+        await importFlatSvgText(await r.text(), extra)
+      } else {
+        addImageFromDataURL(await blobToDataURL(await r.blob()), extra)
+      }
     } catch { /* silenci */ }
   }
 
