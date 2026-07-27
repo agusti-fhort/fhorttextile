@@ -1023,6 +1023,57 @@ export function headerMasterLogoRect(natW, natH, _config) {
   return { x: (X - HDR_M.OX) * P, y: (Y - HDR_M.OY) * P + (H - hPt) * P / 2, w: wPt * P, h: hPt * P }
 }
 
+// ── F4 · LAYOUT DERIVAT PER AMPLADA (la capçalera en pàgina VERTICAL) ────────────────────
+//
+// ⚠️ EXCEPCIÓ DECLARADA a la llei "es MESURA, no s'interpreta" (vegeu el bloc HDR_M de sobre).
+// La geometria de la capçalera és transcripció LITERAL de docs/spec/plantilla_capcalera_ftt.svg,
+// que és un SVG A4 APAÏSAT. Per a retrat NO EXISTEIX cap spec canònica: ningú no l'ha
+// dibuixada. Aquest layout és DERIVAT mecànicament de l'apaïsat i queda EN ESPERA d'una spec
+// SVG de retrat que el substitueixi. Quan arribi, aquesta funció s'esborra i es transcriu
+// aquella, igual que es va fer amb l'apaïsat.
+//
+// Què es conserva i què canvia:
+//   · Es conserva TOT el que és mesura — tipografia (6pt etiqueta / 9pt valor amb el sòl a
+//     8pt), contingut, ordre dels camps, alçada de caixa (90.2pt) i les subcolumnes.
+//   · Canvia NOMÉS on cau cada caixa:
+//       apaïsat  (spec):    [1][2][3]  en una fila de 784.7pt
+//       retrat (derivat):   [1][2]     a la fila de dalt
+//                           [3]        a una segona fila d'amplada completa
+//   · Les caixes 2 i 3 arriben fins al marge dret del full. Cap text s'escala ni es
+//     re-mesura: només guanyen amplada disponible, que és el que evita que hi surti l'el·lipsi.
+//
+// La caixa d'un element es dedueix de la seva `sx` (les fronteres D1/D2 són les mateixes que
+// dibuixen les divisòries), de manera que les ~20 crides a label()/value() de sota no canvien.
+function _hdrLayout(fmtKey) {
+  const f = PAGE_FORMATS[fmtKey]
+  const vertical = !!f && f.h > f.w
+  if (!vertical) {
+    // Apaïsat = la spec, intacta. Identitat: cap desplaçament, cap vora reescrita.
+    return { vertical: false, W: HDR_M.W, H: HDR_M.H, Hfila: HDR_M.H,
+      dx: () => 0, dy: () => 0, right: r => r }
+  }
+  const Wp = f.pdf[0] - 2 * HDR_M.OX        // amplada útil entre marges, en pt
+  const caixa = sx => (sx < HDR_M.D1 ? 1 : sx < HDR_M.D2 ? 2 : 3)
+  const DX3 = HDR_M.OX - HDR_M.D2           // la caixa 3 torna al marge esquerre…
+  return {
+    vertical: true, W: Wp, H: HDR_M.H * 2, Hfila: HDR_M.H,
+    dx: sx => (caixa(sx) === 3 ? DX3 : 0),
+    dy: sx => (caixa(sx) === 3 ? HDR_M.H : 0),   // …i baixa una fila
+    // Vores dretes: la caixa 1 es queda on és; la 2 i la 3 arriben al marge del full. Els
+    // valors intermedis (SUB1/SUB2/R1) passen tal qual — les subcolumnes no es mouen.
+    right: r => (r === HDR_M.R2 ? HDR_M.OX + Wp : r === HDR_M.R3 ? HDR_M.D2 + Wp : r),
+  }
+}
+
+// F4 — geometria de l'OBJECTE capçalera segons el format de la pàgina. En apaïsat és la de
+// sempre (MASTER_HEADER_GEOM, derivada de l'SVG canònic); en vertical, la del layout derivat.
+// Només afecta la caixa de l'objecte al document: el render surt dels prims, no d'aquí.
+export function masterHeaderGeomFor(fmtKey) {
+  const L = _hdrLayout(fmtKey)
+  if (!L.vertical) return MASTER_HEADER_GEOM
+  return { x: MASTER_HEADER_GEOM.x, y: MASTER_HEADER_GEOM.y, width: _mm2(L.W), height: _mm2(L.H) }
+}
+
 function _hdrDate(d) {
   const p = n => String(n).padStart(2, '0')
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`   // DD-MM-YYYY (D7)
@@ -1031,21 +1082,37 @@ function _hdrDate(d) {
 function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx) {
   const P = _hdrP()
   const { OX, OY, ASC } = HDR_M
-  const W = HDR_M.W * P, H = HDR_M.H * P
+  // F4 — el layout depèn del format de LA PÀGINA (pageCtx.fmtKey). Sense pageCtx, o amb un
+  // format apaïsat, `_hdrLayout` torna la identitat i tot això és exactament el d'abans.
+  const L = _hdrLayout(pageCtx?.fmtKey)
+  const W = L.W * P, H = L.H * P
+  const Hfila = L.Hfila * P
   const GRAY = KONVA_COL.labelGray, INK = KONVA_COL.textMain, FRAME = KONVA_COL.textMain
-  const gx = sx => (sx - OX) * P
+  const gx = sx => (sx + L.dx(sx) - OX) * P
   const prims = []
-  // Marc ÚNIC + 2 divisòries (mai 3 rects — D4). Frame 0.5pt.
-  prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
-  prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), H], stroke: FRAME, sw: 0.5 * P })
-  prims.push({ t: 'l', points: [gx(HDR_M.D2), 0, gx(HDR_M.D2), H], stroke: FRAME, sw: 0.5 * P })
+  if (L.vertical) {
+    // Retrat derivat: DUES files. Una divisòria a la de dalt (entre caixa 1 i 2); la de baix
+    // és la caixa 3 sencera i no en porta cap.
+    prims.push({ t: 'r', x: 0, y: 0, w: W, h: Hfila, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
+    prims.push({ t: 'r', x: 0, y: Hfila, w: W, h: Hfila, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
+    prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), Hfila], stroke: FRAME, sw: 0.5 * P })
+  } else {
+    // Marc ÚNIC + 2 divisòries (mai 3 rects — D4). Frame 0.5pt.
+    prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
+    prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), H], stroke: FRAME, sw: 0.5 * P })
+    prims.push({ t: 'l', points: [gx(HDR_M.D2), 0, gx(HDR_M.D2), H], stroke: FRAME, sw: 0.5 * P })
+  }
 
   const V = (real, ph) => placeholderMode ? ph : (real == null ? '' : String(real))
   const join = parts => parts.filter(v => v != null && v !== '').join(' | ')   // UN valor per línia (D3)
   // Etiqueta 6pt a baseline `by`, x `sx`, fins a `rightPt`.
+  // F4 — `L.dy(sx)` baixa una fila els elements de la caixa 3 en retrat (0 en apaïsat), i
+  // `L.right()` eixampla les vores dretes que hi arriben. L'amplada és INVARIANT sota la
+  // translació horitzontal (right i sx es desplacen igual), per això només cal reescriure
+  // les vores que de debò canvien.
   const label = (sx, by, text, rightPt) => {
     const f = 6 * P
-    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: (rightPt - HDR_M.PAD - sx) * P, h: f + 2, text, fill: GRAY, size: f })
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f + L.dy(sx) * P, w: (L.right(rightPt) - HDR_M.PAD - sx) * P, h: f + 2, text, fill: GRAY, size: f })
   }
   // Valor 9pt (baixa a 8pt si no cap; el·lipsi via PrimNode). MAI desborda ni trenca línia.
   // B2 — `fk` (field key) marca les prims de VALOR que tenen una clau exacta a FIELD_CATALOG.
@@ -1054,10 +1121,10 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   // instanciar una plantilla, en lloc de quedar congelat amb les dades d'aquest model.
   const value = (sx, by, text, rightPt, opts = {}) => {
     if (!text) return
-    const availPt = rightPt - HDR_M.PAD - sx
+    const availPt = L.right(rightPt) - HDR_M.PAD - sx
     const fpt = (text.length * 9 * 0.6 > availPt) ? 8 : 9   // 9→8 = sòl de la llei
     const f = fpt * P
-    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, fk: opts.fk })
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f + L.dy(sx) * P, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, fk: opts.fk })
   }
 
   // ── CAIXA 1 ── logo (files 1-2) · DATE+PAGE (fila 3) · TECHNICIAN (fila 4). DATE alineat amb MODEL.
@@ -1088,17 +1155,20 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   label(497.8, 92.5, 'SIZE SYSTEM', HDR_M.R3)
   value(497.8, 102.5, V(m?.size_system_nom, '{size system}'), HDR_M.R3, { fk: 'size_system_nom' })
   label(497.8, 115, 'SIZE RUN', HDR_M.R3)
-  _pushSizeRun(prims, m, placeholderMode, 497.8, 125, P)
+  _pushSizeRun(prims, m, placeholderMode, 497.8, 125, P, L)
 
   return { prims, totalW: W, totalH: H }
 }
 
 // SIZE RUN: run compacte "·" (sense espais, com l'SVG). La talla base = segment PROPI
 // bold+underline; el separador "·" NO es subratlla (D6). Mètrica mono charW=cos·0.6.
-function _pushSizeRun(prims, m, placeholderMode, sx, by, P) {
+// F4 — `L` és el layout derivat: en retrat desplaça aquest bloc (caixa 3) a la segona fila.
+// Per defecte, identitat = comportament de sempre.
+const _HDR_L_IDENT = { dx: () => 0, dy: () => 0 }
+function _pushSizeRun(prims, m, placeholderMode, sx, by, P, L = _HDR_L_IDENT) {
   const f = 9 * P
-  const OX = HDR_M.OX, y = (by - HDR_M.OY) * P - HDR_M.ASC * f
-  const gx = x => (x - OX) * P
+  const OX = HDR_M.OX, y = (by - HDR_M.OY) * P - HDR_M.ASC * f + L.dy(sx) * P
+  const gx = x => (x + L.dx(sx) - OX) * P
   const INK = KONVA_COL.textMain
   if (placeholderMode) {
     prims.push({ t: 't', x: gx(sx), y, w: 300 * P, h: f + 2, text: '{size run}', fill: INK, size: f })
@@ -1636,7 +1706,9 @@ async function addObjectToLayer(layer, obj, ctx, cotaLabel) {
     let logoEl = null
     if (obj.kind === 'header') {
       if (ctx?.customerLogoUrl) { try { logoEl = await loadImageEl(ctx.customerLogoUrl) } catch { logoEl = null } }
-      const pageCtx = (ctx?.pageIndex != null) ? { index: ctx.pageIndex, total: ctx.pageTotal } : null
+      const pageCtx = (ctx?.pageIndex != null)
+        ? { index: ctx.pageIndex, total: ctx.pageTotal, fmtKey: ctx.fmtKey }
+        : (ctx?.fmtKey ? { fmtKey: ctx.fmtKey } : null)
       built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl, obj.config, pageCtx)
     } else if (obj.kind === 'graded_table') {
       const data = ctx?.tableData?.[obj.id]
@@ -3260,6 +3332,7 @@ export default function TechSheetEditor() {
           const f = fmtDe(pages[pi])
           const ctx = { tableData, modelData: model, versio: sheet?.versio,
             pageW: Math.round(f.w * MM_TO_PX), pageH: Math.round(f.h * MM_TO_PX),
+            fmtKey: pages[pi]?.format || pageFormat,
             customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
           thumbs.push(await renderPageToDataURL(pages[pi], 0.18, ctx))
         }
@@ -4650,9 +4723,13 @@ export default function TechSheetEditor() {
     if (objectsOf(currentPage).some(o => o.type === 'data_block' && o.kind === 'header')) {
       flash(t('tech_sheet.flash_header_exists')); return
     }
+    // F4 — la geometria surt del format de LA PÀGINA on s'insereix: en vertical la capçalera
+    // és més estreta i té dues files, i la caixa de l'objecte ho ha de dir. El RENDER ja se'n
+    // surt sol (els prims es deriven del format a cada pintada); això és la caixa al document.
     addObject({
       id: uid(), type: 'data_block', kind: 'header', layer: 'template', locked: true,
-      ...MASTER_HEADER_GEOM, config: { layout: 'masterFtt' },
+      ...masterHeaderGeomFor(pages[currentPage]?.format || pageFormat),
+      config: { layout: 'masterFtt' },
     })
   }
 
@@ -4676,8 +4753,11 @@ export default function TechSheetEditor() {
     // continuar en vertical. Si coincideix amb l'herència no s'escriu la clau (una fitxa
     // que mai ha tocat formats mixtos no en guanya cap).
     const actual = pages[currentPage]?.format
+    // F4 — la capçalera copiada pot venir d'una pàgina d'un altre format: se li torna a
+    // derivar la caixa per al format de la pàgina nova.
+    const hdrFmt = hdr ? { ...hdr, ...masterHeaderGeomFor(actual || pageFormat) } : null
     setPages(ps => [...ps, {
-      id: uid(), objects: hdr ? [hdr] : [],
+      id: uid(), objects: hdrFmt ? [hdrFmt] : [],
       ...(actual && actual !== pageFormat ? { format: actual } : {}),
     }])
     setCurrentPage(pages.length)
@@ -4692,12 +4772,21 @@ export default function TechSheetEditor() {
   // (segueix sent l'herència de les que no en declaren cap). Si el valor triat coincideix amb
   // l'herència, la clau s'ESBORRA en lloc d'escriure-s'hi igual: així un document que no ha
   // fet servir formats mixtos no en guanya cap i segueix serialitzant-se com sempre.
+  // F4 — en canviar el format d'una pàgina, la capçalera que hi hagi ha de refer la seva
+  // caixa: en vertical és més estreta i té dues files. El render ja deriva sol; això manté
+  // coherent el que hi ha DESAT al document.
+  const _ambHeaderRefet = (objs, fmtKey) => (objs || []).map(o => (
+    o.type === 'data_block' && o.kind === 'header' && o.config?.layout === 'masterFtt'
+      ? { ...o, ...masterHeaderGeomFor(fmtKey) }
+      : o
+  ))
   const setPageFormatDePagina = (index, valor) => {
     if (!locked) return
     setPages(ps => ps.map((p, i) => {
       if (i !== index) return p
       const { format: _fora, ...resta } = p
-      return valor === pageFormat ? resta : { ...resta, format: valor }
+      const objects = _ambHeaderRefet(p.objects, valor)
+      return valor === pageFormat ? { ...resta, objects } : { ...resta, objects, format: valor }
     }))
   }
   // "Aplicar a tot el document": el format de la pàgina activa passa a ser el del DOCUMENT i
@@ -4706,7 +4795,9 @@ export default function TechSheetEditor() {
     if (!locked) return
     const valor = pages[currentPage]?.format || pageFormat
     setPageFormat(valor)
-    setPages(ps => ps.map(({ format: _fora, ...resta }) => resta))
+    setPages(ps => ps.map(({ format: _fora, ...resta }) => ({
+      ...resta, objects: _ambHeaderRefet(resta.objects, valor),
+    })))
   }
   const removePage = (index) => {
     if (!locked || pages.length <= 1) return
@@ -4730,6 +4821,7 @@ export default function TechSheetEditor() {
         const [pdfW, pdfH] = f.pdf
         const ctx = { tableData, modelData: model, versio: sheet?.versio,
           pageW: Math.round(f.w * MM_TO_PX), pageH: Math.round(f.h * MM_TO_PX),
+          fmtKey: pages[pi]?.format || pageFormat,
           customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
         const dataUrl = await renderPageToDataURL(pages[pi], 3.5, ctx)
         const png = await pdf.embedPng(dataUrl)
@@ -5068,7 +5160,8 @@ export default function TechSheetEditor() {
     setF2Msg(t('tech_sheet.ia_proposant'))
     try {
       const netaObjs = (curObjs || []).filter(o => !(o.type === 'group' && o.pomId != null))
-      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl }
+      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl,
+        fmtKey: pages[currentPage]?.format || pageFormat }
       const pageImage = await renderPageToDataURL({ ...pages[currentPage], objects: netaObjs }, 1.5, ctx)
       const sketches = hosts.map(o => {
         const bb = objectBounds(o)
@@ -6251,7 +6344,7 @@ export default function TechSheetEditor() {
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
                     placeholderMode={templateMode}
                     hideTextChildren={editingFlatGroupId === o.id}
-                    pageCtx={{ index: currentPage, total: pages.length }}
+                    pageCtx={{ index: currentPage, total: pages.length, fmtKey: pages[currentPage]?.format || pageFormat }}
                     onHeaderContextMenu={locked ? ((e, ho) => { e.evt.preventDefault(); setHeaderMenu(ho.detached ? null : { x: e.evt.clientX, y: e.evt.clientY }) }) : undefined}
                     selected={selectedIds.includes(o.id)}
                     selectable={locked && o.layer !== 'template' && !o.locked}
