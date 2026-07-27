@@ -11,7 +11,7 @@ import PropagatedEditor from './PropagatedEditor'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
 import { MaduresaBadge, EncarrecDelClient } from '../components/model/FederacioBadge'
-import { models, watchpoints, modelTasks, fittingSessions } from '../api/endpoints'
+import { models, watchpoints, modelTasks, fittingSessions, modelFitxers } from '../api/endpoints'
 import useAuthStore from '../store/auth'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
@@ -612,29 +612,48 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   )
 }
 
-// Pestanya "Fitxa tècnica": resum read-only + accessos a l'editor (/fitxa).
-// Consulta des del Model obre sense task_id → mode consulta. L'edició registrada
-// es fa des del Kanban (que passa ?task_id=...). Vegeu TechSheetEditor.
+// Pestanya "Fitxa tècnica": LA CASA de les fitxes .ftt del model.
+//
+// U1 — un model pot tenir N fitxes (multi-peça: DRESS + KNICKERS + HEADBAND). Fins ara el tab
+// només ensenyava la primera de la llista i les germanes eren invisibles des d'aquí: existien a
+// la BD i al selector de /fitxa, però no hi havia cap superfície on veure-les totes. Ara el tab
+// les llista totes i cada fila apunta al SEU document (/models/:id/ftt/:fitxerId), no al
+// resolver: obrir una fitxa concreta no ha de tornar a passar per una tria.
+//
+// Consulta des del Model obre sense task_id → mode consulta (l'editor desa igual, però no
+// imputa temps). L'edició registrada es fa des del Kanban, que passa ?task_id=...
 function TechSheetTab({ modelId, navigate }) {
-  // Cutover .ftt (F8): la fitxa és un ModelFitxer tipus TECHSHEET (no el TechSheet O2O). El
-  // resum llegeix el cap de cadena vigent; els botons van a /fitxa (resolver que obre/crea el .ftt).
-  const [fitxer, setFitxer] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const token   = localStorage.getItem('access_token')
-  const headers = { Authorization: `Bearer ${token}` }
+  const { t, i18n } = useTranslation()
+  // Cutover .ftt (F8): la fitxa és un ModelFitxer tipus TECHSHEET (no el TechSheet O2O).
+  // `null` = encara carregant; `[]` = el model no en té cap.
+  const [fitxes, setFitxes] = useState(null)
+  const [nova, setNova] = useState(null)      // null = modal tancat | { nom, descripcio }
+  const [creant, setCreant] = useState(false)
+  const [err, setErr] = useState(null)
 
   useEffect(() => {
-    fetch(`${API}/api/v1/model-fitxers/?model=${modelId}&tipus=TECHSHEET&is_current=true&ordering=-data_pujada`, { headers })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { const list = data?.results || data || []; setFitxer(list[0] || null); setLoading(false) })
-      .catch(() => setLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false
+    modelFitxers.fitxesTecniques(modelId)
+      .then(({ data }) => { if (!cancelled) setFitxes(data?.results || data || []) })
+      .catch(() => { if (!cancelled) setFitxes([]) })
+    return () => { cancelled = true }
   }, [modelId])
 
-  if (loading) return (
-    <div style={{ padding: '24px', color: 'var(--text-muted)',
-      fontSize: 'var(--fs-body)' }}>
-      Carregant…
+  // U2 — la fitxa nova neix amb NOM: és l'únic que distingeix les germanes d'un multi-peça.
+  // Es crea en blanc i s'entra directament a l'editor; qui vulgui partir d'una plantilla del
+  // tenant té aquell camí a "Crear fitxa tècnica" (el resolver), que és qui les ofereix.
+  const crear = () => {
+    const nom = (nova?.nom || '').trim()
+    if (!nom || creant) return
+    setCreant(true); setErr(null)
+    modelFitxers.crearFitxa(modelId, { nom, descripcio: (nova.descripcio || '').trim() || undefined })
+      .then(({ data }) => navigate(`/models/${modelId}/ftt/${data.id}`))
+      .catch(() => { setErr(t('tech_sheet.tab_new_err')); setCreant(false) })
+  }
+
+  if (fitxes === null) return (
+    <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+      {t('model_sheet.loading')}
     </div>
   )
 
@@ -645,78 +664,128 @@ function TechSheetTab({ modelId, navigate }) {
     color: 'var(--text-main)',
     fontSize: 'var(--fs-body)',
     padding: '5px 12px',
+    borderRadius: 6,
     cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: 5,
   }
 
-  // --- NO HI HA FITXA ---
-  if (!fitxer) {
+  const dataDe = (f) => (f.data_pujada
+    ? new Date(f.data_pujada).toLocaleDateString(i18n.language || 'ca',
+        { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : '—')
+
+  const modal = nova && (
+    <Modal
+      title={t('tech_sheet.tab_new_title')}
+      subtitle={t('tech_sheet.tab_new_hint')}
+      confirmLabel={creant ? t('model_sheet.loading') : t('app.create')}
+      cancelLabel={t('app.cancel')}
+      confirmDisabled={creant || !(nova.nom || '').trim()}
+      onCancel={() => { setNova(null); setErr(null) }}
+      onConfirm={crear}>
+      <label style={{ display: 'block', fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4 }}>
+        {t('tech_sheet.tab_new_name')}
+      </label>
+      <input autoFocus value={nova.nom} onChange={e => setNova({ ...nova, nom: e.target.value })}
+        placeholder={t('tech_sheet.new_doc_name_placeholder')}
+        style={{ width: '100%', fontSize: 'var(--fs-body)', padding: '8px 10px', marginBottom: 12,
+                 border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)' }} />
+      <label style={{ display: 'block', fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4 }}>
+        {t('tech_sheet.tab_new_desc')}
+      </label>
+      <input value={nova.descripcio} onChange={e => setNova({ ...nova, descripcio: e.target.value })}
+        style={{ width: '100%', fontSize: 'var(--fs-body)', padding: '8px 10px',
+                 border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)' }} />
+      {err && <p style={{ marginTop: 10, fontSize: 'var(--fs-body)', color: 'var(--err)' }}>{err}</p>}
+    </Modal>
+  )
+
+  // --- CAP FITXA --- el buit de sempre; "Crear fitxa tècnica" segueix passant pel resolver,
+  // que és qui ofereix les plantilles del tenant quan n'hi ha.
+  if (!fitxes.length) {
     return (
-      <div style={{ padding: '24px',
-        }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
-          marginBottom: '16px' }}>
-          Encara no hi ha fitxa tècnica per a aquest model.
+      <div style={{ padding: '24px' }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginBottom: '16px' }}>
+          {t('tech_sheet.tab_empty')}
         </p>
-        <button
-          onClick={() => navigate(`/models/${modelId}/fitxa`)}
-          style={{ ...btnOutline, borderColor: 'var(--gold)',
-            color: 'var(--gold)' }}>
-          Crear fitxa tècnica
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => navigate(`/models/${modelId}/fitxa`)}
+            style={{ ...btnOutline, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+            <i className="ti ti-file-plus" aria-hidden="true" style={{ fontSize: 14 }} />
+            {t('tech_sheet.tab_create')}
+          </button>
+          <button onClick={() => setNova({ nom: '', descripcio: '' })} style={btnOutline}>
+            <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 14 }} />
+            {t('tech_sheet.tab_new')}
+          </button>
+        </div>
+        {modal}
       </div>
     )
   }
 
-  // --- HI HA FITXA ---
-  const updatedAt = fitxer.data_pujada
-    ? new Date(fitxer.data_pujada).toLocaleDateString('ca-ES',
-        { day:'2-digit', month:'2-digit', year:'numeric' })
-    : '—'
-
+  // --- N FITXES (amb 1, la fila única de sempre) ---
   return (
-    <div style={{ }}>
-
-      {/* Barra superior: info + botons */}
+    <div>
+      {/* Capçalera del tab: recompte + la porta de la fitxa nova. */}
       <div style={{
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '12px 16px',
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--bg-muted)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-muted)',
       }}>
-        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
-          display: 'flex', gap: '16px' }}>
-          <span>v{fitxer.versio}</span>
-          <span>{fitxer.nom_fitxer}</span>
-          <span>Actualitzat: {updatedAt}</span>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => navigate(`/models/${modelId}/fitxa`)}
-            style={btnOutline}>
-            Previsualitzar
-          </button>
-          <button
-            onClick={() => navigate(`/models/${modelId}/fitxa`)}
-            style={btnOutline}>
-            Modificar
-          </button>
-        </div>
+        <span style={{ fontSize: 'var(--fs-label)', fontFamily: FILES_MONO,
+                       color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+          {t('tech_sheet.tab_count', { n: fitxes.length })}
+        </span>
+        <button onClick={() => setNova({ nom: '', descripcio: '' })}
+          style={{ ...btnOutline, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+          <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 14 }} />
+          {t('tech_sheet.tab_new')}
+        </button>
       </div>
+
+      {/* Una fila per fitxa. Els dos botons apunten al document CONCRET. */}
+      {fitxes.map(f => (
+        <div key={f.id} style={{
+          display: 'flex', alignItems: 'center', gap: 16,
+          padding: '12px 16px', borderBottom: '1px solid var(--border)',
+        }}>
+          <i className="ti ti-file-text" aria-hidden="true"
+             style={{ fontSize: 16, color: 'var(--text-muted)', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                 title={f.nom_fitxer}>
+              {f.nom_fitxer}
+            </div>
+            {f.descripcio && (
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {f.descripcio}
+              </div>
+            )}
+          </div>
+          <span style={{ width: 44, flexShrink: 0, textAlign: 'right', fontSize: 'var(--fs-label)',
+                         fontFamily: FILES_MONO, color: 'var(--text-muted)' }}>v{f.versio}</span>
+          <span style={{ width: 110, flexShrink: 0, fontSize: 'var(--fs-label)',
+                         fontFamily: FILES_MONO, color: 'var(--text-muted)' }}
+                title={t('tech_sheet.tab_updated')}>{dataDe(f)}</span>
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+            <button onClick={() => navigate(`/models/${modelId}/ftt/${f.id}`)} style={btnOutline}>
+              {t('tech_sheet.tab_preview')}
+            </button>
+            <button onClick={() => navigate(`/models/${modelId}/ftt/${f.id}`)} style={btnOutline}>
+              {t('tech_sheet.tab_edit')}
+            </button>
+          </div>
+        </div>
+      ))}
 
       {/* Cos: resum de l'estat */}
-      <div style={{ padding: '16px', fontSize: 'var(--fs-body)',
-        color: 'var(--text-muted)' }}>
-        <p>
-          La fitxa es pot editar des del Kanban (tasca
-          <strong style={{ color: 'var(--text-main)' }}>
-            {' '}Fitxa tècnica
-          </strong>
-          ) o des del botó Modificar.
-          El PDF definitiu es generarà en congelar la fitxa.
-        </p>
+      <div style={{ padding: '16px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+        <p>{t('tech_sheet.tab_hint')}</p>
       </div>
 
+      {modal}
     </div>
   )
 }
