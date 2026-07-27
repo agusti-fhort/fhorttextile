@@ -330,9 +330,32 @@ def base_measurements_view(request, model_id):
             ).order_by('pendent_revisio', 'client_code').values_list('pom_id', 'client_code'):
                 alias_by_pom.setdefault(pom_id, client_code)
 
+        # F1 — la REGLA RESIDENT del model (ModelGradingRule), per pom_id. La T1a de la fitxa
+        # necessita `increment_base` + `talla_break_label` per POM, i fins ara els llegia
+        # NOMÉS de `grading-rules/?rule_set=<model.grading_rule_set>`: amb el ruleset a NULL
+        # (graduació resident, el cas normal d'un model importat) la crida sortia amb `null`
+        # a la URL i la taula naixia sense columna de regla. S'exposen aquí, al costat de la
+        # base, perquè és la mateixa unitat de lectura (una fila per POM del model) i no cal
+        # cap endpoint nou. Batch: un sol query, mai per fila.
+        # Precedència a la fitxa: si el model TÉ ruleset, el consumidor segueix el camí del
+        # ruleset; aquest camp és el que el substitueix quan no n'hi ha.
+        from fhort.models_app.models import ModelGradingRule
+        regla_by_pom = {
+            r.pom_id: {
+                'logica': r.logica,
+                'increment_base': r.increment_base,
+                'increment_break': r.increment_break,
+                'talla_break_label': r.talla_break_label or '',
+                'origen': r.origen,
+            }
+            for r in ModelGradingRule.objects.filter(model_id=model_id, actiu=True)
+        }
+
         data = [{
             'id': bm.id,
             'pom_id': bm.pom_id,
+            # F1: la regla resident d'aquest POM (None si el model no en té cap).
+            'regla_model': regla_by_pom.get(bm.pom_id),
             'codi_client': bm.pom.codi_client,
             'nom_client': bm.pom.nom_client,
             'nom_ca': bm.pom.pom_global.nom_ca if bm.pom.pom_global_id else '',
@@ -345,6 +368,9 @@ def base_measurements_view(request, model_id):
             'notes': bm.notes or '',
             'nom_fitxa': bm.nom_fitxa or '',
             'origen': bm.origen or '',
+            # F3 — secció d'origen ('01.- DRESS', 'Bodice:'…). '' quan el document no en
+            # tenia. La fitxa tècnica la fa servir per partir la taula en una per peça.
+            'seccio': bm.seccio or '',
             'pom_abbreviation': bm.pom.pom_global.abbreviation if bm.pom.pom_global_id else '',
             'pom_code_global': bm.pom.pom_global.codi if bm.pom.pom_global_id else '',
             'pom_is_key': bool(bm.pom.pom_global.is_key) if bm.pom.pom_global_id else False,

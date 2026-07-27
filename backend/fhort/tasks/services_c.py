@@ -274,6 +274,23 @@ def transition_task(task, to_status, profile, force=False, auto=None):
         from .services_i import record_actual_time
         record_actual_time(task)
 
+    # RETORN-2 — CANAL D'ESTAT (estudi → marca). A CADA canvi d'estat de tasca, i no només a
+    # l'inici o al final: el que la marca vol saber és el moviment («3 de 4 fetes»), i un
+    # recompte que només s'actualitzés als extrems mentiria tota l'estona del mig.
+    #
+    # Va DESPRÉS del `fase_actual='Dev'` de dalt a posta: el resum ha de portar la fase que
+    # queda, no la d'abans. Es rellegeix el model per això mateix — l'`update()` de dalt no
+    # toca cap instància en memòria.
+    #
+    # No-fatal per construcció (`sync_estat_segur`, mateix patró que la meritació): si el pont
+    # està tancat el tècnic no se n'ha d'assabentar. `sync_estat` ja calla sol si el model és
+    # INTERN, així que aquí no cal cap guard de provinença.
+    from fhort.models_app.models import Model as _Model
+    from fhort.tenants.federation_service import SENTIT_MADURESA, sync_estat_segur
+    _model = _Model.objects.filter(pk=task.model_id).first()
+    if _model is not None:
+        sync_estat_segur(_model, SENTIT_MADURESA)
+
     return {'task_id': task.pk, 'status': to_status, 'paused_task_id': paused_task_id}
 
 

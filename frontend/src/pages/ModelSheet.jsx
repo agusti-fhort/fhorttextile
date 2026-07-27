@@ -10,6 +10,7 @@ import MeasuresEntryPanel from '../components/model/MeasuresEntryPanel'
 import PropagatedEditor from './PropagatedEditor'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
+import { MaduresaBadge, EncarrecDelClient } from '../components/model/FederacioBadge'
 import { models, watchpoints, modelTasks, fittingSessions } from '../api/endpoints'
 import useAuthStore from '../store/auth'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
@@ -1020,7 +1021,19 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           ? t('model_sheet.shrinkage_value_simple', { pct: model.shrinkage_pct, type: model.shrinkage_type })
           : '—' },
     ] : []),
-    { label: t('model_sheet.field_deadline'), value: deadlineCell },
+    // RETORN-2 — a l'ESTUDI, la data i la urgència les MANA la marca i les hi sobreescriu.
+    // Sense aquesta nota, un tècnic que les canviés a mà no entendria per què tornen soles.
+    { label: t('model_sheet.field_deadline'), value: (
+        <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {deadlineCell}
+          <EncarrecDelClient model={model} t={t} />
+        </span>
+      ) },
+    // La maduresa només existeix al bessó de la MARCA (a l'estudi el camp és buit i el
+    // component no pinta res), i és on cal: la marca no té tasques per mirar.
+    ...(model.federacio_estat
+      ? [{ label: t('federacio.maduresa_label'), value: <MaduresaBadge model={model} t={t} /> }]
+      : []),
   ]
 
   // ── Viabilitat: càlculs derivats (render) ─────────────────────────────────

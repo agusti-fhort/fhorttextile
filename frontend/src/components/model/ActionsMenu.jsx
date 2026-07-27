@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan, commerce, recursos as recursosApi } from '../../api/endpoints'
+import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan, commerce, recursos as recursosApi, encarrecs } from '../../api/endpoints'
 import useAuthStore from '../../store/auth'
 import Modal from '../ui/Modal'
 import { selS } from '../ui/buttons'
@@ -43,6 +43,10 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
   // P7 — l'assignació a un recurs només existeix en una MARCA: és la seva sobirania sobre
   // qui pot treballar cada model. En un Estudi el camp `studio_assignat` no vol dir res.
   const isBrand = useAuthStore(st => st.tenant?.tipologia === 'marca')
+  // RETORN-1 — l'ENVIAMENT és el mirall de l'assignació: només existeix en un ESTUDI, i només
+  // per a les peces que venen d'una marca (EXTERN). Una peça nascuda aquí no té on anar.
+  const isStudio = useAuthStore(st => st.tenant?.tipologia === 'estudi')
+  const enviables = list.filter(m => m.origen === 'EXTERN')
   const canConfigure = useAuthStore(st => st.user?.capabilities?.includes('configure')) ?? false
   const [recursosActius, setRecursosActius] = useState([])   // només ACTIU: la resta no deixa passar res
 
@@ -228,6 +232,37 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
       })
   }
 
+  // RETORN-1 — ENVIAR A LA MARCA. Itera l'endpoint per-model (un model per crida, a posta) i
+  // AGREGA l'informe en lloc de comptar només èxits: el que l'usuari ha de saber després de
+  // clicar no és «10 fet», és QUÈ ha arribat i què no. Els POMs no aparellats es reporten
+  // units de tots els models: són un problema de catàleg, no d'una peça concreta.
+  const runEnviarMarca = async () => {
+    setBusy(true)
+    let ok = 0
+    const errors = []
+    const tot = { mesures: 0, regles: 0, fitxers: 0 }
+    const noAparellats = new Set()
+    for (const m of enviables) {
+      try {
+        const r = await encarrecs.enviar({ model_id: m.id })
+        ok++
+        const v = r.data?.viatjat || {}
+        tot.mesures += v.mesures || 0
+        tot.regles += v.regles || 0
+        tot.fitxers += v.fitxers || 0
+        ;(r.data?.no_aparellat || []).forEach(x => noAparellats.add(x))
+      } catch (e) {
+        errors.push(`${m.codi_intern}: ${e.response?.data?.error || 'error'}`)
+      }
+    }
+    setBusy(false); setModal(null)
+    let txt = t('federacio.enviar_done', { n: ok, ...tot })
+    if (noAparellats.size) txt += ' · ' + t('federacio.enviar_no_aparellats', { n: noAparellats.size })
+    if (errors.length) txt += ' · ' + t('federacio.enviar_errors', { n: errors.length })
+    onFeedback({ type: errors.length ? 'err' : 'ok', text: txt })
+    onChanged && onChanged()
+  }
+
   // B — La creació de Watchpoints (D-12) viu ara a l'overlay flotant de la capçalera del model
   // (WatchpointDrawer → WatchpointsPanel), única porta de creació. Aquí ja no hi ha "Fer comentari".
 
@@ -243,6 +278,12 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
     ...((isBrand && canConfigure)
       ? [{ key: 'assign_resource', label: t('model_sheet.assign_resource'), icon: 'ti-affiliate',
            enabled: !conjunt && list.length > 0, hint: conjuntHint }]
+      : []),
+    // RETORN-1 — només en un ESTUDI amb CONFIGURE i només si hi ha peces EXTERN a la
+    // selecció. Fora del mode conjunt: la crida pren models explícits, no filtres.
+    ...((isStudio && canConfigure && enviables.length > 0)
+      ? [{ key: 'send_brand', label: t('federacio.enviar_action'), icon: 'ti-cloud-upload',
+           enabled: !conjunt, hint: conjuntHint }]
       : []),
     { key: 'advance', label: t('model_sheet.advance_phase'), icon: 'ti-arrow-right', enabled: !conjunt && someNext, hint: conjuntHint },
     { key: 'back', label: t('model_sheet.back_phase'), icon: 'ti-arrow-left', enabled: !conjunt && somePrev, hint: conjuntHint },
@@ -356,6 +397,34 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
           {recursosActius.length === 0 && (
             <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
               {t('model_sheet.assign_resource_none')}
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* RETORN-1 — la confirmació DIU QUÈ VIATJARÀ i, sobretot, QUÈ NO. Enviar feina a la
+          casa del client és un acte que no es desfà amb un botó, i l'usuari ha de saber abans
+          de clicar que el seu .ftt i els seus patrons es queden aquí. */}
+      {modal === 'send_brand' && (
+        <Modal title={t('federacio.enviar_action')}
+          confirmLabel={busy ? t('model_sheet.working') : t('federacio.enviar_confirm')}
+          cancelLabel={t('model_sheet.cancel')} confirmDisabled={busy}
+          onConfirm={runEnviarMarca} onCancel={() => !busy && setModal(null)}>
+          <div style={infoBox}>{t('federacio.enviar_intro', { n: enviables.length })}</div>
+          <ul style={{ margin: '0 0 12px 18px', padding: 0, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
+            <li>{t('federacio.enviar_inclou_mesures')}</li>
+            <li>{t('federacio.enviar_inclou_regles')}</li>
+            <li>{t('federacio.enviar_inclou_fitxers')}</li>
+          </ul>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
+            {t('federacio.enviar_exclou')}
+          </div>
+          <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+            {t('federacio.enviar_sobirania')}
+          </div>
+          {enviables.length < list.length && (
+            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--gray)', marginTop: 8 }}>
+              {t('federacio.enviar_no_externs', { n: list.length - enviables.length })}
             </div>
           )}
         </Modal>

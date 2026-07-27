@@ -716,6 +716,9 @@ export const encarrecs = {
   list: () => client.get('/api/v1/encarrecs/'),
   // {brand_codi, codis: [...] | 'tots_pendents'} → informe {creats, saltats, unmatched, n_*}
   traspassar: (data) => client.post('/api/v1/encarrecs/traspassar/', data),
+  // RETORN-1 — la feina feta, cap a la marca. {model_id} → informe
+  // {viatjat, saltat, no_aparellat, avisos}. Un model per crida: el bulk itera i agrega.
+  enviar: (data) => client.post('/api/v1/encarrecs/enviar/', data),
 }
 
 export const me = {

@@ -163,6 +163,21 @@ class Model(models.Model):
     # TenantLink autoritza el PONT, aquest camp autoritza CADA MODEL — sense assignació, res viatja.
     studio_assignat = models.CharField(max_length=3, blank=True, default='', db_index=True)
 
+    # Federació v2 · RETORN-2 (2026-07-27) — el CANAL D'ESTAT. Materialització del que passa a
+    # l'ALTRA casa sobre aquesta mateixa peça: al bessó de la MARCA hi arriba la maduresa que
+    # publica l'estudi (fase + recompte de tasques); és la finestra, no la font.
+    #
+    # PER QUÈ UN JSON I NO COLUMNES: el que viatja aquí és un RESUM d'estat aliè, no dades de
+    # domini d'aquesta casa. Res del sistema hi consulta per decidir (ni el planificador, ni
+    # els gates, ni el motor): només es pinta. Fer-ne columnes convidaria a filtrar-hi i a
+    # tractar-lo com a veritat local, que és exactament el que la doctrina prohibeix. Les
+    # dades que SÍ manen (prioritat, data_objectiu) viatgen a camps reals, no aquí.
+    #
+    # CAP HORA, CAP TÈCNIC, CAP COST hi entra mai (doctrina views_encarrecs.py:6-8). El
+    # servei que l'escriu (tenants/federation_service.sync_estat) és l'únic escriptor i té un
+    # test negatiu que ho defensa.
+    federacio_estat = models.JSONField(null=True, blank=True)
+
     nom_prenda = models.CharField(max_length=200, blank=True, null=True)
     descripcio = models.TextField(null=True, blank=True)
     color_referencia = models.CharField(max_length=100, null=True, blank=True)
@@ -587,6 +602,12 @@ class BaseMeasurement(models.Model):
         # model B, que és una mentida d'auditoria. `COPIED` diu la veritat: el valor és cert
         # però la seva autoritat viu en un altre model.
         ('COPIED', 'Copiat d\'un altre model'),
+        # RETORN-1 (2026-07-27) — arribat per la FEDERACIÓ, de l'altra casa. No és 'COPIED'
+        # (que parla d'un altre MODEL d'aquesta mateixa casa) ni 'IMPORTED' (que parla d'una
+        # fitxa externa que algú ha llegit): és el mateix model, mesurat per l'altra banda del
+        # pont. La distinció importa el dia que algú pregunti «qui va mesurar això»: la
+        # resposta és «l'estudi», i cap dels altres valors ho diu.
+        ('FEDERAT', "Arribat de l'altra casa (federació)"),
     ]
 
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='base_measurements')
@@ -622,6 +643,21 @@ class BaseMeasurement(models.Model):
         max_length=20, choices=ORIGEN_CHOICES, default='STANDARD',
     )
     ordre = models.PositiveIntegerField(default=0)
+
+    # F3 — SECCIÓ d'origen de la mesura al document importat ('01.- DRESS', 'Bodice:'…).
+    # És el rètol que agrupava les files a la fitxa del client, i fins ara es perdia al
+    # confirm tot i que els DOS camins d'extracció ja el capturaven (parser i IA).
+    # És DADA DESCRIPTIVA, no estructura: ningú no hi decideix res. Serveix perquè la fitxa
+    # tècnica pugui partir la taula de mesures en una taula per peça, que és el que l'humà
+    # composa a mà avui.
+    #
+    # ⚠️ LÍMIT CONEGUT, no resolt aquí (DIAGNOSI_MULTIPECA_DALIA §Q2 i taula final §9): la
+    # clau segueix sent `unique_together = [('model','pom')]`. Si DUES seccions del mateix
+    # document comparteixen un POM, el confirm en col·lapsa les files i la que sobreviu es
+    # queda amb la secció de l'ÚLTIMA — aquest camp no ho pot arreglar, perquè el bloqueig
+    # no és el camp que faltava sinó la clau. Separar-les de debò vol tocar la clau, que
+    # travessa 5 taules més, i és decisió d'arquitectura (Patró C), no d'aquest sprint.
+    seccio = models.CharField(max_length=60, blank=True, default='')
 
     class Meta:
         verbose_name = 'Mesura base'
@@ -745,6 +781,9 @@ class ModelGradingRule(models.Model):
         ('CANONICAL', 'Derivat canònicament'),
         ('CLIENT_RUN', 'Derivat de run de client'),
         ('MANUAL', 'Introduït manualment'),
+        # RETORN-1 — mateixa raó que a BaseMeasurement: la regla resident ve de l'altra casa,
+        # i cap dels quatre valors anteriors ho sabia dir.
+        ('FEDERAT', "Arribat de l'altra casa (federació)"),
     ]
 
     model = models.ForeignKey(

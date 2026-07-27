@@ -177,6 +177,24 @@ def extract_document_assets(document_json):
     return doc, assets
 
 
+def _amb_format(origen, sortida):
+    """F4 — arrossega el `format` OPCIONAL de la pàgina, si en porta.
+
+    L'esquema .ftt guanya un `format` PER PÀGINA ('A4L'|'A4P'|'A3L'|'A3P'). És OPCIONAL i la
+    seva ABSÈNCIA vol dir "hereta el del document" (`pageFormat`), que és exactament el que
+    diuen tots els documents que existeixen avui. Per això la clau no s'escriu mai quan no hi
+    és: un document vell round-trip d'aquestes funcions ha de sortir BYTE A BYTE igual que
+    hi ha entrat, i afegir-hi `format: null` ja no ho seria.
+
+    Aquestes dues funcions reconstruïen la pàgina amb {id, objects} i prou, de manera que
+    qualsevol clau nova de pàgina s'hi perdia en silenci.
+    """
+    fmt = origen.get("format")
+    if fmt:
+        sortida["format"] = fmt
+    return sortida
+
+
 def v2_to_document(template_json, metadata=None):
     """template_json v2 → (document_json v-ftt, assets:{nom->bytes}).
 
@@ -186,10 +204,10 @@ def v2_to_document(template_json, metadata=None):
     assets = {}
     pages_out = []
     for page in template_json.get("pages") or []:
-        pages_out.append({
+        pages_out.append(_amb_format(page, {
             "id": page.get("id"),
             "objects": _extract_inline_objects(page.get("objects"), assets),
-        })
+        }))
     document = {
         "ftt_schema": FTT_DOCUMENT_SCHEMA,
         "metadata": metadata or {},
@@ -213,10 +231,10 @@ def document_to_v2(document_json, asset_src=None):
 
     pages_out = []
     for page in document_json.get("pages") or []:
-        pages_out.append({
+        pages_out.append(_amb_format(page, {
             "id": page.get("id"),
             "objects": [_map_object_tree(o, mapper) for o in page.get("objects") or []],
-        })
+        }))
     return {
         "version": 2,
         "pageFormat": document_json.get("pageFormat") or DEFAULT_PAGE_FORMAT,

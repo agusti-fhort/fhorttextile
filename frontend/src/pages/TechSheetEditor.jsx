@@ -533,12 +533,18 @@ function objectBounds(obj) {
 // El backend (ftt-documents/) serveix document.json (v-ftt) + un mapa d'assets {nom→URL}.
 // L'editor pinta el format v2 (clau `pages`), on image.src ha de ser una URL carregable;
 // per desar es torna a 'assets/<nom>'. Anàleg JS de services_ftt.document_to_v2/v2_to_document.
+// F4 — `format` OPCIONAL per pàgina. Absent = hereta el `pageFormat` del document, que és el
+// que diuen TOTS els documents existents. La clau no s'escriu mai quan no hi és: un document
+// vell ha de sobreviure el round-trip idèntic, i un `format: undefined` a cada pàgina ja no
+// ho seria. Anàleg JS de services_ftt._amb_format.
+const ambFormat = (origen, sortida) => (origen?.format ? { ...sortida, format: origen.format } : sortida)
+
 export function documentToV2(documentJson, assets = {}) {
   const urlOf = (name) => assets[name] || ('assets/' + name)
   return {
     version: 2,
     pageFormat: documentJson?.pageFormat || 'A4L',
-    pages: (documentJson?.pages || []).map(p => ({
+    pages: (documentJson?.pages || []).map(p => ambFormat(p, {
       id: p.id,
       objects: (p.objects || []).map(o => mapObjectTree(o, obj => (
         typeof obj.src === 'string' && obj.src.startsWith('assets/')
@@ -558,7 +564,7 @@ export function v2ToDocument(v2Pages, pageFormat, metadata = {}, urlToName = {})
     ftt_schema: 1,
     metadata: metadata || {},
     pageFormat: pageFormat || 'A4L',
-    pages: (v2Pages || []).map(p => ({
+    pages: (v2Pages || []).map(p => ambFormat(p, {
       id: p.id,
       objects: (p.objects || []).map(o => mapObjectTree(o, obj => (
         typeof obj.src === 'string' && urlToName[obj.src]
@@ -1017,6 +1023,57 @@ export function headerMasterLogoRect(natW, natH, _config) {
   return { x: (X - HDR_M.OX) * P, y: (Y - HDR_M.OY) * P + (H - hPt) * P / 2, w: wPt * P, h: hPt * P }
 }
 
+// ── F4 · LAYOUT DERIVAT PER AMPLADA (la capçalera en pàgina VERTICAL) ────────────────────
+//
+// ⚠️ EXCEPCIÓ DECLARADA a la llei "es MESURA, no s'interpreta" (vegeu el bloc HDR_M de sobre).
+// La geometria de la capçalera és transcripció LITERAL de docs/spec/plantilla_capcalera_ftt.svg,
+// que és un SVG A4 APAÏSAT. Per a retrat NO EXISTEIX cap spec canònica: ningú no l'ha
+// dibuixada. Aquest layout és DERIVAT mecànicament de l'apaïsat i queda EN ESPERA d'una spec
+// SVG de retrat que el substitueixi. Quan arribi, aquesta funció s'esborra i es transcriu
+// aquella, igual que es va fer amb l'apaïsat.
+//
+// Què es conserva i què canvia:
+//   · Es conserva TOT el que és mesura — tipografia (6pt etiqueta / 9pt valor amb el sòl a
+//     8pt), contingut, ordre dels camps, alçada de caixa (90.2pt) i les subcolumnes.
+//   · Canvia NOMÉS on cau cada caixa:
+//       apaïsat  (spec):    [1][2][3]  en una fila de 784.7pt
+//       retrat (derivat):   [1][2]     a la fila de dalt
+//                           [3]        a una segona fila d'amplada completa
+//   · Les caixes 2 i 3 arriben fins al marge dret del full. Cap text s'escala ni es
+//     re-mesura: només guanyen amplada disponible, que és el que evita que hi surti l'el·lipsi.
+//
+// La caixa d'un element es dedueix de la seva `sx` (les fronteres D1/D2 són les mateixes que
+// dibuixen les divisòries), de manera que les ~20 crides a label()/value() de sota no canvien.
+function _hdrLayout(fmtKey) {
+  const f = PAGE_FORMATS[fmtKey]
+  const vertical = !!f && f.h > f.w
+  if (!vertical) {
+    // Apaïsat = la spec, intacta. Identitat: cap desplaçament, cap vora reescrita.
+    return { vertical: false, W: HDR_M.W, H: HDR_M.H, Hfila: HDR_M.H,
+      dx: () => 0, dy: () => 0, right: r => r }
+  }
+  const Wp = f.pdf[0] - 2 * HDR_M.OX        // amplada útil entre marges, en pt
+  const caixa = sx => (sx < HDR_M.D1 ? 1 : sx < HDR_M.D2 ? 2 : 3)
+  const DX3 = HDR_M.OX - HDR_M.D2           // la caixa 3 torna al marge esquerre…
+  return {
+    vertical: true, W: Wp, H: HDR_M.H * 2, Hfila: HDR_M.H,
+    dx: sx => (caixa(sx) === 3 ? DX3 : 0),
+    dy: sx => (caixa(sx) === 3 ? HDR_M.H : 0),   // …i baixa una fila
+    // Vores dretes: la caixa 1 es queda on és; la 2 i la 3 arriben al marge del full. Els
+    // valors intermedis (SUB1/SUB2/R1) passen tal qual — les subcolumnes no es mouen.
+    right: r => (r === HDR_M.R2 ? HDR_M.OX + Wp : r === HDR_M.R3 ? HDR_M.D2 + Wp : r),
+  }
+}
+
+// F4 — geometria de l'OBJECTE capçalera segons el format de la pàgina. En apaïsat és la de
+// sempre (MASTER_HEADER_GEOM, derivada de l'SVG canònic); en vertical, la del layout derivat.
+// Només afecta la caixa de l'objecte al document: el render surt dels prims, no d'aquí.
+export function masterHeaderGeomFor(fmtKey) {
+  const L = _hdrLayout(fmtKey)
+  if (!L.vertical) return MASTER_HEADER_GEOM
+  return { x: MASTER_HEADER_GEOM.x, y: MASTER_HEADER_GEOM.y, width: _mm2(L.W), height: _mm2(L.H) }
+}
+
 function _hdrDate(d) {
   const p = n => String(n).padStart(2, '0')
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`   // DD-MM-YYYY (D7)
@@ -1025,21 +1082,37 @@ function _hdrDate(d) {
 function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx) {
   const P = _hdrP()
   const { OX, OY, ASC } = HDR_M
-  const W = HDR_M.W * P, H = HDR_M.H * P
+  // F4 — el layout depèn del format de LA PÀGINA (pageCtx.fmtKey). Sense pageCtx, o amb un
+  // format apaïsat, `_hdrLayout` torna la identitat i tot això és exactament el d'abans.
+  const L = _hdrLayout(pageCtx?.fmtKey)
+  const W = L.W * P, H = L.H * P
+  const Hfila = L.Hfila * P
   const GRAY = KONVA_COL.labelGray, INK = KONVA_COL.textMain, FRAME = KONVA_COL.textMain
-  const gx = sx => (sx - OX) * P
+  const gx = sx => (sx + L.dx(sx) - OX) * P
   const prims = []
-  // Marc ÚNIC + 2 divisòries (mai 3 rects — D4). Frame 0.5pt.
-  prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
-  prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), H], stroke: FRAME, sw: 0.5 * P })
-  prims.push({ t: 'l', points: [gx(HDR_M.D2), 0, gx(HDR_M.D2), H], stroke: FRAME, sw: 0.5 * P })
+  if (L.vertical) {
+    // Retrat derivat: DUES files. Una divisòria a la de dalt (entre caixa 1 i 2); la de baix
+    // és la caixa 3 sencera i no en porta cap.
+    prims.push({ t: 'r', x: 0, y: 0, w: W, h: Hfila, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
+    prims.push({ t: 'r', x: 0, y: Hfila, w: W, h: Hfila, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
+    prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), Hfila], stroke: FRAME, sw: 0.5 * P })
+  } else {
+    // Marc ÚNIC + 2 divisòries (mai 3 rects — D4). Frame 0.5pt.
+    prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
+    prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), H], stroke: FRAME, sw: 0.5 * P })
+    prims.push({ t: 'l', points: [gx(HDR_M.D2), 0, gx(HDR_M.D2), H], stroke: FRAME, sw: 0.5 * P })
+  }
 
   const V = (real, ph) => placeholderMode ? ph : (real == null ? '' : String(real))
   const join = parts => parts.filter(v => v != null && v !== '').join(' | ')   // UN valor per línia (D3)
   // Etiqueta 6pt a baseline `by`, x `sx`, fins a `rightPt`.
+  // F4 — `L.dy(sx)` baixa una fila els elements de la caixa 3 en retrat (0 en apaïsat), i
+  // `L.right()` eixampla les vores dretes que hi arriben. L'amplada és INVARIANT sota la
+  // translació horitzontal (right i sx es desplacen igual), per això només cal reescriure
+  // les vores que de debò canvien.
   const label = (sx, by, text, rightPt) => {
     const f = 6 * P
-    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: (rightPt - HDR_M.PAD - sx) * P, h: f + 2, text, fill: GRAY, size: f })
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f + L.dy(sx) * P, w: (L.right(rightPt) - HDR_M.PAD - sx) * P, h: f + 2, text, fill: GRAY, size: f })
   }
   // Valor 9pt (baixa a 8pt si no cap; el·lipsi via PrimNode). MAI desborda ni trenca línia.
   // B2 — `fk` (field key) marca les prims de VALOR que tenen una clau exacta a FIELD_CATALOG.
@@ -1048,10 +1121,10 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   // instanciar una plantilla, en lloc de quedar congelat amb les dades d'aquest model.
   const value = (sx, by, text, rightPt, opts = {}) => {
     if (!text) return
-    const availPt = rightPt - HDR_M.PAD - sx
+    const availPt = L.right(rightPt) - HDR_M.PAD - sx
     const fpt = (text.length * 9 * 0.6 > availPt) ? 8 : 9   // 9→8 = sòl de la llei
     const f = fpt * P
-    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, fk: opts.fk })
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f + L.dy(sx) * P, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, fk: opts.fk })
   }
 
   // ── CAIXA 1 ── logo (files 1-2) · DATE+PAGE (fila 3) · TECHNICIAN (fila 4). DATE alineat amb MODEL.
@@ -1082,17 +1155,20 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   label(497.8, 92.5, 'SIZE SYSTEM', HDR_M.R3)
   value(497.8, 102.5, V(m?.size_system_nom, '{size system}'), HDR_M.R3, { fk: 'size_system_nom' })
   label(497.8, 115, 'SIZE RUN', HDR_M.R3)
-  _pushSizeRun(prims, m, placeholderMode, 497.8, 125, P)
+  _pushSizeRun(prims, m, placeholderMode, 497.8, 125, P, L)
 
   return { prims, totalW: W, totalH: H }
 }
 
 // SIZE RUN: run compacte "·" (sense espais, com l'SVG). La talla base = segment PROPI
 // bold+underline; el separador "·" NO es subratlla (D6). Mètrica mono charW=cos·0.6.
-function _pushSizeRun(prims, m, placeholderMode, sx, by, P) {
+// F4 — `L` és el layout derivat: en retrat desplaça aquest bloc (caixa 3) a la segona fila.
+// Per defecte, identitat = comportament de sempre.
+const _HDR_L_IDENT = { dx: () => 0, dy: () => 0 }
+function _pushSizeRun(prims, m, placeholderMode, sx, by, P, L = _HDR_L_IDENT) {
   const f = 9 * P
-  const OX = HDR_M.OX, y = (by - HDR_M.OY) * P - HDR_M.ASC * f
-  const gx = x => (x - OX) * P
+  const OX = HDR_M.OX, y = (by - HDR_M.OY) * P - HDR_M.ASC * f + L.dy(sx) * P
+  const gx = x => (x + L.dx(sx) - OX) * P
   const INK = KONVA_COL.textMain
   if (placeholderMode) {
     prims.push({ t: 't', x: gx(sx), y, w: 300 * P, h: f + 2, text: '{size run}', fill: INK, size: f })
@@ -1630,7 +1706,9 @@ async function addObjectToLayer(layer, obj, ctx, cotaLabel) {
     let logoEl = null
     if (obj.kind === 'header') {
       if (ctx?.customerLogoUrl) { try { logoEl = await loadImageEl(ctx.customerLogoUrl) } catch { logoEl = null } }
-      const pageCtx = (ctx?.pageIndex != null) ? { index: ctx.pageIndex, total: ctx.pageTotal } : null
+      const pageCtx = (ctx?.pageIndex != null)
+        ? { index: ctx.pageIndex, total: ctx.pageTotal, fmtKey: ctx.fmtKey }
+        : (ctx?.fmtKey ? { fmtKey: ctx.fmtKey } : null)
       built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl, obj.config, pageCtx)
     } else if (obj.kind === 'graded_table') {
       const data = ctx?.tableData?.[obj.id]
@@ -1727,7 +1805,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
 // Serialitza pages per a desar: els data_block graded_table NO desen el dataURL
 // (es re-genera des de size_fitting_id en obrir); la resta es desa tal qual.
 export function serializePages(pages) {
-  return pages.map(p => ({
+  return pages.map(p => ambFormat(p, {
     id: p.id,
     // F3: les cotes PROPOSADES per la IA (iaProposada) són NOMÉS pantalla fins a acceptar-les;
     // no sobreviuen la sessió (decisió de codi mínim) → no entren al .ftt.
@@ -2312,6 +2390,9 @@ export default function TechSheetEditor() {
   const [peces, setPeces] = useState({ loading: true })
   const [sizeFittings, setSizeFittings] = useState([])
   const [tableData, setTableData] = useState({})    // {objId: jsonData|null} fora del JSON
+  // F3 — partició opcional de les taules de mesures per secció d'origen. Default false: la
+  // fitxa d'una peça (la immensa majoria) no ha de notar que això existeix.
+  const [partirPerSeccio, setPartirPerSeccio] = useState(false)
   const [notice, setNotice] = useState(null)        // toast efímer (p.ex. "ja hi ha capçalera")
   const [thumbnails, setThumbnails] = useState([])
   const [exporting, setExporting] = useState(false)
@@ -2376,7 +2457,18 @@ export default function TechSheetEditor() {
   const snapCand = useRef(null)   // S2: candidats de magnetisme calculats a l'inici del drag (no per frame)
 
   const locked = lockState === 'owned'
-  const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
+  // F4 — el format és PER PÀGINA, amb el del document com a herència. `fmtDe` és la font
+  // única que resol quin format toca a una pàgina; qualsevol lloc que necessiti mides ha de
+  // passar per aquí i no per `pageFormat` directament.
+  const fmtDe = useCallback(
+    (pagina) => PAGE_FORMATS[pagina?.format || pageFormat] || PAGE_FORMATS.A4L,
+    [pageFormat])
+  // El canvas viu pinta UNA pàgina (la current): les seves mides són les d'AQUELLA pàgina.
+  // Els ~25 usos de pageW/pageH que hi pengen (stage, marc, guies, magnetisme, PaperFlat,
+  // zoom-to-fit) queden correctes per construcció. Els únics que no en depenen són els dos
+  // BUCLES sobre totes les pàgines —miniatures i export—, que resolen el format pàgina a
+  // pàgina i estan marcats com a tals.
+  const fmt = fmtDe(pages[currentPage])
   const pageW = Math.round(fmt.w * MM_TO_PX)
   const pageH = Math.round(fmt.h * MM_TO_PX)
   const customerLogoUrl = model?.customer_logo || null   // TS-4c
@@ -2496,7 +2588,10 @@ export default function TechSheetEditor() {
   useEffect(() => {
     const t = setTimeout(syncRuler, 0)   // post-layout (zoom/format canvien la mida del wrap)
     return () => clearTimeout(t)
-  }, [zoom, pageFormat, pages.length, syncRuler])
+    // F4 — depèn de pageW/pageH i no de `pageFormat`: amb el format per pàgina, la mida del
+    // wrap també canvia en passar a una pàgina d'un altre format sense que `pageFormat` es
+    // mogui. Les regles han de seguir la mida REAL, que és el que aquestes dues diuen.
+  }, [zoom, pageW, pageH, pages.length, syncRuler])
   useEffect(() => {
     window.addEventListener('resize', syncRuler)
     return () => window.removeEventListener('resize', syncRuler)
@@ -3231,7 +3326,14 @@ export default function TechSheetEditor() {
       try {
         const thumbs = []
         for (let pi = 0; pi < pages.length; pi++) {
-          const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
+          // F4 · BUCLE SOBRE TOTES LES PÀGINES: les mides es resolen pàgina a pàgina, no
+          // des del pageW/pageH del canvas (que és el de la pàgina activa). Amb un document
+          // mixt, les miniatures han de sortir cadascuna amb la seva proporció.
+          const f = fmtDe(pages[pi])
+          const ctx = { tableData, modelData: model, versio: sheet?.versio,
+            pageW: Math.round(f.w * MM_TO_PX), pageH: Math.round(f.h * MM_TO_PX),
+            fmtKey: pages[pi]?.format || pageFormat,
+            customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
           thumbs.push(await renderPageToDataURL(pages[pi], 0.18, ctx))
         }
         setThumbnails(thumbs)
@@ -4369,26 +4471,78 @@ export default function TechSheetEditor() {
     return { ...obj, scale, width: wMm * scale, height: hMm * scale }
   }
 
+  // ── F3 · UNA TAULA PER SECCIÓ ───────────────────────────────────────────────
+  // Un document multi-peça porta les mesures agrupades sota rètols ('01.- DRESS',
+  // '02.- KNICKERS'…) que ara sobreviuen a l'import (BaseMeasurement.seccio). Qui composa la
+  // fitxa vol una taula per peça al costat del seu croquis, no una de sola amb les tres
+  // seguides — però això és una decisió de MAQUETACIÓ, i per això la partició és OPCIONAL i
+  // no s'aplica mai sola.
+  //
+  // `buildTableCellPrimitives` no es toca: cada secció produeix un objecte `table` normal i
+  // corrent, amb les mateixes columnes i el mateix builder. L'única cosa que canvia és
+  // quantes files hi entren i on cau l'objecte.
+  const seccionsDeFiles = (files) => {
+    const vistes = []
+    for (const f of files) {
+      const s = (f?.seccio || '').trim()
+      if (s && !vistes.includes(s)) vistes.push(s)
+    }
+    return vistes
+  }
+
+  // Col·locació ESGLAONADA: N taules a la mateixa x/y naixerien exactament l'una damunt de
+  // l'altra i semblaria que només se n'ha inserit una. El desplaçament és petit a propòsit
+  // (prou per veure-les totes, prou poc per no sortir de la pàgina amb 3-4 peces).
+  const escalonat = (i) => ({ x: 10 + i * 6, y: 14 + i * 8 })
+
+  // Insereix N objectes (un per secció) o UN de sol. Retorna quantes taules ha posat.
+  const inserirTaules = (grups, fesObjecte) => {
+    grups.forEach((g, i) => {
+      const obj = fitTableObj({ ...fesObjecte(g), ...escalonat(i) })
+      addObject(obj)
+    })
+    return grups.length
+  }
+
   // T1a — fitxa de treball fitting (POM base + regla de grading). Tol± queda buit: la
   // serialització de base-measurements no exposa tolerància (només impressió+anotació manual).
+  // F1 — DUES fonts per a la regla, mai una URL amb `null`. Un model pot portar la graduació
+  // de dues maneres i la T1a ha de sortir igual per totes dues (decisió: la taula llegeix LES
+  // DADES DEL MODEL, tant si el ruleset és sembrat com si ve d'un import):
+  //   · `model.grading_rule_set` → GradingRule del ruleset compartit (camí de sempre).
+  //   · sense ruleset → ModelGradingRule RESIDENT, que ara arriba dins de cada base-measurement
+  //     com a `regla_model` (backend F1). Abans aquest cas interpolava `null` a la query
+  //     (`?rule_set=null`), el backend tornava una llista buida i la columna de regla naixia
+  //     muda sense que res ho digués.
   const insertTableT1a = async (sfId) => {
     if (!locked) return
+    const ruleSetId = model?.grading_rule_set ?? null
     let bms, rules
     try {
-      const [rBm, rRules] = await Promise.all([
-        fetch(`${API}/api/v1/models/${model.id}/base-measurements/`, { headers: authHeaders }),
-        fetch(`${API}/api/v1/grading-rules/?rule_set=${model.grading_rule_set}`, { headers: authHeaders }),
-      ])
-      if (!rBm.ok || !rRules.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
+      const peticions = [fetch(`${API}/api/v1/models/${model.id}/base-measurements/`, { headers: authHeaders })]
+      // GUARD: la crida al ruleset NOMÉS existeix si hi ha ruleset.
+      if (ruleSetId != null) {
+        peticions.push(fetch(`${API}/api/v1/grading-rules/?rule_set=${ruleSetId}`, { headers: authHeaders }))
+      }
+      const [rBm, rRules] = await Promise.all(peticions)
+      if (!rBm.ok || (rRules && !rRules.ok)) { flash(t('tech_sheet.flash_table_fetch_error')); return }
       const dBm = await rBm.json()
-      const dRules = await rRules.json()
       bms = dBm.results || dBm || []
-      rules = dRules.results || dRules || []
+      if (rRules) {
+        const dRules = await rRules.json()
+        rules = dRules.results || dRules || []
+      } else {
+        rules = []
+      }
     } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
     if (!bms.length) { flash(t('tech_sheet.flash_empty_table')); return }
 
+    // Índex per pom_id. Amb ruleset mana la GradingRule; sense, la resident de cada fila.
     const rulesByPom = {}
     rules.forEach(r => { rulesByPom[r.pom] = r })
+    bms.forEach(bm => {
+      if (rulesByPom[bm.pom_id] == null && bm.regla_model) rulesByPom[bm.pom_id] = bm.regla_model
+    })
     const columns = [
       { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
       { key: 'pom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
@@ -4399,24 +4553,35 @@ export default function TechSheetEditor() {
       { key: 'nova', label: t('tech_sheet.tbl_col_new_measure'), width: 34 },
       { key: 'coment', label: t('tech_sheet.tbl_col_comments'), width: 60 },
     ]
-    const rows = bms.map(bm => {
+    const filesDe = (sub) => sub.map(bm => {
       const rule = rulesByPom[bm.pom_id]
       return [
         bm.nom_fitxa || bm.pom_abbreviation || '',
-        { text: rule?.pom_nom_en || bm.nom_client || bm.pom_code_global || '', sub: bm.nom_ca || '' },
+        // Amb ruleset el nom canònic ve de la regla; amb regla resident la regla no en porta,
+        // i el nom canònic és el `nom_en` que base-measurements ja exposa.
+        { text: rule?.pom_nom_en || bm.nom_en || bm.nom_client || bm.pom_code_global || '', sub: bm.nom_ca || '' },
         fmtMeasure(bm.base_value_cm, unit) ?? '',
         fmtMeasure(rule?.increment_base, unit) ?? '',
         rule?.talla_break_label || '',
         '', '', '',
       ]
     })
-    const obj = fitTableObj({
-      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
-      kind: 'pom_fitting', columns, rows,
+    // F3 — una taula per secció NOMÉS si el tècnic ho ha demanat I el document en té més
+    // d'una. Amb una sola secció (o cap) el resultat és exactament el d'abans.
+    const seccions = seccionsDeFiles(bms)
+    const grups = (partirPerSeccio && seccions.length > 1)
+      ? seccions.map(s => ({ seccio: s, files: bms.filter(b => (b.seccio || '').trim() === s) }))
+      : [{ seccio: null, files: bms }]
+    const n = inserirTaules(grups, g => ({
+      id: uid(), type: 'table', layer: 'free',
+      kind: 'pom_fitting', columns, rows: filesDe(g.files),
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
-      snapshot: { model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString() },
-    })
-    addObject(obj)
+      snapshot: {
+        model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString(),
+        ...(g.seccio ? { seccio: g.seccio } : {}),
+      },
+    }))
+    if (n > 1) flash(t('tech_sheet.flash_tables_per_section', { count: n }))
     setTablePicker(null)
   }
 
@@ -4461,20 +4626,28 @@ export default function TechSheetEditor() {
     const breakResum = (row) => sizeLabels
       .filter((sl, si) => esBreak(row, sl, si > 0 ? sizeLabels[si - 1] : null))
       .join(' · ')
-    const rows = data.rows.map(row => [
+    const filesDe = (sub) => sub.map(row => [
       row.ref || row.abbreviation || row.codi || '',
       { text: row.nom_en || '', sub: row.nom_ca || '' },
       ...sizeLabels.map(sl => cellForSize(row, sl)),
       rowDelta(row, data.base_size, sizeLabels),
       breakResum(row),
     ])
-    const obj = fitTableObj({
-      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
-      kind: 'pom_grading', columns, rows,
+    // F3 — mateix criteri que a la T1a: opcional, i només si el document té més d'una secció.
+    const seccions = seccionsDeFiles(data.rows)
+    const grups = (partirPerSeccio && seccions.length > 1)
+      ? seccions.map(s => ({ seccio: s, files: data.rows.filter(r => (r.seccio || '').trim() === s) }))
+      : [{ seccio: null, files: data.rows }]
+    const n = inserirTaules(grups, g => ({
+      id: uid(), type: 'table', layer: 'free',
+      kind: 'pom_grading', columns, rows: filesDe(g.files),
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
-      snapshot: { model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString() },
-    })
-    addObject(obj)
+      snapshot: {
+        model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString(),
+        ...(g.seccio ? { seccio: g.seccio } : {}),
+      },
+    }))
+    if (n > 1) flash(t('tech_sheet.flash_tables_per_section', { count: n }))
     setTablePicker(null)
   }
 
@@ -4529,8 +4702,13 @@ export default function TechSheetEditor() {
     // no aporta: el panell dret ja té els controls d'afegir i treure files i columnes, i allà
     // es decideix VEIENT la taula, que és quan se sap quantes en calen.
     if (variant === 'custom') { insertTableCustom(3, 3); return }
-    if (!sizeFittings.length) return   // ribbon el desactiva (commit 4); sense fitting no hi ha què inserir
-    if (sizeFittings.length === 1) { runTableVariant(variant, sizeFittings[0].id); return }
+    // F1 — cada variant tria entre els fittings que li serveixen: la T1b NOMÉS entre els que
+    // tenen graduació; la T1a entre tots, i sense cap si el model no en té (el fitting hi és
+    // per traça al snapshot, no per dades: la T1a surt de la base + la regla del model).
+    const candidats = variant === 't1b' ? sfAmbGrading : sizeFittings
+    if (variant === 't1a' && !candidats.length) { runTableVariant(variant, null); return }
+    if (!candidats.length) return      // el picker ja el deshabilita; xarxa de seguretat
+    if (candidats.length === 1) { runTableVariant(variant, candidats[0].id); return }
     setTablePicker({ variant })
   }
 
@@ -4545,9 +4723,13 @@ export default function TechSheetEditor() {
     if (objectsOf(currentPage).some(o => o.type === 'data_block' && o.kind === 'header')) {
       flash(t('tech_sheet.flash_header_exists')); return
     }
+    // F4 — la geometria surt del format de LA PÀGINA on s'insereix: en vertical la capçalera
+    // és més estreta i té dues files, i la caixa de l'objecte ho ha de dir. El RENDER ja se'n
+    // surt sol (els prims es deriven del format a cada pintada); això és la caixa al document.
     addObject({
       id: uid(), type: 'data_block', kind: 'header', layer: 'template', locked: true,
-      ...MASTER_HEADER_GEOM, config: { layout: 'masterFtt' },
+      ...masterHeaderGeomFor(pages[currentPage]?.format || pageFormat),
+      config: { layout: 'masterFtt' },
     })
   }
 
@@ -4566,7 +4748,18 @@ export default function TechSheetEditor() {
   const addPage = () => {
     if (!locked) return
     const hdr = masterHeaderInstance()
-    setPages(ps => [...ps, { id: uid(), objects: hdr ? [hdr] : [] }])
+    // F4 — la pàgina nova neix amb el format de la que s'està mirant, no amb el del
+    // document: qui acaba de posar una pàgina en vertical i n'afegeix una altra vol
+    // continuar en vertical. Si coincideix amb l'herència no s'escriu la clau (una fitxa
+    // que mai ha tocat formats mixtos no en guanya cap).
+    const actual = pages[currentPage]?.format
+    // F4 — la capçalera copiada pot venir d'una pàgina d'un altre format: se li torna a
+    // derivar la caixa per al format de la pàgina nova.
+    const hdrFmt = hdr ? { ...hdr, ...masterHeaderGeomFor(actual || pageFormat) } : null
+    setPages(ps => [...ps, {
+      id: uid(), objects: hdrFmt ? [hdrFmt] : [],
+      ...(actual && actual !== pageFormat ? { format: actual } : {}),
+    }])
     setCurrentPage(pages.length)
   }
   // B3 — "Delete on this page": treu la instància de la capçalera mestra NOMÉS d'aquesta
@@ -4574,6 +4767,37 @@ export default function TechSheetEditor() {
   const deleteHeaderOnPage = (pageIdx) => {
     if (!locked) return
     updatePageObjects(pageIdx, objs => objs.filter(o => !(o.type === 'data_block' && o.kind === 'header')))
+  }
+  // F4 — format d'UNA pàgina. S'escriu a la pàgina; el `pageFormat` del document no es toca
+  // (segueix sent l'herència de les que no en declaren cap). Si el valor triat coincideix amb
+  // l'herència, la clau s'ESBORRA en lloc d'escriure-s'hi igual: així un document que no ha
+  // fet servir formats mixtos no en guanya cap i segueix serialitzant-se com sempre.
+  // F4 — en canviar el format d'una pàgina, la capçalera que hi hagi ha de refer la seva
+  // caixa: en vertical és més estreta i té dues files. El render ja deriva sol; això manté
+  // coherent el que hi ha DESAT al document.
+  const _ambHeaderRefet = (objs, fmtKey) => (objs || []).map(o => (
+    o.type === 'data_block' && o.kind === 'header' && o.config?.layout === 'masterFtt'
+      ? { ...o, ...masterHeaderGeomFor(fmtKey) }
+      : o
+  ))
+  const setPageFormatDePagina = (index, valor) => {
+    if (!locked) return
+    setPages(ps => ps.map((p, i) => {
+      if (i !== index) return p
+      const { format: _fora, ...resta } = p
+      const objects = _ambHeaderRefet(p.objects, valor)
+      return valor === pageFormat ? { ...resta, objects } : { ...resta, objects, format: valor }
+    }))
+  }
+  // "Aplicar a tot el document": el format de la pàgina activa passa a ser el del DOCUMENT i
+  // s'esborren tots els formats per pàgina. Un sol gest, i el document torna a ser homogeni.
+  const aplicarFormatATotElDocument = () => {
+    if (!locked) return
+    const valor = pages[currentPage]?.format || pageFormat
+    setPageFormat(valor)
+    setPages(ps => ps.map(({ format: _fora, ...resta }) => ({
+      ...resta, objects: _ambHeaderRefet(resta.objects, valor),
+    })))
   }
   const removePage = (index) => {
     if (!locked || pages.length <= 1) return
@@ -4588,9 +4812,17 @@ export default function TechSheetEditor() {
     setExporting(true)
     try {
       const pdf = await PDFDocument.create()
-      const [pdfW, pdfH] = fmt.pdf
       for (let pi = 0; pi < pages.length; pi++) {
-        const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
+        // F4 · BUCLE SOBRE TOTES LES PÀGINES: la mida del full entra DINS del bucle. Abans
+        // es prenia un sol `fmt.pdf` de fora i totes les pàgines sortien amb la mida del
+        // document; amb formats mixtos, una A4 vertical hauria sortit estirada dins d'un
+        // full apaïsat.
+        const f = fmtDe(pages[pi])
+        const [pdfW, pdfH] = f.pdf
+        const ctx = { tableData, modelData: model, versio: sheet?.versio,
+          pageW: Math.round(f.w * MM_TO_PX), pageH: Math.round(f.h * MM_TO_PX),
+          fmtKey: pages[pi]?.format || pageFormat,
+          customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
         const dataUrl = await renderPageToDataURL(pages[pi], 3.5, ctx)
         const png = await pdf.embedPng(dataUrl)
         const page = pdf.addPage([pdfW, pdfH])
@@ -4684,9 +4916,30 @@ export default function TechSheetEditor() {
   // R3 · les quatre variants de taula amb la seva DISPONIBILITAT. La detecció és la que el
   // popup ja feia (sizeFittings per a les dues taules de mesures); aquí, en comptes de
   // deshabilitar un botó dins un modal, s'ensenya sempre i es diu el motiu.
+  // F1 — les portes de les dues taules de mesures, cadascuna amb el SEU motiu. Abans totes
+  // dues demanaven el mateix ("que hi hagi un size fitting"), que era fals per les dues bandes:
+  // la T1a no necessita cap fitting (surt de la base + la regla del model; el fitting només hi
+  // deixa traça al snapshot) i la T1b en necessita un amb GRADUACIÓ, no un qualsevol —
+  // `graded-table/` d'un fitting sense GradingVersion torna buit i el tècnic ho descobria
+  // després de triar-lo.
+  const t1aOk = pomRows.length > 0
+    && (model?.grading_rule_set != null || pomRows.some(r => r.regla_model))
+  const t1aMotiu = pomRows.length === 0
+    ? t('tech_sheet.lib_table_no_base_measures')
+    : t('tech_sheet.lib_table_no_grading_rules')
+  const sfAmbGrading = sizeFittings.filter(sf => (sf.n_graded_specs || 0) > 0)
+  // F3 — les seccions que el model porta de l'import. Surten de pomRows (base-measurements,
+  // ja carregat en obrir), no d'una crida nova.
+  const seccionsDelModel = seccionsDeFiles(pomRows)
   const TABLE_VARIANTS = [
-    { k: 't1a', icon: 'ti-ruler-measure', label: t('tech_sheet.table_variant_t1a'), ok: sizeFittings.length > 0, motiu: t('tech_sheet.lib_table_no_fitting') },
-    { k: 't1b', icon: 'ti-chart-grid-dots', label: t('tech_sheet.table_variant_t1b'), ok: sizeFittings.length > 0, motiu: t('tech_sheet.lib_table_no_fitting') },
+    { k: 't1a', icon: 'ti-ruler-measure', label: t('tech_sheet.table_variant_t1a'), ok: t1aOk, motiu: t1aMotiu },
+    {
+      k: 't1b', icon: 'ti-chart-grid-dots', label: t('tech_sheet.table_variant_t1b'),
+      ok: sfAmbGrading.length > 0,
+      motiu: sizeFittings.length === 0
+        ? t('tech_sheet.lib_table_no_fitting')
+        : t('tech_sheet.lib_table_no_graded_fitting'),
+    },
     { k: 't2', icon: 'ti-list-details', label: t('tech_sheet.table_variant_t2'), ok: true, motiu: '' },
     { k: 'custom', icon: 'ti-table-plus', label: t('tech_sheet.table_variant_custom'), ok: true, motiu: '' },
   ]
@@ -4907,7 +5160,8 @@ export default function TechSheetEditor() {
     setF2Msg(t('tech_sheet.ia_proposant'))
     try {
       const netaObjs = (curObjs || []).filter(o => !(o.type === 'group' && o.pomId != null))
-      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl }
+      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl,
+        fmtKey: pages[currentPage]?.format || pageFormat }
       const pageImage = await renderPageToDataURL({ ...pages[currentPage], objects: netaObjs }, 1.5, ctx)
       const sketches = hosts.map(o => {
         const bb = objectBounds(o)
@@ -5478,9 +5732,19 @@ export default function TechSheetEditor() {
       return [
         ribbonTool({ key: 'add-page', icon: 'ti-file-plus', label: t('tech_sheet.add_page'), onClick: addPage }),
         ribbonTool({ key: 'delete-page', icon: 'ti-file-minus', label: t('tech_sheet.delete_page'), onClick: () => removePage(currentPage), disabled: pages.length <= 1 }),
-        <select key="format" value={pageFormat} onChange={e => setPageFormat(e.target.value)} title={t('tech_sheet.page_format')} style={ribbonSelectStyle}>
+        // F4 — el selector actua sobre LA PÀGINA ACTIVA. El format del document segueix
+        // existint com a HERÈNCIA (el que agafa una pàgina que no en declara cap); el botó
+        // del costat és el que el mou i, alhora, neteja els formats per pàgina — que és el
+        // que vol dir "tot el document en aquest format".
+        <select key="format" value={pages[currentPage]?.format || pageFormat}
+          onChange={e => setPageFormatDePagina(currentPage, e.target.value)}
+          title={t('tech_sheet.page_format_page')} style={ribbonSelectStyle}>
           {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>,
+        ribbonTool({
+          key: 'format-all', icon: 'ti-copy', label: t('tech_sheet.page_format_all'),
+          onClick: aplicarFormatATotElDocument,
+        }),
         ribbonTool({ key: 'zoom-out', icon: 'ti-minus', label: t('tech_sheet.zoom_out'), onClick: () => setZoomClamped(z => z - ZOOM_STEP) }),
         ribbonTool({ key: 'zoom-in', icon: 'ti-plus', label: t('tech_sheet.zoom_in'), onClick: () => setZoomClamped(z => z + ZOOM_STEP) }),
         ribbonTool({ key: 'zoom-100', icon: 'ti-zoom-reset', label: '100%', onClick: () => setZoomClamped(1), active: zoom === 1 }),
@@ -5986,6 +6250,19 @@ export default function TechSheetEditor() {
                   <span style={libName}>{v.label}</span>
                 </button>
               ))}
+              {/* F3 — la partició per secció NOMÉS surt si el model en té més d'una: en una
+                  fitxa d'una sola peça seria una casella que no vol dir res. Mai forçada. */}
+              {seccionsDelModel.length > 1 && (
+                <label style={{ ...libRow, cursor: 'pointer', gap: 6 }}
+                  title={t('tech_sheet.split_by_section_hint', { seccions: seccionsDelModel.join(' · ') })}>
+                  <input type="checkbox" checked={partirPerSeccio}
+                    onChange={e => setPartirPerSeccio(e.target.checked)}
+                    style={{ flexShrink: 0, cursor: 'pointer' }} />
+                  <span style={libName}>
+                    {t('tech_sheet.split_by_section', { count: seccionsDelModel.length })}
+                  </span>
+                </label>
+              )}
             </Contenidor>
 
             <Contenidor titol={t('tech_sheet.lib_files', { n: fitxersAltres.length })} icona="ti-folder" defaultOpen={false} pes={1}>
@@ -6067,7 +6344,7 @@ export default function TechSheetEditor() {
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
                     placeholderMode={templateMode}
                     hideTextChildren={editingFlatGroupId === o.id}
-                    pageCtx={{ index: currentPage, total: pages.length }}
+                    pageCtx={{ index: currentPage, total: pages.length, fmtKey: pages[currentPage]?.format || pageFormat }}
                     onHeaderContextMenu={locked ? ((e, ho) => { e.evt.preventDefault(); setHeaderMenu(ho.detached ? null : { x: e.evt.clientX, y: e.evt.clientY }) }) : undefined}
                     selected={selectedIds.includes(o.id)}
                     selectable={locked && o.layer !== 'template' && !o.locked}
@@ -6808,13 +7085,31 @@ export default function TechSheetEditor() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setTablePicker(null)}>
           <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.table_pick_fitting')}</h2>
+            {/* F1 — el modal DIU quins fittings tenen graduació. La T1b es construeix des de
+                `graded-table/`, que d'un fitting sense GradingVersion torna buit: oferir-los
+                tots per igual feia que el tècnic ho descobrís després de triar. Els que no en
+                tenen queden atenuats i deshabilitats per a la T1b; per a la T1a segueixen
+                servint (només hi deixen traça al snapshot), i el comptador de specs hi és de
+                totes maneres perquè la tria sigui informada. El contenidor IMP-* queda així
+                identificat sense cap regla d'anomenar: es veu pel comptador. */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {sizeFittings.map(sf => (
-                <button key={sf.id} type="button" onClick={() => runTableVariant(tablePicker.variant, sf.id)}
-                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
-                  {sf.codi || sf.nom || sf.talla_base || `#${sf.id}`}{sf.tipus ? ` · ${sf.tipus}` : ''}
-                </button>
-              ))}
+              {sizeFittings.map(sf => {
+                const nSpecs = sf.n_graded_specs || 0
+                const inutil = tablePicker.variant === 't1b' && nSpecs === 0
+                return (
+                  <button key={sf.id} type="button" disabled={inutil}
+                    title={inutil ? t('tech_sheet.lib_table_no_graded_fitting') : undefined}
+                    onClick={() => { if (!inutil) runTableVariant(tablePicker.variant, sf.id) }}
+                    style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: inutil ? 'not-allowed' : 'pointer', opacity: inutil ? 0.45 : 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span>{sf.codi || sf.nom || sf.talla_base || `#${sf.id}`}{sf.tipus ? ` · ${sf.tipus}` : ''}</span>
+                    <span style={{ fontSize: 'var(--fs-small)', color: nSpecs ? COL.textMain : COL.textMuted, whiteSpace: 'nowrap' }}>
+                      {nSpecs
+                        ? t('tech_sheet.sf_graded_specs', { count: nSpecs })
+                        : t('tech_sheet.sf_no_grading')}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
             <button type="button" onClick={() => setTablePicker(null)}
               style={{ marginTop: 12, fontSize: 'var(--fs-label)', color: COL.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>

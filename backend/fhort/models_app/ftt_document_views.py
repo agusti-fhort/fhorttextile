@@ -75,7 +75,12 @@ class FttDocumentCreateView(APIView):
                     logger.exception("Plantilla %s il·legible; es crea document buit", template_id)
                     document_json = None
                     assets = None
-        fitxer = svc.create_document(model, document_json=document_json, assets=assets)
+        # F2 — nom i descripció opcionals: el que distingeix N fitxes del MATEIX model a la
+        # llista d'Arxius. Absents → nom derivat del model, exactament com fins ara.
+        fitxer = svc.create_document(
+            model, document_json=document_json, assets=assets,
+            nom=request.data.get('nom'), descripcio=request.data.get('descripcio'),
+        )
         return Response(ModelFitxerSerializer(fitxer).data, status=status.HTTP_201_CREATED)
 
 

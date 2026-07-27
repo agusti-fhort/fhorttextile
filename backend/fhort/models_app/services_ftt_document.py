@@ -436,18 +436,50 @@ def es_ftt(fitxer):
     return nom.lower().endswith(ModelFitxer.FTT_EXTENSION)
 
 
-def create_document(model, *, document_json=None, assets=None, preview=None, nom=None):
-    """Crea la v1 d'un document .ftt per al model (cadena nova, is_current=True)."""
+def create_document(model, *, document_json=None, assets=None, preview=None, nom=None,
+                    descripcio=None):
+    """Crea la v1 d'un document .ftt per al model (cadena nova, is_current=True).
+
+    F2 — un model pot tenir N fitxes. `nom` és el nom INTERN que les distingeix a la llista
+    d'Arxius (un model de 3 peces vol "DRESS", "KNICKERS", "HEADBAND", no tres
+    `<codi>_fitxa.ftt` idèntics). Sense `nom` es manté el nom derivat de sempre, de manera
+    que el camí existent (la fitxa única del model) no canvia gens.
+
+    L'extensió la posa aquí i no qui crida: `es_ftt()` reconeix un document pel tipus O per
+    l'extensió, i un nom escrit a mà sense `.ftt` deixaria un document que només es
+    reconeixeria per una de les dues bandes.
+    """
     if document_json is None:
         document_json = services_ftt.new_empty_document()
     blob = services_ftt.pack(document_json, assets=assets, preview=preview)
-    filename = nom or _doc_filename(model)
-    return save_model_file(
+    filename = _nom_de_fitxa(nom) or _doc_filename(model)
+    fitxer = save_model_file(
         model,
         ContentFile(blob, name=filename),
         tipus=ModelFitxer.TIPUS_TECHSHEET,
         nom=filename,
     )
+    # `descripcio` ja existeix a ModelFitxer; s'escriu aquí i no dins de save_model_file
+    # perquè aquella funció és compartida per tots els camins de pujada i no li pertoca.
+    if descripcio:
+        fitxer.descripcio = descripcio
+        fitxer.save(update_fields=['descripcio'])
+    return fitxer
+
+
+def _nom_de_fitxa(nom):
+    """Nom intern escrit per una persona → nom de fitxer .ftt. None/buit → None."""
+    net = (nom or '').strip()
+    if not net:
+        return None
+    # Cap separador de ruta: el nom viatja a ContentFile i acaba al FileField.
+    net = net.replace('/', '-').replace('\\', '-').strip('. ')
+    if not net:
+        return None
+    net = net[:200]
+    if not net.lower().endswith(ModelFitxer.FTT_EXTENSION):
+        net += ModelFitxer.FTT_EXTENSION
+    return net
 
 
 def load_document(fitxer):

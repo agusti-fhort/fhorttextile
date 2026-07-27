@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { models as modelsApi, commerce } from '../api/endpoints'
 import ActionsMenu, { PHASES } from '../components/model/ActionsMenu'
+import { MaduresaBadge } from '../components/model/FederacioBadge'
 import ModelsFilterPanel from '../components/model/ModelsFilterPanel'
 import { useFilterOptions, garmentTypeLabel, garmentGroupLabel } from '../components/model/filterOptions'
 import Feedback from '../components/ui/Feedback'
@@ -471,7 +472,9 @@ function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale, intentMo
           {/* SET-1 — la fila diu si és una PART d'un producte. Sense això un tècnic no pot
               saber que el que veu és la peça 2 de 3 d'un conjunt (base DALIA §6). */}
           <SetBadge m={m} t={t} />
-          {m.collection && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>· {m.collection}</span>}
+          {/* RETORN-2 — la maduresa que l'estudi publica. Només es pinta si ha arribat. */}
+          <MaduresaBadge model={m} t={t} />
+          {m.collection &&<span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>· {m.collection}</span>}
           <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{m.temporada}{m.any ? ` ${m.any}` : ''}</span>
           <span title={t(m.has_order ? 'models_list.with_order_hint' : 'models_list.direct_hint')} style={{
             fontSize: 'var(--fs-caption)', padding: '2px 7px', borderRadius: 5, fontFamily: MONO,

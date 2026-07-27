@@ -79,14 +79,20 @@ class GradedSpecTableView(APIView):
         base_size = (TechModel.objects.filter(pk=sf.model_id)
                      .values_list('base_size_label', flat=True).first())
         # ordre i nom_fitxa per POMMaster del model (precedent: serializers.py FIX 4B).
-        bms = BaseMeasurement.objects.filter(model_id=sf.model_id).values('pom_id', 'ordre', 'nom_fitxa')
+        # F3 — `seccio` viatja pel MATEIX camí que `ordre`/`nom_fitxa`: surt de la
+        # BaseMeasurement del model, no del GradedSpec (la graduació no en sap res, i no li
+        # pertoca: la secció és una propietat del document d'origen, no de l'escalat).
+        bms = BaseMeasurement.objects.filter(model_id=sf.model_id).values(
+            'pom_id', 'ordre', 'nom_fitxa', 'seccio')
         ordre_map = {bm['pom_id']: bm['ordre'] for bm in bms}
         nom_fitxa_map = {bm['pom_id']: bm['nom_fitxa'] for bm in bms}
+        seccio_map = {bm['pom_id']: bm['seccio'] for bm in bms}
 
         rows = [rows_by_pom[pid] for pid in rows_order]
         # ref = nomenclatura del croquis (nom_fitxa) amb fallback a abbreviation del POMGlobal.
         for row in rows:
             row['ref'] = nom_fitxa_map.get(row['pom_id']) or row['abbreviation']
+            row['seccio'] = seccio_map.get(row['pom_id']) or ''
         # Ordre de fitxa (POMs sense BaseMeasurement → al final).
         rows.sort(key=lambda r: ordre_map.get(r['pom_id'], 10 ** 9))
 

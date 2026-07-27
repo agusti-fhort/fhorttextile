@@ -21,6 +21,20 @@ def _valid_phases():
     return [c[0] for c in Model.FASE_CHOICES]
 
 
+def _publica_maduresa(model):
+    """RETORN-2 — el gate també és maduresa: la marca ha de saber que la peça ha canviat de fase.
+
+    L'ESTUDI MANA EN LA FASE (decisió del Patró C): el bessó de la marca l'adopta sense
+    negociar-la. Es crida amb el model ja desat, perquè el resum porti la fase nova.
+
+    No-fatal per construcció (`sync_estat_segur`): un gate és una decisió humana de maduresa i
+    no pot dependre de si el pont de federació està obert. `sync_estat` ja calla sol per als
+    models INTERN, que són la immensa majoria.
+    """
+    from fhort.tenants.federation_service import SENTIT_MADURESA, sync_estat_segur
+    sync_estat_segur(model, SENTIT_MADURESA)
+
+
 @transaction.atomic
 def advance_phase_gate(model, to_phase, by_profile, notes=None):
     """Gate del responsable: avança la fase d'un Model SENSE sessió de fitting.
@@ -47,6 +61,7 @@ def advance_phase_gate(model, to_phase, by_profile, notes=None):
     sealed_version = seal_model_grading(
         model, user_profile_id=(by_profile.id if by_profile else None)
     )
+    _publica_maduresa(model)
     return {'model_id': model.id, 'from_phase': frm, 'to_phase': to_phase,
             'sealed_version': sealed_version}
 
@@ -66,6 +81,7 @@ def regress_phase(model, to_phase, by_profile, notes=None):
     model.save(update_fields=['fase_actual'])
     GateEvent.objects.create(model=model, from_phase=frm, to_phase=to_phase,
                              kind='regress', by=by_profile, notes=notes)
+    _publica_maduresa(model)
     return {'model_id': model.id, 'from_phase': frm, 'to_phase': to_phase}
 
 

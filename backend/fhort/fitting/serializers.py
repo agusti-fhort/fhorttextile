@@ -19,6 +19,17 @@ class SizeFittingSerializer(serializers.ModelSerializer):
     model_codi = serializers.CharField(source='model.codi_intern', read_only=True)
     creat_per_nom = serializers.CharField(source='creat_per.nom_complet', read_only=True)
     estat_display = serializers.CharField(source='get_estat_display', read_only=True)
+    #: F1 — quantes specs graduades té aquest fitting. La T1b de la fitxa es construeix des de
+    #: `fitting/<id>/graded-table/`, i un fitting SENSE GradingVersion la torna buida: el modal
+    #: de tria l'oferia igual i el tècnic hi topava després de triar. Amb això el modal el pot
+    #: atenuar i dir per què. 0 = no hi ha graduació encara (no és un error: és un fitting que
+    #: encara no s'ha graduat). Es compta sobre la versió ACTIVA, que és la que llegeix
+    #: graded-table.
+    n_graded_specs = serializers.SerializerMethodField()
+
+    def get_n_graded_specs(self, obj):
+        gv = obj.grading_versions.filter(is_active=True).order_by('-data').first()
+        return gv.graded_specs.count() if gv else 0
 
     class Meta:
         model = SizeFitting
