@@ -2312,6 +2312,9 @@ export default function TechSheetEditor() {
   const [peces, setPeces] = useState({ loading: true })
   const [sizeFittings, setSizeFittings] = useState([])
   const [tableData, setTableData] = useState({})    // {objId: jsonData|null} fora del JSON
+  // F3 — partició opcional de les taules de mesures per secció d'origen. Default false: la
+  // fitxa d'una peça (la immensa majoria) no ha de notar que això existeix.
+  const [partirPerSeccio, setPartirPerSeccio] = useState(false)
   const [notice, setNotice] = useState(null)        // toast efímer (p.ex. "ja hi ha capçalera")
   const [thumbnails, setThumbnails] = useState([])
   const [exporting, setExporting] = useState(false)
@@ -4369,6 +4372,39 @@ export default function TechSheetEditor() {
     return { ...obj, scale, width: wMm * scale, height: hMm * scale }
   }
 
+  // ── F3 · UNA TAULA PER SECCIÓ ───────────────────────────────────────────────
+  // Un document multi-peça porta les mesures agrupades sota rètols ('01.- DRESS',
+  // '02.- KNICKERS'…) que ara sobreviuen a l'import (BaseMeasurement.seccio). Qui composa la
+  // fitxa vol una taula per peça al costat del seu croquis, no una de sola amb les tres
+  // seguides — però això és una decisió de MAQUETACIÓ, i per això la partició és OPCIONAL i
+  // no s'aplica mai sola.
+  //
+  // `buildTableCellPrimitives` no es toca: cada secció produeix un objecte `table` normal i
+  // corrent, amb les mateixes columnes i el mateix builder. L'única cosa que canvia és
+  // quantes files hi entren i on cau l'objecte.
+  const seccionsDeFiles = (files) => {
+    const vistes = []
+    for (const f of files) {
+      const s = (f?.seccio || '').trim()
+      if (s && !vistes.includes(s)) vistes.push(s)
+    }
+    return vistes
+  }
+
+  // Col·locació ESGLAONADA: N taules a la mateixa x/y naixerien exactament l'una damunt de
+  // l'altra i semblaria que només se n'ha inserit una. El desplaçament és petit a propòsit
+  // (prou per veure-les totes, prou poc per no sortir de la pàgina amb 3-4 peces).
+  const escalonat = (i) => ({ x: 10 + i * 6, y: 14 + i * 8 })
+
+  // Insereix N objectes (un per secció) o UN de sol. Retorna quantes taules ha posat.
+  const inserirTaules = (grups, fesObjecte) => {
+    grups.forEach((g, i) => {
+      const obj = fitTableObj({ ...fesObjecte(g), ...escalonat(i) })
+      addObject(obj)
+    })
+    return grups.length
+  }
+
   // T1a — fitxa de treball fitting (POM base + regla de grading). Tol± queda buit: la
   // serialització de base-measurements no exposa tolerància (només impressió+anotació manual).
   // F1 — DUES fonts per a la regla, mai una URL amb `null`. Un model pot portar la graduació
@@ -4418,7 +4454,7 @@ export default function TechSheetEditor() {
       { key: 'nova', label: t('tech_sheet.tbl_col_new_measure'), width: 34 },
       { key: 'coment', label: t('tech_sheet.tbl_col_comments'), width: 60 },
     ]
-    const rows = bms.map(bm => {
+    const filesDe = (sub) => sub.map(bm => {
       const rule = rulesByPom[bm.pom_id]
       return [
         bm.nom_fitxa || bm.pom_abbreviation || '',
@@ -4431,13 +4467,22 @@ export default function TechSheetEditor() {
         '', '', '',
       ]
     })
-    const obj = fitTableObj({
-      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
-      kind: 'pom_fitting', columns, rows,
+    // F3 — una taula per secció NOMÉS si el tècnic ho ha demanat I el document en té més
+    // d'una. Amb una sola secció (o cap) el resultat és exactament el d'abans.
+    const seccions = seccionsDeFiles(bms)
+    const grups = (partirPerSeccio && seccions.length > 1)
+      ? seccions.map(s => ({ seccio: s, files: bms.filter(b => (b.seccio || '').trim() === s) }))
+      : [{ seccio: null, files: bms }]
+    const n = inserirTaules(grups, g => ({
+      id: uid(), type: 'table', layer: 'free',
+      kind: 'pom_fitting', columns, rows: filesDe(g.files),
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
-      snapshot: { model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString() },
-    })
-    addObject(obj)
+      snapshot: {
+        model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString(),
+        ...(g.seccio ? { seccio: g.seccio } : {}),
+      },
+    }))
+    if (n > 1) flash(t('tech_sheet.flash_tables_per_section', { count: n }))
     setTablePicker(null)
   }
 
@@ -4482,20 +4527,28 @@ export default function TechSheetEditor() {
     const breakResum = (row) => sizeLabels
       .filter((sl, si) => esBreak(row, sl, si > 0 ? sizeLabels[si - 1] : null))
       .join(' · ')
-    const rows = data.rows.map(row => [
+    const filesDe = (sub) => sub.map(row => [
       row.ref || row.abbreviation || row.codi || '',
       { text: row.nom_en || '', sub: row.nom_ca || '' },
       ...sizeLabels.map(sl => cellForSize(row, sl)),
       rowDelta(row, data.base_size, sizeLabels),
       breakResum(row),
     ])
-    const obj = fitTableObj({
-      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
-      kind: 'pom_grading', columns, rows,
+    // F3 — mateix criteri que a la T1a: opcional, i només si el document té més d'una secció.
+    const seccions = seccionsDeFiles(data.rows)
+    const grups = (partirPerSeccio && seccions.length > 1)
+      ? seccions.map(s => ({ seccio: s, files: data.rows.filter(r => (r.seccio || '').trim() === s) }))
+      : [{ seccio: null, files: data.rows }]
+    const n = inserirTaules(grups, g => ({
+      id: uid(), type: 'table', layer: 'free',
+      kind: 'pom_grading', columns, rows: filesDe(g.files),
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
-      snapshot: { model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString() },
-    })
-    addObject(obj)
+      snapshot: {
+        model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString(),
+        ...(g.seccio ? { seccio: g.seccio } : {}),
+      },
+    }))
+    if (n > 1) flash(t('tech_sheet.flash_tables_per_section', { count: n }))
     setTablePicker(null)
   }
 
@@ -4722,6 +4775,9 @@ export default function TechSheetEditor() {
     ? t('tech_sheet.lib_table_no_base_measures')
     : t('tech_sheet.lib_table_no_grading_rules')
   const sfAmbGrading = sizeFittings.filter(sf => (sf.n_graded_specs || 0) > 0)
+  // F3 — les seccions que el model porta de l'import. Surten de pomRows (base-measurements,
+  // ja carregat en obrir), no d'una crida nova.
+  const seccionsDelModel = seccionsDeFiles(pomRows)
   const TABLE_VARIANTS = [
     { k: 't1a', icon: 'ti-ruler-measure', label: t('tech_sheet.table_variant_t1a'), ok: t1aOk, motiu: t1aMotiu },
     {
@@ -6030,6 +6086,19 @@ export default function TechSheetEditor() {
                   <span style={libName}>{v.label}</span>
                 </button>
               ))}
+              {/* F3 — la partició per secció NOMÉS surt si el model en té més d'una: en una
+                  fitxa d'una sola peça seria una casella que no vol dir res. Mai forçada. */}
+              {seccionsDelModel.length > 1 && (
+                <label style={{ ...libRow, cursor: 'pointer', gap: 6 }}
+                  title={t('tech_sheet.split_by_section_hint', { seccions: seccionsDelModel.join(' · ') })}>
+                  <input type="checkbox" checked={partirPerSeccio}
+                    onChange={e => setPartirPerSeccio(e.target.checked)}
+                    style={{ flexShrink: 0, cursor: 'pointer' }} />
+                  <span style={libName}>
+                    {t('tech_sheet.split_by_section', { count: seccionsDelModel.length })}
+                  </span>
+                </label>
+              )}
             </Contenidor>
 
             <Contenidor titol={t('tech_sheet.lib_files', { n: fitxersAltres.length })} icona="ti-folder" defaultOpen={false} pes={1}>
