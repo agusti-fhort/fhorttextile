@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { Fragment, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Modal from '../ui/Modal'
@@ -8,6 +8,27 @@ const API = import.meta.env.VITE_API_URL || ''
 
 // base64 unicode-safe (per passar el prefill al Size Map Setup via query param).
 const encodePrefill = (obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj))))
+
+// F6 · agrupa una llista per SECCIÓ consecutiva, en l'ordre del document. No reordena res:
+// la secció és una capçalera que s'insereix quan canvia, no un criteri d'ordenació — si el
+// document repeteix una secció més avall, hi torna a sortir, que és el que diu el paper.
+// Sense cap `seccio` retorna UN sol grup amb `seccio: null` → el render queda idèntic al d'abans.
+const agrupaPerSeccio = (items, seccioDe) => {
+  const grups = []
+  for (const item of items) {
+    const s = seccioDe(item) || null
+    if (!grups.length || grups[grups.length - 1].seccio !== s) grups.push({ seccio: s, items: [] })
+    grups[grups.length - 1].items.push(item)
+  }
+  return grups
+}
+
+// Subcapçalera de grup: el mateix fons que la capçalera de la taula de mesures (:983).
+const SUBHEAD = {
+  padding: '6px 12px', background: '#f5f0ea', fontWeight: 600,
+  fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
+  textTransform: 'uppercase', letterSpacing: '0.04em',
+}
 
 const STEPS = [
   { n: 1, labelKey: 'import_wizard.step.sizes' },
@@ -354,8 +375,17 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
 
   const pomsActius = (pomsExtrets || []).filter(p => p.actiu).length
 
+  // F6 · grups de secció del pas 2. Es porta l'índex ORIGINAL a dins: els toggles hi indexen.
+  const grupsPoms = agrupaPerSeccio(
+    (pomsExtrets || []).map((p, idx) => ({ p, idx })), x => x.p.seccio)
+  // Els POMs afegits a mà del catàleg no vénen de cap secció del document. Quan la fitxa SÍ
+  // que en té, se'ls posa una capçalera pròpia: sense ella semblaria que pengen de l'última.
+  const pomsAmbSeccions = grupsPoms.some(g => g.seccio)
+
   // ── Pas 3 — taula de mesures
   const pomsTaula = (pomsExtrets || []).filter(p => p.actiu)  // files = POMs actius
+  const grupsTaula = agrupaPerSeccio(pomsTaula, p => p.seccio)     // F6
+  const taulaAmbSeccions = grupsTaula.some(g => g.seccio)
   // La columna base de la taula de mesures és la label DOCUMENT aparellada amb la talla base
   // del model (B5); si no, fallback a l'heurística anterior.
   const baseSize = baseDocLabel
@@ -832,7 +862,14 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
               </div>
 
               <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
-                {pomsExtrets.map((p, idx) => {
+                {grupsPoms.map((grup, gi) => (
+                  <Fragment key={`g${gi}`}>
+                    {(grup.seccio || pomsAmbSeccions) && (
+                      <div style={{ ...SUBHEAD, borderTop: gi ? `1px solid ${BORDER}` : 'none' }}>
+                        {grup.seccio || t('import_wizard.seccio_cap')}
+                      </div>
+                    )}
+                    {grup.items.map(({ p, idx }) => {
                   const conf = (p.confidence || '').toUpperCase()
                   const low = conf === 'LOW' || conf === 'NO_MATCH'
                   const med = conf === 'MEDIUM'
@@ -894,7 +931,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                           : noMatch ? t('import_wizard.no_match_badge') : conf.toLowerCase()}</span>
                     </div>
                   )
-                })}
+                    })}
+                  </Fragment>
+                ))}
               </div>
 
               {/* Afegir POM manual del catàleg */}
@@ -993,7 +1032,16 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                 </tr>
               </thead>
               <tbody>
-                {pomsTaula.map(p => (
+                {grupsTaula.map((grup, gi) => (
+                  <Fragment key={`g${gi}`}>
+                    {(grup.seccio || taulaAmbSeccions) && (
+                      <tr>
+                        <td colSpan={1 + tallesSel.length} style={{ ...SUBHEAD, borderTop: `1px solid ${BORDER}` }}>
+                          {grup.seccio || t('import_wizard.seccio_cap')}
+                        </td>
+                      </tr>
+                    )}
+                    {grup.items.map(p => (
                   <tr key={p.pom_master_id} style={{ borderTop: `1px solid ${BORDER}` }}>
                     <td style={{ padding: '6px 10px', position: 'sticky', left: 0, background: 'var(--white)' }}>
                       {/* QA-S8 · El codi del DOCUMENT mana: és el que la persona té al paper
@@ -1019,6 +1067,8 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                       </td>
                     ))}
                   </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

@@ -3442,6 +3442,7 @@
     "fulls_tria": "Hoja a importar:",
     "fulls_opcio": "{{nom}} · {{n}} POMs",
     "fulls_opcio_illegible": "{{nom}} · sin tabla legible",
+    "seccio_cap": "Sin sección",
     "base_size": "Talla base",
     "base_unpaired": "sin columna del documento emparejada",
     "no_run_configured": "Ningún run configurado",

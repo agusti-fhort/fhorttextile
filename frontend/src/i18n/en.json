@@ -3442,6 +3442,7 @@
     "fulls_tria": "Sheet to import:",
     "fulls_opcio": "{{nom}} · {{n}} POMs",
     "fulls_opcio_illegible": "{{nom}} · no readable table",
+    "seccio_cap": "No section",
     "base_size": "Base size",
     "base_unpaired": "no document column paired",
     "no_run_configured": "No run configured",

@@ -3442,6 +3442,7 @@
     "fulls_tria": "Full a importar:",
     "fulls_opcio": "{{nom}} · {{n}} POMs",
     "fulls_opcio_illegible": "{{nom}} · sense taula llegible",
+    "seccio_cap": "Sense secció",
     "base_size": "Talla base",
     "base_unpaired": "sense columna del document aparellada",
     "no_run_configured": "Cap run configurat",
