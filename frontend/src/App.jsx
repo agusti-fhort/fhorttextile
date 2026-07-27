@@ -123,16 +123,22 @@ function FttResolver() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const taskId = sp.get('task_id')
-  // null = resolent | { templates } = mostra el selector (blanc | plantilla de tenant)
+  // null = resolent | { templates } = tria d'origen (blanc | plantilla de tenant)
+  //                 | { fitxes }   = F2: el model té N fitxes; tria quina obrir (o en fa una de nova)
   const [choose, setChoose] = useState(null)
+  // F2 · nom intern de la fitxa nova des del selector de N. Buit → nom derivat del model.
+  const [nouNom, setNouNom] = useState('')
   const API = import.meta.env.VITE_API_URL || ''
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }
 
   // Crea el document (blanc si templateId és null) i navega a l'editor.
-  const createDoc = async (templateId) => {
+  const createDoc = async (templateId, nom) => {
     try {
+      const cos = {}
+      if (templateId) cos.template_id = templateId
+      if ((nom || '').trim()) cos.nom = nom.trim()
       const r = await fetch(`${API}/api/v1/models/${id}/ftt-document/`, {
-        method: 'POST', headers, body: JSON.stringify(templateId ? { template_id: templateId } : {}),
+        method: 'POST', headers, body: JSON.stringify(cos),
       })
       if (r.ok) {
         const f = await r.json()
@@ -146,16 +152,20 @@ function FttResolver() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      let fitxerId = null
+      // F2 — 0 → crea · 1 → obre · N → selector. Abans obria SEMPRE la primera i la resta
+      // quedaven inabastables des de /fitxa: un model multi-peça amb tres fitxes només en
+      // tenia una d'accessible per aquest camí.
+      let fitxes = []
       try {
         const r = await fetch(`${API}/api/v1/model-fitxers/?model=${id}&tipus=TECHSHEET&is_current=true&ordering=-data_pujada`, { headers })
-        if (r.ok) { const d = await r.json(); const list = d.results || d || []; if (list.length) fitxerId = list[0].id }
+        if (r.ok) { const d = await r.json(); fitxes = d.results || d || [] }
       } catch { /* noop */ }
       if (cancelled) return
-      if (fitxerId) {
-        navigate(`/models/${id}/ftt/${fitxerId}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })
+      if (fitxes.length === 1) {
+        navigate(`/models/${id}/ftt/${fitxes[0].id}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })
         return
       }
+      if (fitxes.length > 1) { setChoose({ fitxes }); return }
       // Sense document existent: si el tenant té plantilles, pregunta; si no, crea en blanc directe.
       let templates = []
       try {
@@ -170,6 +180,35 @@ function FttResolver() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // F2 — el model ja té N fitxes: quina s'obre? Amb la porta per fer-ne una de nova amb nom.
+  if (choose?.fitxes) {
+    const btn = { textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)', color: 'var(--text)', cursor: 'pointer' }
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+        <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '1.4rem', maxWidth: 380, width: '90%', border: '1px solid var(--border)' }}>
+          <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>{t('tech_sheet.pick_doc_title')}</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {choose.fitxes.map(f => (
+              <button key={f.id} type="button" style={btn}
+                onClick={() => navigate(`/models/${id}/ftt/${f.id}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })}>
+                {f.nom_fitxer}
+                {f.descripcio && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{f.descripcio}</div>}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            <input value={nouNom} onChange={e => setNouNom(e.target.value)}
+              placeholder={t('tech_sheet.new_doc_name_placeholder')}
+              style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)', color: 'var(--text)' }} />
+            <button type="button" onClick={() => createDoc(null, nouNom)}
+              style={{ ...btn, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              {t('tech_sheet.new_doc_add')}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
   if (choose) {
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
