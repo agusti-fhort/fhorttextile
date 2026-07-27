@@ -25,12 +25,15 @@ from rest_framework.response import Response
 
 from fhort.accounts.capabilities import CONFIGURE, HasCapability
 
-from .federation_service import FederacioError, safata_del_studio, traspassa
+from .federation_service import (FederacioError, envia_a_la_marca, safata_del_studio,
+                                 traspassa)
 from .models import Client
 
 #: Els errors de domini que són un CONFLICTE amb l'estat del món (409) i no una petició mal
 #: formada (400). El pont tancat és el cas de manual: la petició és perfecta, el món diu que no.
-CODIS_409 = frozenset({'link_not_active', 'customer_missing'})
+#: `besso_missing` hi entra pel mateix motiu: demanar d'enviar una peça que la marca encara no
+#: té no és una petició mal escrita, és un món que encara no hi és.
+CODIS_409 = frozenset({'link_not_active', 'customer_missing', 'besso_missing'})
 
 
 class EsEstudi(IsAuthenticated):
@@ -124,3 +127,37 @@ class EncarrecViewSet(viewsets.ViewSet):
             'n_saltats': len(report['saltats']),
             'n_llegits': report['n_llegits'],
         })
+
+    @action(detail=False, methods=['post'], url_path='enviar')
+    def enviar(self, request):
+        """POST /api/v1/encarrecs/enviar/ — {model_id} — la feina feta, cap a la marca.
+
+        EL RETORN DE `traspassar/`, I VIU AL MATEIX LLOC PER LA MATEIXA RAÓ. El traspàs és de
+        l'estudi perquè la feina és seva; l'enviament també, i pel mateix motiu: qui decideix
+        que la peça està prou madura per ensenyar-la és qui l'ha fet. El `brand_codi` no viatja
+        al payload —es dedueix del model, que ja diu de quina casa ve— exactament com el
+        `studio_codi` no viatja mai en aquest fitxer.
+
+        UN MODEL PER CRIDA, A POSTA. El bulk de la UI itera aquesta crida i n'agrega el resum,
+        com fa `runBulk` amb la resta d'accions per-model. Un endpoint en bloc hauria de decidir
+        què fer quan la peça 7 de 20 no té bessó, i la resposta honesta —«digues-ho per aquella
+        i continua»— és precisament el que la iteració ja fa sense inventar-se cap semàntica.
+        """
+        model_id = request.data.get('model_id')
+        if not model_id:
+            return Response({'error': "Cal l'id del model.", 'code': 'model_id_required'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        from fhort.models_app.models import Model
+        model = Model.objects.filter(pk=model_id).first()
+        if model is None:
+            return Response({'error': 'Model no trobat.', 'code': 'model_missing'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            informe = envia_a_la_marca(model)
+        except FederacioError as e:
+            codi_http = (status.HTTP_409_CONFLICT if e.codi in CODIS_409
+                         else status.HTTP_400_BAD_REQUEST)
+            return Response({'error': str(e), 'code': e.codi}, status=codi_http)
+        return Response(informe)
