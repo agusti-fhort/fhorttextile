@@ -146,6 +146,9 @@ class ModelListSerializer(serializers.ModelSerializer):
             # Read-only per naturalesa (l'únic escriptor és `federation_service.sync_estat`);
             # aquest serializer no desa res.
             'federacio_estat',
+            # RETORN-1 — la provinença, a la llista: sense ella la UI de l'estudi no pot saber
+            # quines files es poden enviar a una marca i quines han nascut a casa.
+            'origen',
             'created_at',
             'garment_type',
             'garment_type_item_nom',
