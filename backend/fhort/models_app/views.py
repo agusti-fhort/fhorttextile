@@ -746,19 +746,48 @@ def create_model_wizard(request):
     if not request.data.get('garment_type_item_id'):
         return Response({'error': 'garment_type_item és obligatori'}, status=400)
 
-    if is_multipiece:
-        try:
-            num_pieces = int(num_pieces)
-        except (TypeError, ValueError):
-            return Response(
-                {'error': 'num_pieces ha de ser un enter quan is_multipiece és cert'},
-                status=400,
-            )
-        if num_pieces < 2:
-            return Response(
-                {'error': 'Un conjunt multi-peça necessita num_pieces >= 2'},
-                status=400,
-            )
+    # ── SET-1 · A4 — EL GTI MANA. Decisió 3 del sprint SET: és l'item qui declara PEÇA o
+    #    CONJUNT, no el payload. `is_multipiece`/`num_pieces` (que cap superfície de frontend
+    #    enviava) queden com a redundància: si contradiuen el GTI, 400 — mai s'endevina.
+    item_triat = garment_fields.get('garment_type_item')
+    parts_del_set = []
+    if item_triat is not None and item_triat.is_set:
+        parts_del_set = list(
+            item_triat.parts.select_related(
+                'part_item', 'part_item__garment_type',
+                'part_item__grading_rule_set', 'part_item__base_size_definition',
+            ).order_by('ordre', 'id'))
+        if len(parts_del_set) < 2:
+            return Response({
+                'error': (f"L'item «{item_triat.code}» està declarat com a conjunt però la seva "
+                          f'composició té {len(parts_del_set)} peça/es. Defineix-ne la '
+                          'composició al catàleg abans de crear-hi models.'),
+                'codi': 'set_sense_composicio',
+            }, status=400)
+        if 'is_multipiece' in request.data and not is_multipiece:
+            return Response({
+                'error': (f"L'item «{item_triat.code}» és un CONJUNT: no es pot crear com a peça "
+                          'única. Retira `is_multipiece: false` del payload.'),
+                'codi': 'contradiccio_gti_set',
+            }, status=400)
+        if num_pieces is not None and int(num_pieces) != len(parts_del_set):
+            return Response({
+                'error': (f'`num_pieces` ({num_pieces}) contradiu la composició de l\'item '
+                          f'«{item_triat.code}» ({len(parts_del_set)} peces). El GTI mana.'),
+                'codi': 'contradiccio_gti_num_pieces',
+            }, status=400)
+        is_multipiece = True
+        num_pieces = len(parts_del_set)
+    elif is_multipiece:
+        # El camí llegat (N peces idèntiques d'un item que NO és conjunt) deixa d'existir: amb
+        # la decisió 3, un conjunt és una declaració del catàleg. Es rebutja explícitament en
+        # comptes de crear N models bessons que cap GTI no reconeixeria com a peces.
+        return Response({
+            'error': (f"L'item «{item_triat.code if item_triat else '—'}» no està declarat com a "
+                      'conjunt al catàleg: no s\'hi poden crear peces. Marca\'l com a conjunt i '
+                      'defineix-ne la composició.'),
+            'codi': 'contradiccio_gti_no_set',
+        }, status=400)
 
     # Prefix unificat: codi del customer (fallback self-customer). Escopa la seqüència via
     # el codi_intern (regex sota), de manera que el next_num ja és per-customer (Pas 4).
@@ -812,7 +841,10 @@ def create_model_wizard(request):
         # materialització → si peta, no queda cap MGR parcial i el model gradua igualment pel
         # fallback PG-1 (ruleset extern). Degradació gràcil INTENCIONAL, no descuit.
         if model.grading_rule_set_id:
-            from django.db import transaction
+            # `transaction` ve del import de mòdul (:4). Un `from django.db import transaction`
+            # AQUÍ el feia local a TOTA la funció i deixava la branca multi-peça amb un
+            # UnboundLocalError al seu `with transaction.atomic()` — latent mentre cap
+            # superfície no enviava `is_multipiece` (forat #4 del dimensionat).
             from fhort.models_app.services import (materialize_model_grading_rules,
                                                origen_mgr_des_de_ruleset)
             with transaction.atomic():
@@ -820,6 +852,31 @@ def create_model_wizard(request):
                     model, model.grading_rule_set.regles.all(),
                     origen=origen_mgr_des_de_ruleset(model.grading_rule_set))
         return Response({'id': model.id, 'codi_intern': model.codi_intern}, status=201)
+
+    # SET-1 · A4 (forat #1 del dimensionat, :849) — les peces JA NO neixen idèntiques. Fins ara
+    # el bucle clonava el MATEIX `**garment_fields` a totes: mateix item, mateix ruleset, mateix
+    # nom. Amb la composició del GTI, cada peça resol el SEU món a través de la mateixa porta
+    # única (`_resolve_garment_def`), i és això —i només això— el que fa que A6 (grading per
+    # part) surti gratis: cada part-Model va al seu contenidor perquè porta el seu propi
+    # `garment_type_item` i `grading_rule_set`.
+    base_payload = {k: request.data.get(k) for k in (
+        'garment_type_item_id', 'garment_type_id', 'size_system_id', 'grading_rule_set_id',
+        'target', 'construction', 'size_run', 'base_size')}
+    camps_per_peca = []
+    for part in parts_del_set:
+        d_part = dict(base_payload)
+        d_part['garment_type_item_id'] = part.part_item_id
+        # El ruleset i la talla base de la PEÇA manen sobre els del payload; si la peça no en
+        # declara, s'hereta el del conjunt (que és el que passava abans per a totes).
+        if part.part_item.grading_rule_set_id:
+            d_part['grading_rule_set_id'] = part.part_item.grading_rule_set_id
+        if part.part_item.base_size_definition_id:
+            d_part['base_size'] = part.part_item.base_size_definition.etiqueta
+        fields_part, err_part = _resolve_garment_def(d_part)
+        if err_part:
+            err_part['peca'] = part.ordre
+            return Response(err_part, status=400)
+        camps_per_peca.append((part, fields_part))
 
     # Multi-piece: one GarmentSet + N piece Models, codi_intern = codi_base-NN.
     with transaction.atomic():
@@ -829,7 +886,7 @@ def create_model_wizard(request):
             num_pieces=num_pieces,
         )
         pieces = []
-        for i in range(1, num_pieces + 1):
+        for i, (part, fields_part) in enumerate(camps_per_peca, start=1):
             piece = Model.objects.create(
                 codi_intern=f"{codi_base}-{str(i).zfill(2)}",
                 codi_client=ref_client,
@@ -838,7 +895,9 @@ def create_model_wizard(request):
                 any=int(year),
                 temporada=season,
                 sequencial=next_num,
-                nom_prenda=nom_prenda or None,
+                # El nom de la PEÇA el dona la composició del catàleg («Top», «Bikini bottom»);
+                # el nom comercial del conjunt viu a GarmentSet.nom_comercial.
+                nom_prenda=(part.nom_peca or nom_prenda) or None,
                 descripcio=descripcio or None,
                 collection=collection or '',
                 created_by=creator,
@@ -846,7 +905,7 @@ def create_model_wizard(request):
                 data_objectiu=data_objectiu,
                 garment_set=garment_set,
                 piece_number=i,
-                **garment_fields,
+                **fields_part,
             )
             # PG-2 Cas B (multi-peça): cada peça hereta el ruleset via garment_fields →
             # materialitza les seves regles residents. Dins l'atomic del set: una fallada
@@ -861,6 +920,8 @@ def create_model_wizard(request):
                 'id': piece.id,
                 'codi_intern': piece.codi_intern,
                 'piece_number': piece.piece_number,
+                'nom_prenda': piece.nom_prenda,
+                'garment_type_item': piece.garment_type_item_id,
             })
 
     return Response({
