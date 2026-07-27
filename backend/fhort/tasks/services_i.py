@@ -9,6 +9,13 @@ logger = logging.getLogger(__name__)
 
 WELFORD_MIN_SAMPLES = 5   # llindar seed→estadística
 
+# REGLA D'HIGIENE — cap tram de timer d'un tècnic dura més d'un dia seguit. Els que ho fan són
+# fuites (timer deixat obert i tancat setmanes després en reobrir la tasca), i alimentaven el
+# Welford amb mitjanes de 9-13 h que el planificador després feia servir com si fossin reals.
+# El criteri viu AQUÍ i en un sol lloc: la data-op del 27/07 i `recompute_welford` el comparteixen.
+# ANOTAT, no fet: aplicar-lo també a `_real_minutes` tancaria la font, no només el rastre.
+MAX_MINUTS_TRAM = 24 * 60
+
 
 def _real_minutes(model_task):
     """Temps real d'una tasca = suma de tots els timers (inclou rectificacions)."""
