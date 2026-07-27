@@ -41,6 +41,7 @@
     "issued_ok": "Albarà emès.",
     "issue_error": "No s'ha pogut emetre l'albarà.",
     "line_saved": "Línia desada.",
+    "saved": "Albarà desat.",
     "line_error": "No s'ha pogut desar la línia.",
     "delete": "Esborrar",
     "delete_confirm": "Segur que vols esborrar aquest albarà esborrany? Els encàrrecs quedaran lliures.",
@@ -1622,6 +1623,8 @@
     "total_must_be_100": "ha de ser 100%"
   },
   "commerce": {
+    "issued_at": "Data d'emissió",
+    "issued_at_save": "Desa la data",
     "pdf_lang": "Idioma del document",
     "pdf_lang_none": "Idioma —",
     "pdf_lang_ca": "Català",

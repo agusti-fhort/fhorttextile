@@ -233,6 +233,16 @@ class SalesOrderViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixins.
             return [IsAuthenticated()]
         return super().get_permissions()
 
+    def perform_update(self, serializer):
+        # Els venciments estan ancorats a la data d'emissió (due_date = issued_at + days_offset,
+        # services.py:127): si es corregeix la data, s'han de tornar a materialitzar. Només quan
+        # ha canviat de debò — un PATCH de `status` no ha de reescriure la taula de venciments.
+        before = serializer.instance.issued_at
+        order = serializer.save()
+        if order.issued_at != before:
+            from .services import generate_due_dates
+            generate_due_dates(order)
+
     @action(detail=True, methods=['get'])
     def pdf(self, request, pk=None):
         """PDF de la comanda: reutilitza el generador de l'oferta amb la clau de títol

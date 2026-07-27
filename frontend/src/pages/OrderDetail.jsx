@@ -6,6 +6,7 @@ import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
+import IssueDateField from '../components/commercial/IssueDateField'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import { DocumentHeader, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { OrderStatusBadge, allocatedPct } from './Orders'
@@ -80,6 +81,14 @@ export default function OrderDetail() {
       .finally(() => setBusy(false))
   }
 
+  // Corregir la data d'emissió remou els venciments (hi estan ancorats), per això recarrega.
+  const saveIssuedAt = (value) => {
+    setFeedback(null)
+    return commerce.orders.update(id, { issued_at: value })
+      .then(() => reload()).then(() => setFeedback({ type: 'ok', text: t('orders.status_saved') }))
+      .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.detail || t('orders.error') }))
+  }
+
   // Sprint C — l'assignació de models va a la superfície universal de selecció (mode intenció):
   // arriba a /models amb propòsit + prefiltre customer bloquejat, multi-selecciona fins a la
   // capacitat restant (quantity − qty_allocated) i torna aquí per confirmar el batch (H1).
@@ -131,6 +140,9 @@ export default function OrderDetail() {
 
   const lines = order.lines || []
   const dueDates = order.due_dates || []
+  // La data d'emissió es corregeix mentre la comanda és OPEN; COMPLETED/CANCELLED són terminals.
+  // El guard dur el posa el backend (serializers.guard_issued_at_editable).
+  const canEditDate = canEdit && order.status === 'OPEN'
   // Línies encara pendents d'imputar (qty_allocated < quantity). En tornar del mode selecció,
   // reload() les refresca; si en queda alguna, s'ofereix continuar amb la primera (no s'imposa).
   const pendingLines = order.status === 'OPEN'
@@ -206,7 +218,8 @@ export default function OrderDetail() {
       <Section title={t('orders.details')}>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
           <Meta label={t('orders.source_quote')} value={order.source_quote_number || '—'} />
-          <Meta label={t('orders.issued_at')} value={fmtDate(order.issued_at)} />
+          <IssueDateField value={order.issued_at} editable={canEditDate} onSave={saveIssuedAt}
+            t={t} label={t('orders.issued_at')} />
           <Meta label={t('orders.payment_terms')} value={order.payment_terms_name || '—'} />
           <Meta label={t('orders.allocated')} value={`${allocatedPct(order)}%`} />
         </div>

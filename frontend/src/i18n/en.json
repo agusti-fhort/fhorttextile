@@ -41,6 +41,7 @@
     "issued_ok": "Delivery note issued.",
     "issue_error": "Could not issue the delivery note.",
     "line_saved": "Line saved.",
+    "saved": "Delivery note saved.",
     "line_error": "Could not save the line.",
     "delete": "Delete",
     "delete_confirm": "Delete this draft delivery note? The work orders will be released.",
@@ -1622,6 +1623,8 @@
     "total_must_be_100": "must be 100%"
   },
   "commerce": {
+    "issued_at": "Issue date",
+    "issued_at_save": "Save date",
     "pdf_lang": "Document language",
     "pdf_lang_none": "Language —",
     "pdf_lang_ca": "Català",
