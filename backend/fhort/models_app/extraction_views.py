@@ -412,6 +412,20 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None, full_sel
             def _cell(row, ci):
                 return _num(row[ci]) if (ci is not None and ci < len(row)) else None
 
+            #: R4 · l'última fila que ÉS un POM. El "fi de taula" no és una forma de fila: és una
+            #: POSICIÓ — per sota d'aquí ja no hi ha taula. Amb la fitxa DALIA (PROD, tenant
+            #: `los`) el rètol de peça viu a la columna del CODI i la seva fila va fusionada de
+            #: banda a banda: les dues coses feien `break` a la PRIMERA secció, just sota la
+            #: capçalera, i el full sencer es perdia (0 files, abdicació i caiguda a la IA).
+            def _fila_de_pom(row):
+                c = (str(row[ci_codi]).strip()
+                     if (ci_codi < len(row) and row[ci_codi] is not None) else '')
+                return (bool(c) and bool(_RE_CODI.match(c))
+                        and any(_cell(row, ci) is not None for ci, _ in size_cols))
+
+            ultima_pom = max((i for i in range(header_idx + 1, len(rows)) if _fila_de_pom(rows[i])),
+                             default=header_idx)
+
             poms = []
             #: Secció vigent (F4). El text de les files de secció es LLEGIA i es llençava; ara
             #: es recorda i cada POM se n'endú una còpia. La convenció d'arrel per peça
@@ -421,8 +435,8 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None, full_sel
             seccio_vigent = None
             for idx in range(header_idx + 1, len(rows)):
                 row = rows[idx]
-                if (idx + 1) in banner:
-                    break
+                if (idx + 1) in banner and idx > ultima_pom:
+                    break                         # bloc del sketch, peus: fi de taula de debò
                 codi = str(row[ci_codi]).strip() if (ci_codi < len(row)
                                                      and row[ci_codi] is not None) else ''
                 if not codi:
@@ -436,7 +450,10 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None, full_sel
                         seccio_vigent = text_seccio
                     continue
                 if not _RE_CODI.match(codi):
-                    break                         # rètol ('SKETCH WITH CODES') → fi de taula
+                    if idx > ultima_pom:
+                        break                     # rètol ('SKETCH WITH CODES') → fi de taula
+                    seccio_vigent = codi          # títol de peça a la columna del codi (LOSAN)
+                    continue
                 desc = (str(row[ci_desc]).strip()
                         if (ci_desc < len(row) and row[ci_desc] is not None) else '')
                 values = {}
