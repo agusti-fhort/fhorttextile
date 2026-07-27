@@ -167,6 +167,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // `task_id` de size_check continua sent treball, no genesi; `mode=entry` i pom oberta/pausada
   // obren la pantalla POM pròpia.
   const [mesuresEntry, setMesuresEntry] = useState(false)
+  // Sprint B — la caixa buida té DUES portes (començar de zero / copiar d'un altre model) i
+  // totes dues entren al MATEIX panell de gènesi: la intenció viatja perquè el panell hi obri
+  // la via correcta, en comptes de duplicar la superfície de còpia aquí (llei del pedaç).
+  const [mesuresIntent, setMesuresIntent] = useState(null)   // null | 'copy'
   const prevTabRef = useRef(null)
   useEffect(() => {
     // Mentre carrega no decidim NI actualitzem el ref (si no, l'entrada directa ?tab=Mesures fixaria el
@@ -201,9 +205,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     activeTaskRef.current = null
     modelTasks.transition(tid, { to_status: 'Paused' }).catch(() => {})
   }, [])
-  const enterEdit = (tab, code) => {
+  const enterEdit = (tab, code, intent = null) => {
     if (openingTask) return
     setOpeningTask(true)
+    setMesuresIntent(intent)
     models.openTask(parseInt(id), code)
       .then(res => {
         setEditTaskId(res.data.task_id)
@@ -221,12 +226,14 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     setEditTaskId(null)
     setEditing(null)
     setMesuresEntry(false)
+    setMesuresIntent(null)
   }, [pauseActiveTask])
   const finishPomEntry = useCallback(() => {
     activeTaskRef.current = null
     setEditTaskId(null)
     setEditing(null)
     setMesuresEntry(false)
+    setMesuresIntent(null)
     setModelTaskRows(prev => prev.map(task => (
       task.task_type_code === 'pom' ? { ...task, status: 'Done' } : task
     )))
@@ -454,7 +461,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         )}
         {activeTab === 'Mesures' && (
           mesuresEntry && editing !== 'Mesures' ? (
-            <MeasuresEntryPanel model={model} entryMode={mesuresEntry}
+            <MeasuresEntryPanel model={model} entryMode={mesuresEntry} intent={mesuresIntent}
               onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }}
               onPomSaved={finishPomEntry} />
           ) : (!taskParam && editing !== 'Mesures' && !pomReady) ? (
@@ -469,13 +476,24 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 </div>
                 <div>{t('model_sheet.measures_empty_body')}</div>
               </div>
-              <button type="button" disabled={openingTask}
-                onClick={() => enterEdit('Mesures', 'pom')}
-                style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
-                         opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
-                <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
-                {t('model_sheet.start_pom')}
-              </button>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button type="button" disabled={openingTask}
+                  onClick={() => enterEdit('Mesures', 'pom')}
+                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
+                           opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
+                  <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
+                  {t('model_sheet.start_pom')}
+                </button>
+                {/* Sprint B — la SEGONA superfície de buit del sistema (l'altra és el `selector`
+                    de MeasuresEntryPanel). Oferir la còpia només a una deixava mig camí. */}
+                <button type="button" disabled={openingTask}
+                  onClick={() => enterEdit('Mesures', 'pom', 'copy')}
+                  style={{ ...btnSecondary, opacity: openingTask ? 0.6 : 1,
+                           cursor: openingTask ? 'default' : 'pointer' }}>
+                  <i className="ti ti-copy" style={{ fontSize: 14 }} />
+                  {t('measures_entry.copy_title')}
+                </button>
+              </div>
             </div>
           ) : (
 	          <div>

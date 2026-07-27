@@ -3988,6 +3988,23 @@
   },
   "measures_entry": {
     "base_set_absent": "Aquest món ({{system}} · {{fit}}) encara no té mesures estàndard.",
-    "base_set_absent_hint": "Quan aquest model estigui mesurat, el podràs promoure per crear-les des d'ell."
+    "base_set_absent_hint": "Quan aquest model estigui mesurat, el podràs promoure per crear-les des d'ell.",
+    "copy_title": "Copiar d'un altre model",
+    "copy_desc": "Reaprofita els POMs, el run, la graduació i els croquis d'un model ja treballat.",
+    "copy_pick_title": "Copiar d'un altre model",
+    "copy_pick_subtitle": "Tria el model d'origen. Encara no s'escriurà res: després podràs decidir què copies.",
+    "copy_pick_search_ph": "Cerca per codi o nom…",
+    "copy_pick_empty": "Cap model trobat.",
+    "copy_confirm_title": "Copiar de {{codi}}",
+    "copy_confirm_subtitle": "Tria què viatja. Res del que aquest model ja té es tocarà.",
+    "copy_confirm_ok": "Copiar",
+    "copy_flag_copy_values": "Valors de les mesures base",
+    "copy_flag_copy_run": "Sistema de talles, run i talla base",
+    "copy_flag_copy_grading": "Regla de graduació",
+    "copy_flag_copy_files": "Croquis i patrons",
+    "copy_sobirania_hint": "Les mesures que aquest model ja té (manuals, importades o de fitting) no es trepitgen mai. Si la talla base dels dos models no coincideix, es copien els POMs però no els valors.",
+    "copy_count": "{{tria}} de {{total}} POMs de l'origen",
+    "copy_count_zero": "Cap POM triat: no es copiarà cap mesura.",
+    "copy_error": "No s'ha pogut copiar del model triat."
   }
 }

@@ -3988,6 +3988,23 @@
   },
   "measures_entry": {
     "base_set_absent": "Este mundo ({{system}} · {{fit}}) todavía no tiene medidas estándar.",
-    "base_set_absent_hint": "Cuando este modelo esté medido, podrás promoverlo para crearlas desde él."
+    "base_set_absent_hint": "Cuando este modelo esté medido, podrás promoverlo para crearlas desde él.",
+    "copy_title": "Copiar de otro modelo",
+    "copy_desc": "Reaprovecha los POMs, el run, la graduación y los croquis de un modelo ya trabajado.",
+    "copy_pick_title": "Copiar de otro modelo",
+    "copy_pick_subtitle": "Elige el modelo de origen. Todavía no se escribirá nada: después podrás decidir qué copias.",
+    "copy_pick_search_ph": "Busca por código o nombre…",
+    "copy_pick_empty": "Ningún modelo encontrado.",
+    "copy_confirm_title": "Copiar de {{codi}}",
+    "copy_confirm_subtitle": "Elige qué viaja. Nada de lo que este modelo ya tiene se tocará.",
+    "copy_confirm_ok": "Copiar",
+    "copy_flag_copy_values": "Valores de las medidas base",
+    "copy_flag_copy_run": "Sistema de tallas, run y talla base",
+    "copy_flag_copy_grading": "Regla de graduación",
+    "copy_flag_copy_files": "Croquis y patrones",
+    "copy_sobirania_hint": "Las medidas que este modelo ya tiene (manuales, importadas o de fitting) no se pisan nunca. Si la talla base de los dos modelos no coincide, se copian los POMs pero no los valores.",
+    "copy_count": "{{tria}} de {{total}} POMs del origen",
+    "copy_count_zero": "Ningún POM elegido: no se copiará ninguna medida.",
+    "copy_error": "No se ha podido copiar del modelo elegido."
   }
 }

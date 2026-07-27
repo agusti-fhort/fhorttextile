@@ -3988,6 +3988,23 @@
   },
   "measures_entry": {
     "base_set_absent": "This world ({{system}} · {{fit}}) has no standard measurements yet.",
-    "base_set_absent_hint": "Once this model is measured, you can promote it to create them from it."
+    "base_set_absent_hint": "Once this model is measured, you can promote it to create them from it.",
+    "copy_title": "Copy from another model",
+    "copy_desc": "Reuse the POMs, size run, grading and sketches of a model already worked on.",
+    "copy_pick_title": "Copy from another model",
+    "copy_pick_subtitle": "Pick the source model. Nothing is written yet: you will choose what to copy next.",
+    "copy_pick_search_ph": "Search by code or name…",
+    "copy_pick_empty": "No model found.",
+    "copy_confirm_title": "Copy from {{codi}}",
+    "copy_confirm_subtitle": "Choose what travels. Nothing this model already has will be touched.",
+    "copy_confirm_ok": "Copy",
+    "copy_flag_copy_values": "Base measurement values",
+    "copy_flag_copy_run": "Size system, run and base size",
+    "copy_flag_copy_grading": "Grading rule",
+    "copy_flag_copy_files": "Sketches and patterns",
+    "copy_sobirania_hint": "Measurements this model already has (manual, imported or from fitting) are never overwritten. If the two models' base sizes differ, the POMs are copied but the values are not.",
+    "copy_count": "{{tria}} of {{total}} POMs from the source",
+    "copy_count_zero": "No POM selected: no measurement will be copied.",
+    "copy_error": "Could not copy from the selected model."
   }
 }
