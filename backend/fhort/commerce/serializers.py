@@ -220,7 +220,8 @@ class QuoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Quote
-        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom', 'status',
+        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom',
+                  'customer_language', 'status',
                   'issued_at', 'valid_until', 'payment_terms', 'payment_terms_name',
                   'customer_payment_terms', 'subtotal', 'tax_amount', 'total',
                   'tax_breakdown', 'notes', 'created_at', 'updated_at', 'lines']
@@ -312,7 +313,8 @@ class SalesOrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SalesOrder
-        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom', 'status',
+        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom',
+                  'customer_language', 'status',
                   'issued_at', 'valid_until', 'payment_terms', 'payment_terms_name',
                   'source_quote', 'source_quote_number', 'subtotal', 'tax_amount', 'total',
                   'tax_breakdown', 'notes', 'created_at', 'updated_at', 'lines', 'due_dates']
@@ -485,7 +487,8 @@ class DeliveryNoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DeliveryNote
-        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom', 'status',
+        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom',
+                  'customer_language', 'status',
                   'issued_at', 'issued_by', 'issued_by_nom', 'invoiced_at', 'invoiced_by',
                   'invoiced_by_nom', 'subtotal', 'tax_amount', 'total',
                   'tax_breakdown', 'notes', 'created_at', 'updated_at', 'lines',
