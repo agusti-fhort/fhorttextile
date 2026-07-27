@@ -15,7 +15,7 @@ import { customers as customersApi, techSheetTemplate as tmplApi } from '../api/
 import {
   MM_TO_PX, CANVAS_W, CANVAS_H, PDF_W_PT, PDF_H_PT, FONT, COL,
   uid, toMm, ObjectNode, renderPageToDataURL, serializePages, buildHeaderPrimitives,
-  SectionTitle, propLabel, propInput,
+  SectionTitle, propLabel, propInput, loadImageEl, containBox,
 } from './TechSheetEditor'
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -229,10 +229,20 @@ export default function TechSheetTemplateEditor() {
   }
 
   // ── Imatge (fitxer local + drop) ───────────────────────────────────────────
-  const addImageFromDataURL = (dataURL) => addObject({ id: uid(), type: 'image', layer: 'free', x: 50, y: 50, width: 120, height: 80, src: dataURL })
+  // PROPORCIÓ: mateixa llei que a TechSheetEditor (la caixa és un MÀXIM, no una talla). Aquest
+  // editor està JUBILAT, però comparteix el motor de render i per tant compartia el defecte:
+  // deixar-l'hi seria repetir la lliçó dels dos camins d'SVG (un arreglat, l'altre no).
+  const addImageFromDataURL = async (dataURL) => {
+    let box = { width: 120, height: 80 }
+    try {
+      const el = await loadImageEl(dataURL)
+      box = containBox(el.naturalWidth || el.width, el.naturalHeight || el.height, 120, 80)
+    } catch { /* mida natural il·legible → caixa nominal */ }
+    addObject({ id: uid(), type: 'image', layer: 'free', x: 50, y: 50, ...box, src: dataURL })
+  }
   const handleFile = (file) => {
     if (!file || !canEdit) return
-    const fr = new FileReader(); fr.onload = () => addImageFromDataURL(fr.result); fr.readAsDataURL(file)
+    const fr = new FileReader(); fr.onload = () => { addImageFromDataURL(fr.result) }; fr.readAsDataURL(file)
   }
   const onDrop = (e) => {
     e.preventDefault(); if (!canEdit) return

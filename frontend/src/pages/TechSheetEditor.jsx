@@ -125,6 +125,15 @@ const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', bord
 const PIECE_BOX_W = 110
 const PIECE_BOX_H = 78
 
+// La caixa on entra una IMATGE ràster (PNG/JPG) importada, i la del logo lliure. Mateixa
+// naturalesa que PIECE_BOX_*: un MÀXIM dins el qual `containBox` encaixa la mida nativa
+// preservant-ne la ràtio, no una talla imposada als dos eixos. Els valors són els nominals
+// històrics (120×80 i 40×20) per no barrejar el fix de proporció amb un canvi de mida.
+const IMG_BOX_W = 120
+const IMG_BOX_H = 80
+const LOGO_BOX_W = 40
+const LOGO_BOX_H = 20
+
 const LAYER_ORDER = { template: 0, data: 1, free: 2 }
 const ZOOM_MIN = 0.25
 const ZOOM_MAX = 8   // F6 — més zoom per a la precisió de l'edició de nodes (abans 4)
@@ -576,8 +585,10 @@ function blobToDataURL(blob) {
   })
 }
 
-// Carrega un HTMLImageElement (promesa) — per a l'export offscreen.
-function loadImageEl(src) {
+// Carrega un HTMLImageElement (promesa) — per a l'export offscreen i per llegir la mida
+// nativa d'un ràster abans d'encaixar-lo (`containBox`, sota). Exportada perquè
+// TechSheetTemplateEditor comparteix el motor i no n'ha de tenir una còpia.
+export function loadImageEl(src) {
   return new Promise((res, rej) => {
     const i = new window.Image()
     i.crossOrigin = 'anonymous'
@@ -585,6 +596,25 @@ function loadImageEl(src) {
     i.onerror = () => rej(new Error('img load'))
     i.src = src
   })
+}
+
+// Encaixa una mida nativa dins una caixa PRESERVANT-NE la ràtio (contain). La caixa és un
+// MÀXIM, no una talla: un sol factor `Math.min` toca un eix i deixa l'altre curt, mai estira
+// els dos per separat.
+//
+// Aquest és l'idioma que els camins VECTORIALS de l'editor ja fan servir —`importFlatSvgText`
+// (via `svgAspectRatio`), `inserirPeca` (PIECE_BOX_W×PIECE_BOX_H) i `headerMasterLogoRect`
+// (`Math.min(W/natW, H/natH)`)—; el camí RÀSTER era l'únic que no preguntava mai la ràtio i
+// clavava la caixa nominal als dos eixos, deformant tot PNG/JPG que no fos exactament 3:2.
+// Sense clamp a s<=1: una imatge petita creix fins a tocar la caixa, igual que un SVG petit
+// (mateix criteri que `headerMasterLogoRect`, comentari «contain sense clamp»).
+//
+// Mida natural il·legible (0/NaN) → es retorna la caixa nominal: el comportament d'abans, que
+// per a una imatge que no es pot mesurar és l'únic honest.
+export function containBox(natW, natH, maxW, maxH) {
+  if (!(natW > 0) || !(natH > 0)) return { width: maxW, height: maxH }
+  const s = Math.min(maxW / natW, maxH / natH)
+  return { width: natW * s, height: natH * s }
 }
 
 // Hook mínim: dataURL/URL → HTMLImageElement (sense dependència use-image).
@@ -4009,15 +4039,25 @@ export default function TechSheetEditor() {
   const endPan = () => { if (panDrag.current) { panDrag.current = null; setPanning(false) } }
 
   // ── Imatge: fitxer local (botó/drop) i fitxers del model ───────────────────
-  const addImageFromDataURL = (dataURL, extra = {}) => {
+  // PROPORCIÓ (fix ràster, germà de 95823a0 per als SVG): IMG_BOX_* és un MÀXIM, no una talla.
+  // Abans width/height eren 120×80 CLAVATS: un PNG vertical entrava estirat horitzontalment i
+  // un apaïsat comprimit, perquè ningú no llegia `naturalWidth/naturalHeight`. Ara la mida
+  // natural manda i `containBox` l'encaixa amb un sol factor.
+  const addImageFromDataURL = async (dataURL, extra = {}) => {
+    let box = { width: IMG_BOX_W, height: IMG_BOX_H }
+    try {
+      const el = await loadImageEl(dataURL)
+      box = containBox(el.naturalWidth || el.width, el.naturalHeight || el.height,
+                       IMG_BOX_W, IMG_BOX_H)
+    } catch { /* mida natural il·legible → caixa nominal (comportament d'abans) */ }
     // F2: `extra` pot portar sourceItemFitxer (procedència de catàleg de l'sketch importat).
-    const obj = { id: uid(), type: 'image', layer: 'free', x: 50, y: 50, width: 120, height: 80, src: dataURL, ...extra }
+    const obj = { id: uid(), type: 'image', layer: 'free', x: 50, y: 50, ...box, src: dataURL, ...extra }
     addObject(obj)
   }
   const handleFile = (file) => {
     if (!file || !locked) return
     const fr = new FileReader()
-    fr.onload = () => addImageFromDataURL(fr.result)
+    fr.onload = () => { addImageFromDataURL(fr.result) }
     fr.readAsDataURL(file)
   }
   const onDrop = (e) => {
@@ -4027,10 +4067,19 @@ export default function TechSheetEditor() {
     if (file && file.type.startsWith('image/')) handleFile(file)
   }
   // Insereix el logo del client com a imatge lliure (redimensionable). TS-4c.
-  const insertLogo = () => {
+  // Mateixa llei de proporció: un logo és un ràster i 40×20 clavats l'estiraven igual que un
+  // PNG qualsevol. El logo de la CAPÇALERA ja es respectava (`headerMasterLogoRect`); el logo
+  // LLIURE era l'excepció que quedava.
+  const insertLogo = async () => {
     if (!locked) return
     if (!customerLogoUrl) { flash(t('tech_sheet.flash_no_logo')); return }
-    addObject({ id: uid(), type: 'image', kind: 'logo', layer: 'free', x: 10, y: 8, width: 40, height: 20, src: customerLogoUrl })
+    let box = { width: LOGO_BOX_W, height: LOGO_BOX_H }
+    try {
+      const el = await loadImageEl(customerLogoUrl)
+      box = containBox(el.naturalWidth || el.width, el.naturalHeight || el.height,
+                       LOGO_BOX_W, LOGO_BOX_H)
+    } catch { /* mida natural il·legible → caixa nominal */ }
+    addObject({ id: uid(), type: 'image', kind: 'logo', layer: 'free', x: 10, y: 8, ...box, src: customerLogoUrl })
   }
   const insertFlatSketch = () => {
     if (!locked) return
@@ -4273,7 +4322,7 @@ export default function TechSheetEditor() {
         // Mateixa bifurcació que importarDelTenant; abans aquí tot queia a addImageFromDataURL.
         await importFlatSvgText(await r.text(), extra)
       } else {
-        addImageFromDataURL(await blobToDataURL(await r.blob()), extra)
+        await addImageFromDataURL(await blobToDataURL(await r.blob()), extra)
       }
     } catch { /* silenci */ }
   }
@@ -5300,7 +5349,7 @@ export default function TechSheetEditor() {
       } else if (nom.endsWith('.dxf')) {
         flash(t('tech_sheet.import_dxf_soon'))      // el motor DXF segueix pendent
       } else {
-        addImageFromDataURL(await blobToDataURL(await r.blob()), extra)
+        await addImageFromDataURL(await blobToDataURL(await r.blob()), extra)
       }
       closeImport()
     } catch {
