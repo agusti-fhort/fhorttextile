@@ -19,10 +19,15 @@ resol contra l'schema equivocat sense dir res.
 L'ERROR ÉS DE DOMINI, NO DE TRANSPORT: aquí es llança `FederacioError`, que no sap res de
 `CommandError` ni de codis HTTP. Cada boca el tradueix a la seva llengua.
 """
-from django.db import transaction
+import logging
+
+from django.db import connection, transaction
+from django.utils import timezone
 from django_tenants.utils import schema_context
 
 from .models import Client, TenantLink
+
+logger = logging.getLogger(__name__)
 
 
 class FederacioError(Exception):
@@ -319,3 +324,170 @@ def safata_del_studio(studio_codi, limit_per_brand=500):
         })
 
     return grups
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════
+# RETORN-2 · EL CANAL D'ESTAT (bidireccional, automàtic)
+# ═════════════════════════════════════════════════════════════════════════════════════════
+#
+# DUES DECISIONS DEL PATRÓ C QUE AQUÍ ES FAN CODI (no re-obrir):
+#
+#   · El canal de DADES (la feina) és un ACTE HUMÀ i viu a `envia_a_la_marca`. Mai automàtic.
+#   · El canal d'ESTAT és AUTOMÀTIC i bidireccional, i és aquest. Cadascú publica el que és
+#     seu de debò: l'ESTUDI mana en la FASE (ell fa la feina, ell sap on és la peça); la
+#     MARCA mana en la PRIORITAT i la DATA OBJECTIU (és el seu encàrrec, la seva botiga).
+#
+# CAP HORA, CAP TÈCNIC, CAP COST TRAVESSA MAI AQUEST CANAL (doctrina de `views_encarrecs`:
+# «el Brand no veu ni temps ni tècnics»). El que viatja en sentit maduresa és un RECOMPTE de
+# tasques —quantes n'hi ha, quantes estan fetes— i mai qui les fa, quant triguen ni què costen.
+# El test negatiu `test_cap_hora_ni_tecnic_al_payload` és la guarda viva d'aquesta frase.
+#
+# UN SYNC NO FALLA MAI CAP AMUNT. No hi ha vincle, el pont està aturat, el bessó no existeix o
+# el tenant ha desaparegut → no-op amb log, i la transició de tasca (o el gate, o el PATCH de
+# prioritat) que l'ha disparat continua com si res. La federació és una capa d'informació
+# sobre la feina, i cap capa d'informació té dret a impedir la feina.
+
+#: Sentit ESTUDI → MARCA. Publica la maduresa al bessó de la marca.
+SENTIT_MADURESA = 'maduresa'
+#: Sentit MARCA → ESTUDI. Escriu prioritat i data_objectiu al bessó de l'estudi.
+SENTIT_PRIORITAT = 'prioritat'
+
+
+def _codi_del_schema_actual():
+    """El `codi_tenant` (3 chars) de la casa on estem ara mateix, o None si som a `public`.
+
+    Es resol per `schema_name` i no per `connection.tenant`: dins d'un `schema_context()` el
+    `connection.tenant` pot ser el d'abans (el context canvia el search_path, no l'objecte), i
+    els commands i els tests sovint no en tenen cap. L'`schema_name` sempre diu la veritat.
+    """
+    schema = connection.schema_name
+    if not schema or schema == 'public':
+        return None
+    with schema_context('public'):
+        client = Client.objects.filter(schema_name=schema).first()
+    return client.codi_tenant if client else None
+
+
+def _vincle_viu(brand_codi, studio_codi):
+    """El vincle ACTIU entre les dues cases, o None. MAI llança: aquí un pont tancat no és un
+    error, és una relació aturada, i el canal d'estat simplement calla."""
+    with schema_context('public'):
+        return (TenantLink.objects
+                .filter(brand_codi_tenant=brand_codi, studio_codi_tenant=studio_codi,
+                        estat=TenantLink.ESTAT_ACTIU)
+                .first())
+
+
+def _schema_de(codi_tenant):
+    with schema_context('public'):
+        client = Client.objects.filter(codi_tenant=codi_tenant).first()
+    return client.schema_name if client else None
+
+
+def resum_maduresa(model):
+    """El resum que l'ESTUDI publica sobre una peça. Dict tancat, calculat al schema d'ara.
+
+    Les quatre xifres del brief + el segell de quan es va dir. `n_total=0` (encara ningú no ha
+    planificat res) NO és «tot acabat»: `totes_acabades` exigeix que n'hi hagi alguna, la
+    mateixa condició que `model_ready_for_gate` — si no, una peça verge diria a la marca que
+    ja està llesta.
+    """
+    from fhort.tasks.models import ModelTask
+
+    qs = ModelTask.objects.filter(model_id=model.pk)
+    n_total = qs.count()
+    n_done = qs.filter(status='Done').count()
+    n_in_progress = qs.filter(status='InProgress').count()
+    return {
+        'fase_actual': model.fase_actual,
+        'tasques': {
+            'n_total': n_total,
+            'n_done': n_done,
+            'n_in_progress': n_in_progress,
+            'totes_acabades': bool(n_total) and n_done == n_total,
+        },
+        'actualitzat_at': timezone.now().isoformat(),
+    }
+
+
+def sync_estat(model, sentit):
+    """Publica l'estat d'aquesta peça al seu BESSÓ de l'altra casa. No-op silenciós si no pot.
+
+    `model` és un `models_app.Model` VIU del schema on som ara. Se'n treuen escalars ABANS
+    d'entrar a cap `schema_context` i el que travessa és un `.update()` de queryset: cap
+    objecte ORM surt del seu schema (Bandera 3 de la diagnosi de federació).
+
+    El bessó es resol per `codi_intern` a través del `TenantLink` ACTIU. `codi_intern` és
+    l'únic lligam que hi ha entre les dues files (diagnosi §Resum executiu 3) i és el mateix
+    que fa idempotent el traspàs: aquí es fa servir per a la mateixa cosa, des de l'altra punta.
+
+    Retorna un dict d'informe: `{'ok': bool, 'motiu': str, ...}`. Mai llança.
+    """
+    from fhort.models_app.models import Model
+
+    codi_intern = model.codi_intern
+    meu_codi = _codi_del_schema_actual()
+    if meu_codi is None:
+        return _noop(codi_intern, sentit, 'sense_tenant')
+
+    if sentit == SENTIT_MADURESA:
+        # L'estudi publica cap a la marca. La marca d'aquesta peça és el seu `codi_tenant`:
+        # al Studio, `Model.codi_tenant` = `Customer.codi` = `brand_codi` (el traspàs
+        # l'escriu així, :166). Un model INTERN no té bessó enlloc — no és cosa de ningú més.
+        if model.origen != Model.ORIGEN_EXTERN:
+            return _noop(codi_intern, sentit, 'model_intern')
+        brand_codi, studio_codi = model.codi_tenant, meu_codi
+        destinatari = brand_codi
+        canvis = {'fase_actual': model.fase_actual, 'federacio_estat': resum_maduresa(model)}
+    elif sentit == SENTIT_PRIORITAT:
+        # La marca escriu al bessó de l'estudi. Camps REALS i no JSON: el planificador de
+        # l'estudi ja els llegeix (`scheduler_service._ordre_model`) i posar-los en un JSON
+        # obligaria a ensenyar-li a llegir dues fonts per a la mateixa pregunta.
+        if not model.studio_assignat:
+            return _noop(codi_intern, sentit, 'sense_studio_assignat')
+        brand_codi, studio_codi = meu_codi, model.studio_assignat
+        destinatari = studio_codi
+        canvis = {'prioritat': model.prioritat, 'data_objectiu': model.data_objectiu}
+    else:
+        raise ValueError(f'Sentit desconegut: {sentit!r}')
+
+    if _vincle_viu(brand_codi, studio_codi) is None:
+        return _noop(codi_intern, sentit, 'sense_vincle_actiu')
+
+    schema_desti = _schema_de(destinatari)
+    if schema_desti is None:
+        return _noop(codi_intern, sentit, 'tenant_desaparegut')
+
+    with schema_context(schema_desti):
+        n = Model.objects.filter(codi_intern=codi_intern).update(**canvis)
+    if not n:
+        return _noop(codi_intern, sentit, 'sense_besso')
+
+    logger.info('federacio.sync_estat[%s] %s → %s: %s', sentit, codi_intern, destinatari,
+                sorted(canvis))
+    return {'ok': True, 'motiu': 'sync', 'sentit': sentit, 'codi_intern': codi_intern,
+            'desti': destinatari}
+
+
+def _noop(codi_intern, sentit, motiu):
+    """Un canal d'estat que no pot parlar CALLA i ho diu al log. No llança mai: la feina de
+    qui l'ha disparat no depèn d'això."""
+    logger.info('federacio.sync_estat[%s] %s: no-op (%s)', sentit, codi_intern, motiu)
+    return {'ok': False, 'motiu': motiu, 'sentit': sentit, 'codi_intern': codi_intern}
+
+
+def sync_estat_segur(model, sentit):
+    """`sync_estat` embolcallat per als DISPARADORS (patró de la meritació, services_c:247-257).
+
+    Els ganxos viuen dins de transaccions que fan feina de veritat (transicions de tasca,
+    gates, PATCH del model). Una excepció aquí —una connexió caiguda, un schema que
+    desapareix a mig camí— tombaria aquella transacció i faria que la federació decidís si
+    un tècnic pot tancar una tasca. No pot.
+    """
+    try:
+        with transaction.atomic():
+            return sync_estat(model, sentit)
+    except Exception:
+        logger.exception('federacio.sync_estat[%s] %s: excepció empassada al disparador',
+                         sentit, getattr(model, 'codi_intern', '?'))
+        return {'ok': False, 'motiu': 'excepcio', 'sentit': sentit}
