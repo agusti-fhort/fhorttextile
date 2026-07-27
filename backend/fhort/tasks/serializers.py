@@ -11,4 +11,6 @@ class TimerEntradaSerializer(serializers.ModelSerializer):
         model = TimerEntrada
         fields = '__all__'
         # tecnic is assigned automatically in ViewSet.perform_create
-        read_only_fields = ('tecnic', 'minuts', 'fi')
+        # last_heartbeat: `fields='__all__'` el faria escrivible i un client podria falsificar
+        # el segell per esquivar el guard. L'únic camí d'escriptura és l'acció `heartbeat`.
+        read_only_fields = ('tecnic', 'minuts', 'fi', 'last_heartbeat')

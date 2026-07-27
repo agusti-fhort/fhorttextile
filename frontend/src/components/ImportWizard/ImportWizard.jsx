@@ -97,6 +97,146 @@ function TallaChip({ label, ok, onRemove }) {
   )
 }
 
+// ───────────────────────────── Picker del catàleg de POMs ─────────────────────────────
+// R3 · UN sol picker per als DOS llocs on el pas 2 tria un POM del catàleg: el botó
+// «+ Afegir POM del catàleg» del final de la llista i el panell de conflicte de fila. Abans
+// el primer era un <select> nu amb el catàleg sencer; ara tots dos cerquen per codi o nom.
+function PomCatalegPicker({ cataleg, onPick, autoFocus }) {
+  const { t } = useTranslation()
+  const [q, setQ] = useState('')
+  const tots = cataleg || []
+  const filtrats = useMemo(() => {
+    const n = norm(q)
+    return n ? tots.filter(c => norm(c.codi_client).includes(n) || norm(c.nom_client).includes(n)) : tots
+  }, [tots, q])
+  const visibles = filtrats.slice(0, 50)
+  return (
+    <div>
+      <input value={q} autoFocus={autoFocus} onChange={e => setQ(e.target.value)}
+        placeholder={t('import_wizard.choose_pom')}
+        style={{ width: '100%', maxWidth: 380, padding: '6px 9px', borderRadius: 6,
+                 border: `1px solid ${BORDER}`, fontSize: 'var(--fs-body)', fontFamily: 'inherit' }} />
+      <div style={{ maxWidth: 380, maxHeight: 170, overflowY: 'auto', marginTop: 6,
+                    border: `1px solid ${BORDER}`, borderRadius: 6, background: 'var(--white)' }}>
+        {visibles.length === 0 && (
+          <div style={{ padding: '8px 10px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+            {t('import_wizard.resol_cap_resultat')}
+          </div>
+        )}
+        {visibles.map((c, i) => (
+          <button key={c.id} type="button" onClick={() => onPick(c)}
+            style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+                     padding: '6px 10px', fontSize: 'var(--fs-body)', fontFamily: 'inherit',
+                     background: 'transparent', border: 'none',
+                     borderTop: i ? `1px solid ${BORDER}` : 'none' }}>
+            <b>{c.codi_client}</b> · {c.nom_client}
+          </button>
+        ))}
+      </div>
+      {filtrats.length > visibles.length && (
+        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 4 }}>
+          {t('import_wizard.resol_mes_resultats', { n: filtrats.length - visibles.length })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ───────────────────── Panell de resolució d'una fila (R3) ─────────────────────
+// El 409 del catàleg deixava el tècnic amb una sola sortida: sortir del wizard cap al
+// catàleg. Aquí la fila té les TRES sortides a sobre —vincular a un candidat, triar del
+// catàleg, o crear-ne un de nou amb codi i nom editables— i la decisió segueix sent seva:
+// el backend no en tria cap, només diu qui es disputa el codi.
+function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea, onTanca }) {
+  const { t } = useTranslation()
+  const candidats = conflicte?.candidats || []
+  const EYEBROW = { fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
+                    letterSpacing: '0.04em', color: 'var(--text-muted)', margin: '10px 0 6px' }
+  const BTN = { padding: '5px 12px', borderRadius: 6, border: `1px solid ${GOLD}`, cursor: 'pointer',
+                background: 'transparent', color: GOLD, fontSize: 'var(--fs-body)', fontFamily: 'inherit' }
+  return (
+    <div style={{ padding: '10px 14px 14px', background: 'var(--bg-muted)',
+                  borderTop: `1px solid ${BORDER}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>
+          {t('import_wizard.resol_title', { codi: fila.codi_fitxa || t('import_wizard.no_description') })}
+        </div>
+        <button type="button" onClick={onTanca}
+          style={{ ...BTN, border: `1px solid ${BORDER}`, color: 'var(--text-muted)' }}>
+          {t('app.cancel')}
+        </button>
+      </div>
+
+      {conflicte?.error && (
+        <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 'var(--fs-body)',
+                      background: 'var(--err-bg)', color: 'var(--err)' }}>
+          {t([`import_wizard.resol_err_${conflicte.error}`, 'import_wizard.resol_err_generic'],
+             { codi: conflicte.codi || fila.codi_fitxa || '', ordre: (conflicte.ordre_ocupat ?? 0) + 1 })}
+        </div>
+      )}
+
+      {candidats.length > 0 && (
+        <>
+          <div style={EYEBROW}>{t('import_wizard.resol_vincula_title')}</div>
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: 6, background: 'var(--white)',
+                        maxWidth: 520 }}>
+            {candidats.map((c, i) => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px',
+                                       borderTop: i ? `1px solid ${BORDER}` : 'none' }}>
+                <div style={{ flex: 1, fontSize: 'var(--fs-body)' }}>
+                  <b>{c.codi_client}</b> · {c.nom_client}
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
+                    {c.origen_import
+                      ? t('import_wizard.resol_origen_import', { origen: c.origen_import })
+                      : t('import_wizard.resol_origen_manual')}
+                    {c.pendent_revisio ? ` · ${t('import_wizard.resol_pendent_revisio')}` : ''}
+                    {c.actiu ? '' : ` · ${t('import_wizard.resol_inactiu')}`}
+                  </div>
+                </div>
+                <button type="button" disabled={!c.actiu} onClick={() => onVincula(c)}
+                  style={{ ...BTN, opacity: c.actiu ? 1 : 0.45, cursor: c.actiu ? 'pointer' : 'not-allowed' }}>
+                  {t('import_wizard.resol_vincula_btn')}
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div style={EYEBROW}>{t('import_wizard.resol_cataleg_title')}</div>
+      <PomCatalegPicker cataleg={cataleg} autoFocus={candidats.length === 0}
+        onPick={pm => onVincula({ id: pm.id, codi_client: pm.codi_client,
+                                  nom_client: pm.nom_client, actiu: true })} />
+
+      <div style={EYEBROW}>{t('import_wizard.resol_crea_title')}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+        <label style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+          {t('import_wizard.resol_camp_codi')}
+          <input value={crea.codi} onChange={e => setCrea({ ...crea, codi: e.target.value })}
+            style={{ display: 'block', width: 110, padding: '6px 9px', borderRadius: 6, marginTop: 3,
+                     border: `1px solid ${BORDER}`, fontSize: 'var(--fs-body)', fontFamily: 'inherit' }} />
+        </label>
+        <label style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', flex: '1 1 240px', maxWidth: 380 }}>
+          {t('import_wizard.resol_camp_nom')}
+          <input value={crea.nom} onChange={e => setCrea({ ...crea, nom: e.target.value })}
+            style={{ display: 'block', width: '100%', padding: '6px 9px', borderRadius: 6, marginTop: 3,
+                     border: `1px solid ${BORDER}`, fontSize: 'var(--fs-body)', fontFamily: 'inherit' }} />
+        </label>
+        <button type="button" onClick={onCrea} disabled={!crea.codi.trim()}
+          style={{ ...BTN, background: crea.codi.trim() ? GOLD : 'transparent',
+                   color: crea.codi.trim() ? 'var(--white)' : 'var(--text-muted)',
+                   border: `1px solid ${crea.codi.trim() ? GOLD : BORDER}`,
+                   cursor: crea.codi.trim() ? 'pointer' : 'not-allowed' }}>
+          {t('import_wizard.resol_crea_btn')}
+        </button>
+      </div>
+      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 6 }}>
+        {t('import_wizard.resol_crea_hint')}
+      </div>
+    </div>
+  )
+}
+
 export default function ImportWizard({ model, onCancel, onComplete }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -133,7 +273,14 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   // 409 `codi_duplicat`: el catàleg té 2+ POMs tenant-only amb el mateix codi i el backend no
   // pot triar. NO és un error del wizard (la sessió és intacta i re-desable): és una feina de
   // catàleg pendent, i es mostra com a avís amb els codis, no com el 500 genèric d'abans.
-  const [pomsDuplicats, setPomsDuplicats] = useState(null)
+  // R3 · deixa de ser un atzucac: el comptador de dalt resumeix, i la feina es fa a la fila.
+  // R3 · l'estat de conflicte VIU A LA FILA: {ordre: {candidats, error, codi, ordre_ocupat}}.
+  const [conflictes, setConflictes] = useState({})
+  // R3 · decisions preses i encara no enviades: {ordre: {accio:'vincula'|'crea', ...}}.
+  const [resolucions, setResolucions] = useState({})
+  const [panellOrdre, setPanellOrdre] = useState(null)   // fila amb el panell obert (una alhora)
+  const [crea, setCrea] = useState({ codi: '', nom: '' })
+  const filaRefs = useRef({})
 
   // Pas 3 — taula de mesures
   const [taula, setTaula] = useState({})              // {pom_master_id: {talla: valor}}
@@ -324,18 +471,66 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const togglePom = (idx) => setPomsExtrets(pomsExtrets.map((p, i) =>
     i === idx ? { ...p, actiu: !p.actiu } : p))
 
-  // POM sense match → marcar/desmarcar com a tenant-only (s'activa i s'afegirà al catàleg).
-  const toggleTenantOnly = (idx) => setPomsExtrets(pomsExtrets.map((p, i) =>
-    i === idx ? { ...p, tenant_only: !p.tenant_only, actiu: !p.tenant_only } : p))
+  // R3 · el marcatge «tenant-only» a cegues (crear amb el codi del document sense mirar-lo)
+  // ha mort: activar una fila sense match és decidir QUÈ és, i això es fa al panell de la
+  // fila (resolució 'crea' amb codi i nom editables). El contracte `poms_tenant_only` del
+  // backend segueix viu i cobert per tests; el que ja no hi ha és la via cega des d'aquí.
 
-  const loadCataleg = async () => {
-    if (cataleg) { setShowAddPom(true); return }
+  // El catàleg el necessiten dos consumidors (el botó d'afegir i el panell de resolució);
+  // es carrega un sol cop i qui el demana decideix què n'obre.
+  const carregaCataleg = async () => {
+    if (cataleg) return cataleg
     try {
       const res = await fetch(`${API}/api/v1/poms/`, { headers: authHeaders })
       const data = await res.json().catch(() => ({}))
-      setCataleg(data.results || data || [])
-      setShowAddPom(true)
-    } catch (e) { setError(t('import_wizard.err_catalog', { detail: String(e) })) }
+      const llista = data.results || data || []
+      setCataleg(llista)
+      return llista
+    } catch (e) {
+      setError(t('import_wizard.err_catalog', { detail: String(e) }))
+      return null
+    }
+  }
+
+  const loadCataleg = async () => {
+    await carregaCataleg()
+    setShowAddPom(true)
+  }
+
+  // ── R3 · el conflicte es resol a la fila ──────────────────────────────────────
+  const obrePanell = (p) => {
+    const res = resolucions[p.ordre]
+    setCrea({
+      codi: (res?.accio === 'crea' ? res.codi : '') || p.codi_fitxa || '',
+      nom: (res?.accio === 'crea' ? res.nom : '') || p.descripcio || p.pom_nom || '',
+    })
+    setPanellOrdre(p.ordre)
+    carregaCataleg()
+  }
+
+  const posaResolucio = (ordre, res) => {
+    setResolucions(prev => ({ ...prev, [ordre]: res }))
+    setConflictes(prev => { const n = { ...prev }; delete n[ordre]; return n })
+    setPomsExtrets(prev => prev.map(p =>
+      p.ordre === ordre ? { ...p, actiu: true, tenant_only: false } : p))
+    setPanellOrdre(null)
+  }
+
+  const treuResolucio = (ordre) => {
+    setResolucions(prev => { const n = { ...prev }; delete n[ordre]; return n })
+    setPomsExtrets(prev => prev.map(p => p.ordre === ordre ? { ...p, actiu: false } : p))
+  }
+
+  // Marca les files afectades i porta el tècnic a la primera. El wizard no es queda mai
+  // amb un missatge global i cap acció possible.
+  const marcaConflictes = (nous) => {
+    setConflictes(nous)
+    const primer = Object.keys(nous).map(Number).sort((a, b) => a - b)[0]
+    if (primer === undefined) return
+    const fila = (pomsExtrets || []).find(p => p.ordre === primer)
+    if (fila) obrePanell(fila)
+    setTimeout(() => filaRefs.current[primer]?.scrollIntoView(
+      { behavior: 'smooth', block: 'center' }), 60)
   }
 
   const addPomManual = (pm) => {
@@ -349,24 +544,60 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   }
 
   const handleContinuePoms = async () => {
-    setSavingPoms(true); setError(''); setPomsDuplicats(null)
-    const ids = pomsExtrets.filter(p => p.actiu && p.pom_master_id).map(p => p.pom_master_id)
-    const tenantOnly = pomsExtrets
-      .filter(p => p.actiu && !p.pom_master_id && p.tenant_only)
+    setSavingPoms(true); setError('')
+    const actius = pomsExtrets.filter(p => p.actiu)
+    // Les resolucions manen: la fila que en porta una no viatja pels camins a cegues
+    // (`poms_confirmats` amb el vincle vell, `poms_tenant_only` amb el codi del document).
+    const llistaRes = actius.filter(p => resolucions[p.ordre])
+      .map(p => ({ ordre: p.ordre, ...resolucions[p.ordre] }))
+    const ambRes = new Set(llistaRes.map(r => r.ordre))
+    const ids = actius.filter(p => p.pom_master_id && !ambRes.has(p.ordre)).map(p => p.pom_master_id)
+    const tenantOnly = actius
+      .filter(p => !p.pom_master_id && p.tenant_only && !ambRes.has(p.ordre))
       .map(p => p.ordre)
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/poms/`, {
         method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ poms_confirmats: ids, poms_tenant_only: tenantOnly }),
+        body: JSON.stringify({ poms_confirmats: ids, poms_tenant_only: tenantOnly,
+                               resolucions: llistaRes }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.status === 409 && data.error === 'codi_duplicat') {
-        setPomsDuplicats(data.codis || []); setSavingPoms(false); return
+        // El codi del document té 2+ POMs al catàleg: marca les files que el porten i obre
+        // la primera. El comptador de dalt només resumeix.
+        const codis = data.codis || []
+        const cands = data.candidats || {}
+        const nous = {}
+        for (const p of pomsExtrets) {
+          const codi = (p.codi_fitxa || '').trim()
+          if (!p.pom_master_id && codis.includes(codi)) {
+            nous[p.ordre] = { candidats: cands[codi] || [], error: 'codi_duplicat', codi }
+          }
+        }
+        marcaConflictes(nous); setSavingPoms(false); return
+      }
+      if (res.status === 409 && data.error === 'resolucions_invalides') {
+        // Error PER FILA. Les resolucions bones es conserven (es reenviaran); només es
+        // desfan les que han fallat, perquè el tècnic les torni a decidir.
+        const errors = data.errors || []
+        const nous = {}
+        for (const e of errors) {
+          nous[e.ordre] = { candidats: e.candidats || [], error: e.error, codi: e.codi,
+                            ordre_ocupat: e.ordre_ocupat }
+        }
+        setResolucions(prev => {
+          const n = { ...prev }
+          for (const e of errors) delete n[e.ordre]
+          return n
+        })
+        marcaConflictes(nous); setSavingPoms(false); return
       }
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setSavingPoms(false); return }
-      // El backend retorna els POMs amb els pom_master_id tenant-only ja assignats.
+      // El backend retorna els POMs amb els pom_master_id (tenant-only i resolucions) ja
+      // assignats: les decisions pendents ja són dades i l'estat local de resolució mor aquí.
       const updated = data.poms_extrets || pomsExtrets
       setPomsExtrets(updated)
+      setResolucions({}); setConflictes({}); setPanellOrdre(null)
       buildTaula(updated)
       setStep(3)
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
@@ -795,9 +1026,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             </div>
           )}
 
-          {/* 409 codi_duplicat — feina de catàleg pendent, no error de l'import. La sessió és
-              intacta: resoldre el duplicat al catàleg i tornar a prémer «Continuar». */}
-          {pomsDuplicats && pomsDuplicats.length > 0 && (
+          {/* 409 codi_duplicat — R3: ja NO és un atzucac. El conflicte es resol fila a fila
+              (panell inline) i això de dalt només compta quantes en queden. */}
+          {Object.keys(conflictes).length > 0 && (
             <div style={{ background: 'var(--gold-pale)', border: '1px solid var(--gold)',
                           color: 'var(--text-main)', borderRadius: 8, padding: '10px 14px',
                           fontSize: 'var(--fs-body)', marginBottom: 12 }}>
@@ -806,8 +1037,11 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
               </div>
               <div>
                 {t('import_wizard.codi_duplicat_body', {
-                  n: pomsDuplicats.length,
-                  codis: pomsDuplicats.join(', '),
+                  n: Object.keys(conflictes).length,
+                  codis: Object.keys(conflictes).map(o => {
+                    const fila = (pomsExtrets || []).find(p => String(p.ordre) === String(o))
+                    return conflictes[o].codi || fila?.codi_fitxa || fila?.pom_codi || ''
+                  }).filter(Boolean).join(', '),
                 })}
               </div>
             </div>
@@ -880,21 +1114,34 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                   // un "sense match": és un suggeriment que espera una decisió humana, i s'ha
                   // de veure com a tal — si no, la persona no sap què li estan proposant.
                   const pendent = noMatch && !!p.weak_suggestion && !tenantOnly
+                  // R3 · l'estat de la fila davant del conflicte: `res` és la decisió presa i
+                  // encara no enviada; `conflicte` és el que el backend n'ha dit.
+                  const res = resolucions[p.ordre]
+                  const conflicte = conflictes[p.ordre]
                   return (
-                    <div key={idx} style={{
+                    <Fragment key={idx}>
+                    <div ref={el => { filaRefs.current[p.ordre] = el }} style={{
                       display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
                       borderTop: idx ? `1px solid ${BORDER}` : 'none',
-                      background: !p.actiu ? '#f7f7f5' : tenantOnly ? '#f3f0fb' : low ? '#fdf3ee' : 'var(--white)',
+                      background: conflicte ? 'var(--err-bg)' : res ? 'var(--ok-bg)'
+                        : !p.actiu ? 'var(--bg-card)' : tenantOnly ? '#f3f0fb' : low ? '#fdf3ee' : 'var(--white)',
                       opacity: p.actiu ? 1 : 0.55,
                     }}>
                       <input type="checkbox" checked={!!p.actiu}
-                        onChange={() => noMatch ? toggleTenantOnly(idx) : togglePom(idx)} />
+                        onChange={() => res ? treuResolucio(p.ordre)
+                          : noMatch ? obrePanell(p) : togglePom(idx)} />
                       <div style={{ flex: '0 0 90px', fontWeight: 600, fontSize: 'var(--fs-body)' }}>
                         {p.codi_fitxa || '—'}
                       </div>
                       <div style={{ fontSize: 'var(--fs-h3)', color: 'var(--text-muted)' }}>→</div>
                       <div style={{ flex: 1, fontSize: 'var(--fs-body)' }}>
-                        {noMatch
+                        {res
+                          ? <span style={{ color: 'var(--ok)' }}>
+                              {res.accio === 'vincula'
+                                ? t('import_wizard.resol_fet_vincula', { codi: res.pom_codi, nom: res.pom_nom })
+                                : t('import_wizard.resol_fet_crea', { codi: res.codi, nom: res.nom })}
+                            </span>
+                          : noMatch
                           ? (tenantOnly
                               ? <span style={{ color: '#5b3fa3' }}>
                                   {p.descripcio || t('import_wizard.no_description')}
@@ -914,7 +1161,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                                       {' '}<b>{p.weak_suggestion_codi}</b> · {p.weak_suggestion}
                                     </div>
                                   )}
-                                  <span onClick={() => toggleTenantOnly(idx)}
+                                  {/* «Afegir com a propi» passa per la MATEIXA via que la
+                                      resta: obre el panell amb codi i nom editables, i el que
+                                      s'envia és una resolució 'crea', no el codi a cegues. */}
+                                  <span onClick={() => obrePanell(p)}
                                     style={{ marginLeft: 8, fontSize: 'var(--fs-body)', color: GOLD,
                                              cursor: 'pointer', textDecoration: 'underline' }}>
                                     {t('import_wizard.add_as_own')}
@@ -922,14 +1172,41 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                                 </span>)
                           : <><b>{p.pom_codi}</b> · {p.pom_nom || p.descripcio}</>}
                       </div>
+                      {/* Qualsevol fila es pot re-decidir, tingui match o no. */}
+                      <button type="button" onClick={() => obrePanell(p)}
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                                 fontSize: 'var(--fs-label)', color: GOLD, textDecoration: 'underline',
+                                 fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        {t('import_wizard.resol_canvia')}
+                      </button>
                       <span style={{
                         fontSize: 'var(--fs-body)', fontWeight: 600, padding: '2px 8px', borderRadius: 10,
-                        background: tenantOnly ? '#ede7fb' : pendent ? '#fdf6ee' : noMatch ? '#fff0f0' : (low || med) ? '#fdf6ee' : '#f0f9f0',
-                        color: tenantOnly ? '#5b3fa3' : pendent ? 'var(--gold)' : noMatch ? '#a32d2d' : (low || med) ? 'var(--gold)' : '#3b6d11',
-                      }}>{tenantOnly ? 'tenant-only'
+                        background: conflicte ? 'var(--err-bg)' : res ? 'var(--ok-bg)'
+                          : tenantOnly ? '#ede7fb' : pendent ? '#fdf6ee' : noMatch ? '#fff0f0' : (low || med) ? '#fdf6ee' : '#f0f9f0',
+                        color: conflicte ? 'var(--err)' : res ? 'var(--ok)'
+                          : tenantOnly ? '#5b3fa3' : pendent ? 'var(--gold)' : noMatch ? '#a32d2d' : (low || med) ? 'var(--gold)' : '#3b6d11',
+                      }}>{conflicte ? t('import_wizard.resol_badge_conflicte')
+                          : res ? t('import_wizard.resol_badge_resolt')
+                          : tenantOnly ? 'tenant-only'
                           : pendent ? t('import_wizard.pending_badge')
                           : noMatch ? t('import_wizard.no_match_badge') : conf.toLowerCase()}</span>
                     </div>
+                    {panellOrdre === p.ordre && (
+                      <ResolPanel
+                        fila={p} conflicte={conflicte} cataleg={cataleg}
+                        crea={crea} setCrea={setCrea}
+                        onTanca={() => setPanellOrdre(null)}
+                        onVincula={(c) => posaResolucio(p.ordre, {
+                          accio: 'vincula', pom_master_id: c.id,
+                          pom_codi: c.codi_client, pom_nom: c.nom_client,
+                        })}
+                        onCrea={() => posaResolucio(p.ordre, {
+                          accio: 'crea', codi: crea.codi.trim(),
+                          nom: crea.nom.trim() || crea.codi.trim(),
+                        })}
+                      />
+                    )}
+                    </Fragment>
                   )
                     })}
                   </Fragment>
@@ -945,15 +1222,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                     {t('import_wizard.add_pom_catalog')}
                   </button>
                 ) : (
-                  <select onChange={e => { const pm = (cataleg || []).find(c => String(c.id) === e.target.value); if (pm) addPomManual(pm) }}
-                    defaultValue=""
-                    style={{ padding: '8px', borderRadius: 6, fontSize: 'var(--fs-body)', border: `1px solid ${BORDER}`,
-                             fontFamily: 'inherit', minWidth: 320 }}>
-                    <option value="" disabled>{t('import_wizard.choose_pom')}</option>
-                    {(cataleg || []).map(c => (
-                      <option key={c.id} value={c.id}>{c.codi_client} · {c.nom_client}</option>
-                    ))}
-                  </select>
+                  <PomCatalegPicker cataleg={cataleg} autoFocus onPick={addPomManual} />
                 )}
               </div>
 

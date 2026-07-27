@@ -638,3 +638,97 @@ class AvisFilesPerdudesTest(SimpleTestCase):
         """PDF, imatge, o un Excel del qual el parser no ha pogut ni ancorar la capçalera: no
         hi ha recompte de document, i un avís inventat seria pitjor que cap avís."""
         self.assertEqual(_avis_files_perdudes(0, 25), [])
+
+
+class ParserFitxaDaliaLosanTest(SimpleTestCase):
+    """R4 · el layout LOSAN real (fitxa DALIA, PROD tenant `los`, 27/07/2026).
+
+    El banner del pas 2 deia: *«full 'Hoja1': només 0 fila(es) amb valor a la talla base
+    '0M-1M'»*. La talla base ja era la del document (F2 resolt) i les columnes es
+    reconeixien: el que fallava era **el final de taula**.
+
+    Aquest layout no s'assembla al de Brownie —l'únic que hi havia com a fixture— en dues
+    coses, i cadascuna per si sola tomba el full sencer:
+
+      1. **El títol de peça viu a la columna del CODI** (`01.- DRESS`), no a la de la
+         descripció. Com que no encaixa a `_RE_CODI`, el parser hi feia `break`.
+      2. **La fila del títol va FUSIONADA de banda a banda**, i `_files_banner` la donava
+         per rètol de fi de taula.
+
+    Com que a DALIA la primera secció seu just sota la capçalera, el `break` queia a la
+    PRIMERA fila de dades: 0 files, abdicació, i el document sencer a la IA — que és qui
+    després fusiona les tres peces en una sola taula.
+
+    El fix: el fi de taula és una POSICIÓ (per sota de l'última fila que és un POM), no una
+    forma de fila. La fixture porta el rètol 'SKETCH WITH CODES' i el bloc del croquis al
+    peu, perquè el tall segueixi existint on toca.
+
+    `dalia_losan_3seccions.xlsx` és GENERADA (el document del client no és a staging): en
+    reprodueix l'estructura —full 'Hoja1', files 1-26 de croquis fusionat, capçalera a la 27
+    (`POM | Obs. | Description | DIM. | 5 talles | Tol (-) | Tol (+)`), 3 seccions amb el
+    títol a la columna del codi i la fila fusionada— i el missatge d'abdicació que en sortia
+    era, literalment, el del banner de PROD.
+    """
+
+    def setUp(self):
+        self.poms, self.talles, self.meta = _parse_excel_poms(
+            _fixture('dalia_losan_3seccions.xlsx'),
+            base_hint='0M-1M',
+            run_hint=['0M-1M', '1M-3M', '3M-6M', '6M-9M', '9M-12M'],
+        )
+
+    def test_ja_no_abdica_amb_el_layout_real(self):
+        """El símptoma exacte de PROD: 0 files amb valor a la talla base."""
+        self.assertIsNone(self.meta['motiu'])
+        self.assertEqual(len(self.poms), 10)
+        self.assertEqual(self.meta['full'], 'Hoja1')
+
+    def test_la_capcalera_a_la_fila_27_i_les_cinc_talles(self):
+        self.assertEqual(self.talles, ['0M-1M', '1M-3M', '3M-6M', '6M-9M', '9M-12M'])
+        self.assertEqual(self.meta['base_size'], '0M-1M')
+        self.assertEqual([p['values']['0M-1M'] for p in self.poms[:3]], [26.0, 24.0, 30.0])
+
+    def test_les_tres_peces_hi_son_i_cada_POM_sap_de_quina_ve(self):
+        """La secció és l'única cosa que permetrà separar les tres peces més endavant; si el
+        parser abdica, aquesta informació no arriba enlloc (la IA no la torna)."""
+        self.assertEqual([p['seccio'] for p in self.poms],
+                         ['01.- DRESS'] * 5 + ['02.- KNICKERS'] * 3 + ['03.- HEADBAND'] * 2)
+
+    def test_el_titol_de_peca_no_entra_com_a_POM(self):
+        codis = [p['codi_fitxa'] for p in self.poms]
+        self.assertEqual(codis, ['B', 'C', 'E', 'M', 'K', 'C.4', 'F', 'T.1', 'L.1', 'S.5'])
+        self.assertNotIn('01.- DRESS', codis)
+
+    def test_la_columna_DIM_i_les_toleràncies_no_son_talles(self):
+        """'DIM.' i 'Tol (-)/(+)' tenen etiqueta i valor numèric a cada fila: si entressin com
+        a talles, la taula de mesures del pas 3 tindria tres columnes fantasma.
+
+        ⚠️ Watchpoint anotat (fora de l'abast d'aquest fix): l'etiqueta real és `DIM.` amb
+        punt i `_ETIQ_SERVEI`/`dim_ci` només coneixen `DIM`, o sigui que el valor no es
+        recull (`dim=None`). No fa mal —cap consumidor llegeix `dim`, i la columna tampoc
+        no s'infiltra com a talla, que és el que importa— però és una dada que es perd.
+        """
+        self.assertNotIn('DIM.', self.talles)
+        self.assertEqual([p['dim'] for p in self.poms[:3]], [None, None, None])
+        self.assertEqual((self.poms[0]['tol_minus'], self.poms[0]['tol_plus']), (0.5, 0.5))
+
+    def test_el_sketch_del_peu_segueix_tallant_la_taula(self):
+        """La contrapartida del fix: el rètol de fi de taula ha de seguir manant on SÍ que és
+        el final. Si no, el parser s'empassaria el croquis com si fossin POMs."""
+        self.assertNotIn('SKETCH WITH CODES', [p['codi_fitxa'] for p in self.poms])
+        self.assertEqual(self.meta['n_files_amb_codi'], 10)
+
+    def test_un_retol_no_llegible_ENMIG_de_la_taula_no_la_talla(self):
+        """El cas general del fix: qualsevol fila rara que tingui POMs a sota és soroll, no
+        un final. Amb el `break` incondicional aquí es perdien les dues últimes files."""
+        files = [
+            (None, 'CODE', 'DESCRIPTION', 'S', 'M', 'L'),
+            (None, 'A', '1/2 chest width', 45.0, 46.0, 47.0),
+            (None, 'BLOC DE COMENTARIS', None, None, None, None),
+            (None, 'D', '1/2 bottom width', 48.0, 49.0, 50.0),
+            (None, 'E', 'Shoulder to shoulder', 36.5, 37.0, 37.5),
+        ]
+        poms, _, meta = _parse_excel_poms(_xlsx(files))
+        self.assertIsNone(meta['motiu'])
+        self.assertEqual([p['codi_fitxa'] for p in poms], ['A', 'D', 'E'])
+        self.assertEqual([p['seccio'] for p in poms[1:]], ['BLOC DE COMENTARIS'] * 2)

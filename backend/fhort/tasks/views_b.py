@@ -369,6 +369,9 @@ def model_task_log_view(request, model_id):
         'from_status': tr.from_status,
         'to_status': tr.to_status,
         'by': (tr.by.nom_complet if tr.by_id else None),
+        # null = gest del tècnic; slug = el guard que ha actuat. Sense això el log diria que la
+        # pausa la va fer `by`, que en una auto-pausa és fals.
+        'auto': tr.auto,
         'at': tr.at.isoformat(),
     } for tr in qs[:300]]
     return Response({'log': log}, status=status.HTTP_200_OK)
@@ -415,11 +418,21 @@ class _ExecuteTasks(HasCapability):
     required_capability = EXECUTE_TASKS
 
 
+# Marques d'automatisme que el CLIENT pot demanar (i només sobre →Paused). 'cron_40min' no hi és:
+# el naixement d'aquella marca és el command de cron, i un navegador no l'ha de poder falsificar.
+_AUTO_DEL_CLIENT = {'guard_30min'}
+
+
 @api_view(['POST'])
 @permission_classes([_ExecuteTasks])
 def transition_task_view(request, pk):
     """POST /api/v1/model-task-items/<pk>/transition/  Body: {"to_status": "InProgress"}
-    Aplica la transició. Retorna la tasca i, si escau, paused_task_id (per l'avís del front)."""
+    Aplica la transició. Retorna la tasca i, si escau, paused_task_id (per l'avís del front).
+
+    Body opcional `auto`: marca del guard que provoca la transició, perquè el log no signi amb
+    el nom del tècnic una cosa que ell no ha fet. NO és un camp lliure — el client només pot
+    demanar els valors de `_AUTO_DEL_CLIENT`, i només per a la pausa. Qualsevol altra cosa
+    s'ignora en silenci i la transició es registra com el que sembla: un gest humà."""
     from .models import ModelTask
     profile = getattr(request.user, 'profile', None)
     if profile is None:
@@ -439,8 +452,11 @@ def transition_task_view(request, pk):
         return Response(
             {'error': f"No tens permès executar el tipus de tasca '{task.task_type.code}'."},
             status=http_status.HTTP_403_FORBIDDEN)
+    auto = request.data.get('auto')
+    if to_status != 'Paused' or auto not in _AUTO_DEL_CLIENT:
+        auto = None
     try:
-        result = transition_task(task, to_status, profile)
+        result = transition_task(task, to_status, profile, auto=auto)
     except TransitionError as e:
         return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
     return Response(result, status=http_status.HTTP_200_OK)

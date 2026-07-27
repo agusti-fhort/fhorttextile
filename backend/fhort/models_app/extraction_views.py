@@ -412,6 +412,20 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None, full_sel
             def _cell(row, ci):
                 return _num(row[ci]) if (ci is not None and ci < len(row)) else None
 
+            #: R4 · l'última fila que ÉS un POM. El "fi de taula" no és una forma de fila: és una
+            #: POSICIÓ — per sota d'aquí ja no hi ha taula. Amb la fitxa DALIA (PROD, tenant
+            #: `los`) el rètol de peça viu a la columna del CODI i la seva fila va fusionada de
+            #: banda a banda: les dues coses feien `break` a la PRIMERA secció, just sota la
+            #: capçalera, i el full sencer es perdia (0 files, abdicació i caiguda a la IA).
+            def _fila_de_pom(row):
+                c = (str(row[ci_codi]).strip()
+                     if (ci_codi < len(row) and row[ci_codi] is not None) else '')
+                return (bool(c) and bool(_RE_CODI.match(c))
+                        and any(_cell(row, ci) is not None for ci, _ in size_cols))
+
+            ultima_pom = max((i for i in range(header_idx + 1, len(rows)) if _fila_de_pom(rows[i])),
+                             default=header_idx)
+
             poms = []
             #: Secció vigent (F4). El text de les files de secció es LLEGIA i es llençava; ara
             #: es recorda i cada POM se n'endú una còpia. La convenció d'arrel per peça
@@ -421,8 +435,8 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None, full_sel
             seccio_vigent = None
             for idx in range(header_idx + 1, len(rows)):
                 row = rows[idx]
-                if (idx + 1) in banner:
-                    break
+                if (idx + 1) in banner and idx > ultima_pom:
+                    break                         # bloc del sketch, peus: fi de taula de debò
                 codi = str(row[ci_codi]).strip() if (ci_codi < len(row)
                                                      and row[ci_codi] is not None) else ''
                 if not codi:
@@ -436,7 +450,10 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None, full_sel
                         seccio_vigent = text_seccio
                     continue
                 if not _RE_CODI.match(codi):
-                    break                         # rètol ('SKETCH WITH CODES') → fi de taula
+                    if idx > ultima_pom:
+                        break                     # rètol ('SKETCH WITH CODES') → fi de taula
+                    seccio_vigent = codi          # títol de peça a la columna del codi (LOSAN)
+                    continue
                 desc = (str(row[ci_desc]).strip()
                         if (ci_desc < len(row) and row[ci_desc] is not None) else '')
                 values = {}
@@ -1673,6 +1690,93 @@ def import_session_extraccio_view(request, token):
     }, status=200)
 
 
+def _candidats_de_codi(codi):
+    """Els POMMaster del catàleg que es disputen un codi, serialitzats per a la UI.
+
+    R1 · el 409 ha de portar els candidats. Fins ara la resposta deia NOMÉS el codi en
+    conflicte i l'única sortida que li quedava al tècnic era sortir del wizard i anar al
+    catàleg a mirar què hi havia. La vista ja feia la query per COMPTAR-los; aquí es
+    serialitzen perquè la decisió (quin dels dos és el bo) es pugui prendre a la fila,
+    sense perdre la governança: el backend segueix sense triar-ne cap.
+    """
+    from fhort.pom.models import POMMaster
+    return [{
+        'id': pm.id,
+        'codi_client': pm.codi_client,
+        'nom_client': pm.nom_client,
+        'origen_import': pm.origen_import or '',
+        'pendent_revisio': bool(pm.pendent_revisio),
+        'actiu': bool(pm.actiu),
+    } for pm in POMMaster.objects.filter(codi_client=codi).order_by('id')]
+
+
+def _pla_de_resolucions(poms, brut):
+    """R2 · valida les `resolucions` de fila i en retorna el PLA, o els errors per fila.
+
+    Una resolució és la decisió humana sobre UNA fila del pas 2:
+      · `{'ordre': n, 'accio': 'vincula', 'pom_master_id': id}` → la fila pren aquest POM
+        del catàleg (ha d'existir i ser actiu, i no el pot tenir ja una altra fila activa).
+      · `{'ordre': n, 'accio': 'crea', 'codi': 'E', 'nom': '...'}` → POMMaster tenant-only
+        amb el codi i el nom DONATS. Si el codi ja existeix al catàleg NO es crea res: es
+        torna l'error amb els candidats (mateixa forma que el 409 de R1). El wizard mai pot
+        fabricar un duplicat nou — que és l'estat que va provocar l'incident.
+
+    Res s'escriu aquí: validar i escriure van separats a propòsit, perquè una sola resolució
+    dolenta no deixi les bones a mitges (la resposta d'error és per fila i el frontend les
+    reenvia senceres).
+    """
+    from fhort.pom.models import POMMaster
+
+    per_ordre = {p.get('ordre'): p for p in poms if p.get('ordre') is not None}
+    ordres_resolts = {r.get('ordre') for r in brut}
+    #: POM → fila que ja el té. Les files que aquesta tramesa resol no compten: si es re-vincula
+    #: una fila, el POM que tenia queda lliure.
+    presos = {p['pom_master_id']: p.get('ordre') for p in poms
+              if p.get('pom_master_id') and p.get('actiu')
+              and p.get('ordre') not in ordres_resolts}
+
+    pla, errors, codis_nous = [], [], {}
+    for r in brut:
+        ordre = r.get('ordre')
+        accio = str(r.get('accio') or '').strip()
+        fila = per_ordre.get(ordre)
+        if fila is None:
+            errors.append({'ordre': ordre, 'error': 'fila_no_trobada'})
+            continue
+        if accio == 'vincula':
+            pid = r.get('pom_master_id')
+            pm = (POMMaster.objects.filter(id=int(pid), actiu=True).first()
+                  if str(pid).isdigit() else None)
+            if pm is None:
+                errors.append({'ordre': ordre, 'error': 'pom_no_valid', 'pom_master_id': pid})
+                continue
+            if pm.id in presos:
+                errors.append({'ordre': ordre, 'error': 'pom_ja_usat', 'pom_master_id': pm.id,
+                               'ordre_ocupat': presos[pm.id]})
+                continue
+            presos[pm.id] = ordre
+            pla.append({'fila': fila, 'accio': 'vincula', 'pom': pm})
+        elif accio == 'crea':
+            codi = str(r.get('codi') or '').strip()
+            if not codi:
+                errors.append({'ordre': ordre, 'error': 'codi_buit'})
+                continue
+            if POMMaster.objects.filter(codi_client=codi).exists():
+                errors.append({'ordre': ordre, 'error': 'codi_existent', 'codi': codi,
+                               'candidats': _candidats_de_codi(codi)})
+                continue
+            if codi.upper() in codis_nous:
+                errors.append({'ordre': ordre, 'error': 'codi_repetit', 'codi': codi,
+                               'ordre_ocupat': codis_nous[codi.upper()]})
+                continue
+            codis_nous[codi.upper()] = ordre
+            pla.append({'fila': fila, 'accio': 'crea', 'codi': codi,
+                        'nom': str(r.get('nom') or '').strip() or codi})
+        else:
+            errors.append({'ordre': ordre, 'error': 'accio_desconeguda', 'accio': accio})
+    return pla, errors
+
+
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def import_session_poms_view(request, token):
@@ -1683,6 +1787,12 @@ def import_session_poms_view(request, token):
     els pom_master_id confirmats que no hi siguin (afegits manualment del catàleg) s'incorporen.
     Rep també poms_tenant_only (llista d'ordres de files NO_MATCH que el tècnic vol crear com
     a POMMaster tenant-only: pom_global=None, codi_client=codi_fitxa). estat→'MESURES'.
+
+    R2 · `resolucions` (opcional) — la decisió de fila. `[{ordre, accio, pom_master_id?, codi?,
+    nom?}]` amb accio 'vincula' (la fila pren un POM del catàleg) o 'crea' (POMMaster tenant-only
+    amb el codi i el nom DONATS, mai el codi_fitxa a cegues). S'apliquen dins del MATEIX atomic i
+    manen sobre `poms_tenant_only` per a la mateixa fila. El contracte antic (poms_confirmats +
+    poms_tenant_only, sense `resolucions`) segueix funcionant idèntic.
 
     409 `codi_duplicat`: el catàleg de tenant NO té cap constraint d'unicitat sobre
     (pom_global, codi_client) — `pom/models.py:183-185` no en declara cap. Dos POMMaster
@@ -1709,6 +1819,11 @@ def import_session_poms_view(request, token):
 
     poms = list(session.poms_extrets or [])
 
+    # R2 · resolucions de fila (opcional). Manen sobre `poms_tenant_only`: una fila que el
+    # tècnic ha resolt explícitament ja no passa pel camí a cegues del codi_fitxa.
+    resolucions_brut = [r for r in (request.data.get('resolucions') or []) if isinstance(r, dict)]
+    tenant_only_ordres -= {r.get('ordre') for r in resolucions_brut}
+
     # ── PORTA 409, ABANS DE TOCAR RES. Les files que el tècnic vol crear com a tenant-only,
     # amb el seu codi. Es recullen TOTS els codis que ja tenen 2+ POMMaster tenant-only al
     # catàleg: petar al primer obligaria a descobrir-los d'un en un, un import per duplicat.
@@ -1724,20 +1839,57 @@ def import_session_poms_view(request, token):
         if POMMaster.objects.filter(pom_global=None, codi_client=codi).count() > 1
     })
     if duplicats:
-        return Response({'error': 'codi_duplicat', 'codis': duplicats}, status=409)
+        # R1 · el 409 porta els CANDIDATS de cada codi. Sense ells la UI només podia enviar
+        # el tècnic al catàleg; amb ells el conflicte es resol a la fila (PATCH `resolucions`).
+        return Response({'error': 'codi_duplicat', 'codis': duplicats,
+                         'candidats': {c: _candidats_de_codi(c) for c in duplicats}}, status=409)
 
     existents = {p.get('pom_master_id') for p in poms if p.get('pom_master_id')}
     for p in poms:
         if p.get('pom_master_id'):
             p['actiu'] = p['pom_master_id'] in confirmats_set
 
+    # PORTA de les resolucions, també abans de tocar res: si una sola falla, no n'entra CAP.
+    # Els errors van per `ordre` perquè el wizard els pugui pintar a la fila que toca i
+    # reenviar la tramesa sencera sense que el tècnic hagi de refer les que ja eren bones.
+    pla_resolucions, errors_resolucions = _pla_de_resolucions(poms, resolucions_brut)
+    if errors_resolucions:
+        return Response({'error': 'resolucions_invalides', 'errors': errors_resolucions},
+                        status=409)
+
     # Cos MUTADOR: o hi entra tot, o no hi entra res. Sense l'atomic, un POMMaster creat i una
     # sessió no desada deixaven catàleg brut sense cap fila que hi apuntés.
     with transaction.atomic():
+        categoria_default = ((POMCategory.objects.filter(actiu=True)
+                              .order_by('display_order', 'codi').first())
+                             if (files_tenant_only or pla_resolucions) else None)
+
+        # R2 · les decisions de fila. Dins del MATEIX atomic que la resta.
+        for r in pla_resolucions:
+            fila = r['fila']
+            if r['accio'] == 'crea':
+                pm = POMMaster.objects.create(
+                    pom_global=None,
+                    codi_client=r['codi'],
+                    nom_client=r['nom'],
+                    actiu=True,
+                    categoria=categoria_default,
+                    pendent_revisio=True,
+                    origen_import=str(session.token),
+                    notes=f'Creat des del pas 2 de l\'import, fitxa {session.token}',
+                )
+            else:
+                pm = r['pom']
+            fila['pom_master_id'] = pm.id
+            fila['pom_codi'] = pm.codi_client
+            fila['pom_nom'] = pm.nom_client
+            fila['match_type'] = 'tenant_only' if r['accio'] == 'crea' else 'manual'
+            fila['confidence'] = 'TENANT_ONLY' if r['accio'] == 'crea' else 'HIGH'
+            fila['actiu'] = True
+            existents.add(pm.id)
+
         # POMs sense match triats pel tècnic → crear (o reutilitzar) POMMaster tenant-only.
         if files_tenant_only:
-            categoria_default = (POMCategory.objects.filter(actiu=True)
-                                 .order_by('display_order', 'codi').first())
             for p in files_tenant_only:
                 codi = (p.get('codi_fitxa') or '').strip()
                 descripcio = (p.get('descripcio') or '').strip()

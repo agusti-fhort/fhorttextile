@@ -258,7 +258,9 @@ export const modelTasks = {
   patch: (id, data) => client.patch(`/api/v1/model-task-items/${id}/`, data),
   remove: (id) => client.delete(`/api/v1/model-task-items/${id}/`),
   // Màquina d'estats (gated execute_tasks). La resposta pot dur paused_task_id (→ toast 3s).
-  transition: (id, data) => client.post(`/api/v1/model-task-items/${id}/transition/`, data),  // {to_status}
+  // {to_status} i, opcionalment, {auto:'guard_30min'} SOBRE →Paused: marca del guard de tasca
+  // oblidada perquè el log no signi l'auto-pausa amb el nom del tècnic. Un gest humà no la porta.
+  transition: (id, data) => client.post(`/api/v1/model-task-items/${id}/transition/`, data),
   // Self-claim entre tècnics (P4a-back, gated execute_tasks, self-only). Sense body: assignee = jo.
   claim: (id) => client.post(`/api/v1/model-task-items/${id}/claim/`),
 }
@@ -690,6 +692,10 @@ export const timers = {
   list: (params) => client.get('/api/v1/timers/', { params }),
   create: (data) => client.post('/api/v1/timers/', data),
   tancar: (id) => client.post(`/api/v1/timers/${id}/tancar/`),
+  // Guard de tasca oblidada: segella el tram obert del PROPI tècnic (sense pk — el backend el
+  // busca pel perfil). Confirmar el modal rearma el llindar des del segell nou. 404 si ja no hi
+  // ha cap tasca En curs (pausada des d'una altra pestanya) → el front s'ha de resincronitzar.
+  heartbeat: () => client.post('/api/v1/timers/heartbeat/'),
 }
 
 // Usuari autenticat (capabilities + rol_nom). El backend SÍ exposa /api/v1/me/.

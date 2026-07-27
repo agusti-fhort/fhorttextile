@@ -108,6 +108,25 @@ class ImportPomsCodiDuplicatTest(_TenantBase):
         self.assertEqual(session.estat, 'POMS', 'la sessió no ha d\'avançar')
         self.assertIsNone(session.poms_extrets[0]['pom_master_id'])
 
+    def test_el_409_porta_els_candidats_de_cada_codi(self):
+        """R1 · sense candidats, l'única sortida de la UI era anar al catàleg. Amb ells, el
+        conflicte es pot resoldre a la fila: cal veure QUI es disputa el codi i d'on ve."""
+        vell = self._pom_tenant_only('E', 'Ample (vell)')
+        nou = POMMaster.objects.create(
+            pom_global=None, codi_client='E', nom_client='Ample (import)', actiu=True,
+            pendent_revisio=True, origen_import='sessio-anterior')
+        session = self._sessio([(0, 'E', 'chest')])
+
+        resp = self._patch(session, tenant_only=[0])
+
+        self.assertEqual(resp.status_code, 409)
+        candidats = resp.data['candidats']['E']
+        self.assertEqual([c['id'] for c in candidats], [vell.id, nou.id])
+        self.assertEqual(candidats[1], {
+            'id': nou.id, 'codi_client': 'E', 'nom_client': 'Ample (import)',
+            'origen_import': 'sessio-anterior', 'pendent_revisio': True, 'actiu': True,
+        })
+
     def test_reporta_TOTS_els_codis_conflictius_no_nomes_el_primer(self):
         """El tècnic ha de poder anar al catàleg UN cop i resoldre'ls tots."""
         for codi in ('AA', 'CC'):

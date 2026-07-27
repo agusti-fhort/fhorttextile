@@ -10,6 +10,11 @@
 // completa (1000), per no alterar-ne l'ordre relatiu.
 export const Z_MODAL = 150
 
+// El guard de tasca oblidada viu PER SOBRE de tot, editors a pantalla completa inclosos (1000):
+// és global i el tècnic passa precisament aquells 30 minuts dins de l'editor .ftt o del taller.
+// Un avís que quedés sota el canvas seria un avís que no existeix.
+export const Z_GUARD = 2000
+
 // Base de l'overlay d'un modal: fixed a tot el viewport + backdrop + centrat horitzontal.
 // `extra` per a l'alineació vertical i el scroll, que depenen de l'alçada del panell.
 export const overlayBase = (extra = {}) => ({

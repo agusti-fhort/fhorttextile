@@ -35,8 +35,10 @@ def _close_open_timer(task):
         t.save(update_fields=['fi', 'minuts', 'actiu'])
 
 
-def _log(task, frm, to, profile):
-    TaskTransition.objects.create(model_task=task, from_status=frm, to_status=to, by=profile)
+def _log(task, frm, to, profile, auto=None):
+    # `auto` viatja fins al log perquè digui la veritat: null = gest del tècnic, slug = guard.
+    TaskTransition.objects.create(model_task=task, from_status=frm, to_status=to, by=profile,
+                                  auto=auto)
 
 
 class TransitionError(Exception):
@@ -173,13 +175,17 @@ def _meritar_conjunt(model, now):
 
 
 @transaction.atomic
-def transition_task(task, to_status, profile, force=False):
+def transition_task(task, to_status, profile, force=False, auto=None):
     """Aplica una transició d'estat. Imposa 'una sola InProgress per tècnic' (global):
     en entrar a InProgress, pausa l'altra InProgress del mateix tècnic (tanca timer + log).
     Retorna dict amb la tasca i, si escau, la pausada automàticament.
 
     `force=True` salta NOMÉS el guard d'albarà (reobertura): reservat a rutines internes de
-    migració que reprocessen històric (retype command). La porta d'usuari mai el passa."""
+    migració que reprocessen històric (retype command). La porta d'usuari mai el passa.
+
+    `auto` és la marca del guard que ha provocat la transició ('guard_30min', 'cron_40min'…).
+    Només viatja al log: NO obre cap camí alternatiu ni salta cap validació. Els guards passen
+    per aquesta mateixa porta i per les mateixes regles — cap màquina d'estats paral·lela."""
     frm = task.status
     if to_status not in ALLOWED.get(frm, set()):
         raise TransitionError(f'Transició no permesa: {frm} → {to_status}')
@@ -203,7 +209,9 @@ def transition_task(task, to_status, profile, force=False):
             _close_open_timer(other)
             other.status = 'Paused'
             other.save(update_fields=['status', 'updated_at'])
-            _log(other, 'InProgress', 'Paused', profile)
+            # Aquesta pausa tampoc no és un gest sobre `other`: el tècnic n'ha obert una altra i el
+            # sistema li ha tancat aquesta. Sense marca, el log li atribuïa una pausa que no va fer.
+            _log(other, 'InProgress', 'Paused', profile, auto='exclusio_inprogress')
             paused_task_id = other.pk
         # Obrir timer de la tasca que entra
         _open_timer(task, profile)
@@ -224,7 +232,7 @@ def transition_task(task, to_status, profile, force=False):
 
     task.status = to_status
     task.save()
-    _log(task, frm, to_status, profile)
+    _log(task, frm, to_status, profile, auto=auto)
 
     # Pas 5B-fix: arrencar la PRIMERA tasca treu el model de Pending → Dev.
     if to_status == 'InProgress':
