@@ -230,13 +230,14 @@ def _files_banner(ws, ci_codi):
     return banner
 
 
-def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
+def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None, full_seleccionat=None):
     """Parse determinista d'una fitxa Excel de POMs (via ràpida del wizard).
 
     Retorna `(poms, talles, meta)`:
       poms  = [{'codi_fitxa', 'descripcio', 'dim', 'values': {talla: float}, 'tol_*', 'seccio'}]
       talles = [etiquetes de talla, en ordre de columna]
-      meta  = {'header', 'base_size', 'full', 'n_files_amb_codi', 'motiu'}
+      meta  = {'header', 'base_size', 'full', 'n_files_amb_codi', 'motiu', 'fulls',
+               'full_seleccionat_ignorat'}
 
     ⚠️ **PORTA D'ABDICACIÓ — la llei d'aquest parser** (DIAGNOSI_QA_S8_IMPORT, risc de D1c).
     El contracte del wizard és "si el parser no en treu res, cau a la IA". Un parser més
@@ -255,6 +256,21 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
     guanya la primera que la passa (a la fitxa Rosalia això descarta 'PROTO COMMENTS' —que té
     la columna de la talla base BUIDA— i tria 'RECTI 1 COMMENTS', que és on hi ha les mesures).
 
+    **F5 · TOTS ELS FULLS S'AVALUEN** (DIAGNOSI_MULTIPECA_DALIA, taula final §15). Fins ara la
+    funció retornava DINS del bucle al primer full que passava la porta i els següents no es
+    miraven mai: un llibre amb una peça per pestanya perdia els fulls 2..N sencers i **sense
+    cap avís de contingut** — l'únic que arribava era l'avís genèric de multi-model del
+    cribratge. Ara es recorre el llibre sencer i `meta['fulls']` porta l'informe
+    `[{nom, n_files_amb_codi, passa_porta}]` de cada pestanya.
+
+    El COMPORTAMENT PER DEFECTE NO CANVIA: sense `full_seleccionat` guanya el primer full que
+    passa la porta, exactament com abans. `full_seleccionat` (el que el tècnic tria al wizard)
+    el força; si el full triat no existeix o no passa la porta, es cau al default i el nom
+    ignorat queda a `meta['full_seleccionat_ignorat']` en comptes d'abdicar en silenci.
+
+    Cost acceptat: ara es llegeixen totes les pestanyes i no només fins a la primera bona. És
+    el preu de poder DIR què hi ha al llibre; les fitxes reals en tenen dues o tres.
+
     `meta['n_files_amb_codi']` és el nombre de files de POM que el document conté de debò.
     Serveix per al Fix D encara que s'abdiqui: si la IA en retorna menys, algú ho ha de dir
     (la fitxa del Tate té 26 POMs i la IA en va perdre un, 'JJ', sense cap avís).
@@ -262,8 +278,16 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
     import openpyxl
 
     meta = {'header': {}, 'base_size': None, 'full': None,
-            'n_files_amb_codi': 0, 'motiu': 'cap full amb capçalera de POMs reconeixible'}
+            'n_files_amb_codi': 0, 'motiu': 'cap full amb capçalera de POMs reconeixible',
+            'fulls': [], 'full_seleccionat_ignorat': None}
     run_canonic = {canonical_size_label(t) for t in (run_hint or []) if str(t).strip()}
+
+    #: Fulls que HAN passat la porta, en ordre de llibre: títol → (poms, talles, header, base).
+    #: Un dict i no una llista perquè la tria per nom sigui directa; conserva l'ordre d'inserció.
+    candidats = {}
+
+    def _apunta(nom, n_files, passa):
+        meta['fulls'].append({'nom': nom, 'n_files_amb_codi': n_files, 'passa_porta': passa})
 
     # read_only=False: els merges (D1c·3 i ·5) NO es poblen en mode read_only, i sense ells
     # no es poden ni compondre les capçaleres dobles ni tallar els blocs del sketch.
@@ -287,6 +311,7 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
                     header_idx, ci_codi, ci_desc = idx, codi_ci, desc_ci
                     break
             if header_idx is None:
+                _apunta(ws.title, 0, False)
                 continue
 
             # ── 2. Capçalera DOBLE amb merges (D1c·3). Els merges verticals (B9:B10) només
@@ -331,6 +356,7 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
                     size_cols.append((ci, str(crua).strip() if crua is not None else et))
             if not size_cols:
                 meta['motiu'] = f"full '{ws.title}': cap columna de talla reconeguda"
+                _apunta(ws.title, 0, False)
                 continue
 
             # ── 4. Bloc de metadades (B2:B7) — el bonus barat de D1c. Etiqueta a la columna del
@@ -370,6 +396,7 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
                 if trobada is None:
                     meta['motiu'] = (f"full '{ws.title}': la talla base '{base_label}' no té "
                                      f"columna a la taula")
+                    _apunta(ws.title, 0, False)
                     continue
                 base_ci, base_label = trobada
             else:
@@ -446,25 +473,40 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
             meta['n_files_amb_codi'] = max(meta['n_files_amb_codi'], len(poms))
 
             amb_base = sum(1 for p in poms if base_label in p['values'])
-            if amb_base < _MIN_FILES_ENTESA:
+            passa = amb_base >= _MIN_FILES_ENTESA
+            _apunta(ws.title, len(poms), passa)
+            if not passa:
                 meta['motiu'] = (f"full '{ws.title}': només {amb_base} fila(es) amb valor a la "
                                  f"talla base '{base_label}' (en calen {_MIN_FILES_ENTESA})")
                 continue
 
-            meta.update({
-                'header': header_meta,
-                'base_size': base_label,
-                'full': ws.title,
-                # Files de POM que el document conté DE DEBÒ (Fix D). Aquí és igual a len(poms):
-                # el parser no en deixa caure cap — una fila sense valor a la talla base ('JJ')
-                # és un POM legítim (BaseMeasurement.base_value_cm és null=True), no un descart.
-                'n_files_amb_codi': len(poms),
-                'motiu': None,
-            })
-            return poms, [lbl for _, lbl in size_cols], meta
+            candidats[ws.title] = (poms, [lbl for _, lbl in size_cols], header_meta, base_label)
     finally:
         wb.close()
-    return [], [], meta
+
+    # ── 8. LA TRIA. Per defecte, el primer full que ha passat la porta (comportament de
+    # sempre). `full_seleccionat` el força; si no és triable, es diu i es cau al default.
+    if not candidats:
+        return [], [], meta
+    tria = next(iter(candidats))
+    if full_seleccionat:
+        if full_seleccionat in candidats:
+            tria = full_seleccionat
+        else:
+            meta['full_seleccionat_ignorat'] = full_seleccionat
+
+    poms, talles, header_meta, base_label = candidats[tria]
+    meta.update({
+        'header': header_meta,
+        'base_size': base_label,
+        'full': tria,
+        # Files de POM que el document conté DE DEBÒ (Fix D). Aquí és igual a len(poms): el
+        # parser no en deixa caure cap — una fila sense valor a la talla base ('JJ') és un POM
+        # legítim (BaseMeasurement.base_value_cm és null=True), no un descart.
+        'n_files_amb_codi': len(poms),
+        'motiu': None,
+    })
+    return poms, talles, meta
 
 
 def _cribratge_content_block(file_bytes: bytes, filename: str, content_type: str) -> dict:
@@ -749,6 +791,11 @@ def import_session_talles_view(request, token):
     talles_sel = [str(t).strip() for t in (request.data.get('talles_seleccionades') or []) if str(t).strip()]
     mapping_in = request.data.get('talla_mapping')   # [{document, model}] editat per l'humà (opcional)
     base_in = request.data.get('base_size_label')    # B5: canvi de talla base (etiqueta model)
+    # F5: full del llibre que el tècnic vol importar (xlsx multi-pestanya). Opcional; absent =
+    # no s'hi toca. CAP endpoint nou i CAP camp nou: viu a `run_conciliat`, el JSONField que ja
+    # és la casa de l'estat d'aquest pas. Qui re-extreu és el wizard, tornant a cridar
+    # /extraccio/ — aquesta vista només desa la tria.
+    full_in = request.data.get('full_seleccionat')
 
     # Run configurat actual del model (etiquetes tenant; només informatiu).
     configurat = [
@@ -849,6 +896,9 @@ def import_session_talles_view(request, token):
         'sense_desti': no_aparellades,        # compat: lectors antics.
         'estat': 'RESOLT' if ready else 'PENDENT',
     })
+    if full_in is not None:
+        nou_full = str(full_in).strip()
+        rc['full_seleccionat'] = nou_full or None
     rc.pop('mapeig', None)                     # la clau `mapeig` MOR: una sola font de veritat.
     session.run_conciliat = rc
     if ready:
@@ -1273,6 +1323,22 @@ def _avis_files_perdudes(n_document, n_extretes):
     return []
 
 
+def _avis_fulls_multiples(fulls, full_llegit):
+    """F5 · el llibre té més d'una pestanya amb POMs i només se n'ha llegit una.
+
+    Fins ara els fulls 2..N es perdien SENCERS i sense cap avís de contingut: l'únic que
+    arribava era el genèric de multi-model del cribratge, que parla de models detectats i no de
+    pestanyes no llegides. Un document multi-peça amb una peça per full desapareixia en silenci.
+    """
+    amb_poms = [f for f in (fulls or []) if f.get('passa_porta')]
+    if len(amb_poms) <= 1:
+        return []
+    noms = ', '.join(f"'{f['nom']}' ({f['n_files_amb_codi']} POMs)" for f in amb_poms)
+    return [f"El llibre té {len(amb_poms)} fulls amb taules de POMs: {noms}. "
+            f"S'ha llegit '{full_llegit}'. Si la fitxa porta una peça per full, tria'l al pas "
+            f"de talles: els altres NO s'importen."]
+
+
 def _extraccio_via_excel(session, api_key):
     """Via ràpida d'extracció per a fitxes Excel: parse determinista + revisió Sonnet,
     SENSE la crida Opus.
@@ -1300,10 +1366,15 @@ def _extraccio_via_excel(session, api_key):
         base_hint=(model.base_size_label if model else None),
         run_hint=[s.strip() for s in ((model.size_run_model if model else '') or '')
                   .replace(';', '·').split('·') if s.strip()],
+        # F5 · el full que el tècnic ha triat al pas 1. Viu a `run_conciliat` (JSONField que ja
+        # és la casa de l'estat de W1) i NO en un camp nou: no cal migració per a un punter.
+        full_seleccionat=(session.run_conciliat or {}).get('full_seleccionat'),
     )
 
     # 3. Sense POMs llegibles → senyal (None) perquè el caller faci fallback IA (Opus).
     if not raw_poms:
+        # L'informe de fulls viatja igual: el camí IA també l'ha de poder ensenyar (el llibre
+        # té els fulls que té, els hagi entès el parser o no).
         return None, meta
 
     # 4. Text pla per a la revisió Sonnet.
@@ -1354,6 +1425,11 @@ def _extraccio_via_excel(session, api_key):
 
     avisos_extraccio = list(revision.get('warnings', []))
     avisos_extraccio += _avisos_de_matching(stats)
+    avisos_extraccio += _avis_fulls_multiples(meta.get('fulls'), meta.get('full'))
+    if meta.get('full_seleccionat_ignorat'):
+        avisos_extraccio.append(
+            f"El full triat «{meta['full_seleccionat_ignorat']}» no té cap taula de POMs "
+            f"llegible; s'ha llegit «{meta.get('full')}».")
 
     # 9. Talles, capçalera i talla BASE — els tres, llegits del document.
     #
@@ -1369,7 +1445,11 @@ def _extraccio_via_excel(session, api_key):
     sizes = [str(t) for t in talles_detectades]
     header = meta.get('header') or {}
     base_size = meta.get('base_size') or (sizes[0] if sizes else None)
-    extraccio = {'via': 'excel', 'header': header, 'sizes': sizes, 'base_size': base_size}
+    # F5 · informe de fulls del llibre + quin s'ha llegit. El wizard el necessita per poder dir
+    # «el llibre té N fulls amb POMs» i per oferir-ne la tria.
+    fulls = meta.get('fulls') or []
+    extraccio = {'via': 'excel', 'header': header, 'sizes': sizes, 'base_size': base_size,
+                 'fulls': fulls, 'full': meta.get('full')}
 
     # 10. Persisteix. NOTA: `session.poms_extrets` és la font de veritat per als passos
     # W2-confirmació (:1216) i W3-mesures (:1415); cal desar-la (paritat amb la via Opus).
@@ -1403,6 +1483,8 @@ def _extraccio_via_excel(session, api_key):
         'grading_status': {'status': 'ok', 'detail': ''},
         'avisos': avisos_extraccio,
         'suggested_valors_mode': suggested_valors_mode,
+        'fulls': fulls,                    # F5 · informe del llibre
+        'full': meta.get('full'),          # F5 · quin s'ha llegit
     }, status=200), meta
 
 
@@ -1584,6 +1666,10 @@ def import_session_extraccio_view(request, token):
         'grading_status': grading_status,
         'avisos': avisos,
         'suggested_valors_mode': suggested_valors_mode,
+        # F5 · l'informe de fulls surt del parser determinista, que sap comptar les pestanyes
+        # encara que abdiqui de llegir-les. Buit per a PDF/imatge, que no tenen fulls.
+        'fulls': excel_meta.get('fulls') or [],
+        'full': excel_meta.get('full'),
     }, status=200)
 
 

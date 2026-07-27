@@ -29,6 +29,7 @@ from django.test import SimpleTestCase
 from fhort.models_app.extraction_views import (
     _MIN_FILES_ENTESA,
     _avis_files_perdudes,
+    _avis_fulls_multiples,
     _extraccio_via_excel,
     _parse_excel_poms,
 )
@@ -43,11 +44,17 @@ def _fixture(nom):
 
 def _xlsx(files, titol='FULL'):
     """Excel sintètic a partir d'una llista de files (tuples). Per als casos deformats."""
+    return _xlsx_multi([(titol, files)])
+
+
+def _xlsx_multi(fulls):
+    """Llibre sintètic de diverses pestanyes. `fulls` = [(titol, [files])], en ordre."""
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = titol
-    for fila in files:
-        ws.append(list(fila))
+    wb.remove(wb.active)
+    for titol, files in fulls:
+        ws = wb.create_sheet(title=titol)
+        for fila in files:
+            ws.append(list(fila))
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -338,6 +345,104 @@ class TallaBaseDelModelAmbEtiquetaDiferentTest(SimpleTestCase):
         self.assertEqual(meta['base_size'], '3M-6M')
 
 
+def _peca(nom_seccio, codis, base='S'):
+    """Un full amb capçalera, una secció i tres POMs — una 'peça' del llibre multi-full."""
+    return ([(None, 'SAMPLE SIZE', base), (None, None, None),
+             (None, 'CODE', 'DESCRIPTION', 'GRADING', base),
+             (None, None, nom_seccio)]
+            + [(None, c, f'mesura {c}', None, 30.0 + i) for i, c in enumerate(codis)])
+
+
+class MultiFullInformeITriaTest(SimpleTestCase):
+    """F5 · un llibre amb una peça per pestanya.
+
+    Fins ara el parser retornava DINS del bucle al primer full que passava la porta i els
+    següents no es miraven mai: els fulls 2..N es perdien sencers i sense cap avís de contingut
+    (DIAGNOSI_MULTIPECA_DALIA, taula final §15). Ara s'avaluen tots i es pot triar.
+    """
+
+    LLIBRE = [
+        ('DRESS', _peca('Bodice:', ['A', 'D', 'E'])),
+        ('NOTES', [(None, 'Comentaris de fitting'), (None, 'res a veure')]),
+        ('KNICKERS', _peca('Front:', ['K1', 'K2', 'K3'])),
+    ]
+
+    def setUp(self):
+        self.bytes = _xlsx_multi(self.LLIBRE)
+
+    def test_linforme_diu_QUE_hi_ha_a_cada_full(self):
+        _, _, meta = _parse_excel_poms(self.bytes)
+        self.assertEqual(meta['fulls'], [
+            {'nom': 'DRESS', 'n_files_amb_codi': 3, 'passa_porta': True},
+            {'nom': 'NOTES', 'n_files_amb_codi': 0, 'passa_porta': False},
+            {'nom': 'KNICKERS', 'n_files_amb_codi': 3, 'passa_porta': True},
+        ])
+
+    def test_per_defecte_guanya_el_primer_que_passa(self):
+        """El comportament de sempre: sense tria explícita, res no canvia."""
+        poms, _, meta = _parse_excel_poms(self.bytes)
+        self.assertEqual(meta['full'], 'DRESS')
+        self.assertEqual([p['codi_fitxa'] for p in poms], ['A', 'D', 'E'])
+        self.assertIsNone(meta['full_seleccionat_ignorat'])
+
+    def test_el_full_triat_mana(self):
+        poms, _, meta = _parse_excel_poms(self.bytes, full_seleccionat='KNICKERS')
+        self.assertEqual(meta['full'], 'KNICKERS')
+        self.assertEqual([p['codi_fitxa'] for p in poms], ['K1', 'K2', 'K3'])
+        self.assertEqual([p['seccio'] for p in poms], ['Front:'] * 3)
+
+    def test_un_full_triat_que_no_passa_la_porta_no_fa_abdicar_en_silenci(self):
+        """Cau al default i ho DIU. Abdicar deixaria l'usuari sense import i sense saber per què."""
+        poms, _, meta = _parse_excel_poms(self.bytes, full_seleccionat='NOTES')
+        self.assertEqual(meta['full'], 'DRESS')
+        self.assertEqual(meta['full_seleccionat_ignorat'], 'NOTES')
+        self.assertEqual(len(poms), 3)
+
+    def test_un_full_triat_inexistent_tampoc(self):
+        _, _, meta = _parse_excel_poms(self.bytes, full_seleccionat='NO HI SOC')
+        self.assertEqual(meta['full'], 'DRESS')
+        self.assertEqual(meta['full_seleccionat_ignorat'], 'NO HI SOC')
+
+    def test_lavis_diu_quants_fulls_amb_POMs_hi_ha_i_quin_sha_llegit(self):
+        _, _, meta = _parse_excel_poms(self.bytes)
+        avisos = _avis_fulls_multiples(meta['fulls'], meta['full'])
+        self.assertEqual(len(avisos), 1)
+        self.assertIn('2 fulls', avisos[0])
+        self.assertIn("'DRESS' (3 POMs)", avisos[0])
+        self.assertIn("'KNICKERS' (3 POMs)", avisos[0])
+        self.assertIn("S'ha llegit 'DRESS'", avisos[0])
+
+    def test_lavis_calla_amb_un_sol_full_amb_POMs(self):
+        """La immensa majoria de fitxes. Un avís que surt sempre no el llegeix ningú."""
+        _, _, meta = _parse_excel_poms(_xlsx(_SANA))
+        self.assertEqual(_avis_fulls_multiples(meta['fulls'], meta['full']), [])
+
+
+class MultiFullSobreLaFitxaRealTest(SimpleTestCase):
+    """La Rosalia, que té dos fulls de debò: 'PROTO COMMENTS' (columna de la base BUIDA, no
+    passa) i 'RECTI 1 COMMENTS' (les mesures). L'informe ha de dir exactament això."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.bytes = _fixture('brownie_rosalia_spec_sheet.xlsx')
+
+    def test_linforme_marca_el_full_que_no_passa(self):
+        _, _, meta = _parse_excel_poms(self.bytes)
+        self.assertEqual([(f['nom'], f['passa_porta']) for f in meta['fulls']],
+                         [('PROTO COMMENTS', False), ('RECTI 1 COMMENTS', True)])
+
+    def test_no_savisa_de_multi_full_perque_nomes_un_te_taula(self):
+        _, _, meta = _parse_excel_poms(self.bytes)
+        self.assertEqual(_avis_fulls_multiples(meta['fulls'], meta['full']), [])
+
+    def test_triar_el_full_que_no_passa_cau_al_bo_i_ho_diu(self):
+        poms, _, meta = _parse_excel_poms(self.bytes, full_seleccionat='PROTO COMMENTS')
+        self.assertEqual(meta['full'], 'RECTI 1 COMMENTS')
+        self.assertEqual(meta['full_seleccionat_ignorat'], 'PROTO COMMENTS')
+        self.assertEqual(len(poms), 11)
+
+
 class ElCamiIAContinuaSentElFallbackTest(SimpleTestCase):
     """El contracte del caller, no del parser: un Excel que el parser no entén ha d'anar a la IA.
 
@@ -368,13 +473,16 @@ class ElCamiIAContinuaSentElFallbackTest(SimpleTestCase):
         model = None
         model_id = None
 
-        def __init__(self, contingut):
+        def __init__(self, contingut, full_seleccionat=None):
             self.document = ElCamiIAContinuaSentElFallbackTest._Doc(contingut)
             self.resultat = {}
             self.poms_extrets = []
             self.avisos = []
             self.estat = 'TALLES'
             self.desada = False
+            # F5 · el punter al full triat viu aquí (no hi ha camp nou a ImportSession).
+            self.run_conciliat = ({'full_seleccionat': full_seleccionat}
+                                  if full_seleccionat else {})
 
         def save(self, **kwargs):
             self.desada = True
@@ -418,6 +526,35 @@ class ElCamiIAContinuaSentElFallbackTest(SimpleTestCase):
         # …i la sessió en desa la base, que és el que W5 necessita per reconciliar les talles.
         self.assertEqual(sessio.resultat['extraccio']['base_size'], 'S')
         self.assertEqual(sessio.estat, 'POMS')
+
+    @mock.patch('fhort.models_app.extraction_views._match_rows')
+    @mock.patch('fhort.models_app.extraction_views._revise_excel_poms_with_sonnet')
+    def test_la_resposta_porta_linforme_de_fulls_i_respecta_la_tria(self, revisio, match_rows):
+        """F5 · el cablejat sencer: `run_conciliat['full_seleccionat']` → parser → resposta.
+
+        I l'avís de multi-full hi ha de ser: sense ell, els fulls no llegits desapareixen en
+        silenci, que és exactament el forat que F5 tanca.
+        """
+        revisio.return_value = {'corrections': [], 'warnings': []}
+        match_rows.side_effect = lambda files, customer: (
+            [{'codi_fitxa': f['codi_fitxa'], 'values': f['values'], 'pom_master_id': None}
+             for f in files],
+            {'n_nomatch': 0, 'n_low': 0, 'n_many_to_one': 0},
+        )
+        llibre = _xlsx_multi(MultiFullInformeITriaTest.LLIBRE)
+
+        sessio = self._Sessio(llibre, full_seleccionat='KNICKERS')
+        resposta, _ = _extraccio_via_excel(sessio, api_key='no-cal')
+
+        self.assertEqual(resposta.data['full'], 'KNICKERS')
+        self.assertEqual([p['codi_fitxa'] for p in resposta.data['poms_extrets']],
+                         ['K1', 'K2', 'K3'])
+        self.assertEqual([f['nom'] for f in resposta.data['fulls']],
+                         ['DRESS', 'NOTES', 'KNICKERS'])
+        self.assertTrue(any('2 fulls' in a for a in resposta.data['avisos']),
+                        "l'avís de multi-full ha d'arribar a la persona")
+        # I la sessió també en desa l'informe (el wizard el pot rellegir sense re-extreure).
+        self.assertEqual(sessio.resultat['extraccio']['full'], 'KNICKERS')
 
 
 class AvisFilesPerdudesTest(SimpleTestCase):
