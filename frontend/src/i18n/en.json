@@ -4038,5 +4038,17 @@
     "copy_count": "{{tria}} of {{total}} POMs from the source",
     "copy_count_zero": "No POM selected: no measurement will be copied.",
     "copy_error": "Could not copy from the selected model."
+  },
+  "guard_tasca": {
+    "titol": "You've had a task open for {{minuts}} minutes",
+    "cos": "“{{tasca}}” on model {{model}} has been In progress for {{minuts}} minutes. Are you still working on it?",
+    "compte_enrere": "It will pause itself in",
+    "segueixo": "Still here",
+    "pausar": "Pause it now",
+    "pausada": "Task auto-paused: it stayed open too long without confirmation. The time worked has been saved.",
+    "pausa_fallida": "The task could not be paused from here. The server will pick it up.",
+    "log_auto_guard": "auto · 30 min guard",
+    "log_auto_cron": "auto · server",
+    "log_auto_exclusio": "auto · you opened another one"
   }
 }

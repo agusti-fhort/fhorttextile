@@ -4038,5 +4038,17 @@
     "copy_count": "{{tria}} de {{total}} POMs de l'origen",
     "copy_count_zero": "Cap POM triat: no es copiarà cap mesura.",
     "copy_error": "No s'ha pogut copiar del model triat."
+  },
+  "guard_tasca": {
+    "titol": "Portes {{minuts}} minuts amb una tasca oberta",
+    "cos": "«{{tasca}}» del model {{model}} fa {{minuts}} minuts que està En curs. Hi segueixes treballant?",
+    "compte_enrere": "Es pausarà sola en",
+    "segueixo": "Hi segueixo",
+    "pausar": "Pausar-la ara",
+    "pausada": "Tasca auto-pausada: portava massa estona oberta sense confirmació. El temps treballat queda desat.",
+    "pausa_fallida": "No s'ha pogut pausar la tasca des d'aquí. El servidor la recollirà.",
+    "log_auto_guard": "auto · guard 30 min",
+    "log_auto_cron": "auto · servidor",
+    "log_auto_exclusio": "auto · n'has obert una altra"
   }
 }

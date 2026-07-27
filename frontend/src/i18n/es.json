@@ -4038,5 +4038,17 @@
     "copy_count": "{{tria}} de {{total}} POMs del origen",
     "copy_count_zero": "Ningún POM elegido: no se copiará ninguna medida.",
     "copy_error": "No se ha podido copiar del modelo elegido."
+  },
+  "guard_tasca": {
+    "titol": "Llevas {{minuts}} minutos con una tarea abierta",
+    "cos": "«{{tasca}}» del modelo {{model}} lleva {{minuts}} minutos En curso. ¿Sigues trabajando en ella?",
+    "compte_enrere": "Se pausará sola en",
+    "segueixo": "Sigo aquí",
+    "pausar": "Pausarla ahora",
+    "pausada": "Tarea auto-pausada: llevaba demasiado tiempo abierta sin confirmación. El tiempo trabajado queda guardado.",
+    "pausa_fallida": "No se ha podido pausar la tarea desde aquí. El servidor la recogerá.",
+    "log_auto_guard": "auto · guard 30 min",
+    "log_auto_cron": "auto · servidor",
+    "log_auto_exclusio": "auto · has abierto otra"
   }
 }
