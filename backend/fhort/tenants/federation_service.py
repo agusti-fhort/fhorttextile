@@ -78,7 +78,8 @@ def llegeix_models_del_brand(brand_schema, studio_codi, limit=None, codis=None):
         assignats = Model.objects.filter(studio_assignat=studio_codi)
         n_assignats = assignats.count()
         qs = (assignats
-              .select_related('garment_type_item__garment_type', 'size_system', 'grading_rule_set')
+              .select_related('garment_type_item__garment_type', 'size_system',
+                              'grading_rule_set', 'garment_set')
               .order_by('sequencial', 'codi_intern'))
         if codis is not None:
             qs = qs.filter(codi_intern__in=list(codis))
@@ -101,6 +102,15 @@ def llegeix_models_del_brand(brand_schema, studio_codi, limit=None, codis=None):
                                 if gti and gti.garment_type_id else None),
                 'size_system_codi': m.size_system.codi if m.size_system_id else None,
                 'grs_nom': m.grading_rule_set.nom if m.grading_rule_set_id else None,
+                # SET-1 · C6 — la UNITAT COMERCIAL viatja. Sense això el Studio rebia N models
+                # solts amb codis -01/-02 i el conjunt es dissolia en silenci (risc #2 d'A2):
+                # res fallava, però el producte que el client va comprar desapareixia. La clau
+                # natural del conjunt és `codi_base`; `consumption_started_at` NO viatja mai —
+                # el mèrit és per tenant i cada tenant merita el seu.
+                'set_codi_base': m.garment_set.codi_base if m.garment_set_id else None,
+                'set_nom_comercial': (m.garment_set.nom_comercial if m.garment_set_id else None),
+                'set_num_pieces': m.garment_set.num_pieces if m.garment_set_id else None,
+                'piece_number': m.piece_number,
             })
     return total_brand, n_assignats, rows
 
@@ -115,11 +125,12 @@ def instancia_al_studio(studio_schema, brand_codi, rows, commit):
     `Model.objects.create()` i NO `bulk_create`: els signals s'han de disparar (la SizeFitting
     buida, el watchpoint). Un bulk_create seria més ràpid i deixaria els models a mitges.
     """
-    from fhort.models_app.models import Model
+    from fhort.models_app.models import GarmentSet, Model
     from fhort.pom.models import GarmentType, GradingRuleSet, SizeSystem
     from fhort.tasks.models import Customer, GarmentTypeItem
 
     creats, saltats = [], []
+    sets_tocats = set()
     unmatched = {k: [] for k in CONFIG_KEYS}
 
     with schema_context(studio_schema):
@@ -159,6 +170,22 @@ def instancia_al_studio(studio_schema, brand_codi, rows, commit):
                     if grs is None:
                         unmatched['grading_rule_set'].append(r['grs_nom'])
 
+                # SET-1 · C6 — resoldre-O-CREAR el conjunt al destí per clau natural
+                # (`codi_base`). `get_or_create` fa que el traspàs d'UNA sola part creï
+                # igualment el set i que les germanes s'hi enganxin quan viatgin, en qualsevol
+                # ordre i en execucions separades: no hi ha cap moment en què el conjunt
+                # existeixi a mitges de manera irreparable. `consumption_started_at` es deixa a
+                # NULL a posta — l'albarà és patrimoni del tenant que fa la feina.
+                garment_set = None
+                if r.get('set_codi_base'):
+                    if commit:
+                        garment_set, _ = GarmentSet.objects.get_or_create(
+                            codi_base=r['set_codi_base'],
+                            defaults={'nom_comercial': r.get('set_nom_comercial') or '',
+                                      'num_pieces': r.get('set_num_pieces') or 1},
+                        )
+                    sets_tocats.add(r['set_codi_base'])
+
                 if commit:
                     Model.objects.create(
                         codi_intern=r['codi_intern'],
@@ -175,6 +202,8 @@ def instancia_al_studio(studio_schema, brand_codi, rows, commit):
                         garment_type_item=gti,
                         size_system=size_system,
                         grading_rule_set=grs,
+                        garment_set=garment_set,
+                        piece_number=r.get('piece_number'),
                     )
                 creats.append(r['codi_intern'])
 
@@ -184,7 +213,10 @@ def instancia_al_studio(studio_schema, brand_codi, rows, commit):
         else:
             _crea_tots()
 
-    return {'creats': creats, 'saltats': saltats, 'unmatched': unmatched}
+    # `ConsumptionRecord` NO viatja (i mai ho ha fet): l'albarà és el llibre de meritació del
+    # tenant que ha fet la feina, i el Studio no ha meritat res per rebre un model.
+    return {'creats': creats, 'saltats': saltats, 'unmatched': unmatched,
+            'sets': sorted(sets_tocats)}
 
 
 def traspassa(brand_codi, studio_codi, commit=False, limit=None, codis=None):

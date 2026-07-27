@@ -149,7 +149,11 @@ class ModelViewSet(viewsets.ModelViewSet):
             .select_related('garment_type', 'garment_group',
                             'responsable', 'responsable__user',
                             'size_system', 'grading_rule_set',
-                            'garment_type_item', 'customer')
+                            'garment_type_item', 'customer',
+                            # SET-1: el serializer hi niua el conjunt (badge «SET n/N»).
+                            'garment_set')
+            # …i les germanes, per no fer una query per fila de conjunt.
+            .prefetch_related('garment_set__peces')
             .all()
         )
         if self.action != 'list':
@@ -746,19 +750,48 @@ def create_model_wizard(request):
     if not request.data.get('garment_type_item_id'):
         return Response({'error': 'garment_type_item és obligatori'}, status=400)
 
-    if is_multipiece:
-        try:
-            num_pieces = int(num_pieces)
-        except (TypeError, ValueError):
-            return Response(
-                {'error': 'num_pieces ha de ser un enter quan is_multipiece és cert'},
-                status=400,
-            )
-        if num_pieces < 2:
-            return Response(
-                {'error': 'Un conjunt multi-peça necessita num_pieces >= 2'},
-                status=400,
-            )
+    # ── SET-1 · A4 — EL GTI MANA. Decisió 3 del sprint SET: és l'item qui declara PEÇA o
+    #    CONJUNT, no el payload. `is_multipiece`/`num_pieces` (que cap superfície de frontend
+    #    enviava) queden com a redundància: si contradiuen el GTI, 400 — mai s'endevina.
+    item_triat = garment_fields.get('garment_type_item')
+    parts_del_set = []
+    if item_triat is not None and item_triat.is_set:
+        parts_del_set = list(
+            item_triat.parts.select_related(
+                'part_item', 'part_item__garment_type',
+                'part_item__grading_rule_set', 'part_item__base_size_definition',
+            ).order_by('ordre', 'id'))
+        if len(parts_del_set) < 2:
+            return Response({
+                'error': (f"L'item «{item_triat.code}» està declarat com a conjunt però la seva "
+                          f'composició té {len(parts_del_set)} peça/es. Defineix-ne la '
+                          'composició al catàleg abans de crear-hi models.'),
+                'codi': 'set_sense_composicio',
+            }, status=400)
+        if 'is_multipiece' in request.data and not is_multipiece:
+            return Response({
+                'error': (f"L'item «{item_triat.code}» és un CONJUNT: no es pot crear com a peça "
+                          'única. Retira `is_multipiece: false` del payload.'),
+                'codi': 'contradiccio_gti_set',
+            }, status=400)
+        if num_pieces is not None and int(num_pieces) != len(parts_del_set):
+            return Response({
+                'error': (f'`num_pieces` ({num_pieces}) contradiu la composició de l\'item '
+                          f'«{item_triat.code}» ({len(parts_del_set)} peces). El GTI mana.'),
+                'codi': 'contradiccio_gti_num_pieces',
+            }, status=400)
+        is_multipiece = True
+        num_pieces = len(parts_del_set)
+    elif is_multipiece:
+        # El camí llegat (N peces idèntiques d'un item que NO és conjunt) deixa d'existir: amb
+        # la decisió 3, un conjunt és una declaració del catàleg. Es rebutja explícitament en
+        # comptes de crear N models bessons que cap GTI no reconeixeria com a peces.
+        return Response({
+            'error': (f"L'item «{item_triat.code if item_triat else '—'}» no està declarat com a "
+                      'conjunt al catàleg: no s\'hi poden crear peces. Marca\'l com a conjunt i '
+                      'defineix-ne la composició.'),
+            'codi': 'contradiccio_gti_no_set',
+        }, status=400)
 
     # Prefix unificat: codi del customer (fallback self-customer). Escopa la seqüència via
     # el codi_intern (regex sota), de manera que el next_num ja és per-customer (Pas 4).
@@ -812,7 +845,10 @@ def create_model_wizard(request):
         # materialització → si peta, no queda cap MGR parcial i el model gradua igualment pel
         # fallback PG-1 (ruleset extern). Degradació gràcil INTENCIONAL, no descuit.
         if model.grading_rule_set_id:
-            from django.db import transaction
+            # `transaction` ve del import de mòdul (:4). Un `from django.db import transaction`
+            # AQUÍ el feia local a TOTA la funció i deixava la branca multi-peça amb un
+            # UnboundLocalError al seu `with transaction.atomic()` — latent mentre cap
+            # superfície no enviava `is_multipiece` (forat #4 del dimensionat).
             from fhort.models_app.services import (materialize_model_grading_rules,
                                                origen_mgr_des_de_ruleset)
             with transaction.atomic():
@@ -820,6 +856,39 @@ def create_model_wizard(request):
                     model, model.grading_rule_set.regles.all(),
                     origen=origen_mgr_des_de_ruleset(model.grading_rule_set))
         return Response({'id': model.id, 'codi_intern': model.codi_intern}, status=201)
+
+    # SET-1 · A4 (forat #1 del dimensionat, :849) — les peces JA NO neixen idèntiques. Fins ara
+    # el bucle clonava el MATEIX `**garment_fields` a totes: mateix item, mateix ruleset, mateix
+    # nom. Amb la composició del GTI, cada peça resol el SEU món a través de la mateixa porta
+    # única (`_resolve_garment_def`), i és això —i només això— el que fa que A6 (grading per
+    # part) surti gratis: cada part-Model va al seu contenidor perquè porta el seu propi
+    # `garment_type_item` i `grading_rule_set`.
+    base_payload = {k: request.data.get(k) for k in (
+        'garment_type_item_id', 'garment_type_id', 'size_system_id', 'grading_rule_set_id',
+        'target', 'construction', 'size_run', 'base_size')}
+    # Nom OPCIONAL per peça enviat pel wizard, per id de GarmentTypeItemPart. La composició del
+    # catàleg mana sobre el defecte; això només permet batejar les peces d'AQUEST model (una
+    # «Braga» pot ser «Culotte» en aquest bikini). Buit ⇒ el `nom_peca` de la composició.
+    noms_peces = request.data.get('noms_peces') or {}
+    if not isinstance(noms_peces, dict):
+        return Response({'error': '`noms_peces` ha de ser un objecte {part_id: nom}.'}, status=400)
+
+    camps_per_peca = []
+    for part in parts_del_set:
+        d_part = dict(base_payload)
+        d_part['garment_type_item_id'] = part.part_item_id
+        # El ruleset i la talla base de la PEÇA manen sobre els del payload; si la peça no en
+        # declara, s'hereta el del conjunt (que és el que passava abans per a totes).
+        if part.part_item.grading_rule_set_id:
+            d_part['grading_rule_set_id'] = part.part_item.grading_rule_set_id
+        if part.part_item.base_size_definition_id:
+            d_part['base_size'] = part.part_item.base_size_definition.etiqueta
+        fields_part, err_part = _resolve_garment_def(d_part)
+        if err_part:
+            err_part['peca'] = part.ordre
+            return Response(err_part, status=400)
+        nom_peca = (noms_peces.get(str(part.id)) or noms_peces.get(part.id) or '').strip()
+        camps_per_peca.append((part, fields_part, nom_peca))
 
     # Multi-piece: one GarmentSet + N piece Models, codi_intern = codi_base-NN.
     with transaction.atomic():
@@ -829,7 +898,7 @@ def create_model_wizard(request):
             num_pieces=num_pieces,
         )
         pieces = []
-        for i in range(1, num_pieces + 1):
+        for i, (part, fields_part, nom_peca) in enumerate(camps_per_peca, start=1):
             piece = Model.objects.create(
                 codi_intern=f"{codi_base}-{str(i).zfill(2)}",
                 codi_client=ref_client,
@@ -838,7 +907,9 @@ def create_model_wizard(request):
                 any=int(year),
                 temporada=season,
                 sequencial=next_num,
-                nom_prenda=nom_prenda or None,
+                # El nom de la PEÇA el dona la composició del catàleg («Top», «Bikini bottom»);
+                # el nom comercial del conjunt viu a GarmentSet.nom_comercial.
+                nom_prenda=(nom_peca or part.nom_peca or nom_prenda) or None,
                 descripcio=descripcio or None,
                 collection=collection or '',
                 created_by=creator,
@@ -846,7 +917,7 @@ def create_model_wizard(request):
                 data_objectiu=data_objectiu,
                 garment_set=garment_set,
                 piece_number=i,
-                **garment_fields,
+                **fields_part,
             )
             # PG-2 Cas B (multi-peça): cada peça hereta el ruleset via garment_fields →
             # materialitza les seves regles residents. Dins l'atomic del set: una fallada
@@ -861,6 +932,8 @@ def create_model_wizard(request):
                 'id': piece.id,
                 'codi_intern': piece.codi_intern,
                 'piece_number': piece.piece_number,
+                'nom_prenda': piece.nom_prenda,
+                'garment_type_item': piece.garment_type_item_id,
             })
 
     return Response({
@@ -1173,6 +1246,286 @@ def materialize_poms_view(request, model_id):
             resposta['pom_ids_desconeguts'] = desconeguts
             resposta['warning'] = ('Aquests POMs no pertanyen al GarmentPOMMap de '
                                    f"l'item i no s'han sembrat: {desconeguts}")
+    return Response(resposta)
+
+
+#: Sprint B — tipus de ModelFitxer que viatgen en una còpia model→model. SKETCH i PATRO
+#: descriuen la PEÇA (dibuix i patronatge) i són el patrimoni que un model germà vol
+#: heretar. DOCUMENT en queda FORA sempre: és el paper d'origen d'UNA importació concreta
+#: (`extraction_views.py:2624`), la prova documental d'un fet que no ha passat al destí.
+TIPUS_COPIABLES_MODEL_A_MODEL = ('SKETCH_FLETXES', 'SKETCH_NET', 'SKETCH_SVG', 'PATRO')
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def copiar_de_model_view(request, model_id, src_id):
+    """POST /api/v1/models/<dst>/copiar-de/<src>/ — copia el patrimoni d'un model a un altre.
+
+    MIRALL de `materialize_poms_view` (:986): mateixa llei de SOBIRANIA, mateix guard de
+    talla, mateixa atomicitat. La diferència és la font: allà l'ITEM (plantilla del catàleg),
+    aquí un altre MODEL. El que es copia són quatre coses independents, cadascuna amb el seu
+    flag al body (tots per defecte certs):
+
+      · `copy_run`     — size_system + size_run_model + base_size_label. NOMÉS si el destí no
+        té cap BaseMeasurement pròpia: un run és el marc en què estan expressats els valors
+        que el destí JA té, i canviar-lo sota seu els convertiria en mesures falses. Si el
+        destí en té, el flag s'IGNORA i la resposta ho diu (mai trepitjar en silenci).
+      · `copy_values`  — GUARD P1 TRANSPOSAT (de :1071-1092). Un valor està expressat EN UNA
+        TALLA. Si el run s'acaba de copiar, les bases coincideixen per construcció. Si no,
+        es comparen `src.base_size_label` i `dst.base_size_label`: divergents → es copia
+        NOMÉS la pertinença (fila TEMPLATE buida) i cap valor, amb avís explícit. Sense
+        aquest guard es reintrodueix el bug que P1 va corregir.
+      · `copy_grading` — assigna el `grading_rule_set` de l'origen i re-materialitza les
+        regles residents, exactament com `update_model_step2` (:917-936). NO es copien ni
+        `ModelGradingOverride` ni Watchpoints: són el judici d'un altre model sobre les
+        SEVES dades, no un patrimoni transferible.
+      · `copy_files`   — SKETCH* i PATRO (mai DOCUMENT). Bytes nous pel mateix camí que el
+        germà per-fitxer (`ModelFitxerViewSet.usar_al_model`, :345), amb versió pròpia del
+        destí i nom canònic `{codi}_{TIPUS}_{NNN}`.
+
+    SOBIRANIA (idèntica a la sembra item→model): una fila del destí amb origen específic
+    (MANUAL/IMPORTED/FITTED) o amb valor ja posat NO es trepitja mai; només s'omple un
+    TEMPLATE BUIT. Les files intactes es compten a `skipped`, no desapareixen del report.
+
+    `pom_ids` (llista opcional al body) acota la còpia a aquests POMs de l'origen; els que no
+    hi pertanyen es reporten, no s'ignoren en silenci.
+    """
+    import logging
+    import os
+
+    from django.core.files.base import ContentFile
+
+    from . import services_ftt_document as ftt_svc
+    from .services_fitxers import marcar_procedencia, save_model_file
+
+    try:
+        dst = Model.objects.get(id=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model destí no trobat'}, status=404)
+    try:
+        src = Model.objects.select_related('grading_rule_set', 'size_system').get(id=src_id)
+    except Model.DoesNotExist:
+        return Response({'error': "Model d'origen no trobat"}, status=404)
+
+    if src.pk == dst.pk:
+        return Response({'error': "L'origen i el destí són el mateix model."}, status=400)
+
+    # `_truthy` (:3241) és la font única de lectura de banderes del body en aquest mòdul: un
+    # `false` JSON i un `"false"` de formulari han de dir el mateix. Absent = cert (per defecte
+    # es copia tot); qualsevol valor no-truthy explícit apaga la peça.
+    copy_values = _truthy(request.data.get('copy_values', True))
+    copy_run = _truthy(request.data.get('copy_run', True))
+    copy_grading = _truthy(request.data.get('copy_grading', True))
+    copy_files = _truthy(request.data.get('copy_files', True))
+
+    subconjunt = None
+    if 'pom_ids' in request.data:
+        crus = request.data.get('pom_ids')
+        if not isinstance(crus, list):
+            return Response({'error': "pom_ids ha de ser una llista d'ids de POM"}, status=400)
+        try:
+            subconjunt = {int(x) for x in crus}
+        except (TypeError, ValueError):
+            return Response({'error': "pom_ids ha de contenir només ids numèrics"}, status=400)
+
+    # ── Inventari de l'origen. Un model buit del tot no és una font: 400 abans de tocar res.
+    src_mesures = list(BaseMeasurement.objects.filter(model=src, is_active=True)
+                       .select_related('pom').order_by('ordre', 'pom_id'))
+    src_fitxers = list(ModelFitxer.objects.filter(
+        model=src, tipus__in=TIPUS_COPIABLES_MODEL_A_MODEL, is_current=True,
+    ).exclude(fitxer='').exclude(fitxer__isnull=True).order_by('tipus', 'id'))
+    if not src_mesures and not src.grading_rule_set_id and not src_fitxers:
+        return Response({
+            'error': (f"El model d'origen «{src.codi_intern}» no té res a copiar: cap mesura "
+                      'base activa, cap regla de graduació i cap croquis ni patró.'),
+            'codi': 'origen_buit',
+        }, status=400)
+
+    if subconjunt is not None:
+        poms_origen = {bm.pom_id for bm in src_mesures}
+        desconeguts = sorted(subconjunt - poms_origen)
+        src_mesures = [bm for bm in src_mesures if bm.pom_id in subconjunt]
+    else:
+        desconeguts = []
+
+    warnings = []
+
+    # ── copy_run. El destí amb mesures pròpies és sobirà del seu marc: el flag s'ignora.
+    dst_te_mesures = BaseMeasurement.objects.filter(model=dst).exists()
+    run_copied = False
+    if copy_run and dst_te_mesures:
+        warnings.append(
+            f"S'ha demanat copiar el sistema de talles i el run, però el model destí "
+            f"«{dst.codi_intern}» ja té mesures base pròpies: el seu run és el marc en què "
+            'estan expressades. El flag s\'ha IGNORAT i no s\'ha tocat res del run.')
+    elif copy_run:
+        dst.size_system_id = src.size_system_id
+        dst.size_run_model = src.size_run_model
+        dst.base_size_label = src.base_size_label
+        dst.save(update_fields=['size_system', 'size_run_model', 'base_size_label'])
+        run_copied = True
+
+    # ── GUARD P1 TRANSPOSAT. Amb el run copiat les bases coincideixen per construcció.
+    talla_src = (src.base_size_label or '').strip()
+    talla_dst = (dst.base_size_label or '').strip()
+    talla_divergent = False
+    if run_copied:
+        pass
+    elif not talla_src:
+        warnings.append(
+            f"Talla base de l'origen NO DECLARADA: el model «{src.codi_intern}» no té talla "
+            f"base. Els valors s'han copiat assumint que ja parlen la talla base del destí "
+            f"(«{talla_dst or '—'}»), però ningú no ho ha declarat.")
+    elif not talla_dst:
+        talla_divergent = True
+        warnings.append(
+            f"El model destí no té talla base definida i l'origen parla en «{talla_src}»: no "
+            "s'ha copiat cap VALOR (sí la pertinença de POMs). Fixa la talla base del destí i "
+            'torna a copiar.')
+    elif talla_src != talla_dst:
+        talla_divergent = True
+        warnings.append(
+            f"TALLES DIVERGENTS: l'origen està expressat en «{talla_src}» i la talla base del "
+            f"destí és «{talla_dst}». NO s'ha copiat cap VALOR (sí la pertinença de POMs, que "
+            'és certa igualment). Un valor en una talla que no és la del model és una mesura '
+            'falsa.')
+
+    seeded = values_copied = skipped = 0
+    grading_set = None
+    n_regles = None
+
+    with transaction.atomic():
+        # L'ordre és GLOBAL i únic dins el model (:2420). Si el destí ja en té de propis, la
+        # còpia s'HI AFEGEIX AL FINAL conservant l'ordre relatiu de l'origen, en comptes de
+        # barrejar dos ordres globals; si està verge, l'ordre de l'origen es copia tal qual.
+        ordre_base = 0
+        if dst_te_mesures:
+            from django.db.models import Max
+            ordre_base = (BaseMeasurement.objects.filter(model=dst)
+                          .aggregate(m=Max('ordre'))['m'] or 0)
+
+        for rang, bm in enumerate(src_mesures, start=1):
+            te_valor = (copy_values and not talla_divergent and bm.base_value_cm is not None)
+            existent = BaseMeasurement.objects.filter(model=dst, pom_id=bm.pom_id).first()
+
+            if existent is None:
+                nova = BaseMeasurement(
+                    model=dst, pom_id=bm.pom_id,
+                    base_value_cm=bm.base_value_cm if te_valor else None,
+                    # `notes` NO viatja: és text lliure escrit SOBRE l'altre model (p.ex. «el
+                    # proveïdor va confirmar 62 cm en aquesta peça») i copiat aquí seria una
+                    # afirmació falsa amb aparença d'auditoria.
+                    nom_fitxa=(bm.nom_fitxa or '') if te_valor else '',
+                    tolerancia_minus=bm.tolerancia_minus if te_valor else None,
+                    tolerancia_plus=bm.tolerancia_plus if te_valor else None,
+                    origen='COPIED' if te_valor else 'TEMPLATE',
+                    is_key=bm.is_key,
+                    ordre=(ordre_base + rang) if dst_te_mesures else bm.ordre,
+                )
+                nova._changed_by = request.user
+                nova.save()
+                seeded += 1
+                if te_valor:
+                    values_copied += 1
+                continue
+
+            # Ja existeix: SOBIRANIA. Només s'omple un TEMPLATE BUIT.
+            template_buit = existent.origen == 'TEMPLATE' and existent.base_value_cm is None
+            if te_valor and template_buit:
+                existent.base_value_cm = bm.base_value_cm
+                existent.nom_fitxa = bm.nom_fitxa or existent.nom_fitxa
+                existent.tolerancia_minus = bm.tolerancia_minus
+                existent.tolerancia_plus = bm.tolerancia_plus
+                existent.origen = 'COPIED'
+                existent._changed_by = request.user
+                existent.save(update_fields=[
+                    'base_value_cm', 'nom_fitxa', 'tolerancia_minus',
+                    'tolerancia_plus', 'origen', 'updated_at'])
+                values_copied += 1
+            else:
+                skipped += 1
+
+        # ── copy_grading. Mateix camí que `update_model_step2` (:917-936): assignar la FK i
+        #    re-materialitzar. NO es copien overrides ni watchpoints.
+        if copy_grading and src.grading_rule_set_id:
+            from fhort.models_app.services import (materialize_model_grading_rules,
+                                                   origen_mgr_des_de_ruleset)
+            dst.grading_rule_set_id = src.grading_rule_set_id
+            dst.save(update_fields=['grading_rule_set'])
+            grading_set = src.grading_rule_set_id
+            n_regles = materialize_model_grading_rules(
+                dst, src.grading_rule_set.regles.all(),
+                origen=origen_mgr_des_de_ruleset(src.grading_rule_set))
+            if n_regles == 0:
+                # R1 (el forat que va buidar el 163): un ruleset buit esborra les residents i
+                # torna un 200 mut. Aquí no: queda al log i a la resposta.
+                logging.getLogger(__name__).warning(
+                    "copiar_de_model: model %s (id=%s) ha materialitzat 0 regles des del "
+                    "GradingRuleSet %s — el model queda SENSE regles residents.",
+                    dst.codi_intern, dst.id, src.grading_rule_set_id)
+                warnings.append(
+                    f"El GradingRuleSet «{src.grading_rule_set.nom}» de l'origen no té cap "
+                    'regla: el destí queda SENSE regles residents de graduació.')
+        elif copy_grading:
+            warnings.append(f"El model d'origen «{src.codi_intern}» no té graduació assignada: "
+                            "no s'ha copiat cap regla.")
+
+    # ── copy_files. FORA de l'atomic de les mesures: escriu BYTES a disc, i un rollback de
+    #    transacció no els desfaria (deixaria fitxers orfes). Cada fitxer és una unitat pròpia,
+    #    com al germà per-fitxer (`usar_al_model`, :345).
+    files_copied = 0
+    if copy_files:
+        for origen_f in src_fitxers:
+            anterior = (ModelFitxer.objects.filter(model=dst, tipus=origen_f.tipus)
+                        .order_by('-versio', '-id').first())
+            num = (anterior.versio + 1) if anterior else 1
+            ext = os.path.splitext(origen_f.nom_fitxer)[1] or ''
+            nom = f'{dst.codi_intern}_{origen_f.tipus}_{num:03d}{ext}'
+            origen_f.fitxer.open('rb')
+            try:
+                # Mateixa porta que els dos cicles d'importació: un `.ftt` mai es copia tal
+                # qual. Cap dels tipus copiables ho és avui, però la porta és única. Per a la
+                # resta de tipus `font` ÉS el FieldFile de l'origen: s'ha de mantenir obert
+                # fins que `save_model_file` n'hagi llegit els bytes (mateixa forma que el
+                # germà per-fitxer, :378-387).
+                font, _report = ftt_svc.font_per_al_model(origen_f, dst)
+                nou = save_model_file(dst, font, versio_anterior=anterior,
+                                      tipus=origen_f.tipus, origen='upload', nom=nom)
+            except (ValueError, OSError) as e:
+                warnings.append(f"No s'ha pogut copiar «{origen_f.nom_fitxer}»: {e}")
+                continue
+            finally:
+                origen_f.fitxer.close()
+            # Procedència: model→model és `derivat_de_model`. `derivat_de_item` es CONSERVA si
+            # l'origen el porta — la cadena de procedència del catàleg no s'ha de perdre pel
+            # camí (aquest croquis segueix venint d'aquell ItemFitxer).
+            camps = {'derivat_de_model': origen_f}
+            if origen_f.derivat_de_item_id:
+                camps['derivat_de_item'] = origen_f.derivat_de_item
+            marcar_procedencia(nou, request.user, **camps)
+            files_copied += 1
+
+    resposta = {
+        'seeded': seeded,
+        'values_copied': values_copied,
+        'skipped': skipped,
+        'run_copied': run_copied,
+        'grading_set': grading_set,
+        'files_copied': files_copied,
+        'warnings': warnings,
+        # Context del veredicte de talla, sempre explícit (com a `materialitzar-poms`).
+        'origen': {'id': src.id, 'codi_intern': src.codi_intern},
+        'talla_origen': talla_src or None,
+        'talla_desti': (dst.base_size_label or '').strip() or None,
+        'valors_bloquejats_per_talla': talla_divergent,
+        'regles_materialitzades': n_regles,
+    }
+    if subconjunt is not None:
+        resposta['requested'] = len(subconjunt)
+        if desconeguts:
+            resposta['pom_ids_desconeguts'] = desconeguts
+            warnings.append("Aquests POMs no són del model d'origen i no s'han copiat: "
+                            f'{desconeguts}')
     return Response(resposta)
 
 

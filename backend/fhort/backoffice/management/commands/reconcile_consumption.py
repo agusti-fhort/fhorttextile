@@ -49,6 +49,90 @@ class Command(BaseCommand):
             help='Schema name of the tenant to process (default: all tenants).'
         )
 
+    def _reconcile_sets(self, tenant, dry_run, total_ok, total_skip, total_err):
+        """SET-1 · A3 — forats de CONJUNT: un GarmentSet amb activitat a qualsevol peça i sense
+        `consumption_started_at` AL SET.
+
+        Mateix criteri que el punt de runtime (`tasks/services_c.py:_meritar_conjunt`), i els
+        dos han de canviar sempre alhora: si el runtime deixés les germanes sense marca i aquí
+        no es mirés el SET, cada peça compliria el criteri de forat de models sols i el conjunt
+        meritaria N cops amb retard. Per això, a més de crear l'albarà únic, aquí també
+        s'estampen totes les germanes.
+        """
+        from django.db.models import Min
+
+        from fhort.models_app.models import ConsumptionRecord, GarmentSet, Model
+        from fhort.tasks.models import TaskTransition
+        from fhort.tasks.signals import model_consumption_started
+
+        forats = (GarmentSet.objects
+                  .filter(consumption_started_at__isnull=True,
+                          peces__model_tasks__status__in=['InProgress', 'Done', 'Paused'])
+                  .distinct())
+
+        for gs in forats:
+            merited_at = TaskTransition.objects.filter(
+                model_task__model__garment_set=gs, to_status='InProgress',
+            ).aggregate(first=Min('at'))['first']
+            if merited_at is None:
+                self.stdout.write(self.style.WARNING(
+                    f'  SKIP set {gs.codi_base} (pk={gs.pk}): no InProgress transition found.'))
+                total_skip += 1
+                continue
+
+            period = merited_at.strftime('%Y-%m')
+            peca = Model.objects.filter(garment_set=gs).select_related('customer').first()
+            codi_client = (peca.customer.codi if peca and peca.customer_id
+                           else tenant.codi_tenant)
+
+            if dry_run:
+                self.stdout.write(
+                    f'  [DRY-RUN] WOULD MERIT set {gs.codi_base} (pk={gs.pk}) '
+                    f'| merited_at={merited_at.isoformat()} | period={period} '
+                    f'| codi_client={codi_client}')
+                total_ok += 1
+                continue
+
+            try:
+                with transaction.atomic():
+                    rows = GarmentSet.objects.filter(
+                        pk=gs.pk, consumption_started_at__isnull=True,
+                    ).update(consumption_started_at=merited_at)
+                    # Sempre: cap germana sense marca (tanca el forat per als models sols).
+                    Model.objects.filter(
+                        garment_set=gs, consumption_started_at__isnull=True,
+                    ).update(consumption_started_at=merited_at)
+                    if not rows:
+                        self.stdout.write(self.style.WARNING(
+                            f'  SKIP set {gs.codi_base}: already merited (concurrent run).'))
+                        total_skip += 1
+                        continue
+
+                    ref = uuid.uuid4()
+                    ConsumptionRecord.objects.create(
+                        garment_set=gs,
+                        code_snapshot=gs.codi_base,
+                        name_snapshot=gs.nom_comercial or '',
+                        period=period, opaque_ref=ref, merited_at=merited_at,
+                    )
+                    model_consumption_started.send(
+                        sender=Model, codi_client=codi_client, period=period,
+                        opaque_ref=ref, merited_at=merited_at,
+                        actor_schema=tenant.schema_name,
+                    )
+                self.stdout.write(self.style.SUCCESS(
+                    f'  OK set {gs.codi_base} (pk={gs.pk}) '
+                    f'| merited_at={merited_at.isoformat()} | period={period}'))
+                total_ok += 1
+            except Exception as e:
+                logger.exception('reconcile_consumption failed for set=%s tenant=%s',
+                                 gs.pk, tenant.schema_name)
+                self.stdout.write(self.style.ERROR(
+                    f'  ERROR set {gs.codi_base} (pk={gs.pk}): {e}'))
+                total_err += 1
+
+        return total_ok, total_skip, total_err
+
     def handle(self, *args, **options):
         dry_run = options['dry_run']
         tenant_filter = options['tenant']
@@ -71,11 +155,21 @@ class Command(BaseCommand):
                 from fhort.models_app.models import Model, ConsumptionRecord
                 from fhort.tasks.signals import model_consumption_started
 
-                # Forats: models amb activitat real i sense marca de meritació
+                # SET-1 · A3 — PRIMER els CONJUNTS. Un set amb activitat i sense marca AL SET
+                # merita UN cop, ancorat al conjunt. Si això es fes després (o no es fes), les
+                # peces d'un set caurien pel criteri de forat de sota i el set meritaria N cops.
+                total_ok, total_skip, total_err = self._reconcile_sets(
+                    tenant, dry_run, total_ok, total_skip, total_err)
+
+                # Forats de models SOLS: activitat real i sense marca. `garment_set__isnull=True`
+                # no és cosmètic — sense ell, una peça d'un conjunt ja meritat com a conjunt
+                # (però amb la seva marca encara buida per qualsevol motiu) tornaria a meritar
+                # pel seu compte i el set passaria a comptar 2.
                 gaps = (
                     Model.objects
                     .filter(
                         consumption_started_at__isnull=True,
+                        garment_set__isnull=True,
                         model_tasks__status__in=['InProgress', 'Done', 'Paused'],
                     )
                     .distinct()
@@ -83,7 +177,7 @@ class Command(BaseCommand):
                 )
 
                 if not gaps.exists():
-                    self.stdout.write('  No gaps found.')
+                    self.stdout.write('  No single-model gaps found.')
                     continue
 
                 for model in gaps:

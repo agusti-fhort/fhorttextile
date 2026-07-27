@@ -67,6 +67,9 @@ export default function ModelWizard() {
   const [target, setTarget] = useState(null)
   const [family, setFamily] = useState(null)
   const [item, setItem] = useState(null)
+  // SET-1 · A4 — nom OPCIONAL per peça, per id de GarmentTypeItemPart. Buit ⇒ el backend fa
+  // servir el `nom_peca` que la composició del catàleg ja declara.
+  const [setNoms, setSetNoms] = useState({})
   // El ruleset que el CATÀLEG proposa per a la combinació (SizingProfile). Només SUGGEREIX: es
   // marca i puja al capdamunt del picker, mai s'assigna sol (això seria arrossegar, i el pas 4
   // no ho fa). Fins al 2026-07-23 la font era `GarmentTypeItem.grading_rule_set` (C1).
@@ -423,6 +426,9 @@ export default function ModelWizard() {
         year, season, customer_id: customerId, ref_client: refClient,
         nom_prenda: nomPrenda, descripcio, collection,
         data_objectiu: dataObjectiu || null,
+        // SET-1 — noms per peça (només els omplerts; el backend cau al `nom_peca` del catàleg).
+        ...(item?.is_set ? { noms_peces: Object.fromEntries(
+          Object.entries(setNoms).filter(([, v]) => (v || '').trim())) } : {}),
         ...skeletonPayload(),
       }
       let r
@@ -431,6 +437,14 @@ export default function ModelWizard() {
       } catch (e) {
         if (!confirmaAltreClient(e)) throw e
         r = await models.createWizard({ ...payload, confirmar_altre_client: true })
+      }
+      // SET-1 · A4 (forat #5 del dimensionat) — la resposta d'un CONJUNT no porta `id` sinó
+      // {garment_set_id, codi_base, num_pieces, pieces[]}. Fins ara `navigate('/models/' +
+      // r.data.id)` hauria anat a `/models/undefined` el dia que s'hi creés un conjunt.
+      const pieces = r.data?.pieces
+      if (Array.isArray(pieces) && pieces.length) {
+        navigate(`/models/${pieces[0].id}`)
+        return
       }
       navigate(`/models/${r.data.id}`)
     } catch (e) {
@@ -600,7 +614,40 @@ export default function ModelWizard() {
                       setPicking(true)
                     }} style={ghostBtn}>{t('model_wizard.change')}</button>
                   </div>
-                ) : (
+                ) : null}
+                {/* SET-1 · A4 — si l'item triat és un CONJUNT, la composició es diu AQUÍ, en
+                    LECTURA: és el catàleg qui la declara (decisió 3) i el wizard no la
+                    negocia. L'únic editable és el nom de cada peça, i és opcional: buit ⇒ el
+                    backend fa servir el `nom_peca` de la composició. */}
+                {item?.is_set && !picking ? (
+                  <div style={{ border: '0.5px solid var(--gold)', borderRadius: 8, padding: 14,
+                                background: 'var(--gold-pale)', display: 'flex',
+                                flexDirection: 'column', gap: 10 }}>
+                    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 600 }}>
+                      {t('model_wizard.set_title', { total: (item.parts || []).length })}
+                    </div>
+                    <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+                      {t('model_wizard.set_hint')}
+                    </div>
+                    {(item.parts || []).map((p, i) => (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)',
+                                       color: 'var(--gold)', minWidth: 28 }}>
+                          {String(p.ordre || i + 1).padStart(2, '0')}
+                        </span>
+                        <span style={{ fontSize: 'var(--fs-body)', minWidth: 160 }}>
+                          {p.part_item_name || p.part_item_code}
+                        </span>
+                        <input
+                          value={setNoms[p.id] ?? ''}
+                          onChange={e => setSetNoms(prev => ({ ...prev, [p.id]: e.target.value }))}
+                          placeholder={p.nom_peca || t('model_wizard.set_piece_name_ph')}
+                          style={{ ...inputStyle, flex: 1 }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {item && !picking ? null : (
                   <div style={{ maxHeight: 460, border: '0.5px solid var(--gray-l)', borderRadius: 8, overflowY: 'auto', padding: 14 }}>
                     <CascadeSelector
                       mode="single"

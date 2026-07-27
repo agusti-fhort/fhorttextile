@@ -895,7 +895,8 @@
     "assign_resource_none": "No active resources. Link a studio from Resources.",
     "assign_resource_done": "{{n}} model(s) assigned to the resource.",
     "assign_resource_cleared": "Assignment removed from {{n}} model(s).",
-    "assign_resource_already": "{{n}} were already assigned."
+    "assign_resource_already": "{{n}} were already assigned.",
+    "set_badge": "SET {{n}}/{{total}} · {{codi}}"
   },
   "model_wizard": {
     "customer": "Customer",
@@ -1006,7 +1007,10 @@
     "model_size_system": "Model’s system",
     "grading_dropped": "The grading the model had no longer matches the chosen axes (garment, construction or size system). It has been unassigned: pick another one or tick “No grading”.",
     "grading_dropped_replaced": "The grading the model had no longer matches the chosen axes and has been replaced by the only compatible one. Review it before saving.",
-    "run_lost_sizes": "Warning: the model’s saved run contains sizes that are no longer in its size system ({{talles}}). They could not be restored; if you save now, the run will lose them."
+    "run_lost_sizes": "Warning: the model’s saved run contains sizes that are no longer in its size system ({{talles}}). They could not be restored; if you save now, the run will lose them.",
+    "set_title": "This item is a SET of {{total}} pieces",
+    "set_hint": "The composition is declared by the catalogue. One commercial code and one model per part will be created; you can give them their own name for this model.",
+    "set_piece_name_ph": "Piece name (optional)"
   },
   "models_list": {
     "title": "Models",
@@ -1043,7 +1047,9 @@
     "empty": "No models. Create the first one!",
     "empty_filtered": "No results with this filter.",
     "delete_error": "Could not delete the model.",
-    "col_recurs": "Resource"
+    "col_recurs": "Resource",
+    "set_badge": "SET {{n}}/{{total}}",
+    "set_hint": "Piece of a set · {{codi}} {{nom}}"
   },
   "models_filters": {
     "button": "Filters",
@@ -3988,6 +3994,23 @@
   },
   "measures_entry": {
     "base_set_absent": "This world ({{system}} · {{fit}}) has no standard measurements yet.",
-    "base_set_absent_hint": "Once this model is measured, you can promote it to create them from it."
+    "base_set_absent_hint": "Once this model is measured, you can promote it to create them from it.",
+    "copy_title": "Copy from another model",
+    "copy_desc": "Reuse the POMs, size run, grading and sketches of a model already worked on.",
+    "copy_pick_title": "Copy from another model",
+    "copy_pick_subtitle": "Pick the source model. Nothing is written yet: you will choose what to copy next.",
+    "copy_pick_search_ph": "Search by code or name…",
+    "copy_pick_empty": "No model found.",
+    "copy_confirm_title": "Copy from {{codi}}",
+    "copy_confirm_subtitle": "Choose what travels. Nothing this model already has will be touched.",
+    "copy_confirm_ok": "Copy",
+    "copy_flag_copy_values": "Base measurement values",
+    "copy_flag_copy_run": "Size system, run and base size",
+    "copy_flag_copy_grading": "Grading rule",
+    "copy_flag_copy_files": "Sketches and patterns",
+    "copy_sobirania_hint": "Measurements this model already has (manual, imported or from fitting) are never overwritten. If the two models' base sizes differ, the POMs are copied but the values are not.",
+    "copy_count": "{{tria}} of {{total}} POMs from the source",
+    "copy_count_zero": "No POM selected: no measurement will be copied.",
+    "copy_error": "Could not copy from the selected model."
   }
 }

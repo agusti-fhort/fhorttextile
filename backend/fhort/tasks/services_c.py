@@ -92,6 +92,86 @@ def assign_work_order(task, when):
     task.save(update_fields=['work_order', 'off_recipe', 'updated_at'])
 
 
+def _emetre_meritacio(record, codi_client, now):
+    """L'event a `public`. UN sol event per albarà — la unitat facturable és l'event
+    (`backoffice/recurring_service.py:87` en fa el `.count()` del període)."""
+    from fhort.models_app.models import Model
+    from fhort.tasks.signals import model_consumption_started
+
+    model_consumption_started.send(
+        sender=Model,
+        codi_client=codi_client,
+        period=record.period,
+        opaque_ref=record.opaque_ref,
+        merited_at=now,
+        # P4 — ACTOR: el tenant actiu que obre la tasca (qui merita).
+        actor_schema=connection.schema_name,
+    )
+
+
+def _meritar_model(model, now):
+    """Meritació d'un model SOL. El guard d'idempotència ÉS el `filter(pk=…, isnull=True)`."""
+    from fhort.models_app.models import ConsumptionRecord, Model
+
+    rows = Model.objects.filter(
+        pk=model.pk, consumption_started_at__isnull=True
+    ).update(consumption_started_at=now)
+    if not rows:
+        return
+    record = ConsumptionRecord.objects.create(
+        model=model,
+        code_snapshot=model.codi_intern,
+        name_snapshot=model.nom_prenda or '',
+        period=now.strftime('%Y-%m'),
+        merited_at=now,
+    )
+    _emetre_meritacio(record, model.customer.codi, now)
+
+
+def _meritar_conjunt(model, now):
+    """SET-1 · A3 — meritació d'un CONJUNT: **SET = 1 mèrit** (decisió 2 del sprint SET).
+
+    Dues coses que han de passar SEMPRE juntes:
+
+    1. **Totes les germanes reben `consumption_started_at`.** Sense això, les peces 02 i 03
+       compleixen exactament el criteri de forat de `reconcile_consumption:74-83` (activitat de
+       tasca + cap marca) i la propera execució les merita: set=3 amb retard. Aquest UPDATE és
+       idempotent i es fa a cada arrencada, no només a la primera.
+    2. **UN sol `ConsumptionRecord`, ancorat al SET**, amb `code_snapshot` = `codi_base`. És
+       l'única forma que no fa mentir l'albarà: amb l'albarà penjat d'una peça, el client (que
+       el veu — `models.py:861`) llegiria un codi intern `…-0834-01` en comptes del codi
+       comercial del producte que ha comprat (decisió 1: «el client veu el model sencer»).
+
+    El guard d'idempotència viu al SET, mateixa forma que el de model
+    (`filter(pk=…, consumption_started_at__isnull=True).update(...)`): la transició del flag és
+    la que decideix qui merita, i és atòmica.
+    """
+    from fhort.models_app.models import ConsumptionRecord, GarmentSet, Model
+
+    gs_id = model.garment_set_id
+    rows = GarmentSet.objects.filter(
+        pk=gs_id, consumption_started_at__isnull=True
+    ).update(consumption_started_at=now)
+
+    # (1) sempre, hagi meritat ara o fa un mes: cap germana sense marca.
+    Model.objects.filter(
+        garment_set_id=gs_id, consumption_started_at__isnull=True
+    ).update(consumption_started_at=now)
+
+    if not rows:
+        return   # el conjunt ja havia meritat: cap albarà nou, cap event nou.
+
+    gs = GarmentSet.objects.get(pk=gs_id)
+    record = ConsumptionRecord.objects.create(
+        garment_set=gs,
+        code_snapshot=gs.codi_base,
+        name_snapshot=gs.nom_comercial or (model.nom_prenda or ''),
+        period=now.strftime('%Y-%m'),
+        merited_at=now,
+    )
+    _emetre_meritacio(record, model.customer.codi, now)
+
+
 @transaction.atomic
 def transition_task(task, to_status, profile, force=False):
     """Aplica una transició d'estat. Imposa 'una sola InProgress per tècnic' (global):
@@ -148,8 +228,7 @@ def transition_task(task, to_status, profile, force=False):
 
     # Pas 5B-fix: arrencar la PRIMERA tasca treu el model de Pending → Dev.
     if to_status == 'InProgress':
-        from fhort.models_app.models import Model, ConsumptionRecord
-        from fhort.tasks.signals import model_consumption_started
+        from fhort.models_app.models import Model
 
         # MÓN TÈCNIC (sagrat): la fase passa a Dev com avui, fora de tota lògica de facturació.
         Model.objects.filter(pk=task.model_id, fase_actual='Pending').update(fase_actual='Dev')
@@ -159,27 +238,12 @@ def transition_task(task, to_status, profile, force=False):
         # mòdul comercial; un error de commerce no pot revertir una meritació amb èxit.
         try:
             with transaction.atomic():
-                rows = Model.objects.filter(
-                    pk=task.model_id, consumption_started_at__isnull=True
-                ).update(consumption_started_at=now)
-                if rows:  # primera vegada que aquest model arrenca → meritar
-                    model = Model.objects.select_related('customer').get(pk=task.model_id)
-                    record = ConsumptionRecord.objects.create(
-                        model=model,
-                        code_snapshot=model.codi_intern,
-                        name_snapshot=model.nom_prenda or '',
-                        period=now.strftime('%Y-%m'),
-                        merited_at=now,
-                    )
-                    model_consumption_started.send(
-                        sender=Model,
-                        codi_client=model.customer.codi,
-                        period=record.period,
-                        opaque_ref=record.opaque_ref,
-                        merited_at=now,
-                        # P4 — ACTOR: el tenant actiu que obre la tasca (qui merita).
-                        actor_schema=connection.schema_name,
-                    )
+                model = Model.objects.select_related('customer', 'garment_set').get(
+                    pk=task.model_id)
+                if model.garment_set_id:
+                    _meritar_conjunt(model, now)
+                else:
+                    _meritar_model(model, now)
         except Exception:
             logger.exception("meritacio fallida model=%s task=%s", task.model_id, task.pk)
             # NO re-raise: el tecnic ja te la transicio feta; el forat es reconcilia despres

@@ -167,6 +167,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // `task_id` de size_check continua sent treball, no genesi; `mode=entry` i pom oberta/pausada
   // obren la pantalla POM pròpia.
   const [mesuresEntry, setMesuresEntry] = useState(false)
+  // Sprint B — la caixa buida té DUES portes (començar de zero / copiar d'un altre model) i
+  // totes dues entren al MATEIX panell de gènesi: la intenció viatja perquè el panell hi obri
+  // la via correcta, en comptes de duplicar la superfície de còpia aquí (llei del pedaç).
+  const [mesuresIntent, setMesuresIntent] = useState(null)   // null | 'copy'
   const prevTabRef = useRef(null)
   useEffect(() => {
     // Mentre carrega no decidim NI actualitzem el ref (si no, l'entrada directa ?tab=Mesures fixaria el
@@ -201,9 +205,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     activeTaskRef.current = null
     modelTasks.transition(tid, { to_status: 'Paused' }).catch(() => {})
   }, [])
-  const enterEdit = (tab, code) => {
+  const enterEdit = (tab, code, intent = null) => {
     if (openingTask) return
     setOpeningTask(true)
+    setMesuresIntent(intent)
     models.openTask(parseInt(id), code)
       .then(res => {
         setEditTaskId(res.data.task_id)
@@ -221,12 +226,14 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     setEditTaskId(null)
     setEditing(null)
     setMesuresEntry(false)
+    setMesuresIntent(null)
   }, [pauseActiveTask])
   const finishPomEntry = useCallback(() => {
     activeTaskRef.current = null
     setEditTaskId(null)
     setEditing(null)
     setMesuresEntry(false)
+    setMesuresIntent(null)
     setModelTaskRows(prev => prev.map(task => (
       task.task_type_code === 'pom' ? { ...task, status: 'Done' } : task
     )))
@@ -454,7 +461,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         )}
         {activeTab === 'Mesures' && (
           mesuresEntry && editing !== 'Mesures' ? (
-            <MeasuresEntryPanel model={model} entryMode={mesuresEntry}
+            <MeasuresEntryPanel model={model} entryMode={mesuresEntry} intent={mesuresIntent}
               onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }}
               onPomSaved={finishPomEntry} />
           ) : (!taskParam && editing !== 'Mesures' && !pomReady) ? (
@@ -469,13 +476,24 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 </div>
                 <div>{t('model_sheet.measures_empty_body')}</div>
               </div>
-              <button type="button" disabled={openingTask}
-                onClick={() => enterEdit('Mesures', 'pom')}
-                style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
-                         opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
-                <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
-                {t('model_sheet.start_pom')}
-              </button>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button type="button" disabled={openingTask}
+                  onClick={() => enterEdit('Mesures', 'pom')}
+                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
+                           opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
+                  <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
+                  {t('model_sheet.start_pom')}
+                </button>
+                {/* Sprint B — la SEGONA superfície de buit del sistema (l'altra és el `selector`
+                    de MeasuresEntryPanel). Oferir la còpia només a una deixava mig camí. */}
+                <button type="button" disabled={openingTask}
+                  onClick={() => enterEdit('Mesures', 'pom', 'copy')}
+                  style={{ ...btnSecondary, opacity: openingTask ? 0.6 : 1,
+                           cursor: openingTask ? 'default' : 'pointer' }}>
+                  <i className="ti ti-copy" style={{ fontSize: 14 }} />
+                  {t('measures_entry.copy_title')}
+                </button>
+              </div>
             </div>
           ) : (
 	          <div>
@@ -742,6 +760,35 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
                            color: 'var(--text-main)' }}>
               {model.nom_prenda}
             </span>
+          </>
+        )}
+        {/* SET-1 · A4 — el conjunt a la capçalera: quina peça és, de quantes, i com anar a les
+            germanes. Les germanes vénen niuades al serializer del detall (`garment_set.peces`):
+            un fetch de menys, i la llista ja s'ha de travessar per pintar el badge. */}
+        {model.garment_set && (
+          <>
+            <span style={{ color: 'var(--border)' }}>·</span>
+            <span title={model.garment_set.nom_comercial || ''} style={{
+              fontSize: 'var(--fs-caption)', padding: '2px 8px', borderRadius: 5,
+              background: 'var(--gold-pale)', color: 'var(--gold)',
+              border: '0.5px solid var(--gold)', fontWeight: 600,
+            }}>
+              {t('model_sheet.set_badge', {
+                n: model.piece_number ?? '?', total: model.garment_set.num_pieces,
+                codi: model.garment_set.codi_base,
+              })}
+            </span>
+            {(model.garment_set.peces || [])
+              .filter(p => p.id !== model.id)
+              .map(p => (
+                <button key={p.id} type="button" onClick={() => navigate(`/models/${p.id}`)}
+                  title={p.codi_intern}
+                  style={{ background: 'none', border: '0.5px solid var(--border)',
+                           borderRadius: 5, padding: '2px 8px', cursor: 'pointer',
+                           fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+                  {p.nom_prenda || `#${p.piece_number}`}
+                </button>
+              ))}
           </>
         )}
         <span style={{

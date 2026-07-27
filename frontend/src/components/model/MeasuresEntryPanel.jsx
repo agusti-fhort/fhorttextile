@@ -3,10 +3,16 @@ import { useTranslation } from 'react-i18next'
 import EditableTable from '../EditableTable/EditableTable'
 import ImportWizard from '../ImportWizard/ImportWizard'
 import Modal from '../ui/Modal'
+import ModelPicker from './ModelPicker'
 import { IconBulb, IconX } from '@tabler/icons-react'
 import { models } from '../../api/endpoints'
 
 const API = import.meta.env.VITE_API_URL || ''
+
+// Sprint B — les quatre peces independents que una còpia model→model pot portar. L'ordre és el
+// de la resposta del backend; els noms són els del body de l'endpoint (cap traducció d'aquí cap
+// allà: la clau i18n es deriva del nom del flag).
+const COPY_FLAGS = ['copy_values', 'copy_run', 'copy_grading', 'copy_files']
 
 // MeasuresEntryPanel (J1a) — flux d'ENTRADA/genesi de mesures, portat des de la pàgina standalone
 // ModelMeasurements perquè el TAB Mesures del ModelSheet pugui rebre l'entrada d'un model verge sense
@@ -18,7 +24,7 @@ const API = import.meta.env.VITE_API_URL || ''
 // NO inclou el camí 'size_check' (CheckMeasureEditor): això és el flux de TREBALL del tab, no la
 // genesi (es reapuntarà a J1b). Quan la base queda materialitzada, crida onMaterialized() perquè el
 // tab rellegeixi taula-mesures i passi a la superfície de consulta/treball (CheckMeasureEditor).
-export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, entryMode = false }) {
+export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, entryMode = false, intent = null }) {
   const { t } = useTranslation()
   const id = model?.id
   const token = localStorage.getItem('access_token')
@@ -111,6 +117,73 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
     }
   }
   const cancelSeed = () => { setSeedOffer(false); setMode('selector') }
+
+  // ── Sprint B · CÒPIA model→model ────────────────────────────────────────────────────────
+  // Tercera via de gènesi, germana de la sembra des de l'item: mateixa llei F2.1 (la còpia és
+  // un ACTE DEL TÈCNIC — el picker tria, però res s'escriu fins que el modal es confirma) i
+  // mateix desenllaç (`reloadTable('manual')`, per poder ajustar abans de sortir).
+  const [copyPicker, setCopyPicker] = useState(false)
+  const [copySrc, setCopySrc] = useState(null)          // model d'origen triat
+  const [copySrcPoms, setCopySrcPoms] = useState([])    // POMs REALS de l'origen (per als chips)
+  const [copyPomIds, setCopyPomIds] = useState([])
+  const [copyFlags, setCopyFlags] = useState(
+    { copy_values: true, copy_run: true, copy_grading: true, copy_files: true })
+  const [copyBusy, setCopyBusy] = useState(false)
+  const toggleCopyPom = toggleIn(setCopyPomIds)
+
+  // El subconjunt es tria sobre els POMs de l'ORIGEN, no sobre el mapa de l'item: és el que
+  // l'endpoint filtra (`pom_ids` es compara amb les mesures del model font).
+  const pickCopySource = async (m) => {
+    setCopyPicker(false)
+    setCopySrc(m)
+    setNotice('')
+    setCopyFlags({ copy_values: true, copy_run: true, copy_grading: true, copy_files: true })
+    try {
+      const res = await fetch(`${API}/api/v1/models/${m.id}/taula-mesures/`, { headers: authHeaders })
+      const d = await res.json()
+      const poms = (d.rows || []).map(r => ({
+        pom_id: r.pom_id, pom_code: r.pom_code, nom_ca: r.nom_ca, nom_en: r.nom_en,
+      }))
+      setCopySrcPoms(poms)
+      setCopyPomIds(poms.map(p => p.pom_id))   // proposta: tot; el tècnic hi treu el que no vol
+    } catch {
+      setCopySrcPoms([]); setCopyPomIds([])
+    }
+  }
+
+  const confirmCopy = async () => {
+    setCopyBusy(true)
+    setError('')
+    try {
+      // Els chips SÓN la petició (mateix criteri que `confirmSeed`). Només s'omet `pom_ids` si
+      // no hem pogut llegir els POMs de l'origen: llavors no hi ha res a triar.
+      const body = { ...copyFlags, ...(copySrcPoms.length > 0 ? { pom_ids: copyPomIds } : {}) }
+      const r = await models.copiarDeModel(id, copySrc.id, body)
+      const avisos = r.data?.warnings || []
+      setCopySrc(null)
+      await reloadTable('manual')
+      // Res en silenci: si el backend ha bloquejat valors o ha ignorat el run, es diu.
+      if (avisos.length) setNotice(avisos.join(' · '))
+    } catch (err) {
+      setError(err?.response?.data?.error || t('measures_entry.copy_error'))
+      setCopySrc(null)
+    } finally {
+      setCopyBusy(false)
+    }
+  }
+  const cancelCopy = () => setCopySrc(null)
+
+  // La caixa buida de ModelSheet té una porta pròpia cap a la còpia: quan s'hi entra amb aquesta
+  // intenció, el picker s'obre sol. NO escriu res (la llei F2.1 es manté: el modal de confirmació
+  // segueix sent l'únic punt que escriu), i l'oferta de sembra des de l'item es calla per no
+  // ensenyar dues portes alhora.
+  const intentRef = useRef(false)
+  useEffect(() => {
+    if (intent !== 'copy' || intentRef.current) return
+    intentRef.current = true
+    setSeedOffer(false)
+    setCopyPicker(true)
+  }, [intent])
 
   // Càrrega inicial: poms suggerits + decisió de sembra (mirall de ModelMeasurements). La memòria de la
   // decisió DERIVA de l'estat del model (taula verge?), no de localStorage.
@@ -289,6 +362,63 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
         </Modal>
       )}
 
+      {copyPicker && (
+        <ModelPicker
+          title={t('measures_entry.copy_pick_title')}
+          subtitle={t('measures_entry.copy_pick_subtitle')}
+          searchPlaceholder={t('measures_entry.copy_pick_search_ph')}
+          emptyLabel={t('measures_entry.copy_pick_empty')}
+          loadingLabel={t('common.loading')}
+          cancelLabel={t('common.cancel')}
+          excludeId={id}
+          onPick={pickCopySource}
+          onClose={() => setCopyPicker(false)}
+        />
+      )}
+
+      {copySrc && (
+        <Modal
+          title={t('measures_entry.copy_confirm_title', { codi: copySrc.codi_intern })}
+          subtitle={t('measures_entry.copy_confirm_subtitle')}
+          cancelLabel={t('common.cancel')}
+          confirmLabel={copyBusy ? t('common.saving') : t('measures_entry.copy_confirm_ok')}
+          onCancel={cancelCopy}
+          onConfirm={confirmCopy}
+          confirmDisabled={copyBusy}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {COPY_FLAGS.map(f => (
+              <label key={f} style={{ display: 'flex', alignItems: 'center', gap: 8,
+                                      fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={copyFlags[f]}
+                  onChange={e => setCopyFlags(prev => ({ ...prev, [f]: e.target.checked }))} />
+                <span style={{ color: 'var(--text-main)' }}>{t(`measures_entry.copy_flag_${f}`)}</span>
+              </label>
+            ))}
+          </div>
+          <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', margin: '10px 0 0' }}>
+            {t('measures_entry.copy_sobirania_hint')}
+          </p>
+          {copySrcPoms.length > 0 && (
+            <>
+              <p style={{ fontSize: 'var(--fs-body)', margin: '12px 0 0',
+                          color: copyPomIds.length === 0 ? 'var(--warn)' : 'var(--text-muted)' }}>
+                {copyPomIds.length === 0
+                  ? t('measures_entry.copy_count_zero')
+                  : t('measures_entry.copy_count', { total: copySrcPoms.length, tria: copyPomIds.length })}
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, maxHeight: 200,
+                            overflowY: 'auto', border: '0.5px solid var(--border)', borderRadius: 8, padding: 8 }}>
+                {copySrcPoms.map(p => (
+                  <POMChipSuggerit key={p.pom_id} pom={p} selected={copyPomIds.includes(p.pom_id)}
+                    onToggle={() => toggleCopyPom(p)} />
+                ))}
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
+
       {pomConfirmOpen && (
         <Modal
           title={t('model_measurements.gravar_confirm_title')}
@@ -320,7 +450,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
           <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
             {t('model_measurements.intro')}
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             <div onClick={() => setMode('manual')}
               style={{ background: 'var(--bg-main)', border: '0.5px solid var(--border)',
                        borderRadius: 12, padding: '1.5rem', cursor: 'pointer' }}>
@@ -341,6 +471,15 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
               <div style={{ fontSize: 28, marginBottom: 8 }}><i className="ti ti-bolt" style={{ color: 'var(--gold)' }} /></div>
               <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.import_title')}</div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_measurements.import_desc')}</div>
+            </div>
+            {/* Sprint B — tercera via de gènesi: el patrimoni d'un model germà. Ni manual ni
+                import: el que ja està mesurat en un altre model d'aquesta col·lecció. */}
+            <div onClick={() => setCopyPicker(true)}
+              style={{ background: 'var(--bg-main)', border: '0.5px solid var(--border)',
+                       borderRadius: 12, padding: '1.5rem', cursor: 'pointer' }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}><i className="ti ti-copy" style={{ color: 'var(--gold)' }} /></div>
+              <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 6 }}>{t('measures_entry.copy_title')}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('measures_entry.copy_desc')}</div>
             </div>
           </div>
         </div>

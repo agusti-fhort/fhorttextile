@@ -31,7 +31,7 @@ from fhort.pom.models import (
     ItemBaseMeasurement, SizeSystem, SizeDefinition, GradingRuleSet, RuleSetScopeNode,
     GradingRule, SizingProfile,
 )
-from fhort.tasks.models import Customer, GarmentTypeItem
+from fhort.tasks.models import Customer, GarmentTypeItem, GarmentTypeItemPart
 from fhort.models_app.ftt_models import DocumentTemplate
 
 CUSTOMER_CODI = 'LOS'
@@ -223,14 +223,29 @@ class Command(BaseCommand):
                 item_rows.append({
                     'garment_type': it.garment_type.codi_client, 'code': it.code,
                     'complexity_order': it.complexity_order,
+                    # SET-1 — la declaració peça/conjunt viatja amb l'item; la COMPOSICIÓ va en
+                    # un bloc propi (sota) perquè les seves dues claus són items i el loader ha
+                    # d'haver creat tots els items abans de poder-les resoldre.
+                    'is_set': it.is_set,
                     'base_size_definition': self._sizedef_key(it.base_size_definition),
                     'grading_rule_set': (it.grading_rule_set.nom if it.grading_rule_set_id else None),
                 })
+            part_rows = []
+            for pt in (GarmentTypeItemPart.objects
+                       .select_related('set_item', 'set_item__garment_type',
+                                       'part_item', 'part_item__garment_type')
+                       .all().order_by('set_item__code', 'ordre', 'id')):
+                part_rows.append({
+                    'set_item': self._gti_key(pt.set_item), 'part_item': self._gti_key(pt.part_item),
+                    'ordre': pt.ordre, 'nom_peca': pt.nom_peca,
+                })
             manifest_layers.append(self._write(out_dir, '05_garment_catalog.json',
                 {'layer': 'garment_catalog',
-                 'count': len(grp_rows) + len(type_rows) + len(item_rows),
-                 'groups_count': len(grp_rows), 'types_count': len(type_rows), 'items_count': len(item_rows),
-                 'groups': grp_rows, 'types': type_rows, 'items': item_rows}, indent))
+                 'count': len(grp_rows) + len(type_rows) + len(item_rows) + len(part_rows),
+                 'groups_count': len(grp_rows), 'types_count': len(type_rows),
+                 'items_count': len(item_rows), 'parts_count': len(part_rows),
+                 'groups': grp_rows, 'types': type_rows, 'items': item_rows,
+                 'item_parts': part_rows}, indent))
 
             # ── 06 · GarmentPOMMap + ItemBaseMeasurement ───────────────────
             map_rows = []

@@ -895,7 +895,8 @@
     "assign_resource_none": "Ningún recurso activo. Vincula un estudio desde Recursos.",
     "assign_resource_done": "{{n}} modelo(s) asignado(s) al recurso.",
     "assign_resource_cleared": "Asignación retirada de {{n}} modelo(s).",
-    "assign_resource_already": "{{n}} ya lo estaban."
+    "assign_resource_already": "{{n}} ya lo estaban.",
+    "set_badge": "SET {{n}}/{{total}} · {{codi}}"
   },
   "model_wizard": {
     "customer": "Cliente",
@@ -1006,7 +1007,10 @@
     "model_size_system": "Sistema del modelo",
     "grading_dropped": "La graduación que tenía el modelo ya no casa con los ejes elegidos (prenda, construcción o sistema de tallas). Se ha desasignado: elige otra o marca «Sin graduación».",
     "grading_dropped_replaced": "La graduación que tenía el modelo ya no casa con los ejes elegidos y se ha sustituido por la única compatible. Revísala antes de guardar.",
-    "run_lost_sizes": "Atención: el run guardado del modelo contiene tallas que ya no están en su sistema de tallas ({{talles}}). No se han podido recuperar; si guardas ahora, el run se quedará sin ellas."
+    "run_lost_sizes": "Atención: el run guardado del modelo contiene tallas que ya no están en su sistema de tallas ({{talles}}). No se han podido recuperar; si guardas ahora, el run se quedará sin ellas.",
+    "set_title": "Este ítem es un CONJUNTO de {{total}} piezas",
+    "set_hint": "La composición la declara el catálogo. Se creará un código comercial y una pieza por cada parte; puedes darles un nombre propio para este modelo.",
+    "set_piece_name_ph": "Nombre de la pieza (opcional)"
   },
   "models_list": {
     "title": "Modelos",
@@ -1043,7 +1047,9 @@
     "empty": "Sin modelos. ¡Crea el primero!",
     "empty_filtered": "Sin resultados con este filtro.",
     "delete_error": "No se ha podido eliminar el modelo.",
-    "col_recurs": "Recurso"
+    "col_recurs": "Recurso",
+    "set_badge": "SET {{n}}/{{total}}",
+    "set_hint": "Pieza de un conjunto · {{codi}} {{nom}}"
   },
   "models_filters": {
     "button": "Filtros",
@@ -3988,6 +3994,23 @@
   },
   "measures_entry": {
     "base_set_absent": "Este mundo ({{system}} · {{fit}}) todavía no tiene medidas estándar.",
-    "base_set_absent_hint": "Cuando este modelo esté medido, podrás promoverlo para crearlas desde él."
+    "base_set_absent_hint": "Cuando este modelo esté medido, podrás promoverlo para crearlas desde él.",
+    "copy_title": "Copiar de otro modelo",
+    "copy_desc": "Reaprovecha los POMs, el run, la graduación y los croquis de un modelo ya trabajado.",
+    "copy_pick_title": "Copiar de otro modelo",
+    "copy_pick_subtitle": "Elige el modelo de origen. Todavía no se escribirá nada: después podrás decidir qué copias.",
+    "copy_pick_search_ph": "Busca por código o nombre…",
+    "copy_pick_empty": "Ningún modelo encontrado.",
+    "copy_confirm_title": "Copiar de {{codi}}",
+    "copy_confirm_subtitle": "Elige qué viaja. Nada de lo que este modelo ya tiene se tocará.",
+    "copy_confirm_ok": "Copiar",
+    "copy_flag_copy_values": "Valores de las medidas base",
+    "copy_flag_copy_run": "Sistema de tallas, run y talla base",
+    "copy_flag_copy_grading": "Regla de graduación",
+    "copy_flag_copy_files": "Croquis y patrones",
+    "copy_sobirania_hint": "Las medidas que este modelo ya tiene (manuales, importadas o de fitting) no se pisan nunca. Si la talla base de los dos modelos no coincide, se copian los POMs pero no los valores.",
+    "copy_count": "{{tria}} de {{total}} POMs del origen",
+    "copy_count_zero": "Ningún POM elegido: no se copiará ninguna medida.",
+    "copy_error": "No se ha podido copiar del modelo elegido."
   }
 }

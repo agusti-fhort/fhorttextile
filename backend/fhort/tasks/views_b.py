@@ -15,7 +15,8 @@ from fhort.accounts.capabilities import (HasCapability, DEFINE_TASKS, EXECUTE_TA
                                          get_allowed_task_types, scope_model_task_queryset)
 from fhort.models_app.models import Model
 from .models import (TaskType, ModelTask, Supplier, Production,
-                     GarmentTypeItem, TaskTimeEstimate, TaskTransition, Customer, TimeSeed)
+                     GarmentTypeItem, GarmentTypeItemPart, TaskTimeEstimate,
+                     TaskTransition, Customer, TimeSeed)
 from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             SupplierSerializer, ProductionSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer,
@@ -944,8 +945,11 @@ class GarmentTypeItemViewSet(viewsets.ModelViewSet):
     # `order_by` explícit i idèntic al Meta.ordering: `annotate()` afegeix GROUP BY i Django
     # descarta l'ordenació per defecte a les queries agregades (el SQL en perdia l'ORDER BY).
     # Sense això, la paginació d'aquest endpoint deixava de ser determinista.
+    # SET-1: `parts` es niua en lectura al serializer → prefetch, o cada item-conjunt de la
+    # graella tornaria a la BD per la seva composició (i cada part per al seu `part_item`).
     queryset = (GarmentTypeItem.objects
                 .select_related('garment_type', 'grading_rule_set', 'base_size_definition')
+                .prefetch_related('parts__part_item')
                 .annotate(
                     poms_count=Count('pom_maps', distinct=True),
                     fitxers_count=Count('fitxers', filter=Q(fitxers__is_current=True),
@@ -957,7 +961,9 @@ class GarmentTypeItemViewSet(viewsets.ModelViewSet):
     # `code` i `name` són els únics camps presentables del model: no en té cap altre de nom
     # (les etiquetes i18n viuen a GarmentType, no a l'item).
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['garment_type', 'active']
+    # SET-1: `?is_set=true` — la cascada i el wizard han de poder demanar només peces o només
+    # conjunts sense filtrar al client.
+    filterset_fields = ['garment_type', 'active', 'is_set']
     search_fields = ['code', 'name']
 
     def get_permissions(self):
@@ -965,6 +971,66 @@ class GarmentTypeItemViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         p = HasCapability(); self.required_capability = CONFIGURE
         return [p]
+
+    @action(detail=True, methods=['put'], url_path='parts')
+    def parts(self, request, pk=None):
+        """PUT /api/v1/garment-type-items/<id>/parts/ — Body: `[{part_item, ordre, nom_peca}]`
+
+        SET-1 · escriptura de la composició d'un item-conjunt. És un REEMPLAÇAMENT declarat de
+        la llista sencera, no un merge: el PATCH genèric del ModelViewSet no escriu relacions
+        inverses, i inventar-hi una semàntica parcial (què vol dir «falta una part al payload»?)
+        seria pitjor que dir clarament que el que s'envia ÉS la composició.
+
+        Cada fila passa per `GarmentTypeItemPart.clean()` (anti-cicle i anti-set-de-sets) abans
+        d'escriure res, exactament com `GarmentTypeItemSerializer.validate()` invoca el clean()
+        del seu model: DRF no crida `Model.clean()` sol.
+
+        Gate CONFIGURE (via `get_permissions`: no és list ni retrieve).
+        """
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from django.db import transaction
+
+        item = self.get_object()
+        files = request.data
+        if not isinstance(files, list):
+            return Response({'error': 'El cos ha de ser una llista de parts.'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+
+        nous = []
+        vistos = set()
+        for i, f in enumerate(files):
+            if not isinstance(f, dict) or not f.get('part_item'):
+                return Response({'error': f'Fila {i}: `part_item` és obligatori.'},
+                                status=http_status.HTTP_400_BAD_REQUEST)
+            part_id = f['part_item']
+            if part_id in vistos:
+                return Response({'error': f'Fila {i}: `part_item` {part_id} repetit.'},
+                                status=http_status.HTTP_400_BAD_REQUEST)
+            vistos.add(part_id)
+            part = GarmentTypeItem.objects.filter(pk=part_id).first()
+            if part is None:
+                return Response({'error': f'Fila {i}: item {part_id} no trobat.'},
+                                status=http_status.HTTP_400_BAD_REQUEST)
+            fila = GarmentTypeItemPart(
+                set_item=item, part_item=part,
+                ordre=f.get('ordre', i + 1) or (i + 1),
+                nom_peca=(f.get('nom_peca') or '').strip(),
+            )
+            try:
+                fila.clean()
+            except DjangoValidationError as e:
+                return Response(getattr(e, 'message_dict', None) or {'error': e.messages},
+                                status=http_status.HTTP_400_BAD_REQUEST)
+            nous.append(fila)
+
+        with transaction.atomic():
+            # PROTECT és de `part_item`, no de `set_item`: esborrar les files de composició
+            # d'AQUEST conjunt no toca cap item.
+            item.parts.all().delete()
+            GarmentTypeItemPart.objects.bulk_create(nous)
+
+        item.refresh_from_db()
+        return Response(GarmentTypeItemSerializer(item).data)
 
 
 class TaskTimeEstimateViewSet(viewsets.ModelViewSet):

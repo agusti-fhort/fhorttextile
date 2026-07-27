@@ -57,7 +57,7 @@ SEED_BLOCKS = {
     'base':            ['BodyMeasurementISO', 'POMCategory', 'GarmentGroup', 'Target',
                         'FitType', 'ConstructionType', 'POMGlobal', 'GarmentTypeGlobal'],
     'size_systems':    ['SizeSystem', 'SizeDefinition'],
-    'garments':        ['GarmentType', 'GarmentTypeItem'],
+    'garments':        ['GarmentType', 'GarmentTypeItem', 'GarmentTypeItemPart'],
     'pom_masters':     ['POMMaster', 'GarmentPOMMap'],
     'grading':         ['GradingRuleSet', 'GradingRule'],
     'sizing_profiles': ['SizingProfile'],
@@ -133,7 +133,8 @@ def _spec():
         SizeSystem, SizeDefinition, POMGlobal, GarmentTypeGlobal, GarmentType, POMMaster,
         GradingRuleSet, GarmentPOMMap, GradingRule, SizingProfile,
     )
-    from fhort.tasks.models import GarmentTypeItem, TaskTimeEstimate, TimeSeed, TaskType
+    from fhort.tasks.models import (GarmentTypeItem, GarmentTypeItemPart,
+                                    TaskTimeEstimate, TimeSeed, TaskType)
 
     return [
         # (model, clau natural, {camp_fk: estratègia}, m2m, transform)
@@ -153,6 +154,11 @@ def _spec():
         (POMMaster,          ('codi_client',), {}, (), None),
         (GradingRuleSet,     ('nom',), {'customer': NULL, 'parent_version': DEFER}, ('targets',), None),
         (GarmentTypeItem,    ('garment_type', 'code'), {}, (), None),
+        # SET-1 — composició dels items-conjunt. DESPRÉS de GarmentTypeItem: les dues FK hi
+        # apunten i el mapa de pks del destí ha d'existir abans (ordre topològic, com
+        # GarmentPOMMap respecte del seu item). `is_set` no necessita entrada pròpia: és un
+        # camp concret i `_concrete()` el copia sol.
+        (GarmentTypeItemPart, ('set_item', 'part_item'), {}, (), None),
         (GarmentPOMMap,      ('garment_type_item', 'pom'), {}, (), None),
         (GradingRule,        ('rule_set', 'pom'), {}, (), None),
         # (GradingException) — jubilada G6/1a: model retirat, 0 files. No hi ha res a copiar.

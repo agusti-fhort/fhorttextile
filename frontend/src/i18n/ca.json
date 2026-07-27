@@ -895,7 +895,8 @@
     "assign_resource_none": "Cap recurs actiu. Vincula un estudi des de Recursos.",
     "assign_resource_done": "{{n}} model(s) assignat(s) al recurs.",
     "assign_resource_cleared": "Assignació retirada de {{n}} model(s).",
-    "assign_resource_already": "{{n}} ja hi estaven."
+    "assign_resource_already": "{{n}} ja hi estaven.",
+    "set_badge": "SET {{n}}/{{total}} · {{codi}}"
   },
   "model_wizard": {
     "customer": "Client",
@@ -1006,7 +1007,10 @@
     "model_size_system": "Sistema del model",
     "grading_dropped": "La graduació que tenia el model ja no casa amb els eixos triats (peça, construcció o sistema de talles). S'ha desassignat: torna a triar-ne una o marca «Sense graduació».",
     "grading_dropped_replaced": "La graduació que tenia el model ja no casa amb els eixos triats i s'ha substituït per l'única compatible. Revisa-la abans de desar.",
-    "run_lost_sizes": "Atenció: el run desat del model conté talles que ja no són al seu sistema de talles ({{talles}}). No s'han pogut recuperar; si deses ara, el run quedarà sense elles."
+    "run_lost_sizes": "Atenció: el run desat del model conté talles que ja no són al seu sistema de talles ({{talles}}). No s'han pogut recuperar; si deses ara, el run quedarà sense elles.",
+    "set_title": "Aquest ítem és un CONJUNT de {{total}} peces",
+    "set_hint": "La composició la declara el catàleg. Es crearà un codi comercial i una peça per cada part; pots posar-los un nom propi per a aquest model.",
+    "set_piece_name_ph": "Nom de la peça (opcional)"
   },
   "models_list": {
     "title": "Models",
@@ -1043,7 +1047,9 @@
     "empty": "Sense models. Crea el primer!",
     "empty_filtered": "Sense resultats amb aquest filtre.",
     "delete_error": "No s'ha pogut esborrar el model.",
-    "col_recurs": "Recurs"
+    "col_recurs": "Recurs",
+    "set_badge": "SET {{n}}/{{total}}",
+    "set_hint": "Peça d'un conjunt · {{codi}} {{nom}}"
   },
   "models_filters": {
     "button": "Filtres",
@@ -3988,6 +3994,23 @@
   },
   "measures_entry": {
     "base_set_absent": "Aquest món ({{system}} · {{fit}}) encara no té mesures estàndard.",
-    "base_set_absent_hint": "Quan aquest model estigui mesurat, el podràs promoure per crear-les des d'ell."
+    "base_set_absent_hint": "Quan aquest model estigui mesurat, el podràs promoure per crear-les des d'ell.",
+    "copy_title": "Copiar d'un altre model",
+    "copy_desc": "Reaprofita els POMs, el run, la graduació i els croquis d'un model ja treballat.",
+    "copy_pick_title": "Copiar d'un altre model",
+    "copy_pick_subtitle": "Tria el model d'origen. Encara no s'escriurà res: després podràs decidir què copies.",
+    "copy_pick_search_ph": "Cerca per codi o nom…",
+    "copy_pick_empty": "Cap model trobat.",
+    "copy_confirm_title": "Copiar de {{codi}}",
+    "copy_confirm_subtitle": "Tria què viatja. Res del que aquest model ja té es tocarà.",
+    "copy_confirm_ok": "Copiar",
+    "copy_flag_copy_values": "Valors de les mesures base",
+    "copy_flag_copy_run": "Sistema de talles, run i talla base",
+    "copy_flag_copy_grading": "Regla de graduació",
+    "copy_flag_copy_files": "Croquis i patrons",
+    "copy_sobirania_hint": "Les mesures que aquest model ja té (manuals, importades o de fitting) no es trepitgen mai. Si la talla base dels dos models no coincideix, es copien els POMs però no els valors.",
+    "copy_count": "{{tria}} de {{total}} POMs de l'origen",
+    "copy_count_zero": "Cap POM triat: no es copiarà cap mesura.",
+    "copy_error": "No s'ha pogut copiar del model triat."
   }
 }

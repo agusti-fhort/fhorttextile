@@ -315,6 +315,13 @@ class GarmentTypeItem(models.Model):
                          help_text="Ordre de complexitat creixent dins la família")
     active = models.BooleanField(default=True)
 
+    # SET-1 (2026-07-27) — el GTI declara PEÇA o CONJUNT. Decisió 3 del sprint: el DEFECTE és
+    # NO SET i no hi ha cap backfill possible ni necessari (0 files de GarmentSet als dos
+    # esquemes). La composició viu a `GarmentTypeItemPart` (related_name='parts').
+    is_set = models.BooleanField(
+        default=False,
+        help_text="Aquest item és un CONJUNT: la seva composició viu a GarmentTypeItemPart.")
+
     # Sprint Mesures Base per Item (P1) — talla base de la plantilla de l'Item: la talla a la qual
     # s'expressen els valors base d'ItemBaseMeasurement (P2). FK NORMAL (constraint real) cap a
     # pom.SizeDefinition, igual que `garment_type` → pom.GarmentType (pom viu al schema del tenant).
@@ -364,6 +371,70 @@ class GarmentTypeItem(models.Model):
 
     def __str__(self):
         return f'{self.garment_type_id}/{self.code}'
+
+
+class GarmentTypeItemPart(models.Model):
+    """Composició d'un ITEM-CONJUNT: quines peces el formen i en quin ordre (SET-1).
+
+    Decisió 3 del sprint SET (2026-07-27): **el GTI declara PEÇA o SET**. Un item amb
+    `is_set=True` porta N files aquí; cadascuna diu quin ALTRE item és la peça (`part_item`),
+    quina posició ocupa (`ordre` → 01/02/03) i com se'n diu la peça al conjunt (`nom_peca`).
+
+    Per què una taula pròpia i no un M2M nu a `self`: la taula automàtica de Django no admet
+    columnes extra, i la creació multi-peça necessita exactament les dues que hi falten
+    (`ordre` i `nom_peca`). Amb un `through=` per portar-les, el M2M ÉS aquesta taula.
+
+    `part_item` és PROTECT: esborrar un item que forma part d'un conjunt ha de BLOQUEJAR, no
+    deixar el conjunt coix en silenci. `set_item` és CASCADE: si el conjunt desapareix, la
+    seva composició no té cap sentit propi.
+    """
+    set_item = models.ForeignKey(
+        GarmentTypeItem, on_delete=models.CASCADE, related_name='parts',
+        help_text="L'item CONJUNT (el que té is_set=True).")
+    part_item = models.ForeignKey(
+        GarmentTypeItem, on_delete=models.PROTECT, related_name='part_of',
+        help_text="L'item que fa de PEÇA dins el conjunt.")
+    ordre = models.PositiveSmallIntegerField(
+        default=0, help_text='Posició de la peça al conjunt (dona el sufix -01/-02/-03).')
+    nom_peca = models.CharField(
+        max_length=120, blank=True, default='',
+        help_text='Nom de la peça dins el conjunt (ex: «Top», «Bikini bottom»).')
+
+    class Meta:
+        ordering = ['set_item', 'ordre', 'id']
+        unique_together = [('set_item', 'part_item')]
+        verbose_name = 'Peça d\'un item-conjunt'
+        verbose_name_plural = 'Peces dels items-conjunt'
+
+    def clean(self):
+        """Anti-cicle i anti-set-de-sets. Cridat des del serializer (DRF no crida clean() sol),
+        mateix patró que `GarmentTypeItem.clean()`."""
+        super().clean()
+        from django.core.exceptions import ValidationError
+
+        if self.set_item_id and self.part_item_id and self.set_item_id == self.part_item_id:
+            raise ValidationError({'part_item': "Un item no pot ser peça de si mateix."})
+
+        # Un SET no pot contenir un altre SET: la decisió 1 diu «peces = parts internes
+        # 01/02/03», una sola alçada. Sense aquest guard la numeració de peces no tindria
+        # forma i la meritació de conjunt (A3) no sabria quin és «el» conjunt.
+        if self.part_item_id:
+            part = self.part_item
+            if part.is_set:
+                raise ValidationError({
+                    'part_item': ("Un conjunt no pot contenir un altre conjunt: "
+                                  f"«{part.code}» ja és un item-conjunt.")})
+
+        # L'altra banda del cicle: l'item que fa de peça no pot tenir el conjunt entre les
+        # seves parts. Amb sets d'una sola alçada això només pot ser un cicle directe A↔B.
+        if self.set_item_id and self.part_item_id:
+            if GarmentTypeItemPart.objects.filter(
+                    set_item_id=self.part_item_id, part_item_id=self.set_item_id).exists():
+                raise ValidationError({
+                    'part_item': "Cicle: aquest item ja té el conjunt com a peça."})
+
+    def __str__(self):
+        return f'{self.set_item_id} ⊃ {self.ordre:02d} {self.part_item_id}'
 
 
 class TaskTimeEstimate(models.Model):
