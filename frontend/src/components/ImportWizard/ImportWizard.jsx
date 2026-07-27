@@ -272,7 +272,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setExtracting(false); return }
       setPomsExtrets(data.poms_extrets || [])
       setExtraccioMeta({ header: data.header, base_size: data.base_size, sizes: data.sizes,
-                         grading_status: data.grading_status, avisos: data.avisos || [] })
+                         grading_status: data.grading_status, avisos: data.avisos || [],
+                         // F5 · informe del llibre: quines pestanyes hi ha i quina s'ha llegit.
+                         fulls: data.fulls || [], full: data.full || null })
       if (data.suggested_valors_mode === 'absoluts' || data.suggested_valors_mode === 'deltes')
         setValorsMode(data.suggested_valors_mode)
     } catch (e) {
@@ -280,6 +282,23 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     }
     setExtracting(false)
   }
+
+  // F5 · el tècnic tria quin full del llibre s'importa. Es desa amb el MATEIX PATCH de talles
+  // (que reenvia el mapping sencer, així que no s'hi perd res) i es torna a extreure: el full
+  // és una entrada del parser, no un filtre de la sortida.
+  const canviaFull = async (nom) => {
+    if (!nom || nom === extraccioMeta?.full) return
+    setExtracting(true); setError('')
+    const data = await patchTalles({ full_seleccionat: nom })
+    if (!data) { setExtracting(false); return }
+    await runExtraccio()
+  }
+
+  const fulls = extraccioMeta?.fulls || []
+  const fullsAmbPoms = fulls.filter(f => f.passa_porta)
+  // Fulls amb files de POM que NO s'han pogut llegir: hi ha contingut i s'està perdent.
+  const fullsNoLlegits = fulls.filter(f => !f.passa_porta && f.n_files_amb_codi > 0)
+  const potTriarFull = fullsAmbPoms.length > 1 || fullsNoLlegits.length > 0
 
   const togglePom = (idx) => setPomsExtrets(pomsExtrets.map((p, i) =>
     i === idx ? { ...p, actiu: !p.actiu } : p))
@@ -761,6 +780,39 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                   codis: pomsDuplicats.join(', '),
                 })}
               </div>
+            </div>
+          )}
+
+          {/* F5 · el llibre té més d'un full. L'avís surt sempre que n'hi hagi més d'un; el
+              selector, només si hi ha res a triar de debò (2+ fulls llegibles, o fulls amb
+              POMs que no s'han pogut llegir). */}
+          {!extracting && fulls.length > 1 && (
+            <div style={{ background: 'var(--gold-pale)', border: '1px solid var(--gold)',
+                          color: 'var(--text-main)', borderRadius: 8, padding: '10px 14px',
+                          fontSize: 'var(--fs-body)', marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                {t('import_wizard.fulls_title', { n: fullsAmbPoms.length })}
+              </div>
+              <div style={{ marginBottom: potTriarFull ? 10 : 0 }}>
+                {t('import_wizard.fulls_llegit', { full: extraccioMeta?.full || '—' })}
+              </div>
+              {potTriarFull && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>{t('import_wizard.fulls_tria')}</span>
+                  <select value={extraccioMeta?.full || ''}
+                    onChange={e => canviaFull(e.target.value)}
+                    style={{ padding: '6px 8px', borderRadius: 6, fontSize: 'var(--fs-body)',
+                             border: `1px solid ${BORDER}`, fontFamily: 'inherit', minWidth: 260 }}>
+                    {fulls.map(f => (
+                      <option key={f.nom} value={f.nom} disabled={!f.passa_porta}>
+                        {f.passa_porta
+                          ? t('import_wizard.fulls_opcio', { nom: f.nom, n: f.n_files_amb_codi })
+                          : t('import_wizard.fulls_opcio_illegible', { nom: f.nom })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
           )}
 

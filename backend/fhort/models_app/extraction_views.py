@@ -1335,8 +1335,8 @@ def _avis_fulls_multiples(fulls, full_llegit):
         return []
     noms = ', '.join(f"'{f['nom']}' ({f['n_files_amb_codi']} POMs)" for f in amb_poms)
     return [f"El llibre té {len(amb_poms)} fulls amb taules de POMs: {noms}. "
-            f"S'ha llegit '{full_llegit}'. Si la fitxa porta una peça per full, tria'l al pas "
-            f"de talles: els altres NO s'importen."]
+            f"S'ha llegit '{full_llegit}'; els altres NO s'importen. Si la fitxa porta una "
+            f"peça per full, tria quin vols importar."]
 
 
 def _extraccio_via_excel(session, api_key):
