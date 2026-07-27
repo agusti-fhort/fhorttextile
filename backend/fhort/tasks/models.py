@@ -127,6 +127,16 @@ class TaskTransition(models.Model):
     by = models.ForeignKey('accounts.UserProfile', on_delete=models.SET_NULL,
                            null=True, blank=True, related_name='task_transitions')
     at = models.DateTimeField(auto_now_add=True)
+    # El log ha de dir la VERITAT: una transició pot néixer d'un gest del tècnic o d'un guard del
+    # sistema. Sense aquest camp, una auto-pausa signa amb el nom del tècnic i menteix.
+    #   null                  = gest humà (tot l'històric i tot el camí normal del kanban)
+    #   'guard_30min'         = guard de tasca oblidada: el modal va vèncer sense resposta
+    #   'cron_40min'          = xarxa de seguretat: la pestanya ja no hi era per pausar
+    #   'exclusio_inprogress' = una-sola-InProgress-per-tècnic (n'ha obert una altra)
+    # Sense `choices` a posta: el catàleg de guards creixerà i una migració per valor no aporta res.
+    auto = models.CharField(max_length=32, null=True, blank=True,
+                            help_text="Marca d'automatisme. null = gest humà del tècnic; "
+                                      "slug del guard que ha actuat en cas contrari.")
 
     class Meta:
         ordering = ['at']
