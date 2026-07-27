@@ -368,6 +368,9 @@ def base_measurements_view(request, model_id):
             'notes': bm.notes or '',
             'nom_fitxa': bm.nom_fitxa or '',
             'origen': bm.origen or '',
+            # F3 — secció d'origen ('01.- DRESS', 'Bodice:'…). '' quan el document no en
+            # tenia. La fitxa tècnica la fa servir per partir la taula en una per peça.
+            'seccio': bm.seccio or '',
             'pom_abbreviation': bm.pom.pom_global.abbreviation if bm.pom.pom_global_id else '',
             'pom_code_global': bm.pom.pom_global.codi if bm.pom.pom_global_id else '',
             'pom_is_key': bool(bm.pom.pom_global.is_key) if bm.pom.pom_global_id else False,

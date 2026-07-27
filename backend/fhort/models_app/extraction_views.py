@@ -2548,6 +2548,9 @@ def import_session_confirmar_view(request, token):
                 'is_active': True,
                 'ordre': i,
                 'notes': p.get('descripcio') or '',
+                # F3 — la secció d'origen. Els dos camins d'extracció ja la portaven a
+                # `poms_extrets` i aquí es perdia perquè no hi havia columna on desar-la.
+                'seccio': p.get('seccio') or '',
             }
             # B2: només escrivim tolerància si el document en porta (asimètrica, contracte Size Check).
             if p.get('tol_minus') is not None:
