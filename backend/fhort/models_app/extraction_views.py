@@ -1673,6 +1673,26 @@ def import_session_extraccio_view(request, token):
     }, status=200)
 
 
+def _candidats_de_codi(codi):
+    """Els POMMaster del catàleg que es disputen un codi, serialitzats per a la UI.
+
+    R1 · el 409 ha de portar els candidats. Fins ara la resposta deia NOMÉS el codi en
+    conflicte i l'única sortida que li quedava al tècnic era sortir del wizard i anar al
+    catàleg a mirar què hi havia. La vista ja feia la query per COMPTAR-los; aquí es
+    serialitzen perquè la decisió (quin dels dos és el bo) es pugui prendre a la fila,
+    sense perdre la governança: el backend segueix sense triar-ne cap.
+    """
+    from fhort.pom.models import POMMaster
+    return [{
+        'id': pm.id,
+        'codi_client': pm.codi_client,
+        'nom_client': pm.nom_client,
+        'origen_import': pm.origen_import or '',
+        'pendent_revisio': bool(pm.pendent_revisio),
+        'actiu': bool(pm.actiu),
+    } for pm in POMMaster.objects.filter(codi_client=codi).order_by('id')]
+
+
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def import_session_poms_view(request, token):
@@ -1724,7 +1744,10 @@ def import_session_poms_view(request, token):
         if POMMaster.objects.filter(pom_global=None, codi_client=codi).count() > 1
     })
     if duplicats:
-        return Response({'error': 'codi_duplicat', 'codis': duplicats}, status=409)
+        # R1 · el 409 porta els CANDIDATS de cada codi. Sense ells la UI només podia enviar
+        # el tècnic al catàleg; amb ells el conflicte es resol a la fila (PATCH `resolucions`).
+        return Response({'error': 'codi_duplicat', 'codis': duplicats,
+                         'candidats': {c: _candidats_de_codi(c) for c in duplicats}}, status=409)
 
     existents = {p.get('pom_master_id') for p in poms if p.get('pom_master_id')}
     for p in poms:
