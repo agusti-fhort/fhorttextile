@@ -8,6 +8,15 @@ class TimerEntrada(models.Model):
     fi = models.DateTimeField(null=True, blank=True)
     minuts = models.PositiveIntegerField(null=True, blank=True)
     actiu = models.BooleanField(default=True)
+    # Segell de vida del tram obert (guard de tasca oblidada). El tècnic hi truca en confirmar el
+    # modal, i el rearmament dels 30 min es mesura DES D'AQUÍ. null = mai n'hi ha hagut cap → el
+    # llindar es compta des d'`inici`: una tasca oberta i mai confirmada ha de vèncer igualment.
+    # No és inactivitat: és DURADA des de l'últim senyal (decisió Patró C).
+    # GANXO F-MÀ (no construït): aquest és el senyal que alimentarà `last_activity_at` del TTL de
+    # la mà. Qui escrigui aquí haurà d'escriure els dos alhora, no inventar-se un segon batec.
+    last_heartbeat = models.DateTimeField(null=True, blank=True,
+                                          help_text='Últim senyal de vida del tècnic sobre el '
+                                                    'tram obert. null = cap encara (val `inici`).')
 
     class Meta:
         verbose_name = 'Entrada de timer'

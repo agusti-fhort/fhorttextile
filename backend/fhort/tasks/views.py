@@ -43,6 +43,32 @@ class TimerEntradaViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('Usuari sense UserProfile en aquest tenant.')
         serializer.save(tecnic=profile)
 
+    @action(detail=False, methods=['post'], url_path='heartbeat')
+    def heartbeat(self, request):
+        """POST /api/v1/timers/heartbeat/ (sense body) — segella el tram obert del tècnic.
+
+        Porta LLEUGERA: el frontend hi truca quan la persona confirma el modal del guard de tasca
+        oblidada, i els 30 min es rearmen des del segell nou. Sense `pk` a posta — el timer es
+        busca pel propi perfil (queryset ja scopat), de manera que per construcció no es pot
+        segellar el tram d'un altre.
+
+        Només compta el tram d'una tasca realment En curs: si la tasca ja s'ha pausat o tancat
+        des d'una altra pestanya, el batec no ha de ressuscitar res → 404 i el front es
+        resincronitza. Idempotent: trucar-hi dos cops només avança el segell."""
+        timer = (self.get_queryset()
+                 .filter(fi__isnull=True, actiu=True, model_task__status='InProgress')
+                 .order_by('-inici').first())
+        if timer is None:
+            return Response({'error': 'Cap tasca En curs amb tram obert.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        timer.last_heartbeat = timezone.now()
+        # GANXO F-MÀ (no construït): quan la mà tingui TTL, `last_activity_at` s'escriu AQUÍ
+        # mateix, en el mateix save. És el mateix senyal; dos batecs separats es desincronitzarien.
+        timer.save(update_fields=['last_heartbeat'])
+        return Response({'timer_id': timer.pk, 'model_task': timer.model_task_id,
+                         'last_heartbeat': timer.last_heartbeat.isoformat()},
+                        status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'], url_path='tancar')
     def tancar(self, request, pk=None):
         timer = self.get_object()
