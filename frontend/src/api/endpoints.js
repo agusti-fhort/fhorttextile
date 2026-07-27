@@ -156,6 +156,19 @@ export const watchpoints = {
 // L'escriptura NO passa per aquí: puja per models/<id>/upload-fitxer/ (multipart, fetch cru).
 export const modelFitxers = {
   list: (params) => client.get('/api/v1/model-fitxers/', { params }),
+  // FONT ÚNICA de les fitxes .ftt d'un model (U4): el tab "Fitxa tècnica" del ModelSheet i el
+  // resolver /models/:id/fitxa han de veure EXACTAMENT la mateixa llista. Fins ara cadascú
+  // escrivia la seva query a mà (dos `fetch` crus amb els mateixos paràmetres): la divergència
+  // no era un bug d'avui però sí un bug d'un dia qualsevol. `is_current` = només el cap de cada
+  // cadena de versions; una fitxa amb 4 versions hi surt un cop, no quatre.
+  fitxesTecniques: (modelId) => client.get('/api/v1/model-fitxers/', {
+    params: { model: modelId, tipus: 'TECHSHEET', is_current: true, ordering: '-data_pujada' },
+  }),
+  // Crea una fitxa .ftt nova per al model. `nom` és el nom INTERN que la distingeix de les
+  // germanes (un model de 3 peces vol "DRESS", "KNICKERS", "HEADBAND"); sense `nom` el backend
+  // deriva el de sempre. `template_id` opcional: document a partir d'una plantilla del tenant.
+  crearFitxa: (modelId, data = {}) =>
+    client.post(`/api/v1/models/${modelId}/ftt-document/`, data),
   // Cicle model→model (S03c · C3.2): crea una CÒPIA sobirana al model destí (derivat_de_model);
   // l'origen no es toca mai. Un `.ftt` s'hi descongela i es re-resol contra el destí (D16).
   usarAlModel: (id, modelId) =>

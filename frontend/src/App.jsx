@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Entrar from './pages/Entrar'
 import Shell from './components/layout/Shell'
 import GuardTascaOblidada from './components/GuardTascaOblidada'
+import { modelFitxers } from './api/endpoints'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Models = lazy(() => import('./pages/Models'))
@@ -137,14 +138,9 @@ function FttResolver() {
       const cos = {}
       if (templateId) cos.template_id = templateId
       if ((nom || '').trim()) cos.nom = nom.trim()
-      const r = await fetch(`${API}/api/v1/models/${id}/ftt-document/`, {
-        method: 'POST', headers, body: JSON.stringify(cos),
-      })
-      if (r.ok) {
-        const f = await r.json()
-        navigate(`/models/${id}/ftt/${f.id}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })
-        return
-      }
+      const { data: f } = await modelFitxers.crearFitxa(id, cos)
+      navigate(`/models/${id}/ftt/${f.id}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })
+      return
     } catch { /* noop */ }
     navigate(`/models/${id}`, { replace: true })
   }
@@ -155,10 +151,12 @@ function FttResolver() {
       // F2 — 0 → crea · 1 → obre · N → selector. Abans obria SEMPRE la primera i la resta
       // quedaven inabastables des de /fitxa: un model multi-peça amb tres fitxes només en
       // tenia una d'accessible per aquest camí.
+      // U4 — mateixa font que el tab "Fitxa tècnica" del ModelSheet (modelFitxers.fitxesTecniques):
+      // el selector de N i la llista canònica no poden dir coses diferents del mateix model.
       let fitxes = []
       try {
-        const r = await fetch(`${API}/api/v1/model-fitxers/?model=${id}&tipus=TECHSHEET&is_current=true&ordering=-data_pujada`, { headers })
-        if (r.ok) { const d = await r.json(); fitxes = d.results || d || [] }
+        const { data: d } = await modelFitxers.fitxesTecniques(id)
+        fitxes = d.results || d || []
       } catch { /* noop */ }
       if (cancelled) return
       if (fitxes.length === 1) {
