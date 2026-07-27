@@ -14,8 +14,10 @@ Dues peces del backend, provades pel forat pel qual es colarien:
      que és el que val per a tot l'històric.
 """
 import datetime
+from io import StringIO
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.utils import timezone
 from django_tenants.test.cases import TenantTestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
@@ -182,6 +184,68 @@ class GuardTascaOblidadaTest(TenantTestCase):
         timer.refresh_from_db()
         self.assertEqual(timer.minuts, 30)
         self.assertFalse(timer.actiu)
+
+    # ── La xarxa de seguretat (pestanya tancada) ────────────────────────────
+    def _envelleix(self, minuts, camp='inici'):
+        timer = self._timer_obert()
+        TimerEntrada.objects.filter(pk=timer.pk).update(
+            **{camp: timezone.now() - datetime.timedelta(minutes=minuts)})
+
+    def _cron(self, **kwargs):
+        from django.db import connection
+        out = StringIO()
+        call_command('pausa_tasques_oblidades', tenant=connection.schema_name,
+                     stdout=out, **kwargs)
+        return out.getvalue()
+
+    def test_cron_pausa_el_tram_sense_cap_senyal(self):
+        transition_task(self.task, 'InProgress', self.prof)
+        self._envelleix(45)
+        self._cron()
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.status, 'Paused')
+        tr = TaskTransition.objects.filter(model_task=self.task).order_by('at').last()
+        self.assertEqual(tr.auto, 'cron_40min')
+        self.assertEqual(tr.to_status, 'Paused')
+
+    def test_cron_respecta_el_batec(self):
+        """Tram vell però amb senyal recent: el tècnic hi és, no s'hi toca."""
+        transition_task(self.task, 'InProgress', self.prof)
+        self._envelleix(120)
+        self._heartbeat()
+        self._cron()
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.status, 'InProgress')
+
+    def test_cron_no_toca_els_trams_joves(self):
+        transition_task(self.task, 'InProgress', self.prof)
+        self._envelleix(10)
+        self._cron()
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.status, 'InProgress')
+
+    def test_cron_dry_run_no_escriu(self):
+        transition_task(self.task, 'InProgress', self.prof)
+        self._envelleix(45)
+        sortida = self._cron(dry_run=True)
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.status, 'InProgress')
+        self.assertIn('dry-run', sortida)
+
+    def test_cron_es_idempotent(self):
+        transition_task(self.task, 'InProgress', self.prof)
+        self._envelleix(45)
+        self._cron()
+        abans = TaskTransition.objects.filter(model_task=self.task).count()
+        self._cron()
+        self.assertEqual(TaskTransition.objects.filter(model_task=self.task).count(), abans)
+
+    def test_cron_amb_llindar_curt_es_la_via_de_qa(self):
+        transition_task(self.task, 'InProgress', self.prof)
+        self._envelleix(3)
+        self._cron(minuts=2)
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.status, 'Paused')
 
     def test_la_tasca_auto_pausada_es_repren_net(self):
         """El guard i el kanban no es trepitgen: Paused→InProgress obre tram NOU i el segell
