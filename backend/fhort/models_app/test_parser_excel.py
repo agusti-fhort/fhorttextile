@@ -557,6 +557,65 @@ class ElCamiIAContinuaSentElFallbackTest(SimpleTestCase):
         self.assertEqual(sessio.resultat['extraccio']['full'], 'KNICKERS')
 
 
+class SmokeMultipecaTest(SimpleTestCase):
+    """SMOKE del sprint: F2 + F4 + F5 alhora sobre UNA fitxa.
+
+    Fixture SINTÈTICA (`smoke_multipeca_2fulls_3seccions.xlsx`), generada per a aquest test i
+    no un document de client: 2 fulls (DRESS/KNICKERS), 3 seccions al primer i el run NEWBORN
+    escrit en mesos sense `SAMPLE SIZE`, que és la combinació del cas real LOS-SS27-0834.
+    """
+
+    BASE_HINT = '00/01'
+    RUN_HINT = ['00/01', '01/03', '03/06']
+
+    def _parse(self, **kw):
+        return _parse_excel_poms(
+            _fixture('smoke_multipeca_2fulls_3seccions.xlsx'),
+            base_hint=self.BASE_HINT, run_hint=self.RUN_HINT, **kw)
+
+    def test_F2_no_abdica_i_la_base_es_la_del_document(self):
+        poms, talles, meta = self._parse()
+        self.assertIsNone(meta['motiu'])
+        self.assertEqual(meta['base_size'], '0M-1M')
+        self.assertEqual(talles, ['0M-1M', '1M-3M', '3M-6M'])
+        self.assertEqual([p['values'][meta['base_size']] for p in poms],
+                         [20.0, 21.5, 18.0, 12.0, 6.0, 0.5, 75.0])
+
+    def test_F4_les_tres_seccions_hi_son_i_en_ordre(self):
+        poms, _, _ = self._parse()
+        self.assertEqual(
+            [(p['codi_fitxa'], p['seccio']) for p in poms],
+            [('A', 'Bodice:'), ('D', 'Bodice:'), ('E', 'Bodice:'),
+             ('S1', 'Sleeve:'), ('S2', 'Sleeve:'),
+             ('LZ', 'Cord:'), ('LZ1', 'Cord:')])
+
+    def test_F5_linforme_veu_els_dos_fulls_i_es_pot_triar_el_segon(self):
+        _, _, meta = self._parse()
+        self.assertEqual(meta['fulls'], [
+            {'nom': 'DRESS', 'n_files_amb_codi': 7, 'passa_porta': True},
+            {'nom': 'KNICKERS', 'n_files_amb_codi': 3, 'passa_porta': True},
+        ])
+        self.assertEqual(meta['full'], 'DRESS')          # default: el primer que passa
+
+        poms2, _, meta2 = self._parse(full_seleccionat='KNICKERS')
+        self.assertEqual(meta2['full'], 'KNICKERS')
+        self.assertEqual([(p['codi_fitxa'], p['seccio']) for p in poms2],
+                         [('K1', 'Front:'), ('K2', 'Front:'), ('K3', 'Front:')])
+
+    def test_F5_lavis_de_multi_full_ho_diu_amb_noms_i_recomptes(self):
+        _, _, meta = self._parse()
+        avis = _avis_fulls_multiples(meta['fulls'], meta['full'])[0]
+        self.assertIn('2 fulls', avis)
+        self.assertIn("'DRESS' (7 POMs)", avis)
+        self.assertIn("'KNICKERS' (3 POMs)", avis)
+
+    def test_la_seccio_amb_valors_no_entra_com_a_POM(self):
+        """'Cord:' porta zeros a les tres columnes i segueix sent una capçalera, no una fila."""
+        poms, _, meta = self._parse()
+        self.assertNotIn('Cord:', [p['codi_fitxa'] for p in poms])
+        self.assertEqual(meta['n_files_amb_codi'], 7)
+
+
 class AvisFilesPerdudesTest(SimpleTestCase):
     """FIX D — la pèrdua silenciosa. El document té 26 files i la IA en torna 25: s'ha de dir."""
 
