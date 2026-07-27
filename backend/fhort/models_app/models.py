@@ -62,6 +62,11 @@ class GarmentSet(models.Model):
         help_text='Nombre de peces del conjunt. Immutable després de la creació.',
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    # SET-1 · A3 (2026-07-27) — MERITACIÓ DE CONJUNT. Decisió 2: **SET = 1 mèrit**. La marca
+    # d'arrencada viu AQUÍ, no repartida entre les peces, perquè és el conjunt el que merita.
+    # Les germanes reben igualment el seu `consumption_started_at` (perquè el criteri de forat
+    # de `reconcile_consumption` no les torni a meritar), però l'albarà n'és un i penja d'aquí.
+    consumption_started_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = 'Garment Set (conjunt)'
@@ -866,8 +871,18 @@ class ConsumptionRecord(models.Model):
     """Sprint 4: albarà de consum. Viu al TENANT, el veu el client.
     Àncora immutable del fet 'aquest model va meritar'. El detall viu/creixent
     (tasques, temps, usuaris) es calcula sobre TaskTransition, NO es duplica aquí."""
+    # SET-1 · A3 — l'albarà ancora a UN Model **o** a UN GarmentSet, mai a tots dos ni a cap
+    # (XOR sota, mateix patró que `FittingSession` a fitting/models.py:293-301). `model` passa a
+    # nullable NOMÉS per fer-hi lloc: un albarà de conjunt no té model. La unicitat es conserva a
+    # les dues bandes — `garment_set` és OneToOne com ho és `model` — perquè la decisió 2 diu
+    # SET = 1 mèrit, i una FK plana deixaria escriure'n tres.
     model = models.OneToOneField(
-        'models_app.Model', on_delete=models.CASCADE, related_name='consumption_record'
+        'models_app.Model', on_delete=models.CASCADE, related_name='consumption_record',
+        null=True, blank=True,
+    )
+    garment_set = models.OneToOneField(
+        'models_app.GarmentSet', on_delete=models.CASCADE, related_name='consumption_record',
+        null=True, blank=True,
     )
     code_snapshot = models.CharField(max_length=40)            # snapshot de codi_intern
     name_snapshot = models.CharField(max_length=200, blank=True, default='')  # snapshot de nom_prenda
@@ -877,6 +892,15 @@ class ConsumptionRecord(models.Model):
 
     class Meta:
         ordering = ['-merited_at']
+        constraints = [
+            models.CheckConstraint(
+                name='consumptionrecord_model_xor_set',
+                condition=(
+                    models.Q(model__isnull=False, garment_set__isnull=True) |
+                    models.Q(model__isnull=True, garment_set__isnull=False)
+                ),
+            ),
+        ]
 
     def __str__(self):
         return f'{self.code_snapshot} · {self.period}'
