@@ -4058,5 +4058,13 @@
     "log_auto_guard": "auto · guard 30 min",
     "log_auto_cron": "auto · servidor",
     "log_auto_exclusio": "auto · has abierto otra"
+  },
+  "federacio": {
+    "maduresa_label": "Madurez en el estudio",
+    "maduresa_badge": "{{done}}/{{total}} tareas · {{fase}}",
+    "maduresa_badge_sense_tasques": "Sin tareas · {{fase}}",
+    "maduresa_hint": "Lo que el estudio publica sobre esta pieza. Actualizado: {{at}}",
+    "encarrec_client": "lo manda el cliente",
+    "encarrec_client_hint": "La prioridad y la fecha objetivo las fija la marca y se escriben solas: si las cambias aquí, la próxima publicación de la marca las volverá a poner."
   }
 }

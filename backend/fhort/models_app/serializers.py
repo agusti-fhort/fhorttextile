@@ -140,6 +140,12 @@ class ModelListSerializer(serializers.ModelSerializer):
             # P7 — el RECURS assignat (codi nu del Studio, '' = cap). La llista del Brand
             # n'ha de poder pintar una columna sense demanar el detall model a model.
             'studio_assignat',
+            # RETORN-2 — la MADURESA que l'altra casa publica sobre aquesta peça. Va a la
+            # LLISTA i no només al detall: qui mira 200 files vol veure d'un cop quines
+            # avancen i quines no, i entrar model a model per saber-ho no és una llista.
+            # Read-only per naturalesa (l'únic escriptor és `federation_service.sync_estat`);
+            # aquest serializer no desa res.
+            'federacio_estat',
             'created_at',
             'garment_type',
             'garment_type_item_nom',
@@ -304,7 +310,12 @@ class ModelDetailSerializer(serializers.ModelSerializer):
         # 'fields = __all__' already includes the new fields origen_patro, versio,
         # garment_group. The *_nom variants are only exposed read-only.
         fields = '__all__'
-        read_only_fields = ('codi_intern', 'data_entrada', 'created_at', 'created_by')
+        # RETORN-2 — `federacio_estat` és una FINESTRA a l'altra casa, no un camp d'aquesta:
+        # `fields='__all__'` l'hauria fet escrivible pel PATCH genèric i qualsevol client
+        # hauria pogut escriure-hi una maduresa inventada que la UI pinta com si vingués de
+        # l'estudi. L'únic escriptor legítim és `federation_service.sync_estat`.
+        read_only_fields = ('codi_intern', 'data_entrada', 'created_at', 'created_by',
+                            'federacio_estat')
 
 
 
