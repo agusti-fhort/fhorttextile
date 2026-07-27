@@ -308,3 +308,66 @@ def log_measurement_change(sender, instance, created, raw=False, **kwargs):
         motiu=motiu,
         fora_de_tolerancia=fora_de_tolerancia,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RETORN-2 · el disparador MARCA → ESTUDI (prioritat i data_objectiu)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# PER QUÈ UN SIGNAL I NO EL SERIALIZER. `prioritat` i `data_objectiu` no tenen un punt únic
+# d'escriptura: hi arriben pel PATCH genèric de `ModelViewSet` (`ModelDetailSerializer` amb
+# `fields='__all__'`), pel wizard de creació (`models_app/views.py:840,917`) i per qualsevol
+# rutina que desi el model. Enganxar el sync al serializer cobriria una porta i deixaria les
+# altres callades — exactament la forma de divergència que el docstring de `federation_service`
+# descriu per a les dues boques del traspàs. El `pre_save`/`post_save` és l'ÚNIC lloc pel qual
+# passen totes.
+#
+# LÍMIT DECLARAT (no és un forat, és la forma dels signals): un `queryset.update()` no dispara
+# senyals i, per tant, no sincronitza. Avui cap escriptor de `prioritat`/`data_objectiu` ho fa
+# per aquesta via; si algun dia n'hi ha un, ha de cridar `sync_estat` ell mateix.
+
+#: Els dos camps que la MARCA mana i que viatgen a camps reals del bessó de l'estudi.
+_CAMPS_QUE_MANA_LA_MARCA = ('prioritat', 'data_objectiu')
+
+
+@receiver(pre_save)
+def _snapshot_encarrec(sender, instance, **kwargs):
+    """Desa els valors ANTERIORS de l'encàrrec per poder comparar-los al post_save.
+
+    Només per a models JA assignats a un estudi: sense assignació no hi ha bessó a qui
+    parlar i la consulta extra no la paga ningú.
+    """
+    try:
+        Model = _get_model_class()
+    except Exception:
+        return
+    if sender is not Model or not instance.pk or not getattr(instance, 'studio_assignat', ''):
+        return
+    anterior = (Model.objects.filter(pk=instance.pk)
+                .values(*_CAMPS_QUE_MANA_LA_MARCA).first())
+    instance._encarrec_anterior = anterior
+
+
+@receiver(post_save)
+def sync_encarrec_a_l_estudi(sender, instance, **kwargs):
+    """En canviar prioritat o data_objectiu a la MARCA, escriu-les al bessó de l'ESTUDI.
+
+    La marca MANA en aquests dos camps (decisió del Patró C): no es comparen amb el que hi
+    hagi a l'altra banda ni es negocia res — s'hi escriuen. El sync és no-fatal per construcció
+    (`sync_estat_segur`): desar un model no pot dependre de si el pont està obert.
+    """
+    try:
+        Model = _get_model_class()
+    except Exception:
+        return
+    if sender is not Model or not getattr(instance, 'studio_assignat', ''):
+        return
+
+    anterior = getattr(instance, '_encarrec_anterior', None)
+    instance._encarrec_anterior = None
+    if anterior is not None and all(
+            anterior.get(c) == getattr(instance, c, None) for c in _CAMPS_QUE_MANA_LA_MARCA):
+        return   # res de l'encàrrec ha canviat: no es molesta l'altra casa
+
+    from fhort.tenants.federation_service import SENTIT_PRIORITAT, sync_estat_segur
+    sync_estat_segur(instance, SENTIT_PRIORITAT)
