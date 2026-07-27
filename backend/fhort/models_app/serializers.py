@@ -228,22 +228,37 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     # precisament el camí que ningú no ha dissenyat.
     garment_set = GarmentSetMiniSerializer(read_only=True)
 
+    # F1 — FALLBACK als camps PROPIS del model. Aquests tres `_nom` alimenten la línia
+    # "TARGET | FIT TYPE | CONSTRUCTION" de la capçalera de la fitxa
+    # (TechSheetEditor.buildMasterHeaderPrimitives, caixa 3). Fins ara sortien de la cascada
+    # del GradingRuleSet i prou: un model amb graduació RESIDENT (ModelGradingRule) i
+    # `grading_rule_set=NULL` —el cas normal després d'un import— imprimia la capçalera BUIDA
+    # tot i tenir `target`/`fit_type`/`construction` poblats a la seva pròpia fila.
+    #
+    # Precedència: mana el ruleset quan n'hi ha (porta els noms CANÒNICS del catàleg, en
+    # anglès i possiblement multi-target); si no, el camp propi TAL QUAL. No s'inventa res:
+    # si el model tampoc no en té, segueix sent None i la capçalera calla.
     def get_grading_target_nom(self, obj):
         rs = obj.grading_rule_set if obj.grading_rule_set_id else None
-        if not rs:
-            return None
-        noms = [t.nom_en for t in rs.targets.all()]
-        if noms:
-            return ' / '.join(noms)
-        return rs.target.nom_en if rs.target_id else None
+        if rs:
+            noms = [t.nom_en for t in rs.targets.all()]
+            if noms:
+                return ' / '.join(noms)
+            if rs.target_id:
+                return rs.target.nom_en
+        return (obj.target or '').strip() or None
 
     def get_grading_fit_nom(self, obj):
         rs = obj.grading_rule_set if obj.grading_rule_set_id else None
-        return rs.fit_type.nom_en if rs and rs.fit_type_id else None
+        if rs and rs.fit_type_id:
+            return rs.fit_type.nom_en
+        return (obj.fit_type or '').strip() or None
 
     def get_grading_construction_nom(self, obj):
         rs = obj.grading_rule_set if obj.grading_rule_set_id else None
-        return rs.construction.nom_en if rs and rs.construction_id else None
+        if rs and rs.construction_id:
+            return rs.construction.nom_en
+        return (obj.construction or '').strip() or None
 
     def get_customer_logo(self, obj):
         if obj.customer_id and obj.customer.logo:
