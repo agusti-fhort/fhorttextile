@@ -111,6 +111,18 @@ def llegeix_models_del_brand(brand_schema, studio_codi, limit=None, codis=None):
                 'set_nom_comercial': (m.garment_set.nom_comercial if m.garment_set_id else None),
                 'set_num_pieces': m.garment_set.num_pieces if m.garment_set_id else None,
                 'piece_number': m.piece_number,
+                # RETORN-0 (2026-07-27) — els camps de l'ENCÀRREC que faltaven a l'anada. Cap
+                # d'ells és feina: són el que la marca DEMANA (què és la peça, per a quan la
+                # vol i amb quina urgència). Sense ells el Studio rebia una identitat muda i
+                # havia de tornar a preguntar per correu allò que la marca ja tenia escrit.
+                # Tots són literals al model (CharField/TextField/Date/PositiveSmallInteger):
+                # cap FK, cap choices per-tenant → viatgen tal qual, sense clau natural.
+                'collection': m.collection,
+                'descripcio': m.descripcio,
+                'prioritat': m.prioritat,
+                'data_objectiu': m.data_objectiu,
+                'target': m.target,
+                'construction': m.construction,
             })
     return total_brand, n_assignats, rows
 
@@ -118,9 +130,12 @@ def llegeix_models_del_brand(brand_schema, studio_codi, limit=None, codis=None):
 def instancia_al_studio(studio_schema, brand_codi, rows, commit):
     """Crea al Studio els models llegits, com a EXTERN. Idempotent per `codi_intern`.
 
-    L'EXTERN NEIX AMB IDENTITAT I CONFIGURACIÓ, MAI AMB FEINA: viatgen codi, nom, any,
-    temporada, sequencial i els camps de CONFIG_KEYS resolts per clau natural. No viatgen
-    mesures, regles, fitxes, fittings ni tasques — la feina es fa al Studio i neix a zero.
+    L'EXTERN NEIX AMB IDENTITAT, CONFIGURACIÓ I ENCÀRREC, MAI AMB FEINA: viatgen codi, nom,
+    any, temporada, sequencial, els camps de CONFIG_KEYS resolts per clau natural i els camps
+    de l'encàrrec (collection, descripcio, target, construction, prioritat, data_objectiu). No
+    viatgen mesures, regles, fitxes, fittings ni tasques — la feina es fa al Studio i neix a
+    zero. La frontera no és "poques dades": és FEINA vs ENCÀRREC. El que la marca demana és
+    seu i ha d'arribar; el que el Studio fa és del Studio.
 
     `Model.objects.create()` i NO `bulk_create`: els signals s'han de disparar (la SizeFitting
     buida, el watchpoint). Un bulk_create seria més ràpid i deixaria els models a mitges.
@@ -204,6 +219,15 @@ def instancia_al_studio(studio_schema, brand_codi, rows, commit):
                         grading_rule_set=grs,
                         garment_set=garment_set,
                         piece_number=r.get('piece_number'),
+                        # RETORN-0 — l'encàrrec (vegeu `llegeix_models_del_brand`). `prioritat`
+                        # cau al default del model (3) si el Brand la té a NULL: la columna és
+                        # NOT NULL i un `None` explícit petaria l'INSERT.
+                        collection=r.get('collection') or '',
+                        descripcio=r.get('descripcio'),
+                        prioritat=r.get('prioritat') if r.get('prioritat') is not None else 3,
+                        data_objectiu=r.get('data_objectiu'),
+                        target=r.get('target'),
+                        construction=r.get('construction'),
                     )
                 creats.append(r['codi_intern'])
 
