@@ -533,12 +533,18 @@ function objectBounds(obj) {
 // El backend (ftt-documents/) serveix document.json (v-ftt) + un mapa d'assets {nom→URL}.
 // L'editor pinta el format v2 (clau `pages`), on image.src ha de ser una URL carregable;
 // per desar es torna a 'assets/<nom>'. Anàleg JS de services_ftt.document_to_v2/v2_to_document.
+// F4 — `format` OPCIONAL per pàgina. Absent = hereta el `pageFormat` del document, que és el
+// que diuen TOTS els documents existents. La clau no s'escriu mai quan no hi és: un document
+// vell ha de sobreviure el round-trip idèntic, i un `format: undefined` a cada pàgina ja no
+// ho seria. Anàleg JS de services_ftt._amb_format.
+const ambFormat = (origen, sortida) => (origen?.format ? { ...sortida, format: origen.format } : sortida)
+
 export function documentToV2(documentJson, assets = {}) {
   const urlOf = (name) => assets[name] || ('assets/' + name)
   return {
     version: 2,
     pageFormat: documentJson?.pageFormat || 'A4L',
-    pages: (documentJson?.pages || []).map(p => ({
+    pages: (documentJson?.pages || []).map(p => ambFormat(p, {
       id: p.id,
       objects: (p.objects || []).map(o => mapObjectTree(o, obj => (
         typeof obj.src === 'string' && obj.src.startsWith('assets/')
@@ -558,7 +564,7 @@ export function v2ToDocument(v2Pages, pageFormat, metadata = {}, urlToName = {})
     ftt_schema: 1,
     metadata: metadata || {},
     pageFormat: pageFormat || 'A4L',
-    pages: (v2Pages || []).map(p => ({
+    pages: (v2Pages || []).map(p => ambFormat(p, {
       id: p.id,
       objects: (p.objects || []).map(o => mapObjectTree(o, obj => (
         typeof obj.src === 'string' && urlToName[obj.src]
@@ -1727,7 +1733,7 @@ export async function renderPageToDataURL(page, pixelRatio, ctx) {
 // Serialitza pages per a desar: els data_block graded_table NO desen el dataURL
 // (es re-genera des de size_fitting_id en obrir); la resta es desa tal qual.
 export function serializePages(pages) {
-  return pages.map(p => ({
+  return pages.map(p => ambFormat(p, {
     id: p.id,
     // F3: les cotes PROPOSADES per la IA (iaProposada) són NOMÉS pantalla fins a acceptar-les;
     // no sobreviuen la sessió (decisió de codi mínim) → no entren al .ftt.

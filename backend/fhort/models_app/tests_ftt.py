@@ -13,6 +13,7 @@ from .services_ftt import (
     FTT_MAGIC,
     FTT_SCHEMA_VERSION,
     document_to_v2,
+    extract_document_assets,
     pack,
     unpack,
     v2_to_document,
@@ -433,3 +434,61 @@ class FttUnfreezePathPieceTest(SimpleTestCase):
         net, _, report = unfreeze_document(doc, {})
         self.assertEqual(report['peces_despenjades'], 0)
         self.assertNotIn('pattern_file_id', next(_tots_els_objectes(net)))
+
+
+class FttFormatPerPaginaTest(SimpleTestCase):
+    """F4 — `format` OPCIONAL per pàgina, i la retrocompatibilitat que el sosté.
+
+    L'esquema .ftt guanya un `format` per pàgina ('A4L'|'A4P'|'A3L'|'A3P'). L'ABSÈNCIA de la
+    clau vol dir "hereta el `pageFormat` del document" — que és el que diuen TOTS els
+    documents que ja existeixen. La condició innegociable és que un document vell surti del
+    round-trip idèntic: si aquestes funcions hi afegissin `format: null` a cada pàgina,
+    l'esquema hauria canviat per a tothom i els documents existents ja no serien els mateixos
+    bytes.
+    """
+
+    def test_un_document_VELL_torna_identic(self):
+        """Cap clau nova a les pàgines que no en portaven."""
+        doc = {
+            'ftt_schema': 1, 'metadata': {}, 'pageFormat': 'A4L',
+            'pages': [{'id': 'p1', 'objects': []}, {'id': 'p2', 'objects': []}],
+        }
+        v2 = document_to_v2(doc)
+        for pagina in v2['pages']:
+            self.assertNotIn('format', pagina)
+        tornat, _ = v2_to_document(v2)
+        for pagina in tornat['pages']:
+            self.assertNotIn('format', pagina)
+        self.assertEqual(tornat['pages'], doc['pages'])
+
+    def test_el_format_de_pagina_sobreviu_al_round_trip(self):
+        doc = {
+            'ftt_schema': 1, 'metadata': {}, 'pageFormat': 'A4L',
+            'pages': [
+                {'id': 'p1', 'objects': []},                    # hereta A4L
+                {'id': 'p2', 'objects': [], 'format': 'A4P'},   # vertical
+                {'id': 'p3', 'objects': [], 'format': 'A3L'},
+            ],
+        }
+        v2 = document_to_v2(doc)
+        self.assertEqual([p.get('format') for p in v2['pages']], [None, 'A4P', 'A3L'])
+        tornat, _ = v2_to_document(v2)
+        self.assertEqual([p.get('format') for p in tornat['pages']], [None, 'A4P', 'A3L'])
+
+    def test_el_format_del_document_segueix_manant_com_a_herencia(self):
+        """El `pageFormat` del document no desapareix: és el valor per defecte de les
+        pàgines que no en declaren cap."""
+        doc = {'ftt_schema': 1, 'metadata': {}, 'pageFormat': 'A3P',
+               'pages': [{'id': 'p1', 'objects': []}]}
+        v2 = document_to_v2(doc)
+        self.assertEqual(v2['pageFormat'], 'A3P')
+        self.assertNotIn('format', v2['pages'][0])
+
+    def test_extract_document_assets_ja_preservava_les_claus_de_pagina(self):
+        """Aquesta funció copia la pàgina sencera (dict(page)); el test hi és perquè segueixi
+        fent-ho el dia que algú la reescrigui amb un literal."""
+        doc = {'ftt_schema': 1, 'metadata': {}, 'pageFormat': 'A4L',
+               'pages': [{'id': 'p1', 'objects': [], 'format': 'A4P', 'guides': [{'pos': 5}]}]}
+        net, _ = extract_document_assets(doc)
+        self.assertEqual(net['pages'][0]['format'], 'A4P')
+        self.assertEqual(net['pages'][0]['guides'], [{'pos': 5}])
