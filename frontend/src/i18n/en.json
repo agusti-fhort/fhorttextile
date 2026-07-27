@@ -2595,6 +2595,8 @@
     "tool_select": "Select",
     "tool_image": "Image",
     "page_format": "Page format",
+    "page_format_page": "Format of this page",
+    "page_format_all": "To whole doc.",
     "layers": "Layers",
     "dock_layers": "Layers",
     "dock_fields": "Fields",

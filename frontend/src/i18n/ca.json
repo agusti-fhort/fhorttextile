@@ -2595,6 +2595,8 @@
     "tool_select": "Seleccionar",
     "tool_image": "Imatge",
     "page_format": "Format de pàgina",
+    "page_format_page": "Format d'aquesta pàgina",
+    "page_format_all": "A tot el doc.",
     "layers": "Capes",
     "dock_layers": "Capes",
     "dock_fields": "Camps",

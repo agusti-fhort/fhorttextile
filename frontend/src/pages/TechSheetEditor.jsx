@@ -2385,7 +2385,18 @@ export default function TechSheetEditor() {
   const snapCand = useRef(null)   // S2: candidats de magnetisme calculats a l'inici del drag (no per frame)
 
   const locked = lockState === 'owned'
-  const fmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.A4L
+  // F4 — el format és PER PÀGINA, amb el del document com a herència. `fmtDe` és la font
+  // única que resol quin format toca a una pàgina; qualsevol lloc que necessiti mides ha de
+  // passar per aquí i no per `pageFormat` directament.
+  const fmtDe = useCallback(
+    (pagina) => PAGE_FORMATS[pagina?.format || pageFormat] || PAGE_FORMATS.A4L,
+    [pageFormat])
+  // El canvas viu pinta UNA pàgina (la current): les seves mides són les d'AQUELLA pàgina.
+  // Els ~25 usos de pageW/pageH que hi pengen (stage, marc, guies, magnetisme, PaperFlat,
+  // zoom-to-fit) queden correctes per construcció. Els únics que no en depenen són els dos
+  // BUCLES sobre totes les pàgines —miniatures i export—, que resolen el format pàgina a
+  // pàgina i estan marcats com a tals.
+  const fmt = fmtDe(pages[currentPage])
   const pageW = Math.round(fmt.w * MM_TO_PX)
   const pageH = Math.round(fmt.h * MM_TO_PX)
   const customerLogoUrl = model?.customer_logo || null   // TS-4c
@@ -2505,7 +2516,10 @@ export default function TechSheetEditor() {
   useEffect(() => {
     const t = setTimeout(syncRuler, 0)   // post-layout (zoom/format canvien la mida del wrap)
     return () => clearTimeout(t)
-  }, [zoom, pageFormat, pages.length, syncRuler])
+    // F4 — depèn de pageW/pageH i no de `pageFormat`: amb el format per pàgina, la mida del
+    // wrap també canvia en passar a una pàgina d'un altre format sense que `pageFormat` es
+    // mogui. Les regles han de seguir la mida REAL, que és el que aquestes dues diuen.
+  }, [zoom, pageW, pageH, pages.length, syncRuler])
   useEffect(() => {
     window.addEventListener('resize', syncRuler)
     return () => window.removeEventListener('resize', syncRuler)
@@ -3240,7 +3254,13 @@ export default function TechSheetEditor() {
       try {
         const thumbs = []
         for (let pi = 0; pi < pages.length; pi++) {
-          const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
+          // F4 · BUCLE SOBRE TOTES LES PÀGINES: les mides es resolen pàgina a pàgina, no
+          // des del pageW/pageH del canvas (que és el de la pàgina activa). Amb un document
+          // mixt, les miniatures han de sortir cadascuna amb la seva proporció.
+          const f = fmtDe(pages[pi])
+          const ctx = { tableData, modelData: model, versio: sheet?.versio,
+            pageW: Math.round(f.w * MM_TO_PX), pageH: Math.round(f.h * MM_TO_PX),
+            customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
           thumbs.push(await renderPageToDataURL(pages[pi], 0.18, ctx))
         }
         setThumbnails(thumbs)
@@ -4651,7 +4671,15 @@ export default function TechSheetEditor() {
   const addPage = () => {
     if (!locked) return
     const hdr = masterHeaderInstance()
-    setPages(ps => [...ps, { id: uid(), objects: hdr ? [hdr] : [] }])
+    // F4 — la pàgina nova neix amb el format de la que s'està mirant, no amb el del
+    // document: qui acaba de posar una pàgina en vertical i n'afegeix una altra vol
+    // continuar en vertical. Si coincideix amb l'herència no s'escriu la clau (una fitxa
+    // que mai ha tocat formats mixtos no en guanya cap).
+    const actual = pages[currentPage]?.format
+    setPages(ps => [...ps, {
+      id: uid(), objects: hdr ? [hdr] : [],
+      ...(actual && actual !== pageFormat ? { format: actual } : {}),
+    }])
     setCurrentPage(pages.length)
   }
   // B3 — "Delete on this page": treu la instància de la capçalera mestra NOMÉS d'aquesta
@@ -4659,6 +4687,26 @@ export default function TechSheetEditor() {
   const deleteHeaderOnPage = (pageIdx) => {
     if (!locked) return
     updatePageObjects(pageIdx, objs => objs.filter(o => !(o.type === 'data_block' && o.kind === 'header')))
+  }
+  // F4 — format d'UNA pàgina. S'escriu a la pàgina; el `pageFormat` del document no es toca
+  // (segueix sent l'herència de les que no en declaren cap). Si el valor triat coincideix amb
+  // l'herència, la clau s'ESBORRA en lloc d'escriure-s'hi igual: així un document que no ha
+  // fet servir formats mixtos no en guanya cap i segueix serialitzant-se com sempre.
+  const setPageFormatDePagina = (index, valor) => {
+    if (!locked) return
+    setPages(ps => ps.map((p, i) => {
+      if (i !== index) return p
+      const { format: _fora, ...resta } = p
+      return valor === pageFormat ? resta : { ...resta, format: valor }
+    }))
+  }
+  // "Aplicar a tot el document": el format de la pàgina activa passa a ser el del DOCUMENT i
+  // s'esborren tots els formats per pàgina. Un sol gest, i el document torna a ser homogeni.
+  const aplicarFormatATotElDocument = () => {
+    if (!locked) return
+    const valor = pages[currentPage]?.format || pageFormat
+    setPageFormat(valor)
+    setPages(ps => ps.map(({ format: _fora, ...resta }) => resta))
   }
   const removePage = (index) => {
     if (!locked || pages.length <= 1) return
@@ -4673,9 +4721,16 @@ export default function TechSheetEditor() {
     setExporting(true)
     try {
       const pdf = await PDFDocument.create()
-      const [pdfW, pdfH] = fmt.pdf
       for (let pi = 0; pi < pages.length; pi++) {
-        const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
+        // F4 · BUCLE SOBRE TOTES LES PÀGINES: la mida del full entra DINS del bucle. Abans
+        // es prenia un sol `fmt.pdf` de fora i totes les pàgines sortien amb la mida del
+        // document; amb formats mixtos, una A4 vertical hauria sortit estirada dins d'un
+        // full apaïsat.
+        const f = fmtDe(pages[pi])
+        const [pdfW, pdfH] = f.pdf
+        const ctx = { tableData, modelData: model, versio: sheet?.versio,
+          pageW: Math.round(f.w * MM_TO_PX), pageH: Math.round(f.h * MM_TO_PX),
+          customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
         const dataUrl = await renderPageToDataURL(pages[pi], 3.5, ctx)
         const png = await pdf.embedPng(dataUrl)
         const page = pdf.addPage([pdfW, pdfH])
@@ -5584,9 +5639,19 @@ export default function TechSheetEditor() {
       return [
         ribbonTool({ key: 'add-page', icon: 'ti-file-plus', label: t('tech_sheet.add_page'), onClick: addPage }),
         ribbonTool({ key: 'delete-page', icon: 'ti-file-minus', label: t('tech_sheet.delete_page'), onClick: () => removePage(currentPage), disabled: pages.length <= 1 }),
-        <select key="format" value={pageFormat} onChange={e => setPageFormat(e.target.value)} title={t('tech_sheet.page_format')} style={ribbonSelectStyle}>
+        // F4 — el selector actua sobre LA PÀGINA ACTIVA. El format del document segueix
+        // existint com a HERÈNCIA (el que agafa una pàgina que no en declara cap); el botó
+        // del costat és el que el mou i, alhora, neteja els formats per pàgina — que és el
+        // que vol dir "tot el document en aquest format".
+        <select key="format" value={pages[currentPage]?.format || pageFormat}
+          onChange={e => setPageFormatDePagina(currentPage, e.target.value)}
+          title={t('tech_sheet.page_format_page')} style={ribbonSelectStyle}>
           {Object.entries(PAGE_FORMATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>,
+        ribbonTool({
+          key: 'format-all', icon: 'ti-copy', label: t('tech_sheet.page_format_all'),
+          onClick: aplicarFormatATotElDocument,
+        }),
         ribbonTool({ key: 'zoom-out', icon: 'ti-minus', label: t('tech_sheet.zoom_out'), onClick: () => setZoomClamped(z => z - ZOOM_STEP) }),
         ribbonTool({ key: 'zoom-in', icon: 'ti-plus', label: t('tech_sheet.zoom_in'), onClick: () => setZoomClamped(z => z + ZOOM_STEP) }),
         ribbonTool({ key: 'zoom-100', icon: 'ti-zoom-reset', label: '100%', onClick: () => setZoomClamped(1), active: zoom === 1 }),

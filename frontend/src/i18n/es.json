@@ -2595,6 +2595,8 @@
     "tool_select": "Seleccionar",
     "tool_image": "Imagen",
     "page_format": "Formato de página",
+    "page_format_page": "Formato de esta página",
+    "page_format_all": "A todo el doc.",
     "layers": "Capas",
     "dock_layers": "Capas",
     "dock_fields": "Campos",
