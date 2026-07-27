@@ -29,7 +29,7 @@ from fhort.pom.models import (
     ItemBaseMeasurement, SizeSystem, SizeDefinition, GradingRuleSet, RuleSetScopeNode,
     GradingRule, SizingProfile, Target, FitType, ConstructionType, POMCategory,
 )
-from fhort.tasks.models import Customer, GarmentTypeItem
+from fhort.tasks.models import Customer, GarmentTypeItem, GarmentTypeItemPart
 from fhort.models_app.ftt_models import DocumentTemplate
 
 CUSTOMER_CODI = 'LOS'
@@ -302,7 +302,21 @@ class Command(BaseCommand):
                 self._warn(f"item {it['garment_type']}/{it['code']}: GarmentType absent → saltat")
                 continue
             self._upsert(GarmentTypeItem, {'garment_type': gt, 'code': it['code']},
-                         {'complexity_order': it['complexity_order']}, s)
+                         {'complexity_order': it['complexity_order'],
+                          # SET-1 — `.get()` amb defecte: un paquet exportat abans d'aquest
+                          # sprint no porta la clau, i llavors el defecte del model (NO SET) és
+                          # la resposta correcta.
+                          'is_set': it.get('is_set', False)}, s)
+        # SET-1 — composició dels conjunts, DESPRÉS de tots els items (les dues claus són
+        # items). Reemplaçament per clau natural (set_item, part_item), com la resta d'upserts.
+        for pt in cat.get('item_parts', []):
+            si = self._resolve_gti(pt['set_item'])
+            pi = self._resolve_gti(pt['part_item'])
+            if not si or not pi:
+                self._warn(f"item_part {pt['set_item']}→{pt['part_item']}: no resolt → saltat")
+                continue
+            self._upsert(GarmentTypeItemPart, {'set_item': si, 'part_item': pi},
+                         {'ordre': pt['ordre'], 'nom_peca': pt.get('nom_peca', '')}, s)
         return s
 
     def _load_size_systems(self):

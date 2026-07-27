@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import (TaskType, ModelTask, Supplier, Production,
-                     GarmentTypeItem, TaskTimeEstimate, Customer)
+                     GarmentTypeItem, GarmentTypeItemPart, TaskTimeEstimate, Customer)
 from .services_c import rectification_count
 
 
@@ -130,6 +130,19 @@ class ProductionSerializer(serializers.ModelSerializer):
         read_only_fields = ['requested_at', 'delivered_at', 'status', 'requested_by']
 
 
+class GarmentTypeItemPartSerializer(serializers.ModelSerializer):
+    """Composició d'un item-conjunt (SET-1). READ-ONLY dins de GarmentTypeItemSerializer: el
+    PATCH genèric del ModelViewSet no escriu relacions inverses, i escriure-les per aquí
+    obligaria a inventar-se una semàntica de merge parcial. L'escriptura té acció pròpia
+    (`PUT /garment-type-items/<id>/parts/`), que és REEMPLAÇAMENT declarat de la llista."""
+    part_item_code = serializers.CharField(source='part_item.code', read_only=True)
+    part_item_name = serializers.CharField(source='part_item.name', read_only=True)
+
+    class Meta:
+        model = GarmentTypeItemPart
+        fields = ['id', 'part_item', 'part_item_code', 'part_item_name', 'ordre', 'nom_peca']
+
+
 class GarmentTypeItemSerializer(serializers.ModelSerializer):
     # Sprint Llibreria d'Items (B3b): camps de completesa READ-ONLY per a la graella de cards de
     # Garment Types (nom del ruleset, etiqueta de la talla base, compte de POMs). Additius; no
@@ -141,12 +154,17 @@ class GarmentTypeItemSerializer(serializers.ModelSerializer):
     # instància desada, que no ve del queryset i no porta les anotacions.
     poms_count = serializers.IntegerField(read_only=True, default=0)
     fitxers_count = serializers.IntegerField(read_only=True, default=0)
+    # SET-1 — la composició, niuada en LECTURA. L'escriptura va per l'acció `parts/` (vegeu
+    # GarmentTypeItemPartSerializer). `is_set` sí és escrivible pel PATCH genèric: és un camp
+    # concret de la taula, i és la declaració que la decisió 3 posa a mans de l'autoria.
+    parts = GarmentTypeItemPartSerializer(many=True, read_only=True)
 
     class Meta:
         model = GarmentTypeItem
         # Sprint Llibreria d'Items (B3a): exposa el context de grading de l'Item (FK ruleset) i
         # la talla base, escrivibles per la pàgina d'autoria (Fase B). Tots dos nullable.
         fields = ['id', 'garment_type', 'code', 'name', 'complexity_order', 'active',
+                  'is_set', 'parts',
                   'grading_rule_set', 'base_size_definition',
                   'grading_rule_set_nom', 'base_size_label', 'poms_count', 'fitxers_count']
 
