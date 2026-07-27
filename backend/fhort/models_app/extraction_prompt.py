@@ -129,6 +129,11 @@ IMPORTANT GARMENT TYPE DISAMBIGUATION:
 - description: measurement name as written
 - values: {size_label: numeric_value_cm}
 - tol_minus, tol_plus: tolerances if present
+- section: OPTIONAL. Many sheets group the measurements under sub-headings that name a
+  part or a separate piece of the garment ("Bodice:", "Cord:", "KNICKERS", "TOP").
+  Those heading rows have NO client_code. Do NOT emit them as measurement rows; instead,
+  copy the heading text verbatim into "section" for every measurement row underneath it,
+  until the next heading. Use null when the sheet has no such headings.
 
 5. POM MAPPING — map each measurement to FHORT POM catalog:
 Upper body: Chest width(half)→POM-001, Waist width(half)→POM-003, Hip width(half)→POM-004,
@@ -203,6 +208,7 @@ RETURN ONLY VALID JSON — no markdown, no preamble, no explanation outside JSON
       "values": {"XXS": 30.5, "XS": 32.5, "S": 35.5, "M": 38.5, "L": 41.5, "XL": 44.5},
       "tol_minus": null,
       "tol_plus": null,
+      "section": "Bodice:",
       "pom_code": "POM-003",
       "pom_confidence": "HIGH",
       "pom_notes": "Waist width half measurement",

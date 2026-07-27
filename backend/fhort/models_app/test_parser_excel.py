@@ -168,6 +168,34 @@ class ParserFitxaRosaliaTest(SimpleTestCase):
         self.assertEqual(self.codis[0], 'A')
         self.assertEqual(self.codis[-1], 'LZ1')
 
+    def test_cada_pom_sap_de_quina_seccio_ve(self):
+        """F4 · el text de la secció es LLEGIA i es llençava; ara viatja amb cada POM.
+
+        Les quatre seccions reals d'aquest document, en ordre: 'Bodice:' (A, D, G1, F, FF),
+        'CF Sequins piece:' (U, U1), 'Chest piece:' (P, P1) i 'Cord:' (LZ, LZ1).
+        """
+        per_seccio = {}
+        for p in self.poms:
+            per_seccio.setdefault(p['seccio'], []).append(p['codi_fitxa'])
+        self.assertEqual(per_seccio, {
+            'Bodice:': ['A', 'D', 'G1', 'F', 'FF'],
+            'CF Sequins piece:': ['U', 'U1'],
+            'Chest piece:': ['P', 'P1'],
+            'Cord:': ['LZ', 'LZ1'],
+        })
+
+    def test_una_seccio_amb_valors_tambe_compta_com_a_seccio(self):
+        """'Chest piece:' (f23) porta zeros a les columnes de talla. El discriminant és la
+        DESCRIPCIÓ amb el codi buit, no l'absència de valors — si fos l'absència, P i P1
+        s'haurien quedat penjats de la secció anterior."""
+        p = next(p for p in self.poms if p['codi_fitxa'] == 'P')
+        self.assertEqual(p['seccio'], 'Chest piece:')
+
+    def test_la_fila_de_soroll_sense_text_no_canvia_la_seccio(self):
+        """f22 té valors i CAP text: no és una secció i no ha de trencar la vigent."""
+        u1 = next(p for p in self.poms if p['codi_fitxa'] == 'U1')
+        self.assertEqual(u1['seccio'], 'CF Sequins piece:')
+
     def test_salta_les_tres_seccions_i_la_fila_de_zeros_sense_codi(self):
         """Aquesta fitxa té TRES seccions ('Bodice:', 'CF Sequins piece:', 'Cord:') i, a més,
         una fila sense codi PERÒ AMB VALORS (f22) — que tampoc no és un POM."""
@@ -295,6 +323,10 @@ class TallaBaseDelModelAmbEtiquetaDiferentTest(SimpleTestCase):
 
     def test_les_talles_del_document_es_conserven_crues(self):
         self.assertEqual(self.talles, ['0M-1M', '1M-3M', '3M-6M', '6M-9M', '9M-12M'])
+
+    def test_no_inventa_seccio_quan_el_document_no_en_te(self):
+        """F4 · una fitxa sense capçaleres de secció ha de donar `seccio=None`, no ''."""
+        self.assertEqual([p['seccio'] for p in self.poms], [None, None, None])
 
     def test_el_document_segueix_manant_sobre_el_model(self):
         """Si el document declara `SAMPLE SIZE`, mana ell (contracte de D1c·6) — però

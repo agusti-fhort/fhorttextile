@@ -234,7 +234,7 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
     """Parse determinista d'una fitxa Excel de POMs (via ràpida del wizard).
 
     Retorna `(poms, talles, meta)`:
-      poms  = [{'codi_fitxa', 'descripcio', 'dim', 'values': {talla: float}, 'tol_*'}]
+      poms  = [{'codi_fitxa', 'descripcio', 'dim', 'values': {talla: float}, 'tol_*', 'seccio'}]
       talles = [etiquetes de talla, en ordre de columna]
       meta  = {'header', 'base_size', 'full', 'n_files_amb_codi', 'motiu'}
 
@@ -386,6 +386,12 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
                 return _num(row[ci]) if (ci is not None and ci < len(row)) else None
 
             poms = []
+            #: Secció vigent (F4). El text de les files de secció es LLEGIA i es llençava; ara
+            #: es recorda i cada POM se n'endú una còpia. La convenció d'arrel per peça
+            #: (01./02./03.) no es podia automatitzar sense això: no hi havia d'on treure la
+            #: peça (DIAGNOSI_MULTIPECA_DALIA · Q3, taula final §14).
+            #: Es reinicia a cada full: una secció no travessa pestanyes.
+            seccio_vigent = None
             for idx in range(header_idx + 1, len(rows)):
                 row = rows[idx]
                 if (idx + 1) in banner:
@@ -393,7 +399,15 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
                 codi = str(row[ci_codi]).strip() if (ci_codi < len(row)
                                                      and row[ci_codi] is not None) else ''
                 if not codi:
-                    continue                      # secció, capçalera-2, o fila buida
+                    # Codi buit: secció, capçalera-2 o fila buida. La distingeix la DESCRIPCIÓ,
+                    # no l'absència de valors: a la fitxa Rosalia la secció 'Chest piece:' (f23)
+                    # porta zeros a les columnes de talla i la fila de soroll f22 en porta
+                    # sense cap text. Amb text → és una secció; sense → segueix sent soroll.
+                    text_seccio = (str(row[ci_desc]).strip()
+                                   if (ci_desc < len(row) and row[ci_desc] is not None) else '')
+                    if text_seccio:
+                        seccio_vigent = text_seccio
+                    continue
                 if not _RE_CODI.match(codi):
                     break                         # rètol ('SKETCH WITH CODES') → fi de taula
                 desc = (str(row[ci_desc]).strip()
@@ -417,6 +431,10 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
                     'values': values,
                     'tol_minus': tm,
                     'tol_plus': tp,
+                    # F4 · secció d'origen. None quan el document no en té cap (la majoria de
+                    # fitxes d'una sola peça): és DADA, no comportament — ningú no hi decideix
+                    # res encara.
+                    'seccio': seccio_vigent,
                 })
 
             # ── 7. LA PORTA. ¿Podem demostrar que hem entès la taula? Files amb codi I valor a
@@ -1118,8 +1136,12 @@ def _match_rows(files, customer):
 
         **actiu ⇔ vincle FERM** (match per sobre del llindar i no compartit amb cap altra fila).
 
-    `files`: [{codi_fitxa, descripcio, values, tol_minus, tol_plus}].
+    `files`: [{codi_fitxa, descripcio, values, tol_minus, tol_plus, seccio}].
     Retorna (poms_extrets, stats) amb stats = {n_nomatch, n_low, n_many_to_one}.
+
+    `seccio` (F4) travessa TAL QUAL: aquesta funció aparella POMs, no interpreta el document.
+    Els dos camins d'extracció l'omplen (el parser llegint la fila de secció, la IA amb el camp
+    `section` de l'esquema) i el que arriba aquí ja és el text final.
     """
     rows = []
     n_nomatch = n_low = 0
@@ -1149,6 +1171,7 @@ def _match_rows(files, customer):
             'values': f.get('values') or {},
             'tol_minus': f.get('tol_minus'),
             'tol_plus': f.get('tol_plus'),
+            'seccio': f.get('seccio') or None,
             'actiu': bool(pm_efectiu),
             'ordre': i,
             'weak_suggestion': suggeriment.nom_client if suggeriment else None,
@@ -1519,6 +1542,10 @@ def import_session_extraccio_view(request, token):
                 # B2: tolerància del document (None si absent).
                 'tol_minus': normalitza_cm(msr.get('tol_minus')),
                 'tol_plus': normalitza_cm(msr.get('tol_plus')),
+                # F4 · secció d'origen. `section` és OPCIONAL a l'esquema del prompt: les
+                # fitxes d'una sola peça no en tenen, i una IA que no l'empleni no ha fallat.
+                'seccio': (str(msr.get('section')).strip() or None
+                           if msr.get('section') else None),
             }
             for msr in measurements
         ],
