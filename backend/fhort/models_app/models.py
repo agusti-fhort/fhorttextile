@@ -602,6 +602,12 @@ class BaseMeasurement(models.Model):
         # model B, que és una mentida d'auditoria. `COPIED` diu la veritat: el valor és cert
         # però la seva autoritat viu en un altre model.
         ('COPIED', 'Copiat d\'un altre model'),
+        # RETORN-1 (2026-07-27) — arribat per la FEDERACIÓ, de l'altra casa. No és 'COPIED'
+        # (que parla d'un altre MODEL d'aquesta mateixa casa) ni 'IMPORTED' (que parla d'una
+        # fitxa externa que algú ha llegit): és el mateix model, mesurat per l'altra banda del
+        # pont. La distinció importa el dia que algú pregunti «qui va mesurar això»: la
+        # resposta és «l'estudi», i cap dels altres valors ho diu.
+        ('FEDERAT', "Arribat de l'altra casa (federació)"),
     ]
 
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='base_measurements')
@@ -775,6 +781,9 @@ class ModelGradingRule(models.Model):
         ('CANONICAL', 'Derivat canònicament'),
         ('CLIENT_RUN', 'Derivat de run de client'),
         ('MANUAL', 'Introduït manualment'),
+        # RETORN-1 — mateixa raó que a BaseMeasurement: la regla resident ve de l'altra casa,
+        # i cap dels quatre valors anteriors ho sabia dir.
+        ('FEDERAT', "Arribat de l'altra casa (federació)"),
     ]
 
     model = models.ForeignKey(

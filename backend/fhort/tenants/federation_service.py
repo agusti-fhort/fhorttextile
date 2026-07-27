@@ -20,6 +20,7 @@ L'ERROR ÉS DE DOMINI, NO DE TRANSPORT: aquí es llança `FederacioError`, que n
 `CommandError` ni de codis HTTP. Cada boca el tradueix a la seva llengua.
 """
 import logging
+import os
 
 from django.db import connection, transaction
 from django.utils import timezone
@@ -491,3 +492,322 @@ def sync_estat_segur(model, sentit):
         logger.exception('federacio.sync_estat[%s] %s: excepció empassada al disparador',
                          sentit, getattr(model, 'codi_intern', '?'))
         return {'ok': False, 'motiu': 'excepcio', 'sentit': sentit}
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════
+# RETORN-1 · L'ENVIAMENT DE FEINA (acte humà, mai automàtic)
+# ═════════════════════════════════════════════════════════════════════════════════════════
+#
+# LA DECISIÓ DEL PATRÓ C: el canal de DADES és un ACTE HUMÀ. Algú de l'estudi mira la peça,
+# decideix que el que hi ha està prou madur per ensenyar-ho, i clica. No hi ha cap ganxo, cap
+# signal ni cap cron que ho dispari — i no n'hi ha d'haver: una taula de mides a mig fer
+# publicada sola a la casa del client és pitjor que no publicar-ne cap.
+#
+# ÉS EL MIRALL DE `traspassa`, DEL REVÉS. Allà la marca dona identitat i l'estudi la instancia;
+# aquí l'estudi dona la feina feta i la marca la rep. Les DUES CLAUS són les mateixes: el
+# `TenantLink` ACTIU autoritza el pont i el bessó per `codi_intern` autoritza la peça.
+#
+# SOBIRANIA DEL DESTÍ (patró `copiar_de_model_view`): la marca és sobirana del seu schema. Una
+# fila seva amb origen específic (MANUAL/FITTED/IMPORTED…) o amb valor ja posat NO es trepitja
+# MAI; només s'omple un TEMPLATE BUIT. El que no viatja no desapareix de l'informe: es compta.
+#
+# QUÈ NO VIATJA MAI, I PER QUÈ:
+#   · El `.ftt` viu (TECHSHEET) — decisió del Patró C, literal. El document editable és d'una
+#     sola casa; dues cadenes de versions amb dos `is_current` i dos locks que no es veuen és
+#     el risc R4 de la diagnosi, i aquí no s'obre.
+#   · Les TASQUES — decisió del Patró C, literal. Són el calaix B (local per actor): la marca
+#     no ha de tenir les tasques de l'estudi ni sabria què fer-ne.
+#   · El PATRÓ (DXF) — decisió d'aquest sprint. NO és perquè el DXF tingui dependències
+#     locals (no en té: són bytes autocontinguts), sinó perquè el patró JA TÉ LA SEVA PORTA:
+#     `patterns.ExportAcknowledgement` és una precondició DURA amb text literal acceptat i
+#     versió de grading segellada («entre el nostre motor i la taula de tall hi ha d'haver una
+#     persona que hagi dit sí»). Fer sortir el DXF per aquest botó genèric seria una SEGONA
+#     boca sobre la mateixa llei, que és exactament la divergència contra la qual avisa el
+#     docstring d'aquest mòdul. Si un dia el patró ha de federar-se, ha de passar per la seva
+#     porta, no per aquesta.
+#   · `GradedSpec` — es RECALCULA al destí. És sortida del motor, no dada: enviar-la seria
+#     enviar una fotografia d'un càlcul que la marca pot tornar a fer amb les regles que sí
+#     que viatgen.
+#   · Cap hora, cap tècnic, cap cost (doctrina de sempre).
+
+#: Els únics tipus de fitxer que travessen el pont. `EXPORT` és el PDF que ja està fet per
+#: ensenyar; els `SKETCH_*` són el dibuix de la peça. Tota la resta —TECHSHEET, PATRO, ESCALAT,
+#: MARCADA, RUL, DOCUMENT, ALTRES— es queda a casa.
+TIPUS_FEDERABLES = ('EXPORT', 'SKETCH_FLETXES', 'SKETCH_NET', 'SKETCH_SVG')
+
+#: Provinença de tot el que arriba per aquest camí (choice afegit al mateix sprint).
+ORIGEN_FEDERAT = 'FEDERAT'
+
+
+def _clau_natural_pom(pom):
+    """La clau amb què un POM es reconeix a l'altra casa: (codi del diccionari, codi de client).
+
+    `POMGlobal.codi` és el diccionari CANÒNIC i és la clau forta —és el mateix vocabulari a
+    totes les cases—; `POMMaster.codi_client` és la nomenclatura local i només serveix de
+    darrer recurs. Mateixa forma que CONFIG_KEYS (clau natural, mai pk), i deliberadament MÉS
+    ESTRICTA que `find_pom_master`: aquell matcher és per a fitxes de proveïdor, on cal
+    endevinar; aquí les dues cases parlen el mateix sistema i endevinar seria posar una mesura
+    sobre el POM equivocat sense que ningú se n'assabentés.
+    """
+    return ((pom.pom_global.codi if pom.pom_global_id else None), pom.codi_client)
+
+
+def _resol_pom_al_desti(clau, cache):
+    """Resol la clau natural contra el catàleg del destí. None = no aparellat (i no viatja)."""
+    if clau in cache:
+        return cache[clau]
+    from fhort.pom.models import POMMaster
+
+    global_codi, codi_client = clau
+    pom = None
+    if global_codi:
+        pom = POMMaster.objects.filter(pom_global__codi=global_codi, actiu=True).first()
+    if pom is None and codi_client:
+        pom = POMMaster.objects.filter(codi_client=codi_client, actiu=True).first()
+    cache[clau] = pom
+    return pom
+
+
+def _llegeix_patrimoni(model):
+    """Tot el que pot viatjar, com a DICTS TANCATS i BYTES ja llegits. Cap ORM en surt viu.
+
+    Els bytes es llegeixen AQUÍ i no al destí a posta: `FileField.name` és relatiu al TENANT
+    (memòria `ftt-media-namespace-tenant`), de manera que obrir el fitxer un cop ja som a
+    l'altre schema el buscaria al calaix equivocat.
+    """
+    from fhort.models_app.models import BaseMeasurement, ModelFitxer, ModelGradingRule
+
+    mesures = []
+    for bm in (BaseMeasurement.objects.filter(model=model, is_active=True)
+               .select_related('pom__pom_global').order_by('ordre', 'pom_id')):
+        mesures.append({
+            'clau': _clau_natural_pom(bm.pom),
+            'base_value_cm': bm.base_value_cm,
+            'is_key': bm.is_key,
+            'nom_fitxa': bm.nom_fitxa or '',
+            'tolerancia_minus': bm.tolerancia_minus,
+            'tolerancia_plus': bm.tolerancia_plus,
+            'ordre': bm.ordre,
+        })
+
+    regles = []
+    for r in (ModelGradingRule.objects.filter(model=model, actiu=True)
+              .select_related('pom__pom_global').order_by('pom_id')):
+        regles.append({
+            'clau': _clau_natural_pom(r.pom),
+            'logica': r.logica,
+            'increment': r.increment,
+            'valors_step': r.valors_step,
+            'increment_base': r.increment_base,
+            'increment_break': r.increment_break,
+            'talla_break_label': r.talla_break_label,
+            'talla_break_pos': r.talla_break_pos,
+        })
+
+    fitxers = []
+    for f in (ModelFitxer.objects.filter(model=model, tipus__in=TIPUS_FEDERABLES,
+                                         is_current=True)
+              .exclude(fitxer='').exclude(fitxer__isnull=True).order_by('tipus', 'id')):
+        try:
+            f.fitxer.open('rb')
+            contingut = f.fitxer.read()
+        except (OSError, ValueError) as e:
+            fitxers.append({'error': str(e), 'nom_fitxer': f.nom_fitxer, 'tipus': f.tipus})
+            continue
+        finally:
+            try:
+                f.fitxer.close()
+            except (OSError, ValueError):
+                pass
+        fitxers.append({'nom_fitxer': f.nom_fitxer, 'tipus': f.tipus,
+                        'checksum': f.checksum, 'bytes': contingut})
+
+    return {
+        'mesures': mesures,
+        'regles': regles,
+        'fitxers': fitxers,
+        'base_size_label': (model.base_size_label or '').strip(),
+    }
+
+
+def _escriu_a_la_marca(brand_schema, codi_intern, patrimoni):
+    """Escriu el patrimoni al bessó de la marca respectant-ne la sobirania. Retorna l'informe."""
+    from django.core.files.base import ContentFile
+
+    from fhort.models_app.models import (BaseMeasurement, Model, ModelFitxer, ModelGradingRule,
+                                         Watchpoint)
+    from fhort.models_app.services_fitxers import save_model_file
+
+    viatjat = {'mesures': 0, 'regles': 0, 'fitxers': 0, 'pertinences': 0}
+    saltat = {'mesures': 0, 'regles': 0, 'fitxers': 0}
+    no_aparellat, avisos = [], []
+    cache = {}
+
+    with schema_context(brand_schema):
+        twin = Model.objects.filter(codi_intern=codi_intern).first()
+        if twin is None:
+            raise FederacioError(
+                f"La marca no té cap model amb codi_intern='{codi_intern}'. Res a enviar: la "
+                f'peça encara no existeix a l\'altra banda.', 'besso_missing')
+
+        # GUARD DE TALLA (transposat de `copiar_de_model_view`): un valor està expressat EN UNA
+        # TALLA. Si les dues cases no parlen la mateixa talla base, viatja la PERTINENÇA del
+        # POM (fila TEMPLATE buida) i cap VALOR. Una mesura en una talla que no és la del model
+        # que la rep no és una dada imprecisa: és una dada falsa.
+        talla_origen = patrimoni['base_size_label']
+        talla_desti = (twin.base_size_label or '').strip()
+        talla_divergent = bool(talla_origen and talla_desti and talla_origen != talla_desti)
+        if talla_divergent:
+            avisos.append(
+                f'TALLES DIVERGENTS: l\'estudi mesura en «{talla_origen}» i la marca té la base '
+                f'a «{talla_desti}». No ha viatjat cap VALOR (sí la pertinença dels POMs).')
+        elif talla_origen and not talla_desti:
+            avisos.append(
+                f'La marca no té talla base declarada; els valors han viatjat assumint que '
+                f'parlen «{talla_origen}», que és el que diu l\'estudi.')
+
+        with transaction.atomic():
+            for row in patrimoni['mesures']:
+                pom = _resol_pom_al_desti(row['clau'], cache)
+                if pom is None:
+                    no_aparellat.append(row['clau'][0] or row['clau'][1])
+                    continue
+                te_valor = (not talla_divergent) and row['base_value_cm'] is not None
+                existent = BaseMeasurement.objects.filter(model=twin, pom=pom).first()
+
+                if existent is None:
+                    BaseMeasurement.objects.create(
+                        model=twin, pom=pom,
+                        base_value_cm=row['base_value_cm'] if te_valor else None,
+                        # `notes` NO viatja: és text lliure escrit sobre l'altra fila i portat
+                        # aquí seria una afirmació amb aparença d'auditoria (mateix criteri
+                        # que la còpia model→model).
+                        nom_fitxa=row['nom_fitxa'] if te_valor else '',
+                        tolerancia_minus=row['tolerancia_minus'] if te_valor else None,
+                        tolerancia_plus=row['tolerancia_plus'] if te_valor else None,
+                        origen=ORIGEN_FEDERAT if te_valor else 'TEMPLATE',
+                        is_key=row['is_key'], ordre=row['ordre'],
+                    )
+                    if te_valor:
+                        viatjat['mesures'] += 1
+                    else:
+                        viatjat['pertinences'] += 1
+                    continue
+
+                # SOBIRANIA: només s'omple un TEMPLATE BUIT. Tota la resta és de la marca.
+                template_buit = existent.origen == 'TEMPLATE' and existent.base_value_cm is None
+                if te_valor and template_buit:
+                    existent.base_value_cm = row['base_value_cm']
+                    existent.nom_fitxa = row['nom_fitxa'] or existent.nom_fitxa
+                    existent.tolerancia_minus = row['tolerancia_minus']
+                    existent.tolerancia_plus = row['tolerancia_plus']
+                    existent.origen = ORIGEN_FEDERAT
+                    existent.save(update_fields=['base_value_cm', 'nom_fitxa', 'tolerancia_minus',
+                                                 'tolerancia_plus', 'origen', 'updated_at'])
+                    viatjat['mesures'] += 1
+                else:
+                    saltat['mesures'] += 1
+
+            for row in patrimoni['regles']:
+                pom = _resol_pom_al_desti(row['clau'], cache)
+                if pom is None:
+                    no_aparellat.append(row['clau'][0] or row['clau'][1])
+                    continue
+                # La regla RESIDENT de la marca és el seu judici sobre les seves dades: si ja
+                # n'hi ha una, no es toca. `GradedSpec` no viatja mai — el motor de la marca
+                # projectarà des d'aquestes regles quan li toqui.
+                if ModelGradingRule.objects.filter(model=twin, pom=pom).exists():
+                    saltat['regles'] += 1
+                    continue
+                ModelGradingRule.objects.create(
+                    model=twin, pom=pom, logica=row['logica'], increment=row['increment'],
+                    valors_step=row['valors_step'], increment_base=row['increment_base'],
+                    increment_break=row['increment_break'],
+                    talla_break_label=row['talla_break_label'],
+                    talla_break_pos=row['talla_break_pos'],
+                    origen=ORIGEN_FEDERAT,
+                )
+                viatjat['regles'] += 1
+
+        # Els BYTES fora de l'atomic: un rollback no els desfaria i deixaria fitxers orfes
+        # (mateix criteri que la còpia model→model).
+        for f in patrimoni['fitxers']:
+            if 'error' in f:
+                avisos.append(f"No s'ha pogut llegir «{f['nom_fitxer']}»: {f['error']}")
+                continue
+            anterior = (ModelFitxer.objects.filter(model=twin, tipus=f['tipus'])
+                        .order_by('-versio', '-id').first())
+            # IDEMPOTÈNCIA PER CHECKSUM: re-enviar el mateix fitxer no encadena una versió
+            # nova. Sense això, cada clic del botó inflaria la cadena del destí amb còpies
+            # idèntiques i el «v7» de la marca no voldria dir res.
+            if anterior is not None and anterior.checksum and anterior.checksum == f['checksum']:
+                saltat['fitxers'] += 1
+                continue
+            num = (anterior.versio + 1) if anterior else 1
+            ext = os.path.splitext(f['nom_fitxer'])[1] or ''
+            nom = f"{twin.codi_intern}_{f['tipus']}_{num:03d}{ext}"
+            try:
+                save_model_file(twin, ContentFile(f['bytes'], name=nom),
+                                versio_anterior=anterior, tipus=f['tipus'], origen='federacio',
+                                nom=nom)
+            except (ValueError, OSError) as e:
+                avisos.append(f"No s'ha pogut desar «{f['nom_fitxer']}»: {e}")
+                continue
+            viatjat['fitxers'] += 1
+
+        informe = {'viatjat': viatjat, 'saltat': saltat,
+                   'no_aparellat': sorted(set(no_aparellat)), 'avisos': avisos}
+
+        # L'INFORME, AL MODEL DE LA MARCA. `dades=None` a posta i no per descuit: el signal
+        # `recompute_import_watchpoint` (models_app/signals.py) reclama TOT Watchpoint obert
+        # amb `task IS NULL` i `dades` no-null, i li reescriu el text amb la config que falta.
+        # Un informe d'enviament amb `dades` poblades duraria fins al següent save del model.
+        # `created_by=None`: qui ha clicat viu a l'altre schema i el seu UserProfile no existeix
+        # aquí — inventar-ne un seria mentir sobre l'autoria.
+        Watchpoint.objects.create(model=twin, dades=None, text=_text_informe(informe))
+
+    return informe
+
+
+def _text_informe(informe):
+    v, s = informe['viatjat'], informe['saltat']
+    parts = [
+        f"Enviament de l'estudi: {v['mesures']} mesura/es, {v['regles']} regla/es de graduació "
+        f"i {v['fitxers']} fitxer/s.",
+    ]
+    if v['pertinences']:
+        parts.append(f"{v['pertinences']} POM/s han arribat sense valor (només la pertinença).")
+    if any(s.values()):
+        parts.append(f"No s'ha trepitjat res del que ja teníeu: {s['mesures']} mesura/es, "
+                     f"{s['regles']} regla/es i {s['fitxers']} fitxer/s intactes.")
+    if informe['no_aparellat']:
+        parts.append('POMs que NO s\'han pogut aparellar amb el vostre catàleg i no han '
+                     'viatjat: ' + ', '.join(informe['no_aparellat']) + '.')
+    parts.extend(informe['avisos'])
+    return ' '.join(parts)
+
+
+def envia_a_la_marca(model_estudi):
+    """ACTE HUMÀ: l'estudi envia la feina feta al bessó de la marca. Mai automàtic.
+
+    Llança `FederacioError` amb `codi` estable quan no es pot fer (la boca el tradueix a HTTP):
+    `model_no_extern` · `link_missing`/`link_not_active` · `tenant_missing` · `besso_missing`.
+    """
+    from fhort.models_app.models import Model
+
+    if model_estudi.origen != Model.ORIGEN_EXTERN:
+        raise FederacioError(
+            f"«{model_estudi.codi_intern}» no és un model EXTERN: no ve de cap marca i no hi ha "
+            f'on enviar-lo.', 'model_no_extern')
+
+    studio_codi = _codi_del_schema_actual()
+    brand_codi = model_estudi.codi_tenant
+    resol_vincle(brand_codi, studio_codi)          # les dues claus, com al traspàs
+    brand_client = resol_schema(brand_codi, 'brand')
+
+    patrimoni = _llegeix_patrimoni(model_estudi)
+    informe = _escriu_a_la_marca(brand_client.schema_name, model_estudi.codi_intern, patrimoni)
+    informe.update({'codi_intern': model_estudi.codi_intern, 'brand_codi': brand_codi})
+    logger.info('federacio.envia_a_la_marca %s → %s: %s', model_estudi.codi_intern, brand_codi,
+                informe['viatjat'])
+    return informe
