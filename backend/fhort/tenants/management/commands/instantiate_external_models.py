@@ -54,6 +54,11 @@ class Command(BaseCommand):
         self.stdout.write(f"  llegits (assignats): {r['n_llegits']}")
         self.stdout.write(f"  {verb:<17}: {len(r['creats'])}")
         self.stdout.write(f"  saltats (ja hi són): {len(r['saltats'])}")
+        # SET-1 · C6 — els conjunts tocats: la unitat comercial que viatja amb les peces.
+        if r.get('sets'):
+            self.stdout.write(f"  conjunts (GarmentSet): {len(r['sets'])} → "
+                              + ', '.join(r['sets'][:10])
+                              + (' …' if len(r['sets']) > 10 else ''))
 
         um = r['unmatched']
         total_um = sum(len(v) for v in um.values())
