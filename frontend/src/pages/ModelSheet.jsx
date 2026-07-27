@@ -762,6 +762,35 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
             </span>
           </>
         )}
+        {/* SET-1 · A4 — el conjunt a la capçalera: quina peça és, de quantes, i com anar a les
+            germanes. Les germanes vénen niuades al serializer del detall (`garment_set.peces`):
+            un fetch de menys, i la llista ja s'ha de travessar per pintar el badge. */}
+        {model.garment_set && (
+          <>
+            <span style={{ color: 'var(--border)' }}>·</span>
+            <span title={model.garment_set.nom_comercial || ''} style={{
+              fontSize: 'var(--fs-caption)', padding: '2px 8px', borderRadius: 5,
+              background: 'var(--gold-pale)', color: 'var(--gold)',
+              border: '0.5px solid var(--gold)', fontWeight: 600,
+            }}>
+              {t('model_sheet.set_badge', {
+                n: model.piece_number ?? '?', total: model.garment_set.num_pieces,
+                codi: model.garment_set.codi_base,
+              })}
+            </span>
+            {(model.garment_set.peces || [])
+              .filter(p => p.id !== model.id)
+              .map(p => (
+                <button key={p.id} type="button" onClick={() => navigate(`/models/${p.id}`)}
+                  title={p.codi_intern}
+                  style={{ background: 'none', border: '0.5px solid var(--border)',
+                           borderRadius: 5, padding: '2px 8px', cursor: 'pointer',
+                           fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+                  {p.nom_prenda || `#${p.piece_number}`}
+                </button>
+              ))}
+          </>
+        )}
         <span style={{
           fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 20, fontWeight: 600,
           background: 'var(--gold)', color: 'var(--white)',

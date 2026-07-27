@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
-from .models import (BaseMeasurement, Contracte, ItemFitxer, LiniaContracte, Model,
-                     ModelFitxer, Watchpoint)
+from .models import (BaseMeasurement, Contracte, GarmentSet, ItemFitxer, LiniaContracte,
+                     Model, ModelFitxer, Watchpoint)
 
 
 def _signed_download_url(obj, request, *, salt, ruta):
@@ -84,6 +84,27 @@ class ItemFitxerSerializer(serializers.ModelSerializer):
                                     salt=ITEM_DOWNLOAD_SALT, ruta='item-fitxers')
 
 
+class GarmentSetMiniSerializer(serializers.ModelSerializer):
+    """SET-1 · A4 — el CONJUNT vist des d'una peça. Read-only i mínim: el que cal per pintar el
+    badge «SET n/N» i per navegar a les germanes, res més. La font del codi COMERCIAL és
+    `codi_base` (decisió 1: un codi comercial; les peces són parts internes -01/-02)."""
+    peces = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GarmentSet
+        fields = ('id', 'codi_base', 'nom_comercial', 'num_pieces', 'peces')
+
+    def get_peces(self, obj):
+        """Les germanes, per poder navegar-hi des de la capçalera sense un segon fetch.
+        Va aquí i no a un endpoint nou perquè és una llista de 2-3 files que ja s'ha de
+        travessar per pintar el badge: un endpoint per a això seria una crida de més."""
+        return [
+            {'id': p.id, 'codi_intern': p.codi_intern, 'piece_number': p.piece_number,
+             'nom_prenda': p.nom_prenda}
+            for p in obj.peces.all().order_by('piece_number', 'id')
+        ]
+
+
 class ModelListSerializer(serializers.ModelSerializer):
     garment_type = serializers.SerializerMethodField()
     responsable = serializers.SerializerMethodField()
@@ -98,6 +119,10 @@ class ModelListSerializer(serializers.ModelSerializer):
     fitting_prev = serializers.DateField(read_only=True)
     # Pas 5C — tècnics = assignees distints de les ModelTask (prefetch, sense N+1).
     tecnics = serializers.SerializerMethodField()
+    # SET-1 · A4 — la pertinença a un conjunt, visible a la llista. Fins ara `ModelListSerializer`
+    # no exposava ni `garment_set` ni `piece_number`, i un tècnic no podia saber que una fila era
+    # la peça d'un producte. Read-only: l'única escriptura de `garment_set` és a la creació.
+    garment_set = GarmentSetMiniSerializer(read_only=True)
 
     class Meta:
         model = Model
@@ -135,6 +160,9 @@ class ModelListSerializer(serializers.ModelSerializer):
             'slots_prev_confeccio',
             'slots_reals_tecnic',
             'slots_reals_confeccio',
+            # SET-1
+            'garment_set',
+            'piece_number',
         )
 
     def get_garment_type(self, obj):
@@ -192,6 +220,13 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     grading_fit_nom = serializers.SerializerMethodField()
     grading_construction_nom = serializers.SerializerMethodField()
     customer_logo = serializers.SerializerMethodField()   # TS-4c: logo del client (URL)
+    # SET-1 · A4 — el conjunt, niuat, amb les germanes per navegar-hi des de la capçalera.
+    # DESVIACIÓ ANOTADA: `fields='__all__'` exposava `garment_set` com a pk ESCRIVIBLE; aquesta
+    # declaració el fa read-only. Cap caller el feia servir (0 hits al frontend; els dos únics
+    # escriptors —`create_model_wizard` i `bulk_import_service`— són per ORM), i A5 diu que la
+    # conversió mandrosa d'un model a peça no té camí: obrir-la per un PATCH genèric seria
+    # precisament el camí que ningú no ha dissenyat.
+    garment_set = GarmentSetMiniSerializer(read_only=True)
 
     def get_grading_target_nom(self, obj):
         rs = obj.grading_rule_set if obj.grading_rule_set_id else None

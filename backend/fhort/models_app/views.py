@@ -149,7 +149,11 @@ class ModelViewSet(viewsets.ModelViewSet):
             .select_related('garment_type', 'garment_group',
                             'responsable', 'responsable__user',
                             'size_system', 'grading_rule_set',
-                            'garment_type_item', 'customer')
+                            'garment_type_item', 'customer',
+                            # SET-1: el serializer hi niua el conjunt (badge «SET n/N»).
+                            'garment_set')
+            # …i les germanes, per no fer una query per fila de conjunt.
+            .prefetch_related('garment_set__peces')
             .all()
         )
         if self.action != 'list':
@@ -862,6 +866,13 @@ def create_model_wizard(request):
     base_payload = {k: request.data.get(k) for k in (
         'garment_type_item_id', 'garment_type_id', 'size_system_id', 'grading_rule_set_id',
         'target', 'construction', 'size_run', 'base_size')}
+    # Nom OPCIONAL per peça enviat pel wizard, per id de GarmentTypeItemPart. La composició del
+    # catàleg mana sobre el defecte; això només permet batejar les peces d'AQUEST model (una
+    # «Braga» pot ser «Culotte» en aquest bikini). Buit ⇒ el `nom_peca` de la composició.
+    noms_peces = request.data.get('noms_peces') or {}
+    if not isinstance(noms_peces, dict):
+        return Response({'error': '`noms_peces` ha de ser un objecte {part_id: nom}.'}, status=400)
+
     camps_per_peca = []
     for part in parts_del_set:
         d_part = dict(base_payload)
@@ -876,7 +887,8 @@ def create_model_wizard(request):
         if err_part:
             err_part['peca'] = part.ordre
             return Response(err_part, status=400)
-        camps_per_peca.append((part, fields_part))
+        nom_peca = (noms_peces.get(str(part.id)) or noms_peces.get(part.id) or '').strip()
+        camps_per_peca.append((part, fields_part, nom_peca))
 
     # Multi-piece: one GarmentSet + N piece Models, codi_intern = codi_base-NN.
     with transaction.atomic():
@@ -886,7 +898,7 @@ def create_model_wizard(request):
             num_pieces=num_pieces,
         )
         pieces = []
-        for i, (part, fields_part) in enumerate(camps_per_peca, start=1):
+        for i, (part, fields_part, nom_peca) in enumerate(camps_per_peca, start=1):
             piece = Model.objects.create(
                 codi_intern=f"{codi_base}-{str(i).zfill(2)}",
                 codi_client=ref_client,
@@ -897,7 +909,7 @@ def create_model_wizard(request):
                 sequencial=next_num,
                 # El nom de la PEÇA el dona la composició del catàleg («Top», «Bikini bottom»);
                 # el nom comercial del conjunt viu a GarmentSet.nom_comercial.
-                nom_prenda=(part.nom_peca or nom_prenda) or None,
+                nom_prenda=(nom_peca or part.nom_peca or nom_prenda) or None,
                 descripcio=descripcio or None,
                 collection=collection or '',
                 created_by=creator,

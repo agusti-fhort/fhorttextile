@@ -895,7 +895,8 @@
     "assign_resource_none": "Ningún recurso activo. Vincula un estudio desde Recursos.",
     "assign_resource_done": "{{n}} modelo(s) asignado(s) al recurso.",
     "assign_resource_cleared": "Asignación retirada de {{n}} modelo(s).",
-    "assign_resource_already": "{{n}} ya lo estaban."
+    "assign_resource_already": "{{n}} ya lo estaban.",
+    "set_badge": "SET {{n}}/{{total}} · {{codi}}"
   },
   "model_wizard": {
     "customer": "Cliente",
@@ -1006,7 +1007,10 @@
     "model_size_system": "Sistema del modelo",
     "grading_dropped": "La graduación que tenía el modelo ya no casa con los ejes elegidos (prenda, construcción o sistema de tallas). Se ha desasignado: elige otra o marca «Sin graduación».",
     "grading_dropped_replaced": "La graduación que tenía el modelo ya no casa con los ejes elegidos y se ha sustituido por la única compatible. Revísala antes de guardar.",
-    "run_lost_sizes": "Atención: el run guardado del modelo contiene tallas que ya no están en su sistema de tallas ({{talles}}). No se han podido recuperar; si guardas ahora, el run se quedará sin ellas."
+    "run_lost_sizes": "Atención: el run guardado del modelo contiene tallas que ya no están en su sistema de tallas ({{talles}}). No se han podido recuperar; si guardas ahora, el run se quedará sin ellas.",
+    "set_title": "Este ítem es un CONJUNTO de {{total}} piezas",
+    "set_hint": "La composición la declara el catálogo. Se creará un código comercial y una pieza por cada parte; puedes darles un nombre propio para este modelo.",
+    "set_piece_name_ph": "Nombre de la pieza (opcional)"
   },
   "models_list": {
     "title": "Modelos",
@@ -1043,7 +1047,9 @@
     "empty": "Sin modelos. ¡Crea el primero!",
     "empty_filtered": "Sin resultados con este filtro.",
     "delete_error": "No se ha podido eliminar el modelo.",
-    "col_recurs": "Recurso"
+    "col_recurs": "Recurso",
+    "set_badge": "SET {{n}}/{{total}}",
+    "set_hint": "Pieza de un conjunto · {{codi}} {{nom}}"
   },
   "models_filters": {
     "button": "Filtros",

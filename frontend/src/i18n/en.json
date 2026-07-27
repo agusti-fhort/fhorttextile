@@ -895,7 +895,8 @@
     "assign_resource_none": "No active resources. Link a studio from Resources.",
     "assign_resource_done": "{{n}} model(s) assigned to the resource.",
     "assign_resource_cleared": "Assignment removed from {{n}} model(s).",
-    "assign_resource_already": "{{n}} were already assigned."
+    "assign_resource_already": "{{n}} were already assigned.",
+    "set_badge": "SET {{n}}/{{total}} · {{codi}}"
   },
   "model_wizard": {
     "customer": "Customer",
@@ -1006,7 +1007,10 @@
     "model_size_system": "Model’s system",
     "grading_dropped": "The grading the model had no longer matches the chosen axes (garment, construction or size system). It has been unassigned: pick another one or tick “No grading”.",
     "grading_dropped_replaced": "The grading the model had no longer matches the chosen axes and has been replaced by the only compatible one. Review it before saving.",
-    "run_lost_sizes": "Warning: the model’s saved run contains sizes that are no longer in its size system ({{talles}}). They could not be restored; if you save now, the run will lose them."
+    "run_lost_sizes": "Warning: the model’s saved run contains sizes that are no longer in its size system ({{talles}}). They could not be restored; if you save now, the run will lose them.",
+    "set_title": "This item is a SET of {{total}} pieces",
+    "set_hint": "The composition is declared by the catalogue. One commercial code and one model per part will be created; you can give them their own name for this model.",
+    "set_piece_name_ph": "Piece name (optional)"
   },
   "models_list": {
     "title": "Models",
@@ -1043,7 +1047,9 @@
     "empty": "No models. Create the first one!",
     "empty_filtered": "No results with this filter.",
     "delete_error": "Could not delete the model.",
-    "col_recurs": "Resource"
+    "col_recurs": "Resource",
+    "set_badge": "SET {{n}}/{{total}}",
+    "set_hint": "Piece of a set · {{codi}} {{nom}}"
   },
   "models_filters": {
     "button": "Filters",

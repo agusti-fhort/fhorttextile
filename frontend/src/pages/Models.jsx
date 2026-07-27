@@ -468,6 +468,9 @@ function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale, intentMo
           <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--gold)' }}>{m.codi_intern}</span>
           {m.nom_prenda && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontWeight: 500 }}>{m.nom_prenda}</span>}
           {m.codi_client && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>· {m.codi_client}</span>}
+          {/* SET-1 — la fila diu si és una PART d'un producte. Sense això un tècnic no pot
+              saber que el que veu és la peça 2 de 3 d'un conjunt (base DALIA §6). */}
+          <SetBadge m={m} t={t} />
           {m.collection && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>· {m.collection}</span>}
           <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{m.temporada}{m.any ? ` ${m.any}` : ''}</span>
           <span title={t(m.has_order ? 'models_list.with_order_hint' : 'models_list.direct_hint')} style={{
@@ -489,6 +492,21 @@ function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale, intentMo
         </div>
       </div>
     </div>
+  )
+}
+
+// SET-1 · A4 — «SET n/N» amb el codi comercial del conjunt al title. Codis via token, mai hex.
+function SetBadge({ m, t }) {
+  if (!m.garment_set) return null
+  const gs = m.garment_set
+  return (
+    <span title={t('models_list.set_hint', { codi: gs.codi_base, nom: gs.nom_comercial || '' })}
+      style={{
+        fontSize: 'var(--fs-caption)', padding: '2px 7px', borderRadius: 5, fontFamily: MONO,
+        background: 'var(--gold-pale)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
+      }}>
+      {t('models_list.set_badge', { n: m.piece_number ?? '?', total: gs.num_pieces })}
+    </span>
   )
 }
 

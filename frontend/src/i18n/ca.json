@@ -895,7 +895,8 @@
     "assign_resource_none": "Cap recurs actiu. Vincula un estudi des de Recursos.",
     "assign_resource_done": "{{n}} model(s) assignat(s) al recurs.",
     "assign_resource_cleared": "Assignació retirada de {{n}} model(s).",
-    "assign_resource_already": "{{n}} ja hi estaven."
+    "assign_resource_already": "{{n}} ja hi estaven.",
+    "set_badge": "SET {{n}}/{{total}} · {{codi}}"
   },
   "model_wizard": {
     "customer": "Client",
@@ -1006,7 +1007,10 @@
     "model_size_system": "Sistema del model",
     "grading_dropped": "La graduació que tenia el model ja no casa amb els eixos triats (peça, construcció o sistema de talles). S'ha desassignat: torna a triar-ne una o marca «Sense graduació».",
     "grading_dropped_replaced": "La graduació que tenia el model ja no casa amb els eixos triats i s'ha substituït per l'única compatible. Revisa-la abans de desar.",
-    "run_lost_sizes": "Atenció: el run desat del model conté talles que ja no són al seu sistema de talles ({{talles}}). No s'han pogut recuperar; si deses ara, el run quedarà sense elles."
+    "run_lost_sizes": "Atenció: el run desat del model conté talles que ja no són al seu sistema de talles ({{talles}}). No s'han pogut recuperar; si deses ara, el run quedarà sense elles.",
+    "set_title": "Aquest ítem és un CONJUNT de {{total}} peces",
+    "set_hint": "La composició la declara el catàleg. Es crearà un codi comercial i una peça per cada part; pots posar-los un nom propi per a aquest model.",
+    "set_piece_name_ph": "Nom de la peça (opcional)"
   },
   "models_list": {
     "title": "Models",
@@ -1043,7 +1047,9 @@
     "empty": "Sense models. Crea el primer!",
     "empty_filtered": "Sense resultats amb aquest filtre.",
     "delete_error": "No s'ha pogut esborrar el model.",
-    "col_recurs": "Recurs"
+    "col_recurs": "Recurs",
+    "set_badge": "SET {{n}}/{{total}}",
+    "set_hint": "Peça d'un conjunt · {{codi}} {{nom}}"
   },
   "models_filters": {
     "button": "Filtres",
