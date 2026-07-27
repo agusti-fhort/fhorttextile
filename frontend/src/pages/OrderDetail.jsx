@@ -5,7 +5,8 @@ import useAuthStore from '../store/auth'
 import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
-import PdfButton from '../components/ui/PdfButton'
+import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
+import IssueDateField from '../components/commercial/IssueDateField'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import { DocumentHeader, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { OrderStatusBadge, allocatedPct } from './Orders'
@@ -45,6 +46,8 @@ export default function OrderDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [order, setOrder] = useState(null)
+  // Idioma del PDF: default = el del client destinatari, canviable per document.
+  const [pdfLang, setPdfLang] = usePdfLang(order?.customer_language)
   const [feedback, setFeedback] = useState(null)
   const [busy, setBusy] = useState(false)
   // P4 — desplegable read-only per línia: models assignats + tasques + % imputat (lazy).
@@ -64,7 +67,7 @@ export default function OrderDetail() {
 
   const doPdf = () => {
     setBusy(true); setFeedback(null)
-    commerce.orders.pdf(id)
+    commerce.orders.pdf(id, pdfLang)
       .then(res => downloadBlob(res.data, filenameFromHeaders(res, `${order?.document_number || 'comanda'}.pdf`)))
       .catch(() => setFeedback({ type: 'err', text: t('orders.pdf_error') }))
       .finally(() => setBusy(false))
@@ -76,6 +79,14 @@ export default function OrderDetail() {
       .then(() => reload()).then(() => setFeedback({ type: 'ok', text: t('orders.status_saved') }))
       .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.detail || t('orders.error') }))
       .finally(() => setBusy(false))
+  }
+
+  // Corregir la data d'emissió remou els venciments (hi estan ancorats), per això recarrega.
+  const saveIssuedAt = (value) => {
+    setFeedback(null)
+    return commerce.orders.update(id, { issued_at: value })
+      .then(() => reload()).then(() => setFeedback({ type: 'ok', text: t('orders.status_saved') }))
+      .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.detail || t('orders.error') }))
   }
 
   // Sprint C — l'assignació de models va a la superfície universal de selecció (mode intenció):
@@ -129,6 +140,9 @@ export default function OrderDetail() {
 
   const lines = order.lines || []
   const dueDates = order.due_dates || []
+  // La data d'emissió es corregeix mentre la comanda és OPEN; COMPLETED/CANCELLED són terminals.
+  // El guard dur el posa el backend (serializers.guard_issued_at_editable).
+  const canEditDate = canEdit && order.status === 'OPEN'
   // Línies encara pendents d'imputar (qty_allocated < quantity). En tornar del mode selecció,
   // reload() les refresca; si en queda alguna, s'ofereix continuar amb la primera (no s'imposa).
   const pendingLines = order.status === 'OPEN'
@@ -168,7 +182,8 @@ export default function OrderDetail() {
         statusBadge={<OrderStatusBadge status={order.status} t={t} />}
         customer={order.customer_nom}
         actions={<>
-          <PdfButton onClick={doPdf} disabled={busy} label={t('orders.download_pdf')} />
+          <PdfButton onClick={doPdf} disabled={busy} label={t('orders.download_pdf')}
+            lang={pdfLang} onLangChange={setPdfLang} t={t} />
           {canEdit && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)' }}>
               {t('orders.status')}:
@@ -203,7 +218,8 @@ export default function OrderDetail() {
       <Section title={t('orders.details')}>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
           <Meta label={t('orders.source_quote')} value={order.source_quote_number || '—'} />
-          <Meta label={t('orders.issued_at')} value={fmtDate(order.issued_at)} />
+          <IssueDateField value={order.issued_at} editable={canEditDate} onSave={saveIssuedAt}
+            t={t} label={t('orders.issued_at')} />
           <Meta label={t('orders.payment_terms')} value={order.payment_terms_name || '—'} />
           <Meta label={t('orders.allocated')} value={`${allocatedPct(order)}%`} />
         </div>

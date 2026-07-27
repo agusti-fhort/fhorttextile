@@ -139,10 +139,14 @@ class QuoteViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def pdf(self, request, pk=None):
-        """Genera i retorna el PDF de l'oferta (reportlab, P5). Import mandrós per no acoblar."""
+        """Genera i retorna el PDF de l'oferta (reportlab, P5). Import mandrós per no acoblar.
+
+        `?lang=` és l'idioma triat per l'operador en emetre; si no ve o no és vàlid, mana el
+        del client destinatari i, en últim terme, el fallback (resolve_pdf_lang)."""
         quote = self.get_object()
-        from .pdf_service import generate_quote_pdf
-        pdf_bytes = generate_quote_pdf(quote)
+        from .pdf_service import generate_quote_pdf, resolve_pdf_lang
+        lang = resolve_pdf_lang(request.query_params.get('lang'), quote.customer)
+        pdf_bytes = generate_quote_pdf(quote, lang=lang)
         resp = HttpResponse(pdf_bytes, content_type='application/pdf')
         resp['Content-Disposition'] = f'attachment; filename="{quote.document_number or "quote"}.pdf"'
         return resp
@@ -229,12 +233,24 @@ class SalesOrderViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixins.
             return [IsAuthenticated()]
         return super().get_permissions()
 
+    def perform_update(self, serializer):
+        # Els venciments estan ancorats a la data d'emissió (due_date = issued_at + days_offset,
+        # services.py:127): si es corregeix la data, s'han de tornar a materialitzar. Només quan
+        # ha canviat de debò — un PATCH de `status` no ha de reescriure la taula de venciments.
+        before = serializer.instance.issued_at
+        order = serializer.save()
+        if order.issued_at != before:
+            from .services import generate_due_dates
+            generate_due_dates(order)
+
     @action(detail=True, methods=['get'])
     def pdf(self, request, pk=None):
-        """PDF de la comanda: reutilitza el generador de l'oferta amb títol 'Comanda'."""
+        """PDF de la comanda: reutilitza el generador de l'oferta amb la clau de títol
+        'doc_order' (la CLAU, no el text: qui tradueix és el generador). `?lang=` com a Quote."""
         order = self.get_object()
-        from .pdf_service import generate_document_pdf
-        pdf_bytes = generate_document_pdf(order, doc_title='Comanda')
+        from .pdf_service import generate_document_pdf, resolve_pdf_lang
+        lang = resolve_pdf_lang(request.query_params.get('lang'), order.customer)
+        pdf_bytes = generate_document_pdf(order, doc_key='doc_order', lang=lang)
         resp = HttpResponse(pdf_bytes, content_type='application/pdf')
         resp['Content-Disposition'] = f'attachment; filename="{order.document_number or "order"}.pdf"'
         return resp
@@ -600,11 +616,12 @@ class DeliveryNoteViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixin
 
     @action(detail=True, methods=['get'])
     def pdf(self, request, pk=None):
-        """PDF de l'albarà: reutilitza el generador genèric amb títol 'Albarà' i SENSE bloc de
-        venciments/condicions de pagament (show_payment=False)."""
+        """PDF de l'albarà v2 (compost per model), SENSE bloc de venciments/condicions de
+        pagament. `?lang=` com a Quote/SalesOrder."""
         dn = self.get_object()
-        from .pdf_service import generate_delivery_note_pdf
-        pdf_bytes = generate_delivery_note_pdf(dn)
+        from .pdf_service import generate_delivery_note_pdf, resolve_pdf_lang
+        lang = resolve_pdf_lang(request.query_params.get('lang'), dn.customer)
+        pdf_bytes = generate_delivery_note_pdf(dn, lang=lang)
         resp = HttpResponse(pdf_bytes, content_type='application/pdf')
         resp['Content-Disposition'] = f'attachment; filename="{dn.document_number or "albara"}.pdf"'
         return resp

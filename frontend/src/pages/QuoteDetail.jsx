@@ -6,7 +6,8 @@ import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
-import PdfButton from '../components/ui/PdfButton'
+import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
+import IssueDateField from '../components/commercial/IssueDateField'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import { DocumentHeader, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { StatusBadge } from './Quotes'
@@ -51,6 +52,8 @@ export default function QuoteDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [quote, setQuote] = useState(null)
+  // Idioma del PDF: default = el del client destinatari, canviable per document.
+  const [pdfLang, setPdfLang] = usePdfLang(quote?.customer_language)
   const [products, setProducts] = useState([])
   const [paymentTerms, setPaymentTerms] = useState([])
   const [feedback, setFeedback] = useState(null)
@@ -89,7 +92,7 @@ export default function QuoteDetail() {
 
   const doPdf = () => {
     setBusy(true); setFeedback(null)
-    commerce.quotes.pdf(id)
+    commerce.quotes.pdf(id, pdfLang)
       .then(res => downloadBlob(res.data, filenameFromHeaders(res, `${quote?.document_number || 'oferta'}.pdf`)))
       .catch(() => setFeedback({ type: 'err', text: t('quotes.pdf_error') }))
       .finally(() => setBusy(false))
@@ -122,6 +125,9 @@ export default function QuoteDetail() {
   const canConvert = canEdit && quote.status === 'SENT'
   // E6 — les intencions de model es negocien en DRAFT i SENT; read-only en ACCEPTED.
   const canIntents = canEdit && (quote.status === 'DRAFT' || quote.status === 'SENT')
+  // La data d'emissió es corregeix mentre l'oferta negocia (mateixa frontera que les intencions);
+  // el guard dur el posa el backend (serializers.guard_issued_at_editable).
+  const canEditDate = canIntents
 
   return (
     <div style={{ minWidth: 0, maxWidth: 900 }}>
@@ -138,7 +144,8 @@ export default function QuoteDetail() {
             title={!isDraft ? t('quotes.send_only_draft') : (!hasLines ? t('quotes.send_needs_lines') : '')}>
             <i className="ti ti-send" style={{ fontSize: 14 }} /> {t('quotes.send')}
           </button>
-          <PdfButton onClick={doPdf} disabled={busy} label={t('quotes.download_pdf')} />
+          <PdfButton onClick={doPdf} disabled={busy} label={t('quotes.download_pdf')}
+            lang={pdfLang} onLangChange={setPdfLang} t={t} />
           {canConvert && (
             <button onClick={() => setConfirmConvert(true)} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>
               <i className="ti ti-arrow-right-circle" style={{ fontSize: 14 }} /> {t('quotes.convert')}
@@ -158,7 +165,7 @@ export default function QuoteDetail() {
       <div style={{ marginBottom: 16 }}>
         <DocumentSummary lines={quoteSummaryLines(quote, t)} />
       </div>
-      <DetailsSection quote={quote} editable={editable} paymentTerms={paymentTerms} t={t} reload={reload} ok={ok} err={err} />
+      <DetailsSection quote={quote} editable={editable} dateEditable={canEditDate} paymentTerms={paymentTerms} t={t} reload={reload} ok={ok} err={err} />
 
       {confirmConvert && (
         <Modal title={t('quotes.convert_title')} subtitle={t('quotes.convert_warning')}
@@ -366,7 +373,10 @@ function LinesSection({ quote, editable, canIntents, products, t, reload, ok, er
 
 // --- Detalls editables (validesa, condicions de pagament, notes) — només DRAFT ---
 // L'IVA ja NO és editable (B3a): es calcula sobre bases agregades i es mostra al desglossament.
-function DetailsSection({ quote, editable, paymentTerms, t, reload, ok, err }) {
+// La DATA D'EMISSIÓ va per lliure: es pot corregir també en SENT (l'oferta encara negocia i la
+// data acaba d'existir), i es desa sola perquè en SENT és l'ÚNIC camp viu de la capçalera —
+// enviar-hi la resta del formulari reobriria camps que avui la UI manté tancats.
+function DetailsSection({ quote, editable, dateEditable, paymentTerms, t, reload, ok, err }) {
   const [terms, setTerms] = useState(quote.payment_terms != null ? String(quote.payment_terms) : '')
   const [validUntil, setValidUntil] = useState(quote.valid_until || '')
   const [notes, setNotes] = useState(quote.notes || '')
@@ -381,9 +391,13 @@ function DetailsSection({ quote, editable, paymentTerms, t, reload, ok, err }) {
       .then(() => reload()).then(() => ok(t('quotes.saved'))).catch(err).finally(() => setBusy(false))
   }
 
+  const saveIssuedAt = (value) => commerce.quotes.update(quote.id, { issued_at: value })
+    .then(() => reload()).then(() => ok(t('quotes.saved'))).catch(err)
+
   return (
     <Section title={t('quotes.details')}>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+        <IssueDateField value={quote.issued_at} editable={dateEditable} onSave={saveIssuedAt} t={t} />
         <Field label={t('quotes.valid_until')}>
           {editable
             ? <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} style={{ ...selS }} />

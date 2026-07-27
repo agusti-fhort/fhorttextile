@@ -273,6 +273,26 @@ CORS_ALLOW_CREDENTIALS = True
 # de manera que `logger.info` (p.ex. la instrumentació R4 de size_map_views) no s'emet mai.
 # StreamHandler → stdout/stderr → journald (gunicorn). Vegeu DIAGNOSI_ETIQUETES_TALLA_2026-07-08.
 # ─────────────────────────────────────────────────────────────
+#
+# F3 · OBSERVABILITAT DELS 500. Un 500 en producció només deixava rastre a journald, barrejat
+# amb tota la resta i sense traceback llegible fora de `journalctl -u`. El 500 real del 27/07
+# (MultipleObjectsReturned a l'import) es va haver de reproduir a mà per saber què era.
+# `django.request` a ERROR és exactament el logger que Django fa servir per als 500 no
+# capturats, amb `exc_info` i tot.
+#
+# EL PATH VE DE L'ENTORN, mai cuit: PROD posa FHORT_ERROR_LOG=/var/log/fhort/django-error.log
+# (directori de sistema, creat i xmodat pel desplegament) i staging es queda amb el seu propi
+# dins de BASE_DIR. Un default a /var/log hauria estat mentida a staging.
+#
+# NO ES CREA CAP DIRECTORI des d'aquí. `manage.py` es corre sovint com a root i gunicorn com a
+# www-data: un `makedirs` en aquest fitxer deixaria un directori root-only que el servei no
+# podria escriure després (mateixa trampa que els subdirs de media). Si el directori no hi és
+# o no és escrivible, el handler NO s'enganxa i els 500 continuen anant a consola/journald —
+# degradar és acceptable, petar l'arrencada per un log no ho és.
+ERROR_LOG_PATH = os.environ.get(
+    'FHORT_ERROR_LOG', str(BASE_DIR / 'logs' / 'django-error.log'))
+ERROR_LOG_ACTIU = os.access(os.path.dirname(ERROR_LOG_PATH) or '.', os.W_OK)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -281,9 +301,23 @@ LOGGING = {
     },
     'handlers': {
         'console': {'class': 'logging.StreamHandler', 'formatter': 'standard'},
+        **({'error_file': {
+            'class': 'logging.handlers.WatchedFileHandler',   # sobreviu al logrotate
+            'filename': ERROR_LOG_PATH,
+            'level': 'ERROR',
+            'formatter': 'standard',
+            'delay': True,          # el fitxer no es toca fins al primer ERROR
+        }} if ERROR_LOG_ACTIU else {}),
     },
     'loggers': {
         'fhort': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        # `django.request` NO propaga: si ho fes, cada 500 sortiria dues vegades (aquí i al
+        # logger arrel de Django). El console hi és igualment perquè journald no perdi res.
+        'django.request': {
+            'handlers': ['console'] + (['error_file'] if ERROR_LOG_ACTIU else []),
+            'level': 'ERROR',
+            'propagate': False,
+        },
     },
 }
 

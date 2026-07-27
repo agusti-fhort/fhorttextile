@@ -73,6 +73,8 @@ class CustomerSerializer(serializers.ModelSerializer):
                   'persona_contacte', 'telefon_contacte',
                   # Comercial Studio (B3a) — règim fiscal + condicions de pagament per defecte.
                   'tax_regime', 'vat_number', 'payment_method', 'payment_terms',
+                  # Idioma per defecte dels PDF comercials (default del selector d'emissió).
+                  'language',
                   # Pàgina Clients (annotate): ofertes presentades/acceptades, comandes obertes, albarans.
                   'quotes_sent', 'quotes_accepted', 'orders_open', 'delivery_notes_count',
                   # P8 (Federació v2) — connexió amb un tenant Brand. `codi_global` és el ganxo

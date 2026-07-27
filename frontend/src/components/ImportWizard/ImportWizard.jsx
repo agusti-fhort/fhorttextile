@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { Fragment, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Modal from '../ui/Modal'
@@ -8,6 +8,27 @@ const API = import.meta.env.VITE_API_URL || ''
 
 // base64 unicode-safe (per passar el prefill al Size Map Setup via query param).
 const encodePrefill = (obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj))))
+
+// F6 · agrupa una llista per SECCIÓ consecutiva, en l'ordre del document. No reordena res:
+// la secció és una capçalera que s'insereix quan canvia, no un criteri d'ordenació — si el
+// document repeteix una secció més avall, hi torna a sortir, que és el que diu el paper.
+// Sense cap `seccio` retorna UN sol grup amb `seccio: null` → el render queda idèntic al d'abans.
+const agrupaPerSeccio = (items, seccioDe) => {
+  const grups = []
+  for (const item of items) {
+    const s = seccioDe(item) || null
+    if (!grups.length || grups[grups.length - 1].seccio !== s) grups.push({ seccio: s, items: [] })
+    grups[grups.length - 1].items.push(item)
+  }
+  return grups
+}
+
+// Subcapçalera de grup: el mateix fons que la capçalera de la taula de mesures (:983).
+const SUBHEAD = {
+  padding: '6px 12px', background: '#f5f0ea', fontWeight: 600,
+  fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
+  textTransform: 'uppercase', letterSpacing: '0.04em',
+}
 
 const STEPS = [
   { n: 1, labelKey: 'import_wizard.step.sizes' },
@@ -109,6 +130,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const [savingPoms, setSavingPoms] = useState(false)
   const [cataleg, setCataleg] = useState(null)        // POMMaster catàleg (per afegir manual)
   const [showAddPom, setShowAddPom] = useState(false)
+  // 409 `codi_duplicat`: el catàleg té 2+ POMs tenant-only amb el mateix codi i el backend no
+  // pot triar. NO és un error del wizard (la sessió és intacta i re-desable): és una feina de
+  // catàleg pendent, i es mostra com a avís amb els codis, no com el 500 genèric d'abans.
+  const [pomsDuplicats, setPomsDuplicats] = useState(null)
 
   // Pas 3 — taula de mesures
   const [taula, setTaula] = useState({})              // {pom_master_id: {talla: valor}}
@@ -268,7 +293,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setExtracting(false); return }
       setPomsExtrets(data.poms_extrets || [])
       setExtraccioMeta({ header: data.header, base_size: data.base_size, sizes: data.sizes,
-                         grading_status: data.grading_status, avisos: data.avisos || [] })
+                         grading_status: data.grading_status, avisos: data.avisos || [],
+                         // F5 · informe del llibre: quines pestanyes hi ha i quina s'ha llegit.
+                         fulls: data.fulls || [], full: data.full || null })
       if (data.suggested_valors_mode === 'absoluts' || data.suggested_valors_mode === 'deltes')
         setValorsMode(data.suggested_valors_mode)
     } catch (e) {
@@ -276,6 +303,23 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     }
     setExtracting(false)
   }
+
+  // F5 · el tècnic tria quin full del llibre s'importa. Es desa amb el MATEIX PATCH de talles
+  // (que reenvia el mapping sencer, així que no s'hi perd res) i es torna a extreure: el full
+  // és una entrada del parser, no un filtre de la sortida.
+  const canviaFull = async (nom) => {
+    if (!nom || nom === extraccioMeta?.full) return
+    setExtracting(true); setError('')
+    const data = await patchTalles({ full_seleccionat: nom })
+    if (!data) { setExtracting(false); return }
+    await runExtraccio()
+  }
+
+  const fulls = extraccioMeta?.fulls || []
+  const fullsAmbPoms = fulls.filter(f => f.passa_porta)
+  // Fulls amb files de POM que NO s'han pogut llegir: hi ha contingut i s'està perdent.
+  const fullsNoLlegits = fulls.filter(f => !f.passa_porta && f.n_files_amb_codi > 0)
+  const potTriarFull = fullsAmbPoms.length > 1 || fullsNoLlegits.length > 0
 
   const togglePom = (idx) => setPomsExtrets(pomsExtrets.map((p, i) =>
     i === idx ? { ...p, actiu: !p.actiu } : p))
@@ -305,7 +349,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   }
 
   const handleContinuePoms = async () => {
-    setSavingPoms(true); setError('')
+    setSavingPoms(true); setError(''); setPomsDuplicats(null)
     const ids = pomsExtrets.filter(p => p.actiu && p.pom_master_id).map(p => p.pom_master_id)
     const tenantOnly = pomsExtrets
       .filter(p => p.actiu && !p.pom_master_id && p.tenant_only)
@@ -316,6 +360,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         body: JSON.stringify({ poms_confirmats: ids, poms_tenant_only: tenantOnly }),
       })
       const data = await res.json().catch(() => ({}))
+      if (res.status === 409 && data.error === 'codi_duplicat') {
+        setPomsDuplicats(data.codis || []); setSavingPoms(false); return
+      }
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setSavingPoms(false); return }
       // El backend retorna els POMs amb els pom_master_id tenant-only ja assignats.
       const updated = data.poms_extrets || pomsExtrets
@@ -328,8 +375,17 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
 
   const pomsActius = (pomsExtrets || []).filter(p => p.actiu).length
 
+  // F6 · grups de secció del pas 2. Es porta l'índex ORIGINAL a dins: els toggles hi indexen.
+  const grupsPoms = agrupaPerSeccio(
+    (pomsExtrets || []).map((p, idx) => ({ p, idx })), x => x.p.seccio)
+  // Els POMs afegits a mà del catàleg no vénen de cap secció del document. Quan la fitxa SÍ
+  // que en té, se'ls posa una capçalera pròpia: sense ella semblaria que pengen de l'última.
+  const pomsAmbSeccions = grupsPoms.some(g => g.seccio)
+
   // ── Pas 3 — taula de mesures
   const pomsTaula = (pomsExtrets || []).filter(p => p.actiu)  // files = POMs actius
+  const grupsTaula = agrupaPerSeccio(pomsTaula, p => p.seccio)     // F6
+  const taulaAmbSeccions = grupsTaula.some(g => g.seccio)
   // La columna base de la taula de mesures és la label DOCUMENT aparellada amb la talla base
   // del model (B5); si no, fallback a l'heurística anterior.
   const baseSize = baseDocLabel
@@ -739,6 +795,57 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             </div>
           )}
 
+          {/* 409 codi_duplicat — feina de catàleg pendent, no error de l'import. La sessió és
+              intacta: resoldre el duplicat al catàleg i tornar a prémer «Continuar». */}
+          {pomsDuplicats && pomsDuplicats.length > 0 && (
+            <div style={{ background: 'var(--gold-pale)', border: '1px solid var(--gold)',
+                          color: 'var(--text-main)', borderRadius: 8, padding: '10px 14px',
+                          fontSize: 'var(--fs-body)', marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                {t('import_wizard.codi_duplicat_title')}
+              </div>
+              <div>
+                {t('import_wizard.codi_duplicat_body', {
+                  n: pomsDuplicats.length,
+                  codis: pomsDuplicats.join(', '),
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* F5 · el llibre té més d'un full. L'avís surt sempre que n'hi hagi més d'un; el
+              selector, només si hi ha res a triar de debò (2+ fulls llegibles, o fulls amb
+              POMs que no s'han pogut llegir). */}
+          {!extracting && fulls.length > 1 && (
+            <div style={{ background: 'var(--gold-pale)', border: '1px solid var(--gold)',
+                          color: 'var(--text-main)', borderRadius: 8, padding: '10px 14px',
+                          fontSize: 'var(--fs-body)', marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                {t('import_wizard.fulls_title', { n: fullsAmbPoms.length })}
+              </div>
+              <div style={{ marginBottom: potTriarFull ? 10 : 0 }}>
+                {t('import_wizard.fulls_llegit', { full: extraccioMeta?.full || '—' })}
+              </div>
+              {potTriarFull && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>{t('import_wizard.fulls_tria')}</span>
+                  <select value={extraccioMeta?.full || ''}
+                    onChange={e => canviaFull(e.target.value)}
+                    style={{ padding: '6px 8px', borderRadius: 6, fontSize: 'var(--fs-body)',
+                             border: `1px solid ${BORDER}`, fontFamily: 'inherit', minWidth: 260 }}>
+                    {fulls.map(f => (
+                      <option key={f.nom} value={f.nom} disabled={!f.passa_porta}>
+                        {f.passa_porta
+                          ? t('import_wizard.fulls_opcio', { nom: f.nom, n: f.n_files_amb_codi })
+                          : t('import_wizard.fulls_opcio_illegible', { nom: f.nom })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+          )}
+
           {!extracting && pomsExtrets && (
             <div>
               {/* Avisos d'extracció */}
@@ -755,7 +862,14 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
               </div>
 
               <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
-                {pomsExtrets.map((p, idx) => {
+                {grupsPoms.map((grup, gi) => (
+                  <Fragment key={`g${gi}`}>
+                    {(grup.seccio || pomsAmbSeccions) && (
+                      <div style={{ ...SUBHEAD, borderTop: gi ? `1px solid ${BORDER}` : 'none' }}>
+                        {grup.seccio || t('import_wizard.seccio_cap')}
+                      </div>
+                    )}
+                    {grup.items.map(({ p, idx }) => {
                   const conf = (p.confidence || '').toUpperCase()
                   const low = conf === 'LOW' || conf === 'NO_MATCH'
                   const med = conf === 'MEDIUM'
@@ -817,7 +931,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                           : noMatch ? t('import_wizard.no_match_badge') : conf.toLowerCase()}</span>
                     </div>
                   )
-                })}
+                    })}
+                  </Fragment>
+                ))}
               </div>
 
               {/* Afegir POM manual del catàleg */}
@@ -916,7 +1032,16 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                 </tr>
               </thead>
               <tbody>
-                {pomsTaula.map(p => (
+                {grupsTaula.map((grup, gi) => (
+                  <Fragment key={`g${gi}`}>
+                    {(grup.seccio || taulaAmbSeccions) && (
+                      <tr>
+                        <td colSpan={1 + tallesSel.length} style={{ ...SUBHEAD, borderTop: `1px solid ${BORDER}` }}>
+                          {grup.seccio || t('import_wizard.seccio_cap')}
+                        </td>
+                      </tr>
+                    )}
+                    {grup.items.map(p => (
                   <tr key={p.pom_master_id} style={{ borderTop: `1px solid ${BORDER}` }}>
                     <td style={{ padding: '6px 10px', position: 'sticky', left: 0, background: 'var(--white)' }}>
                       {/* QA-S8 · El codi del DOCUMENT mana: és el que la persona té al paper
@@ -942,6 +1067,8 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                       </td>
                     ))}
                   </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

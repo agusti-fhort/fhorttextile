@@ -466,7 +466,8 @@ export const commerce = {
     update: (id, data) => client.patch(`/api/v1/commerce/quotes/${id}/`, data),
     remove: (id) => client.delete(`/api/v1/commerce/quotes/${id}/`),
     send: (id) => client.post(`/api/v1/commerce/quotes/${id}/send/`),
-    pdf: (id) => client.get(`/api/v1/commerce/quotes/${id}/pdf/`, { responseType: 'blob' }),
+    // `lang` (ca/en/es) = idioma triat en emetre; buit → el backend cau al del client i, si no, a ca.
+    pdf: (id, lang) => client.get(`/api/v1/commerce/quotes/${id}/pdf/`, { params: lang ? { lang } : {}, responseType: 'blob' }),
     convert: (id) => client.post(`/api/v1/commerce/quotes/${id}/convert/`),   // → SalesOrder (201)
   },
   quoteLines: {
@@ -489,7 +490,7 @@ export const commerce = {
     list: (params) => client.get('/api/v1/commerce/orders/', { params }),
     get: (id) => client.get(`/api/v1/commerce/orders/${id}/`),
     update: (id, data) => client.patch(`/api/v1/commerce/orders/${id}/`, data),   // només status
-    pdf: (id) => client.get(`/api/v1/commerce/orders/${id}/pdf/`, { responseType: 'blob' }),
+    pdf: (id, lang) => client.get(`/api/v1/commerce/orders/${id}/pdf/`, { params: lang ? { lang } : {}, responseType: 'blob' }),
   },
   orderLines: {
     list: (params) => client.get('/api/v1/commerce/order-lines/', { params }),   // ?order=
@@ -535,7 +536,7 @@ export const commerce = {
     // Genera un DRAFT amb línies proposades. {work_order_ids:[…]} → 201 o 400 {detail, errors}.
     generate: (data) => client.post('/api/v1/commerce/delivery-notes/generate/', data),
     issue: (id) => client.post(`/api/v1/commerce/delivery-notes/${id}/issue/`),   // DRAFT→ISSUED (congela)
-    pdf: (id) => client.get(`/api/v1/commerce/delivery-notes/${id}/pdf/`, { responseType: 'blob' }),
+    pdf: (id, lang) => client.get(`/api/v1/commerce/delivery-notes/${id}/pdf/`, { params: lang ? { lang } : {}, responseType: 'blob' }),
     // v2 — safata d'albaranables per model. ?customer=<id> → {customer, groups:[{model, items}]}.
     billable: (params) => client.get('/api/v1/commerce/delivery-notes/billable/', { params }),
     // v2 — retorna el DRAFT obert del client o en crea un. {customer} → 200/201.

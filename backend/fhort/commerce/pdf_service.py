@@ -8,8 +8,17 @@ paràgrafs i HRFlowable respectaven el padding (~2mm d'indent) mentre les Table 
 Solució: BaseDocTemplate + Frame amb padding 0. Un sol origen (el leftMargin) per a tot.
 
 Tipografia Montserrat de `settings.PDF_FONTS_DIR` (fallback Helvetica + WARNING, mai 500).
-Emissor = TenantConfig; client = quote.customer; línies/totals/dates = quote. Etiquetes en
-català (naming EN només a BD/codi). doc_type al PDF hardcoded "Pressupost" (i18n = TODO).
+Emissor = TenantConfig; client = quote.customer; línies/totals/dates = quote.
+
+IDIOMA (decisió Patró C 2026-07-27): els literals del document viuen al diccionari
+`_PDF_STRINGS` d'aquest fitxer i se serveixen per `t(lang, key)`. És una v1 CONSCIENT: no
+és gettext. El backend no té cap canonada i18n (ni LocaleMiddleware, ni LOCALE_PATHS, ni
+locale/, ni .po) i muntar-la per a una sola superfície seria arquitectura per endavant.
+**Promoure a gettext quan hi hagi una 2a superfície backend amb i18n** — llavors el
+diccionari es buida cap als .po i `t()` esdevé un àlies de gettext, sense tocar cap crida.
+
+Llei del fitxer: cap literal de cara al lector fora de `_PDF_STRINGS`. Els títols dels
+documents també hi entren; les views passen la CLAU ('doc_quote'…), mai el text.
 """
 import logging
 import os
@@ -94,6 +103,82 @@ def _fonts():
     return resolved
 
 
+# ── i18n dels literals del document (v1 diccionari; veure capçalera) ────────────────────────
+# Els idiomes són els mateixos que tasks.Customer.LANGUAGE_CHOICES. 'ca' és la llengua base:
+# és l'idioma en què es va dissenyar el document i el fallback de tota clau que falti.
+PDF_LANGS = ('ca', 'en', 'es')
+PDF_LANG_FALLBACK = 'ca'
+
+_PDF_STRINGS = {
+    'ca': {
+        'doc_quote': 'Pressupost', 'doc_order': 'Comanda', 'doc_delivery_note': 'Albarà',
+        'number': 'Número', 'date': 'Data', 'valid_until': 'Vàlid fins',
+        'for': 'Per a:', 'tax_id': 'NIF', 'iban': 'IBAN',
+        'description': 'Descripció', 'units': 'Unitats', 'unit_price': 'Preu unit.',
+        'amount': 'Import',
+        'taxable_base': 'Base imposable', 'vat': 'I.V.A.', 'total_amount': 'Import total',
+        'payment_method': 'Forma de pagament', 'observations': 'Observacions',
+        'payment_terms': 'Condicions de pagament',
+        'qty': 'Qt.', 'unit': 'Unitat', 'price': 'Preu', 'delivery': 'Lliurament',
+        'done': 'feta', 'pending': 'pendent', 'model_subtotal': 'Subtotal model',
+    },
+    'en': {
+        'doc_quote': 'Quotation', 'doc_order': 'Order', 'doc_delivery_note': 'Delivery note',
+        'number': 'Number', 'date': 'Date', 'valid_until': 'Valid until',
+        'for': 'For:', 'tax_id': 'Tax ID', 'iban': 'IBAN',
+        'description': 'Description', 'units': 'Units', 'unit_price': 'Unit price',
+        'amount': 'Amount',
+        'taxable_base': 'Taxable base', 'vat': 'VAT', 'total_amount': 'Total amount',
+        'payment_method': 'Payment method', 'observations': 'Notes',
+        'payment_terms': 'Payment terms',
+        'qty': 'Qty', 'unit': 'Unit', 'price': 'Price', 'delivery': 'Delivery',
+        'done': 'done', 'pending': 'pending', 'model_subtotal': 'Model subtotal',
+    },
+    'es': {
+        'doc_quote': 'Presupuesto', 'doc_order': 'Pedido', 'doc_delivery_note': 'Albarán',
+        'number': 'Número', 'date': 'Fecha', 'valid_until': 'Válido hasta',
+        'for': 'Para:', 'tax_id': 'NIF', 'iban': 'IBAN',
+        'description': 'Descripción', 'units': 'Unidades', 'unit_price': 'Precio unit.',
+        'amount': 'Importe',
+        'taxable_base': 'Base imponible', 'vat': 'I.V.A.', 'total_amount': 'Importe total',
+        'payment_method': 'Forma de pago', 'observations': 'Observaciones',
+        'payment_terms': 'Condiciones de pago',
+        'qty': 'Cant.', 'unit': 'Unidad', 'price': 'Precio', 'delivery': 'Entrega',
+        'done': 'hecha', 'pending': 'pendiente', 'model_subtotal': 'Subtotal modelo',
+    },
+}
+
+
+def t(lang, key):
+    """Literal del document per (idioma, clau). Doble fallback: idioma desconegut → 'ca';
+    clau absent en aquell idioma → la de 'ca'. Mai peta i mai retorna buit: un PDF no es
+    trenca per una traducció que falta. Únic accés als literals — cap ternari inline."""
+    table = _PDF_STRINGS.get(lang) or _PDF_STRINGS[PDF_LANG_FALLBACK]
+    text = table.get(key)
+    if text is None:
+        text = _PDF_STRINGS[PDF_LANG_FALLBACK].get(key)
+        if text is None:
+            logger.warning("PDF i18n: clau desconeguda '%s' (idioma %s).", key, lang)
+            return key
+        logger.warning("PDF i18n: clau '%s' sense traducció a '%s'; fallback a '%s'.",
+                       key, lang, PDF_LANG_FALLBACK)
+    return text
+
+
+def resolve_pdf_lang(requested, customer=None):
+    """Idioma efectiu d'un PDF. Cadena de decisió ÚNICA (les views no decideixen res):
+    petició explícita de l'operador → idioma del client destinatari → 'ca'.
+
+    El buit és un valor legítim a Customer.language ('sense preselecció'): no és un error,
+    simplement no aporta default i es cau al fallback."""
+    if requested in PDF_LANGS:
+        return requested
+    cust_lang = (getattr(customer, 'language', '') or '').strip()
+    if cust_lang in PDF_LANGS:
+        return cust_lang
+    return PDF_LANG_FALLBACK
+
+
 def _money(value):
     """Format monetari 2 decimals amb coma decimal (convenció EU)."""
     v = Decimal(value or 0).quantize(Decimal('0.01'))
@@ -128,15 +213,15 @@ def _amb_pais(trossos, pais):
     return f'{addr}, {pais}' if pais else addr
 
 
-def _customer_oneliner(c):
-    """Adreça · NIF del client en una sola línia (omet buits)."""
+def _customer_oneliner(c, lang=PDF_LANG_FALLBACK):
+    """Adreça · identificador fiscal del client en una sola línia (omet buits)."""
     parts = []
     addr = _amb_pais([c.adreca_linia1, c.adreca_linia2,
                       ' '.join(y for y in [c.codi_postal, c.ciutat] if y)], c.pais)
     if addr:
         parts.append(addr)
     if c.nif:
-        parts.append(f'NIF: {c.nif}')
+        parts.append(f'{t(lang, "tax_id")}: {c.nif}')
     return ' · '.join(parts)
 
 
@@ -181,7 +266,7 @@ def _brand_flowable(cfg, s, FS, FL):
                      f'<font name="{FL}" color="#888888">Textile Tech</font>', s('logo', size=14))
 
 
-def _emissor_left(cfg, s, FS, FL):
+def _emissor_left(cfg, s, FS, FL, lang=PDF_LANG_FALLBACK):
     """Columna esquerra de la capçalera: marca + identitat fiscal de l'emissor (TenantConfig).
     Cada línia és opcional (fallback net). Compartida per generate_document_pdf i _delivery_note."""
     rows = [[_brand_flowable(cfg, s, FS, FL)], [Spacer(1, 2 * mm)]]
@@ -196,7 +281,7 @@ def _emissor_left(cfg, s, FS, FL):
             rows.append([Paragraph(oneliner, S_EM)])
         tax_id = (getattr(cfg, 'tax_id', '') or '').strip()
         if tax_id:
-            rows.append([Paragraph(f'NIF: {tax_id}', S_EM)])
+            rows.append([Paragraph(f'{t(lang, "tax_id")}: {tax_id}', S_EM)])
         contact = ' · '.join(x for x in [(getattr(cfg, 'email', '') or '').strip(),
                                          (getattr(cfg, 'phone', '') or '').strip()] if x)
         if contact:
@@ -213,17 +298,21 @@ def _tax_pct(subtotal, tax_amount):
     return 21
 
 
-def generate_quote_pdf(quote):
+def generate_quote_pdf(quote, lang=None):
     """Retorna els bytes del PDF de l'oferta `quote` (disseny Montserrat; fallback Helvetica)."""
-    return generate_document_pdf(quote, doc_title='Pressupost')
+    return generate_document_pdf(quote, doc_key='doc_quote', lang=lang)
 
 
-def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
+def generate_document_pdf(quote, doc_key='doc_quote', show_payment=True, lang=None):
     """Retorna els bytes del PDF d'un document comercial (`quote` = Quote, SalesOrder o
-    DeliveryNote; layout idèntic). `doc_title` és el títol ('Pressupost'/'Comanda'/'Albarà').
+    DeliveryNote; layout idèntic). `doc_key` és la CLAU del títol ('doc_quote'/'doc_order'/
+    'doc_delivery_note'), no el text: el títol es tradueix aquí com la resta de literals.
+    `lang` és l'idioma efectiu (ja resolt per resolve_pdf_lang); None → fallback 'ca'.
     `show_payment=False` (albarà, B4c): SENSE bloc de venciments/condicions de pagament ni
     "Vàlid fins" (l'albarà no en porta); el peu queda amb les observacions/notes. Les línies
     DEDUCTION (import negatiu) es mostren amb signe − i color discret. Emissor = TenantConfig."""
+    lang = lang if lang in PDF_LANGS else PDF_LANG_FALLBACK
+    doc_title = t(lang, doc_key)
     F = _fonts()
     FL, FR, FS, FB = F[F_LIGHT], F[F_REG], F[F_SEMI], F[F_BOLD]
     cfg = _tenant_cfg()
@@ -258,14 +347,15 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
 
     # ═══ CAPÇALERA ═══
     # Emissor = TenantConfig (marca + identitat fiscal), via helper compartit. Fi del hardcode.
-    left = _emissor_left(cfg, s, FS, FL)
+    left = _emissor_left(cfg, s, FS, FL, lang)
 
     meta_rows = [
-        [Paragraph('Número', S_LABEL_R), Paragraph(quote.document_number or '—', SSM_R)],
-        [Paragraph('Data', S_LABEL_R), Paragraph(_fmt_date(quote.issued_at), SSM_R)],
+        [Paragraph(t(lang, 'number'), S_LABEL_R), Paragraph(quote.document_number or '—', SSM_R)],
+        [Paragraph(t(lang, 'date'), S_LABEL_R), Paragraph(_fmt_date(quote.issued_at), SSM_R)],
     ]
     if show_payment:  # "Vàlid fins" és propi d'oferta/comanda; un albarà no en porta.
-        meta_rows.append([Paragraph('Vàlid fins', S_LABEL_R), Paragraph(_fmt_date(quote.valid_until), SSM_R)])
+        meta_rows.append([Paragraph(t(lang, 'valid_until'), S_LABEL_R),
+                          Paragraph(_fmt_date(quote.valid_until), SSM_R)])
     meta = Table(meta_rows, colWidths=[COL_RIGHT_W - 30 * mm, 30 * mm], style=TableStyle(ZP))
 
     right = Table([
@@ -284,10 +374,10 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
 
     # ═══ CLIENT ═══
     c = quote.customer
-    story.append(Paragraph('Per a:', S_LABEL))
+    story.append(Paragraph(t(lang, 'for'), S_LABEL))
     story.append(Spacer(1, 1 * mm))
     story.append(Paragraph(c.rao_social or c.nom, S_CLIENT))
-    oneliner = _customer_oneliner(c)
+    oneliner = _customer_oneliner(c, lang)
     if oneliner:
         story.append(Paragraph(oneliner, SSM_G))
     story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY,
@@ -296,8 +386,8 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
     # ═══ LÍNIES ═══
     HDR = s('hdr', font=FS, size=8, color=GREY)
     HDR_R = s('hdrr', font=FS, size=8, color=GREY, align=TA_RIGHT)
-    rows = [[Paragraph('Descripció', HDR), Paragraph('Unitats', HDR_R),
-             Paragraph('Preu unit.', HDR_R), Paragraph('Import', HDR_R)]]
+    rows = [[Paragraph(t(lang, 'description'), HDR), Paragraph(t(lang, 'units'), HDR_R),
+             Paragraph(t(lang, 'unit_price'), HDR_R), Paragraph(t(lang, 'amount'), HDR_R)]]
     SR_NEG = s('rneg', align=TA_RIGHT, color=DGREY)  # línia negativa (deducció): color discret
     for line in quote.lines.all():
         name = (line.product.name if line.product_id else '') or ''
@@ -329,9 +419,9 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
     # ═══ TOTALS ═══
     pct = _tax_pct(quote.subtotal, quote.tax_amount)
     story.append(Table([
-        ['', Paragraph('Base imposable', S), Paragraph(_money(quote.subtotal), SR)],
-        ['', Paragraph(f'I.V.A. {pct}%', S), Paragraph(_money(quote.tax_amount), SR)],
-        ['', Paragraph('Import total', SB), Paragraph(_money(quote.total), SRB)],
+        ['', Paragraph(t(lang, 'taxable_base'), S), Paragraph(_money(quote.subtotal), SR)],
+        ['', Paragraph(f'{t(lang, "vat")} {pct}%', S), Paragraph(_money(quote.tax_amount), SR)],
+        ['', Paragraph(t(lang, 'total_amount'), SB), Paragraph(_money(quote.total), SRB)],
     ], colWidths=[104 * mm, 44 * mm, 26 * mm], style=TableStyle([
         ('LINEABOVE', (1, 2), (2, 2), 0.5, LGREY),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
@@ -342,7 +432,7 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
     # Albarà (show_payment=False): sense forma/condicions de pagament ni venciments; només
     # observacions. Oferta/comanda: bloc esquerre (forma de pagament + notes) + bloc dret
     # (condicions + venciments materialitzats).
-    peu_label = 'Forma de pagament' if show_payment else 'Observacions'
+    peu_label = t(lang, 'payment_method' if show_payment else 'observations')
     peu_l_rows = [[Paragraph(peu_label, S_LABEL)]]
     if quote.notes:
         peu_l_rows.append([Paragraph(quote.notes.replace('\n', ' '), SSM_G)])
@@ -351,7 +441,7 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
     if show_payment:
         iban = (getattr(cfg, 'iban', '') or '').strip()
         if iban:
-            peu_l_rows.append([Paragraph(f'IBAN: {iban}', SSM_G)])
+            peu_l_rows.append([Paragraph(f'{t(lang, "iban")}: {iban}', SSM_G)])
         pay_notes = (getattr(cfg, 'payment_notes', '') or '').strip()
         if pay_notes:
             peu_l_rows.append([Paragraph(pay_notes.replace('\n', ' '), SSM_G)])
@@ -366,9 +456,12 @@ def generate_document_pdf(quote, doc_title='Pressupost', show_payment=True):
     else:
         terms = quote.payment_terms or (quote.customer.payment_terms if quote.customer_id else None)
         due = list(quote.due_dates.all())
-        peu_r_rows = [[Paragraph('Condicions de pagament', S_LABEL), '']]
+        peu_r_rows = [[Paragraph(t(lang, 'payment_terms'), S_LABEL), '']]
         if terms:
-            peu_r_rows.append([Paragraph(terms.name, SSM_I), ''])
+            # Bandera tancada (2026-07-27): commerce/models.py:400 declarava des de B3a que aquest
+            # nom surt "en l'idioma del document/client", però s'imprimia el canònic. PaymentTerms
+            # és TranslatableMixin i la seva traducció viu a i18n_content; ara sí que s'hi passa.
+            peu_r_rows.append([Paragraph(terms.translated('name', lang), SSM_I), ''])
         for dd in due:
             peu_r_rows.append([Paragraph(f'{dd.percentage:g}% · {_fmt_date(dd.due_date)}', SSM_G),
                                Paragraph(_money(dd.amount), SR)])
@@ -397,12 +490,14 @@ DET_COLS = [78 * mm, 22 * mm, 16 * mm, 16 * mm, 20 * mm, 22 * mm]  # Descr·Data
 _UNIT_DEFAULT = 'ut'
 
 
-def generate_delivery_note_pdf(delivery_note):
+def generate_delivery_note_pdf(delivery_note, lang=None):
     """Retorna els bytes del PDF d'un albarà v2 compost per model. Agrupa les línies VISIBLES pel
     seu model FK; per cada model dibuixa una franja (fons cream) amb ref intern + nom + [ref client
     si difereix] + collection + temporada/any + data de lliurament (última tasca), els detalls
     columnats, els comentaris lliures (MANUAL) en cursiva i el subtotal del model. Els totals són
-    els del document (calculats sobre línies visibles). SENSE venciments, SENSE cost intern."""
+    els del document (calculats sobre línies visibles). SENSE venciments, SENSE cost intern.
+    `lang` és l'idioma efectiu (ja resolt per resolve_pdf_lang); None → fallback 'ca'."""
+    lang = lang if lang in PDF_LANGS else PDF_LANG_FALLBACK
     F = _fonts()
     FL, FR, FS, FB = F[F_LIGHT], F[F_REG], F[F_SEMI], F[F_BOLD]
     cfg = _tenant_cfg()
@@ -427,20 +522,20 @@ def generate_delivery_note_pdf(delivery_note):
     buf = BytesIO()
     doc = BaseDocTemplate(buf, pagesize=A4,
                           leftMargin=ML, rightMargin=MR, topMargin=MT, bottomMargin=MB,
-                          title=delivery_note.document_number or 'Albarà')
+                          title=delivery_note.document_number or t(lang, 'doc_delivery_note'))
     frame = Frame(ML, MB, CW, PAGE_H - MT - MB,
                   leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
     doc.addPageTemplates([PageTemplate(id='main', frames=[frame])])
     story = []
 
     # ═══ CAPÇALERA (heretada del pressupost validat) — emissor = TenantConfig, helper compartit ═══
-    left = _emissor_left(cfg, s, FS, FL)
+    left = _emissor_left(cfg, s, FS, FL, lang)
 
     meta = Table([
-        [Paragraph('Número', S_LABEL_R), Paragraph(delivery_note.document_number or '—', SSM_R)],
-        [Paragraph('Data', S_LABEL_R), Paragraph(_fmt_date(delivery_note.issued_at), SSM_R)],
+        [Paragraph(t(lang, 'number'), S_LABEL_R), Paragraph(delivery_note.document_number or '—', SSM_R)],
+        [Paragraph(t(lang, 'date'), S_LABEL_R), Paragraph(_fmt_date(delivery_note.issued_at), SSM_R)],
     ], colWidths=[COL_RIGHT_W - 30 * mm, 30 * mm], style=TableStyle(ZP))
-    right = Table([[Paragraph('Albarà', S_TITDOC)], [Spacer(1, 2 * mm)], [meta]],
+    right = Table([[Paragraph(t(lang, 'doc_delivery_note'), S_TITDOC)], [Spacer(1, 2 * mm)], [meta]],
                   colWidths=[COL_RIGHT_W], style=TableStyle(ZP))
     story.append(Table([[left, right]], colWidths=[COL_LEFT_W, COL_RIGHT_W],
         style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')] + ZP)))
@@ -448,10 +543,10 @@ def generate_delivery_note_pdf(delivery_note):
 
     # ═══ CLIENT ═══
     c = delivery_note.customer
-    story.append(Paragraph('Per a:', S_LABEL))
+    story.append(Paragraph(t(lang, 'for'), S_LABEL))
     story.append(Spacer(1, 1 * mm))
     story.append(Paragraph(c.rao_social or c.nom, S_CLIENT))
-    oneliner = _customer_oneliner(c)
+    oneliner = _customer_oneliner(c, lang)
     if oneliner:
         story.append(Paragraph(oneliner, SSM_G))
     story.append(HRFlowable(width='100%', thickness=0.5, color=LGREY, spaceBefore=4 * mm, spaceAfter=5 * mm))
@@ -494,7 +589,7 @@ def generate_delivery_note_pdf(delivery_note):
             Paragraph(f'<font name="{FS}" color="#B8860B">{ref}</font>&nbsp;&nbsp;'
                       f'<font name="{FS}" color="#1A1A1A">{name}</font>&nbsp;&nbsp;'
                       f'<font name="{FL}" color="#888888" size="7.5">{meta_txt}</font>', s('band', size=10)),
-            Paragraph(f'Lliurament · {deliver}', S_MDELIV),
+            Paragraph(f'{t(lang, "delivery")} · {deliver}', S_MDELIV),
         ]], colWidths=[CW * 0.68, CW * 0.32], style=TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), MODEL_BAND),
             ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
@@ -503,19 +598,19 @@ def generate_delivery_note_pdf(delivery_note):
         ]))
         els.append(band)
         # --- DETALLS COLUMNATS ---
-        head = [Paragraph('Descripció', s('dh', font=FS, size=7, color=GREY)),
-                Paragraph('Data', s('dh2', font=FS, size=7, color=GREY)),
-                Paragraph('Qt.', s('dh3', font=FS, size=7, color=GREY, align=TA_RIGHT)),
-                Paragraph('Unitat', s('dh4', font=FS, size=7, color=GREY)),
-                Paragraph('Preu', s('dh5', font=FS, size=7, color=GREY, align=TA_RIGHT)),
-                Paragraph('Import', s('dh6', font=FS, size=7, color=GREY, align=TA_RIGHT))]
+        head = [Paragraph(t(lang, 'description'), s('dh', font=FS, size=7, color=GREY)),
+                Paragraph(t(lang, 'date'), s('dh2', font=FS, size=7, color=GREY)),
+                Paragraph(t(lang, 'qty'), s('dh3', font=FS, size=7, color=GREY, align=TA_RIGHT)),
+                Paragraph(t(lang, 'unit'), s('dh4', font=FS, size=7, color=GREY)),
+                Paragraph(t(lang, 'price'), s('dh5', font=FS, size=7, color=GREY, align=TA_RIGHT)),
+                Paragraph(t(lang, 'amount'), s('dh6', font=FS, size=7, color=GREY, align=TA_RIGHT))]
         rows = [head]
         for l in det_lines:
             desc = (l.description or '').strip() or (l.product.name if l.product_id else '—')
             if partial and l.model_task_id:
                 done = l.model_task and l.model_task.status == 'Done'
                 col = FETA_COL if done else PEND_COL
-                desc = f'{desc}  <font color="{col}" size="6.5">● {"feta" if done else "pendent"}</font>'
+                desc = f'{desc}  <font color="{col}" size="6.5">● {t(lang, "done" if done else "pending")}</font>'
             date = _fmt_date(l.model_task.finished_at) if (l.model_task_id and l.model_task and l.model_task.finished_at) else '—'
             rows.append([
                 Paragraph(desc, s('ld', size=8)),
@@ -541,7 +636,7 @@ def generate_delivery_note_pdf(delivery_note):
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 2)])))
         # --- SUBTOTAL MODEL ---
         subtotal = sum((Decimal(l.line_total or 0) for l in det_lines), Decimal('0'))
-        els.append(Table([[Paragraph('Subtotal model', s('stl', size=7.5, color=DGREY, align=TA_RIGHT)),
+        els.append(Table([[Paragraph(t(lang, 'model_subtotal'), s('stl', size=7.5, color=DGREY, align=TA_RIGHT)),
                            Paragraph(f'{_money(subtotal)} €', s('stv', font=FS, size=9, align=TA_RIGHT))]],
             colWidths=[CW - 30 * mm, 30 * mm], style=TableStyle([
             ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
@@ -562,9 +657,9 @@ def generate_delivery_note_pdf(delivery_note):
     # ═══ RESUM (sense venciments; totals sobre línies visibles = els del document) ═══
     pct = _tax_pct(delivery_note.subtotal, delivery_note.tax_amount)
     story.append(Table([
-        ['', Paragraph('Base imposable', S), Paragraph(f'{_money(delivery_note.subtotal)} €', SR)],
-        ['', Paragraph(f'I.V.A. {pct}%', S), Paragraph(f'{_money(delivery_note.tax_amount)} €', SR)],
-        ['', Paragraph('Import total', SB), Paragraph(f'{_money(delivery_note.total)} €', SRB)],
+        ['', Paragraph(t(lang, 'taxable_base'), S), Paragraph(f'{_money(delivery_note.subtotal)} €', SR)],
+        ['', Paragraph(f'{t(lang, "vat")} {pct}%', S), Paragraph(f'{_money(delivery_note.tax_amount)} €', SR)],
+        ['', Paragraph(t(lang, 'total_amount'), SB), Paragraph(f'{_money(delivery_note.total)} €', SRB)],
     ], colWidths=[104 * mm, 44 * mm, 26 * mm], style=TableStyle([
         ('LINEABOVE', (1, 2), (2, 2), 0.5, LGREY),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
@@ -573,7 +668,7 @@ def generate_delivery_note_pdf(delivery_note):
     # ═══ OBSERVACIONS (notes de l'albarà; sense pagament/venciments) ═══
     if (delivery_note.notes or '').strip():
         story.append(Spacer(1, 8 * mm))
-        story.append(Table([[Paragraph('Observacions', S_LABEL)],
+        story.append(Table([[Paragraph(t(lang, 'observations'), S_LABEL)],
                             [Paragraph(delivery_note.notes.replace('\n', ' '), SSM_G)]],
             colWidths=[CW], style=TableStyle(ZP + [('LINEABOVE', (0, 0), (0, 0), 0.5, LGREY)])))
 

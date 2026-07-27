@@ -248,6 +248,16 @@ class Customer(models.Model):
                                       null=True, blank=True, related_name='default_customers',
                                       help_text="Condició de pagament per defecte del client.")
 
+    # Idioma dels documents comercials adreçats a aquest client (decisió Agus 2026-07-27).
+    # Semàntica ESTRICTA: és el DEFAULT del selector d'idioma en emetre un PDF, no una
+    # propietat que mani. Buit = el selector s'obre sense preselecció i tria l'operador; el
+    # que triï NO es reescriu aquí (l'idioma del client el decideix qui edita la fitxa, no
+    # una emissió puntual). Naming en anglès (llei B1, commerce/models_base.py:9).
+    LANGUAGE_CHOICES = [('ca', 'Català'), ('en', 'English'), ('es', 'Español')]
+    language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, blank=True, default='',
+                                help_text="Idioma per defecte dels PDF comercials. Buit = sense "
+                                          "preselecció; l'operador tria en emetre.")
+
     class Meta:
         ordering = ['codi']
         verbose_name = 'Customer'

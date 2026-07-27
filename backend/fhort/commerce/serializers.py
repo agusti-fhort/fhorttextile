@@ -149,6 +149,28 @@ class PaymentTermsSerializer(TranslationsSerializerMixin, serializers.ModelSeria
             PaymentTermLine.objects.create(terms=terms, **{k: v for k, v in ln.items() if k != 'id'})
 
 
+# ── Data d'emissió: guard d'estat (2026-07-27) ─────────────────────────────────────────
+# `issued_at` (models_base.py:45) ja existia i ja sortia al PDF; el que faltava era poder-la
+# CORREGIR. És editable mentre el document encara es pot corregir i queda congelada quan el
+# document ja està tancat — mateix principi de segellat que les línies i les intencions.
+# El cens d'estats viu de cada tipus (STATUS_CHOICES) dona la frontera:
+#   Quote        DRAFT·SENT    → mateixa frontera que les intencions de model ("mentre l'oferta
+#                                negocia"); ACCEPTED està convertida i segellada, i REJECTED/
+#                                EXPIRED són documents morts.
+#   SalesOrder   OPEN          → COMPLETED i CANCELLED són terminals.
+#   DeliveryNote DRAFT·ISSUED  → l'emissió és seva i encara s'ha de poder corregir; INVOICED ja
+#                                s'ha presentat al client i acceptat.
+def guard_issued_at_editable(serializer, value, live_statuses):
+    """Bloqueja el canvi de data d'emissió si el document ja no és en un estat viu.
+    En creació (instance=None) no aplica: encara no hi ha estat."""
+    doc = serializer.instance
+    if doc is not None and doc.status not in live_statuses:
+        raise serializers.ValidationError(
+            f"La data d'emissió no es pot canviar en un document en estat '{doc.status}' "
+            f"(només {' o '.join(live_statuses)}).")
+    return value
+
+
 # ── Documents comercials — Quote (B2) ──────────────────────────────────────────────────
 
 class QuoteLineSerializer(serializers.ModelSerializer):
@@ -189,6 +211,8 @@ class QuoteSerializer(serializers.ModelSerializer):
     """Capçalera d'oferta amb línies nested (read-only, s'editen pel QuoteLineViewSet, ?quote=).
     Numeració, totals i estat són calculats/gestionats pel backend (read-only)."""
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
+    # Default del selector d'idioma del PDF (Customer.language). '' = sense preselecció.
+    customer_language = serializers.CharField(source='customer.language', read_only=True, default='')
     lines = QuoteLineSerializer(many=True, read_only=True)
     # Display (B3a): nom de la condició override + condició per defecte del client (per al selector).
     payment_terms_name = serializers.CharField(source='payment_terms.name', read_only=True)
@@ -196,7 +220,8 @@ class QuoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Quote
-        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom', 'status',
+        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom',
+                  'customer_language', 'status',
                   'issued_at', 'valid_until', 'payment_terms', 'payment_terms_name',
                   'customer_payment_terms', 'subtotal', 'tax_amount', 'total',
                   'tax_breakdown', 'notes', 'created_at', 'updated_at', 'lines']
@@ -204,6 +229,9 @@ class QuoteSerializer(serializers.ModelSerializer):
         # és el desglossament calculat, només lectura.
         read_only_fields = ['document_number', 'doc_type', 'status', 'subtotal', 'tax_amount',
                             'total', 'tax_breakdown', 'created_at', 'updated_at']
+
+    def validate_issued_at(self, value):
+        return guard_issued_at_editable(self, value, ('DRAFT', 'SENT'))
 
 
 class QuoteLineModelIntentSerializer(serializers.ModelSerializer):
@@ -272,8 +300,12 @@ class DocumentDueDateSerializer(serializers.ModelSerializer):
 
 class SalesOrderSerializer(serializers.ModelSerializer):
     """Capçalera de comanda amb línies i venciments nested (read-only). Tot calculat/congelat;
-    l'ÚNIC camp editable per API és `status` (OPEN/COMPLETED/CANCELLED). Traçabilitat a l'oferta."""
+    els únics camps editables per API són `status` (OPEN/COMPLETED/CANCELLED) i la data
+    d'emissió, corregible mentre la comanda és OPEN. La irreversibilitat de B3b es manté
+    sencera: preus, quantitats i línies segueixen intocables."""
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
+    # Default del selector d'idioma del PDF (Customer.language). '' = sense preselecció.
+    customer_language = serializers.CharField(source='customer.language', read_only=True, default='')
     lines = SalesOrderLineSerializer(many=True, read_only=True)
     due_dates = DocumentDueDateSerializer(many=True, read_only=True)
     payment_terms_name = serializers.CharField(source='payment_terms.name', read_only=True)
@@ -281,13 +313,17 @@ class SalesOrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SalesOrder
-        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom', 'status',
+        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom',
+                  'customer_language', 'status',
                   'issued_at', 'valid_until', 'payment_terms', 'payment_terms_name',
                   'source_quote', 'source_quote_number', 'subtotal', 'tax_amount', 'total',
                   'tax_breakdown', 'notes', 'created_at', 'updated_at', 'lines', 'due_dates']
-        read_only_fields = ['document_number', 'doc_type', 'customer', 'issued_at', 'valid_until',
+        read_only_fields = ['document_number', 'doc_type', 'customer', 'valid_until',
                             'payment_terms', 'source_quote', 'subtotal', 'tax_amount', 'total',
                             'tax_breakdown', 'notes', 'created_at', 'updated_at']
+
+    def validate_issued_at(self, value):
+        return guard_issued_at_editable(self, value, ('OPEN',))
 
 
 class WorkOrderAdjustmentSerializer(serializers.ModelSerializer):
@@ -442,6 +478,8 @@ class DeliveryNoteSerializer(serializers.ModelSerializer):
     ?delivery_note=). Numeració/totals/estat calculats o gestionats pel backend (read-only);
     `notes` editable en DRAFT. `work_orders_included` = els WO agregats (traçabilitat)."""
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
+    # Default del selector d'idioma del PDF (Customer.language). '' = sense preselecció.
+    customer_language = serializers.CharField(source='customer.language', read_only=True, default='')
     lines = DeliveryNoteLineSerializer(many=True, read_only=True)
     issued_by_nom = serializers.CharField(source='issued_by.nom_complet', read_only=True, default=None)
     invoiced_by_nom = serializers.CharField(source='invoiced_by.nom_complet', read_only=True, default=None)
@@ -449,14 +487,18 @@ class DeliveryNoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DeliveryNote
-        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom', 'status',
+        fields = ['id', 'document_number', 'doc_type', 'customer', 'customer_nom',
+                  'customer_language', 'status',
                   'issued_at', 'issued_by', 'issued_by_nom', 'invoiced_at', 'invoiced_by',
                   'invoiced_by_nom', 'subtotal', 'tax_amount', 'total',
                   'tax_breakdown', 'notes', 'created_at', 'updated_at', 'lines',
                   'work_orders_included']
-        read_only_fields = ['document_number', 'doc_type', 'customer', 'status', 'issued_at',
+        read_only_fields = ['document_number', 'doc_type', 'customer', 'status',
                             'issued_by', 'invoiced_at', 'invoiced_by', 'subtotal', 'tax_amount',
                             'total', 'tax_breakdown', 'created_at', 'updated_at']
+
+    def validate_issued_at(self, value):
+        return guard_issued_at_editable(self, value, ('DRAFT', 'ISSUED'))
 
     def get_work_orders_included(self, obj):
         return [{'id': w.id, 'number': w.number, 'kind': w.kind}
