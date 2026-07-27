@@ -552,6 +552,19 @@ def _clau_natural_pom(pom):
     return ((pom.pom_global.codi if pom.pom_global_id else None), pom.codi_client)
 
 
+def _nom_del_no_aparellat(clau):
+    """Com s'anomena al informe un POM que no ha trobat parella.
+
+    Les DUES cares, i a posta: el codi del diccionari és el que la marca reconeix i pot buscar
+    al seu catàleg; el `codi_client` és el que l'estudi veu a la seva pantalla. Un informe que
+    només digués un dels dos obligaria una de les dues cases a traduir-lo a mà.
+    """
+    global_codi, codi_client = clau
+    if global_codi and codi_client:
+        return f'{global_codi} ({codi_client})'
+    return global_codi or codi_client or '?'
+
+
 def _resol_pom_al_desti(clau, cache):
     """Resol la clau natural contra el catàleg del destí. None = no aparellat (i no viatja)."""
     if clau in cache:
@@ -670,7 +683,7 @@ def _escriu_a_la_marca(brand_schema, codi_intern, patrimoni):
             for row in patrimoni['mesures']:
                 pom = _resol_pom_al_desti(row['clau'], cache)
                 if pom is None:
-                    no_aparellat.append(row['clau'][0] or row['clau'][1])
+                    no_aparellat.append(_nom_del_no_aparellat(row['clau']))
                     continue
                 te_valor = (not talla_divergent) and row['base_value_cm'] is not None
                 existent = BaseMeasurement.objects.filter(model=twin, pom=pom).first()
@@ -711,7 +724,7 @@ def _escriu_a_la_marca(brand_schema, codi_intern, patrimoni):
             for row in patrimoni['regles']:
                 pom = _resol_pom_al_desti(row['clau'], cache)
                 if pom is None:
-                    no_aparellat.append(row['clau'][0] or row['clau'][1])
+                    no_aparellat.append(_nom_del_no_aparellat(row['clau']))
                     continue
                 # La regla RESIDENT de la marca és el seu judici sobre les seves dades: si ja
                 # n'hi ha una, no es toca. `GradedSpec` no viatja mai — el motor de la marca
