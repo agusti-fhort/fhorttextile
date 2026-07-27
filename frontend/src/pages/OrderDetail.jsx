@@ -5,7 +5,7 @@ import useAuthStore from '../store/auth'
 import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
-import PdfButton from '../components/ui/PdfButton'
+import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import { DocumentHeader, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { OrderStatusBadge, allocatedPct } from './Orders'
@@ -45,6 +45,8 @@ export default function OrderDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [order, setOrder] = useState(null)
+  // Idioma del PDF: default = el del client destinatari, canviable per document.
+  const [pdfLang, setPdfLang] = usePdfLang(order?.customer_language)
   const [feedback, setFeedback] = useState(null)
   const [busy, setBusy] = useState(false)
   // P4 — desplegable read-only per línia: models assignats + tasques + % imputat (lazy).
@@ -64,7 +66,7 @@ export default function OrderDetail() {
 
   const doPdf = () => {
     setBusy(true); setFeedback(null)
-    commerce.orders.pdf(id)
+    commerce.orders.pdf(id, pdfLang)
       .then(res => downloadBlob(res.data, filenameFromHeaders(res, `${order?.document_number || 'comanda'}.pdf`)))
       .catch(() => setFeedback({ type: 'err', text: t('orders.pdf_error') }))
       .finally(() => setBusy(false))
@@ -168,7 +170,8 @@ export default function OrderDetail() {
         statusBadge={<OrderStatusBadge status={order.status} t={t} />}
         customer={order.customer_nom}
         actions={<>
-          <PdfButton onClick={doPdf} disabled={busy} label={t('orders.download_pdf')} />
+          <PdfButton onClick={doPdf} disabled={busy} label={t('orders.download_pdf')}
+            lang={pdfLang} onLangChange={setPdfLang} t={t} />
           {canEdit && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)' }}>
               {t('orders.status')}:

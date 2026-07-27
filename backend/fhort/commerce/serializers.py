@@ -189,6 +189,8 @@ class QuoteSerializer(serializers.ModelSerializer):
     """Capçalera d'oferta amb línies nested (read-only, s'editen pel QuoteLineViewSet, ?quote=).
     Numeració, totals i estat són calculats/gestionats pel backend (read-only)."""
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
+    # Default del selector d'idioma del PDF (Customer.language). '' = sense preselecció.
+    customer_language = serializers.CharField(source='customer.language', read_only=True, default='')
     lines = QuoteLineSerializer(many=True, read_only=True)
     # Display (B3a): nom de la condició override + condició per defecte del client (per al selector).
     payment_terms_name = serializers.CharField(source='payment_terms.name', read_only=True)
@@ -274,6 +276,8 @@ class SalesOrderSerializer(serializers.ModelSerializer):
     """Capçalera de comanda amb línies i venciments nested (read-only). Tot calculat/congelat;
     l'ÚNIC camp editable per API és `status` (OPEN/COMPLETED/CANCELLED). Traçabilitat a l'oferta."""
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
+    # Default del selector d'idioma del PDF (Customer.language). '' = sense preselecció.
+    customer_language = serializers.CharField(source='customer.language', read_only=True, default='')
     lines = SalesOrderLineSerializer(many=True, read_only=True)
     due_dates = DocumentDueDateSerializer(many=True, read_only=True)
     payment_terms_name = serializers.CharField(source='payment_terms.name', read_only=True)
@@ -442,6 +446,8 @@ class DeliveryNoteSerializer(serializers.ModelSerializer):
     ?delivery_note=). Numeració/totals/estat calculats o gestionats pel backend (read-only);
     `notes` editable en DRAFT. `work_orders_included` = els WO agregats (traçabilitat)."""
     customer_nom = serializers.CharField(source='customer.nom', read_only=True)
+    # Default del selector d'idioma del PDF (Customer.language). '' = sense preselecció.
+    customer_language = serializers.CharField(source='customer.language', read_only=True, default='')
     lines = DeliveryNoteLineSerializer(many=True, read_only=True)
     issued_by_nom = serializers.CharField(source='issued_by.nom_complet', read_only=True, default=None)
     invoiced_by_nom = serializers.CharField(source='invoiced_by.nom_complet', read_only=True, default=None)

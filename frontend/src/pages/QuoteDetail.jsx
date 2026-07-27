@@ -6,7 +6,7 @@ import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
-import PdfButton from '../components/ui/PdfButton'
+import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import { DocumentHeader, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { StatusBadge } from './Quotes'
@@ -51,6 +51,8 @@ export default function QuoteDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [quote, setQuote] = useState(null)
+  // Idioma del PDF: default = el del client destinatari, canviable per document.
+  const [pdfLang, setPdfLang] = usePdfLang(quote?.customer_language)
   const [products, setProducts] = useState([])
   const [paymentTerms, setPaymentTerms] = useState([])
   const [feedback, setFeedback] = useState(null)
@@ -89,7 +91,7 @@ export default function QuoteDetail() {
 
   const doPdf = () => {
     setBusy(true); setFeedback(null)
-    commerce.quotes.pdf(id)
+    commerce.quotes.pdf(id, pdfLang)
       .then(res => downloadBlob(res.data, filenameFromHeaders(res, `${quote?.document_number || 'oferta'}.pdf`)))
       .catch(() => setFeedback({ type: 'err', text: t('quotes.pdf_error') }))
       .finally(() => setBusy(false))
@@ -138,7 +140,8 @@ export default function QuoteDetail() {
             title={!isDraft ? t('quotes.send_only_draft') : (!hasLines ? t('quotes.send_needs_lines') : '')}>
             <i className="ti ti-send" style={{ fontSize: 14 }} /> {t('quotes.send')}
           </button>
-          <PdfButton onClick={doPdf} disabled={busy} label={t('quotes.download_pdf')} />
+          <PdfButton onClick={doPdf} disabled={busy} label={t('quotes.download_pdf')}
+            lang={pdfLang} onLangChange={setPdfLang} t={t} />
           {canConvert && (
             <button onClick={() => setConfirmConvert(true)} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>
               <i className="ti ti-arrow-right-circle" style={{ fontSize: 14 }} /> {t('quotes.convert')}

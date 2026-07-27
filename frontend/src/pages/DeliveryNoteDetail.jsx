@@ -6,7 +6,7 @@ import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Badge from '../components/ui/Badge'
-import PdfButton from '../components/ui/PdfButton'
+import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
 import { selS, primaryBtn } from '../components/ui/buttons'
 import { DocumentHeader, ModelCard, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { DNStatusBadge } from './DeliveryNotes'
@@ -60,6 +60,8 @@ export default function DeliveryNoteDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [dn, setDn] = useState(null)
+  // Idioma del PDF: default = el del client destinatari, canviable per document.
+  const [pdfLang, setPdfLang] = usePdfLang(dn?.customer_language)
   const [feedback, setFeedback] = useState(null)
   const [busy, setBusy] = useState(false)
   const [edits, setEdits] = useState({})          // lineId → {unit_price, description, quantity}
@@ -182,7 +184,7 @@ export default function DeliveryNoteDetail() {
   }
 
   const doPdf = () => {
-    commerce.deliveryNotes.pdf(id)
+    commerce.deliveryNotes.pdf(id, pdfLang)
       .then(res => downloadBlob(res.data, filenameFromHeaders(res, `${dn?.document_number || 'albara'}.pdf`)))
       .catch(() => setFeedback({ type: 'err', text: t('deliverynotes.pdf_error') }))
   }
@@ -244,7 +246,8 @@ export default function DeliveryNoteDetail() {
   // Barra d'accions de la capçalera (segons el sistema de la casa; mai text pla).
   const headerActions = (
     <>
-      <PdfButton label={t('deliverynotes.download_pdf')} onClick={doPdf} />
+      <PdfButton label={t('deliverynotes.download_pdf')} onClick={doPdf}
+        lang={pdfLang} onLangChange={setPdfLang} t={t} />
       {editable && (
         <button onClick={openTray} disabled={busy} style={smallBtn}>
           <i className="ti ti-inbox" style={{ fontSize: 14 }} />{t('deliverynotes.tray_action')}

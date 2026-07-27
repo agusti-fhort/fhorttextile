@@ -1621,6 +1621,13 @@
     "total_pct": "Total",
     "total_must_be_100": "must be 100%"
   },
+  "commerce": {
+    "pdf_lang": "Document language",
+    "pdf_lang_none": "Language —",
+    "pdf_lang_ca": "Català",
+    "pdf_lang_en": "English",
+    "pdf_lang_es": "Español"
+  },
   "quotes": {
     "title": "Quotes",
     "subtitle": "Commercial quotes to the customer: lines, totals and PDF.",

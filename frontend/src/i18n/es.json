@@ -1621,6 +1621,13 @@
     "total_pct": "Suma",
     "total_must_be_100": "debe ser 100%"
   },
+  "commerce": {
+    "pdf_lang": "Idioma del documento",
+    "pdf_lang_none": "Idioma —",
+    "pdf_lang_ca": "Català",
+    "pdf_lang_en": "English",
+    "pdf_lang_es": "Español"
+  },
   "quotes": {
     "title": "Ofertas",
     "subtitle": "Ofertas comerciales al cliente: líneas, totales y PDF.",
