@@ -6,6 +6,9 @@ import { selS } from './ui/buttons'
 const MONO = 'IBM Plex Mono, monospace'
 export const REGIMES = ['DOMESTIC', 'INTRA_EU', 'EXPORT', 'EXEMPT']
 export const METHODS = ['TRANSFER', 'DIRECT_DEBIT', 'CONFIRMING', 'CASH']
+// Idioma per defecte dels PDF comercials. Mirall de Customer.LANGUAGE_CHOICES (tasks/models.py).
+// El buit és un valor legítim: «sense preselecció», i l'operador tria en emetre.
+export const LANGUAGES = ['ca', 'en', 'es']
 
 export function initCustomerForm(c = {}) {
   return {
@@ -21,6 +24,7 @@ export function initCustomerForm(c = {}) {
     tax_regime: c?.tax_regime || 'DOMESTIC', vat_number: c?.vat_number || '',
     payment_method: c?.payment_method || 'TRANSFER',
     payment_terms: c?.payment_terms ?? '',
+    language: c?.language || '',
   }
 }
 
@@ -38,6 +42,7 @@ export function customerPayload(f) {
     persona_contacte: f.persona_contacte, telefon_contacte: f.telefon_contacte,
     tax_regime: f.tax_regime, vat_number: f.vat_number, payment_method: f.payment_method,
     payment_terms: f.payment_terms === '' ? null : f.payment_terms,
+    language: f.language,   // '' = sense preselecció (no és null: el camp és blank, no nullable)
   }
 }
 
@@ -122,6 +127,12 @@ export default function CustomerForm({ form, set, terms = [], t, section = 'all'
             </select>
           </Field>
         </Row>
+        <Field label={t('clients.language')}>
+          <select value={form.language} onChange={e => set('language', e.target.value)} style={{ ...selS, width: '100%' }}>
+            <option value="">{t('clients.language_none')}</option>
+            {LANGUAGES.map(l => <option key={l} value={l}>{t(`clients.language_${l}`)}</option>)}
+          </select>
+        </Field>
         <Field label={t('clients.condicions_pagament')}>
           <input value={form.condicions_pagament} onChange={e => set('condicions_pagament', e.target.value)}
             style={{ ...selS, width: '100%' }} />
