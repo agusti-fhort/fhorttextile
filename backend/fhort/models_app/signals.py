@@ -203,6 +203,10 @@ _ORIGEN_TO_CONTEXT = {
     'FITTED': 'fitting',
     'CALCULATED': 'calculated',
     'STANDARD': 'standard',
+    # Sprint B (2026-07-27) — sense aquesta entrada el context queia al fallback `origen.lower()`
+    # (:273). El resultat hi coincidiria per casualitat ('copied'), però el mapa és la font
+    # declarada del vocabulari del log i un origen viu no hi ha de faltar.
+    'COPIED': 'copied',
 }
 
 

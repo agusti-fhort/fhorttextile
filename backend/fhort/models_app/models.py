@@ -577,6 +577,11 @@ class BaseMeasurement(models.Model):
         ('TEMPLATE',   'Materialitzat de plantilla (sense valor encara)'),
         ('CHECKED',    'Validat en size check (proto a talla base)'),
         ('ITEM_STANDARD', 'Sembrat de l\'estàndard de l\'item (copy-at-the-moment)'),
+        # Sprint B (2026-07-27) — còpia model→model. Cap dels valors anteriors serveix: copiar
+        # `src.origen` verbatim faria que un MANUAL del model A afirmés que algú va mesurar el
+        # model B, que és una mentida d'auditoria. `COPIED` diu la veritat: el valor és cert
+        # però la seva autoritat viu en un altre model.
+        ('COPIED', 'Copiat d\'un altre model'),
     ]
 
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='base_measurements')
