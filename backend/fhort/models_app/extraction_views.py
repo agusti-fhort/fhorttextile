@@ -351,16 +351,27 @@ def _parse_excel_poms(file_bytes: bytes, base_hint=None, run_hint=None):
             # ── 5. La TALLA BASE. Si el document (o el model) la declara, ha de correspondre a
             # una columna de talla real: si no hi és, hem entès malament la taula → abdicar.
             # Si ningú no la declara, la base és la primera talla (contracte del parser antic).
+            #
+            # ⚠️ `base_label` entra com l'etiqueta de QUI LA DECLARA (el `SAMPLE SIZE` del
+            # document o el `base_hint` del MODEL) i, un cop trobada la columna, passa a ser
+            # l'etiqueta CRUA D'AQUELLA COLUMNA. No és cosmètica: `values` està indexat per
+            # l'etiqueta crua del document (:394), i la porta de :419 compara per igualtat
+            # literal de cadena. Amb `base_hint='00/01'` i la columna '0M-1M' —el cas real de
+            # LOS-SS27-0834— la canonicalització SÍ que trobava la columna (les dues donen
+            # '0/1'), però `base_label` es quedava com '00/01' i llavors `'00/01' in values`
+            # era fals a cada fila → amb_base=0 → el parser abdicava i queia a la IA sobre un
+            # xlsx que havia entès perfectament (DIAGNOSI_MULTIPECA_DALIA Q5).
             base_label = (sample_size or base_hint or '').strip()
             base_ci = None
             if base_label:
                 canon = canonical_size_label(base_label)
-                base_ci = next((ci for ci, lbl in size_cols
+                trobada = next(((ci, lbl) for ci, lbl in size_cols
                                 if canonical_size_label(lbl) == canon), None)
-                if base_ci is None:
+                if trobada is None:
                     meta['motiu'] = (f"full '{ws.title}': la talla base '{base_label}' no té "
                                      f"columna a la taula")
                     continue
+                base_ci, base_label = trobada
             else:
                 base_ci, base_label = size_cols[0][0], size_cols[0][1]
 

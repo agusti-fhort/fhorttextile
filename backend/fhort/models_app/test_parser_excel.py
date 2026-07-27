@@ -247,6 +247,65 @@ class PortaDAbdicacioTest(SimpleTestCase):
         self.assertIsNotNone(meta['motiu'])
 
 
+class TallaBaseDelModelAmbEtiquetaDiferentTest(SimpleTestCase):
+    """El cas LOS-SS27-0834 (DIAGNOSI_MULTIPECA_DALIA · Q5): el MODEL diu '00/01' i el
+    DOCUMENT diu '0M-1M'. És la mateixa talla —`canonical_size_label` dona '0/1' per a totes
+    dues— i el parser trobava la columna correctament.
+
+    El que fallava era el que passava DESPRÉS: `base_label` es quedava amb l'etiqueta del
+    model ('00/01') mentre que `values` s'indexa per l'etiqueta crua del document ('0M-1M').
+    La porta de comprensió compara per igualtat literal de cadena, així que comptava 0 files
+    amb valor a la base i el parser abdicava sobre un xlsx que havia entès sencer — i el
+    document se n'anava a la IA, amb el cost i la pèrdua de fidelitat que això té.
+
+    El document NO porta `SAMPLE SIZE`: és el cas en què mana el `base_hint` del model, que és
+    exactament on neix l'asimetria.
+    """
+
+    #: Run NEWBORN escrit com l'escriu el document del client (mesos), sense SAMPLE SIZE.
+    _MESOS = [
+        (None, 'CODE', 'DESCRIPTION', '0M-1M', '1M-3M', '3M-6M', '6M-9M', '9M-12M'),
+        (None, 'A', '1/2 chest width', 20.0, 21.0, 22.0, 23.0, 24.0),
+        (None, 'D', '1/2 bottom width', 21.5, 22.5, 23.5, 24.5, 25.5),
+        (None, 'E', 'Shoulder to shoulder', 18.0, 18.5, 19.0, 19.5, 20.0),
+    ]
+
+    def setUp(self):
+        self.poms, self.talles, self.meta = _parse_excel_poms(
+            _xlsx(self._MESOS),
+            base_hint='00/01',
+            run_hint=['00/01', '01/03', '03/06', '06/09', '09/12'],
+        )
+
+    def test_no_abdica(self):
+        """El símptoma reportat: queia a la IA amb un xlsx perfectament llegible."""
+        self.assertIsNone(self.meta['motiu'])
+        self.assertEqual(len(self.poms), 3)
+
+    def test_la_base_es_letiqueta_del_DOCUMENT_no_la_del_model(self):
+        """`values` viu indexat per l'etiqueta del document; `base_size` ha de parlar el
+        mateix idioma o el consumidor no hi pot indexar."""
+        self.assertEqual(self.meta['base_size'], '0M-1M')
+
+    def test_la_base_indexa_de_debo_els_valors_extrets(self):
+        """La prova que tanca el cercle: amb l'etiqueta que retorna el parser es pot llegir
+        el valor base de cada fila. Amb '00/01' no es podia llegir cap."""
+        base = self.meta['base_size']
+        self.assertEqual([p['values'][base] for p in self.poms], [20.0, 21.5, 18.0])
+
+    def test_les_talles_del_document_es_conserven_crues(self):
+        self.assertEqual(self.talles, ['0M-1M', '1M-3M', '3M-6M', '6M-9M', '9M-12M'])
+
+    def test_el_document_segueix_manant_sobre_el_model(self):
+        """Si el document declara `SAMPLE SIZE`, mana ell (contracte de D1c·6) — però
+        l'etiqueta que en surt continua sent la de la COLUMNA, no la del bloc de metadades."""
+        amb_sample = [(None, 'SAMPLE SIZE', '3M-6M'), (None, None, None)] + self._MESOS
+        _, _, meta = _parse_excel_poms(
+            _xlsx(amb_sample), base_hint='00/01',
+            run_hint=['00/01', '01/03', '03/06', '06/09', '09/12'])
+        self.assertEqual(meta['base_size'], '3M-6M')
+
+
 class ElCamiIAContinuaSentElFallbackTest(SimpleTestCase):
     """El contracte del caller, no del parser: un Excel que el parser no entén ha d'anar a la IA.
 
