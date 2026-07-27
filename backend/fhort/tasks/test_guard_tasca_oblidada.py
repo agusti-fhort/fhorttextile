@@ -152,6 +152,17 @@ class GuardTascaOblidadaTest(TenantTestCase):
         self.assertEqual(tr.auto, 'guard_30min')
         self.assertEqual(tr.by_id, self.prof.id)   # de qui era la tasca, sense mentir sobre el gest
 
+    def test_lexclusio_una_sola_inprogress_tambe_es_marca(self):
+        """Obrir una segona tasca en pausa la primera: el sistema, no el tècnic."""
+        altra = ModelTask.objects.create(model=self.model, task_type=self.tt, order=1,
+                                         status='Pending', assignee=self.prof, origen='ad_hoc')
+        transition_task(self.task, 'InProgress', self.prof)
+        res = transition_task(altra, 'InProgress', self.prof)
+        self.assertEqual(res['paused_task_id'], self.task.pk)
+        tr = TaskTransition.objects.filter(model_task=self.task).order_by('at').last()
+        self.assertEqual((tr.from_status, tr.to_status), ('InProgress', 'Paused'))
+        self.assertEqual(tr.auto, 'exclusio_inprogress')
+
     def test_lauto_pausa_no_es_mai_done(self):
         """El Stop és humà (llei intacta): el guard pausa, i la tasca queda represa-ble."""
         transition_task(self.task, 'InProgress', self.prof)

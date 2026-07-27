@@ -209,7 +209,9 @@ def transition_task(task, to_status, profile, force=False, auto=None):
             _close_open_timer(other)
             other.status = 'Paused'
             other.save(update_fields=['status', 'updated_at'])
-            _log(other, 'InProgress', 'Paused', profile)
+            # Aquesta pausa tampoc no és un gest sobre `other`: el tècnic n'ha obert una altra i el
+            # sistema li ha tancat aquesta. Sense marca, el log li atribuïa una pausa que no va fer.
+            _log(other, 'InProgress', 'Paused', profile, auto='exclusio_inprogress')
             paused_task_id = other.pk
         # Obrir timer de la tasca que entra
         _open_timer(task, profile)
