@@ -3435,6 +3435,8 @@
     "cols_descartades_title": "Columnes descartades",
     "cols_descartades_body": "{{n}} columna(es) del document eren fora del sistema de talles «{{system}}» i s'han descartat: {{labels}}. S'han importat les talles conegudes i s'ha creat un watchpoint al model.",
     "cols_descartades_done": "Entesos, continua",
+    "codi_duplicat_title": "Codi de POM duplicat al catàleg",
+    "codi_duplicat_body": "{{n}} codi(s) de la fitxa tenen més d'un POM propi al catàleg amb el mateix codi: {{codis}}. No es pot saber quin s'ha de fer servir, i per això no s'ha creat ni desat res. Resol el duplicat al catàleg de POMs i torna a prémer «Continuar»: la sessió d'import és intacta.",
     "base_size": "Talla base",
     "base_unpaired": "sense columna del document aparellada",
     "no_run_configured": "Cap run configurat",

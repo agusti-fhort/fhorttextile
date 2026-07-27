@@ -3435,6 +3435,8 @@
     "cols_descartades_title": "Discarded columns",
     "cols_descartades_body": "{{n}} document column(s) were outside the size system «{{system}}» and were discarded: {{labels}}. The known sizes were imported and a watchpoint was created on the model.",
     "cols_descartades_done": "Got it, continue",
+    "codi_duplicat_title": "Duplicate POM code in the catalogue",
+    "codi_duplicat_body": "{{n}} code(s) from the sheet have more than one own POM in the catalogue with the same code: {{codis}}. There is no way to tell which one to use, so nothing has been created or saved. Resolve the duplicate in the POM catalogue and press «Continue» again: the import session is intact.",
     "base_size": "Base size",
     "base_unpaired": "no document column paired",
     "no_run_configured": "No run configured",

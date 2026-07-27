@@ -109,6 +109,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   const [savingPoms, setSavingPoms] = useState(false)
   const [cataleg, setCataleg] = useState(null)        // POMMaster catàleg (per afegir manual)
   const [showAddPom, setShowAddPom] = useState(false)
+  // 409 `codi_duplicat`: el catàleg té 2+ POMs tenant-only amb el mateix codi i el backend no
+  // pot triar. NO és un error del wizard (la sessió és intacta i re-desable): és una feina de
+  // catàleg pendent, i es mostra com a avís amb els codis, no com el 500 genèric d'abans.
+  const [pomsDuplicats, setPomsDuplicats] = useState(null)
 
   // Pas 3 — taula de mesures
   const [taula, setTaula] = useState({})              // {pom_master_id: {talla: valor}}
@@ -305,7 +309,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   }
 
   const handleContinuePoms = async () => {
-    setSavingPoms(true); setError('')
+    setSavingPoms(true); setError(''); setPomsDuplicats(null)
     const ids = pomsExtrets.filter(p => p.actiu && p.pom_master_id).map(p => p.pom_master_id)
     const tenantOnly = pomsExtrets
       .filter(p => p.actiu && !p.pom_master_id && p.tenant_only)
@@ -316,6 +320,9 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         body: JSON.stringify({ poms_confirmats: ids, poms_tenant_only: tenantOnly }),
       })
       const data = await res.json().catch(() => ({}))
+      if (res.status === 409 && data.error === 'codi_duplicat') {
+        setPomsDuplicats(data.codis || []); setSavingPoms(false); return
+      }
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setSavingPoms(false); return }
       // El backend retorna els POMs amb els pom_master_id tenant-only ja assignats.
       const updated = data.poms_extrets || pomsExtrets
@@ -736,6 +743,24 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
               <div style={{ fontSize: 28, marginBottom: 12 }}>⏳</div>
               <div style={{ fontSize: 'var(--fs-h3)' }}>{t('import_wizard.extracting_poms')}</div>
               <div style={{ fontSize: 'var(--fs-body)', marginTop: 4 }}>{t('import_wizard.vision_analysis')}</div>
+            </div>
+          )}
+
+          {/* 409 codi_duplicat — feina de catàleg pendent, no error de l'import. La sessió és
+              intacta: resoldre el duplicat al catàleg i tornar a prémer «Continuar». */}
+          {pomsDuplicats && pomsDuplicats.length > 0 && (
+            <div style={{ background: 'var(--gold-pale)', border: '1px solid var(--gold)',
+                          color: 'var(--text-main)', borderRadius: 8, padding: '10px 14px',
+                          fontSize: 'var(--fs-body)', marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                {t('import_wizard.codi_duplicat_title')}
+              </div>
+              <div>
+                {t('import_wizard.codi_duplicat_body', {
+                  n: pomsDuplicats.length,
+                  codis: pomsDuplicats.join(', '),
+                })}
+              </div>
             </div>
           )}
 

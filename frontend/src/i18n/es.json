@@ -3435,6 +3435,8 @@
     "cols_descartades_title": "Columnas descartadas",
     "cols_descartades_body": "{{n}} columna(s) del documento estaban fuera del sistema de tallas «{{system}}» y se han descartado: {{labels}}. Se han importado las tallas conocidas y se ha creado un watchpoint en el modelo.",
     "cols_descartades_done": "Entendido, continuar",
+    "codi_duplicat_title": "Código de POM duplicado en el catálogo",
+    "codi_duplicat_body": "{{n}} código(s) de la ficha tienen más de un POM propio en el catálogo con el mismo código: {{codis}}. No se puede saber cuál hay que usar, y por eso no se ha creado ni guardado nada. Resuelve el duplicado en el catálogo de POMs y vuelve a pulsar «Continuar»: la sesión de importación está intacta.",
     "base_size": "Talla base",
     "base_unpaired": "sin columna del documento emparejada",
     "no_run_configured": "Ningún run configurado",
