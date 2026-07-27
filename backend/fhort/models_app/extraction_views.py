@@ -1559,7 +1559,16 @@ def import_session_poms_view(request, token):
     els pom_master_id confirmats que no hi siguin (afegits manualment del catàleg) s'incorporen.
     Rep també poms_tenant_only (llista d'ordres de files NO_MATCH que el tècnic vol crear com
     a POMMaster tenant-only: pom_global=None, codi_client=codi_fitxa). estat→'MESURES'.
+
+    409 `codi_duplicat`: el catàleg de tenant NO té cap constraint d'unicitat sobre
+    (pom_global, codi_client) — `pom/models.py:183-185` no en declara cap. Dos POMMaster
+    tenant-only amb el mateix codi són, doncs, un estat LEGAL de la BD, i el `get_or_create`
+    que hi havia aquí hi petava amb `MultipleObjectsReturned` → 500 i sessió descartada (QA
+    real a PROD, 27/07/2026). Ara la vista ho detecta ABANS d'escriure res i ho diu; resoldre
+    el duplicat del catàleg és una decisió humana, no una que el wizard pugui prendre sola.
     """
+    from django.db import transaction
+
     from fhort.models_app.models import ImportSession
     from fhort.pom.models import POMMaster, POMCategory
 
@@ -1575,63 +1584,82 @@ def import_session_poms_view(request, token):
     }
 
     poms = list(session.poms_extrets or [])
+
+    # ── PORTA 409, ABANS DE TOCAR RES. Les files que el tècnic vol crear com a tenant-only,
+    # amb el seu codi. Es recullen TOTS els codis que ja tenen 2+ POMMaster tenant-only al
+    # catàleg: petar al primer obligaria a descobrir-los d'un en un, un import per duplicat.
+    files_tenant_only = [
+        p for p in poms
+        if not p.get('pom_master_id')
+        and p.get('ordre') in tenant_only_ordres
+        and (p.get('codi_fitxa') or '').strip()
+    ] if tenant_only_ordres else []
+
+    duplicats = sorted({
+        codi for codi in {(p.get('codi_fitxa') or '').strip() for p in files_tenant_only}
+        if POMMaster.objects.filter(pom_global=None, codi_client=codi).count() > 1
+    })
+    if duplicats:
+        return Response({'error': 'codi_duplicat', 'codis': duplicats}, status=409)
+
     existents = {p.get('pom_master_id') for p in poms if p.get('pom_master_id')}
     for p in poms:
         if p.get('pom_master_id'):
             p['actiu'] = p['pom_master_id'] in confirmats_set
 
-    # POMs sense match triats pel tècnic → crear (o reutilitzar) POMMaster tenant-only.
-    if tenant_only_ordres:
-        categoria_default = (POMCategory.objects.filter(actiu=True)
-                             .order_by('display_order', 'codi').first())
-        for p in poms:
-            if p.get('pom_master_id') or p.get('ordre') not in tenant_only_ordres:
-                continue
-            codi = (p.get('codi_fitxa') or '').strip()
-            if not codi:
-                continue
-            descripcio = (p.get('descripcio') or '').strip()
-            pm, _created = POMMaster.objects.get_or_create(
-                pom_global=None,
-                codi_client=codi,
-                defaults={
-                    'nom_client': descripcio or codi,
-                    'actiu': True,
-                    'categoria': categoria_default,
-                    'pendent_revisio': True,
-                    'origen_import': str(session.token),
-                    'notes': f'Creat automàticament per import, fitxa {session.token}',
-                },
-            )
-            p['pom_master_id'] = pm.id
-            p['pom_codi'] = pm.codi_client
-            p['pom_nom'] = pm.nom_client
-            p['match_type'] = 'tenant_only'
-            p['confidence'] = 'TENANT_ONLY'
-            p['actiu'] = True
-            existents.add(pm.id)
+    # Cos MUTADOR: o hi entra tot, o no hi entra res. Sense l'atomic, un POMMaster creat i una
+    # sessió no desada deixaven catàleg brut sense cap fila que hi apuntés.
+    with transaction.atomic():
+        # POMs sense match triats pel tècnic → crear (o reutilitzar) POMMaster tenant-only.
+        if files_tenant_only:
+            categoria_default = (POMCategory.objects.filter(actiu=True)
+                                 .order_by('display_order', 'codi').first())
+            for p in files_tenant_only:
+                codi = (p.get('codi_fitxa') or '').strip()
+                descripcio = (p.get('descripcio') or '').strip()
+                # count==1 → reutilitzar · count==0 → crear. El cas count>1 ja ha sortit per
+                # la porta 409 de dalt, i per això aquí NO hi ha get_or_create.
+                pm = POMMaster.objects.filter(pom_global=None, codi_client=codi).first()
+                if pm is None:
+                    pm = POMMaster.objects.create(
+                        pom_global=None,
+                        codi_client=codi,
+                        nom_client=descripcio or codi,
+                        actiu=True,
+                        categoria=categoria_default,
+                        pendent_revisio=True,
+                        origen_import=str(session.token),
+                        notes=f'Creat automàticament per import, fitxa {session.token}',
+                    )
+                p['pom_master_id'] = pm.id
+                p['pom_codi'] = pm.codi_client
+                p['pom_nom'] = pm.nom_client
+                p['match_type'] = 'tenant_only'
+                p['confidence'] = 'TENANT_ONLY'
+                p['actiu'] = True
+                existents.add(pm.id)
 
-    # Afegir POMs confirmats que no eren a l'extracció (afegits manualment).
-    for pid in confirmats_set - existents:
-        pm = POMMaster.objects.filter(id=pid, actiu=True).first()
-        if not pm:
-            continue
-        poms.append({
-            'codi_fitxa': '',
-            'descripcio': pm.nom_client or '',
-            'pom_master_id': pm.id,
-            'pom_codi': pm.codi_client,
-            'pom_nom': pm.nom_client,
-            'match_type': 'manual',
-            'confidence': 'HIGH',
-            'values': {},
-            'actiu': True,
-            'ordre': len(poms),
-        })
+        # Afegir POMs confirmats que no eren a l'extracció (afegits manualment).
+        for pid in confirmats_set - existents:
+            pm = POMMaster.objects.filter(id=pid, actiu=True).first()
+            if not pm:
+                continue
+            poms.append({
+                'codi_fitxa': '',
+                'descripcio': pm.nom_client or '',
+                'pom_master_id': pm.id,
+                'pom_codi': pm.codi_client,
+                'pom_nom': pm.nom_client,
+                'match_type': 'manual',
+                'confidence': 'HIGH',
+                'values': {},
+                'actiu': True,
+                'ordre': len(poms),
+            })
 
-    session.poms_extrets = poms
-    session.estat = 'MESURES'
-    session.save(update_fields=['poms_extrets', 'estat', 'actualitzat_at'])
+        session.poms_extrets = poms
+        session.estat = 'MESURES'
+        session.save(update_fields=['poms_extrets', 'estat', 'actualitzat_at'])
 
     actius = [p for p in poms if p.get('actiu')]
     return Response({'ok': True, 'estat': session.estat,
