@@ -4371,24 +4371,43 @@ export default function TechSheetEditor() {
 
   // T1a — fitxa de treball fitting (POM base + regla de grading). Tol± queda buit: la
   // serialització de base-measurements no exposa tolerància (només impressió+anotació manual).
+  // F1 — DUES fonts per a la regla, mai una URL amb `null`. Un model pot portar la graduació
+  // de dues maneres i la T1a ha de sortir igual per totes dues (decisió: la taula llegeix LES
+  // DADES DEL MODEL, tant si el ruleset és sembrat com si ve d'un import):
+  //   · `model.grading_rule_set` → GradingRule del ruleset compartit (camí de sempre).
+  //   · sense ruleset → ModelGradingRule RESIDENT, que ara arriba dins de cada base-measurement
+  //     com a `regla_model` (backend F1). Abans aquest cas interpolava `null` a la query
+  //     (`?rule_set=null`), el backend tornava una llista buida i la columna de regla naixia
+  //     muda sense que res ho digués.
   const insertTableT1a = async (sfId) => {
     if (!locked) return
+    const ruleSetId = model?.grading_rule_set ?? null
     let bms, rules
     try {
-      const [rBm, rRules] = await Promise.all([
-        fetch(`${API}/api/v1/models/${model.id}/base-measurements/`, { headers: authHeaders }),
-        fetch(`${API}/api/v1/grading-rules/?rule_set=${model.grading_rule_set}`, { headers: authHeaders }),
-      ])
-      if (!rBm.ok || !rRules.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
+      const peticions = [fetch(`${API}/api/v1/models/${model.id}/base-measurements/`, { headers: authHeaders })]
+      // GUARD: la crida al ruleset NOMÉS existeix si hi ha ruleset.
+      if (ruleSetId != null) {
+        peticions.push(fetch(`${API}/api/v1/grading-rules/?rule_set=${ruleSetId}`, { headers: authHeaders }))
+      }
+      const [rBm, rRules] = await Promise.all(peticions)
+      if (!rBm.ok || (rRules && !rRules.ok)) { flash(t('tech_sheet.flash_table_fetch_error')); return }
       const dBm = await rBm.json()
-      const dRules = await rRules.json()
       bms = dBm.results || dBm || []
-      rules = dRules.results || dRules || []
+      if (rRules) {
+        const dRules = await rRules.json()
+        rules = dRules.results || dRules || []
+      } else {
+        rules = []
+      }
     } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
     if (!bms.length) { flash(t('tech_sheet.flash_empty_table')); return }
 
+    // Índex per pom_id. Amb ruleset mana la GradingRule; sense, la resident de cada fila.
     const rulesByPom = {}
     rules.forEach(r => { rulesByPom[r.pom] = r })
+    bms.forEach(bm => {
+      if (rulesByPom[bm.pom_id] == null && bm.regla_model) rulesByPom[bm.pom_id] = bm.regla_model
+    })
     const columns = [
       { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
       { key: 'pom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
@@ -4403,7 +4422,9 @@ export default function TechSheetEditor() {
       const rule = rulesByPom[bm.pom_id]
       return [
         bm.nom_fitxa || bm.pom_abbreviation || '',
-        { text: rule?.pom_nom_en || bm.nom_client || bm.pom_code_global || '', sub: bm.nom_ca || '' },
+        // Amb ruleset el nom canònic ve de la regla; amb regla resident la regla no en porta,
+        // i el nom canònic és el `nom_en` que base-measurements ja exposa.
+        { text: rule?.pom_nom_en || bm.nom_en || bm.nom_client || bm.pom_code_global || '', sub: bm.nom_ca || '' },
         fmtMeasure(bm.base_value_cm, unit) ?? '',
         fmtMeasure(rule?.increment_base, unit) ?? '',
         rule?.talla_break_label || '',
@@ -4529,8 +4550,13 @@ export default function TechSheetEditor() {
     // no aporta: el panell dret ja té els controls d'afegir i treure files i columnes, i allà
     // es decideix VEIENT la taula, que és quan se sap quantes en calen.
     if (variant === 'custom') { insertTableCustom(3, 3); return }
-    if (!sizeFittings.length) return   // ribbon el desactiva (commit 4); sense fitting no hi ha què inserir
-    if (sizeFittings.length === 1) { runTableVariant(variant, sizeFittings[0].id); return }
+    // F1 — cada variant tria entre els fittings que li serveixen: la T1b NOMÉS entre els que
+    // tenen graduació; la T1a entre tots, i sense cap si el model no en té (el fitting hi és
+    // per traça al snapshot, no per dades: la T1a surt de la base + la regla del model).
+    const candidats = variant === 't1b' ? sfAmbGrading : sizeFittings
+    if (variant === 't1a' && !candidats.length) { runTableVariant(variant, null); return }
+    if (!candidats.length) return      // el picker ja el deshabilita; xarxa de seguretat
+    if (candidats.length === 1) { runTableVariant(variant, candidats[0].id); return }
     setTablePicker({ variant })
   }
 
@@ -4684,9 +4710,27 @@ export default function TechSheetEditor() {
   // R3 · les quatre variants de taula amb la seva DISPONIBILITAT. La detecció és la que el
   // popup ja feia (sizeFittings per a les dues taules de mesures); aquí, en comptes de
   // deshabilitar un botó dins un modal, s'ensenya sempre i es diu el motiu.
+  // F1 — les portes de les dues taules de mesures, cadascuna amb el SEU motiu. Abans totes
+  // dues demanaven el mateix ("que hi hagi un size fitting"), que era fals per les dues bandes:
+  // la T1a no necessita cap fitting (surt de la base + la regla del model; el fitting només hi
+  // deixa traça al snapshot) i la T1b en necessita un amb GRADUACIÓ, no un qualsevol —
+  // `graded-table/` d'un fitting sense GradingVersion torna buit i el tècnic ho descobria
+  // després de triar-lo.
+  const t1aOk = pomRows.length > 0
+    && (model?.grading_rule_set != null || pomRows.some(r => r.regla_model))
+  const t1aMotiu = pomRows.length === 0
+    ? t('tech_sheet.lib_table_no_base_measures')
+    : t('tech_sheet.lib_table_no_grading_rules')
+  const sfAmbGrading = sizeFittings.filter(sf => (sf.n_graded_specs || 0) > 0)
   const TABLE_VARIANTS = [
-    { k: 't1a', icon: 'ti-ruler-measure', label: t('tech_sheet.table_variant_t1a'), ok: sizeFittings.length > 0, motiu: t('tech_sheet.lib_table_no_fitting') },
-    { k: 't1b', icon: 'ti-chart-grid-dots', label: t('tech_sheet.table_variant_t1b'), ok: sizeFittings.length > 0, motiu: t('tech_sheet.lib_table_no_fitting') },
+    { k: 't1a', icon: 'ti-ruler-measure', label: t('tech_sheet.table_variant_t1a'), ok: t1aOk, motiu: t1aMotiu },
+    {
+      k: 't1b', icon: 'ti-chart-grid-dots', label: t('tech_sheet.table_variant_t1b'),
+      ok: sfAmbGrading.length > 0,
+      motiu: sizeFittings.length === 0
+        ? t('tech_sheet.lib_table_no_fitting')
+        : t('tech_sheet.lib_table_no_graded_fitting'),
+    },
     { k: 't2', icon: 'ti-list-details', label: t('tech_sheet.table_variant_t2'), ok: true, motiu: '' },
     { k: 'custom', icon: 'ti-table-plus', label: t('tech_sheet.table_variant_custom'), ok: true, motiu: '' },
   ]
@@ -6808,13 +6852,31 @@ export default function TechSheetEditor() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setTablePicker(null)}>
           <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.table_pick_fitting')}</h2>
+            {/* F1 — el modal DIU quins fittings tenen graduació. La T1b es construeix des de
+                `graded-table/`, que d'un fitting sense GradingVersion torna buit: oferir-los
+                tots per igual feia que el tècnic ho descobrís després de triar. Els que no en
+                tenen queden atenuats i deshabilitats per a la T1b; per a la T1a segueixen
+                servint (només hi deixen traça al snapshot), i el comptador de specs hi és de
+                totes maneres perquè la tria sigui informada. El contenidor IMP-* queda així
+                identificat sense cap regla d'anomenar: es veu pel comptador. */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {sizeFittings.map(sf => (
-                <button key={sf.id} type="button" onClick={() => runTableVariant(tablePicker.variant, sf.id)}
-                  style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: 'pointer' }}>
-                  {sf.codi || sf.nom || sf.talla_base || `#${sf.id}`}{sf.tipus ? ` · ${sf.tipus}` : ''}
-                </button>
-              ))}
+              {sizeFittings.map(sf => {
+                const nSpecs = sf.n_graded_specs || 0
+                const inutil = tablePicker.variant === 't1b' && nSpecs === 0
+                return (
+                  <button key={sf.id} type="button" disabled={inutil}
+                    title={inutil ? t('tech_sheet.lib_table_no_graded_fitting') : undefined}
+                    onClick={() => { if (!inutil) runTableVariant(tablePicker.variant, sf.id) }}
+                    style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: inutil ? 'not-allowed' : 'pointer', opacity: inutil ? 0.45 : 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span>{sf.codi || sf.nom || sf.talla_base || `#${sf.id}`}{sf.tipus ? ` · ${sf.tipus}` : ''}</span>
+                    <span style={{ fontSize: 'var(--fs-small)', color: nSpecs ? COL.textMain : COL.textMuted, whiteSpace: 'nowrap' }}>
+                      {nSpecs
+                        ? t('tech_sheet.sf_graded_specs', { count: nSpecs })
+                        : t('tech_sheet.sf_no_grading')}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
             <button type="button" onClick={() => setTablePicker(null)}
               style={{ marginTop: 12, fontSize: 'var(--fs-label)', color: COL.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
