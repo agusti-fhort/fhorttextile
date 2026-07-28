@@ -13,6 +13,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models_base import DocumentSequence
+# Els minuts que acaben a `internal_minutes` (i d'aquí al cost intern) es llegeixen amb la
+# MATEIXA regla d'higiene que la resta del sistema: un tram desbocat no és temps treballat.
+from fhort.tasks.services_i import TRAMS_SANS
 
 _CENT = Decimal('0.01')
 
@@ -611,7 +614,7 @@ def generate_delivery_note(work_orders, user=None):
                     # Temps intern = lògica comercial, FORA del document (decisió Agus). Els minuts
                     # es guarden a internal_minutes; la línia surt amb quantity=1 i sense "(N min)"
                     # a la descripció (el PDF mai els mostra). El Salva posa preu en DRAFT.
-                    minutes = t.timers.aggregate(m=Sum('minuts'))['m'] or 0
+                    minutes = t.timers.filter(TRAMS_SANS).aggregate(m=Sum('minuts'))['m'] or 0
                     _add('TASK', Decimal('0'), Decimal('1'), label,
                          product=None, work_order=wo, model_task=t,
                          internal_minutes=Decimal(minutes))
@@ -733,7 +736,7 @@ def get_billable_items(customer):
             price = Decimal(str((wo.price_snapshot or {}).get('unit_price') or '0')).quantize(_CENT)
         else:
             price = Decimal('0.00')   # COLLECTOR o work_order=NULL: el Salva posa preu en DRAFT
-        minutes = t.timers.aggregate(m=Sum('minuts'))['m'] or 0
+        minutes = t.timers.filter(TRAMS_SANS).aggregate(m=Sum('minuts'))['m'] or 0
         _bucket(t.model)['items'].append({
             'kind': 'TASK', 'ref': t.task_type.code,
             'description': f"{t.task_type.name} · {t.model.codi_intern}",
@@ -828,7 +831,7 @@ def add_lines_to_draft(draft, selected_items, user=None):
                     price = Decimal(str((wo.price_snapshot or {}).get('unit_price') or '0'))
                 else:
                     product, price = None, Decimal('0')
-                minutes = t.timers.aggregate(m=Sum('minuts'))['m'] or 0
+                minutes = t.timers.filter(TRAMS_SANS).aggregate(m=Sum('minuts'))['m'] or 0
                 line = DeliveryNoteLine(
                     delivery_note=draft, line_kind='TASK', model_id=t.model_id, model_task=t,
                     work_order=wo, product=product, quantity=Decimal('1'),
