@@ -4,7 +4,7 @@ usa la mitjana real quan hi ha prou mostres (§7: error mínim a la 2a temporada
 import logging
 from decimal import Decimal
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 logger = logging.getLogger(__name__)
 
 WELFORD_MIN_SAMPLES = 5   # llindar seed→estadística
@@ -12,14 +12,36 @@ WELFORD_MIN_SAMPLES = 5   # llindar seed→estadística
 # REGLA D'HIGIENE — cap tram de timer d'un tècnic dura més d'un dia seguit. Els que ho fan són
 # fuites (timer deixat obert i tancat setmanes després en reobrir la tasca), i alimentaven el
 # Welford amb mitjanes de 9-13 h que el planificador després feia servir com si fossin reals.
-# El criteri viu AQUÍ i en un sol lloc: la data-op del 27/07 i `recompute_welford` el comparteixen.
-# ANOTAT, no fet: aplicar-lo també a `_real_minutes` tancaria la font, no només el rastre.
+# El criteri viu AQUÍ i en un sol lloc: la data-op del 27/07, `recompute_welford` i TOTES les
+# lectures de temps de cara a l'usuari el comparteixen.
 MAX_MINUTS_TRAM = 24 * 60
+
+# LA LLEI, en una sola expressió: un tram COMPTA si està tancat i no supera el llindar.
+# El criteri és EXCLUSIÓ, no retall — el mateix que `recompute_welford:49-50`. Un tram de 3.710
+# min no és una jornada llarga que calgui podar a 24 h: és una fuita, i no sabem quant s'hi va
+# treballar de debò. Retallar-lo inventaria 1.440 minuts de feina que ningú no ha fet; excloure'l
+# només diu "d'aquest tram no en tenim dada". Una sola llei, cap divergència.
+TRAMS_SANS = Q(fi__isnull=False, minuts__lte=MAX_MINUTS_TRAM)
+
+
+def tram_compta(timer):
+    """Versió Python de `TRAMS_SANS`, per als bucles sobre timers ja prefetchats (albarà,
+    registre de consum). Ha de dir SEMPRE el mateix que el filtre ORM."""
+    return timer.fi is not None and (timer.minuts or 0) <= MAX_MINUTS_TRAM
+
+
+def minuts_per_model_task(timer_qs):
+    """{model_task_id: minuts sans} sobre un queryset de TimerEntrada, en 1 query.
+    Font ÚNICA dels agregadors visibles (compositor del dashboard, anàlisi de temps): abans
+    cadascun repetia el seu propi `Sum('minuts')` sense higiene i donaven xifres diferents."""
+    return {r['model_task_id']: (r['s'] or 0)
+            for r in timer_qs.filter(TRAMS_SANS).values('model_task_id').annotate(s=Sum('minuts'))}
 
 
 def _real_minutes(model_task):
-    """Temps real d'una tasca = suma de tots els timers (inclou rectificacions)."""
-    return model_task.timers.aggregate(s=Sum('minuts'))['s'] or 0
+    """Temps real d'una tasca = suma dels trams SANS (inclou rectificacions).
+    Mateixa llei que el recompute: els trams desbocats no són temps treballat i no hi entren."""
+    return model_task.timers.filter(TRAMS_SANS).aggregate(s=Sum('minuts'))['s'] or 0
 
 
 @transaction.atomic

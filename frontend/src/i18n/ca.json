@@ -759,6 +759,7 @@
         "play": "Iniciar",
         "pause": "Pausar",
         "stop": "Finalitzar",
+        "stop_resumed_not_closed": "S'ha reprès la tasca però no s'ha pogut tancar: {{msg}}",
         "empty": "Aquest model encara no té tasques assignades",
         "toast_paused": "S'ha pausat «{{name}}»",
         "transition_error": "No s'ha pogut canviar l'estat de la tasca",
@@ -896,7 +897,9 @@
     "assign_resource_done": "{{n}} model(s) assignat(s) al recurs.",
     "assign_resource_cleared": "Assignació retirada de {{n}} model(s).",
     "assign_resource_already": "{{n}} ja hi estaven.",
-    "set_badge": "SET {{n}}/{{total}} · {{codi}}"
+    "set_badge": "SET {{n}}/{{total}} · {{codi}}",
+    "measures_view_table": "Taula de mesures",
+    "measures_view_repas": "Repàs de fittings"
   },
   "model_wizard": {
     "customer": "Client",
@@ -2286,6 +2289,16 @@
       "n_models": "{{n}} models",
       "load_error": "No s'ha pogut carregar la convocatòria.",
       "open_sheet": "Obrir fulla del dia"
+    },
+    "repas": {
+      "title": "Repàs de fittings",
+      "count": "{{n}} sessions fetes",
+      "size": "talla {{talla}}",
+      "col_comments": "Comentaris",
+      "session_notes": "Notes de la sessió",
+      "gate_motiu": "Motiu del gate",
+      "no_sessions": "Aquest model encara no té cap fitting fet.",
+      "empty": "Cap POM pres en aquestes sessions."
     }
   },
   "wizard_base_size_required": "El sistema de talles ha canviat. Selecciona la talla base.",
@@ -4096,5 +4109,12 @@
     "enviar_done": "{{n}} peça/es enviades · {{mesures}} mesures, {{regles}} regles, {{fitxers}} fitxers",
     "enviar_no_aparellats": "{{n}} POM/s sense aparellar al catàleg de la marca",
     "enviar_errors": "{{n}} amb error"
+  },
+  "auth": {
+    "session_expired": "La sessió ha caducat. Torna a entrar.",
+    "session_expiring_title": "La sessió caducarà aviat",
+    "session_expiring_body": "La teva sessió és a punt d'acabar. Vols continuar treballant?",
+    "session_keep": "Continua treballant",
+    "session_logout": "Tancar sessió"
   }
 }

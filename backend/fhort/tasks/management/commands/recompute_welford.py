@@ -36,7 +36,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django_tenants.utils import get_tenant_model, schema_context
 
-from fhort.tasks.services_i import MAX_MINUTS_TRAM, WELFORD_MIN_SAMPLES
+from fhort.tasks.services_i import MAX_MINUTS_TRAM, WELFORD_MIN_SAMPLES, tram_compta
 
 
 def _mostres_de_la_cella(item_id, task_type_id, tasques):
@@ -46,8 +46,7 @@ def _mostres_de_la_cella(item_id, task_type_id, tasques):
 
     mostres = []
     for task in tasques:
-        trams = [t for t in task.timers.all()
-                 if t.fi is not None and (t.minuts or 0) <= MAX_MINUTS_TRAM]
+        trams = [t for t in task.timers.all() if tram_compta(t)]
         for tr in TaskTransition.objects.filter(model_task=task, to_status='Done').order_by('at'):
             # El que `Sum('minuts')` veia en aquell instant: els trams ja tancats.
             x = sum((t.minuts or 0) for t in trams if t.fi <= tr.at)

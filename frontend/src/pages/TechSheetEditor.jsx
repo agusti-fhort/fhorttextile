@@ -681,15 +681,25 @@ const TBL = {
 const NUM_RE = /^[+\-−]?\d+(?:[.,]\d+)?$/
 const esNumeric = (v) => NUM_RE.test(String(v ?? '').trim())
 
-// Delta de fila = increment de la GradingRule: primer increment no-zero de talla no-base.
-// Tots 0 (grading FIXED) → '—'. Signe explícit (+1 / −0.5).
-function rowDelta(row, baseSize, sizes) {
-  for (const sl of sizes) {
-    if (sl === baseSize) continue
-    const d = row.deltas?.[sl]
-    if (d && d !== 0) return d > 0 ? `+${d}` : `${String(d).replace('-', '−')}`
-  }
-  return '—'
+// Delta de fila = `increment_base` de la regla: l'increment PER SALT ASCENDENT, amb signe
+// explícit. Sense regla o sense increment (STEP/FIXED) → '—'.
+//
+// Abans llegia `row.deltas` (increment_applied_cm), que és la distància ACUMULADA a la base
+// —invariant del motor (patterns/engine/ports.py:64)—, agafant la primera talla no-base de
+// `size_labels`. Només encertava quan aquella talla queia UN salt per sobre de la base: amb
+// dues talles per sota pintava −2× l'increment, i el signe el decidia l'ordre en què el
+// document servia les talles, no el domini (model 163: −4 amb regla 2 · model 166: mateixa
+// regla, +8). La regla DECLARADA no depèn de cap de les dues coses.
+//
+// Convenció de la casa (GradingRuleSets.jsx:520-529, i la T1a a :4564): l'increment declarat,
+// positiu. Aquí es conserva la unitat de la taula (fmtMeasure converteix a INCH si cal) i
+// s'omet el sufix 'cm': la capçalera ja diu Δ i una cel·la amb unitat deixaria de ser
+// numèrica per a `esNumeric` (:682) → la columna perdria el centrat.
+function rowDelta(row, unit = 'CM') {
+  const inc = row?.increment_base
+  if (inc == null || Number(inc) === 0) return '—'
+  const n = fmtMeasure(inc, unit)
+  return Number(inc) > 0 ? `+${n}` : `${String(n).replace('-', '−')}`
 }
 
 // graded-table JSON (enriquit TS-4a) → {prims, totalW, totalH}. Camps: base_size,
@@ -740,7 +750,11 @@ function buildTablePrimitives(d) {
       const v = row.valors?.[sl]
       prims.push({ t: 't', x: sizesX0 + si * T_VAL_W, y, w: T_VAL_W, h: T_ROW_H, text: v != null ? String(v) : '–', fill: TBL.VAL, size: T_FONT, align: 'center', mid: true })
     })
-    prims.push({ t: 't', x: deltaX0, y, w: T_DELTA_W, h: T_ROW_H, text: rowDelta(row, baseSize, sizes), fill: TBL.DELTA, size: T_FONT, align: 'center', mid: true })
+    // Aquest render (blocs `graded_table` legacy) re-baixa graded-table a cada obertura: el Δ
+    // es recalcula sol, i per tant es cura sense tocar cap document. Sense `unit` a l'abast, i
+    // amb les xifres d'aquesta taula servides en cru (`String(v)`), el Δ va en la mateixa
+    // unitat canònica que elles.
+    prims.push({ t: 't', x: deltaX0, y, w: T_DELTA_W, h: T_ROW_H, text: rowDelta(row), fill: TBL.DELTA, size: T_FONT, align: 'center', mid: true })
     prims.push({ t: 'l', points: [0, y + T_ROW_H, totalW, y + T_ROW_H], stroke: TBL.ROW_BORDER, sw: 0.5 })
   })
 
@@ -4614,23 +4628,18 @@ export default function TechSheetEditor() {
       // Ordre final: ...talles... · Δ · Break. Amplada mínima suficient per a un resum curt.
       { key: 'break', label: t('tech_sheet.tbl_col_break'), width: 22 },
     ]
-    // Break = talla on el delta CANVIA respecte a la talla anterior (ordre de size_labels). Ara
-    // NOMÉS alimenta la columna resum; la cel·la de la talla es queda en negre pla (C1).
-    const esBreak = (row, sl, prevSl) => {
-      const d = row.deltas?.[sl]
-      const dPrev = prevSl != null ? row.deltas?.[prevSl] : undefined
-      return prevSl != null && d != null && dPrev != null && d !== dPrev
-    }
     const cellForSize = (row, sl) => fmtMeasure(row.valors?.[sl], unit) ?? '–'
-    // Resum de breaks de la fila: buit si cap · una talla ("9/10") · llista compacta ("6 · 9/10").
-    const breakResum = (row) => sizeLabels
-      .filter((sl, si) => esBreak(row, sl, si > 0 ? sizeLabels[si - 1] : null))
-      .join(' · ')
+    // Break = la talla DECLARADA a la regla (`talla_break_label`), com fa la T1a (:4565) i la
+    // pantalla de RuleSets. Abans es deduïa marcant la talla on el delta canviava respecte a
+    // l'anterior — però amb deltes ACUMULATS el delta canvia a cada talla per construcció, i
+    // una LINEAR pura sense cap break les marcava totes (TATE: 0 regles amb break, 18 files
+    // de 23 amb Break pintat). Un break no es dedueix: està declarat o no hi és.
+    const breakResum = (row) => row.talla_break_label || ''
     const filesDe = (sub) => sub.map(row => [
       row.ref || row.abbreviation || row.codi || '',
       { text: row.nom_en || '', sub: row.nom_ca || '' },
       ...sizeLabels.map(sl => cellForSize(row, sl)),
-      rowDelta(row, data.base_size, sizeLabels),
+      rowDelta(row, unit),
       breakResum(row),
     ])
     // F3 — mateix criteri que a la T1a: opcional, i només si el document té més d'una secció.

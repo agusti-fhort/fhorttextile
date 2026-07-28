@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { modelTasks, timers } from '../api/endpoints'
+import { recordaTascaActiva } from '../api/tascaActiva'
 import { taskTypeLabel } from '../utils/taskType'
 import { primaryBtn, selS } from './ui/buttons'
 import { overlayBase, Z_GUARD } from './ui/overlay'
@@ -125,6 +126,12 @@ export default function GuardTascaOblidada() {
       })
       .catch(() => { /* xarxa caiguda: el cron de servidor és la xarxa de sota */ })
   }, [t])
+
+  // K6 — aquest guard ja sap quina tasca duc En curs (la sondeja cada minut per armar el
+  // llindar). El camí de tancament de sessió n'ha de poder llegir l'id, i no ha de muntar
+  // un segon sondeig ni un segon concepte de «tasca activa» per saber-ho: es reflecteix la
+  // dada que ja hi ha. Derivat de `tasca`, no una font nova.
+  useEffect(() => { recordaTascaActiva(tasca?.id ?? null) }, [tasca])
 
   useEffect(() => {
     llegeixTram()

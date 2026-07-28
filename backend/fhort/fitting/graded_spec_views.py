@@ -76,8 +76,8 @@ class GradedSpecTableView(APIView):
         # TS-4a: enriquiment del payload — talla base, ordre de fitxa i nomenclatura del croquis.
         # Imports locals (evita cicle fitting↔models_app a nivell de mòdul).
         from fhort.models_app.models import Model as TechModel, BaseMeasurement
-        base_size = (TechModel.objects.filter(pk=sf.model_id)
-                     .values_list('base_size_label', flat=True).first())
+        model = TechModel.objects.filter(pk=sf.model_id).first()
+        base_size = model.base_size_label if model else None
         # ordre i nom_fitxa per POMMaster del model (precedent: serializers.py FIX 4B).
         # F3 — `seccio` viatja pel MATEIX camí que `ordre`/`nom_fitxa`: surt de la
         # BaseMeasurement del model, no del GradedSpec (la graduació no en sap res, i no li
@@ -88,11 +88,30 @@ class GradedSpecTableView(APIView):
         nom_fitxa_map = {bm['pom_id']: bm['nom_fitxa'] for bm in bms}
         seccio_map = {bm['pom_id']: bm['seccio'] for bm in bms}
 
+        # LA REGLA per fila. `deltas` (increment_applied_cm) és la distància ACUMULADA a la
+        # base — invariant declarada a patterns/engine/ports.py:64 i grading_projection.py:29 —
+        # i per tant NO és l'increment per salt. Qui vulgui pintar «Δ per talla» ha de llegir
+        # la regla DECLARADA, no deduir-la del resultat: mateix camí que `ordre`/`nom_fitxa`
+        # (BaseMeasurement, aquí a sobre), però des de la regla de graduació.
+        #
+        # `_load_grading_rules` és la MATEIXA font que fa servir el motor: ModelGradingRule
+        # resident amb prioritat i fallback al GradingRuleSet extern. Els dos camins (F1
+        # resident i RULESET) queden servits per una sola lectura, com el motor.
+        from fhort.pom.services import _load_grading_rules
+        regles = _load_grading_rules(model) if model else {}
+
         rows = [rows_by_pom[pid] for pid in rows_order]
         # ref = nomenclatura del croquis (nom_fitxa) amb fallback a abbreviation del POMGlobal.
         for row in rows:
             row['ref'] = nom_fitxa_map.get(row['pom_id']) or row['abbreviation']
             row['seccio'] = seccio_map.get(row['pom_id']) or ''
+            r = regles.get(row['pom_id'])
+            # Increment PER SALT ascendent (positiu). Sense regla, o amb regla sense increment
+            # (STEP/FIXED), viatja null: el pintor decideix el placeholder, la vista no en posa.
+            inc = getattr(r, 'increment_base', None) if r else None
+            row['increment_base'] = float(inc) if inc is not None else None
+            row['talla_break_label'] = (getattr(r, 'talla_break_label', None) if r else None) or ''
+            row['logica'] = getattr(r, 'logica', None) if r else None
         # Ordre de fitxa (POMs sense BaseMeasurement → al final).
         rows.sort(key=lambda r: ordre_map.get(r['pom_id'], 10 ** 9))
 

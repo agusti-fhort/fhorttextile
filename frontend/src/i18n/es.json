@@ -759,6 +759,7 @@
         "play": "Iniciar",
         "pause": "Pausar",
         "stop": "Finalizar",
+        "stop_resumed_not_closed": "Se ha reanudado la tarea pero no se ha podido cerrar: {{msg}}",
         "empty": "Este modelo aún no tiene tareas asignadas",
         "toast_paused": "Se ha pausado «{{name}}»",
         "transition_error": "No se ha podido cambiar el estado de la tarea",
@@ -896,7 +897,9 @@
     "assign_resource_done": "{{n}} modelo(s) asignado(s) al recurso.",
     "assign_resource_cleared": "Asignación retirada de {{n}} modelo(s).",
     "assign_resource_already": "{{n}} ya lo estaban.",
-    "set_badge": "SET {{n}}/{{total}} · {{codi}}"
+    "set_badge": "SET {{n}}/{{total}} · {{codi}}",
+    "measures_view_table": "Tabla de medidas",
+    "measures_view_repas": "Repaso de fittings"
   },
   "model_wizard": {
     "customer": "Cliente",
@@ -2286,6 +2289,16 @@
       "n_models": "{{n}} modelos",
       "load_error": "No se ha podido cargar la convocatoria.",
       "open_sheet": "Abrir hoja del día"
+    },
+    "repas": {
+      "title": "Repaso de fittings",
+      "count": "{{n}} sesiones realizadas",
+      "size": "talla {{talla}}",
+      "col_comments": "Comentarios",
+      "session_notes": "Notas de la sesión",
+      "gate_motiu": "Motivo del gate",
+      "no_sessions": "Este modelo aún no tiene ningún fitting realizado.",
+      "empty": "Ningún POM tomado en estas sesiones."
     }
   },
   "wizard_base_size_required": "El sistema de tallas ha cambiado. Selecciona la talla base.",
@@ -4096,5 +4109,12 @@
     "enviar_done": "{{n}} pieza(s) enviadas · {{mesures}} medidas, {{regles}} reglas, {{fitxers}} ficheros",
     "enviar_no_aparellats": "{{n}} POM sin emparejar en el catálogo de la marca",
     "enviar_errors": "{{n}} con error"
+  },
+  "auth": {
+    "session_expired": "La sesión ha caducado. Vuelve a entrar.",
+    "session_expiring_title": "La sesión caducará pronto",
+    "session_expiring_body": "Tu sesión está a punto de acabar. ¿Quieres seguir trabajando?",
+    "session_keep": "Seguir trabajando",
+    "session_logout": "Cerrar sesión"
   }
 }

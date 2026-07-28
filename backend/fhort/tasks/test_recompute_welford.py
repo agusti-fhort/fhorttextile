@@ -14,6 +14,7 @@ I fixen també les dues decisions de Patró C que el separen d'un recompute inge
   · una cel·la sense cap tasca supervivent NO es toca (és l'últim rastre d'aquella feina).
 """
 import datetime
+from decimal import Decimal
 from io import StringIO
 
 from django.contrib.auth import get_user_model
@@ -108,10 +109,38 @@ class RecomputeWelfordTest(TenantTestCase):
         self.assertEqual((c.n, c.mean_minutes, c.m2), abans)
 
     # ── Regla d'higiene ─────────────────────────────────────────────────────
-    def test_un_tram_impossible_surt_de_la_mostra(self):
+    def _mostra_pre_s1(self, x):
+        """Injecta a la cel·la la mostra que el camí viu escrivia ABANS de S1 (quan
+        `_real_minutes` sumava els trams en cru). És la forma de l'històric que el recompute
+        ha de saber netejar: sense això, aquest test ja no tindria res a netejar."""
+        c = self._cella()
+        n = c.n + 1
+        delta = Decimal(x) - c.mean_minutes
+        mean_nova = c.mean_minutes + (delta / n)
+        c.m2 = c.m2 + (delta * (Decimal(x) - mean_nova))
+        c.mean_minutes = mean_nova
+        c.n = n
+        c.save(update_fields=['n', 'mean_minutes', 'm2'])
+        return c
+
+    def test_la_font_ja_no_injecta_el_tram_impossible(self):
+        """S1 · LA FONT TANCADA. Abans, tancar una tasca amb un tram desbocat escrivia la
+        mentida a la cel·la i el recompute l'havia de treure després. Ara `_real_minutes`
+        aplica la MATEIXA llei que el recompute: la mostra no neix."""
         self._tasca_treballada(30)
         zombi = self._tasca_treballada(MAX_MINUTS_TRAM + 500)
         c = self._cella()
+        self.assertEqual(c.n, 1, 'el tram desbocat no ha d\'aportar cap mostra')
+        self.assertEqual(int(c.mean_minutes), 30)
+        # La FILA del tram es conserva: la higiene és de la mostra, no de la traça.
+        self.assertTrue(TimerEntrada.objects.filter(model_task=zombi).exists())
+
+    def test_un_tram_impossible_surt_de_la_mostra(self):
+        """El recompute segueix sent la neteja de l'HISTÒRIC (el que es va escriure abans de
+        S1). La font ja no en genera de nous, però els que hi ha s'han de poder treure."""
+        self._tasca_treballada(30)
+        zombi = self._tasca_treballada(MAX_MINUTS_TRAM + 500)
+        c = self._mostra_pre_s1(MAX_MINUTS_TRAM + 500)
         self.assertEqual(c.n, 2)
         self.assertGreater(c.mean_minutes, MAX_MINUTS_TRAM / 2)   # la mitjana ja menteix
 
@@ -119,7 +148,6 @@ class RecomputeWelfordTest(TenantTestCase):
         c.refresh_from_db()
         self.assertEqual(c.n, 1, 'la mostra del tram impossible ha de caure')
         self.assertEqual(int(c.mean_minutes), 30)
-        # La FILA del tram es conserva: la higiene és de la mostra, no de la traça.
         self.assertTrue(TimerEntrada.objects.filter(model_task=zombi).exists())
 
     def test_el_llindar_es_estricte_no_toca_el_que_hi_arriba_just(self):
@@ -147,7 +175,7 @@ class RecomputeWelfordTest(TenantTestCase):
     def test_dry_run_no_escriu(self):
         self._tasca_treballada(30)
         self._tasca_treballada(MAX_MINUTS_TRAM + 500)
-        c = self._cella()
+        c = self._mostra_pre_s1(MAX_MINUTS_TRAM + 500)   # hi ha d'haver ALGUNA cosa a corregir
         abans = (c.n, c.mean_minutes, c.m2)
         sortida = self._recompute()
         c.refresh_from_db()

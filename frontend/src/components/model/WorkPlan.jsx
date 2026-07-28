@@ -64,12 +64,19 @@ const TASK_ICON = {
 // status → variant del Badge del design system (mateix criteri que el dashboard F1).
 const STATUS_VARIANT = { Done: 'ok', InProgress: 'gold', Paused: 'warn', Pending: 'gray' }
 
-// Transport actiu per estat (mirall d'ACTIONS de KanbanTasks: quins botons toquen a cada estat).
+// Transport actiu per estat. Aquest és avui l'ÚNIC transport de la casa: l'ACTIONS de
+// KanbanTasks que aquest mapa emmirallava ja no existeix (la pàgina Kanban global es va jubilar
+// a fc98cab6), i cap altra superfície pinta play/pause/stop. No hi ha res amb què sincronitzar.
+//
 // play = Pending/Paused/Done (start/resume/reopen); en InProgress només es reactiva si hi ha eina
-// per navegar-hi. pause+stop = InProgress.
+// per navegar-hi. pause = InProgress (només té sentit sobre feina en curs).
+// stop = InProgress i PAUSED. A Paused no és una transició nova —`Paused → Done` segueix
+// prohibida a la màquina d'estats (decisió Agus: NO es toca)— sinó un GEST: play+stop encadenat
+// (`handleStop`). Pending NO en té: tancar una tasca mai començada és «cancel·lar», una altra
+// cosa que aquest sprint no decideix.
 const TRANSPORT = {
   Pending:    { play: true,  pause: false, stop: false },
-  Paused:     { play: true,  pause: false, stop: false },
+  Paused:     { play: true,  pause: false, stop: true  },
   InProgress: { play: false, pause: true,  stop: true  },
   Done:       { play: true,  pause: false, stop: false },
 }
@@ -219,17 +226,21 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
     showToast('warn', t('model_sheet.dashboard.workplan.toast_paused', { name }))
   }
 
+  // Missatge d'error REAL del servidor, amb els dos fallbacks de sempre.
+  function transitionError(err) {
+    return err?.response?.data?.error
+      || (err?.response?.status === 403
+        ? t('model_sheet.dashboard.workplan.not_allowed')
+        : t('model_sheet.dashboard.workplan.transition_error'))
+  }
+
   // Transició que NO navega (Play sense eina §4, Pause, Stop): després refresca el dashboard
   // perquè estat/temps/obertures de la targeta reflecteixin el canvi.
   function doTransition(task, toStatus) {
     modelTasks.transition(task.id, { to_status: toStatus })
       .then(res => { notifyPaused(res); onRefresh?.() })
       .catch(err => {
-        const msg = err?.response?.data?.error
-          || (err?.response?.status === 403
-            ? t('model_sheet.dashboard.workplan.not_allowed')
-            : t('model_sheet.dashboard.workplan.transition_error'))
-        showToast('err', msg)
+        showToast('err', transitionError(err))
         onRefresh?.()   // re-sincronitza amb el backend (la targeta local podia ser obsoleta)
       })
   }
@@ -296,7 +307,34 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
 
   // Pause = pauso, no he acabat. Stop = gest humà explícit "feta, 100%" (MAI automàtic). Cap navega.
   const handlePause = (task) => doTransition(task, 'Paused')
-  const handleStop  = (task) => doTransition(task, 'Done')
+
+  // Stop sobre tasca EN CURS: una transició. Sobre tasca PAUSADA: el mateix botó, però el gest
+  // és play+stop ENCADENAT — la màquina d'estats prohibeix `Paused → Done` i no es toca; el que
+  // s'obre és el gest, no la llei. Un sol acte d'usuari, dues transicions legals.
+  //
+  // El segon pas NOMÉS si el primer torna 200. Si el play falla (403 d'allow-list, tasca ja
+  // moguda per un altre), la tasca es queda Paused i el toast diu el motiu del servidor: el
+  // gate d'execució no s'esquiva, es respecta de franc. Si falla el TANCAMENT havent reprès, el
+  // toast ho diu explícitament — la tasca ha quedat en curs, i callar-ho seria l'estat intermedi
+  // silenciós que aquest sprint prohibeix.
+  function handleStop(task) {
+    if (task.status !== 'Paused') { doTransition(task, 'Done'); return }
+    let repres = false
+    modelTasks.transition(task.id, { to_status: 'InProgress' })
+      .then(res => {
+        repres = true
+        notifyPaused(res)   // el play pot haver pausat l'altra InProgress del tècnic
+        return modelTasks.transition(task.id, { to_status: 'Done' })
+      })
+      .then(() => onRefresh?.())
+      .catch(err => {
+        const msg = transitionError(err)
+        showToast('err', repres
+          ? t('model_sheet.dashboard.workplan.stop_resumed_not_closed', { msg })
+          : msg)
+        onRefresh?.()
+      })
+  }
 
   return (
     <section style={containerStyle}>

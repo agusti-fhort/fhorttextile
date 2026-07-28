@@ -4,6 +4,7 @@ from django.urls import path, register_converter
 from rest_framework.routers import DefaultRouter
 
 from .graded_spec_views import GradedSpecTableView
+from .repas_views import FittingRepasView
 
 
 class CaseInsensitiveUUIDConverter:
@@ -64,4 +65,6 @@ group_urls = [
 urlpatterns = group_urls + router.urls + [
     # F3 — taula de specs graduades (GradingVersion activa) per a la fitxa tècnica.
     path('fitting/<int:sf_id>/graded-table/', GradedSpecTableView.as_view(), name='graded-spec-table'),
+    # Repàs de fittings del model: taula POM × sessions (lectura pura).
+    path('fitting/model/<int:model_id>/repas/', FittingRepasView.as_view(), name='fitting-repas'),
 ]

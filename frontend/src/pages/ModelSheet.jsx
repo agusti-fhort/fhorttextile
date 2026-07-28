@@ -7,11 +7,14 @@ import WatchpointDrawer from '../components/model/WatchpointDrawer'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import { fittingSource } from '../components/model/measureSources'
 import MeasuresEntryPanel from '../components/model/MeasuresEntryPanel'
+import FittingRepasPanel from '../components/model/FittingRepasPanel'
 import PropagatedEditor from './PropagatedEditor'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
 import { MaduresaBadge, EncarrecDelClient } from '../components/model/FederacioBadge'
 import { models, watchpoints, modelTasks, fittingSessions, modelFitxers } from '../api/endpoints'
+import { authFetch } from '../api/authFetch'
+import { missatgeError } from '../api/errorsAuth'
 import useAuthStore from '../store/auth'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
@@ -191,6 +194,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // InProgress (compta-temps); en sortir de mode edició es pausa. El lifecycle del timer es mou de
   // mount/unmount de ruta (EscalatTask/ModelMeasurements) a enter/exit de mode.
   const [editing, setEditing] = useState(null)        // null | 'Mesures' | 'Escalat'
+  // Subvista de Mesures en CONSULTA: la taula del model ↔ el repàs dels fittings fets. Les dues
+  // miren la mateixa matèria (POM × columnes) des de dos costats; no mereixen dues tabs.
+  const [mesuresView, setMesuresView] = useState('taula')   // 'taula' | 'repas'
   const [editTaskId, setEditTaskId] = useState(null)
   // Sprint Y — sessió de fitting resolta (quan hi ha ?fitting_session=): la font fitting la rep per
   // sourceCtx. null = camí del check normal.
@@ -500,9 +506,29 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
 	          <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           marginBottom: 10, gap: 12 }}>
-              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-                {editing === 'Mesures' ? t('model_sheet.measures_editing') : t('model_sheet.measures_consult')}
-              </span>
+              {editing === 'Mesures' ? (
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                  {t('model_sheet.measures_editing')}
+                </span>
+              ) : (
+                // Commutador de subvista (consulta): taula del model ↔ repàs dels fittings fets.
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[['taula', 'model_sheet.measures_view_table', 'ti-table'],
+                    ['repas', 'model_sheet.measures_view_repas', 'ti-history']].map(([key, label, icon]) => (
+                    <button key={key} type="button" onClick={() => setMesuresView(key)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                        background: mesuresView === key ? 'var(--gold)' : 'var(--bg-muted)',
+                        color: mesuresView === key ? 'var(--white)' : 'var(--text-muted)',
+                        fontSize: 'var(--fs-body)', fontWeight: mesuresView === key ? 500 : 400,
+                      }}>
+                      <i className={`ti ${icon}`} aria-hidden="true" style={{ fontSize: 14 }} />
+                      {t(label)}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {/* Commuta consulta↔edició DINS la tab (no navega): manté tot el context. */}
                 {editing === 'Mesures' ? (
@@ -541,6 +567,8 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 lockRules={!!fittingSession}
                 onSessionSaved={fittingSession ? onSessionSaved : null}
                 onFeedback={fb => setFeedback(fb)} onResolved={exitEdit} onBack={exitEdit} />
+            ) : mesuresView === 'repas' ? (
+              <FittingRepasPanel model={model} />
             ) : (
               <CheckMeasureEditor model={model} readOnly />
             )}
@@ -1413,8 +1441,9 @@ function iconForExt(ext) {
 function TabFiles({ modelId }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const token = localStorage.getItem('access_token')
-  const authHeaders = { Authorization: `Bearer ${token}` }
+  // K2 — aquest tab va per `authFetch` (no per `fetch` cru): un 401 per access token
+  // caducat es refresca i es REINTENTA, en comptes d'arribar a la pantalla com a JSON.
+  // El Bearer el posa `authFetch`; aquí ja no cal ni token ni capçalera d'autorització.
 
   const [fitxers, setFitxers] = useState([])
   const [orderBy, setOrderBy] = useState('data')
@@ -1425,7 +1454,7 @@ function TabFiles({ modelId }) {
   const [selectedId, setSelectedId] = useState(null)   // Finder: CAP selecció per defecte
 
   useEffect(() => {
-    fetch(`${API}/api/v1/model-fitxers/?model=${modelId}&is_current=true&ordering=-data_pujada`, { headers: authHeaders })
+    authFetch(`/api/v1/model-fitxers/?model=${modelId}&is_current=true&ordering=-data_pujada`)
       .then(r => r.json())
       .then(d => setFitxers(d.results || d || []))
       .catch(() => setError(t('model_sheet.err_load_files')))
@@ -1440,9 +1469,10 @@ function TabFiles({ modelId }) {
     formData.append('nom', file.name)
     if (versioAnteriorId) formData.append('versio_anterior_id', versioAnteriorId)
     try {
-      const r = await fetch(`${API}/api/v1/models/${modelId}/upload-fitxer/`, {
+      // El FormData es reenvia tal qual si `authFetch` ha de refrescar i reintentar: la
+      // pujada sobreviu a l'access token caducat i el fitxer NO es perd (K2).
+      const r = await authFetch(`/api/v1/models/${modelId}/upload-fitxer/`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       })
       const d = await r.json()
@@ -1451,7 +1481,8 @@ function TabFiles({ modelId }) {
           ? [d, ...prev.filter(f => f.id !== versioAnteriorId)]
           : [d, ...prev])
       } else {
-        setError(JSON.stringify(d))
+        // K3 — codis coneguts en llenguatge humà; la resta, com abans.
+        setError(missatgeError(d, t))
       }
     } catch {
       setError(t('model_sheet.err_upload'))
@@ -1463,7 +1494,7 @@ function TabFiles({ modelId }) {
   const openHistory = async (fitxer) => {
     setHistory({ fitxer, chain: [], loading: true })
     try {
-      const r = await fetch(`${API}/api/v1/model-fitxers/${fitxer.id}/versions/`, { headers: authHeaders })
+      const r = await authFetch(`/api/v1/model-fitxers/${fitxer.id}/versions/`)
       const d = await r.json()
       setHistory({ fitxer, chain: (d.results || d || []), loading: false })
     } catch {
@@ -1473,9 +1504,7 @@ function TabFiles({ modelId }) {
 
   const handleDelete = async (fitxerId) => {
     if (!window.confirm(t('model_sheet.confirm_delete_file'))) return
-    await fetch(`${API}/api/v1/model-fitxers/${fitxerId}/`, {
-      method: 'DELETE', headers: authHeaders,
-    })
+    await authFetch(`/api/v1/model-fitxers/${fitxerId}/`, { method: 'DELETE' })
     setFitxers(prev => prev.filter(f => f.id !== fitxerId))
   }
 

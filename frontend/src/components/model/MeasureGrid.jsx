@@ -69,6 +69,18 @@ const activeRed = (value, active) => {
   return isModified(value, active.baseValue)
 }
 
+// Indicador de COMENTARI de cel·la (repàs de fittings): un punt discret amb el text al `title`.
+// Patró de tooltip de la casa (attr title, com el ★ KEY o la candidata a poda) — cap dependència
+// nova. La dada arriba com history[key] = {value, nota} o active.nota; sense nota no es pinta res,
+// de manera que els eixos que ja existien (check/fitting/escalat, valors nus) no canvien.
+function NotaDot({ nota }) {
+  if (!nota) return null
+  return (
+    <i className="ti ti-message-circle" title={nota} aria-label={nota}
+      style={{ fontSize: 11, marginLeft: 4, color: 'var(--gold)', verticalAlign: 'middle' }} />
+  )
+}
+
 // Cel·la activa editable (única amb input + autosave). Vermell si difereix de baseValue; negreta si
 // editada a mà (ancoratge). Buida si no hi ha línia activa per a aquest (pom, grup).
 const stepBtnStyle = {
@@ -89,6 +101,7 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     return (
       <td style={{ ...cellTd(true, false, false), color: modified ? 'var(--err)' : 'var(--text-main)' }}>
         {fmtMeasure(value, unit) ?? '—'}
+        <NotaDot nota={active.nota} />
       </td>
     )
   }
@@ -385,10 +398,12 @@ export default function MeasureGrid({
                   const cell = r.cells?.[g.key] || {}
                   const out = (g.historyCols || []).map((h, idx) => {
                     const hv = cell.history?.[h.key]
-                    const v = hv && typeof hv === 'object' ? hv.value : hv
+                    const obj = hv && typeof hv === 'object'
+                    const v = obj ? hv.value : hv
                     return (
                       <td key={`${g.key}-h-${h.key}`} style={{ ...cellTd(false, idx === 0, false), color: 'var(--text-main)' }}>
                         {fmtMeasure(v, unit) ?? '—'}
+                        {obj && <NotaDot nota={hv.nota} />}
                       </td>
                     )
                   })

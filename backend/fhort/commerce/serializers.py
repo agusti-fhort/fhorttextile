@@ -363,9 +363,10 @@ class WorkOrderSerializer(serializers.ModelSerializer):
         if view is not None and getattr(view, 'action', None) == 'list':
             return None
         from django.db.models import Sum
+        from fhort.tasks.services_i import TRAMS_SANS
         rows = []
         for t in obj.tasks.select_related('task_type').all():
-            minutes = t.timers.aggregate(m=Sum('minuts'))['m'] or 0
+            minutes = t.timers.filter(TRAMS_SANS).aggregate(m=Sum('minuts'))['m'] or 0
             rows.append({
                 'id': t.pk, 'task_type_code': t.task_type.code, 'task_type_name': t.task_type.name,
                 'status': t.status, 'off_recipe': t.off_recipe, 'assignee': t.assignee_id,
@@ -437,7 +438,10 @@ class DeliveryNoteLineSerializer(serializers.ModelSerializer):
         if not obj.model_task_id or not obj.internal_minutes:
             return None
         from django.db.models import Sum
-        row = (obj.model_task.timers.values('tecnic__nom_complet')
+        from fhort.tasks.services_i import TRAMS_SANS
+        # Qui hi ha posat més hores. Amb els trams desbocats dins, un timer oblidat coronava
+        # el tècnic que se l'havia deixat obert: la mateixa llei que la resta de lectures.
+        row = (obj.model_task.timers.filter(TRAMS_SANS).values('tecnic__nom_complet')
                .annotate(m=Sum('minuts')).order_by('-m').first())
         return (row or {}).get('tecnic__nom_complet')
 
