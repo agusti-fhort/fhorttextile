@@ -759,6 +759,7 @@
         "play": "Start",
         "pause": "Pause",
         "stop": "Finish",
+        "stop_resumed_not_closed": "The task was resumed but could not be closed: {{msg}}",
         "empty": "This model has no tasks assigned yet",
         "toast_paused": "Paused «{{name}}»",
         "transition_error": "Could not change the task status",

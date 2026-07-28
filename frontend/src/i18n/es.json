@@ -759,6 +759,7 @@
         "play": "Iniciar",
         "pause": "Pausar",
         "stop": "Finalizar",
+        "stop_resumed_not_closed": "Se ha reanudado la tarea pero no se ha podido cerrar: {{msg}}",
         "empty": "Este modelo aún no tiene tareas asignadas",
         "toast_paused": "Se ha pausado «{{name}}»",
         "transition_error": "No se ha podido cambiar el estado de la tarea",

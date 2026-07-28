@@ -759,6 +759,7 @@
         "play": "Iniciar",
         "pause": "Pausar",
         "stop": "Finalitzar",
+        "stop_resumed_not_closed": "S'ha reprès la tasca però no s'ha pogut tancar: {{msg}}",
         "empty": "Aquest model encara no té tasques assignades",
         "toast_paused": "S'ha pausat «{{name}}»",
         "transition_error": "No s'ha pogut canviar l'estat de la tasca",
