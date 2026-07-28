@@ -897,7 +897,9 @@
     "assign_resource_done": "{{n}} model(s) assigned to the resource.",
     "assign_resource_cleared": "Assignment removed from {{n}} model(s).",
     "assign_resource_already": "{{n}} were already assigned.",
-    "set_badge": "SET {{n}}/{{total}} · {{codi}}"
+    "set_badge": "SET {{n}}/{{total}} · {{codi}}",
+    "measures_view_table": "Measurement table",
+    "measures_view_repas": "Fitting review"
   },
   "model_wizard": {
     "customer": "Customer",
@@ -2287,6 +2289,16 @@
       "n_models": "{{n}} models",
       "load_error": "Could not load the fitting sheet.",
       "open_sheet": "Open today's sheet"
+    },
+    "repas": {
+      "title": "Fitting review",
+      "count": "{{n}} sessions held",
+      "size": "size {{talla}}",
+      "col_comments": "Comments",
+      "session_notes": "Session notes",
+      "gate_motiu": "Gate reason",
+      "no_sessions": "This model has no fittings yet.",
+      "empty": "No POM measured in these sessions."
     }
   },
   "wizard_base_size_required": "The size system has changed. Select the base size.",

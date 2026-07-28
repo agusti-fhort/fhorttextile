@@ -897,7 +897,9 @@
     "assign_resource_done": "{{n}} modelo(s) asignado(s) al recurso.",
     "assign_resource_cleared": "Asignación retirada de {{n}} modelo(s).",
     "assign_resource_already": "{{n}} ya lo estaban.",
-    "set_badge": "SET {{n}}/{{total}} · {{codi}}"
+    "set_badge": "SET {{n}}/{{total}} · {{codi}}",
+    "measures_view_table": "Tabla de medidas",
+    "measures_view_repas": "Repaso de fittings"
   },
   "model_wizard": {
     "customer": "Cliente",
@@ -2287,6 +2289,16 @@
       "n_models": "{{n}} modelos",
       "load_error": "No se ha podido cargar la convocatoria.",
       "open_sheet": "Abrir hoja del día"
+    },
+    "repas": {
+      "title": "Repaso de fittings",
+      "count": "{{n}} sesiones realizadas",
+      "size": "talla {{talla}}",
+      "col_comments": "Comentarios",
+      "session_notes": "Notas de la sesión",
+      "gate_motiu": "Motivo del gate",
+      "no_sessions": "Este modelo aún no tiene ningún fitting realizado.",
+      "empty": "Ningún POM tomado en estas sesiones."
     }
   },
   "wizard_base_size_required": "El sistema de tallas ha cambiado. Selecciona la talla base.",

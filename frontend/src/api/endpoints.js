@@ -643,6 +643,11 @@ export const fittingSessions = {
   groupRemove: (uuid) => client.delete(`/api/v1/fitting-sessions/group/${uuid}/`),
 }
 
+// REPÀS — taula POM × sessions de fitting del model (LECTURA pura; cap escriptura des d'aquí).
+export const fittingRepas = {
+  get: (modelId, params) => client.get(`/api/v1/fitting/model/${modelId}/repas/`, { params }),
+}
+
 // Sprint 5B.6-A2 — Piece fittings: graella de treball + gate.
 export const pieceFittings = {
   get: (id) => client.get(`/api/v1/piece-fittings/${id}/`),

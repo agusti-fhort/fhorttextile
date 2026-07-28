@@ -152,6 +152,100 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel) {
   })
 }
 
+// --- REPÀS de fittings (taula POM × sessions, LECTURA) -------------------------------------------
+// L'eix del fitting editor és la VERSIÓ (una sessió, com evoluciona la teoria). Aquí l'eix és la
+// SESSIÓ (totes les fetes, què s'hi va prendre). Mateixa anatomia: un sol group (la talla), N
+// columnes d'història + l'ACTIVA = l'última sessió (és la que mana visualment, i el gold-pale de
+// MeasureGrid ja diu «aquesta») + trailCol COMENTARIS. Res editable: la font és l'endpoint de repàs.
+
+const fmtDia = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit' })
+}
+
+// Punt d'estat de la sessió: verd = tancada (el que s'hi va prendre ja no es mou), daurat = oberta.
+const estatAccent = (estat) => (estat === 'Tancada' ? 'var(--ok)' : 'var(--gold)')
+
+// Capçalera de columna de sessió: TIPUS (la fase — dada de domini, no es tradueix) + @data a sota,
+// mateix llenguatge que els estadis de la taula de mesures. Si la sessió porta comentari propi
+// (notes o motiu del gate), l'indicador viu aquí: és un comentari de SESSIÓ, no de cel·la.
+function SessionLabel({ session, t }) {
+  const comentari = [
+    session.notes && `${t('fitting.repas.session_notes')}: ${session.notes}`,
+    session.gate_motiu && `${t('fitting.repas.gate_motiu')} (${session.gate}): ${session.gate_motiu}`,
+  ].filter(Boolean).join('\n')
+  return (
+    <span>
+      <span aria-hidden="true" style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+        background: estatAccent(session.estat), marginRight: 4, verticalAlign: 'middle' }} />
+      {session.fase}
+      {comentari && (
+        <i className="ti ti-message-circle" title={comentari} aria-label={comentari}
+          style={{ fontSize: 11, marginLeft: 4, color: 'var(--gold)', verticalAlign: 'middle' }} />
+      )}
+      {session.data && <span style={{ display: 'block', fontWeight: 400, fontSize: 'var(--fs-caption)' }}>@{fmtDia(session.data)}</span>}
+    </span>
+  )
+}
+
+// Columna final: l'ÚLTIM comentari del POM (el darrer no buit, que el backend ja resol) amb la data
+// de la sessió d'on ve. Un POM sense cap comentari deixa la cel·la buida, no un guionet: no hi ha
+// res a dir, i el buit ho diu millor.
+function UltimComentari({ ultim }) {
+  if (!ultim?.text) return null
+  return (
+    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>
+      {ultim.text}
+      {ultim.data && (
+        <span style={{ marginLeft: 6, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>@{fmtDia(ultim.data)}</span>
+      )}
+    </span>
+  )
+}
+
+export function buildRepasGroups(sessions, talla, baseLabel, t) {
+  if (!sessions?.length) return []
+  const ultima = sessions[sessions.length - 1]
+  return [{
+    key: 'repas',
+    label: talla
+      ? (talla === baseLabel
+        ? <span>{talla}<i className="ti ti-star" style={{ fontSize: 10, marginLeft: 4, color: 'var(--gold)' }} /></span>
+        : talla)
+      : '—',
+    historyCols: sessions.slice(0, -1).map(s => ({ key: String(s.id), label: <SessionLabel session={s} t={t} /> })),
+    activeLabel: <SessionLabel session={ultima} t={t} />,
+    trailCols: [{ key: 'coment', label: t('fitting.repas.col_comments') }],
+  }]
+}
+
+export function buildRepasRows(rows, sessions) {
+  if (!sessions?.length) return []
+  const ultima = sessions[sessions.length - 1]
+  return (rows || []).map(row => {
+    const history = {}
+    for (const s of sessions.slice(0, -1)) {
+      const v = row.valors?.[String(s.id)]
+      // Objecte {value, nota} SEMPRE: és el contracte que fa aparèixer l'indicador de comentari
+      // a MeasureGrid. Sense presa en aquella sessió, la cel·la queda a null (surt '—').
+      history[String(s.id)] = v ? { value: v.valor_real, nota: v.nota } : null
+    }
+    const v = row.valors?.[String(ultima.id)]
+    return {
+      pom_id: row.pom_id, codi: row.codi, pom_code: row.pom_code, is_key: row.is_key,
+      nom_en: row.nom_en, nom_local: row.nom_local, nom_fitxa: row.nom_fitxa, bm_id: row.bm_id,
+      cells: {
+        repas: {
+          history,
+          active: v ? { lineId: `repas:${row.pom_id}`, value: v.valor_real ?? '', baseValue: null, nota: v.nota, readonly: true } : null,
+          trail: { coment: <UltimComentari ultim={row.ultim_comentari} /> },
+        },
+      },
+    }
+  })
+}
+
 // onSave de MeasureGrid per al fitting: despatxa per règim del POM (lineRegimeMap: lineId → 'LINEAR'|'STEP').
 // STEP → PATCH valor_real (no propaga). LINEAR → propagar (retorna {linies} → MeasureGrid refresca germanes).
 // Motor INTACTE: només es criden els endpoints d'autosave/propagació existents.

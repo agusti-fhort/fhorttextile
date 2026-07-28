@@ -7,6 +7,7 @@ import WatchpointDrawer from '../components/model/WatchpointDrawer'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import { fittingSource } from '../components/model/measureSources'
 import MeasuresEntryPanel from '../components/model/MeasuresEntryPanel'
+import FittingRepasPanel from '../components/model/FittingRepasPanel'
 import PropagatedEditor from './PropagatedEditor'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
@@ -193,6 +194,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // InProgress (compta-temps); en sortir de mode edició es pausa. El lifecycle del timer es mou de
   // mount/unmount de ruta (EscalatTask/ModelMeasurements) a enter/exit de mode.
   const [editing, setEditing] = useState(null)        // null | 'Mesures' | 'Escalat'
+  // Subvista de Mesures en CONSULTA: la taula del model ↔ el repàs dels fittings fets. Les dues
+  // miren la mateixa matèria (POM × columnes) des de dos costats; no mereixen dues tabs.
+  const [mesuresView, setMesuresView] = useState('taula')   // 'taula' | 'repas'
   const [editTaskId, setEditTaskId] = useState(null)
   // Sprint Y — sessió de fitting resolta (quan hi ha ?fitting_session=): la font fitting la rep per
   // sourceCtx. null = camí del check normal.
@@ -502,9 +506,29 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
 	          <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           marginBottom: 10, gap: 12 }}>
-              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-                {editing === 'Mesures' ? t('model_sheet.measures_editing') : t('model_sheet.measures_consult')}
-              </span>
+              {editing === 'Mesures' ? (
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                  {t('model_sheet.measures_editing')}
+                </span>
+              ) : (
+                // Commutador de subvista (consulta): taula del model ↔ repàs dels fittings fets.
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[['taula', 'model_sheet.measures_view_table', 'ti-table'],
+                    ['repas', 'model_sheet.measures_view_repas', 'ti-history']].map(([key, label, icon]) => (
+                    <button key={key} type="button" onClick={() => setMesuresView(key)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                        background: mesuresView === key ? 'var(--gold)' : 'var(--bg-muted)',
+                        color: mesuresView === key ? 'var(--white)' : 'var(--text-muted)',
+                        fontSize: 'var(--fs-body)', fontWeight: mesuresView === key ? 500 : 400,
+                      }}>
+                      <i className={`ti ${icon}`} aria-hidden="true" style={{ fontSize: 14 }} />
+                      {t(label)}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {/* Commuta consulta↔edició DINS la tab (no navega): manté tot el context. */}
                 {editing === 'Mesures' ? (
@@ -543,6 +567,8 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 lockRules={!!fittingSession}
                 onSessionSaved={fittingSession ? onSessionSaved : null}
                 onFeedback={fb => setFeedback(fb)} onResolved={exitEdit} onBack={exitEdit} />
+            ) : mesuresView === 'repas' ? (
+              <FittingRepasPanel model={model} />
             ) : (
               <CheckMeasureEditor model={model} readOnly />
             )}
