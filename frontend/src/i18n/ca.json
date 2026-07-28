@@ -2968,7 +2968,9 @@
     "node_tool_direct": "Selecció directa (nodes)",
     "node_mode_shapes": "Formes",
     "node_mode_nodes": "Nodes",
-    "obj_action_node_mode": "No disponible mentre s'editen nodes"
+    "obj_action_node_mode": "No disponible mentre s'editen nodes",
+    "table_variant_repas": "T3 — Repàs de fittings",
+    "lib_table_no_repas": "El model no té cap fitting registrat: no hi ha esdeveniments per omplir la taula."
   },
   "estat_badge": {
     "pendent_inputs": "Pendent d'inputs",

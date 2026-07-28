@@ -2968,7 +2968,9 @@
     "node_tool_direct": "Direct selection (nodes)",
     "node_mode_shapes": "Shapes",
     "node_mode_nodes": "Nodes",
-    "obj_action_node_mode": "Not available while editing nodes"
+    "obj_action_node_mode": "Not available while editing nodes",
+    "table_variant_repas": "T3 — Fitting review",
+    "lib_table_no_repas": "This model has no recorded fitting: there are no events to fill the table."
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",
