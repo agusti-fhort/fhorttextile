@@ -172,3 +172,161 @@ class FittingRepasTest(TenantTestCase):
         self.assertEqual(d['sessions'], [])
         self.assertEqual(d['rows'], [])
         self.assertIsNone(d['talla'])
+
+
+class FittingRepasEtapesTest(FittingRepasTest):
+    """UN FITTING NO ÉS SEMPRE UNA FittingSession (decisió Agus, 28/07).
+
+    Al despatx els fittings s'escriuen a mà i s'entren a la TAULA DE MESURES. El cens de
+    `fhort` ho confirma: 13 models tenen història de mesures i només 3 tenen PieceFitting —
+    per a 10 el Repàs deia «cap fitting registrat» amb la feina feta a l'altra taula.
+
+    Aquí es blinda que el Repàs reculli TOT el que és fitting, vingui de l'eina o de la
+    taula, i —igual d'important— que NO reculli el que no ho és.
+    """
+
+    def _etapa(self, pom, valor, origen='MANUAL', dia=15, anterior=50.0, motiu=''):
+        """Una re-mesura escrita a la taula de mesures, amb data controlada.
+
+        Es fabrica el `MeasurementChangeLog` DIRECTAMENT en comptes de desar la
+        BaseMeasurement: així la prova fixa el contracte que el Repàs llegeix, sense dependre
+        del camí que l'hagi escrit (fitting, size check o edició a mà).
+        """
+        from fhort.models_app.models import MeasurementChangeLog
+
+        ctx = {'MANUAL': 'manual', 'CHECKED': 'checked', 'FITTED': 'fitting'}[origen]
+        log = MeasurementChangeLog.objects.create(
+            model=self.model, pom=pom, valor_anterior=anterior, valor_nou=valor,
+            context=ctx, motiu=motiu)
+        quan = datetime.datetime(2026, 6, dia, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        MeasurementChangeLog.objects.filter(pk=log.pk).update(created_at=quan)
+        return log
+
+    def _neteja_log(self):
+        """El signal registra un canvi per cada BaseMeasurement del setUp: fora, perquè cada
+        prova digui exactament quines etapes hi ha."""
+        from fhort.models_app.models import MeasurementChangeLog
+        MeasurementChangeLog.objects.filter(model=self.model).delete()
+
+    # ── Cas TATE: model amb NOMÉS etapes, cap sessió ──────────────────────────
+    def test_model_sense_cap_sessio_pero_amb_etapes_treu_columnes(self):
+        self._neteja_log()
+        self._etapa(self.pom_a, 61.0, dia=15)
+
+        d = self._get().data
+        self.assertEqual(len(d['sessions']), 1, 'una etapa és una columna')
+        col = d['sessions'][0]
+        self.assertEqual(col['origen'], 'MANUAL')
+        self.assertTrue(str(col['id']).startswith('etapa:'))
+        self.assertEqual(d['rows'][0]['valors'][col['id']]['valor_real'], 61.0)
+        self.assertEqual(d['talla'], 'M', 'les etapes viuen a la talla base')
+
+    def test_el_buit_honest_nomes_si_no_hi_ha_NI_sessions_NI_etapes(self):
+        self._neteja_log()
+        d = self._get().data
+        self.assertEqual(d['sessions'], [])
+        self.assertEqual(d['rows'], [])
+
+    # ── El criteri d'inclusió ────────────────────────────────────────────────
+    def test_una_alta_inicial_NO_es_un_fitting(self):
+        """`manual` amb valor_anterior NUL és algú donant d'alta la fitxa, no mesurant una
+        peça. Al cens de `fhort` són 23 dels 28 events manuals: sense aquest filtre, el
+        Repàs s'ompliria de columnes que no són fittings."""
+        self._neteja_log()
+        self._etapa(self.pom_a, 60.0, anterior=None)
+        self.assertEqual(self._get().data['sessions'], [])
+
+    def test_els_contextos_que_no_son_mesura_queden_fora(self):
+        from fhort.models_app.models import MeasurementChangeLog
+        self._neteja_log()
+        for ctx in ('import', 'standard', 'calculated', 'item_standard', 'copied'):
+            log = MeasurementChangeLog.objects.create(
+                model=self.model, pom=self.pom_a, valor_anterior=50.0, valor_nou=60.0,
+                context=ctx)
+            MeasurementChangeLog.objects.filter(pk=log.pk).update(
+                created_at=datetime.datetime(2026, 6, 15, 12, 0, 0,
+                                             tzinfo=datetime.timezone.utc))
+        self.assertEqual(self._get().data['sessions'], [],
+                         'moure dades no és mesurar una peça')
+
+    def test_els_tres_contextos_de_mesura_hi_entren(self):
+        self._neteja_log()
+        self._etapa(self.pom_a, 61.0, origen='MANUAL', dia=10)
+        self._etapa(self.pom_a, 62.0, origen='CHECKED', dia=11)
+        self._etapa(self.pom_a, 63.0, origen='FITTED', dia=12)
+        self.assertEqual([c['origen'] for c in self._get().data['sessions']],
+                         ['MANUAL', 'CHECKED', 'FITTING'])
+
+    # ── Fusió cronològica de les dues fonts ──────────────────────────────────
+    def test_sessions_i_etapes_es_fusionen_per_data(self):
+        self._neteja_log()
+        _, pf_10 = self._sessio(10)
+        self._linia(pf_10, self.pom_a, 'M', 60.0)
+        _, pf_20 = self._sessio(20)
+        self._linia(pf_20, self.pom_a, 'M', 62.0)
+        self._etapa(self.pom_a, 61.0, dia=15)      # entremig de les dues sessions
+
+        d = self._get().data
+        self.assertEqual([c['origen'] for c in d['sessions']], ['SESSIO', 'MANUAL', 'SESSIO'])
+        self.assertEqual([c['data'][:10] for c in d['sessions']],
+                         ['2026-06-10', '2026-06-15', '2026-06-20'])
+        valors = d['rows'][0]['valors']
+        self.assertEqual([valors[str(c['id'])]['valor_real'] for c in d['sessions']],
+                         [60.0, 61.0, 62.0])
+
+    def test_una_etapa_no_arrossega_POMs_que_ningu_va_tocar(self):
+        """Sense carry-forward, a diferència de la taula de mesures: allà cada columna és un
+        snapshot de la fitxa; aquí és UN esdeveniment. Arrossegar faria semblar que es van
+        prendre mesures que ningú va prendre."""
+        self._neteja_log()
+        self._etapa(self.pom_a, 61.0, dia=15)      # només el pit
+
+        d = self._get().data
+        clau = d['sessions'][0]['id']
+        per_pom = {r['pom_id']: r for r in d['rows']}
+        self.assertIn(clau, per_pom[self.pom_a.id]['valors'])
+        self.assertNotIn(self.pom_b.id, per_pom,
+                         'un POM que ningú va mesurar no fa fila')
+
+    # ── Comentaris: últim per POM amb les fonts barrejades ───────────────────
+    def test_ultim_comentari_amb_fonts_barrejades(self):
+        """La nota d'una etapa (DECISIÓ·NOTA del size check) i la d'una sessió competeixen
+        pel mateix lloc: guanya la darrera en el temps, vingui d'on vingui."""
+        from fhort.models_app.models import SizeCheck, SizeCheckLine
+        self._neteja_log()
+
+        _, pf = self._sessio(10)
+        self._linia(pf, self.pom_a, 'M', 60.0, nota='de la sessió')
+
+        # Un size check resolt: la nota viu a SizeCheckLine i el log hi apunta pel `motiu`.
+        sc = SizeCheck.objects.create(model=self.model, talla_base_label='M', estat='Acceptat')
+        SizeCheckLine.objects.create(size_check=sc, pom=self.pom_a, valor_teoric=60.0,
+                                     valor_real=61.0, decisio='tolerancia_acceptada',
+                                     nota='vora curta')
+        self._etapa(self.pom_a, 61.0, origen='CHECKED', dia=20,
+                    motiu=f'Size check · check {sc.pk}')
+
+        ultim = self._get().data['rows'][0]['ultim_comentari']
+        self.assertIn('vora curta', ultim['text'])
+        self.assertIn('Tolerància acceptada', ultim['text'], 'la DECISIÓ també es diu')
+
+    def test_si_l_etapa_no_comenta_val_el_comentari_anterior_de_la_sessio(self):
+        self._neteja_log()
+        _, pf = self._sessio(10)
+        self._linia(pf, self.pom_a, 'M', 60.0, nota='de la sessió')
+        self._etapa(self.pom_a, 61.0, dia=20)      # etapa POSTERIOR, sense nota
+
+        ultim = self._get().data['rows'][0]['ultim_comentari']
+        self.assertEqual(ultim['text'], 'de la sessió')
+
+    def test_a_una_talla_que_no_es_la_base_no_es_pinten_etapes(self):
+        """El log és història de BaseMeasurement: totes les seves preses són de la base.
+        Ensenyar-les sota una altra talla seria mentir sobre què es va mesurar."""
+        self._neteja_log()
+        _, pf = self._sessio(10)
+        self._linia(pf, self.pom_a, 'L', 70.0)
+        self._etapa(self.pom_a, 61.0, dia=15)
+
+        d = self._get(talla='L').data
+        self.assertEqual(d['talla'], 'L')
+        self.assertEqual([c['origen'] for c in d['sessions']], ['SESSIO'])

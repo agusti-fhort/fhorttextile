@@ -2298,7 +2298,8 @@
       "session_notes": "Session notes",
       "gate_motiu": "Gate reason",
       "no_sessions": "This model has no fittings yet.",
-      "empty": "No POM measured in these sessions."
+      "empty": "No POM measured in these sessions.",
+      "des_de_mesures": "Reading entered in the measurements table"
     }
   },
   "wizard_base_size_required": "The size system has changed. Select the base size.",

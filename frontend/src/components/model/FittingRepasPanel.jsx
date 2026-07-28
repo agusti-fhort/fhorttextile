@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fittingRepas } from '../../api/endpoints'
-import { buildRepasGroups, buildRepasRows } from './fittingGridAdapter'
+import { buildRepasGroups, buildRepasRows } from './repasGridAdapter'
 import MeasureGrid from './MeasureGrid'
 
 // REPÀS de fittings del model — la superfície de tornar-hi.
