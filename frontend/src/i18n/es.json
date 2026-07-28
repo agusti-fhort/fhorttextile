@@ -2298,7 +2298,8 @@
       "session_notes": "Notas de la sesión",
       "gate_motiu": "Motivo del gate",
       "no_sessions": "Este modelo aún no tiene ningún fitting realizado.",
-      "empty": "Ningún POM tomado en estas sesiones."
+      "empty": "Ningún POM tomado en estas sesiones.",
+      "des_de_mesures": "Toma escrita en la tabla de medidas"
     }
   },
   "wizard_base_size_required": "El sistema de tallas ha cambiado. Selecciona la talla base.",
