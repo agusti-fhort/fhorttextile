@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore, { AUTH_VALID } from '../store/auth'
 import { SUPPORTED_LANGUAGES } from '../i18n'
+import { CLAU_SESSIO_CADUCADA } from '../api/sessio'
 
 // Logotip vectorial Fhort Textile Tech. Sobre fons clar: "Fhort" en or (#c27a2a),
 // "Textile Tech" en charcoal (#1d1d1b) — abans era blanc per al fons fosc anterior.
@@ -59,6 +60,18 @@ export default function Login() {
     : '/'
 
   const resetOk = !!location.state?.resetOk   // ve de ResetPassword en èxit
+
+  // K1 — per què s'ha acabat aquí. `sessio.tancaSessio()` fa `window.location.href`, una
+  // recàrrega dura que s'emporta `location.state`; el motiu viatja per sessionStorage.
+  // Es llegeix UN cop en muntar i es consumeix, perquè l'avís no persegueixi la persona
+  // en el proper login voluntari.
+  const [sessioCaducada] = useState(() => {
+    try {
+      if (!sessionStorage.getItem(CLAU_SESSIO_CADUCADA)) return false
+      sessionStorage.removeItem(CLAU_SESSIO_CADUCADA)
+      return true
+    } catch { return false }   // mode privat
+  })
   const [view, setView] = useState('login')  // 'login' | 'forgot'
   const [forgotMsg, setForgotMsg] = useState('')
   const [username, setUsername] = useState('')
@@ -134,6 +147,13 @@ export default function Login() {
             <form onSubmit={handleSubmit}>
               <h2 className="welcome">{t('login.welcome')}</h2>
               <p className="welcome-sub">{t('login.welcome_sub')}</p>
+
+              {sessioCaducada && (
+                <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 12, color: '#8a5a00',
+                            background: '#fbf1dc', borderRadius: 8, padding: '10px 12px', marginBottom: 16 }}>
+                  {t('auth.session_expired')}
+                </p>
+              )}
 
               {resetOk && (
                 <p style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 12, color: '#3b6d11',
