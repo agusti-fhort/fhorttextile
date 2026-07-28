@@ -11,5 +11,8 @@
 //
 // NO s'aplica a: l'input d'Importar Garment de l'editor (filtra .svg/.dxf pel seu propòsit),
 // els inputs de logo (imatges) ni els assistents d'importació de dades (.xlsx de mesures).
+// `.heic`/`.heif`: les fotos de fitting es fan amb el mòbil. El client NO les converteix —
+// puja la HEIC tal qual i el servidor la desa convertida a JPEG. Aquí només cal que el diàleg
+// de fitxers de l'iPhone les deixi triar.
 export const UPLOAD_ACCEPT =
-  '.ftt,.pdf,.dxf,.svg,.rul,.txt,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls'
+  '.ftt,.pdf,.dxf,.svg,.rul,.txt,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif,.xlsx,.xls'
