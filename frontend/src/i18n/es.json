@@ -2714,6 +2714,7 @@
     "page_n": "Pág. {{n}}",
     "delete_page": "Eliminar página",
     "readonly_overlay": "Modo consulta — solo lectura",
+    "pen_trace_hint": "Trazado en curso ({{n}} nodos) — doble clic o Enter para terminar · Escape para cancelar",
     "insert_data_block": "Insertar bloque de datos",
     "model_header": "Cabecera del modelo",
     "insert_logo_title": "Inserta el logo del cliente",

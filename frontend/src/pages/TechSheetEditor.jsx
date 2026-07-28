@@ -23,6 +23,7 @@ import { normalizePaint, normalizeFillRule, resolStroke, resolFill, resolStrokeW
 import { useUnit, fmtMeasure } from './fittingShared'
 // Quines formes del conversor són una PEÇA de patró (path o grup-sketch), en un sol lloc.
 import { comptaPecesInserides, esPecaInserible } from '../utils/pecaInsercio'
+import { potTancar, treuAncoratgeFantasma } from '../utils/tracatPloma'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -3896,8 +3897,19 @@ export default function TechSheetEditor() {
     // Aquest era l'únic handler del Stage SENSE guard: amb el sub-editor obert, un doble-clic
     // per entrar a selecció directa també tancava el traç de la ploma que hi hagués en curs.
     if (!konvaOwnsPointer) return
-    if (penRef.current && penRef.current.points.length >= 2) finishPen(false)
+    const pts = penRef.current?.points
+    if (!potTancar(pts)) return
+    // A1 — el doble-clic arriba DESPRÉS de dos mousedown: el segon ha deixat un ancoratge
+    // FANTASMA damunt del primer. Es treu abans de tancar; si no, l'últim tram té llargada 0 i
+    // `pathHeadAngles` calcula la tangent d'un vector nul → atan2(0,0)=0 i la punta mira sempre
+    // a la dreta, corbi el traç cap on corbi. Al corpus .ftt local hi ha fletxes desades així.
+    penRef.current.points = treuAncoratgeFantasma(pts)
+    finishPen(false)
   }
+  // A1 — hi ha un traç de ploma/fletxa curva en curs? Els dobles clics d'entrada a un objecte
+  // (text, grup, sub-editor de nodes) no han de disparar-se mentre s'està traçant: el doble-clic
+  // és, en aquest mode, el gest de TANCAR el traç, i sovint cau damunt del croquis.
+  const penTraceBusy = () => !!penRef.current
   // ── E2: 2n clic de nota-fletxa/cota → construeix el GRUP (children relatius a l'origen del grup) ──
   const finishTwoClick = (kind, p1, p2) => {
     if (kind === 'note') {
@@ -4152,7 +4164,7 @@ export default function TechSheetEditor() {
 
   // ── Edició inline de text (textarea overlay) ───────────────────────────────
   const startTextEdit = (obj) => {
-    if (!locked) return
+    if (!locked || penTraceBusy()) return
     selectOnly(obj.id)
     setEditingText({ id: obj.id, value: obj.text || '', x: toPx(obj.x), y: toPx(obj.y), w: toPx(obj.width || 120) })
   }
@@ -4332,7 +4344,7 @@ export default function TechSheetEditor() {
     }
   }
   const startVectorEdit = (obj) => {
-    if (!locked || !['sketch_svg', 'path'].includes(obj?.type)) return
+    if (!locked || penTraceBusy() || !['sketch_svg', 'path'].includes(obj?.type)) return
     setEditingText(null)
     setTool('select')
     selectOnly(obj.id)
@@ -5888,8 +5900,12 @@ export default function TechSheetEditor() {
     // tabs per FAMÍLIA (dibuixar · anotar · inserir), no en una llista de 27. Allà eren icones
     // de 30 px sense etiqueta, amb flyouts de press-and-hold que n'amagaven dues de cada tres;
     // aquí són botons de 72×50 amb el nom escrit i totes visibles alhora.
+    // A1 — el botó del ribbon es DESENFOCA en triar l'eina: si es queda amb el focus, l'Enter
+    // que ha de tancar el traç de la ploma/fletxa curva també torna a "clicar" el botó i re-arma
+    // l'eina (el traç es desa, però sembla que no hagi passat res i el clic següent en comença un
+    // altre). El blur no canvia què fa el clic; només allibera el focus.
     const eina = (k, icon, label) => ribbonTool({
-      key: `t-${k}`, icon, label, onClick: () => setTool(k), active: tool === k, disabled: !locked,
+      key: `t-${k}`, icon, label, onClick: (e) => { e.currentTarget?.blur(); setTool(k) }, active: tool === k, disabled: !locked,
     })
     if (ribbonGroup === 'draw') {
       return [
@@ -6460,6 +6476,14 @@ export default function TechSheetEditor() {
               <i className="ti ti-eye" style={{ marginRight: 6 }} />{t('tech_sheet.readonly_overlay')}
             </div>
           )}
+          {/* A1 — mentre hi ha traç en curs (ploma / fletxa curva) les SORTIDES es diuen pel seu
+              nom: cap clic al llenç les descobreix i cada clic de més allarga el traçat. */}
+          {penTemp?.points?.length > 0 && (
+            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: COL.sidebar, border: `1px solid ${COL.gold}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-label)', color: COL.textMain, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
+              <i className="ti ti-vector-spline" style={{ marginRight: 6, color: COL.gold }} />
+              {t('tech_sheet.pen_trace_hint', { n: penTemp.points.length })}
+            </div>
+          )}
           <div style={{ width: pageW * zoom, height: pageH * zoom, position: 'relative', margin: '0 auto' }}>
           <div ref={wrapRef} onDrop={onDrop} onDragOver={e => e.preventDefault()}
             style={{ position: 'relative', width: pageW * zoom, height: pageH * zoom, outline: `1px solid ${COL.border}`, background: 'var(--white)', cursor: viewportCursor }}>
@@ -6492,7 +6516,7 @@ export default function TechSheetEditor() {
                     onDblText={() => startTextEdit(o)}
                     onDblVector={() => startVectorEdit(o)}
                     entered={locked && activeGroup === o.id}
-                    onDblGroup={() => { if (o.type === 'group') { setActiveGroup(o.id); setSelectedChildId(null); clearSelection() } }}
+                    onDblGroup={() => { if (o.type === 'group' && !penTraceBusy()) { setActiveGroup(o.id); setSelectedChildId(null); clearSelection() } }}
                     onChildSelect={handleChildSelect}
                     onChildDragEnd={handleChildDragEnd(o.id)}
                     selectedChildId={activeGroup === o.id ? selectedChildId : null}
