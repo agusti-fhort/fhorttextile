@@ -1003,7 +1003,16 @@ const HDR_M = {
   R1: 170.3, R2: 491.8, R3: 813.3,     // vores dretes de caixa 1/2/3
   SUB1: 105.45, SUB2: 337.05,          // subcolumnes (PAGE · SEASON)
   ASC: 0.8,                            // baseline→top ≈ 0.8·cos (IBM Plex Mono)
+  // Separació entre les DUES columnes d'una mateixa caixa. `PAD` (6pt) és el marge contra la
+  // vora de la caixa, i servia també aquí: amb un valor llarg a l'esquerra, l'el·lipsi
+  // acabava a 6pt de l'etiqueta del costat i SEASON semblava enganxat a INTERNAL REFERENCE.
+  // Un marge contra una vora i un carrer entre columnes no són la mateixa mesura.
+  GUT: 12,
 }
+
+// Separació a la DRETA d'un text: contra una vora de caixa, el marge (PAD); contra la
+// columna del costat dins la mateixa caixa, el carrer (GUT).
+const _hdrGut = rightPt => (rightPt === HDR_M.SUB1 || rightPt === HDR_M.SUB2 ? HDR_M.GUT : HDR_M.PAD)
 const _hdrP = () => 0.3528 * MM_TO_PX
 
 // FONT ÚNICA de la posició/mida de l'OBJECTE capçalera mestra (mm), DERIVADA de la geometria de
@@ -1126,7 +1135,7 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   // les vores que de debò canvien.
   const label = (sx, by, text, rightPt) => {
     const f = 6 * P
-    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f + L.dy(sx) * P, w: (L.right(rightPt) - HDR_M.PAD - sx) * P, h: f + 2, text, fill: GRAY, size: f })
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f + L.dy(sx) * P, w: (L.right(rightPt) - _hdrGut(rightPt) - sx) * P, h: f + 2, text, fill: GRAY, size: f })
   }
   // Valor 9pt (baixa a 8pt si no cap; el·lipsi via PrimNode). MAI desborda ni trenca línia.
   // B2 — `fk` (field key) marca les prims de VALOR que tenen una clau exacta a FIELD_CATALOG.
@@ -1135,7 +1144,7 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   // instanciar una plantilla, en lloc de quedar congelat amb les dades d'aquest model.
   const value = (sx, by, text, rightPt, opts = {}) => {
     if (!text) return
-    const availPt = L.right(rightPt) - HDR_M.PAD - sx
+    const availPt = L.right(rightPt) - _hdrGut(rightPt) - sx
     const fpt = (text.length * 9 * 0.6 > availPt) ? 8 : 9   // 9→8 = sòl de la llei
     const f = fpt * P
     prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f + L.dy(sx) * P, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, fk: opts.fk })
