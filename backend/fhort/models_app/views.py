@@ -2923,7 +2923,9 @@ def consumption_delivery_view(request, model_id):
     Capçalera immutable (ConsumptionRecord) + cos calculat sobre producció
     (ModelTask/TimerEntrada/TaskTransition). Tot intra-tenant. Agregació en
     Python sobre dades prefetchades → una sola consulta (sense N+1).
-    Timers oberts (minuts NULL) NO es compten (B1-a: només temps consolidat)."""
+    Timers oberts NO es compten (B1-a: només temps consolidat), i els trams desbocats tampoc
+    (`tram_compta`: mateixa llei que el Welford i la resta d'agregadors)."""
+    from fhort.tasks.services_i import tram_compta
     try:
         model = Model.objects.select_related('consumption_record').prefetch_related(
             'model_tasks__task_type',
@@ -2947,7 +2949,7 @@ def consumption_delivery_view(request, model_id):
     for mt in tasks:
         task_minutes = 0
         for tm in mt.timers.all():
-            if tm.minuts is None:        # timer obert → no consolidat (B1-a)
+            if not tram_compta(tm):      # timer obert (B1-a) o tram desbocat → fora
                 continue
             task_minutes += tm.minuts
             total_minutes += tm.minuts
@@ -3063,17 +3065,17 @@ def model_dashboard_view(request, model_id):
     # assignee_id, order). Ordre per task_type.default_order/code (clau canònica de l'scheduler,
     # P0), NO per ModelTask.order. Temps i obertures es deriven sense camp nou (P0.1) amb consultes
     # SEPARADES per evitar el join cartesià Timer×Transition (RISC confirmat a P0.1).
-    from django.db.models import Sum, Count
+    from django.db.models import Count
     from fhort.tasks.models import ModelTask as _ModelTask, TimerEntrada, TaskTransition
 
     pla_tasks = (_ModelTask.objects
                  .filter(model_id=model.id)
                  .select_related('task_type', 'assignee')
                  .order_by('task_type__default_order', 'task_type__code'))
-    # Temps consumit: Sum(timers.minuts) per tasca (== helper canònic _real_minutes). 1 query.
-    temps_per_task = {r['model_task_id']: (r['s'] or 0) for r in (
-        TimerEntrada.objects.filter(model_task__model_id=model.id)
-        .values('model_task_id').annotate(s=Sum('minuts')))}
+    # Temps consumit per tasca amb la regla d'higiene (== helper canònic _real_minutes). 1 query.
+    from fhort.tasks.services_i import minuts_per_model_task
+    temps_per_task = minuts_per_model_task(
+        TimerEntrada.objects.filter(model_task__model_id=model.id))
     # Obertures: count de transicions a InProgress per tasca (cada Play hi deixa una fila). 1 query.
     obertures_per_task = {r['model_task_id']: r['c'] for r in (
         TaskTransition.objects.filter(model_task__model_id=model.id, to_status='InProgress')
@@ -3238,8 +3240,10 @@ def model_timeline_view(request, model_id):
 def registre_activitat_view(request):
     """Sprint 4.5: llista global de ConsumptionRecord del tenant.
     Filtres: ?period=YYYY-MM &tecnic_id=<int> &page=<int> &page_size=<int>
-    Retorna: { count, totals:{models,total_minutes,avg_per_model,avg_per_step}, results:[...] }"""
+    Retorna: { count, totals:{models,total_minutes,avg_per_model,avg_per_step}, results:[...] }
+    Els minuts són els dels trams SANS (`tram_compta`), com la resta de superfícies de temps."""
     from fhort.models_app.models import ConsumptionRecord
+    from fhort.tasks.services_i import tram_compta
 
     period   = request.query_params.get('period')
     tecnic_id = request.query_params.get('tecnic_id')
@@ -3274,7 +3278,7 @@ def registre_activitat_view(request):
         for mt in rec.model.model_tasks.all():
             total_steps += 1
             for tm in mt.timers.all():
-                if tm.minuts is not None:
+                if tram_compta(tm):
                     total_minutes += tm.minuts
 
     avg_per_model = round(total_minutes / total_models, 1) if total_models else 0
@@ -3289,7 +3293,7 @@ def registre_activitat_view(request):
         model = rec.model
         mins = sum(
             tm.minuts for mt in model.model_tasks.all()
-            for tm in mt.timers.all() if tm.minuts is not None
+            for tm in mt.timers.all() if tram_compta(tm)
         )
         steps = model.model_tasks.count()
         results.append({

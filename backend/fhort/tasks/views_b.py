@@ -1296,8 +1296,8 @@ def time_by_model_view(request):
     `unique_together=[('model','task_type')]`, doncs el task_type és la fulla).
 
     Filtres opcionals: ?model=id ?fase=. Gated view_team_tasks (com la resta d'anàlisi de temps)."""
-    from django.db.models import Sum
     from .models import TimerEntrada
+    from .services_i import minuts_per_model_task
     qs = ModelTask.objects.select_related('task_type', 'model').all()
     model_id = request.query_params.get('model')
     if model_id:
@@ -1305,11 +1305,9 @@ def time_by_model_view(request):
     fase = request.query_params.get('fase')
     if fase:
         qs = qs.filter(task_type__fase=fase)
-    # Real consolidat per ModelTask = Sum(timers.minuts); timers oberts (minuts NULL) fora (B1-a).
-    # Mateixa regla que l'albarà (models_app/views.py) i el helper canònic _real_minutes. 1 query.
-    real_per_task = {r['model_task_id']: (r['s'] or 0) for r in (
-        TimerEntrada.objects.filter(model_task__in=qs)
-        .values('model_task_id').annotate(s=Sum('minuts')))}
+    # Real consolidat per ModelTask: trams tancats i sans (`TRAMS_SANS`). Mateixa font que
+    # l'albarà, el compositor del dashboard i el helper canònic _real_minutes. 1 query.
+    real_per_task = minuts_per_model_task(TimerEntrada.objects.filter(model_task__in=qs))
 
     fase_order = {f: i for i, (f, _l) in enumerate(TaskType.FASE_CHOICES)}
     models = {}   # model_id → {label, nom, est, real, n, fases: {fase: {...}}}
