@@ -229,6 +229,19 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     grading_fit_nom = serializers.SerializerMethodField()
     grading_construction_nom = serializers.SerializerMethodField()
     customer_logo = serializers.SerializerMethodField()   # TS-4c: logo del client (URL)
+    # L'ESTAT DE LA FEINA DE POM ÉS UN FET DEL MODEL, no una fila de la llista de tasques.
+    #
+    # El full del model derivava el gate de Mesures de `GET model-task-items`, que va escopat
+    # per `view_team_tasks` (accounts/capabilities.scope_model_task_queryset): un tècnic que no
+    # té la capability i no és l'assignat de la tasca `pom` no en veia la fila, i el full
+    # concloïa que la feina no estava feta. Resultat: «Mesures encara no disponibles» amb la
+    # tasca Done i la taula plena. El permís decidia si el model tenia mesures, que no és el
+    # que aquell permís vol dir — regula QUINES TASQUES VEUS, no quin estat té el model.
+    #
+    # Per això aquest booleà es calcula al servidor i SENSE cap scope de visibilitat. La llista
+    # de tasques segueix escopada exactament com fins ara: aquí no s'exposa cap tasca, ni qui hi
+    # treballa, ni quantes n'hi ha — només si la feina de POM del model està tancada.
+    pom_task_done = serializers.SerializerMethodField()
     # SET-1 · A4 — el conjunt, niuat, amb les germanes per navegar-hi des de la capçalera.
     # DESVIACIÓ ANOTADA: `fields='__all__'` exposava `garment_set` com a pk ESCRIVIBLE; aquesta
     # declaració el fa read-only. Cap caller el feia servir (0 hits al frontend; els dos únics
@@ -247,6 +260,15 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     # Precedència: mana el ruleset quan n'hi ha (porta els noms CANÒNICS del catàleg, en
     # anglès i possiblement multi-target); si no, el camp propi TAL QUAL. No s'inventa res:
     # si el model tampoc no en té, segueix sent None i la capçalera calla.
+    def get_pom_task_done(self, obj):
+        # La unicitat (model, task_type) només val per a `origen='prevista'` (tasks/models.py),
+        # o sigui que un model pot tenir més d'una tasca `pom`. «Feta» = n'hi ha ALGUNA de Done:
+        # és determinista, a diferència del que feia el front (agafar la primera de la llista,
+        # que depenia de l'ordre i de què l'scope li havia deixat veure).
+        from fhort.tasks.models import ModelTask   # import local: evita cicle models_app↔tasks
+        return ModelTask.objects.filter(
+            model_id=obj.pk, task_type__code='pom', status='Done').exists()
+
     def get_grading_target_nom(self, obj):
         rs = obj.grading_rule_set if obj.grading_rule_set_id else None
         if rs:
