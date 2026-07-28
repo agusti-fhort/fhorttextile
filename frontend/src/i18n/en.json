@@ -4097,5 +4097,12 @@
     "enviar_done": "{{n}} piece(s) sent · {{mesures}} measurements, {{regles}} rules, {{fitxers}} files",
     "enviar_no_aparellats": "{{n}} POM(s) unmatched in the brand's catalogue",
     "enviar_errors": "{{n}} failed"
+  },
+  "auth": {
+    "session_expired": "Your session has expired. Please sign in again.",
+    "session_expiring_title": "Your session is about to expire",
+    "session_expiring_body": "Your session is about to end. Do you want to keep working?",
+    "session_keep": "Keep working",
+    "session_logout": "Sign out"
   }
 }

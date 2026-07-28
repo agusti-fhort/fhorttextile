@@ -12,6 +12,8 @@ import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
 import { MaduresaBadge, EncarrecDelClient } from '../components/model/FederacioBadge'
 import { models, watchpoints, modelTasks, fittingSessions, modelFitxers } from '../api/endpoints'
+import { authFetch } from '../api/authFetch'
+import { missatgeError } from '../api/errorsAuth'
 import useAuthStore from '../store/auth'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
@@ -1413,8 +1415,9 @@ function iconForExt(ext) {
 function TabFiles({ modelId }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const token = localStorage.getItem('access_token')
-  const authHeaders = { Authorization: `Bearer ${token}` }
+  // K2 — aquest tab va per `authFetch` (no per `fetch` cru): un 401 per access token
+  // caducat es refresca i es REINTENTA, en comptes d'arribar a la pantalla com a JSON.
+  // El Bearer el posa `authFetch`; aquí ja no cal ni token ni capçalera d'autorització.
 
   const [fitxers, setFitxers] = useState([])
   const [orderBy, setOrderBy] = useState('data')
@@ -1425,7 +1428,7 @@ function TabFiles({ modelId }) {
   const [selectedId, setSelectedId] = useState(null)   // Finder: CAP selecció per defecte
 
   useEffect(() => {
-    fetch(`${API}/api/v1/model-fitxers/?model=${modelId}&is_current=true&ordering=-data_pujada`, { headers: authHeaders })
+    authFetch(`/api/v1/model-fitxers/?model=${modelId}&is_current=true&ordering=-data_pujada`)
       .then(r => r.json())
       .then(d => setFitxers(d.results || d || []))
       .catch(() => setError(t('model_sheet.err_load_files')))
@@ -1440,9 +1443,10 @@ function TabFiles({ modelId }) {
     formData.append('nom', file.name)
     if (versioAnteriorId) formData.append('versio_anterior_id', versioAnteriorId)
     try {
-      const r = await fetch(`${API}/api/v1/models/${modelId}/upload-fitxer/`, {
+      // El FormData es reenvia tal qual si `authFetch` ha de refrescar i reintentar: la
+      // pujada sobreviu a l'access token caducat i el fitxer NO es perd (K2).
+      const r = await authFetch(`/api/v1/models/${modelId}/upload-fitxer/`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       })
       const d = await r.json()
@@ -1451,7 +1455,8 @@ function TabFiles({ modelId }) {
           ? [d, ...prev.filter(f => f.id !== versioAnteriorId)]
           : [d, ...prev])
       } else {
-        setError(JSON.stringify(d))
+        // K3 — codis coneguts en llenguatge humà; la resta, com abans.
+        setError(missatgeError(d, t))
       }
     } catch {
       setError(t('model_sheet.err_upload'))
@@ -1463,7 +1468,7 @@ function TabFiles({ modelId }) {
   const openHistory = async (fitxer) => {
     setHistory({ fitxer, chain: [], loading: true })
     try {
-      const r = await fetch(`${API}/api/v1/model-fitxers/${fitxer.id}/versions/`, { headers: authHeaders })
+      const r = await authFetch(`/api/v1/model-fitxers/${fitxer.id}/versions/`)
       const d = await r.json()
       setHistory({ fitxer, chain: (d.results || d || []), loading: false })
     } catch {
@@ -1473,9 +1478,7 @@ function TabFiles({ modelId }) {
 
   const handleDelete = async (fitxerId) => {
     if (!window.confirm(t('model_sheet.confirm_delete_file'))) return
-    await fetch(`${API}/api/v1/model-fitxers/${fitxerId}/`, {
-      method: 'DELETE', headers: authHeaders,
-    })
+    await authFetch(`/api/v1/model-fitxers/${fitxerId}/`, { method: 'DELETE' })
     setFitxers(prev => prev.filter(f => f.id !== fitxerId))
   }
 

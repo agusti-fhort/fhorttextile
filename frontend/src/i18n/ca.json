@@ -4097,5 +4097,12 @@
     "enviar_done": "{{n}} peça/es enviades · {{mesures}} mesures, {{regles}} regles, {{fitxers}} fitxers",
     "enviar_no_aparellats": "{{n}} POM/s sense aparellar al catàleg de la marca",
     "enviar_errors": "{{n}} amb error"
+  },
+  "auth": {
+    "session_expired": "La sessió ha caducat. Torna a entrar.",
+    "session_expiring_title": "La sessió caducarà aviat",
+    "session_expiring_body": "La teva sessió és a punt d'acabar. Vols continuar treballant?",
+    "session_keep": "Continua treballant",
+    "session_logout": "Tancar sessió"
   }
 }
