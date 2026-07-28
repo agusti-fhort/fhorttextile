@@ -44,11 +44,102 @@ ALLOWED_UPLOAD_EXTENSIONS = frozenset({
     # Endollar-hi `validate_upload` sense afegir-los rebutjaria dades que el sistema ja accepta.
     # `.xls` acompanya `.xlsx` pel mateix motiu que `.jpg` acompanya `.jpeg`.
     '.xlsx', '.xls',                         # fulls de càlcul (mesures, BOM)
+    # Les fotos de fitting es fan amb el mòbil, i un iPhone les desa en HEIC. S'accepten a la
+    # PUJADA, però no es desen mai en HEIC: es converteixen a JPEG aquí al servidor
+    # (`converteix_heic_a_jpeg`) i el que arriba a la BD és sempre un .jpg. Cap navegador
+    # d'escriptori no pinta HEIC, i el visor de fitxers del model ha de poder ensenyar la foto.
+    '.heic', '.heif',                        # fotos de mòbil → es desen convertides a .jpg
 })
+
+# Extensions que NO es desen tal com arriben: entren, es converteixen i desen com una altra cosa.
+HEIC_EXTENSIONS = frozenset({'.heic', '.heif'})
+HEIC_MIMETYPES = frozenset({
+    'image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence',
+})
+JPEG_QUALITY = 90
 
 
 class UploadRejected(ValueError):
     """L'upload no passa la validació (mida o extensió). El caller la tradueix a 400."""
+
+
+class ConversioFallida(ValueError):
+    """El fitxer diu que és HEIC però no s'ha pogut convertir. El caller la tradueix a 422.
+
+    422 i no 500: el fitxer ha arribat bé i la petició és correcta; el que no serveix és el
+    CONTINGUT. Un 500 diria que el servidor s'ha trencat, i el que ha passat és que la foto
+    no es pot llegir — que és una cosa que l'usuari pot entendre i resoldre.
+    """
+
+
+def es_heic(nom, content_type=''):
+    """L'upload és HEIC/HEIF? Per EXTENSIÓ (la llei de la casa, vegeu ALLOWED_UPLOAD_EXTENSIONS)
+    i, si l'extensió no ho diu, pel MIME: Safari de vegades puja la foto amb nom `.jpg` i el
+    content_type correcte, i aleshores el que mana és el contingut."""
+    ext = os.path.splitext(nom or '')[1].lower()
+    if ext in HEIC_EXTENSIONS:
+        return True
+    return (content_type or '').split(';')[0].strip().lower() in HEIC_MIMETYPES
+
+
+def converteix_heic_a_jpeg(file, nom):
+    """HEIC/HEIF → JPEG q=90. Retorna `(fitxer_nou, nom_nou)` amb el nom original i `.jpg`.
+
+    ORIENTACIÓ: les fotos de mòbil vénen girades i amb un tag EXIF que diu com desgirar-les.
+    `pillow_heif` JA aplica l'orientació en descodificar (torna la imatge dreta i el tag
+    normalitzat a 1), o sigui que `exif_transpose` és aquí un no-op en el camí d'avui. S'hi
+    deixa a posta: és la crida que ho garanteix si un dia el descodificador canvia de criteri,
+    i no costa res quan el tag ja val 1.
+
+    NO es conserva la resta d'EXIF (data, càmera, GPS). Reinjectar-lo obligaria a netejar-ne
+    l'orientació —si no, un visor que l'honrés giraria una imatge que ja ve dreta— i el que la
+    decisió demanava és la foto, no les seves metadades.
+    """
+    import io
+
+    from django.core.files.base import ContentFile
+
+    try:
+        import pillow_heif
+        from PIL import Image, ImageOps
+    except ImportError as exc:   # dep nova al lock: si el desplegament no ha fet pip install
+        raise ConversioFallida(
+            "El servidor no pot convertir fotos HEIC (falta pillow-heif). "
+            "Puja la foto en JPEG o avisa l'administrador."
+        ) from exc
+
+    pillow_heif.register_heif_opener()
+    try:
+        try:
+            file.seek(0)
+        except (AttributeError, ValueError):
+            pass
+        imatge = Image.open(file)
+        imatge = ImageOps.exif_transpose(imatge) or imatge
+        if imatge.mode != 'RGB':
+            # JPEG no té canal alfa ni paleta; una HEIC amb transparència peta en desar-se.
+            imatge = imatge.convert('RGB')
+        sortida = io.BytesIO()
+        imatge.save(sortida, format='JPEG', quality=JPEG_QUALITY)
+    except ConversioFallida:
+        raise
+    except Exception as exc:
+        logger.warning('HEIC il·legible (%s): %s', nom, exc)
+        raise ConversioFallida(
+            "No s'ha pogut llegir la foto HEIC: pot estar corrupta o incompleta."
+        ) from exc
+
+    bytes_jpeg = sortida.getvalue()
+    # El sostre de mida es torna a mirar SOBRE EL RESULTAT: un JPEG pesa més que la HEIC
+    # d'origen, i acceptar per la porta de la conversió un fitxer que la llei del sistema
+    # rebutja per la porta del davant seria obrir-hi un forat.
+    if len(bytes_jpeg) > MAX_UPLOAD_BYTES:
+        raise ConversioFallida(
+            f'La foto convertida a JPEG ocupa {len(bytes_jpeg) / (1024 * 1024):.1f} MB, '
+            f'per sobre del màxim de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.')
+
+    nom_jpg = os.path.splitext(nom or 'foto')[0] + '.jpg'
+    return ContentFile(bytes_jpeg, name=nom_jpg), nom_jpg
 
 
 def validate_upload(file, nom=None):
