@@ -1,6 +1,7 @@
 import axios from 'axios'
 
 import { apiBaseURL } from './base'
+import { creaGestorSessio } from './sessioCore'
 
 /**
  * ESTAT DE SESSIÓ COMPARTIT — un sol refresh per a tota l'app.
@@ -13,46 +14,9 @@ import { apiBaseURL } from './base'
  * primer acaba de substituir → expulsió. El mutex ha de ser un, i per tant ha de viure
  * fora de qui el fa servir.
  *
- * `creaGestorSessio` és una fàbrica amb les dependències injectades perquè la lògica del
- * mutex es pugui provar sense navegador (`node --test`): sense localStorage, sense axios i
- * sense `window.location`.
+ * Aquest mòdul és el CABLATGE (axios + localStorage + window.location); la lògica del
+ * mutex viu a `sessioCore.js`, que no importa res i per això es pot provar amb Node.
  */
-export function creaGestorSessio({ llegeixRefresh, desaTokens, demanaRefresh, tancaSessio }) {
-  // La promesa del refresh EN CURS. És el mutex: qui arriba mentre n'hi ha un de viu
-  // s'espera al mateix, no en dispara un altre.
-  let enCurs = null
-
-  return {
-    /** Retorna una promesa amb l'access token NOU. Si no es pot refrescar, tanca la
-     *  sessió i rebutja — qui l'ha cridada no ha de decidir res més. */
-    refresca() {
-      if (enCurs) return enCurs
-
-      const refresh = llegeixRefresh()
-      if (!refresh) {
-        tancaSessio()
-        return Promise.reject(new Error('sessio: no hi ha refresh token'))
-      }
-
-      enCurs = demanaRefresh(refresh)
-        .then(dades => {
-          desaTokens(dades)
-          return dades.access
-        })
-        .catch(err => {
-          // El refresh també és mort (caducat o invàlid): ARA sí que s'ha acabat la sessió.
-          tancaSessio()
-          throw err
-        })
-        .finally(() => { enCurs = null })
-
-      return enCurs
-    },
-
-    /** Només per a tests i diagnòstic: hi ha un refresh viu? */
-    get enMarxa() { return enCurs !== null },
-  }
-}
 
 // ── La instància real ───────────────────────────────────────────────────────────────────
 
