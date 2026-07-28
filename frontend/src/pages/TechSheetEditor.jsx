@@ -1009,10 +1009,6 @@ const HDR_M = {
   // Un marge contra una vora i un carrer entre columnes no són la mateixa mesura.
   GUT: 12,
 }
-
-// Separació a la DRETA d'un text: contra una vora de caixa, el marge (PAD); contra la
-// columna del costat dins la mateixa caixa, el carrer (GUT).
-const _hdrGut = rightPt => (rightPt === HDR_M.SUB1 || rightPt === HDR_M.SUB2 ? HDR_M.GUT : HDR_M.PAD)
 const _hdrP = () => 0.3528 * MM_TO_PX
 
 // FONT ÚNICA de la posició/mida de l'OBJECTE capçalera mestra (mm), DERIVADA de la geometria de
@@ -1057,36 +1053,40 @@ export function headerMasterLogoRect(natW, natH, _config) {
 //
 // Què es conserva i què canvia:
 //   · Es conserva TOT el que és mesura — tipografia (6pt etiqueta / 9pt valor amb el sòl a
-//     8pt), contingut, ordre dels camps, alçada de caixa (90.2pt) i les subcolumnes.
-//   · Canvia NOMÉS on cau cada caixa:
-//       apaïsat  (spec):    [1][2][3]  en una fila de 784.7pt
-//       retrat (derivat):   [1][2]     a la fila de dalt
-//                           [3]        a una segona fila d'amplada completa
-//   · Les caixes 2 i 3 arriben fins al marge dret del full. Cap text s'escala ni es
-//     re-mesura: només guanyen amplada disponible, que és el que evita que hi surti l'el·lipsi.
+//     8pt), contingut, ordre dels camps, alçada de caixa (90.2pt), l'estructura de UNA BANDA
+//     amb tres caixes i les subcolumnes.
+//   · Canvia NOMÉS l'amplada de les caixes:
+//       apaïsat (spec):  [1][2][3]  en una banda de 784.7pt
+//       retrat (derivat):[1][2][3]  en una banda de 538.08pt
+//   · La CAIXA 1 no es comprimeix. El seu contingut té terra: una data i una paginació
+//     ocupen el que ocupen —no es poden escurçar sense mentir— i el logo hi viu amb una zona
+//     mesurada. Les caixes 2 i 3, que porten text elàstic (MODEL, COLLECTION, GARMENT TYPE),
+//     absorbeixen TOTA la compressió, i a parts iguals perquè a l'spec ja són iguals.
+//   · Cap camp es perd. Un valor que no hi cap baixa de 9 a 8pt (el sòl de la llei) i, si
+//     encara no hi cap, es retalla per el·lipsi — que és el que ja fa `PrimNode`.
 //
-// La caixa d'un element es dedueix de la seva `sx` (les fronteres D1/D2 són les mateixes que
-// dibuixen les divisòries), de manera que les ~20 crides a label()/value() de sota no canvien.
+// La geometria es deriva amb UN mapa d'abscisses `mx`: identitat dins la caixa 1, lineal
+// des de D1 fins a R3. Com que és continu a D1 i les caixes 2 i 3 són iguals a l'spec, el
+// repartiment surt sol i les ~20 crides a label()/value() de sota no canvien.
 function _hdrLayout(fmtKey) {
   const f = PAGE_FORMATS[fmtKey]
   const vertical = !!f && f.h > f.w
   if (!vertical) {
-    // Apaïsat = la spec, intacta. Identitat: cap desplaçament, cap vora reescrita.
-    return { vertical: false, W: HDR_M.W, H: HDR_M.H, Hfila: HDR_M.H,
-      dx: () => 0, dy: () => 0, right: r => r }
+    // Apaïsat = la spec, intacta. Identitat: cap abscissa reescrita.
+    return { vertical: false, W: HDR_M.W, H: HDR_M.H, mx: x => x }
   }
-  const Wp = f.pdf[0] - 2 * HDR_M.OX        // amplada útil entre marges, en pt
-  const caixa = sx => (sx < HDR_M.D1 ? 1 : sx < HDR_M.D2 ? 2 : 3)
-  const DX3 = HDR_M.OX - HDR_M.D2           // la caixa 3 torna al marge esquerre…
+  const Wp = f.pdf[0] - 2 * HDR_M.OX               // amplada útil entre marges, en pt
+  const B1 = HDR_M.D1 - HDR_M.OX                   // caixa 1, intacta (141.7pt)
+  const k = (Wp - B1) / (HDR_M.R3 - HDR_M.D1)      // factor de les caixes 2+3
   return {
-    vertical: true, W: Wp, H: HDR_M.H * 2, Hfila: HDR_M.H,
-    dx: sx => (caixa(sx) === 3 ? DX3 : 0),
-    dy: sx => (caixa(sx) === 3 ? HDR_M.H : 0),   // …i baixa una fila
-    // Vores dretes: la caixa 1 es queda on és; la 2 i la 3 arriben al marge del full. Els
-    // valors intermedis (SUB1/SUB2/R1) passen tal qual — les subcolumnes no es mouen.
-    right: r => (r === HDR_M.R2 ? HDR_M.OX + Wp : r === HDR_M.R3 ? HDR_M.D2 + Wp : r),
+    vertical: true, W: Wp, H: HDR_M.H,
+    mx: x => (x <= HDR_M.D1 ? x : HDR_M.D1 + (x - HDR_M.D1) * k),
   }
 }
+
+// Separació a la DRETA d'un text: contra una vora de caixa, el marge (PAD); contra la
+// columna del costat dins la mateixa caixa, el carrer (GUT). Vegeu HDR_M.GUT.
+const _hdrGut = rightPt => (rightPt === HDR_M.SUB1 || rightPt === HDR_M.SUB2 ? HDR_M.GUT : HDR_M.PAD)
 
 // F4 — geometria de l'OBJECTE capçalera segons el format de la pàgina. En apaïsat és la de
 // sempre (MASTER_HEADER_GEOM, derivada de l'SVG canònic); en vertical, la del layout derivat.
@@ -1109,33 +1109,24 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   // format apaïsat, `_hdrLayout` torna la identitat i tot això és exactament el d'abans.
   const L = _hdrLayout(pageCtx?.fmtKey)
   const W = L.W * P, H = L.H * P
-  const Hfila = L.Hfila * P
   const GRAY = KONVA_COL.labelGray, INK = KONVA_COL.textMain, FRAME = KONVA_COL.textMain
-  const gx = sx => (sx + L.dx(sx) - OX) * P
+  const gx = sx => (L.mx(sx) - OX) * P
   const prims = []
-  if (L.vertical) {
-    // Retrat derivat: DUES files. Una divisòria a la de dalt (entre caixa 1 i 2); la de baix
-    // és la caixa 3 sencera i no en porta cap.
-    prims.push({ t: 'r', x: 0, y: 0, w: W, h: Hfila, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
-    prims.push({ t: 'r', x: 0, y: Hfila, w: W, h: Hfila, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
-    prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), Hfila], stroke: FRAME, sw: 0.5 * P })
-  } else {
-    // Marc ÚNIC + 2 divisòries (mai 3 rects — D4). Frame 0.5pt.
-    prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
-    prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), H], stroke: FRAME, sw: 0.5 * P })
-    prims.push({ t: 'l', points: [gx(HDR_M.D2), 0, gx(HDR_M.D2), H], stroke: FRAME, sw: 0.5 * P })
-  }
+  // UNA banda als dos formats: marc ÚNIC + 2 divisòries (mai 3 rects — D4). Frame 0.5pt.
+  // En retrat les divisòries cauen on les posa `mx`; no hi ha cap branca de layout.
+  prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
+  prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), H], stroke: FRAME, sw: 0.5 * P })
+  prims.push({ t: 'l', points: [gx(HDR_M.D2), 0, gx(HDR_M.D2), H], stroke: FRAME, sw: 0.5 * P })
 
   const V = (real, ph) => placeholderMode ? ph : (real == null ? '' : String(real))
   const join = parts => parts.filter(v => v != null && v !== '').join(' | ')   // UN valor per línia (D3)
+  // Amplada disponible d'un text: de la seva `sx` a `rightPt`, tots dos passats pel mapa
+  // d'abscisses, menys la separació que toqui (marge de caixa o carrer entre columnes).
+  const avail = (sx, rightPt) => L.mx(rightPt) - _hdrGut(rightPt) - L.mx(sx)
   // Etiqueta 6pt a baseline `by`, x `sx`, fins a `rightPt`.
-  // F4 — `L.dy(sx)` baixa una fila els elements de la caixa 3 en retrat (0 en apaïsat), i
-  // `L.right()` eixampla les vores dretes que hi arriben. L'amplada és INVARIANT sota la
-  // translació horitzontal (right i sx es desplacen igual), per això només cal reescriure
-  // les vores que de debò canvien.
   const label = (sx, by, text, rightPt) => {
     const f = 6 * P
-    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f + L.dy(sx) * P, w: (L.right(rightPt) - _hdrGut(rightPt) - sx) * P, h: f + 2, text, fill: GRAY, size: f })
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: avail(sx, rightPt) * P, h: f + 2, text, fill: GRAY, size: f })
   }
   // Valor 9pt (baixa a 8pt si no cap; el·lipsi via PrimNode). MAI desborda ni trenca línia.
   // B2 — `fk` (field key) marca les prims de VALOR que tenen una clau exacta a FIELD_CATALOG.
@@ -1144,10 +1135,10 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   // instanciar una plantilla, en lloc de quedar congelat amb les dades d'aquest model.
   const value = (sx, by, text, rightPt, opts = {}) => {
     if (!text) return
-    const availPt = L.right(rightPt) - _hdrGut(rightPt) - sx
+    const availPt = avail(sx, rightPt)
     const fpt = (text.length * 9 * 0.6 > availPt) ? 8 : 9   // 9→8 = sòl de la llei
     const f = fpt * P
-    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f + L.dy(sx) * P, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, fk: opts.fk })
+    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, fk: opts.fk })
   }
 
   // ── CAIXA 1 ── logo (files 1-2) · DATE+PAGE (fila 3) · TECHNICIAN (fila 4). DATE alineat amb MODEL.
@@ -1185,27 +1176,47 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
 
 // SIZE RUN: run compacte "·" (sense espais, com l'SVG). La talla base = segment PROPI
 // bold+underline; el separador "·" NO es subratlla (D6). Mètrica mono charW=cos·0.6.
-// F4 — `L` és el layout derivat: en retrat desplaça aquest bloc (caixa 3) a la segona fila.
-// Per defecte, identitat = comportament de sempre.
-const _HDR_L_IDENT = { dx: () => 0, dy: () => 0 }
+// `L` és el layout: en retrat, el mapa d'abscisses estreny la caixa 3. Per defecte, identitat.
+//
+// Aquest bloc es dibuixa segment a segment (la base necessita el seu propi node per anar en
+// negreta i subratllada) i per això NO el protegeix l'el·lipsi de `PrimNode`, que actua per
+// node: 20 segments curts mai desborden individualment, però el conjunt sí. El topall és
+// explícit — el mateix 9→8 que els valors i, si encara no hi cap, es talla amb '…'.
+const _HDR_L_IDENT = { mx: x => x }
 function _pushSizeRun(prims, m, placeholderMode, sx, by, P, L = _HDR_L_IDENT) {
-  const f = 9 * P
-  const OX = HDR_M.OX, y = (by - HDR_M.OY) * P - HDR_M.ASC * f + L.dy(sx) * P
-  const gx = x => (x + L.dx(sx) - OX) * P
+  const OX = HDR_M.OX
+  const gx = x => (L.mx(x) - OX) * P
   const INK = KONVA_COL.textMain
+  const availPt = L.mx(HDR_M.R3) - HDR_M.PAD - L.mx(sx)
+  const yFor = f => (by - HDR_M.OY) * P - HDR_M.ASC * f
   if (placeholderMode) {
-    prims.push({ t: 't', x: gx(sx), y, w: 300 * P, h: f + 2, text: '{size run}', fill: INK, size: f })
+    const f = 9 * P
+    prims.push({ t: 't', x: gx(sx), y: yFor(f), w: availPt * P, h: f + 2, text: '{size run}', fill: INK, size: f })
     return
   }
   const raw = (m?.size_run_model || '').trim()
   if (!raw) return
   const labels = raw.split(/[·;,]/).map(s => s.trim()).filter(Boolean)
   const base = (m?.base_size_label || '').trim()
-  const charWpt = 9 * 0.6
-  let cxPt = sx
+  const nChars = labels.reduce((n, l) => n + l.length, 0) + (labels.length - 1)
+  const fpt = (nChars * 9 * 0.6 > availPt) ? 8 : 9   // 9→8 = sòl de la llei
+  const f = fpt * P
+  const y = yFor(f)
+  const charWpt = fpt * 0.6
+  const maxPt = L.mx(sx) + availPt
+  let cxPt = L.mx(sx)
+  let tallat = false
   const seg = (text, opts = {}) => {
-    prims.push({ t: 't', x: gx(cxPt), y, w: text.length * charWpt * P + 4, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, underline: !!opts.underline })
-    cxPt += text.length * charWpt
+    if (tallat) return
+    const wPt = text.length * charWpt
+    if (cxPt + wPt > maxPt) {
+      // No hi cap: es tanca amb '…' allà on s'ha arribat i no s'hi afegeix res més.
+      prims.push({ t: 't', x: (cxPt - OX) * P, y, w: charWpt * P + 4, h: f + 2, text: '…', fill: INK, size: f })
+      tallat = true
+      return
+    }
+    prims.push({ t: 't', x: (cxPt - OX) * P, y, w: wPt * P + 4, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, underline: !!opts.underline })
+    cxPt += wPt
   }
   labels.forEach((lab, i) => {
     const isBase = base && lab === base
