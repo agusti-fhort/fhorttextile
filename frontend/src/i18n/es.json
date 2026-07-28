@@ -2968,7 +2968,9 @@
     "node_tool_direct": "Selección directa (nodos)",
     "node_mode_shapes": "Formas",
     "node_mode_nodes": "Nodos",
-    "obj_action_node_mode": "No disponible mientras se editan nodos"
+    "obj_action_node_mode": "No disponible mientras se editan nodos",
+    "table_variant_repas": "T3 — Repaso de fittings",
+    "lib_table_no_repas": "El modelo no tiene ningún fitting registrado: no hay eventos para rellenar la tabla."
   },
   "estat_badge": {
     "pendent_inputs": "Pendiente de inputs",

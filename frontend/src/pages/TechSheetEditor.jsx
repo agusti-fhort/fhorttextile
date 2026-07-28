@@ -2465,6 +2465,7 @@ export default function TechSheetEditor() {
   // POMs del model, per al contenidor del panell dret. FRONTERA G1: aquesta llista serveix per
   // DECIDIR què s'escriu; el que arriba al document és només el string. Cap id hi viatja.
   const [pomRows, setPomRows] = useState([])
+  const [nRepas, setNRepas] = useState(0)      // esdeveniments de fitting del model (porta T3)
   // Cota pre-carregada: {text} mentre l'usuari té un POM triat i encara no ha fet els dos clics.
   const [cotaPreset, setCotaPreset] = useState(null)
   // F2 (precedent de col·locació): enllaç OBJECT-LEVEL — la procedència viu a cada objecte
@@ -3205,6 +3206,22 @@ export default function TechSheetEditor() {
     fetch(`${API}/api/v1/models/${id}/base-measurements/`, { headers: authHeaders })
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (!cancelled && d) setPomRows(d.results || d || []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  // ── Repàs de fittings: NOMBRE d'esdeveniments, per a la porta de la variant T3 ──
+  // La casa ensenya sempre la variant i diu el motiu quan no es pot inserir (R3/F1), i per
+  // dir-ho cal saber-ho ABANS d'obrir el picker — igual que `pomRows` i `sizeFittings`. Es
+  // llegeix l'endpoint del Repàs tal qual; la inserció el tornarà a demanar quan toqui, que
+  // és quan el snapshot ha de ser fresc.
+  useEffect(() => {
+    if (!id) return undefined
+    let cancelled = false
+    fetch(`${API}/api/v1/fitting/model/${id}/repas/`, { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d) setNRepas((d.sessions || []).length) })
       .catch(() => {})
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4682,6 +4699,77 @@ export default function TechSheetEditor() {
     setTablePicker(null)
   }
 
+  // T3 — REPÀS DE FITTINGS: la mateixa taula que la pantalla de Mesures, per emportar-se-la
+  // impresa al fitting presencial. Eix = ESDEVENIMENT (sessions de fitting + etapes escrites a
+  // la taula de mesures, fusionades cronològicament pel backend), no talla ni versió.
+  //
+  // Mateix patró que la T1b, sense excepcions: es baixa l'endpoint del Repàs TAL QUAL (cap
+  // paràmetre, cap càlcul aquí), es congelen els valors com a STRINGS i l'objecte és un `table`
+  // corrent que `buildTableCellPrimitives` sap pintar. La fitxa és un document, no una vista
+  // viva: el que s'imprimeix ha de dir el que deia el dia que es va inserir.
+  //
+  // La capçalera de columna replica el criteri de la pantalla (repasGridAdapter): la fase per a
+  // una sessió —dada de domini, no es tradueix— i l'origen TRADUÏT per a una etapa, amb les
+  // mateixes claus `basestage.ctx.*` que la taula de mesures, perquè el tècnic llegeixi la
+  // mateixa paraula al paper i a la pantalla. Es replica el criteri, no el codi: aquell mòdul
+  // és de la superfície de Mesures i no es toca.
+  const insertTableRepas = async () => {
+    if (!locked || !model?.id) return
+    let data
+    try {
+      const r = await fetch(`${API}/api/v1/fitting/model/${model.id}/repas/`, { headers: authHeaders })
+      if (!r.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
+      data = await r.json()
+    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
+    const esdev = data.sessions || []
+    if (!esdev.length || !(data.rows || []).length) { flash(t('tech_sheet.flash_empty_table')); return }
+
+    // dd/mm, com la pantalla. Còpia local d'una línia: importar-la lligaria l'editor a un
+    // mòdul de la superfície de Mesures.
+    const dia = (iso) => {
+      if (!iso) return ''
+      const d = new Date(iso)
+      return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit' })
+    }
+    const capcalera = (s) => {
+      const titol = (s.origen && s.origen !== 'SESSIO')
+        ? t(`basestage.ctx.${String(s.origen).toLowerCase()}`, s.origen)
+        : (s.fase || '')
+      return s.data ? `${titol} @${dia(s.data)}` : titol
+    }
+    const columns = [
+      { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
+      { key: 'nom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
+      // Amples REALS: 20mm per esdeveniment donen aire a una mesura de 4-5 xifres i deixen que
+      // la capçalera parteixi en dues línies (buildTableCellPrimitives no talla mai un títol).
+      ...esdev.map(s => ({ key: String(s.id), label: capcalera(s), width: 20 })),
+      { key: 'coment', label: t('tech_sheet.tbl_col_comments'), width: 52 },
+    ]
+    const cella = (row, s) => {
+      const v = row.valors?.[String(s.id)]
+      return v ? (fmtMeasure(v.valor_real, unit) ?? '–') : '–'
+    }
+    const rows = (data.rows || []).map(row => [
+      row.codi || row.pom_code || '',
+      { text: row.nom_en || '', sub: row.nom_local || '' },
+      ...esdev.map(s => cella(row, s)),
+      row.ultim_comentari?.text || '',
+    ])
+    // `fitTableObj` és qui resol la mida: amb molts esdeveniments la taula es passa d'ample i
+    // l'escala uniforme la fa cabre a la pàgina, exactament com T1a/T1b/BOM. El sòl de 8pt el
+    // guarda el builder (`Math.max(8, style.fontSize)`).
+    addObject(fitTableObj({
+      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
+      kind: 'fitting_history', columns, rows,
+      style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+      snapshot: {
+        model_id: model.id, talla: data.talla || null,
+        n_esdeveniments: esdev.length, snapshot_at: new Date().toISOString(),
+      },
+    }))
+    setTablePicker(null)
+  }
+
   // T2 — BOM: neix buida (sense snapshot de fitting), 100% editable a mà.
   const insertTableT2 = () => {
     if (!locked) return
@@ -4729,6 +4817,8 @@ export default function TechSheetEditor() {
   }
   const onPickTableVariant = (variant) => {
     if (variant === 't2') { insertTableT2(); return }
+    // T3 — res a triar: el Repàs és del MODEL, no d'un size fitting. S'insereix i prou.
+    if (variant === 'repas') { insertTableRepas(); return }
     // R3 — la personalitzada s'insereix ja, 3×3. Preguntar files i columnes abans de veure res
     // no aporta: el panell dret ja té els controls d'afegir i treure files i columnes, i allà
     // es decideix VEIENT la taula, que és quan se sap quantes en calen.
@@ -4970,6 +5060,13 @@ export default function TechSheetEditor() {
       motiu: sizeFittings.length === 0
         ? t('tech_sheet.lib_table_no_fitting')
         : t('tech_sheet.lib_table_no_graded_fitting'),
+    },
+    // T3 — el Repàs de fittings imprès. Porta d'una sola condició: que hi hagi algun
+    // esdeveniment. No hi ha res a triar (ni size fitting ni talla): s'insereix tot el que
+    // l'endpoint dona, que és el que la pantalla ja ensenya.
+    {
+      k: 'repas', icon: 'ti-history', label: t('tech_sheet.table_variant_repas'),
+      ok: nRepas > 0, motiu: t('tech_sheet.lib_table_no_repas'),
     },
     { k: 't2', icon: 'ti-list-details', label: t('tech_sheet.table_variant_t2'), ok: true, motiu: '' },
     { k: 'custom', icon: 'ti-table-plus', label: t('tech_sheet.table_variant_custom'), ok: true, motiu: '' },
