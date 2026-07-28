@@ -21,6 +21,8 @@ import { scaleSubpath, rotateSubpath, translateSubpath } from './ftt/paperOps'
 // lloc, perquè el llenç, el PDF i el sub-editor de Paper l'han de llegir IGUAL.
 import { normalizePaint, normalizeFillRule, resolStroke, resolFill, resolStrokeWidth, sensePintura } from './ftt/paint'
 import { useUnit, fmtMeasure } from './fittingShared'
+// Quines formes del conversor són una PEÇA de patró (path o grup-sketch), en un sol lloc.
+import { comptaPecesInserides, esPecaInserible } from '../utils/pecaInsercio'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -5674,12 +5676,17 @@ export default function TechSheetEditor() {
       // qualsevol altre vector. Abans era un PNG dins un rectangle.
       // En cascada: dues peces seguides a la mateixa cantonada es tapen l'una a l'altra, i qui
       // n'insereix dues creu que n'hi ha una. Cada peça nova entra una mica més avall.
-      const n = objectsOf(currentPage).filter(o => o.type === 'path' && o.piece_name).length
+      // X2 — compta les DUES formes que el conversor pot tornar (path i grup-sketch). Comptant
+      // només els `path`, una pàgina de peces amb rols separats tornava 0 i totes queien
+      // apilades a la mateixa cantonada, que és exactament el que la cascada evita.
+      const n = comptaPecesInserides(objectsOf(currentPage))
       const x = 20 + (n % 5) * 10, y = 20 + (n % 5) * 10
       const vector = await convertLegacySketchSvgObject({
         id: uid(), type: 'sketch_svg', layer: 'free', x, y, width, height: width / ratio, svg: svgText,
       })
-      if (vector.type !== 'path') { flash(t('tech_sheet.piece_insert_error')); return }
+      // X1 — el conversor torna un `path` amb un sol rol i un `group kind:'sketch'` amb més
+      // d'un (b4cb0b7). Acceptar només `path` deixava fora la peça amb rols separats.
+      if (!esPecaInserible(vector)) { flash(t('tech_sheet.piece_insert_error')); return }
       // `piece_name` i `pattern_file_id` es conserven: són la traça de d'on ve el dibuix, i
       // el descongelat de plantilla ja els sap despenjar (`_unfreeze_pattern_piece`).
       addObject({ ...vector, piece_name: peca.nom_block, pattern_file_id: patternFile.id })
