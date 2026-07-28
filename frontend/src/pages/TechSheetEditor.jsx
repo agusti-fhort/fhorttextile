@@ -24,6 +24,8 @@ import { useUnit, fmtMeasure } from './fittingShared'
 // Quines formes del conversor són una PEÇA de patró (path o grup-sketch), en un sol lloc.
 import { comptaPecesInserides, esPecaInserible } from '../utils/pecaInsercio'
 import { potTancar, treuAncoratgeFantasma } from '../utils/tracatPloma'
+// F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
+import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -536,11 +538,7 @@ function objectBounds(obj) {
 // El backend (ftt-documents/) serveix document.json (v-ftt) + un mapa d'assets {nom→URL}.
 // L'editor pinta el format v2 (clau `pages`), on image.src ha de ser una URL carregable;
 // per desar es torna a 'assets/<nom>'. Anàleg JS de services_ftt.document_to_v2/v2_to_document.
-// F4 — `format` OPCIONAL per pàgina. Absent = hereta el `pageFormat` del document, que és el
-// que diuen TOTS els documents existents. La clau no s'escriu mai quan no hi és: un document
-// vell ha de sobreviure el round-trip idèntic, i un `format: undefined` a cada pàgina ja no
-// ho seria. Anàleg JS de services_ftt._amb_format.
-const ambFormat = (origen, sortida) => (origen?.format ? { ...sortida, format: origen.format } : sortida)
+// F4 — el `format` OPCIONAL per pàgina viu a utils/paginesFtt (amb la hidratació que el llegeix).
 
 export function documentToV2(documentJson, assets = {}) {
   const urlOf = (name) => assets[name] || ('assets/' + name)
@@ -3262,7 +3260,10 @@ export default function TechSheetEditor() {
     skipSave.current = true
     let rawPages = null
     if (tj && tj.version === 2 && Array.isArray(tj.pages) && tj.pages.length) {
-      rawPages = tj.pages.map(p => ({ id: p.id || uid(), objects: (p.objects || []).map(o => ({ ...o, id: o.id || uid() })), guides: p.guides || [] }))
+      // F4 — LA FUITA del format per pàgina era aquí: aquesta hidratació reconstruïa la pàgina
+      // amb {id, objects, guides} i prou, de manera que el `format` que el .ftt SÍ portava es
+      // perdia en obrir i la pàgina tornava a l'herència del document.
+      rawPages = hidratarPagines(tj.pages, uid)
     } else {
       rawPages = [{ id: uid(), objects: [] }]
     }
