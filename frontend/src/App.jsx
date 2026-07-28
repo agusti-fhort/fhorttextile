@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Entrar from './pages/Entrar'
 import Shell from './components/layout/Shell'
 import GuardTascaOblidada from './components/GuardTascaOblidada'
+import AvisSessio from './components/AvisSessio'
 import { modelFitxers } from './api/endpoints'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -86,7 +87,9 @@ function ProtectedRoute({ children }) {
   // patró són rutes de fora del Shell (són eines a pantalla completa), i són precisament on el
   // tècnic passa aquells 30 minuts. Muntat al Shell, l'avís no existiria allà on més cal.
   // Va com a GERMÀ de children: repintar-se cada segon no arrossega l'app sencera.
-  if (estatAuth === AUTH_VALID) return <>{children}<GuardTascaOblidada /></>
+  // AvisSessio (K5) va al costat del guard de tasca oblidada i pel mateix motiu: tots dos
+  // són globals i han de viure allà on la persona treballa, no en una pantalla concreta.
+  if (estatAuth === AUTH_VALID) return <>{children}<GuardTascaOblidada /><AvisSessio /></>
   return <Navigate to="/login" replace state={{ from: location }} />
 }
 
