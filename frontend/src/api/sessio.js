@@ -2,6 +2,7 @@ import axios from 'axios'
 
 import { apiBaseURL } from './base'
 import { creaGestorSessio } from './sessioCore'
+import { pausaTascaActiva } from './tascaActiva'
 
 /**
  * ESTAT DE SESSIÓ COMPARTIT — un sol refresh per a tota l'app.
@@ -44,6 +45,12 @@ export const sessio = creaGestorSessio({
   demanaRefresh: refresh =>
     refreshClient.post('/api/token/refresh/', { refresh }).then(r => r.data),
   tancaSessio: () => {
+    // K6 capa 1 — abans d'esborrar res, intent de deixar la tasca En curs en pausa. Surt amb
+    // el token que hi hagi (probablement mort: és la paradoxa acceptada) i `keepalive` la fa
+    // sobreviure a la redirecció. No s'espera i no es mira el resultat: si falla, la capa 2
+    // (cron `pausa_tasques_oblidades`) ho recull.
+    pausaTascaActiva()
+
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     // El motiu viatja fins a /login perquè hi surti un missatge humà en comptes de deixar

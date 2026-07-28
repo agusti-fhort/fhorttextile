@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import client from '../api/client'
 import { authCentral, me as meApi } from '../api/endpoints'
+import { pausaTascaActiva } from '../api/tascaActiva'
 
 /**
  * L'estat de l'auth té TRES valors, no dos (D10).
@@ -112,7 +113,12 @@ const useAuthStore = create((set, get) => ({
   isBrand: () => get().tenant?.tipologia === 'marca',
   isStudio: () => get().tenant?.tipologia === 'estudi',
 
-  logout: () => {
+  // K6 capa 1, cas FIABLE: al logout voluntari el token encara és viu, així que la pausa de
+  // la tasca En curs no és un intent sinó una garantia — i per això s'espera abans de
+  // netejar els tokens (esborrar-los primer deixaria la crida sense credencial).
+  // Marxar de la feina no és acabar-la: la tasca queda Paused, mai Done.
+  logout: async () => {
+    try { await pausaTascaActiva() } catch { /* mai ha de bloquejar la sortida */ }
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     set({ token: null, user: null, tenant: null, isAuthenticated: false, estatAuth: AUTH_INVALID })
