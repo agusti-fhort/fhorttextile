@@ -163,7 +163,11 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
 
   const pomTask = modelTaskRows.find(task => task.task_type_code === 'pom')
   const hasBaseValue = taulaRows.some(r => r.base_value_cm != null)
-  const pomDone = pomTask?.status === 'Done'
+  // El gate de Mesures llegeix l'estat de la feina de POM del MODEL, no de la llista de
+  // tasques: aquella va escopada per `view_team_tasks`, i qui no tenia la capability veia
+  // «Mesures encara no disponibles» amb la tasca Done i la taula plena. Un permís sobre
+  // quines tasques veus no pot decidir si el model té mesures.
+  const pomDone = !!model?.pom_task_done
   const pomGenesisOpen = pomTask && ['InProgress', 'Paused'].includes(pomTask.status)
   const pomReady = pomDone && hasBaseValue
 
@@ -244,11 +248,16 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     setModelTaskRows(prev => prev.map(task => (
       task.task_type_code === 'pom' ? { ...task, status: 'Done' } : task
     )))
+    // El gate llegeix `model.pom_task_done`: l'optimisme de la fila de tasca ja no l'obre tot
+    // sol. `reloadModel()` (aquí sota) el confirmaria igualment, però el salt d'un anada-i-
+    // tornada deixaria la caixa de «encara no disponibles» un instant després d'acabar la
+    // feina. Es marca aquí pel mateix motiu que ja es marcava la fila.
+    setModel(m => (m ? { ...m, pom_task_done: true } : m))
     reloadTaula()
     reloadModel()
     reloadTasks()
     setWpVersion(v => v + 1)
-  }, [reloadModel, reloadTaula, reloadTasks])
+  }, [reloadModel, reloadTaula, reloadTasks, setModel])
   // Sortir de mode edició/entrada en canviar de tab (pausa la tasca si n'hi havia).
   useEffect(() => {
     if ((editing && editing !== activeTab) || (mesuresEntry && activeTab !== 'Mesures')) exitEdit()
