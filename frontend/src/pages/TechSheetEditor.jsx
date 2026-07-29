@@ -2473,6 +2473,9 @@ export default function TechSheetEditor() {
   // F2 (precedent de col·locació): enllaç OBJECT-LEVEL — la procedència viu a cada objecte
   // sketch (`sourceItemFitxer`, posat a l'import des del catàleg), no al document.
   const [f2Msg, setF2Msg] = useState(null)   // resultat de col·locar/desar precedents
+  // Propostes TRIADES al panell (pom_ids). Selecció d'UI pura: qui mana sobre què és
+  // proposable segueix sent el servidor (propostes + cotes col·locades al document).
+  const [propSel, setPropSel] = useState(() => new Set())
   // F2 · propostes de col·locació agregades per pom_id (cascada del catàleg). El panell de POMs
   // les llegeix per marcar cada POM com a PROPOSABLE; mai una crida per POM (agregació client).
   const [propostes, setPropostes] = useState(() => new Map())   // pom_id → { p, derivat, hostId }
@@ -5158,7 +5161,7 @@ export default function TechSheetEditor() {
   const sketchObjs = curObjs.filter(isSketchObj)
   // Assignar la vista a un objecte sketch (des de Propietats de l'objecte, UX-COTES). El col·locar
   // i el desar massius de l'antic contenidor «Cotes des de precedent» han mort: el col·locar viu
-  // ara per-POM al panell (posarProposta/posarTotesPropostes) i el desar per-cota (desarUnaPrecedent).
+  // ara per-POM al panell (posarProposta/posarPropostes) i el desar per-cota (desarUnaPrecedent).
   const assignaVista = (objId, slot) => updateObject(objId, { viewSlot: slot || undefined })
 
   // ── F2 · PROPOSTES agregades per pom_id ─────────────────────────────────────
@@ -5227,20 +5230,35 @@ export default function TechSheetEditor() {
     if (cota) updatePageObjects(currentPage, objs => [...objs, cota])
   }, [propostes, buildCotaDeProposta, currentPage, updatePageObjects])
 
-  // Acció de grup: posar TOTES les proposables que encara no són al document.
-  const posarTotesPropostes = useCallback(() => {
+  // Acció de grup: posar les proposables TRIADES que encara no són al document. Mateixa
+  // mecànica que posar-les una a una (buildCotaDeProposta) — la selecció només filtra QUINES,
+  // no obre cap camí nou de creació.
+  const posarPropostes = useCallback((pomIds) => {
     const nous = []
-    for (const [pomId, prop] of propostes) {
-      if (cotesColocades.has(pomId)) continue
+    for (const pomId of pomIds) {
+      const prop = propostes.get(pomId)
+      if (!prop || cotesColocades.has(pomId)) continue
       const cota = buildCotaDeProposta(pomId, prop)
       if (cota) nous.push(cota)
     }
     if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
     setF2Msg(t('tech_sheet.pom_posades', { n: nous.length }))
   }, [propostes, cotesColocades, buildCotaDeProposta, currentPage, updatePageObjects, t])
-  // Nombre de POMs proposables encara NO col·locats (per a l'acció de grup del panell).
-  const proposablesCount = pomRows.filter(
-    bm => bm.pom_id != null && !cotesColocades.has(bm.pom_id) && propostes.has(bm.pom_id)).length
+  // POMs proposables encara NO col·locats: els que la selecció múltiple pot triar.
+  const proposablesIds = useMemo(() => pomRows
+    .filter(bm => bm.pom_id != null && !cotesColocades.has(bm.pom_id) && propostes.has(bm.pom_id))
+    .map(bm => bm.pom_id), [pomRows, cotesColocades, propostes])
+  // Triats que segueixen sent proposables (col·locar-ne un el treu de la llista tot sol).
+  const propTriats = useMemo(() => proposablesIds.filter(pid => propSel.has(pid)), [proposablesIds, propSel])
+  const totsTriats = proposablesIds.length > 0 && propTriats.length === proposablesIds.length
+  const alternaTriat = useCallback((pomId) => setPropSel(s => {
+    const n = new Set(s)
+    if (n.has(pomId)) n.delete(pomId); else n.add(pomId)
+    return n
+  }), [])
+  const alternaTotsTriats = useCallback(() => setPropSel(s => (
+    proposablesIds.every(pid => s.has(pid)) ? new Set() : new Set(proposablesIds)
+  )), [proposablesIds])
 
   // Desar UNA cota com a precedent del catàleg (acte CONSCIENT, D1) — des de Propietats de la
   // cota. Resol el host sketch pel punt mig de la cota; la vista es pren del host. Substitueix
@@ -6247,13 +6265,20 @@ export default function TechSheetEditor() {
               icona="ti-ruler-measure" pes={2}
             >
               <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.poms_hint')}</p>
-              {/* Acció de grup: posar TOTES les proposables que encara no són al document. */}
-              {proposablesCount > 0 && (
-                <button type="button" onClick={posarTotesPropostes}
-                  title={t('tech_sheet.pom_posar_totes', { n: proposablesCount })}
-                  style={{ width: '100%', marginBottom: 6, cursor: 'pointer', padding: '0.35rem 0.5rem', background: COL.goldPale, border: `1px solid ${COL.gold}`, borderRadius: 4, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  <i className="ti ti-copy" /> {t('tech_sheet.pom_posar_totes', { n: proposablesCount })}
-                </button>
+              {/* Acció de grup: triar quines propostes es col·loquen i col·locar-les d'un cop.
+                  «Selecciona-ho tot» + botó primari; amb cap de triada el botó no fa res. */}
+              {proposablesIds.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, cursor: 'pointer', fontSize: 'var(--fs-label)', color: COL.textMain, fontFamily: FONT }}>
+                    <input type="checkbox" checked={totsTriats} onChange={alternaTotsTriats} style={{ cursor: 'pointer' }} />
+                    {t('tech_sheet.pom_sel_totes', { n: proposablesIds.length })}
+                  </label>
+                  <button type="button" onClick={() => posarPropostes(propTriats)} disabled={propTriats.length === 0}
+                    title={t('tech_sheet.pom_colocar_n', { n: propTriats.length })}
+                    style={{ width: '100%', cursor: propTriats.length ? 'pointer' : 'default', opacity: propTriats.length ? 1 : 0.5, padding: '0.35rem 0.5rem', background: COL.goldPale, border: `1px solid ${COL.gold}`, borderRadius: 4, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <i className="ti ti-copy" /> {t('tech_sheet.pom_colocar_n', { n: propTriats.length })}
+                  </button>
+                </div>
               )}
               {/* F3 · proposar cotes amb IA per als PENDENT (sobre els croquis de la pàgina). */}
               {sketchObjs.length > 0 && (
@@ -6308,6 +6333,15 @@ export default function TechSheetEditor() {
                   const stateCol = colocat ? COL.ok : (armat || iaProp || prop) ? COL.gold : COL.textMuted
                   return (
                     <div key={bm.id} style={{ display: 'flex', alignItems: 'stretch', gap: 4 }}>
+                      {/* Triar una proposta per col·locar-la en bloc. Només a les files
+                          PROPOSABLE: la resta no té res a col·locar des del precedent. */}
+                      {prop && (
+                        <label title={t('tech_sheet.pom_sel_una')}
+                          style={{ display: 'flex', alignItems: 'center', flexShrink: 0, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={propSel.has(bm.pom_id)}
+                            onChange={() => alternaTriat(bm.pom_id)} style={{ cursor: 'pointer' }} />
+                        </label>
+                      )}
                       <button type="button"
                         // C3 · GUARD DE DUPLICATS: un POM amb cota viva al document no es pot
                         // re-acotar. La fila COL·LOCAT queda no-clicable (el «selector» de l'eina
