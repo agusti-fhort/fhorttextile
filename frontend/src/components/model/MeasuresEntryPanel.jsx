@@ -32,7 +32,6 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
 
   const [mode, setMode] = useState('loading')   // 'loading' | 'selector' | 'manual' | 'import'
   const [pomsSuggerits, setPomsSuggerits] = useState([])
-  const [selectedPomIds, setSelectedPomIds] = useState([])   // graella manual
   const [taulaRows, setTaulaRows] = useState([])
   const [sizesAmbDades, setSizesAmbDades] = useState(null)
   const [deltes, setDeltes] = useState(null)
@@ -60,7 +59,6 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
 
   const toggleIn = (setter) => (pom) => setter(prev =>
     prev.includes(pom.pom_id) ? prev.filter(x => x !== pom.pom_id) : [...prev, pom.pom_id])
-  const togglePom = toggleIn(setSelectedPomIds)      // graella manual (arrenca amb els KEY)
 
   const refreshTableMeta = (d) => {
     setSizesAmbDades(d.sizes_amb_dades || null)
@@ -174,9 +172,8 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
       .then(r => r.json())
       .then(pomsData => {
         if (!alive) return
-        const poms = pomsData.poms || []
-        setPomsSuggerits(poms)
-        setSelectedPomIds(prev => prev.length ? prev : poms.filter(p => p.is_key).map(p => p.pom_id))
+        // C2 — ja no hi ha preselecció de KEY: la taula els porta TOTS i el tècnic hi treu.
+        setPomsSuggerits(pomsData.poms || [])
       })
       .catch(() => { if (alive) setError(t('errors.load_failed')) })
 
@@ -435,37 +432,19 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
               <i className="ti ti-upload" /> {t('model_measurements.import_table')}
             </button>
           </div>
-          {taulaRows.length === 0 && pomsSuggerits.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>
-                {t('model_measurements.suggested_poms')}
-              </div>
-              {pomsSuggerits.filter(p => p.is_key).length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gold)', marginRight: 6, fontWeight: 500 }}>KEY</span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                    {pomsSuggerits.filter(p => p.is_key).map(p => (
-                      <POMChipSuggerit key={p.pom_id} pom={p} selected={selectedPomIds.includes(p.pom_id)} onToggle={() => togglePom(p)} />
-                    ))}
-                  </div>
-                </div>
-              )}
-              {pomsSuggerits.filter(p => !p.is_key).length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {pomsSuggerits.filter(p => !p.is_key).map(p => (
-                    <POMChipSuggerit key={p.pom_id} pom={p} selected={selectedPomIds.includes(p.pom_id)} onToggle={() => togglePom(p)} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
+          {/* C2 — els xips de POMs suggerits han mort. La taula ARRENCA amb totes les files de
+              l'item i el tècnic hi treu el que no vol amb la ✕ de cada fila (i n'afegeix amb el
+              cercador del peu de taula). Triar sobre una llista de 48 xips per després tornar a
+              mirar-la a la taula era fer dues vegades la mateixa lectura. */}
           <EditableTable
-            rows={taulaRows.length > 0 ? taulaRows : pomsSuggerits
-              .filter(p => selectedPomIds.includes(p.pom_id))
+            rows={taulaRows.length > 0 ? taulaRows : [...pomsSuggerits]
+              // Ordre de l'ITEM (GarmentPOMMap.ordre); `poms-suggerits` els serveix amb els KEY
+              // al davant, i aquí el que mana és l'ordre en què l'item declara les mesures.
+              .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0))
               .map((p, i) => ({
                 id: `tmp-${p.pom_id}`, pom_id: p.pom_id, pom_code: p.pom_code,
-                nom_ca: p.nom_ca, nom_en: p.nom_en, nom_fitxa: '',
+                nom_ca: p.nom_ca, nom_en: p.nom_en, nom_fitxa: '', is_key: p.is_key,
+                client_code: p.client_code, client_name_en: p.client_name_en, client_name_local: p.client_name_local,
                 base_value_cm: null, graded: {}, ordre: i,
               }))}
             sizeRun={sizeRun}
