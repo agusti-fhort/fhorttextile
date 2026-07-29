@@ -1652,6 +1652,18 @@ def measurements_table_view(request, model_id):
     except Exception:
         rules_by_pom = {}
 
+    # C4 — GRADING INFORMAT AL WIZARD. El resolutor canònic mira el model (regla resident) i
+    # el seu `grading_rule_set`; el ruleset del client, però, sovint penja del GARMENT TYPE
+    # ITEM (RS146-149 hi són assignats), i llavors el tècnic es trobava les columnes Règim /
+    # Delta / Break buides tot i que la regla existeix. Aquí s'hi cau NOMÉS PER OMPLIR LA
+    # PANTALLA: és lectura, i el motor de graduació no en sap res —si el tècnic desa, la regla
+    # passa a ser resident del model, que és qui mana. Sense ruleset al GTI, res canvia.
+    gti_rule_set_id = getattr(model.garment_type_item, 'grading_rule_set_id', None)
+    if gti_rule_set_id:
+        from fhort.pom.models import GradingRule
+        for r in GradingRule.objects.filter(rule_set_id=gti_rule_set_id, actiu=True):
+            rules_by_pom.setdefault(r.pom_id, r)
+
     def _flt(v):
         return float(v) if v is not None else None
 
