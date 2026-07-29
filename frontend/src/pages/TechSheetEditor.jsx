@@ -239,11 +239,15 @@ function flattenObjects(objects = []) {
   return objects.flatMap(o => [o, ...flattenObjects(o.children || [])])
 }
 
-// F1 (cota viva) — etiqueta VISIBLE d'un POM a la cota: àlies de client si n'hi ha, si
-// no el codi canònic (pom_code_global). El codi canònic sempre queda com a metadada +
-// tooltip. Últim fallback a codi_client per no deixar mai l'etiqueta buida en POMs
-// tenant-only sense canònic ni àlies.
-export const cotaLabelDe = (bm) => (bm && (bm.client_alias || bm.pom_code_global || bm.codi_client)) || ''
+// F1 (cota viva) — NOMENCLATURA VISIBLE d'un POM: EXACTAMENT el criteri de la columna
+// «Nomenclatura» de la taula de Mesures, que és qui la mana. Allà és `nom_fitxa || pom_code`
+// (CheckMeasureEditor.jsx:223, i base_stages_view defineix pom_code = pom.codi_client): la
+// nomenclatura curta del MODEL, i el codi intern del POM quan el model no n'ha declarat cap.
+// El panell de la fitxa NO pot tenir un criteri propi — el patronista anomena la cota al
+// croquis igual que la fila de Mesures. El codi canònic (pom_code_global) queda com a ÚLTIM
+// recurs, només perquè un POM tenant-only sense res no es quedi sense etiqueta; abans era el
+// segon criteri i és el que feia sortir "POM-020" com si fos nomenclatura.
+export const cotaLabelDe = (bm) => (bm && (bm.nom_fitxa || bm.codi_client || bm.pom_code_global)) || ''
 
 // F2 (precedent de col·locació) — objectes del croquis als quals el tècnic assigna una vista
 // (viewSlot) i sobre la bbox dels quals es normalitzen les cotes.
