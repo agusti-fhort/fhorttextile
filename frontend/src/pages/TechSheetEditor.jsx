@@ -12,7 +12,6 @@ import FhortLogo from '../components/brand/FhortLogo'
 import FilePicker from '../components/model/FilePicker'
 import AssetNavigator from '../components/assets/AssetNavigator'
 import Contenidor from '../components/ui/Contenidor'
-import { PomNamePair } from '../components/POMBrowser/POMBrowser'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 import { booleanOp } from './ftt/paperbool'
@@ -6283,17 +6282,18 @@ export default function TechSheetEditor() {
               {f2Msg && <p style={{ fontSize: 'var(--fs-caption)', color: COL.textMain, margin: '0 0 6px' }}>{f2Msg}</p>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {pomRows.map(bm => {
-                  // F1 (cota viva): etiqueta = àlies de client || codi canònic; el vincle
-                  // viatja per pom_id/bm_id, no pel text.
+                  // F1 (cota viva): etiqueta = la nomenclatura del model (cotaLabelDe, mateix
+                  // criteri que Mesures); el vincle viatja per pom_id/bm_id, no pel text.
                   const etiqueta = cotaLabelDe(bm)
-                  const esAlies = !!bm.client_alias
                   const canonic = bm.pom_code_global || ''
-                  // NOMENCLATURA UNIFICADA — mateixa llei que l'etiqueta de la cota (F1: client_alias
-                  // || canònic || codi_client, via cotaLabelDe) i que la taula de Mesures: la línia 1
-                  // porta el CODI CLIENT + nom canònic EN (PomNamePair). El badge mostra el codi que
-                  // NO és a la línia 1 — el canònic quan la línia porta client — mai un tercer
-                  // vocabulari (el nom_fitxa del croquis ja no hi surt: no és nomenclatura de POM).
-                  const canonicBadge = esAlies && canonic && canonic !== etiqueta ? canonic : ''
+                  // CONTENIDOR A DUES LÍNIES, la convenció de presentació vigent (MeasureGrid ·
+                  // NomCell): L1 = nomenclatura en pes fort + nom canònic EN · L2 = nom en llengua
+                  // d'usuari, petit, gris i en cursiva. El xip amb el codi canònic ha marxat: era
+                  // un tercer vocabulari competint amb la nomenclatura a la mateixa línia (el
+                  // canònic segueix al tooltip i viatja amb la cota com a metadada).
+                  const nomLocal = bm.nom_ca || bm.nom_client || ''
+                  const nomCanonic = bm.nom_en || nomLocal
+                  const nomSota = nomCanonic && nomLocal !== nomCanonic ? nomLocal : ''
                   const colocat = bm.pom_id != null && cotesColocades.has(bm.pom_id)
                   const armat = cotaPreset?.bmId === bm.id && tool === 'cota_pom'
                   // PROPOSADA-IA: hi ha una cota de visió pendent de revisió per aquest POM.
@@ -6318,7 +6318,7 @@ export default function TechSheetEditor() {
                         aria-pressed={armat}
                         title={colocat
                           ? t('tech_sheet.pom_cota_ja_colocat')
-                          : esAlies && canonic
+                          : canonic
                             ? `${t('tech_sheet.pom_cota_hint', { nom: etiqueta })} · ${t('tech_sheet.pom_canonical_tip', { codi: canonic })}`
                             : t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
                         style={{
@@ -6333,9 +6333,10 @@ export default function TechSheetEditor() {
                         <i className={`ti ${stateIcon}`} style={{ color: stateCol, flexShrink: 0, fontSize: 14 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
-                            <span>{etiqueta || bm.codi_client}</span>
-                            <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              <PomNamePair en={bm.nom_en} local={bm.nom_ca || bm.nom_client} />
+                            <span style={{ flexShrink: 0 }}>{etiqueta}</span>
+                            {/* El nom pot no cabre-hi: es retalla amb ellipsis i el tooltip el diu sencer. */}
+                            <span title={nomCanonic} style={{ fontWeight: 500, color: COL.textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {nomCanonic}
                             </span>
                             {/* Badge PROPOSADA-IA (pendent de revisió): distint d'exacte/germana. */}
                             {iaProp && (
@@ -6351,19 +6352,20 @@ export default function TechSheetEditor() {
                                 {t(exacte ? 'tech_sheet.pom_rel_exacte' : 'tech_sheet.pom_rel_germana')}
                               </span>
                             )}
-                            {/* Badge = codi CANÒNIC (l'altre codi), només quan la línia 1 porta el
-                                client. Mai el nom_fitxa (nomenclatura del croquis, no del POM). */}
-                            {canonicBadge && (
-                              <span title={t('tech_sheet.pom_canonical_tip', { codi: canonicBadge })}
-                                style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: COL.textMuted, border: `1px solid ${COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
-                                {canonicBadge}
-                              </span>
-                            )}
                           </div>
+                          {/* L2 — nom en llengua d'usuari: petit, gris, cursiva. */}
+                          {nomSota && (
+                            <div title={nomSota} style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: COL.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {nomSota}
+                            </div>
+                          )}
                         </div>
-                        {/* La xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
+                        {/* Valor a la dreta, 1 decimal + unitat, com la taula (punt decimal). La
+                            xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
                         {bm.base_value_cm != null && (
-                          <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0 }}>{bm.base_value_cm}</span>
+                          <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0, textAlign: 'right' }}>
+                            {`${Number(bm.base_value_cm).toFixed(1)} cm`}
+                          </span>
                         )}
                       </button>
                       {/* «Posar»: col·loca LA cota des del precedent (queda viva F1, arrossegable). */}
