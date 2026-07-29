@@ -6439,9 +6439,12 @@ export default function TechSheetEditor() {
                               </span>
                             )}
                           </div>
-                          {/* L2 — nom en llengua d'usuari: petit, gris, cursiva. */}
+                          {/* L2 — nom en llengua d'usuari: petit, gris, cursiva. Al token
+                              --fs-label (10px) i no al de captions (8px), la mateixa correcció
+                              que ja es va fer a la taula del wizard de POMs: per sota del nom
+                              (--fs-body), però llegible. */}
                           {nomSota && (
-                            <div title={nomSota} style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: COL.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div title={nomSota} style={{ fontSize: 'var(--fs-label)', fontStyle: 'italic', color: COL.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {nomSota}
                             </div>
                           )}
