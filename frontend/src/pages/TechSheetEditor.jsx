@@ -12,7 +12,6 @@ import FhortLogo from '../components/brand/FhortLogo'
 import FilePicker from '../components/model/FilePicker'
 import AssetNavigator from '../components/assets/AssetNavigator'
 import Contenidor from '../components/ui/Contenidor'
-import { PomNamePair } from '../components/POMBrowser/POMBrowser'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 import { booleanOp } from './ftt/paperbool'
@@ -100,6 +99,7 @@ export const COL = {
   charcoal: 'var(--charcoal)',   // fons de capçalera de contenidor col·lapsable
   ok: 'var(--ok)',               // verd de validació (semàfor "col·locat")
   okBg: 'var(--ok-bg)',
+  placedBg: 'var(--placed-bg)',  // fons suau d'allò que ja té lloc al dibuix (cota col·locada)
   err: 'var(--err)',             // vermell de marca (xip de veredicte fora de tolerància)
   errBg: 'var(--err-bg)',
 }
@@ -239,11 +239,15 @@ function flattenObjects(objects = []) {
   return objects.flatMap(o => [o, ...flattenObjects(o.children || [])])
 }
 
-// F1 (cota viva) — etiqueta VISIBLE d'un POM a la cota: àlies de client si n'hi ha, si
-// no el codi canònic (pom_code_global). El codi canònic sempre queda com a metadada +
-// tooltip. Últim fallback a codi_client per no deixar mai l'etiqueta buida en POMs
-// tenant-only sense canònic ni àlies.
-export const cotaLabelDe = (bm) => (bm && (bm.client_alias || bm.pom_code_global || bm.codi_client)) || ''
+// F1 (cota viva) — NOMENCLATURA VISIBLE d'un POM: EXACTAMENT el criteri de la columna
+// «Nomenclatura» de la taula de Mesures, que és qui la mana. Allà és `nom_fitxa || pom_code`
+// (CheckMeasureEditor.jsx:223, i base_stages_view defineix pom_code = pom.codi_client): la
+// nomenclatura curta del MODEL, i el codi intern del POM quan el model no n'ha declarat cap.
+// El panell de la fitxa NO pot tenir un criteri propi — el patronista anomena la cota al
+// croquis igual que la fila de Mesures. El codi canònic (pom_code_global) queda com a ÚLTIM
+// recurs, només perquè un POM tenant-only sense res no es quedi sense etiqueta; abans era el
+// segon criteri i és el que feia sortir "POM-020" com si fos nomenclatura.
+export const cotaLabelDe = (bm) => (bm && (bm.nom_fitxa || bm.codi_client || bm.pom_code_global)) || ''
 
 // F2 (precedent de col·locació) — objectes del croquis als quals el tècnic assigna una vista
 // (viewSlot) i sobre la bbox dels quals es normalitzen les cotes.
@@ -2470,6 +2474,9 @@ export default function TechSheetEditor() {
   // F2 (precedent de col·locació): enllaç OBJECT-LEVEL — la procedència viu a cada objecte
   // sketch (`sourceItemFitxer`, posat a l'import des del catàleg), no al document.
   const [f2Msg, setF2Msg] = useState(null)   // resultat de col·locar/desar precedents
+  // Propostes TRIADES al panell (pom_ids). Selecció d'UI pura: qui mana sobre què és
+  // proposable segueix sent el servidor (propostes + cotes col·locades al document).
+  const [propSel, setPropSel] = useState(() => new Set())
   // F2 · propostes de col·locació agregades per pom_id (cascada del catàleg). El panell de POMs
   // les llegeix per marcar cada POM com a PROPOSABLE; mai una crida per POM (agregació client).
   const [propostes, setPropostes] = useState(() => new Map())   // pom_id → { p, derivat, hostId }
@@ -5155,7 +5162,7 @@ export default function TechSheetEditor() {
   const sketchObjs = curObjs.filter(isSketchObj)
   // Assignar la vista a un objecte sketch (des de Propietats de l'objecte, UX-COTES). El col·locar
   // i el desar massius de l'antic contenidor «Cotes des de precedent» han mort: el col·locar viu
-  // ara per-POM al panell (posarProposta/posarTotesPropostes) i el desar per-cota (desarUnaPrecedent).
+  // ara per-POM al panell (posarProposta/posarPropostes) i el desar per-cota (desarUnaPrecedent).
   const assignaVista = (objId, slot) => updateObject(objId, { viewSlot: slot || undefined })
 
   // ── F2 · PROPOSTES agregades per pom_id ─────────────────────────────────────
@@ -5224,20 +5231,35 @@ export default function TechSheetEditor() {
     if (cota) updatePageObjects(currentPage, objs => [...objs, cota])
   }, [propostes, buildCotaDeProposta, currentPage, updatePageObjects])
 
-  // Acció de grup: posar TOTES les proposables que encara no són al document.
-  const posarTotesPropostes = useCallback(() => {
+  // Acció de grup: posar les proposables TRIADES que encara no són al document. Mateixa
+  // mecànica que posar-les una a una (buildCotaDeProposta) — la selecció només filtra QUINES,
+  // no obre cap camí nou de creació.
+  const posarPropostes = useCallback((pomIds) => {
     const nous = []
-    for (const [pomId, prop] of propostes) {
-      if (cotesColocades.has(pomId)) continue
+    for (const pomId of pomIds) {
+      const prop = propostes.get(pomId)
+      if (!prop || cotesColocades.has(pomId)) continue
       const cota = buildCotaDeProposta(pomId, prop)
       if (cota) nous.push(cota)
     }
     if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
     setF2Msg(t('tech_sheet.pom_posades', { n: nous.length }))
   }, [propostes, cotesColocades, buildCotaDeProposta, currentPage, updatePageObjects, t])
-  // Nombre de POMs proposables encara NO col·locats (per a l'acció de grup del panell).
-  const proposablesCount = pomRows.filter(
-    bm => bm.pom_id != null && !cotesColocades.has(bm.pom_id) && propostes.has(bm.pom_id)).length
+  // POMs proposables encara NO col·locats: els que la selecció múltiple pot triar.
+  const proposablesIds = useMemo(() => pomRows
+    .filter(bm => bm.pom_id != null && !cotesColocades.has(bm.pom_id) && propostes.has(bm.pom_id))
+    .map(bm => bm.pom_id), [pomRows, cotesColocades, propostes])
+  // Triats que segueixen sent proposables (col·locar-ne un el treu de la llista tot sol).
+  const propTriats = useMemo(() => proposablesIds.filter(pid => propSel.has(pid)), [proposablesIds, propSel])
+  const totsTriats = proposablesIds.length > 0 && propTriats.length === proposablesIds.length
+  const alternaTriat = useCallback((pomId) => setPropSel(s => {
+    const n = new Set(s)
+    if (n.has(pomId)) n.delete(pomId); else n.add(pomId)
+    return n
+  }), [])
+  const alternaTotsTriats = useCallback(() => setPropSel(s => (
+    proposablesIds.every(pid => s.has(pid)) ? new Set() : new Set(proposablesIds)
+  )), [proposablesIds])
 
   // Desar UNA cota com a precedent del catàleg (acte CONSCIENT, D1) — des de Propietats de la
   // cota. Resol el host sketch pel punt mig de la cota; la vista es pren del host. Substitueix
@@ -6244,13 +6266,20 @@ export default function TechSheetEditor() {
               icona="ti-ruler-measure" pes={2}
             >
               <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.poms_hint')}</p>
-              {/* Acció de grup: posar TOTES les proposables que encara no són al document. */}
-              {proposablesCount > 0 && (
-                <button type="button" onClick={posarTotesPropostes}
-                  title={t('tech_sheet.pom_posar_totes', { n: proposablesCount })}
-                  style={{ width: '100%', marginBottom: 6, cursor: 'pointer', padding: '0.35rem 0.5rem', background: COL.goldPale, border: `1px solid ${COL.gold}`, borderRadius: 4, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  <i className="ti ti-copy" /> {t('tech_sheet.pom_posar_totes', { n: proposablesCount })}
-                </button>
+              {/* Acció de grup: triar quines propostes es col·loquen i col·locar-les d'un cop.
+                  «Selecciona-ho tot» + botó primari; amb cap de triada el botó no fa res. */}
+              {proposablesIds.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, cursor: 'pointer', fontSize: 'var(--fs-label)', color: COL.textMain, fontFamily: FONT }}>
+                    <input type="checkbox" checked={totsTriats} onChange={alternaTotsTriats} style={{ cursor: 'pointer' }} />
+                    {t('tech_sheet.pom_sel_totes', { n: proposablesIds.length })}
+                  </label>
+                  <button type="button" onClick={() => posarPropostes(propTriats)} disabled={propTriats.length === 0}
+                    title={t('tech_sheet.pom_colocar_n', { n: propTriats.length })}
+                    style={{ width: '100%', cursor: propTriats.length ? 'pointer' : 'default', opacity: propTriats.length ? 1 : 0.5, padding: '0.35rem 0.5rem', background: COL.goldPale, border: `1px solid ${COL.gold}`, borderRadius: 4, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <i className="ti ti-copy" /> {t('tech_sheet.pom_colocar_n', { n: propTriats.length })}
+                  </button>
+                </div>
               )}
               {/* F3 · proposar cotes amb IA per als PENDENT (sobre els croquis de la pàgina). */}
               {sketchObjs.length > 0 && (
@@ -6279,17 +6308,18 @@ export default function TechSheetEditor() {
               {f2Msg && <p style={{ fontSize: 'var(--fs-caption)', color: COL.textMain, margin: '0 0 6px' }}>{f2Msg}</p>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {pomRows.map(bm => {
-                  // F1 (cota viva): etiqueta = àlies de client || codi canònic; el vincle
-                  // viatja per pom_id/bm_id, no pel text.
+                  // F1 (cota viva): etiqueta = la nomenclatura del model (cotaLabelDe, mateix
+                  // criteri que Mesures); el vincle viatja per pom_id/bm_id, no pel text.
                   const etiqueta = cotaLabelDe(bm)
-                  const esAlies = !!bm.client_alias
                   const canonic = bm.pom_code_global || ''
-                  // NOMENCLATURA UNIFICADA — mateixa llei que l'etiqueta de la cota (F1: client_alias
-                  // || canònic || codi_client, via cotaLabelDe) i que la taula de Mesures: la línia 1
-                  // porta el CODI CLIENT + nom canònic EN (PomNamePair). El badge mostra el codi que
-                  // NO és a la línia 1 — el canònic quan la línia porta client — mai un tercer
-                  // vocabulari (el nom_fitxa del croquis ja no hi surt: no és nomenclatura de POM).
-                  const canonicBadge = esAlies && canonic && canonic !== etiqueta ? canonic : ''
+                  // CONTENIDOR A DUES LÍNIES, la convenció de presentació vigent (MeasureGrid ·
+                  // NomCell): L1 = nomenclatura en pes fort + nom canònic EN · L2 = nom en llengua
+                  // d'usuari, petit, gris i en cursiva. El xip amb el codi canònic ha marxat: era
+                  // un tercer vocabulari competint amb la nomenclatura a la mateixa línia (el
+                  // canònic segueix al tooltip i viatja amb la cota com a metadada).
+                  const nomLocal = bm.nom_ca || bm.nom_client || ''
+                  const nomCanonic = bm.nom_en || nomLocal
+                  const nomSota = nomCanonic && nomLocal !== nomCanonic ? nomLocal : ''
                   const colocat = bm.pom_id != null && cotesColocades.has(bm.pom_id)
                   const armat = cotaPreset?.bmId === bm.id && tool === 'cota_pom'
                   // PROPOSADA-IA: hi ha una cota de visió pendent de revisió per aquest POM.
@@ -6304,6 +6334,15 @@ export default function TechSheetEditor() {
                   const stateCol = colocat ? COL.ok : (armat || iaProp || prop) ? COL.gold : COL.textMuted
                   return (
                     <div key={bm.id} style={{ display: 'flex', alignItems: 'stretch', gap: 4 }}>
+                      {/* Triar una proposta per col·locar-la en bloc. Només a les files
+                          PROPOSABLE: la resta no té res a col·locar des del precedent. */}
+                      {prop && (
+                        <label title={t('tech_sheet.pom_sel_una')}
+                          style={{ display: 'flex', alignItems: 'center', flexShrink: 0, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={propSel.has(bm.pom_id)}
+                            onChange={() => alternaTriat(bm.pom_id)} style={{ cursor: 'pointer' }} />
+                        </label>
+                      )}
                       <button type="button"
                         // C3 · GUARD DE DUPLICATS: un POM amb cota viva al document no es pot
                         // re-acotar. La fila COL·LOCAT queda no-clicable (el «selector» de l'eina
@@ -6314,12 +6353,15 @@ export default function TechSheetEditor() {
                         aria-pressed={armat}
                         title={colocat
                           ? t('tech_sheet.pom_cota_ja_colocat')
-                          : esAlies && canonic
+                          : canonic
                             ? `${t('tech_sheet.pom_cota_hint', { nom: etiqueta })} · ${t('tech_sheet.pom_canonical_tip', { codi: canonic })}`
                             : t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
                         style={{
                           textAlign: 'left', flex: 1, minWidth: 0, cursor: colocat ? 'default' : 'pointer',
-                          background: armat ? 'var(--gold-pale)' : 'var(--bg-card)',
+                          // COL·LOCAT en verd suau: l'estat es DERIVA del document del servidor
+                          // (cotesColocades = cotes vives amb pomId a les pàgines desades), mai
+                          // d'un rastre local — per això sobreviu a refrescar la pàgina.
+                          background: colocat ? COL.placedBg : armat ? 'var(--gold-pale)' : 'var(--bg-card)',
                           border: `1px solid ${armat ? COL.gold : COL.border}`,
                           borderLeft: `3px solid ${accent}`,
                           borderRadius: 4, padding: '0.3rem 0.5rem',
@@ -6329,9 +6371,10 @@ export default function TechSheetEditor() {
                         <i className={`ti ${stateIcon}`} style={{ color: stateCol, flexShrink: 0, fontSize: 14 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
-                            <span>{etiqueta || bm.codi_client}</span>
-                            <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              <PomNamePair en={bm.nom_en} local={bm.nom_ca || bm.nom_client} />
+                            <span style={{ flexShrink: 0 }}>{etiqueta}</span>
+                            {/* El nom pot no cabre-hi: es retalla amb ellipsis i el tooltip el diu sencer. */}
+                            <span title={nomCanonic} style={{ fontWeight: 500, color: COL.textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {nomCanonic}
                             </span>
                             {/* Badge PROPOSADA-IA (pendent de revisió): distint d'exacte/germana. */}
                             {iaProp && (
@@ -6347,19 +6390,20 @@ export default function TechSheetEditor() {
                                 {t(exacte ? 'tech_sheet.pom_rel_exacte' : 'tech_sheet.pom_rel_germana')}
                               </span>
                             )}
-                            {/* Badge = codi CANÒNIC (l'altre codi), només quan la línia 1 porta el
-                                client. Mai el nom_fitxa (nomenclatura del croquis, no del POM). */}
-                            {canonicBadge && (
-                              <span title={t('tech_sheet.pom_canonical_tip', { codi: canonicBadge })}
-                                style={{ fontSize: 'var(--fs-caption)', fontWeight: 400, color: COL.textMuted, border: `1px solid ${COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
-                                {canonicBadge}
-                              </span>
-                            )}
                           </div>
+                          {/* L2 — nom en llengua d'usuari: petit, gris, cursiva. */}
+                          {nomSota && (
+                            <div title={nomSota} style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: COL.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {nomSota}
+                            </div>
+                          )}
                         </div>
-                        {/* La xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
+                        {/* Valor a la dreta, 1 decimal + unitat, com la taula (punt decimal). La
+                            xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
                         {bm.base_value_cm != null && (
-                          <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0 }}>{bm.base_value_cm}</span>
+                          <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0, textAlign: 'right' }}>
+                            {`${Number(bm.base_value_cm).toFixed(1)} cm`}
+                          </span>
                         )}
                       </button>
                       {/* «Posar»: col·loca LA cota des del precedent (queda viva F1, arrossegable). */}
