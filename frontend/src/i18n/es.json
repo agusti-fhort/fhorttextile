@@ -2767,6 +2767,8 @@
     "pom_sel_totes": "Seleccionarlo todo ({{n}})",
     "pom_sel_una": "Elegir esta propuesta",
     "pom_colocar_n": "Coloca {{n}} cotas",
+    "pom_colocar_totes": "Coloca las cotas que faltan ({{n}})",
+    "pom_colocar_sense_superficie": "Hace falta un croquis o una foto en la página para colocar las cotas.",
     "pom_posades": "{{n}} cotas puestas desde el precedente.",
     "pom_rel_exacte": "exacto",
     "pom_rel_germana": "hermana",

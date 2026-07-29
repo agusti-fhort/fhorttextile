@@ -2767,6 +2767,8 @@
     "pom_sel_totes": "Select all ({{n}})",
     "pom_sel_una": "Select this proposal",
     "pom_colocar_n": "Place {{n}} callouts",
+    "pom_colocar_totes": "Place the missing callouts ({{n}})",
+    "pom_colocar_sense_superficie": "A sketch or a photo on the page is needed to place callouts on it.",
     "pom_posades": "{{n}} callouts placed from the precedent.",
     "pom_rel_exacte": "exact",
     "pom_rel_germana": "sibling",
