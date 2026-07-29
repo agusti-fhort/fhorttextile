@@ -2767,6 +2767,8 @@
     "pom_sel_totes": "Selecciona-ho tot ({{n}})",
     "pom_sel_una": "Triar aquesta proposta",
     "pom_colocar_n": "Col·loca {{n}} cotes",
+    "pom_colocar_totes": "Col·loca les cotes que falten ({{n}})",
+    "pom_colocar_sense_superficie": "Cal un croquis o una foto a la pàgina per col·locar-hi les cotes.",
     "pom_posades": "{{n}} cotes posades des del precedent.",
     "pom_rel_exacte": "exacte",
     "pom_rel_germana": "germana",

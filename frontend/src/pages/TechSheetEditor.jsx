@@ -23,6 +23,7 @@ import { useUnit, fmtMeasure } from './fittingShared'
 // Quines formes del conversor són una PEÇA de patró (path o grup-sketch), en un sol lloc.
 import { comptaPecesInserides, esPecaInserible } from '../utils/pecaInsercio'
 import { potTancar, treuAncoratgeFantasma } from '../utils/tracatPloma'
+import { reparteixCotes, superficieDeCotes } from '../utils/cotesAuto'
 // F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
 import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
 
@@ -5162,7 +5163,7 @@ export default function TechSheetEditor() {
   const sketchObjs = curObjs.filter(isSketchObj)
   // Assignar la vista a un objecte sketch (des de Propietats de l'objecte, UX-COTES). El col·locar
   // i el desar massius de l'antic contenidor «Cotes des de precedent» han mort: el col·locar viu
-  // ara per-POM al panell (posarProposta/posarPropostes) i el desar per-cota (desarUnaPrecedent).
+  // ara per-POM al panell (posarProposta/colocarCotes) i el desar per-cota (desarUnaPrecedent).
   const assignaVista = (objId, slot) => updateObject(objId, { viewSlot: slot || undefined })
 
   // ── F2 · PROPOSTES agregades per pom_id ─────────────────────────────────────
@@ -5231,35 +5232,56 @@ export default function TechSheetEditor() {
     if (cota) updatePageObjects(currentPage, objs => [...objs, cota])
   }, [propostes, buildCotaDeProposta, currentPage, updatePageObjects])
 
-  // Acció de grup: posar les proposables TRIADES que encara no són al document. Mateixa
-  // mecànica que posar-les una a una (buildCotaDeProposta) — la selecció només filtra QUINES,
-  // no obre cap camí nou de creació.
-  const posarPropostes = useCallback((pomIds) => {
-    const nous = []
-    for (const pomId of pomIds) {
-      const prop = propostes.get(pomId)
-      if (!prop || cotesColocades.has(pomId)) continue
-      const cota = buildCotaDeProposta(pomId, prop)
-      if (cota) nous.push(cota)
-    }
-    if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
-    setF2Msg(t('tech_sheet.pom_posades', { n: nous.length }))
-  }, [propostes, cotesColocades, buildCotaDeProposta, currentPage, updatePageObjects, t])
-  // POMs proposables encara NO col·locats: els que la selecció múltiple pot triar.
-  const proposablesIds = useMemo(() => pomRows
-    .filter(bm => bm.pom_id != null && !cotesColocades.has(bm.pom_id) && propostes.has(bm.pom_id))
-    .map(bm => bm.pom_id), [pomRows, cotesColocades, propostes])
-  // Triats que segueixen sent proposables (col·locar-ne un el treu de la llista tot sol).
-  const propTriats = useMemo(() => proposablesIds.filter(pid => propSel.has(pid)), [proposablesIds, propSel])
-  const totsTriats = proposablesIds.length > 0 && propTriats.length === proposablesIds.length
+  // ── ASSIGNACIÓ AUTOMÀTICA DE COTES ─────────────────────────────────────────
+  // POMs del model que encara no tenen cota al document: el domini del botó automàtic. No hi
+  // entra cap noció de "proposable": si un POM té precedent, la cota hi caurà a sobre; si no,
+  // es reparteix sobre la superfície. Tenir-ne o no NO decideix si es pot col·locar.
+  const pomsSenseCota = useMemo(() => pomRows
+    .filter(bm => bm.pom_id != null && !cotesColocades.has(bm.pom_id))
+    .map(bm => bm.pom_id), [pomRows, cotesColocades])
+  // La superfície de la pàgina on cauen les cotes sense precedent: el croquis/foto més gran.
+  // Sense cap objecte on col·locar, el botó es deshabilita DIENT-HO (mai desapareix).
+  const superficieCotes = useMemo(
+    () => superficieDeCotes(sketchObjs, objectBounds), [sketchObjs])
+  // Selecció: la fa el tècnic sobre QUALSEVOL fila sense cota. Cap marca = totes.
+  const triats = useMemo(() => pomsSenseCota.filter(pid => propSel.has(pid)), [pomsSenseCota, propSel])
+  const totsTriats = pomsSenseCota.length > 0 && triats.length === pomsSenseCota.length
   const alternaTriat = useCallback((pomId) => setPropSel(s => {
     const n = new Set(s)
     if (n.has(pomId)) n.delete(pomId); else n.add(pomId)
     return n
   }), [])
   const alternaTotsTriats = useCallback(() => setPropSel(s => (
-    proposablesIds.every(pid => s.has(pid)) ? new Set() : new Set(proposablesIds)
-  )), [proposablesIds])
+    pomsSenseCota.every(pid => s.has(pid)) ? new Set() : new Set(pomsSenseCota)
+  )), [pomsSenseCota])
+
+  // El botó: col·loca les cotes dels POMs demanats. PRECEDENT primer (la col·locació que ja
+  // sabem bona); la resta, repartides sobre la superfície, vives i arrossegables des del primer
+  // moment — igual que si el tècnic les hagués dibuixat a mà.
+  const colocarCotes = useCallback((pomIds) => {
+    const sensePrecedent = []
+    const nous = []
+    for (const pomId of pomIds) {
+      if (cotesColocades.has(pomId)) continue
+      const prop = propostes.get(pomId)
+      const cota = prop ? buildCotaDeProposta(pomId, prop) : null
+      if (cota) nous.push(cota)
+      else sensePrecedent.push(pomId)
+    }
+    if (sensePrecedent.length && superficieCotes) {
+      const bmByPom = new Map(pomRows.map(bm => [bm.pom_id, bm]))
+      reparteixCotes(superficieCotes, sensePrecedent.length).forEach((geo, i) => {
+        const pomId = sensePrecedent[i]
+        const bm = bmByPom.get(pomId)
+        nous.push(buildLiveCota({
+          ...geo, label: cotaLabelDe(bm) || String(pomId),
+          pomId, bmId: bm?.id, canonical: bm?.pom_code_global || '',
+        }))
+      })
+    }
+    if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
+    setF2Msg(t('tech_sheet.pom_posades', { n: nous.length }))
+  }, [cotesColocades, propostes, buildCotaDeProposta, superficieCotes, pomRows, currentPage, updatePageObjects, t])
 
   // Desar UNA cota com a precedent del catàleg (acte CONSCIENT, D1) — des de Propietats de la
   // cota. Resol el host sketch pel punt mig de la cota; la vista es pren del host. Substitueix
@@ -6275,19 +6297,34 @@ export default function TechSheetEditor() {
               icona="ti-ruler-measure" pes={2}
             >
               <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 6px' }}>{t('tech_sheet.poms_hint')}</p>
-              {/* Acció de grup: triar quines propostes es col·loquen i col·locar-les d'un cop.
-                  «Selecciona-ho tot» + botó primari; amb cap de triada el botó no fa res. */}
-              {proposablesIds.length > 0 && (
+              {/* ASSIGNACIÓ AUTOMÀTICA — el botó hi és SEMPRE que quedi cap POM per acotar.
+                  Sense res marcat col·loca TOTES les cotes que falten; amb caselles marcades,
+                  només aquelles. Si no hi ha cap superfície a la pàgina, es queda deshabilitat
+                  però DIENT per què: un botó que desapareix no s'aprèn (i és el que va passar
+                  quan la col·locació en bloc va quedar lligada a tenir precedent de catàleg). */}
+              {pomsSenseCota.length > 0 && (
                 <div style={{ marginBottom: 6 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, cursor: 'pointer', fontSize: 'var(--fs-label)', color: COL.textMain, fontFamily: FONT }}>
                     <input type="checkbox" checked={totsTriats} onChange={alternaTotsTriats} style={{ cursor: 'pointer' }} />
-                    {t('tech_sheet.pom_sel_totes', { n: proposablesIds.length })}
+                    {t('tech_sheet.pom_sel_totes', { n: pomsSenseCota.length })}
                   </label>
-                  <button type="button" onClick={() => posarPropostes(propTriats)} disabled={propTriats.length === 0}
-                    title={t('tech_sheet.pom_colocar_n', { n: propTriats.length })}
-                    style={{ width: '100%', cursor: propTriats.length ? 'pointer' : 'default', opacity: propTriats.length ? 1 : 0.5, padding: '0.35rem 0.5rem', background: COL.goldPale, border: `1px solid ${COL.gold}`, borderRadius: 4, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                    <i className="ti ti-copy" /> {t('tech_sheet.pom_colocar_n', { n: propTriats.length })}
+                  <button type="button"
+                    onClick={() => colocarCotes(triats.length ? triats : pomsSenseCota)}
+                    disabled={!superficieCotes}
+                    title={superficieCotes
+                      ? (triats.length ? t('tech_sheet.pom_colocar_n', { n: triats.length }) : t('tech_sheet.pom_colocar_totes', { n: pomsSenseCota.length }))
+                      : t('tech_sheet.pom_colocar_sense_superficie')}
+                    style={{ width: '100%', cursor: superficieCotes ? 'pointer' : 'default', opacity: superficieCotes ? 1 : 0.5, padding: '0.35rem 0.5rem', background: COL.goldPale, border: `1px solid ${COL.gold}`, borderRadius: 4, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <i className="ti ti-wand" />
+                    {triats.length
+                      ? t('tech_sheet.pom_colocar_n', { n: triats.length })
+                      : t('tech_sheet.pom_colocar_totes', { n: pomsSenseCota.length })}
                   </button>
+                  {!superficieCotes && (
+                    <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '4px 0 0' }}>
+                      {t('tech_sheet.pom_colocar_sense_superficie')}
+                    </p>
+                  )}
                 </div>
               )}
               {/* F3 · proposar cotes amb IA per als PENDENT (sobre els croquis de la pàgina). */}
@@ -6343,9 +6380,11 @@ export default function TechSheetEditor() {
                   const stateCol = colocat ? COL.ok : (armat || iaProp || prop) ? COL.gold : COL.textMuted
                   return (
                     <div key={bm.id} style={{ display: 'flex', alignItems: 'stretch', gap: 4 }}>
-                      {/* Triar una proposta per col·locar-la en bloc. Només a les files
-                          PROPOSABLE: la resta no té res a col·locar des del precedent. */}
-                      {prop && (
+                      {/* La casella és a TOTA fila que encara no té cota: serveix per triar què
+                          col·loca el botó automàtic, i res més. Estava lligada a l'estat
+                          PROPOSABLE, que és una propietat del precedent, no una condició per
+                          poder acotar. */}
+                      {!colocat && bm.pom_id != null && (
                         <label title={t('tech_sheet.pom_sel_una')}
                           style={{ display: 'flex', alignItems: 'center', flexShrink: 0, cursor: 'pointer' }}>
                           <input type="checkbox" checked={propSel.has(bm.pom_id)}
