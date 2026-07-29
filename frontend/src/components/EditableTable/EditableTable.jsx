@@ -313,6 +313,9 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
           // Llei de presentació de la casa (nom internacional dalt · llengua de qui llegeix
           // sota), APLICADA AL CLIENT: si el POM té àlies, manen les seves descripcions.
           const dalt = row.client_name_en || row.nom_en || row.nom_ca || row.pom_code
+          // C5 — el subtítol anava al token de captions (8px), pensat per a badges i peus, no
+          // per a una columna que es llegeix a cada fila: puja al token immediatament superior
+          // (--fs-label, 10px). Segueix per sota del nom (--fs-body, 12px).
           const sota = row.client_name_en ? row.client_name_local : row.nom_ca
           return (
             <>
@@ -320,7 +323,7 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
                 {dalt}
               </div>
               {sota && sota !== dalt && (
-                <div style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }}>
+                <div style={{ fontSize: 'var(--fs-label)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }}>
                   {sota}
                 </div>
               )}
