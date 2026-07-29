@@ -2761,6 +2761,7 @@
     "rotation_of_child": "Rotación del hijo seleccionado",
     "poms_of_model": "POMs del modelo ({{n}})",
     "poms_hint": "Haz clic en un POM para acotarlo en el croquis: la cota nacerá con su nomenclatura.",
+    "poms_empty": "Este modelo aún no tiene POMs. Añádelos desde Medidas y aparecerán aquí para acotarlos en el croquis.",
     "pom_posar": "Poner la cota desde el precedente",
     "pom_posar_totes": "Poner todas las proponibles ({{n}})",
     "pom_sel_totes": "Seleccionarlo todo ({{n}})",

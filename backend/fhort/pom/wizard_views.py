@@ -307,7 +307,7 @@ def base_measurements_view(request, model_id):
     """
     try:
         from fhort.models_app.models import BaseMeasurement, Model
-        from fhort.pom.models import CustomerPOMAlias
+        from fhort.pom.nomenclatura import alies_per_pom
 
         bms = BaseMeasurement.objects.filter(
             model_id=model_id, is_active=True
@@ -317,18 +317,13 @@ def base_measurements_view(request, model_id):
 
         # F1 (cota viva) — àlies de client per pom_id, resolt amb UN sol prefetch (mai
         # find_pom_master per fila; l'N+1 està documentat a DIAGNOSI_COTES_POM_SKETCH.md
-        # §B3). Un client pot tenir DIVERSOS codis per al mateix POM (unicitat
-        # (customer, client_code), no (customer, pom)) → triem deterministicament el
-        # no-pendent-de-revisió (ordre pendent_revisio, client_code). Model sense
-        # customer o POM sense àlies → None. NOMÉS LECTURA: no s'escriu res.
+        # §B3). La tria determinista entre els diversos codis d'un client per al mateix POM
+        # viu ara a `pom.nomenclatura`, compartida amb el wizard de definició de POMs i la
+        # taula de Mesures: hi havia una còpia per superfície. NOMÉS LECTURA.
         customer_id = Model.objects.filter(
             id=model_id).values_list('customer_id', flat=True).first()
-        alias_by_pom = {}
-        if customer_id:
-            for pom_id, client_code in CustomerPOMAlias.objects.filter(
-                customer_id=customer_id, pom__isnull=False
-            ).order_by('pendent_revisio', 'client_code').values_list('pom_id', 'client_code'):
-                alias_by_pom.setdefault(pom_id, client_code)
+        alias_by_pom = {
+            pom_id: a['client_code'] for pom_id, a in alies_per_pom(customer_id).items()}
 
         # F1 — la REGLA RESIDENT del model (ModelGradingRule), per pom_id. La T1a de la fitxa
         # necessita `increment_base` + `talla_break_label` per POM, i fins ara els llegia

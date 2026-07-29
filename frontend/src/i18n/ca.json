@@ -2761,6 +2761,7 @@
     "rotation_of_child": "Rotació del fill seleccionat",
     "poms_of_model": "POMs del model ({{n}})",
     "poms_hint": "Clica un POM per acotar-lo al croquis: la cota naixerà amb la seva nomenclatura.",
+    "poms_empty": "Aquest model encara no té POMs. Afegeix-los des de Mesures i apareixeran aquí per acotar-los al croquis.",
     "pom_posar": "Posar la cota des del precedent",
     "pom_posar_totes": "Posar totes les proposables ({{n}})",
     "pom_sel_totes": "Selecciona-ho tot ({{n}})",

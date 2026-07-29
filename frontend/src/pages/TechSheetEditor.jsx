@@ -6260,6 +6260,15 @@ export default function TechSheetEditor() {
               POMs (proposta per-POM), la vista viu a Propietats de l'objecte i «desar precedent» a
               Propietats de la cota. Vegeu DECISIÓ Agus 2026-07-26 (Patró C). */}
 
+          {/* Un model SENSE POMs feia desaparèixer el contenidor sencer: qui obria la fitxa no
+              trobava ni la llista ni el botó de col·locar, i res li deia per què. La casa ensenya
+              sempre la superfície i diu el motiu quan no pot servir (mateixa llei que R3/F1 amb
+              les variants de taula). El contenidor hi és; el que canvia és què hi ha a dins. */}
+          {pomRows.length === 0 && (
+            <Contenidor titol={t('tech_sheet.poms_of_model', { n: 0 })} icona="ti-ruler-measure" pes={2}>
+              <p style={libEmpty}>{t('tech_sheet.poms_empty')}</p>
+            </Contenidor>
+          )}
           {pomRows.length > 0 && (
             <Contenidor
               titol={t('tech_sheet.poms_of_model', { n: pomRows.length })}

@@ -295,7 +295,12 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
       )}
       <td style={{ ...tdS, color: 'var(--text-muted)' }}>{(row.ordre ?? 0) + 1}</td>
       <td style={stickyTd(0, 90)}>
-        <EditableCell value={row.nom_fitxa || row.pom_code}
+        {/* C3 — NOMENCLATURA DEL CLIENT del model (CustomerPOMAlias): el codi que el tècnic
+            escriu als documents d'aquest client (Brownie diu "A" on el catàleg diu "CH"), i
+            els seus noms EN/local. Sense àlies per aquest POM, el catàleg de la casa, com
+            sempre. La nomenclatura per-model (nom_fitxa) segueix manant per damunt de tot:
+            és la que el tècnic ha escrit aquí mateix. */}
+        <EditableCell value={row.nom_fitxa || row.client_code || row.pom_code}
           onChange={v => onCellChange(row.id, 'nom_fitxa', v)}
           mono gold readOnly={readOnly} />
         {row.is_key && (
@@ -304,14 +309,27 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
         )}
       </td>
       <td style={stickyTd(90, 190)}>
-        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>
-          {row.nom_en || row.nom_ca || row.pom_code}
-        </div>
-        {(row.nom_ca && row.nom_ca !== row.nom_en) && (
-          <div style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }}>
-            {row.nom_ca}
-          </div>
-        )}
+        {(() => {
+          // Llei de presentació de la casa (nom internacional dalt · llengua de qui llegeix
+          // sota), APLICADA AL CLIENT: si el POM té àlies, manen les seves descripcions.
+          const dalt = row.client_name_en || row.nom_en || row.nom_ca || row.pom_code
+          // C5 — el subtítol anava al token de captions (8px), pensat per a badges i peus, no
+          // per a una columna que es llegeix a cada fila: puja al token immediatament superior
+          // (--fs-label, 10px). Segueix per sota del nom (--fs-body, 12px).
+          const sota = row.client_name_en ? row.client_name_local : row.nom_ca
+          return (
+            <>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>
+                {dalt}
+              </div>
+              {sota && sota !== dalt && (
+                <div style={{ fontSize: 'var(--fs-label)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }}>
+                  {sota}
+                </div>
+              )}
+            </>
+          )
+        })()}
       </td>
       <td style={{ ...tdS, textAlign: 'right', background: 'var(--gold-pale)' }}>
         <EditableCell

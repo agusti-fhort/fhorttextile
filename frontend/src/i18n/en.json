@@ -2761,6 +2761,7 @@
     "rotation_of_child": "Rotation of the selected child",
     "poms_of_model": "Model POMs ({{n}})",
     "poms_hint": "Click a POM to dimension it on the sketch: the callout is created with its nomenclature.",
+    "poms_empty": "This model has no POMs yet. Add them from Measurements and they will show up here to dimension on the sketch.",
     "pom_posar": "Place the callout from the precedent",
     "pom_posar_totes": "Place all proposable ({{n}})",
     "pom_sel_totes": "Select all ({{n}})",
