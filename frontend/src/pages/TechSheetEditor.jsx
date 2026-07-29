@@ -99,6 +99,7 @@ export const COL = {
   charcoal: 'var(--charcoal)',   // fons de capçalera de contenidor col·lapsable
   ok: 'var(--ok)',               // verd de validació (semàfor "col·locat")
   okBg: 'var(--ok-bg)',
+  placedBg: 'var(--placed-bg)',  // fons suau d'allò que ja té lloc al dibuix (cota col·locada)
   err: 'var(--err)',             // vermell de marca (xip de veredicte fora de tolerància)
   errBg: 'var(--err-bg)',
 }
@@ -6357,7 +6358,10 @@ export default function TechSheetEditor() {
                             : t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
                         style={{
                           textAlign: 'left', flex: 1, minWidth: 0, cursor: colocat ? 'default' : 'pointer',
-                          background: armat ? 'var(--gold-pale)' : 'var(--bg-card)',
+                          // COL·LOCAT en verd suau: l'estat es DERIVA del document del servidor
+                          // (cotesColocades = cotes vives amb pomId a les pàgines desades), mai
+                          // d'un rastre local — per això sobreviu a refrescar la pàgina.
+                          background: colocat ? COL.placedBg : armat ? 'var(--gold-pale)' : 'var(--bg-card)',
                           border: `1px solid ${armat ? COL.gold : COL.border}`,
                           borderLeft: `3px solid ${accent}`,
                           borderRadius: 4, padding: '0.3rem 0.5rem',

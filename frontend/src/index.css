@@ -37,6 +37,10 @@
   --err-bg:     #fcebeb;
   --gate:       var(--ok);     /* gate llest = verd èxit canònic (abans #534ab7 lila) */
   --gate-bg:    var(--ok-bg);  /* variant soft del mateix verd (abans #eeedfe) */
+  /* COL·LOCAT: allò que ja té lloc al dibuix (cota al croquis, POM al patró). Verd suau del
+     mateix èxit, amb nom propi perquè la fitxa i el visor de patró en comparteixin la
+     convenció i no cadascun el seu to. */
+  --placed-bg:  var(--ok-bg);
 
   /* Taller de patró — el TRAM declarat. Un tram és UN objecte: el mateix color mentre es
      declara i un cop desat; l'estat només en canvia l'èmfasi (discontinu→ferm, gruix).
