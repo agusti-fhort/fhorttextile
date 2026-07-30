@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { patterns } from '../../api/endpoints'
 import Modal from '../ui/Modal'
 import PatternViewer from './PatternViewer'
-import PieceList from './PieceList'
+import PieceIdentityList from './PieceIdentityList'
 import ExportModal from './ExportModal'
 
 // Sostre real de pujada: 20 MiB al backend (services_fitxers.MAX_UPLOAD_BYTES), per sota
@@ -48,6 +48,14 @@ export default function PatternTab({ modelId }) {
 
   const [exportObert, setExportObert] = useState(false)
 
+  // ── IDENTITAT (I2a) ───────────────────────────────────────────────────────
+  // El catàleg de rols i l'ÚLTIMA acta del fitxer. El verd de confirmat es deriva de
+  // l'acta del servidor, mai del navegador.
+  const [rols, setRols] = useState([])
+  const [acta, setActa] = useState(null)
+  const [desantIdentitat, setDesantIdentitat] = useState(false)
+  const [errorIdentitat, setErrorIdentitat] = useState('')
+
   // Els fitxers triats: estat CONTROLAT (les FileDropCard són controlades). Abans eren dos
   // refs a <input type="file">, i el DOM era l'única font de veritat de què havia triat
   // l'usuari: no es podia ni desactivar el botó de Pujar fins que hi hagués DXF.
@@ -79,6 +87,56 @@ export default function PatternTab({ modelId }) {
   }, [modelId, t])
 
   useEffect(() => { carregar() }, [carregar])
+
+  useEffect(() => {
+    patterns.pieceRoles().then(({ data }) => setRols(data || [])).catch(() => setRols([]))
+  }, [])
+
+  useEffect(() => {
+    if (!actual) return undefined
+    // El guard `viu` no és cerimònia: canviant de versió de patró de pressa, la resposta
+    // de la primera crida pot arribar DESPRÉS de la segona i deixar la pantalla ensenyant
+    // l'acta d'un altre fitxer.
+    let viu = true
+    patterns.identitat(actual.id)
+      .then(({ data }) => { if (viu) setActa(data.acta) })
+      .catch(() => { if (viu) setActa(null) })
+    return () => { viu = false }
+  }, [actual])
+
+  /** Desa una peça sense confirmar: treballar a trossos és legítim. */
+  const desaIdentitat = useCallback(async (pieceId, camps) => {
+    setErrorIdentitat('')
+    setDesantIdentitat(true)
+    try {
+      await patterns.identificar(actual.id, {
+        peces: [{ piece_id: pieceId, ...camps }],
+      })
+      // Es rellegeix el detall sencer: el servidor decideix `rol_origen` i pot haver
+      // tocat més coses de les que hem enviat. Confiar en el nostre optimisme local
+      // faria que la pantalla i la BD divergissin al primer cas rar.
+      const { data } = await patterns.get(actual.id)
+      setActual(data)
+    } catch (e) {
+      setErrorIdentitat(e?.response?.data?.error || t('pattern.identity_err'))
+    } finally {
+      setDesantIdentitat(false)
+    }
+  }, [actual, t])
+
+  /** L'acte: confirmar la identitat sencera. Deixa acta al servidor. */
+  const confirmaIdentitat = useCallback(async () => {
+    setErrorIdentitat('')
+    setDesantIdentitat(true)
+    try {
+      const { data } = await patterns.identificar(actual.id, { peces: [], confirm: true })
+      setActa(data.acta)
+    } catch (e) {
+      setErrorIdentitat(e?.response?.data?.error || t('pattern.identity_err'))
+    } finally {
+      setDesantIdentitat(false)
+    }
+  }, [actual, t])
 
   // ── la geometria (el que el visor Konva dibuixa) ──────────────────────────
   useEffect(() => {
@@ -181,9 +239,20 @@ export default function PatternTab({ modelId }) {
             <div style={{ flex: '1 1 320px', minWidth: 300,
                           display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <h3 style={{ fontSize: 'var(--fs-h3)', margin: 0 }}>
-                {t('pattern.pieces', { n: actual.pieces.length })}
+                {t('pattern.identity_title')}
               </h3>
-              <PieceList pieces={actual.pieces} pecaSel={pecaSel} onTria={setPecaSel} />
+              <PieceIdentityList
+                pieces={actual.pieces}
+                rols={rols}
+                acta={acta}
+                versioPatro={actual.versio}
+                pecaSel={pecaSel}
+                onTria={setPecaSel}
+                onDesa={desaIdentitat}
+                onConfirma={confirmaIdentitat}
+                desant={desantIdentitat}
+                error={errorIdentitat}
+              />
             </div>
 
             <div style={{ flex: '2 1 460px', minWidth: 340, position: 'relative' }}>
