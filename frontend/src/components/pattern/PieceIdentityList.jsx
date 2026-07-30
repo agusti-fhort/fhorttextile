@@ -38,7 +38,10 @@ export default function PieceIdentityList({
 
   const produccio = pieces.filter(p => (p.estat_peca || 'produccio') === 'produccio')
   const treball = pieces.filter(p => (p.estat_peca || 'produccio') !== 'produccio')
-  const ambRol = produccio.filter(p => p.piece_role)
+  // TOTES les que tenen rol, no només les de producció: decidir que una peça és de
+  // treball TAMBÉ és identificar-la, i l'acta la recull. Si el botó comptés només les de
+  // producció, prometria un número i el verd en respondria un altre.
+  const ambRol = pieces.filter(p => p.piece_role)
 
   // L'acta val per a la versió sobre la qual es va signar. Una versió nova del patró refà
   // les peces: el verd d'aleshores ja no parla d'aquestes.
