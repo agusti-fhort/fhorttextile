@@ -1089,3 +1089,76 @@ def propaga_ancoratges(rule, anchor_label, anchor_val, size_run, warnings=None, 
         out[label] = None if t_idx is None else anchor_val + desnivell_entre_talles(
             rule, sistema, base_idx, anchor_idx, t_idx)
     return out
+
+
+def sembra_valors_step(valors_per_talla, run_sistema, base_label):
+    """Valors ABSOLUTS vigents → `valors_step` (deltes) per a una regla STEP.
+
+    Inversa exacta del contracte STEP de `services._apply_rule` (documentat a
+    `services.py:911`): la clau és l'etiqueta de DESTÍ i el valor, l'increment respecte del
+    veí un pas MÉS A PROP de la base, positiu en sentit de creixement cap enfora (mateix
+    format C que `detect_grading`). Recorrent el camí des de la base, la suma telescopia i
+    torna el valor absolut de partida: per això sembrar amb això conserva els números que
+    ja es veien.
+
+    PURA (cap I/O, cap ORM). Args:
+      valors_per_talla: {etiqueta: valor absolut} de les talles que el MODEL fabrica
+            (típicament els `GradedSpec` vigents d'un POM, base inclosa).
+      run_sistema: etiquetes del SISTEMA ordenades — el referent que mana l'ordre i la
+            DISTÀNCIA (llei S24b), igual que a `_apply_rule`. Les CLAUS de sortida surten
+            d'aquí, amb l'ortografia del sistema.
+      base_label: la talla base del model, origen del camí.
+
+    Un run de model no contigu (`XS·S·L` dins d'un sistema amb M) travessa talles que el
+    model no fabrica i de les quals, doncs, no hi ha valor: el salt observat S→L es
+    REPARTEIX a parts iguals entre els passos de sistema que cobreix. És l'única manera de
+    donar entrada a TOTA talla que el camí travessa —sense la qual `_apply_rule` deixaria
+    la cel·la absent— conservant EXACTAMENT el valor de cada talla que el model sí fabrica.
+    El repartiment no s'arrodoneix (només el salt sencer): arrodonir cada tros faria
+    derivar el total i mouria els valors que aquesta funció existeix per conservar.
+
+    Retorna {} si la geometria no dona (base fora del sistema, menys de dues talles amb
+    valor): el cridador ha de deixar la regla com estava, mai sembrar a mitges.
+    """
+    from fhort.pom.size_labels import canonical_size_label
+
+    sistema = [str(s).strip() for s in (run_sistema or [])]
+    pos = {canonical_size_label(e): i for i, e in enumerate(sistema)}
+    base_idx = pos.get(canonical_size_label(base_label))
+    if base_idx is None:
+        return {}
+
+    # Talles amb valor numèric que el sistema situa, ordenades per posició de SISTEMA.
+    punts = {}
+    for label, valor in (valors_per_talla or {}).items():
+        i = pos.get(canonical_size_label(label))
+        v = normalitza_cm(valor)
+        if i is not None and v is not None:
+            punts[i] = v
+    if base_idx not in punts or len(punts) < 2:
+        return {}
+
+    idxs = sorted(punts)
+    b = idxs.index(base_idx)
+
+    deltes = {}
+
+    def _tram(i_prop, i_lluny, tram_idxs, amunt):
+        """Reparteix el salt prop→lluny entre les arestes de sistema que cobreix.
+
+        El SIGNE és el del format C, no el de la resta: cap amunt el motor SUMA i cap
+        avall RESTA, per tant el delta d'una talla petita és positiu quan la mesura
+        minva. És el mateix criteri que `detect_grading`."""
+        salt = normalitza_cm(punts[i_lluny] - punts[i_prop] if amunt
+                             else punts[i_prop] - punts[i_lluny])
+        n = len(tram_idxs)
+        d = salt if n == 1 else salt / n
+        for k in tram_idxs:
+            deltes[sistema[k]] = d
+
+    for k in range(b, len(idxs) - 1):            # cap amunt: el destí porta la seva aresta
+        _tram(idxs[k], idxs[k + 1], list(range(idxs[k] + 1, idxs[k + 1] + 1)), True)
+    for k in range(b, 0, -1):                    # cap avall: ídem, cap a l'altra banda
+        _tram(idxs[k], idxs[k - 1], list(range(idxs[k - 1], idxs[k])), False)
+
+    return deltes

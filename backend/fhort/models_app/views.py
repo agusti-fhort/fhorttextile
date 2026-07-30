@@ -17,6 +17,7 @@ from fhort.pom.services import SealedGradingVersionError, _te_regles
 from fhort.pom.grading_regime import (
     CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada,
 )
+from fhort.pom.plausibilitat import CODI_MESURA_FORA_RANG, mesura_fora_de_rang
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
 from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
 from .serializers import (
@@ -1862,6 +1863,7 @@ def gravar_pom_view(request, model_id):
         return run.index(label) if label in run else None
 
     errors = []
+    fora_rang = []
     prepared = []
     for m in measurements:
         pom_id = m.get('pom_id')
@@ -1869,17 +1871,20 @@ def gravar_pom_view(request, model_id):
         if not pom_id or value is None:
             errors.append('pom_id i base_value_cm obligatoris')
             continue
-        # D2 — una talla base a 0 és físicament impossible. O el POM no aplica a aquest model
-        # (i llavors no s'entra, no s'entra a zero), o és un error de teclat. El motor tracta
-        # el 0 com a "el POM no existeix" i no en gradua cap cel·la: si es deixés entrar, la
-        # mesura desapareixeria de la taula sense dir-ho a ningú.
-        if value == 0:
-            errors.append(
-                f"POM {pom_id}: la mesura base no pot ser 0 cm. Si aquesta mesura no aplica "
-                f"a aquest model, deixa-la buida o desactiva-la; no la posis a zero."
-            )
+        # GUARDA DE RANG FÍSIC (30/07) — punt únic compartit amb `escalat_ajustar_talla_view`,
+        # les DUES portes per on entra una mesura al backend. Cobreix el 0 que aquí ja es
+        # rebutjava (D2: el motor el tracta com a «el POM no existeix» i la mesura desapareix
+        # de la taula sense dir-ho a ningú) i, ara, també el negatiu i el 22224,7 del POP.
+        fora = mesura_fora_de_rang(value)
+        if fora:
+            fora_rang.append(f'POM {pom_id}: {fora}')
             continue
         prepared.append((m, value))
+
+    # El rang físic té resposta pròpia (422) i mai es barreja amb els errors de forma (400):
+    # un número impossible no és una petició mal escrita, és una dada que no pot existir.
+    if fora_rang:
+        return Response({'errors': fora_rang, 'codi': CODI_MESURA_FORA_RANG}, status=422)
 
     if not prepared:
         errors.append('Cal introduir almenys una mida base abans de gravar POM')
@@ -2693,6 +2698,14 @@ def escalat_ajustar_talla_view(request, model_id):
             valor = round(float(valor), 2)
         except (TypeError, ValueError):
             return Response({'error': 'valor ha de ser numèric.'}, status=400)
+
+        # GUARDA DE RANG FÍSIC (30/07) — la porta per on va entrar el 22224,7 del POP. És
+        # una de les DUES portes de mesura del backend (l'altra és `gravar_pom`) i totes
+        # dues passen pel mateix punt únic. Dins del rang no restringeix res: v. la llei a
+        # `pom/plausibilitat.py`.
+        fora = mesura_fora_de_rang(valor)
+        if fora:
+            return Response({'error': fora, 'codi': CODI_MESURA_FORA_RANG}, status=422)
 
         rule = _load_grading_rules(model).get(pom.id)
         logica = getattr(rule, 'logica', None) if rule else None
@@ -3831,6 +3844,40 @@ def desactivar_pom_view(request, model_id, pom_id):
     })
 
 
+def _sembra_step_des_dels_specs(model, pom_id):
+    """`valors_step` d'un POM derivat dels seus GradedSpec VIGENTS. {} si no es pot.
+
+    La part d'I/O de la sembra: tria d'on es llegeixen els números (la versió de grading
+    vigent del SizeFitting de treball, criteri únic de `vigent_grading_version`) i la
+    geometria del motor (`escala_del_model` → run del SISTEMA, llei S24b). L'aritmètica és
+    de `grading_utils.sembra_valors_step`, pura i testejable a part.
+
+    Retorna {} —i el cridador deixa la regla com estava— quan el model encara no té
+    grading: un model sense specs ha de poder passar a STEP i néixer buit, no petar.
+    """
+    from fhort.fitting.models import GradedSpec
+    from fhort.fitting.services import _resolve_working_size_fitting, vigent_grading_version
+    from fhort.pom.grading_utils import sembra_valors_step
+    from fhort.pom.services import escala_del_model
+
+    sf = _resolve_working_size_fitting(model)
+    gv = vigent_grading_version(sf) if sf is not None else None
+    if gv is None:
+        return {}
+
+    valors = dict(GradedSpec.objects
+                  .filter(grading_version=gv, pom_id=pom_id, is_active=True)
+                  .values_list('size_label', 'graded_value_cm'))
+    if not valors:
+        return {}
+
+    try:
+        _size_run, run_sistema, _pos, _base_idx = escala_del_model(model)
+    except ValueError:
+        return {}       # geometria incompleta: no es sembra a mitges (v. docstring)
+    return sembra_valors_step(valors, run_sistema, model.base_size_label)
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def set_pom_regim_view(request, model_id, pom_id):
@@ -3846,6 +3893,10 @@ def set_pom_regim_view(request, model_id, pom_id):
     Si la resident no existeix: es materialitza des del fallback del catàleg; si tampoc n'hi ha,
     es crea de nou (autoria manual de la regla des de zero). Innocu sobre el grading persistent
     (no toca GradedSpec/GradingVersion; només el proper generate_graded_specs).
+
+    Passar a STEP amb `valors_step` buit els SEMBRA des dels GradedSpec vigents del model per a
+    aquell POM (`_sembra_step_des_dels_specs`): la fila STEP neix amb els números que ja es
+    veien, editables. Els specs només es LLEGEIXEN.
     """
     from fhort.models_app.models import ModelGradingRule
     from fhort.pom.models import GradingRule
@@ -3905,6 +3956,15 @@ def set_pom_regim_view(request, model_id, pom_id):
                 run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
                 if tbl in run:
                     rule.talla_break_pos = run.index(tbl)
+        # El pas a STEP CONSERVA els valors vigents (DIAGNOSI_GRADING_POP, 30/07). Una regla
+        # STEP viu dels seus `valors_step`; passar-hi amb el calaix buit deixava `_apply_rule`
+        # retornant None per a cada cel·la i el `continue` de services.py:277 no reescrivia res
+        # — els GradedSpec vells es quedaven a la taula i la fila es CONGELAVA amb números que
+        # ja no venien de cap regla. Aquí se sembren els deltes des dels valors que ja es veien,
+        # i la fila neix amb els mateixos números, ara editables i re-emesos.
+        if rule.logica == 'STEP' and not rule.valors_step:
+            rule.valors_step = _sembra_step_des_dels_specs(model, rule.pom_id) or None
+
         # D2 — una regla LINEAR amb delta 0 és INVÀLIDA: no gradua res, i el que expressa
         # («aquesta mesura no canvia entre talles») ja té forma pròpia i honesta, que és
         # FIXED. Deixar-la passar torna a fabricar una taula plana que sembla graduada.
