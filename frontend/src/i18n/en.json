@@ -2456,7 +2456,12 @@
     "poda_candidata": "No real value anywhere (base and sizes zero or empty): candidate for removal.",
     "poda_ok": "Measurement {{codi}} removed from the model (kept inactive, recorded in the log).",
     "poda_err": "The measurement could not be removed.",
-    "sense_linia": "This row has no line to record in this check yet."
+    "sense_linia": "This row has no line to record in this check yet.",
+    "grup_regla": "Grading rule",
+    "grup_mesures": "Measurements by size",
+    "regla_delta": "Δ",
+    "regla_delta_break": "Δ break",
+    "regla_talla_break": "Break size"
   },
   "sizecheck": {
     "col_date": "Date",
@@ -2545,6 +2550,8 @@
     "propagated_hint_ro": "Read-only view of the current grading. Editing opens from the corresponding task.",
     "propagated_close": "Close",
     "propagated_empty": "No base measurements to propagate yet.",
+    "plaus_mesura": "{{valor}} looks like an increment, not a measurement (base {{base}}). Save anyway?",
+    "plaus_desa": "Save anyway",
     "propagated_load_err": "Could not load the propagated table.",
     "regim_err": "Could not change the regime.",
     "save_pom": "Save POM",
@@ -3093,6 +3100,8 @@
     "save_error": "Could not save the item's base measurements."
   },
   "editable_table": {
+    "plaus_delta": "{{camp}} {{valor}} looks like a measurement, not an increment (base {{base}}). Save anyway?",
+    "plaus_desa": "Save anyway",
     "import_title": "AI-imported table.",
     "import_hint": "Review each row before confirming — AI can make mistakes. Edit, add or remove rows if needed.",
     "discard": "Discard changes",
