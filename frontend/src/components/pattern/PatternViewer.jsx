@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Stage, Layer, Line, Rect, Group, Arrow, Circle, Text } from 'react-konva'
 import { useTranslation } from 'react-i18next'
+
+import { etiquetaPeca } from './pieceText'
 import {
   arcDirigit, bboxDePeces, capesPresents, escalaPerCabre, longitudVora,
   puntMesProper, puntsDelSegment, puntsPerKonva, situaPunt, tramMesProper,
@@ -987,7 +989,7 @@ function BarraEstat({ t, hover, pieces, pecaSel, colocant, unit, potInvertir }) 
       <span style={{ flex: 1 }} />
       {peca && (
         <span style={{ color: 'var(--text-main)' }}>
-          {t('pattern.selected_piece', { peca: peca.nom_block, cm: cm(perimetre) })}
+          {t('pattern.selected_piece', { peca: etiquetaPeca(peca), cm: cm(perimetre) })}
         </span>
       )}
     </div>
