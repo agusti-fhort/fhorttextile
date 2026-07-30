@@ -2934,6 +2934,12 @@ def base_stages_view(request, model_id):
             'nom_fitxa': bm.nom_fitxa or '',
             'nom_ca': pg.nom_ca if pg else pom.nom_client,
             'nom_en': pg.nom_en if pg else pom.nom_client,
+            # Sprint NOMS-POM (30/07) — el BATEIG d'aquest model, CRU i al costat del catàleg
+            # (`nom_ca`/`nom_en`, que no es toquen): '' vol dir «no batejat, mana el catàleg».
+            # La cascada la resol qui pinta, que és qui sap si mostra un input amb placeholder
+            # o un text pla. Camps NOUS: cap camp existent canvia de valor ni de nom.
+            'nom_canonic_model': bm.nom_canonic_model or '',
+            'nom_traduit_model': bm.nom_traduit_model or '',
             'is_key': bm.is_key,
             'tol_minus': tm,
             'tol_plus': tp,

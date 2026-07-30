@@ -73,7 +73,11 @@ class BaseStagesNoRegressioTest(TenantTestCase):
         self.assertEqual(dades['base_size'], 'M')
         self.assertEqual(len(dades['rows']), 2)
         self.assertEqual(sorted(dades['rows'][0].keys()), [
-            'base_measurement_id', 'base_value_cm', 'is_key', 'nom_ca', 'nom_en', 'nom_fitxa',
+            # `nom_canonic_model` i `nom_traduit_model`: ampliació AUTORITZADA per l'Agus
+            # 30/07 — sprint noms-POM (el bateig del model, buit = mana el catàleg). Són
+            # camps AFEGITS: cap dels altres canvia de nom, de valor ni d'ordre.
+            'base_measurement_id', 'base_value_cm', 'is_key', 'nom_ca', 'nom_canonic_model',
+            'nom_en', 'nom_fitxa', 'nom_traduit_model',
             'pom_code', 'pom_id', 'takes', 'tol_minus', 'tol_plus',
         ])
         # L'ordre el mana `ordre` de la fitxa, no l'id d'alta.
