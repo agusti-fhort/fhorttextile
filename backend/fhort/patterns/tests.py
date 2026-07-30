@@ -142,7 +142,7 @@ from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement,
 from fhort.patterns.services import save_pattern_file
 from fhort.patterns.serializers import PatternGeometrySerializer
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
-                                  PatternFileViewSet)
+                                  PatternFileViewSet, PatternPieceRoleViewSet)
 from fhort.pom.management.commands.seed_pattern_piece_roles import sembra
 from fhort.pom.models import GarmentType, PatternPieceRole, POMMaster
 from fhort.tasks.models import GarmentTypeItem
@@ -4869,3 +4869,63 @@ class BackfillRolSegmentPreferenceTest(PatternsAPITestBase):
         for nom, slug in self.mig.MAPA.items():
             with self.subTest(nom=nom):
                 self.assertIn(slug, slugs)
+
+
+class CatalegDeRolsAPITest(PatternsAPITestBase):
+    """I2a/T1: el catàleg es pot llegir, i el rol d'una peça arriba com a OBJECTE.
+
+    Un id nu obliga qui el rep a tenir el catàleg sencer a la mà per saber què vol dir; era
+    el deute que I1 va deixar obert i que això tanca."""
+
+    def setUp(self):
+        super().setUp()
+        sembra(connection.schema_name)
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+
+    def _get(self, vista, **kw):
+        request = self.factory.get('/')
+        force_authenticate(request, user=self.user)
+        return vista(request, **kw)
+
+    def test_el_cataleg_se_serveix_sencer_i_ordenat(self):
+        resp = self._get(PatternPieceRoleViewSet.as_view({'get': 'list'}))
+        self.assertEqual(resp.status_code, 200)
+        # SENSE paginar: el picker els vol tots de cop per agrupar-los per classe.
+        self.assertIsInstance(resp.data, list)
+        self.assertEqual(len(resp.data), 30)
+        ordres = [r['display_order'] for r in resp.data]
+        self.assertEqual(ordres, sorted(ordres))
+        primer = resp.data[0]
+        for camp in ('id', 'slug', 'nom_en', 'nom_ca', 'nom_es', 'classe',
+                     'display_order', 'is_system'):
+            self.assertIn(camp, primer)
+
+    def test_el_cataleg_no_te_porta_descriptura(self):
+        """La sembra el manté; obrir-hi escriptura per API voldria dir que un rol canònic
+        es canvia des del navegador sense passar per cap gate (D-1).
+
+        No hi ha res a cridar: el viewset no té els verbs. Per això es comprova l'absència
+        i no un 405 — un 405 voldria dir que el mètode hi és i el rebutgem, i el que passa
+        és que no hi és."""
+        for verb in ('create', 'update', 'partial_update', 'destroy'):
+            with self.subTest(verb=verb):
+                self.assertFalse(hasattr(PatternPieceRoleViewSet, verb))
+
+    def test_el_rol_de_la_peca_arriba_niat_a_la_geometria(self):
+        rol = PatternPieceRole.objects.get(slug='back')
+        peca = self.fp.pieces.get(nom_block='BACK')
+        peca.piece_role = rol
+        peca.save(update_fields=['piece_role'])
+
+        resp = self._get(PatternFileViewSet.as_view({'get': 'geometry'}), pk=self.fp.id)
+        self.assertEqual(resp.status_code, 200)
+        served = next(p for p in resp.data['pieces'] if p['nom_block'] == 'BACK')
+        self.assertEqual(served['piece_role']['slug'], 'back')
+        self.assertEqual(served['piece_role']['nom']['ca'], 'Esquena')
+        self.assertEqual(served['piece_role']['classe'], 'cos')
+
+    def test_una_peca_sense_rol_el_dona_a_null(self):
+        resp = self._get(PatternFileViewSet.as_view({'get': 'geometry'}), pk=self.fp.id)
+        served = next(p for p in resp.data['pieces'] if p['nom_block'] == 'FRONT')
+        self.assertIsNone(served['piece_role'])

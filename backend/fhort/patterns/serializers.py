@@ -9,6 +9,8 @@ from rest_framework import serializers
 
 from .engine.geometry import BoundaryData, LayerRole, NotchData, PieceData, PointData, PointKind
 from .engine.natural_segments import index_de_t, segmentar_vora_natural
+from fhort.pom.models import PatternPieceRole
+
 from .models import PatternFile, PatternPiece, PatternSegment
 
 
@@ -55,6 +57,38 @@ def _signed_download_url(obj, request, *, salt, accio='download-signed'):
     )
 
 
+class PatternPieceRoleSerializer(serializers.ModelSerializer):
+    """El catàleg de rols, tal com és. Read-only: qui el manté és la sembra (I1/T2).
+
+    Els tres idiomes viatgen EN CRU i no se'n tria cap aquí. Qui sap quina llengua parla
+    l'usuari és la UI (i18n-gate), i un servidor que en triés una obligaria el client a
+    tornar-ho a demanar el dia que l'usuari canviï d'idioma — mateixa llei que
+    `model-poms` ja aplica als noms de POM (`views.py:70-75`).
+    """
+
+    class Meta:
+        model = PatternPieceRole
+        fields = ['id', 'slug', 'nom_en', 'nom_ca', 'nom_es',
+                  'classe', 'display_order', 'is_system']
+        read_only_fields = fields
+
+
+def _rol_niat(rol) -> dict | None:
+    """El rol d'una peça com a OBJECTE, no com a id nu.
+
+    Un id sol obliga qui el rep a tenir el catàleg sencer a la mà per saber què vol dir.
+    Amb l'objecte, una fila de peça es pot pintar amb el que ja porta.
+    """
+    if rol is None:
+        return None
+    return {
+        'id': rol.id,
+        'slug': rol.slug,
+        'classe': rol.classe,
+        'nom': {'en': rol.nom_en, 'ca': rol.nom_ca, 'es': rol.nom_es},
+    }
+
+
 class PatternPieceSerializer(serializers.ModelSerializer):
     """La peça amb els seus RECOMPTES, no amb els seus milers de punts.
 
@@ -66,6 +100,7 @@ class PatternPieceSerializer(serializers.ModelSerializer):
     punts_per_capa = serializers.SerializerMethodField()
     bounding_box_mm = serializers.SerializerMethodField()
     total_punts = serializers.SerializerMethodField()
+    piece_role = serializers.SerializerMethodField()
 
     class Meta:
         model = PatternPiece
@@ -78,6 +113,9 @@ class PatternPieceSerializer(serializers.ModelSerializer):
             'piece_role', 'nom', 'lateralitat', 'ordinal', 'estat_peca', 'rol_origen',
         ]
         read_only_fields = fields
+
+    def get_piece_role(self, obj):
+        return _rol_niat(obj.piece_role)
 
     def get_punts_per_capa(self, obj):
         recompte: dict[str, int] = {}
@@ -229,7 +267,7 @@ class PatternGeometrySerializer(serializers.ModelSerializer):
             # una crida a part perquè són resposta a la mateixa pregunta que el visor ja
             # fa ("què hi ha en aquesta peça?"), i perquè el dia que s'omplin la UI no
             # hagi de canviar de font.
-            'piece_role': piece.piece_role_id,
+            'piece_role': _rol_niat(piece.piece_role),
             'nom': piece.nom,
             'lateralitat': piece.lateralitat,
             'ordinal': piece.ordinal,
