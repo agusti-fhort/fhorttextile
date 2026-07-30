@@ -7,6 +7,7 @@ import {
   arcDirigit, longitudTram, puntsDelSegment, puntsEntreIndexs, situaPunt,
 } from '../components/pattern/patternGeometry'
 import PieceList from '../components/pattern/PieceList'
+import { etiquetaPeca } from '../components/pattern/pieceText'
 import ModelPomList from '../components/pattern/ModelPomList'
 import RelationsPanel from '../components/pattern/RelationsPanel'
 import POMPicker from '../components/pattern/POMPicker'
@@ -880,7 +881,7 @@ export default function TallerPatro() {
   // que mesuren. (El creuament amb la fitxa ja no es fa aquí: el fa el servidor, a
   // `model-poms`. Fer-lo dues vegades i de dues maneres seria demanar que divergissin.)
   const pomsAncorats = useMemo(() => (geometria?.pieces || []).flatMap(p =>
-    (p.poms || []).map(x => ({ ...x, peca: p.nom_block }))), [geometria])
+    (p.poms || []).map(x => ({ ...x, peca: etiquetaPeca(p) }))), [geometria])
 
   /** La peça que conté un punt de la geometria. */
   const pecaDelPunt = useCallback((punt) => (geometria?.pieces || []).find(p =>
@@ -1036,7 +1037,7 @@ export default function TallerPatro() {
           const vora = (p.boundaries || []).find(b => b.index === sg.vora)
           return {
             ...sg,
-            peca: p.nom_block,
+            peca: etiquetaPeca(p),
             piece_id: p.id,
             longitud_cm: vora ? round2(longitudTram(vora, sg.t_inici, sg.t_fi) / 10) : null,
             en_us: enUs.has(sg.id),

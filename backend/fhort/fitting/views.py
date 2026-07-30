@@ -646,10 +646,18 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
             return _resp(False, logica or 'desconegut')
 
         # 5. Propaga el delta des de l'ancoratge → valor_real de les germanes (valor_teoric intacte).
-        size_run = [s.strip() for s in (pf.model.size_run_model or '')
-                    .replace(';', '·').split('·') if s.strip()]
+        # La geometria surt de `escala_del_model`, la MATEIXA font que fa servir el motor:
+        # el relleu el mana el run del SISTEMA i la talla BASE (llei S24b + FIX-1). Llegir-lo
+        # del run del model col·lapsava els forats i movia el break (DIAGNOSI_MESURES_TEA_205, B1).
+        from fhort.pom.services import escala_del_model
+        try:
+            size_run, run_sistema, _pos, _base_idx = escala_del_model(pf.model)
+        except ValueError as e:
+            return _resp(False, 'geometria_invalida', [str(e)])
         warnings = []
-        teorics = propaga_ancoratges(rule, line.size_label, anchor_val, size_run, warnings=warnings)
+        teorics = propaga_ancoratges(
+            rule, line.size_label, anchor_val, size_run, warnings=warnings,
+            run_sistema=run_sistema, base_label=pf.model.base_size_label)
         with transaction.atomic():
             for sl, val in teorics.items():
                 if val is None:

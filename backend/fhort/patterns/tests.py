@@ -20,7 +20,11 @@ import hashlib
 import io
 import logging
 import math
+import re
 import unittest
+
+from django.db import connection
+from django.db.models import ProtectedError
 from dataclasses import replace
 from pathlib import Path
 
@@ -115,6 +119,7 @@ from django.core import signing
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
+from django.db import connection
 from django.db.models import ProtectedError
 from django_tenants.test.cases import TenantTestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
@@ -130,15 +135,18 @@ from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentVi
                                              SewRelationViewSet, SewToleranceAcceptanceViewSet,
                                              comprovar_costura)
 from fhort.patterns.export import ExportBlocked, build_export
+from fhort.patterns.services import CONFIRM_TEXT_CA
 from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
-                                   PatternPOM, PatternPoint, PatternSegment,
+                                   PatternPiece, PatternPOM, PatternPoint, PatternSegment,
                                    SegmentPreference, SewProposalRejection, SewRelation,
+                                   PieceIdentityAcknowledgement,
                                    SewToleranceAcceptance)
 from fhort.patterns.services import save_pattern_file
 from fhort.patterns.serializers import PatternGeometrySerializer
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
-                                  PatternFileViewSet)
-from fhort.pom.models import GarmentType, POMMaster
+                                  PatternFileViewSet, PatternPieceRoleViewSet)
+from fhort.pom.management.commands.seed_pattern_piece_roles import sembra
+from fhort.pom.models import GarmentType, PatternPieceRole, POMMaster
 from fhort.tasks.models import GarmentTypeItem
 
 FIXTURES = Path(__file__).parent / 'tests' / 'fixtures'
@@ -161,6 +169,26 @@ def _dxf_bytes(doc) -> bytes:
     return stream.getvalue().encode('utf-8')
 
 
+#: ezdxf estampa la SEVA versió i l'INSTANT d'escriptura dins de cada fitxer que emet
+#: (un XDATA de la forma `1.4.4 @ 2026-07-30T10:19:00.430231+00:00`). Conseqüència: dos
+#: DXF escrits del mateix document no són mai iguals byte a byte, ni al mateix procés.
+#: Verificat: dues crides seguides a `AAMAWriter().write()` donen dos sha256 diferents, i
+#: l'única diferència són aquestes dues línies.
+_RE_SEGELL_EZDXF = re.compile(r'\d+\.\d+\.\d+ @ \d{4}-\d{2}-\d{2}T[\d:.+\-]+')
+
+
+def empremta_dxf(data: bytes) -> str:
+    """sha256 del fitxer amb el segell d'ezdxf neutralitzat, i RES MÉS.
+
+    Serveix per comparar dos DXF de debò —literalment, byte a byte— en comptes de fer una
+    equivalència semàntica: una comparació per coordenades passaria per alt un canvi
+    d'ordre d'entitats, de format numèric o de cens, que és exactament el que un test
+    d'invisibilitat ha de poder caçar.
+    """
+    net = _RE_SEGELL_EZDXF.sub('<ezdxf>', data.decode('utf-8', errors='replace'))
+    return hashlib.sha256(net.encode('utf-8')).hexdigest()
+
+
 #: Mitja peça: el centre (x=0) recte —la vora que va sobre el doblec— i la resta del
 #: contorn irregular, com una mitja esquena de debò. Un rectangle no serviria: tindria
 #: dos eixos candidats i no distingiria un detector correcte d'un de sortós.
@@ -181,6 +209,26 @@ def mitja_peca_dxf() -> bytes:
         block.add_point((x, y), dxfattribs={'layer': '2'})
     block.add_point((60, 10), dxfattribs={'layer': '4'})  # un piquet al costat original
     doc.modelspace().add_blockref('MITJA', (0, 0))
+    return _dxf_bytes(doc)
+
+
+def peca_amb_entitats_opaques_dxf() -> bytes:
+    """Una peça llegible + entitats de capa CONEGUDA que el reader no sap interpretar.
+
+    R2000 i no R12 perquè el que s'hi vol posar (MTEXT, LWPOLYLINE) no existeix a R12 —
+    i és exactament el que un CAD modern escriu a la capa 1 quan el nostre reader només
+    espera POLYLINE i TEXT.
+    """
+    doc = ezdxf.new('R2000')
+    block = doc.blocks.new(name='OPACA')
+    block.add_polyline2d(CONTORN_MITJA_PECA, dxfattribs={'layer': '1'})
+    for x, y in CONTORN_MITJA_PECA[:-1]:
+        block.add_point((x, y), dxfattribs={'layer': '2'})
+    # El cas que va motivar la visibilitat: el nom de la peça escrit com a MTEXT.
+    block.add_mtext('Piece Name: OPACA', dxfattribs={'layer': '1'})
+    # I un contorn escrit amb la polilínia moderna, que el reader tampoc no llegeix.
+    block.add_lwpolyline([(0, 0), (10, 0), (10, 10)], dxfattribs={'layer': '1'})
+    doc.modelspace().add_blockref('OPACA', (0, 0))
     return _dxf_bytes(doc)
 
 
@@ -545,6 +593,35 @@ class DegradacioElegantTest(unittest.TestCase):
         self.assertEqual(table.regles[1].delta('XL'), (0.0, 0.0))  # forat → zero
 
 
+class EntitatsNoInterpretadesTest(unittest.TestCase):
+    """El que el motor no sap llegir es DIU. Abans queia pel forat del bucle de lectura:
+    una capa coneguda no va a `raw_entities` (que és el pou de les DESCONEGUDES), i un
+    `dxftype` inesperat no tenia cap braç que el recollís. Un MTEXT amb el nom de la peça
+    desapareixia sense que res ho cantés."""
+
+    def test_les_entitats_opaques_consten_a_lempremta(self):
+        doc = AAMAReader().read(peca_amb_entitats_opaques_dxf())
+        vistes = {(tipus, capa) for tipus, capa, _ in doc.fingerprint.entitats_no_interpretades}
+        self.assertIn(('MTEXT', '1'), vistes)
+        self.assertIn(('LWPOLYLINE', '1'), vistes)
+
+    def test_cada_entitat_porta_el_seu_handle(self):
+        """Sense handle, l'avís diu que falta alguna cosa però no on anar-la a buscar."""
+        doc = AAMAReader().read(peca_amb_entitats_opaques_dxf())
+        self.assertTrue(doc.fingerprint.entitats_no_interpretades)
+        for _tipus, _capa, handle in doc.fingerprint.entitats_no_interpretades:
+            self.assertTrue(handle)
+
+    def test_la_peca_es_llegeix_igualment(self):
+        """Visibilitat no és bloqueig: el contorn que SÍ que s'entén entra com sempre."""
+        peca = AAMAReader().read(peca_amb_entitats_opaques_dxf()).piece('OPACA')
+        self.assertEqual(len(peca.boundary(LayerRole.CUT).points), 5)
+
+    def test_un_fitxer_que_sentén_del_tot_no_en_declara_cap(self):
+        doc = AAMAReader().read(AMELIA_DXF.read_bytes())
+        self.assertEqual(doc.fingerprint.entitats_no_interpretades, ())
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # S2 · ESCRIPTURA — el fitxer torna a sortir tal com va entrar
 # ═════════════════════════════════════════════════════════════════════════════
@@ -885,6 +962,28 @@ class UploadTest(PatternsAPITestBase):
         # DXF i RUL són germans de debò: cap avís de coherència.
         self.assertNotIn('avisos_coherencia', resp.data)
 
+    def test_les_entitats_opaques_surten_al_201_i_a_lempremta(self):
+        """PC-6: el que el motor no ha sabut llegir arriba a qui puja el fitxer.
+
+        Pel MATEIX canal que els avisos de coherència, i sense bloquejar: el fitxer s'ha
+        desat i és llegible. El que no pot passar és que ningú no ho sàpiga."""
+        resp = self._upload(peca_amb_entitats_opaques_dxf())
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        avisos = resp.data.get('avisos_coherencia') or []
+        opacs = [a for a in avisos if a['codi'] == 'entitats_no_interpretades']
+        self.assertEqual(
+            {(a['detall']['dxftype'], a['detall']['capa']) for a in opacs},
+            {('MTEXT', '1'), ('LWPOLYLINE', '1')},
+        )
+        self.assertTrue(all(a['detall']['quantes'] == 1 for a in opacs))
+
+        fp = PatternFile.objects.get(pk=resp.data['id'])
+        self.assertEqual(
+            {tuple(e[:2]) for e in fp.empremta['entitats_no_interpretades']},
+            {('MTEXT', '1'), ('LWPOLYLINE', '1')},
+        )
+
     def test_upload_sense_rul(self):
         resp = self._upload(AMELIA_DXF.read_bytes())
         self.assertEqual(resp.status_code, 201)
@@ -921,6 +1020,61 @@ class UploadTest(PatternsAPITestBase):
         request = self.factory.post('/api/v1/patterns/pattern-files/', {}, format='multipart')
         resp = PatternFileViewSet.as_view({'post': 'create'})(request)
         self.assertIn(resp.status_code, (401, 403))
+
+
+class SimetriaMaterialitzadaTest(PatternsAPITestBase):
+    """D-6: el que arriba a la BD és la peça SENCERA, encara que el fitxer la porti a
+    mitges. Mesurar mitja màniga no és mesurar una màniga, i tot el que llegeix aquesta
+    geometria després —POMs, costures, projecció— no té manera de saber que en falta la
+    meitat."""
+
+    def _peca_desplegada(self):
+        resp = self._upload(mitja_peca_dxf())
+        self.assertEqual(resp.status_code, 201, resp.data)
+        return PatternFile.objects.get(pk=resp.data['id']).pieces.get(nom_block='MITJA')
+
+    def test_la_peca_al_plec_es_desa_sencera(self):
+        peca = self._peca_desplegada()
+        xs = [p.x for p in peca.points.filter(mena='vertex', boundary_index=0)]
+        # El fitxer la porta de x=0 a x=120; desplegada va de −120 a +120.
+        self.assertAlmostEqual(max(xs) - min(xs), 240.0, places=6)
+
+    def test_la_geometria_desada_es_simetrica_respecte_de_leix(self):
+        peca = self._peca_desplegada()
+        punts = [(round(p.x, 6), round(p.y, 6))
+                 for p in peca.points.filter(mena='vertex', boundary_index=0)]
+        self.assertEqual(sorted(punts), sorted([(-x, y) for x, y in punts]))
+
+    def test_el_doblec_queda_marcat_com_a_materialitzat(self):
+        """Sense la marca, l'exportació no sabria que ha de tornar a plegar la peça."""
+        fold = self._peca_desplegada().doblec_original
+        self.assertTrue(fold['materialitzat'])
+        # I el semiplà original es conserva: és l'única manera de saber quina meitat era
+        # la del fitxer un cop la peça té punts als dos costats.
+        self.assertNotEqual(fold['costat'], 0)
+
+    def test_els_piquets_fora_de_leix_es_mirallen(self):
+        peca = self._peca_desplegada()
+        piquets = sorted((round(p.x, 6), round(p.y, 6))
+                         for p in peca.points.filter(mena='notch'))
+        self.assertEqual(piquets, [(-60.0, 10.0), (60.0, 10.0)])
+
+    def test_una_peca_que_ja_venia_sencera_no_es_toca(self):
+        """L'AMELIA no té doblec: ha d'entrar EXACTAMENT com sempre. `unfold_piece`
+        retorna la mateixa instància quan no hi ha res a desplegar, i aquest test és el
+        que ho vigila des del camí real d'importació."""
+        resp = self._upload(AMELIA_DXF.read_bytes())
+        fp = PatternFile.objects.get(pk=resp.data['id'])
+        esperat = {'BACK': (28, 64), 'FRONT': (38, 108),
+                   'BACK_LINI': (24, 24), 'FRONT_LINI': (44, 62)}
+        for nom, (tall, totals) in esperat.items():
+            with self.subTest(peca=nom):
+                peca = fp.pieces.get(nom_block=nom)
+                vertexs = peca.points.filter(mena='vertex')
+                self.assertEqual(vertexs.filter(boundary_index=0).count(), tall)
+                self.assertEqual(vertexs.count(), totals)
+                self.assertIsNone(peca.doblec_original)
+                self.assertFalse(peca.has_fold)
 
 
 class SobiraniaTest(PatternsAPITestBase):
@@ -2030,9 +2184,25 @@ class EscalatTestBase(PatternsAPITestBase):
         self.profile, _ = UserProfile.objects.get_or_create(
             user=self.user, defaults={'nom_complet': 'Tec', 'rol_nom': 'admin'})
 
-        self.sf = SizeFitting.objects.create(
-            model=self.model, numero=1, codi='SF-QA-1', tipus='Fit',
-            estat='TallesGenerades', creat_per=self.profile)
+        # El `SizeFitting` número 1 d'aquest model JA EXISTEIX quan arribem aquí: el crea
+        # un signal de `models_app` en néixer el Model (models_app/signals.py), sempre que
+        # hi hagi un UserProfile al tenant — i n'hi ha, perquè `create_user` en dispara un
+        # altre (accounts/signals.py). Crear-ne un segon amb el mateix (model, numero)
+        # xocava contra el unique de `fitting_sizefitting` i tombava aquest setUp sencer.
+        #
+        # El fixture l'ADOPTA. El que aquests tests necessiten no és la fila, és l'estat:
+        # `self.sf` només fa de destí de la FK de `GradingVersion`. El `codi` que el signal
+        # li ha posat es queda tal com és — `SizeFitting.codi` és unique GLOBAL i cap test
+        # no el mira.
+        self.sf, _ = SizeFitting.objects.get_or_create(
+            model=self.model, numero=1,
+            defaults={'codi': 'SF-QA-1', 'tipus': 'Fit',
+                      'estat': 'TallesGenerades', 'creat_per': self.profile},
+        )
+        self.sf.tipus = 'Fit'
+        self.sf.estat = 'TallesGenerades'
+        self.sf.creat_per = self.profile
+        self.sf.save(update_fields=['tipus', 'estat', 'creat_per'])
         # aprovada=True i is_active=False A POSTA: són ORTOGONALS (S0-B7.1), i la versió
         # aprovada d'un model sovint NO és la que la UI serveix. Si el port confongués les
         # dues coses, aquest fixture el cantaria.
@@ -2364,6 +2534,116 @@ class AutovalidacioTest(EscalatTestBase):
             any(d != (0.0, 0.0) for d in regla.deltes.values())
             for num, regla in taula.regles.items() if num != 0
         ))
+
+
+class ReplegatALExportTest(EscalatTestBase):
+    """D-6, la segona meitat: el motor guarda la peça sencera, però el FITXER surt com
+    l'autor el treballa. Un CAD que dibuixa les simètriques a mitges no reconeix com a
+    seva una peça desplegada."""
+
+    #: Segell congelat: sense això el DXF porta la data d'emissió i no hi ha dues
+    #: execucions que donin els mateixos bytes.
+    TS = '2026-01-01T00:00:00Z'
+
+    def test_una_peca_al_plec_torna_equivalent_a_loriginal_plegat(self):
+        """El cicle sencer: el fitxer entra plegat, es desa sencer, i torna a sortir
+        plegat. El que es compara és el fitxer EMÈS contra el fitxer d'ORIGEN."""
+        original = AAMAReader().read(mitja_peca_dxf()).piece('MITJA')
+        fp = PatternFile.objects.get(pk=self._upload(mitja_peca_dxf()).data['id'])
+
+        # A la BD hi és sencera (I0/T3): el que es plega és la sortida, no el que guardem.
+        desada = fp.pieces.get(nom_block='MITJA')
+        self.assertTrue(desada.doblec_original['materialitzat'])
+
+        res = build_export(fp, self.gv.id, 'polypattern', ts=self.TS)
+        tornada = AAMAReader().read(res.dxf).piece('MITJA')
+
+        a = original.boundary(LayerRole.CUT).points
+        b = tornada.boundary(LayerRole.CUT).points
+        self.assertEqual(len(a), len(b), 'el contorn no torna amb els mateixos punts')
+        deriva = max(max(abs(pa.x - pb.x), abs(pa.y - pb.y)) for pa, pb in zip(a, b))
+        self.assertLess(deriva, 0.01, f'deriva del contorn: {deriva} mm')
+
+        self.assertEqual(len(original.notches), len(tornada.notches))
+        deriva_piquets = max(
+            max(abs(na.x - nb.x), abs(na.y - nb.y))
+            for na, nb in zip(sorted(original.notches, key=lambda n: (n.x, n.y)),
+                              sorted(tornada.notches, key=lambda n: (n.x, n.y)))
+        )
+        self.assertLess(deriva_piquets, 0.01, f'deriva dels piquets: {deriva_piquets} mm')
+
+    def test_el_fitxer_emes_porta_la_peca_A_MITGES(self):
+        """La prova que el plegat s'ha aplicat de debò: si sortís desplegada, el contorn
+        emès tindria el doble d'amplada i el CAD d'origen rebria una peça que no és seva."""
+        fp = PatternFile.objects.get(pk=self._upload(mitja_peca_dxf()).data['id'])
+        res = build_export(fp, self.gv.id, 'polypattern', ts=self.TS)
+        xs = [p.x for p in AAMAReader().read(res.dxf).piece('MITJA')
+              .boundary(LayerRole.CUT).points]
+        self.assertAlmostEqual(max(xs) - min(xs), 120.0, places=2)
+
+
+class ExportSenseDoblecInvisibleTest(EscalatTestBase):
+    """INVISIBILITAT: el plegat només actua quan hi ha plec.
+
+    L'AMELIA no té cap peça al doblec, o sigui que I0/T4a no li ha de tocar ni un byte.
+    Es diu amb el fitxer sencer i no amb una equivalència de coordenades a posta: una
+    comparació semàntica passaria per alt un canvi d'ordre, de format numèric o de cens
+    d'entitats, i aquest test existeix justament per tancar aquesta porta."""
+
+    TS = '2026-01-01T00:00:00Z'
+    #: sha256 del DXF de niada de l'AMELIA amb el segell congelat, mesurat sobre l'arbre
+    #: ANTERIOR al plegat (I0/T4a). Si algun dia es mou, el plegat —o el writer— ha
+    #: començat a tocar peces que no tenen doblec.
+    SHA_NIADA_SENSE_DOBLEC = 'a87451a218e198130f56a5b1e76d2d34105b7ae04072985732f7434fc530b1de'
+
+    def test_el_dxf_emes_no_es_mou_ni_un_byte(self):
+        res = build_export(self.fp, self.gv.id, 'polypattern', ts=self.TS)
+        self.assertEqual(empremta_dxf(res.dxf), self.SHA_NIADA_SENSE_DOBLEC)
+
+    def test_cap_peca_de_lamelia_no_te_doblec(self):
+        """La premissa del test de sobre, dita en veu alta: si un dia l'AMELIA en tingués,
+        el sha de dalt deixaria de voler dir el que volem que digui."""
+        doc = DjangoGeometryStore().load_from(self.fp)
+        self.assertTrue(all(p.doblec_original is None for p in doc.pieces))
+
+
+class POMSobreSimetriaTest(EscalatTestBase):
+    """Un POM ancorat a la meitat MIRALLADA no es pot emetre: el fitxer surt plegat i
+    aquell punt no hi arriba. S'exclou i es DIU —mateixa llei que el mode landmark—, mai
+    en silenci. Substituir-lo pel seu equivalent de la meitat bona demanaria un mapatge
+    mirallat→original que aquest sprint no construeix."""
+
+    TS = '2026-01-01T00:00:00Z'
+
+    def _peca_amb_pom(self, sobre_mirall: bool):
+        fp = PatternFile.objects.get(pk=self._upload(mitja_peca_dxf()).data['id'])
+        peca = fp.pieces.get(nom_block='MITJA')
+        vertexs = list(peca.points.filter(mena='vertex', boundary_index=0))
+        mirallat = next(p for p in vertexs if p.x < 0)
+        originals = [p for p in vertexs if p.x > 0]
+
+        a = mirallat if sobre_mirall else originals[0]
+        PatternPOM.objects.create(
+            pattern_piece=peca, pom_master=self.pom,
+            definicio_mesura={'mode': 'points', 'a': a.id, 'b': originals[-1].id},
+        )
+        return fp
+
+    def test_el_pom_sobre_geometria_mirallada_no_sexporta_i_es_diu(self):
+        res = build_export(self._peca_amb_pom(sobre_mirall=True), self.gv.id,
+                           'polypattern', ts=self.TS)
+        self.assertTrue(
+            any('geometria de simetria' in p for p in res.problemes_poms),
+            f'cap avís de simetria a {res.problemes_poms}')
+        self.assertNotIn(self.pom.pom_code.encode(), res.dxf)
+
+    def test_un_pom_de_la_meitat_BONA_sí_que_sexporta(self):
+        """El control: sense això, el test de sobre passaria igual si l'exclusió fos
+        indiscriminada i cap POM no arribés mai al fitxer."""
+        res = build_export(self._peca_amb_pom(sobre_mirall=False), self.gv.id,
+                           'polypattern', ts=self.TS)
+        self.assertFalse([p for p in res.problemes_poms if 'simetria' in p])
+        self.assertIn(self.pom.pom_code.encode(), res.dxf)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -4493,3 +4773,325 @@ class PincesProposadesAPITest(PatternsAPITestBase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['ja_hi_era'])
         self.assertEqual(DartProposalRejection.objects.count(), 1)
+
+
+class CampsDIdentitatTest(PatternsAPITestBase):
+    """I1/T3: els camps d'identitat existeixen, neixen BUITS i es poden llegir.
+
+    Que neixin buits no és un detall d'implementació, és la frontera de l'sprint: qui els
+    sap omplir és la capa d'identificació, i escriure'ls abans voldria dir endevinar."""
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+
+    def test_neixen_buits_a_totes_les_peces(self):
+        for peca in self.fp.pieces.all():
+            with self.subTest(peca=peca.nom_block):
+                self.assertIsNone(peca.piece_role_id)
+                self.assertEqual(peca.nom, '')
+                self.assertEqual(peca.lateralitat, '')
+                self.assertIsNone(peca.ordinal)
+                self.assertEqual(peca.estat_peca, PatternPiece.ESTAT_PRODUCCIO)
+                self.assertEqual(peca.rol_origen, '')
+
+    def test_la_geometria_els_serveix(self):
+        request = self.factory.get('/')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view({'get': 'geometry'})(request, pk=self.fp.id)
+        self.assertEqual(resp.status_code, 200)
+        peca = resp.data['pieces'][0]
+        for camp in ('piece_role', 'nom', 'lateralitat', 'ordinal',
+                     'estat_peca', 'rol_origen'):
+            self.assertIn(camp, peca)
+
+    def test_un_rol_amb_peces_no_es_pot_esborrar(self):
+        """PROTECT: un rol que alguna peça reclama no desapareix sense que algú s'hi trobi.
+        Mateixa llei que `PatternPOM.pom_master`."""
+        rol = PatternPieceRole.objects.create(
+            slug='prova-rol', nom_en='Test', nom_ca='Prova', nom_es='Prueba',
+            classe=PatternPieceRole.CLASSE_COS)
+        peca = self.fp.pieces.first()
+        peca.piece_role = rol
+        peca.save(update_fields=['piece_role'])
+
+        with self.assertRaises(ProtectedError):
+            rol.delete()
+
+
+class BackfillRolSegmentPreferenceTest(PatternsAPITestBase):
+    """I1/T4: les preferències parlen en slugs del catàleg, i el que no sabem mapar es
+    queda com està.
+
+    Es prova la funció PURA de la migració, no la migració: el que ha de ser correcte és
+    la regla, i la regla ha de poder-se interrogar sense muntar un schema."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import importlib
+        cls.mig = importlib.import_module(
+            'fhort.patterns.migrations.0012_backfill_rol_segmentpreference')
+
+    def test_els_valors_reals_dstaging_es_mapen_tots(self):
+        """Els 10 noms que hi havia de debò a staging, amb el seu slug esperat."""
+        esperat = {
+            'BACK': 'back',
+            'TATE_BACK': 'back',
+            'FRONT': 'front',
+            'TATE_FRONT': 'front',
+            'MID SLEEVE': 'sleeve',
+            'TATE_SLEEVE': 'sleeve',
+            'TATE_FRONT_YOKE': 'yoke',
+            'TATE_FACING_YOKE': 'facing',
+            'TATE_FRONT_FACING': 'facing',
+            'TATE_NECK_BAND': 'neckband',
+            'TATE_NECK_BAND_INTERLINING': 'interlining',
+        }
+        for nom, slug in esperat.items():
+            with self.subTest(nom=nom):
+                self.assertEqual(self.mig.slug_del_rol(nom), slug)
+
+    def test_el_que_no_sabem_mapar_torna_buit(self):
+        """Buit vol dir «deixa-ho com està», mai «posa-hi el que sigui»."""
+        for nom in ('BUTXACA_RARA', 'CALLIE_FRONT', '', '   ', 'XYZ_1'):
+            with self.subTest(nom=nom):
+                self.assertEqual(self.mig.slug_del_rol(nom), '')
+
+    def test_normalitza_espais_i_majuscules(self):
+        self.assertEqual(self.mig.slug_del_rol('  back  '), 'back')
+        self.assertEqual(self.mig.slug_del_rol('tate_front'), 'front')
+
+    def test_tot_slug_del_mapa_existeix_al_cataleg(self):
+        """La invariant que fa el backfill legítim: no s'inventa cap slug. Si algú afegeix
+        una entrada al mapa i s'oblida de sembrar el rol, això ho canta."""
+        sembra(connection.schema_name)
+        slugs = set(PatternPieceRole.objects.values_list('slug', flat=True))
+        for nom, slug in self.mig.MAPA.items():
+            with self.subTest(nom=nom):
+                self.assertIn(slug, slugs)
+
+
+class CatalegDeRolsAPITest(PatternsAPITestBase):
+    """I2a/T1: el catàleg es pot llegir, i el rol d'una peça arriba com a OBJECTE.
+
+    Un id nu obliga qui el rep a tenir el catàleg sencer a la mà per saber què vol dir; era
+    el deute que I1 va deixar obert i que això tanca."""
+
+    def setUp(self):
+        super().setUp()
+        sembra(connection.schema_name)
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+
+    def _get(self, vista, **kw):
+        request = self.factory.get('/')
+        force_authenticate(request, user=self.user)
+        return vista(request, **kw)
+
+    def test_el_cataleg_se_serveix_sencer_i_ordenat(self):
+        resp = self._get(PatternPieceRoleViewSet.as_view({'get': 'list'}))
+        self.assertEqual(resp.status_code, 200)
+        # SENSE paginar: el picker els vol tots de cop per agrupar-los per classe.
+        self.assertIsInstance(resp.data, list)
+        self.assertEqual(len(resp.data), 30)
+        ordres = [r['display_order'] for r in resp.data]
+        self.assertEqual(ordres, sorted(ordres))
+        primer = resp.data[0]
+        for camp in ('id', 'slug', 'nom_en', 'nom_ca', 'nom_es', 'classe',
+                     'display_order', 'is_system'):
+            self.assertIn(camp, primer)
+
+    def test_el_cataleg_no_te_porta_descriptura(self):
+        """La sembra el manté; obrir-hi escriptura per API voldria dir que un rol canònic
+        es canvia des del navegador sense passar per cap gate (D-1).
+
+        No hi ha res a cridar: el viewset no té els verbs. Per això es comprova l'absència
+        i no un 405 — un 405 voldria dir que el mètode hi és i el rebutgem, i el que passa
+        és que no hi és."""
+        for verb in ('create', 'update', 'partial_update', 'destroy'):
+            with self.subTest(verb=verb):
+                self.assertFalse(hasattr(PatternPieceRoleViewSet, verb))
+
+    def test_el_rol_de_la_peca_arriba_niat_a_la_geometria(self):
+        rol = PatternPieceRole.objects.get(slug='back')
+        peca = self.fp.pieces.get(nom_block='BACK')
+        peca.piece_role = rol
+        peca.save(update_fields=['piece_role'])
+
+        resp = self._get(PatternFileViewSet.as_view({'get': 'geometry'}), pk=self.fp.id)
+        self.assertEqual(resp.status_code, 200)
+        served = next(p for p in resp.data['pieces'] if p['nom_block'] == 'BACK')
+        self.assertEqual(served['piece_role']['slug'], 'back')
+        self.assertEqual(served['piece_role']['nom']['ca'], 'Esquena')
+        self.assertEqual(served['piece_role']['classe'], 'cos')
+
+    def test_una_peca_sense_rol_el_dona_a_null(self):
+        resp = self._get(PatternFileViewSet.as_view({'get': 'geometry'}), pk=self.fp.id)
+        served = next(p for p in resp.data['pieces'] if p['nom_block'] == 'FRONT')
+        self.assertIsNone(served['piece_role'])
+
+
+class IdentificacioAPITest(PatternsAPITestBase):
+    """I2a/T2: dir QUÈ és cada peça, i que quedi acta quan algú ho confirma."""
+
+    def setUp(self):
+        super().setUp()
+        sembra(connection.schema_name)
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        self.back = self.fp.pieces.get(nom_block='BACK')
+        self.front = self.fp.pieces.get(nom_block='FRONT')
+        self.rol_back = PatternPieceRole.objects.get(slug='back')
+        self.rol_front = PatternPieceRole.objects.get(slug='front')
+
+    def _post(self, cos):
+        request = self.factory.post('/', cos, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternFileViewSet.as_view({'post': 'identificar'})(request, pk=self.fp.id)
+
+    def _get_identitat(self):
+        request = self.factory.get('/')
+        force_authenticate(request, user=self.user)
+        return PatternFileViewSet.as_view({'get': 'identitat'})(request, pk=self.fp.id)
+
+    # ── escriure ────────────────────────────────────────────────────────────
+    def test_assignar_rol_i_camps_dun_cop(self):
+        resp = self._post({'peces': [{
+            'piece_id': self.back.id, 'piece_role_id': self.rol_back.id,
+            'nom': 'Esquena principal', 'lateralitat': 'L', 'ordinal': 1,
+            'estat_peca': 'produccio',
+        }]})
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data['peces_actualitzades'], 1)
+
+        self.back.refresh_from_db()
+        self.assertEqual(self.back.piece_role_id, self.rol_back.id)
+        self.assertEqual(self.back.nom, 'Esquena principal')
+        self.assertEqual(self.back.lateralitat, 'L')
+        self.assertEqual(self.back.ordinal, 1)
+
+    def _origen_despres(self, **camps):
+        self._post({'peces': [{'piece_id': self.back.id, **camps}]})
+        self.back.refresh_from_db()
+        return self.back.rol_origen
+
+    def test_assignar_ratificar_i_corregir_son_TRES_senyals(self):
+        """Tres actes humans diferents no poden deixar la mateixa marca.
+
+        El dia que el motor proposi rols (I2b), la diferència entre «ho he posat jo perquè
+        no hi havia res», «ho he donat per bo» i «ho he canviat perquè estava malament» és
+        justament el senyal que dirà si el motor encerta."""
+        # Sobre una peça sense rol: ASSIGNAT — no hi havia res a corregir.
+        self.assertEqual(self._origen_despres(piece_role_id=self.rol_back.id),
+                         PatternPiece.ROL_ORIGEN_ASSIGNAT)
+        # El mateix rol una altra vegada: RATIFICAR.
+        self.assertEqual(self._origen_despres(piece_role_id=self.rol_back.id),
+                         PatternPiece.ROL_ORIGEN_CONFIRMAT)
+        # Un rol diferent sobre un que ja hi era: CORREGIR.
+        self.assertEqual(self._origen_despres(piece_role_id=self.rol_front.id),
+                         PatternPiece.ROL_ORIGEN_CORREGIT)
+
+    def test_treure_el_rol_no_deixa_procedencia(self):
+        """Un `rol_origen` que parla d'un rol que ja no hi és seria una dada que es
+        contradiu a si mateixa."""
+        self._origen_despres(piece_role_id=self.rol_back.id)
+        self.assertEqual(self._origen_despres(piece_role_id=None),
+                         PatternPiece.ROL_ORIGEN_CAP)
+        self.assertIsNone(self.back.piece_role_id)
+
+    def test_el_client_no_pot_dictar_rol_origen(self):
+        """Si el pogués enviar, podria dir que una persona ha confirmat el que no ha
+        mirat, i el senyal deixaria de valer per a qui l'hagi de creure."""
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id,
+                               'rol_origen': 'confirmat'}]})
+        self.back.refresh_from_db()
+        self.assertEqual(self.back.rol_origen, PatternPiece.ROL_ORIGEN_ASSIGNAT)
+
+    # ── validació ───────────────────────────────────────────────────────────
+    def test_una_peca_dun_altre_fitxer_es_rebutja(self):
+        altre = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        forastera = altre.pieces.first()
+        resp = self._post({'peces': [{'piece_id': forastera.id,
+                                      'piece_role_id': self.rol_back.id}]})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('no és d\'aquest patró', resp.data['error'])
+
+    def test_un_rol_inexistent_es_rebutja(self):
+        resp = self._post({'peces': [{'piece_id': self.back.id,
+                                      'piece_role_id': 999999}]})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_una_lateralitat_inventada_es_rebutja(self):
+        resp = self._post({'peces': [{'piece_id': self.back.id, 'lateralitat': 'X'}]})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_res_no_es_desa_si_una_fila_es_dolenta(self):
+        """Atòmic: identificar un patró és un sol gest, i mig gest no val."""
+        resp = self._post({'peces': [
+            {'piece_id': self.back.id, 'piece_role_id': self.rol_back.id},
+            {'piece_id': self.front.id, 'lateralitat': 'X'},
+        ]})
+        self.assertEqual(resp.status_code, 400)
+        self.back.refresh_from_db()
+        self.assertIsNone(self.back.piece_role_id)
+
+    # ── acta ────────────────────────────────────────────────────────────────
+    def test_sense_confirm_no_hi_ha_acta(self):
+        """Treballar a trossos és legítim: el que no passa és que quedi acta."""
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id}]})
+        self.assertEqual(PieceIdentityAcknowledgement.objects.count(), 0)
+        self.assertIsNone(self._get_identitat().data['acta'])
+
+    def test_amb_confirm_queda_acta_amb_snapshot(self):
+        resp = self._post({'peces': [
+            {'piece_id': self.back.id, 'piece_role_id': self.rol_back.id,
+             'nom': 'Esquena'},
+            {'piece_id': self.front.id, 'piece_role_id': self.rol_front.id},
+        ], 'confirm': True})
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        acta = PieceIdentityAcknowledgement.objects.get()
+        self.assertEqual(acta.versio_patro, self.fp.versio)
+        self.assertEqual(len(acta.snapshot), 2)
+        per_bloc = {f['nom_block']: f for f in acta.snapshot}
+        self.assertEqual(per_bloc['BACK']['rol_slug'], 'back')
+        self.assertEqual(per_bloc['BACK']['nom'], 'Esquena')
+        self.assertEqual(per_bloc['FRONT']['rol_slug'], 'front')
+        # El text que se li va ensenyar, literal i vingut del SERVIDOR.
+        self.assertEqual(acta.texts_shown, CONFIRM_TEXT_CA)
+
+    def test_lacta_nomes_recull_les_peces_amb_rol(self):
+        """Confirmar la identitat d'una peça que encara no en té no vol dir res, i inflar
+        l'acta amb files buides faria que el recompte mentís."""
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id}], 'confirm': True})
+        acta = PieceIdentityAcknowledgement.objects.get()
+        self.assertEqual(len(acta.snapshot), 1)
+        self.assertEqual(self.fp.pieces.count(), 4)
+
+    def test_el_get_serveix_lULTIMA_acta(self):
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id}], 'confirm': True})
+        self._post({'peces': [{'piece_id': self.front.id,
+                               'piece_role_id': self.rol_front.id}], 'confirm': True})
+
+        dades = self._get_identitat().data['acta']
+        self.assertEqual(dades['peces_confirmades'], 2)
+        self.assertEqual(PieceIdentityAcknowledgement.objects.count(), 2)
+
+    def test_lacta_es_append_only(self):
+        """Un registre d'auditoria que s'esborra quan algú es repensa no audita res."""
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id}], 'confirm': True})
+        acta = PieceIdentityAcknowledgement.objects.get()
+        with self.assertRaises(ValueError):
+            acta.delete()
+        with self.assertRaises(ValueError):
+            acta.save()
+        with self.assertRaises(ValueError):
+            PieceIdentityAcknowledgement.objects.all().delete()

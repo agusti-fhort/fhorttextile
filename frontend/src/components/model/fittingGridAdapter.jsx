@@ -9,6 +9,7 @@
 
 import { pieceFittingLines } from '../../api/endpoints'
 import { effectiveRegime } from '../../utils/gradingRegime'
+import { formatDelta } from '../../utils/format'
 
 // Etiqueta d'una versió: la primera (v1) és Base; les següents són Fit N amb N = version_number - 1.
 const versionLabel = (vn, idx, t) =>
@@ -73,9 +74,12 @@ function regleLabel(row, t) {
 // leadCol Règim del fitting (sticky): a diferència del check (lectura), aquí el règim és EDITABLE
 // (select LINEAR/STEP) perquè d'ell depèn la propagació. Sota, l'etiqueta de regla a 2 línies.
 // LINEAR/STEP són valors de DADA (row.logica) → no es tradueixen.
-export function regimeLeadCol(t, onRegimChange, readOnly = false) {
+// `compacte` (FIX-4): amaga la llegenda de regla de sota el desplegable. La fa servir Escalat,
+// on el delta i el break ja tenen COLUMNA pròpia — repetir-los aquí seria la mateixa dada dues
+// vegades, i és precisament la lletra petita el que ningú llegia.
+export function regimeLeadCol(t, onRegimChange, readOnly = false, { compacte = false } = {}) {
   return {
-    key: 'regim', label: t('fitting.grid.regime'), width: 118,
+    key: 'regim', label: t('fitting.grid.regime'), width: compacte ? 100 : 118,
     render: (row) => {
       // Règim EFECTIU, no el desat: LINEAR+0 sense break es presenta com a FIXED. Quan passa,
       // FIXED s'afegeix com a opció del desplegable perquè el valor visible sigui triable i
@@ -101,7 +105,7 @@ export function regimeLeadCol(t, onRegimChange, readOnly = false) {
             {regim === 'FIXED' && <option value="FIXED">FIXED</option>}
           </select>
         )}
-        {regleLabel(row, t) && (
+        {!compacte && regleLabel(row, t) && (
           <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginTop: 1 }}>
             {regleLabel(row, t)}
           </div>
@@ -147,9 +151,51 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel) {
       nom_en: row.nom_en, nom_local: row.nom_ca,
       logica: row.logica, increment_base: row.increment_base,
       increment_break: row.increment_break, talla_break_label: row.talla_break_label,
+      // FIX-4 — la BASE del POM viatja amb la fila: és el referent de la guarda de plausibilitat
+      // (una cel·la de talla molt lluny de la base sembla un increment, no una mesura).
+      base_value_cm: row.base_value_cm ?? null,
       cells,
     }
   })
+}
+
+// FIX-4 (DIAGNOSI_MESURES_TEA_205) — la REGLA surt de la lletra petita i es fa COLUMNES.
+//
+// Fins ara el delta i el break vivien com una llegenda de dues línies sota el desplegable de
+// règim (`+1 · break XS +1.5`), enganxats a les cel·les de mesura. Al 205 això va acabar amb un
+// `1` escrit a la cel·la de talla d'un POM amb base 46: mirats de reüll, un increment i una
+// llargada són el mateix número. Ara són columnes pròpies, sota la capçalera «Regla de graduació»
+// i amb el fons crema de la casa, separades de les mesures per un filet gruixut.
+//
+// Els deltes es pinten SEMPRE amb signe (`formatDelta`) i les capçaleres porten Δ; les cel·les de
+// talla, planes amb la seva unitat. Cap cel·la de talla mostra mai un '+'.
+export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = 'CM') {
+  const cap = { fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }
+  const buit = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }
+  // Un règim sense delta (FIXED, o STEP amb valors lliures) no té Δ que ensenyar: guió, no zero.
+  const mostraDelta = (row) => effectiveRegime(row) === 'LINEAR'
+  return [
+    regimeLeadCol(t, onRegimChange, readOnly, { compacte: true }),
+    {
+      key: 'delta', label: t('measuregrid.regla_delta'), width: 72,
+      render: (row) => (mostraDelta(row) && row.increment_base != null
+        ? <span style={cap}>{formatDelta(row.increment_base, unit)}</span>
+        : <span style={buit}>—</span>),
+    },
+    {
+      key: 'delta_break', label: t('measuregrid.regla_delta_break'), width: 82,
+      render: (row) => (mostraDelta(row) && row.increment_break != null
+        ? <span style={cap}>{formatDelta(row.increment_break, unit)}</span>
+        : <span style={buit}>—</span>),
+    },
+    {
+      key: 'talla_break', label: t('measuregrid.regla_talla_break'), width: 92,
+      // Etiqueta de talla: DADA de domini (XS, 3XL) — no es tradueix ni porta signe.
+      render: (row) => (mostraDelta(row) && row.talla_break_label
+        ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>{row.talla_break_label}</span>
+        : <span style={buit}>—</span>),
+    },
+  ]
 }
 
 export function makeFittingOnSave(lineRegimeMap) {

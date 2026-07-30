@@ -9,10 +9,13 @@ from .annotation_views import (
     PatternPOMViewSet, PatternSegmentViewSet, SewProposalRejectionViewSet, SewRelationViewSet,
     SewToleranceAcceptanceViewSet,
 )
-from .views import PatternFileViewSet
+from .views import PatternFileViewSet, PatternPieceRoleViewSet
 
 router = DefaultRouter()
 router.register(r'patterns/pattern-files', PatternFileViewSet, basename='patterns-pattern-files')
+# El catàleg de rols de peça: lectura per a tothom qui pugui obrir un patró.
+router.register(r'patterns/piece-roles', PatternPieceRoleViewSet,
+                basename='patterns-piece-roles')
 router.register(r'patterns/pattern-poms', PatternPOMViewSet, basename='patterns-pattern-poms')
 router.register(r'patterns/pattern-segments', PatternSegmentViewSet,
                 basename='patterns-pattern-segments')

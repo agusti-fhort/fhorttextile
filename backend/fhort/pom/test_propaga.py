@@ -27,14 +27,16 @@ class PropagaAncoratgesTest(SimpleTestCase):
     # ── T1: CANÒNIC uniforme, ancora a la base (M) → caminar increment_base. Retrocompat.
     def test_t1_canonic_uniforme_ancora_base(self):
         rule = _rule(logica='LINEAR', increment_base=2)
-        out = propaga_ancoratges(rule, 'M', 50, self.RUN)
+        out = propaga_ancoratges(rule, 'M', 50, self.RUN,
+                                 run_sistema=self.RUN, base_label='M')
         self.assertEqual(out, {'S': 48, 'M': 50, 'L': 52, 'XL': 54})
 
     # ── T2: CANÒNIC amb break (ib=2, break a L, brk=3), ancora a la base (M).
     def test_t2_canonic_amb_break_ancora_base(self):
         rule = _rule(logica='LINEAR', increment_base=2,
                      talla_break_label='L', increment_break=3)
-        out = propaga_ancoratges(rule, 'M', 50, self.RUN)
+        out = propaga_ancoratges(rule, 'M', 50, self.RUN,
+                                 run_sistema=self.RUN, base_label='M')
         # S=48 (sota break, ib), L=53 (al break, brk), XL=56 (M→XL: 2 passos brk).
         self.assertEqual(out, {'S': 48, 'M': 50, 'L': 53, 'XL': 56})
 
@@ -42,7 +44,8 @@ class PropagaAncoratgesTest(SimpleTestCase):
     # Propaga amunt I avall des de L: S=46, M=48, L=50, XL=52.
     def test_ancora_no_base(self):
         rule = _rule(logica='LINEAR', increment_base=2)
-        out = propaga_ancoratges(rule, 'L', 50, self.RUN)
+        out = propaga_ancoratges(rule, 'L', 50, self.RUN,
+                                 run_sistema=self.RUN, base_label='M')
         self.assertEqual(out, {'S': 46, 'M': 48, 'L': 50, 'XL': 52})
 
     # ── T_regla_incompleta: regla sense cap delta (increment_base=None, increment=None)
@@ -50,7 +53,8 @@ class PropagaAncoratgesTest(SimpleTestCase):
     def test_regla_incompleta_warning_i_columna_plana(self):
         rule = _rule(logica='LINEAR')           # sense increment_base ni increment
         warnings = []
-        out = propaga_ancoratges(rule, 'M', 50, self.RUN, warnings=warnings)
+        out = propaga_ancoratges(rule, 'M', 50, self.RUN, warnings=warnings,
+                                 run_sistema=self.RUN, base_label='M')
         self.assertEqual(out, {'S': 50, 'M': 50, 'L': 50, 'XL': 50})
         self.assertEqual(len(warnings), 1)
 
@@ -65,7 +69,8 @@ class PropagaAncoratgesTest(SimpleTestCase):
                   talla_break_label='L', increment_break=3),                       # amb break
         ]
         for rule in rules:
-            out = propaga_ancoratges(rule, 'M', base_val, self.RUN)
+            out = propaga_ancoratges(rule, 'M', base_val, self.RUN,
+                                     run_sistema=self.RUN, base_label='M')
             for i, label in enumerate(self.RUN):
                 expected, _ = _apply_rule(
                     rule, base_val, i - base_idx, i, base_idx, size_run=self.RUN,

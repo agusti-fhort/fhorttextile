@@ -774,6 +774,20 @@ export const patterns = {
   // Porta també els segments (el que una costura pot triar) i els POMs ja ancorats.
   geometry: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/geometry/`),
 
+  // El catàleg de ROLS de peça (I2a). Sense paginar: el picker els vol tots de cop per
+  // agrupar-los per classe.
+  pieceRoles: () => client.get('/api/v1/patterns/piece-roles/'),
+
+  // Dir QUÈ és cada peça. EN BLOC: identificar un patró és un sol gest, i qui mira un
+  // davanter el mira contra l'esquena que té al costat. Amb `confirm` hi queda ACTA.
+  identificar: (id, data) =>
+    client.post(`/api/v1/patterns/pattern-files/${id}/identificar/`, data),
+
+  // L'última acta del fitxer. D'aquí surt el verd de la pantalla — del servidor i no del
+  // navegador: un estat que viu a localStorage diu que algú va confirmar en AQUELL
+  // ordinador, que no és el que la pregunta vol saber.
+  identitat: (id) => client.get(`/api/v1/patterns/pattern-files/${id}/identitat/`),
+
   // La LLISTA DE TREBALL del taller (W3): les Mesures del model creuades amb el que
   // AQUEST patró mesura — valor de fitxa, valor mesurat i la Δ. El creuament és de domini
   // (la frontissa és el POMMaster) i el fa el servidor: baixar-se dues llistes i creuar-les

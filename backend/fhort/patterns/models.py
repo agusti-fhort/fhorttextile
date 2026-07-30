@@ -177,6 +177,78 @@ class PatternPiece(models.Model):
     has_fold = models.BooleanField(default=False)
     unknown_layers = models.JSONField(default=list, blank=True)
 
+    # ── IDENTITAT (I1) ───────────────────────────────────────────────────────
+    # Aquests camps neixen BUITS i I1 no els omple: qui els sap escriure és la capa
+    # d'identificació (I2), i el pas de confirmació humana que la governa. Existir-hi
+    # abans és el que permet que aquella capa no hagi de migrar dades mentre les escriu.
+
+    #: QUÈ és aquesta peça, del catàleg de sistema. PROTECT i no CASCADE: un rol que
+    #: alguna peça reclama no pot desaparèixer sense que algú se n'adoni — mateixa llei
+    #: que `PatternPOM.pom_master`.
+    piece_role = models.ForeignKey(
+        'pom.PatternPieceRole', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='pieces',
+    )
+    #: El BATEIG del model: com en diu aquest patró, en aquest model, aquest taller. No
+    #: substitueix el rol ni el `nom_block` — conviuen: el rol diu què és, el bloc diu com
+    #: es deia al fitxer, i això diu com se'n parla.
+    nom = models.CharField(max_length=160, blank=True)
+
+    LAT_CAP = ''
+    LAT_ESQUERRA = 'L'
+    LAT_DRETA = 'R'
+    LAT_CHOICES = [
+        (LAT_CAP, 'Sense lateralitat'),
+        (LAT_ESQUERRA, 'Esquerra'),
+        (LAT_DRETA, 'Dreta'),
+    ]
+    #: Buit NO vol dir «encara no ho sabem»: vol dir que la peça no té costat (una esquena
+    #: al doblec no és ni esquerra ni dreta). Les que en tenen, en tenen dues.
+    lateralitat = models.CharField(
+        max_length=1, choices=LAT_CHOICES, blank=True, default=LAT_CAP)
+
+    #: Quan el mateix rol es repeteix a la mateixa peça de roba (tres vistes, dues traves).
+    #: null = no cal distingir-la de cap germana.
+    ordinal = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    ESTAT_PRODUCCIO = 'produccio'
+    ESTAT_TREBALL = 'treball'
+    ESTAT_REFERENCIA = 'referencia'
+    ESTAT_PLANTILLA = 'plantilla'
+    ESTAT_CHOICES = [
+        (ESTAT_PRODUCCIO, 'De producció'),
+        (ESTAT_TREBALL, 'De treball'),
+        (ESTAT_REFERENCIA, 'De referència'),
+        (ESTAT_PLANTILLA, 'Plantilla'),
+    ]
+    #: Un DXF de client porta barrejades les peces que es tallen i les que no (bases,
+    #: proves, plantilles). Per defecte tot és de producció: assumir el contrari faria
+    #: desaparèixer peces bones de la niada sense que ningú ho hagués decidit.
+    estat_peca = models.CharField(
+        max_length=12, choices=ESTAT_CHOICES, default=ESTAT_PRODUCCIO)
+
+    ROL_ORIGEN_CAP = ''
+    ROL_ORIGEN_LLEGIT = 'llegit'
+    ROL_ORIGEN_ASSIGNAT = 'assignat'
+    ROL_ORIGEN_CONFIRMAT = 'confirmat'
+    ROL_ORIGEN_CORREGIT = 'corregit'
+    ROL_ORIGEN_CHOICES = [
+        (ROL_ORIGEN_CAP, 'Sense rol'),
+        (ROL_ORIGEN_LLEGIT, 'Llegit pel motor'),
+        # Posat per una persona sobre una peça que no en tenia cap. No és una CORRECCIÓ:
+        # no hi havia res a corregir, i el dia que el motor proposi rols (I2b) la diferència
+        # entre «ho he posat jo perquè no hi havia res» i «ho he canviat perquè estava
+        # malament» és justament el senyal que dirà si el motor encerta.
+        (ROL_ORIGEN_ASSIGNAT, 'Assignat per una persona'),
+        (ROL_ORIGEN_CONFIRMAT, 'Confirmat per una persona'),
+        (ROL_ORIGEN_CORREGIT, 'Corregit per una persona'),
+    ]
+    #: D'ON ve el `piece_role`. Sense això, «FRONT» posat pel motor i «FRONT» confirmat per
+    #: la patronista valdrien igual, i el sistema aprendria del seu propi encert — el mateix
+    #: error que `SegmentPreference` evita aprenent només de la confirmació humana.
+    rol_origen = models.CharField(
+        max_length=10, choices=ROL_ORIGEN_CHOICES, blank=True, default=ROL_ORIGEN_CAP)
+
     class Meta:
         verbose_name = 'Peça de patró'
         verbose_name_plural = 'Peces de patró'
@@ -696,6 +768,72 @@ class _AppendOnlyQuerySet(models.QuerySet):
 
     def delete(self):
         raise ValueError('Append-only: esborrat no permès en aquest registre.')
+
+
+class PieceIdentityAcknowledgement(models.Model):
+    """L'acta de la identificació: algú ha dit QUÈ és cada peça d'aquest patró.
+
+    Germana d'`ExportAcknowledgement` i deliberadament amb la mateixa forma: un registre
+    APPEND-ONLY amb el que caldria per reconstruir la decisió mesos després —**qui** va
+    confirmar, **quan**, sobre **quina versió** del patró, **què** deia exactament de cada
+    peça, i el **text literal** que se li va ensenyar.
+
+    **Per què una acta i no un flag a la peça.** Un `confirmat=True` a `PatternPiece` es
+    reescriu sol al primer canvi i no diu ni qui ni quan; i, sobretot, una versió nova del
+    patró esborra les peces i se l'enduria. L'acta sobreviu perquè el que registra no és
+    l'estat d'una fila: és un ACTE. Que la pantalla en derivi un color verd és una
+    conseqüència, no el motiu (decisió D-4).
+
+    **L'snapshot és una CÒPIA, no una projecció per FK.** Es desa què deia cada peça al
+    moment de confirmar —nom de bloc inclòs— perquè el dia que algú reanomeni una peça,
+    reimporti el patró o esborri una fila, l'acta continuï dient què es va confirmar de
+    debò i no el que avui en diríem. Un registre que es reescriu sol no prova res.
+
+    Es crea NOMÉS amb `confirm=true`. Treballar a trossos —canviar un rol i marxar— no
+    genera acta: no s'ha confirmat res.
+    """
+
+    objects = _AppendOnlyQuerySet.as_manager()
+
+    pattern_file = models.ForeignKey(
+        PatternFile, on_delete=models.CASCADE,
+        related_name='identity_acknowledgements',
+    )
+    #: La versió del patró, COPIADA (mateix criteri que `ExportAcknowledgement`).
+    versio_patro = models.PositiveIntegerField()
+
+    #: [{piece_id, nom_block, rol_slug, nom, lateralitat, ordinal, estat_peca}] — el que
+    #: deia cada peça confirmada, literal.
+    snapshot = models.JSONField(default=list)
+
+    usuari = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True,
+        related_name='identitats_peces_confirmades',
+    )
+    data = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    #: El text EXACTE que l'usuari va veure i acceptar. No una clau i18n: el text.
+    texts_shown = models.TextField()
+
+    class Meta:
+        verbose_name = 'Acta d\'identitat de peces'
+        verbose_name_plural = 'Actes d\'identitat de peces'
+        ordering = ['-data']
+        indexes = [
+            models.Index(fields=['pattern_file', '-data']),
+        ]
+
+    def __str__(self):
+        return (f'{self.pattern_file_id} v{self.versio_patro} · '
+                f'{len(self.snapshot)} peces · {self.data:%Y-%m-%d %H:%M}')
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValueError('PieceIdentityAcknowledgement és append-only: no es modifica.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError('PieceIdentityAcknowledgement és append-only: no s\'esborra.')
 
 
 class SewToleranceAcceptance(models.Model):

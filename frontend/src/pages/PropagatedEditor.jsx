@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { IconLock } from '@tabler/icons-react'
+import { IconAlertTriangle, IconLock } from '@tabler/icons-react'
 import client from '../api/client'
 import { models } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
 import EditorHeader from '../components/model/EditorHeader'
-import { buildEscalatGroups, buildEscalatRows, regimeLeadCol } from '../components/model/fittingGridAdapter'
+import { buildEscalatGroups, buildEscalatRows, escalatRuleLeadCols } from '../components/model/fittingGridAdapter'
+import { mesuraSemblaIncrement } from '../utils/plausibilitatMesura'
+import { formatLen } from '../utils/format'
+import { useUnit } from './fittingShared'
 
 // ESCALAT — editor de la taula propagada del model (totes les talles) sobre l'editor únic MeasureGrid,
 // CONVERGIT amb el fitting: totes les talles editables (base inclosa) i editar una cel·la PROPAGA per
@@ -36,14 +39,33 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   useEffect(() => { models.get(modelId).then(r => setModelInfo(r.data)).catch(() => {}) }, [modelId])
 
   const base = (data?.base_size || '').trim()
-  const sizes = data?.size_run || []
+  // Identitat estable: `data?.size_run || []` fabricava un array nou a cada render i feia recalcular
+  // els useMemo de sota sempre (i el linter ho canta).
+  const sizes = useMemo(() => data?.size_run || [], [data])
   const gridGroups = buildEscalatGroups(sizes, base, t)
-  const gridRows = buildEscalatRows(data?.rows || [], sizes, base)
+  const gridRows = useMemo(
+    () => buildEscalatRows(data?.rows || [], sizes, base),
+    [data, sizes, base])
 
-  // Escriptura per talla (convergit amb el fitting): ancora la talla i PROPAGA per regla a les germanes.
-  // Retorna l'axios promise; MeasureGrid llegeix res.data.linies i refresca la fila (germanes + base).
-  const onGridSave = useCallback((lineId, value) => {
-    if (value == null) return Promise.resolve()
+  // Índex per lineId → {vigent, base} de la fila. El fan servir les dues guardes de sota, i és
+  // l'única lectura de l'estat que necessiten (cap dada nova del backend).
+  const perLinia = useMemo(() => {
+    const m = new Map()
+    for (const r of gridRows) {
+      for (const s of sizes) {
+        const a = r.cells?.[s]?.active
+        if (a) m.set(a.lineId, { vigent: a.value, base: r.base_value_cm, codi: r.codi, talla: s })
+      }
+    }
+    return m
+  }, [gridRows, sizes])
+
+  // La pregunta de plausibilitat viva: {lineId, valor, base, codi, talla, resolt}. Mai un bloqueig.
+  const [confirmPlaus, setConfirmPlaus] = useState(null)
+  const confirmRef = useRef(null)
+
+  // L'escriptura de debò, un cop passades les guardes.
+  const desa = useCallback((lineId, value) => {
     const i = lineId.lastIndexOf(':')
     const pomId = Number(lineId.slice(0, i))
     const talla = lineId.slice(i + 1)
@@ -58,6 +80,48 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
         throw e   // MeasureGrid ha de saber igualment que la cel·la NO s'ha desat.
       })
   }, [modelId])
+
+  // Escriptura per talla (convergit amb el fitting): ancora la talla i PROPAGA per regla a les germanes.
+  // Retorna l'axios promise; MeasureGrid llegeix res.data.linies i refresca la fila (germanes + base).
+  const onGridSave = useCallback((lineId, value) => {
+    if (value == null) return Promise.resolve()
+    const info = perLinia.get(lineId)
+
+    // GUARDA-RAIL — escriure el valor que la cel·la JA té és un NO-OP: ni crida. FIX-1 fa que
+    // reescriure el vigent torni la mateixa corba, però la crida que no es fa no es pot equivocar
+    // mai, i estalvia una re-derivació sencera del grading per un teclejat sense conseqüència.
+    if (info && info.vigent !== '' && info.vigent != null
+        && Number(info.vigent) === Number(value)) {
+      return Promise.resolve()
+    }
+
+    // FIX-4 — GUARDA DE PLAUSIBILITAT, en DESAR (mai en teclejar: interrompre a cada tecla faria
+    // impossible escriure «1» abans de «16»). Pregunta, no bloqueja: el «sí» desa amb normalitat.
+    if (info && mesuraSemblaIncrement(value, info.base)) {
+      return new Promise((resolve, reject) => {
+        confirmRef.current = { resolve, reject }
+        setConfirmPlaus({ lineId, valor: value, base: info.base, codi: info.codi, talla: info.talla })
+      })
+    }
+
+    return desa(lineId, value)
+  }, [perLinia, desa])
+
+  // «Desar igualment» → l'escriptura normal. Cancel·lar → cap escriptura i la cel·la torna al seu
+  // valor desat (remuntatge de la graella): que no quedi a la pantalla un número que no és a la BD.
+  const resolPlaus = useCallback((desaIgualment) => {
+    const pend = confirmPlaus
+    const cb = confirmRef.current
+    confirmRef.current = null
+    setConfirmPlaus(null)
+    if (!pend || !cb) return
+    if (!desaIgualment) {
+      cb.resolve(null)
+      load().then(() => setReloadKey(k => k + 1))
+      return
+    }
+    desa(pend.lineId, pend.valor).then(cb.resolve, cb.reject)
+  }, [confirmPlaus, desa, load])
 
   // La sortida legítima: crear una versió nova (v+1) que superi la segellada. No hi ha auto-bump
   // al backend a propòsit — superar un segell és un acte conscient, i aquest botó és aquest acte.
@@ -77,7 +141,8 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
       .catch(() => setErr(t('model_measurements.regim_err')))
   }
 
-  const leadCols = [regimeLeadCol(t, onRegimChange, readOnly)]
+  const unit = useUnit()
+  const leadCols = escalatRuleLeadCols(t, onRegimChange, readOnly, unit)
 
   // inline=true: incrustat com a contingut de pestanya (sense overlay fix ni botó tancar).
   const outerStyle = inline
@@ -141,6 +206,33 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
             </button>
           </div>
         )}
+        {/* FIX-4 — la pregunta de plausibilitat. MAI un bloqueig dur: hi ha peces petites
+            legítimes, i una validació que impedeix desar només ensenya a esquivar-la. Es
+            pregunta, i el «sí» desa amb normalitat. */}
+        {confirmPlaus && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                        marginBottom: 8, padding: '10px 12px', borderRadius: 6,
+                        border: '1px solid var(--warn)', background: 'var(--warn-bg)' }}>
+            <IconAlertTriangle size={18} stroke={1.5} style={{ color: 'var(--warn)', flexShrink: 0 }} />
+            <span style={{ fontSize: 'var(--fs-body)', flex: 1, minWidth: 260 }}>
+              {t('model_measurements.plaus_mesura', {
+                valor: formatLen(confirmPlaus.valor, unit),
+                base: formatLen(confirmPlaus.base, unit),
+              })}
+            </span>
+            <button type="button" onClick={() => resolPlaus(true)}
+              style={{ padding: '6px 14px', borderRadius: 6, border: '0.5px solid var(--border)',
+                       background: 'var(--white)', cursor: 'pointer',
+                       fontSize: 'var(--fs-body)', whiteSpace: 'nowrap' }}>
+              {t('model_measurements.plaus_desa')}
+            </button>
+            <button type="button" onClick={() => resolPlaus(false)}
+              style={{ padding: '6px 10px', borderRadius: 6, border: 0, background: 'transparent',
+                       cursor: 'pointer', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        )}
         {loading && !data ? (
           <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('app.loading')}</div>
         ) : gridRows.length === 0 ? (
@@ -151,6 +243,8 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
             editable={!readOnly}
             rows={gridRows} groups={gridGroups}
             leadCols={leadCols}
+            leadGroupLabel={t('measuregrid.grup_regla')}
+            groupsLabel={t('measuregrid.grup_mesures')}
             onSave={onGridSave}
           />
         )}

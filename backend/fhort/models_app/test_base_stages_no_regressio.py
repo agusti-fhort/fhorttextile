@@ -198,3 +198,93 @@ class BaseStagesNoRegressioTest(TenantTestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.data['stages'], [])
         self.assertEqual(res.data['rows'], [])
+
+
+class NomesPresesDeTallaBaseTest(TenantTestCase):
+    """FIX-2 (DIAGNOSI_MESURES_TEA_205) — la taula és de la TALLA BASE, i prou.
+
+    El docstring de `base_stages_view` sempre ho ha promès («NOMÉS de la talla base») però
+    la consulta es quedava tots els `MeasurementChangeLog` del model. Els overrides de talla
+    NO-base —l'edició d'una cel·la d'Escalat i `set_size_override`— s'hi escriuen amb
+    `base_measurement` a NULL, i com que els estadis són snapshots ACUMULATS, un override
+    arrossegava el seu valor cap endavant per tota la fila.
+
+    El cas és la fila B del model 205: base 46 cm, i dos overrides de valor 1 escrits a XXS i
+    XS (algú va teclejar l'increment a la cel·la de la talla). La taula de base ensenyava el
+    POM B caient de 46 a 1 — una base que la fitxa no ha tingut mai.
+    """
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Tenant'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TST'
+        tenant.vat_number = 'X0000000X'
+        tenant.tipus_client = 'STANDARD'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        self.user = get_user_model().objects.create(username='fix2')
+        self.factory = APIRequestFactory()
+        self.pom_b = POMMaster.objects.create(codi_client='B', nom_client='Llargada')
+        self.model = Model.objects.create(
+            codi_intern='TST-205', codi_tenant='TST', any=2026, sequencial=205,
+            temporada='SS27', size_run_model='XXS·XS·S·M·L', base_size_label='S',
+        )
+        self.bm = BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom_b, ordre=1, base_value_cm=46.0, origen='IMPORT')
+
+    def _overrides_de_talla(self):
+        """Els dos logs d'Escalat del 205, tal com els escriu `escalat_ajustar_talla_view`."""
+        for talla in ('XXS', 'XS'):
+            MeasurementChangeLog.objects.create(
+                model=self.model, pom=self.pom_b, base_measurement=None,
+                valor_anterior=None, valor_nou=1.0, context='manual',
+                motiu=f'Escalat talla {talla}')
+
+    def _resposta(self):
+        req = self.factory.get(f'/api/v1/models/{self.model.id}/base-stages/')
+        force_authenticate(req, user=self.user)
+        res = base_stages_view(req, self.model.id)
+        self.assertEqual(res.status_code, 200)
+        return res.data
+
+    def test_els_overrides_de_talla_no_pinten_columna(self):
+        abans = len(self._resposta()['stages'])
+        self._overrides_de_talla()
+        self.assertEqual(len(self._resposta()['stages']), abans,
+                         'un override de talla no-base no és una presa de la talla base')
+
+    def test_lhistoric_del_pom_no_cau_a_lincrement(self):
+        """El símptoma exacte: la fila B no pot ensenyar mai el valor 1."""
+        self._overrides_de_talla()
+        fila = self._resposta()['rows'][0]
+        self.assertEqual(fila['pom_code'], 'B')
+        self.assertEqual(fila['base_value_cm'], 46.0)
+        self.assertEqual(list(fila['takes'].values()), [46.0])
+        self.assertNotIn(1.0, fila['takes'].values())
+
+    def test_els_logs_segueixen_intactes(self):
+        """No es neteja res: els overrides viuen al log (auditoria). Només no pinten taula."""
+        self._overrides_de_talla()
+        self._resposta()
+        self.assertEqual(
+            MeasurementChangeLog.objects.filter(
+                model=self.model, base_measurement__isnull=True).count(), 2)
+
+    def test_una_presa_de_base_posterior_si_que_hi_entra(self):
+        """La cara B: després dels overrides, tocar la BASE sí que obre estadi nou."""
+        self._overrides_de_talla()
+        abans = len(self._resposta()['stages'])
+        self.bm.base_value_cm = 47.0
+        self.bm.origen = 'FITTED'
+        self.bm.save()
+        base = datetime.datetime(2026, 7, 29, 9, 0, 0, tzinfo=datetime.timezone.utc)
+        for i, pk in enumerate(MeasurementChangeLog.objects.filter(model=self.model)
+                               .order_by('created_at', 'id').values_list('pk', flat=True)):
+            MeasurementChangeLog.objects.filter(pk=pk).update(
+                created_at=base + datetime.timedelta(minutes=i))
+        dades = self._resposta()
+        self.assertEqual(len(dades['stages']), abans + 1)
+        self.assertEqual(sorted(dades['rows'][0]['takes'].values()), [46.0, 47.0])

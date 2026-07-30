@@ -953,7 +953,91 @@ def deltes_a_absoluts(valors, base_label, run_ordenat):
     return out
 
 
-def propaga_ancoratges(rule, anchor_label, anchor_val, size_run, warnings=None):
+# ─────────────────────────────────────────────────────────────────────────────
+# MECÀNICA D'ARESTES — font ÚNICA del pas entre dues talles veïnes (2026-07-30)
+#
+# El motor (`_apply_rule`) i la propagació per ancoratge (`propaga_ancoratges`) han de
+# recórrer EXACTAMENT el mateix relleu. Fins ara cadascun se'l calculava pel seu compte i
+# indexaven l'aresta de manera DIFERENT baixant, de manera que escriure a una cel·la
+# d'Escalat el valor que JA hi era en movia la base (DIAGNOSI_MESURES_TEA_205, B1).
+#
+# LLEI (la del motor; verificada contra la norma Brownie acceptada — RS146/E2, model 205:
+# ib=1.0, brk=1.5, break a XS, base S, run de sistema XXS·XS·S·M·L·XL·XXL·3XL):
+#   cada ARESTA s'indexa pel seu extrem EXTERIOR, el que queda més lluny de la talla BASE
+#   (que és l'origen de la regla), i pren `increment_break` si aquest extrem és a la talla
+#   de break o més enllà; si no, `increment_base`.
+#     · aresta per damunt de la base → exterior = l'etiqueta SUPERIOR
+#     · aresta per sota de la base   → exterior = l'etiqueta INFERIOR
+#   Per a E2, baixant de S: aresta XS↔S (exterior XS, que ÉS el break) → 1.5; aresta
+#   XXS↔XS (exterior XXS, per sota del break) → 1.0. Total 2.5 → XXS = base − 2.5. ✔
+#
+# L'extrem exterior es mesura SEMPRE contra la BASE, mai contra l'ancoratge: el relleu és
+# propietat de (regla + run + base), no de per on l'entres. Això és el que fa que propagar
+# des de qualsevol talla reprodueixi la MATEIXA corba, i per tant que reescriure el valor
+# vigent d'una cel·la sigui un no-op.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _break_idx_de(rule, run):
+    """Posició de la talla de break dins `run`, o None si la regla no en té (o no hi és).
+
+    Compara amb `_norm` (upper+strip) i NO amb `canonical_size_label`: és el criteri
+    EXACTE de `_apply_rule`, i afinar-lo aquí mouria GradedSpec ja emesos.
+    """
+    tbl = getattr(rule, 'talla_break_label', None)
+    if not tbl or not run:
+        return None
+    norm = [_norm(x) for x in run]
+    tn = _norm(tbl)
+    return norm.index(tn) if tn in norm else None
+
+
+def increment_de_l_aresta(rule, run, base_idx, i, j):
+    """Increment (cm, sempre POSITIU) de l'aresta entre dues talles VEÏNES del run.
+
+    Funció PURA. `i`/`j` són posicions ADJACENTS dins `run`; l'ordre entre elles és
+    indiferent (una aresta no té sentit de marxa). `base_idx` és la posició de la talla
+    BASE — l'origen de la regla — dins d'aquest mateix run.
+
+    Règim canònic (`increment_base` poblat) → llei de l'extrem exterior (v. capçalera).
+    Legacy LINEAR pur (`increment_base` és None) → `increment` uniforme, sense break.
+    """
+    ib_raw = getattr(rule, 'increment_base', None)
+    if ib_raw is None:                          # LINEAR pur legacy: pas uniforme
+        inc_raw = getattr(rule, 'increment', None)
+        return float(inc_raw) if inc_raw is not None else 0.0
+
+    ib = float(ib_raw)
+    brk_raw = getattr(rule, 'increment_break', None)
+    brk = float(brk_raw) if brk_raw is not None else ib
+
+    break_idx = _break_idx_de(rule, run)
+    if break_idx is None:                       # sense break → tot el relleu és uniforme
+        return ib
+
+    aresta = min(i, j)                          # l'aresta viu entre `aresta` i `aresta + 1`
+    exterior = aresta + 1 if aresta >= base_idx else aresta
+    return brk if exterior >= break_idx else ib
+
+
+def desnivell_entre_talles(rule, run, base_idx, origen_idx, desti_idx):
+    """Suma SIGNADA dels increments de les arestes del camí origen → destí.
+
+    Funció PURA i ÚNICA acumulació d'arestes del sistema: la consumeixen tant el motor
+    (`_apply_rule`, que sempre camina des de la base) com `propaga_ancoratges` (que camina
+    des de la talla ancorada). Positiva pujant, negativa baixant, 0.0 si no hi ha camí.
+    """
+    if origen_idx == desti_idx:
+        return 0.0
+    lo, hi = ((origen_idx, desti_idx) if origen_idx < desti_idx
+              else (desti_idx, origen_idx))
+    total = 0.0
+    for k in range(lo, hi):
+        total += increment_de_l_aresta(rule, run, base_idx, k, k + 1)
+    return total if desti_idx > origen_idx else -total
+
+
+def propaga_ancoratges(rule, anchor_label, anchor_val, size_run, warnings=None, *,
+                       run_sistema, base_label):
     """Propaga el delta CANÒNIC/LINEAR de la regla des d'UNA talla ancorada.
 
     Funció PURA (cap I/O, cap ORM). Règim LINEAR/canònic NOMÉS: el cridador NO la crida
@@ -963,58 +1047,45 @@ def propaga_ancoratges(rule, anchor_label, anchor_val, size_run, warnings=None):
           o LINEAR pur legacy (`increment` uniforme quan `increment_base` és None).
     anchor_label / anchor_val: la talla editada i el seu valor real — origen únic de la
           propagació.
-    size_run: list d'etiquetes ordenades.
-    warnings: acceptat per compatibilitat de signatura; canònic/LINEAR no genera avisos.
+    size_run: etiquetes del MODEL. Són les CLAUS de sortida, amb la seva ortografia.
+    run_sistema: etiquetes del SISTEMA ordenades (llei S24b) — el referent que mana l'ordre
+          i la DISTÀNCIA, igual que a `_apply_rule`. Un run de model no contigu (XS·S·L)
+          no té dret a col·lapsar el pas S→L en un de sol.
+    base_label: la talla BASE del model, origen de la regla. Cal per situar el relleu:
+          quina aresta pren `increment_break` depèn de la BASE, no de l'ancoratge (v.
+          `increment_de_l_aresta`). Sense això, propagar des d'una talla i tornar a llegir
+          la base no retornava el valor de partida (B1).
 
-    Retorna {size_label: valor_teoric} per CADA talla del run (claus = etiquetes ORIGINALS),
-    caminant el delta des de l'ancoratge.
+    Retorna {size_label: valor_teoric} per CADA talla de `size_run` (claus = etiquetes
+    ORIGINALS). Talla que el sistema no coneix → None (mai una distància inventada).
     """
+    from fhort.pom.size_labels import canonical_size_label
+
     run = [str(s).strip() for s in (size_run or [])]
     if not run:
         return {}
-    norm_run = [_norm(s) for s in run]
-    na = _norm(anchor_label)
-    if na not in norm_run:                      # ancoratge fora del run (defensiu)
+
+    sistema = [str(s).strip() for s in (run_sistema or [])]
+    pos = {canonical_size_label(e): i for i, e in enumerate(sistema)}
+
+    def _idx(label):
+        return pos.get(canonical_size_label(label))
+
+    anchor_idx, base_idx = _idx(anchor_label), _idx(base_label)
+    if anchor_idx is None or base_idx is None:      # geometria incompleta (defensiu)
         return {lab: None for lab in run}
-    anchor_idx = norm_run.index(na)
+
     anchor_val = float(anchor_val)
 
-    # Delta de la regla: increment_base (+ break per ETIQUETA) o, si és None, increment uniforme.
-    ib_raw = getattr(rule, 'increment_base', None)
-    if ib_raw is not None:
-        ib = float(ib_raw)
-        brk_raw = getattr(rule, 'increment_break', None)
-        brk = float(brk_raw) if brk_raw is not None else ib
-        break_idx = None
-        tbl = getattr(rule, 'talla_break_label', None)
-        if tbl:
-            tn = _norm(tbl)
-            if tn in norm_run:
-                break_idx = norm_run.index(tn)
-    else:                                       # LINEAR pur legacy
-        inc_raw = getattr(rule, 'increment', None)
-        if inc_raw is None and warnings is not None:
-            warnings.append(
-                f"Regla sense delta definit (pom={getattr(rule, 'pom_id', None)}): "
-                f"propagació plana (delta 0) des de l'ancoratge {anchor_label}.")
-        ib = brk = float(inc_raw) if inc_raw is not None else 0.0
-        break_idx = None
+    if (getattr(rule, 'increment_base', None) is None
+            and getattr(rule, 'increment', None) is None and warnings is not None):
+        warnings.append(
+            f"Regla sense delta definit (pom={getattr(rule, 'pom_id', None)}): "
+            f"propagació plana (delta 0) des de l'ancoratge {anchor_label}.")
 
     out = {}
-    for t_idx, label in enumerate(run):
-        if t_idx == anchor_idx:
-            out[label] = anchor_val
-            continue
-        # Camí d'acumulació des de l'ancoratge (mecànica canònica de _apply_rule, origen
-        # = anchor_idx). Cada aresta s'indexa per la seva etiqueta SUPERIOR; el break és
-        # posicional absolut → simètric amunt/avall, sense ambigüitat.
-        if t_idx > anchor_idx:
-            path, sign = range(anchor_idx + 1, t_idx + 1), 1.0
-        else:
-            path, sign = range(t_idx + 1, anchor_idx + 1), -1.0
-        total = 0.0
-        for j in path:
-            total += brk if (break_idx is not None and j >= break_idx) else ib
-        out[label] = anchor_val + sign * total
-
+    for label in run:
+        t_idx = _idx(label)
+        out[label] = None if t_idx is None else anchor_val + desnivell_entre_talles(
+            rule, sistema, base_idx, anchor_idx, t_idx)
     return out

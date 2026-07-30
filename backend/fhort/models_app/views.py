@@ -2649,7 +2649,7 @@ def escalat_ajustar_talla_view(request, model_id):
     """
     from fhort.models_app.models import ModelGradingOverride, MeasurementChangeLog
     from fhort.pom.models import POMMaster
-    from fhort.pom.services import generate_graded_specs, _load_grading_rules
+    from fhort.pom.services import generate_graded_specs, _load_grading_rules, escala_del_model
     from fhort.pom.grading_utils import propaga_ancoratges
     from fhort.fitting.services import _resolve_working_size_fitting, vigent_grading_version
     from fhort.fitting.models import GradedSpec
@@ -2704,8 +2704,19 @@ def escalat_ajustar_talla_view(request, model_id):
         with transaction.atomic():
             if propaga:
                 # Nova base de la corba ancorada a l'edició (per a la base, l'ancoratge ÉS la base).
-                nova_base = (valor if talla == base_size
-                             else propaga_ancoratges(rule, talla, valor, size_run).get(base_size))
+                # Geometria del MOTOR (`escala_del_model`): el relleu el manen el run del
+                # SISTEMA i la talla BASE (llei S24b + FIX-1). Amb el run del model, un forat
+                # col·lapsava el pas i el break queia on no toca — d'aquí que reescriure el
+                # valor vigent d'una cel·la moqués la base (DIAGNOSI_MESURES_TEA_205, B1).
+                nova_base = valor
+                if talla != base_size:
+                    try:
+                        _run_model, run_sistema, _pos, _bidx = escala_del_model(model)
+                    except ValueError as e:
+                        return Response({'error': str(e)}, status=400)
+                    nova_base = propaga_ancoratges(
+                        rule, talla, valor, size_run,
+                        run_sistema=run_sistema, base_label=base_size).get(base_size)
                 if nova_base is None:
                     return Response({'error': "No s'ha pogut derivar la base des de la talla ancorada."}, status=400)
                 _write_base(model, pom, round(float(nova_base), 2), auth_user,
@@ -2853,7 +2864,19 @@ def base_stages_view(request, model_id):
         return (float(tm) if tm is not None else 0.6, float(tp) if tp is not None else 0.6)
 
     # Estadis = events de MeasurementChangeLog agrupats per (context, segon), en ordre d'aparició.
-    logs = (MeasurementChangeLog.objects.filter(model=model)
+    #
+    # NOMÉS PRESES DE LA TALLA BASE (FIX-2, DIAGNOSI_MESURES_TEA_205 · fila B del 205).
+    # `MeasurementChangeLog` també registra els OVERRIDES de talla no-base (l'edició d'una
+    # cel·la d'Escalat i el `set_size_override`), i aquests s'escriuen amb `base_measurement`
+    # a NULL — és el senyal que distingeix «he tocat la base» de «he pinçat una talla».
+    # Sense el filtre entraven a la taula com si fossin preses de base i, com que els estadis
+    # són SNAPSHOTS per carry-forward, un override arrossegava el seu valor cap endavant per
+    # tota la fila: al 205, el POM B (base 46) es veia caure a 1 perquè algú havia escrit 1
+    # a les cel·les XXS i XS. La taula deia una base que la fitxa no ha tingut mai.
+    #
+    # Els logs NO es toquen (són auditoria): el que canvia és qui té dret a pintar-hi columna.
+    logs = (MeasurementChangeLog.objects
+            .filter(model=model, base_measurement__isnull=False)
             .select_related('pom').order_by('created_at', 'id'))
     events, ev_index, changes_by_ev = [], {}, {}
     for c in logs:

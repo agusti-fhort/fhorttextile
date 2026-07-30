@@ -32,18 +32,21 @@ from fhort.fitting.staleness import com_a_dict, estalitud
 from fhort.models_app.models import BaseMeasurement, Model
 from fhort.models_app.services_fitxers import (DOWNLOAD_TTL, UploadRejected,
                                                serve_fitxer, validate_upload)
-from fhort.pom.models import CustomerPOMAlias
+from fhort.pom.models import CustomerPOMAlias, PatternPieceRole
 from fhort.tasks.models import GarmentTypeItem
 
 from .adapters import DjangoGeometryStore
-from .engine.aama_reader import AAMAReader
+from .engine.aama_reader import AAMAReader, unfold_piece
 from .engine.errors import PatternParseError
 from .engine.rul_reader import RULReader, coherencia_dxf_rul
 from .export import PERFILS_DISPONIBLES, ExportBlocked, build_export
-from .models import ExportAcknowledgement, PatternFile, PatternPOM
+from .models import (ExportAcknowledgement, PatternFile, PatternPOM,
+                     PieceIdentityAcknowledgement)
 from .serializers import (PatternFileLlistaSerializer, PatternFileSerializer,
-                          PatternGeometrySerializer)
-from .services import delete_pattern_bytes, save_pattern_file
+                          PatternGeometrySerializer, PatternPieceRoleSerializer)
+from .services import (CONFIRM_TEXT_CA, IdentificacioRebutjada,
+                       delete_pattern_bytes, identificar_peces,
+                       save_pattern_file)
 from .svg import render_document
 
 logger = logging.getLogger(__name__)
@@ -241,6 +244,49 @@ def _preview_payload(resultat) -> dict:
     }
 
 
+def _avisos_no_interpretades(document) -> list:
+    """Les entitats de capa CONEGUDA que el reader no ha sabut llegir, dites en veu alta.
+
+    Agrupades per (tipus, capa): a qui puja el fitxer no li serveix una llista de handles,
+    li serveix saber que hi havia 12 LWPOLYLINE a la capa 1 que no han entrat. Els handles
+    queden a l'empremta per a qui hagi d'anar a mirar el fitxer amb el CAD obert.
+
+    No bloqueja mai: el fitxer s'ha llegit i s'ha desat. Callar-ho sí que seria greu —és
+    exactament així com un contorn desapareixia sense que ningú se n'assabentés.
+    """
+    per_tipus: dict[tuple[str, str], int] = {}
+    for dxftype, capa, _handle in document.fingerprint.entitats_no_interpretades:
+        per_tipus[(dxftype, capa)] = per_tipus.get((dxftype, capa), 0) + 1
+
+    return [
+        {
+            'codi': 'entitats_no_interpretades',
+            'missatge': (
+                f'{quantes} entitats de tipus {dxftype} a la capa {capa} no s\'han '
+                f'interpretat: el motor no en sap llegir la forma i no han entrat a la '
+                f'geometria.'
+            ),
+            'detall': {'dxftype': dxftype, 'capa': capa, 'quantes': quantes},
+        }
+        for (dxftype, capa), quantes in sorted(per_tipus.items())
+    ]
+
+
+def _acta_com_a_dict(acta) -> dict | None:
+    """L'acta tal com la pantalla la necessita: qui, quan, sobre quina versió, i què."""
+    if acta is None:
+        return None
+    return {
+        'id': acta.id,
+        'data': acta.data,
+        'versio_patro': acta.versio_patro,
+        'usuari': acta.usuari_id,
+        'peces_confirmades': len(acta.snapshot),
+        'snapshot': acta.snapshot,
+        'texts_shown': acta.texts_shown,
+    }
+
+
 def _rul_servable(fp: PatternFile):
     """Proxy que compleix el duck-type de `serve_fitxer` (fitxer / nom_fitxer / mimetype).
 
@@ -263,7 +309,8 @@ class PatternFileViewSet(mixins.CreateModelMixin,
     queryset = (
         PatternFile.objects
         .select_related('model', 'garment_type_item', 'pujat_per', 'versio_anterior')
-        .prefetch_related('pieces__points', 'pieces__segments', 'pieces__poms__pom_master')
+        .prefetch_related('pieces__points', 'pieces__segments', 'pieces__poms__pom_master',
+                          'pieces__piece_role')
         .all()
     )
     # MultiPart/Form per a l'upload (que porta els bytes del DXF); JSON per a l'exportació,
@@ -329,8 +376,27 @@ class PatternFileViewSet(mixins.CreateModelMixin,
         finally:
             dxf.seek(0)
 
+        # D-6 · EL QUE ES PERSISTEIX ÉS LA PEÇA SENCERA. El fitxer del client pot portar
+        # les peces simètriques dibuixades a mitges —la vora recta que el patronista posa
+        # sobre el doblec de la tela—, però mesurar mitja màniga no és mesurar una màniga:
+        # tot el que després llegeix aquesta geometria (POMs ancorats, costures, projecció
+        # del grading) l'ha de trobar desplegada, o mesurarà la meitat i no ho dirà.
+        #
+        # El desplegament és del CAMÍ D'IMPORTACIÓ, no del reader: `read()` ha de continuar
+        # tornant el fitxer tal com és (hi ha qui el vol així, i el comparador de round-trip
+        # se'n serveix). L'eix i el semiplà originals viatgen dins de `doblec_original` amb
+        # `materialitzat=True`, que és el que permet tornar-la a plegar en exportar.
+        #
+        # Una peça sense doblec surt d'`unfold_piece` sense tocar —retorna la mateixa
+        # instància—, així que això no altera cap patró que ja vingués sencer.
+        document = replace(
+            document, pieces=tuple(unfold_piece(p) for p in document.pieces))
+
         grade_table = None
-        avisos = []
+        # El que el motor ha vist i NO ha sabut llegir viatja pel mateix canal que els
+        # avisos de coherència: no bloqueja (el fitxer s'ha desat i és llegible), però qui
+        # el puja ha de saber que hi havia entitats que no han entrat.
+        avisos = _avisos_no_interpretades(document)
         if rul is not None:
             try:
                 grade_table = RULReader().read(rul.read())
@@ -339,7 +405,7 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             finally:
                 rul.seek(0)
             # El DXF i el RUL viatgen junts, però ningú no garanteix que siguin germans.
-            avisos = [
+            avisos += [
                 {'codi': i.codi, 'missatge': i.missatge, 'detall': i.detall}
                 for i in coherencia_dxf_rul(document, grade_table)
             ]
@@ -560,6 +626,62 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             'results': files,
         })
 
+    # ── La identitat de les peces ────────────────────────────────────────────
+    @action(detail=True, methods=['post'])
+    def identificar(self, request, pk=None):
+        """POST … /identificar/ — dir QUÈ és cada peça. Amb `confirm`, hi deixa acta.
+
+        `{peces: [{piece_id, piece_role_id?, nom?, lateralitat?, ordinal?, estat_peca?}],
+          confirm: bool}`
+
+        **En bloc i no peça a peça** perquè identificar un patró és un sol gest: qui mira
+        un davanter el mira contra l'esquena que té al costat. Trenta crides soltes podrien
+        fallar a la vintena i deixar mig patró dit.
+
+        L'escriptura la governa `services.identificar_peces`, mai un serializer: la llei del
+        mòdul (v. capçalera) i, aquí, dues raons concretes — `rol_origen` el decideix el
+        SERVIDOR comparant amb el que hi havia, i l'acta ha d'entrar amb les peces o no
+        entrar.
+        """
+        fp = self.get_object()
+        files = request.data.get('peces')
+        if not isinstance(files, list):
+            return Response(
+                {'error': 'Cal una llista `peces`.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            tocades, acta = identificar_peces(
+                pattern_file=fp,
+                files=files,
+                usuari=getattr(request.user, 'profile', None),
+                confirm=request.data.get('confirm') is True,
+                texts_shown=request.data.get('texts_shown') or '',
+            )
+        except IdentificacioRebutjada as e:
+            # Una petició que no es pot aplicar és un 400 amb el motiu, mai una avaria.
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'peces_actualitzades': len(tocades),
+            'acta': _acta_com_a_dict(acta),
+            'text_confirmacio': CONFIRM_TEXT_CA,
+        })
+
+    @action(detail=True, methods=['get'], url_path='identitat')
+    def identitat(self, request, pk=None):
+        """L'ÚLTIMA acta d'aquest patró, o `null`.
+
+        D'aquí surt el verd de la pantalla. Deriva del servidor i no del navegador a posta:
+        un estat de confirmació que viu a `localStorage` diu que algú va confirmar en
+        AQUELL ordinador, que no és el que la pregunta vol saber.
+        """
+        fp = self.get_object()
+        acta = fp.identity_acknowledgements.select_related('usuari').first()
+        return Response({
+            'acta': _acta_com_a_dict(acta),
+            'text_confirmacio': CONFIRM_TEXT_CA,
+        })
+
     # ── L'escalat: previsualitzar i exportar ─────────────────────────────────
     @action(detail=True, methods=['get'], url_path='grading-versions')
     def grading_versions(self, request, pk=None):
@@ -762,3 +884,23 @@ class PatternFileViewSet(mixins.CreateModelMixin,
         if str(signed_id) != str(pk):
             return None, HttpResponseForbidden('El token no correspon a aquest fitxer.')
         return self.get_object(), None
+
+
+class PatternPieceRoleViewSet(viewsets.ReadOnlyModelViewSet):
+    """El catàleg de rols de peça. Només lectura.
+
+    Qui el manté és la sembra (`seed_pattern_piece_roles`), que és idempotent i no esborra
+    mai. Obrir-hi una porta d'escriptura per API voldria dir que un rol canònic es pot
+    canviar des del navegador sense passar per cap gate — i la llei del catàleg (D-1) diu
+    que el tenant PROPOSA i que promoure és un acte separat.
+
+    Sense paginar: són trenta files i el picker les vol totes de cop per agrupar-les per
+    classe. Paginar-les obligaria el client a fer tres crides per pintar un desplegable.
+    """
+    queryset = PatternPieceRole.objects.all()
+    serializer_class = PatternPieceRoleSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['classe', 'is_system']
+    ordering = ['display_order', 'slug']

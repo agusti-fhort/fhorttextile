@@ -930,24 +930,15 @@ def _apply_rule(rule, base_val: float, steps: int, size_idx: int, base_idx: int,
     # PG-4b-3a: `logica` és la veritat del règim. STEP NO grada canònic encara que increment_base
     # estigui poblat (es conserva latent per a STEP↔LINEAR no-destructiu) → cau a la branca STEP.
     if grading_type != 'STEP' and getattr(rule, 'increment_base', None) is not None:
-        ib = float(rule.increment_base)
-        brk = float(rule.increment_break) if rule.increment_break is not None else ib
+        # El recorregut d'arestes viu a `grading_utils.desnivell_entre_talles`, compartit
+        # amb `propaga_ancoratges` (FIX-1, 2026-07-30). Mateixes arestes, mateix ordre de
+        # suma i mateix criteri de break que la versió que hi havia aquí: cap GradedSpec
+        # es mou. La llei de l'aresta està documentada allà.
+        from fhort.pom.grading_utils import desnivell_entre_talles
         if size_idx == base_idx:
             return base_val, grading_type
-        break_idx = None
-        if rule.talla_break_label and size_run:
-            norm = [_norm_label(x) for x in size_run]
-            tl = _norm_label(rule.talla_break_label)
-            if tl in norm:
-                break_idx = norm.index(tl)
-        if size_idx > base_idx:
-            path, sign = range(base_idx + 1, size_idx + 1), 1.0
-        else:
-            path, sign = range(size_idx, base_idx), -1.0
-        total = 0.0
-        for j in path:
-            total += brk if (break_idx is not None and j >= break_idx) else ib
-        return base_val + sign * total, grading_type
+        return (base_val + desnivell_entre_talles(
+            rule, size_run, base_idx, base_idx, size_idx), grading_type)
 
     if grading_type == 'LINEAR':
         return base_val + (steps * increment), 'LINEAR'

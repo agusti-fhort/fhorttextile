@@ -90,9 +90,19 @@ const stepBtnStyle = {
 }
 
 function ActiveCell({ active, editable, value, edited, onChange, onCommit, focusRef, unit }) {
+  const { t } = useTranslation()
   const [state, schedule] = useDebouncedSave(onCommit)
   const [focused, setFocused] = useState(false)
-  if (!active) return <td style={cellTd(true, false, false)} />
+  // FIX-3 (DIAGNOSI_MESURES_TEA_205) — CAP FILA INERTA. Sense línia activa, aquí hi havia una
+  // cel·la destacada i BUIDA: en una columna on totes les altres són caselles d'escriptura, es
+  // llegeix com un camp que no respon, no com una absència. Un guió mut i el motiu al tooltip
+  // diuen la veritat: en aquesta fila no hi ha res a anotar (encara).
+  if (!active) {
+    return (
+      <td style={{ ...cellTd(true, false, false), color: 'var(--text-muted)' }}
+        title={t('measuregrid.sense_linia')}>—</td>
+    )
+  }
   const modified = activeRed(value, active)
   // `active.readonly` força lectura en una cel·la concreta encara que la graella sigui editable
   // (p.ex. la talla base de l'Escalat, que no s'edita com a override).
@@ -249,6 +259,14 @@ export default function MeasureGrid({
   rows = [],
   groups = [],            // [{key, label, accent?, historyCols:[{key,label}], activeLabel, trailCols:[{key,label}]}]
   leadCols = [],          // [{key, label, width, render:(row)=>node}]  sticky després de POM/Nom (consulta: render pot ser text)
+  // FIX-4 (DIAGNOSI_MESURES_TEA_205) — MESURA i DELTA no es poden confondre. Amb `leadGroupLabel`
+  // la graella guanya una FILA DE CAPÇALERA per damunt: els leadCols queden agrupats sota el seu
+  // títol i amb el fons crema de la casa, i els grups de talla sota el seu. Al 205 algú va escriure
+  // l'increment `1` a la cel·la de talla d'un POM amb base 46; el camp Δ i la cel·la de mesura eren
+  // dos números iguals a pocs píxels, sense res que digués que són coses diferents.
+  // OPT-IN: sense `leadGroupLabel` la capçalera és exactament la de sempre (check i fitting intactes).
+  leadGroupLabel = null,  // títol del bloc de leadCols (p.ex. "Regla de graduació")
+  groupsLabel = null,     // títol del bloc de grups de talla (p.ex. "Mesures per talla")
   editable = false,
   onSave,                 // (lineId, rawValue) => Promise (pot resoldre amb {lines:[{id,valor_real}]} per propagar)
   onNomSave = null,       // (bmId, value) => Promise — desa la nomenclatura curta del MODEL (nom_fitxa, P4); null = no editable
@@ -328,18 +346,60 @@ export default function MeasureGrid({
   const baseLeft = COL_POM_W + COL_NOM_W
   const leadLefts = leadCols.map((_, i) => baseLeft + leadCols.slice(0, i).reduce((s, c) => s + c.width, 0))
 
-  const stickyHd = (left, w) => ({ ...thStyle, position: 'sticky', left, zIndex: 3, minWidth: w, width: w, background: 'var(--bg-muted)', textAlign: 'left' })
-  const stickyTd = (left, w, bg) => ({ position: 'sticky', left, zIndex: 1, minWidth: w, width: w, background: bg, padding: '5px 10px', borderBottom: '0.5px solid var(--border)', verticalAlign: 'middle', whiteSpace: 'nowrap' })
+  // FIX-4 — el bloc de REGLA es distingeix per FONS (crema de la casa) i per un SEPARADOR gruixut
+  // just abans de les mesures. Dos senyals, no un: el color agrupa, el filet talla.
+  const agrupat = !!leadGroupLabel
+  const REGLA_BG = 'var(--model-band)'                   // crema suau (token de casa, cap hex)
+  const SEP = '2px solid var(--border)'                  // separador Regla | Mesures
+  const esUltimLead = (i) => agrupat && i === leadCols.length - 1
+
+  const stickyHd = (left, w, i = null) => ({
+    ...thStyle, position: 'sticky', left, zIndex: 3, minWidth: w, width: w,
+    background: (agrupat && i != null) ? REGLA_BG : 'var(--bg-muted)', textAlign: 'left',
+    ...(esUltimLead(i) && { borderRight: SEP }),
+  })
+  const stickyTd = (left, w, bg, i = null) => ({
+    position: 'sticky', left, zIndex: 1, minWidth: w, width: w,
+    background: (agrupat && i != null) ? REGLA_BG : bg,
+    padding: '5px 10px', borderBottom: '0.5px solid var(--border)',
+    verticalAlign: 'middle', whiteSpace: 'nowrap',
+    ...(esUltimLead(i) && { borderRight: SEP }),
+  })
+  const totalGroupCols = groups.reduce(
+    (s, g) => s + (g.historyCols?.length || 0) + 1 + (g.trailCols?.length || 0), 0)
+  const identitatHd = (left, w) => stickyHd(left, w)     // POM/Nom: mai del bloc de regla
 
   return (
     <div style={{ overflow: 'auto', maxHeight: '70vh', width: '100%' }}>
       <table style={{ borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
         <thead>
+          {agrupat && (
+            <tr>
+              <th rowSpan={3} style={identitatHd(0, COL_POM_W)}>{t('measuregrid.col_pom')}</th>
+              <th rowSpan={3} style={identitatHd(COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>
+              {leadCols.length > 0 && (
+                <th colSpan={leadCols.length} style={{
+                  ...thStyle, textAlign: 'center', background: REGLA_BG, borderRight: SEP,
+                }}>{leadGroupLabel}</th>
+              )}
+              {totalGroupCols > 0 && (
+                <th colSpan={totalGroupCols} style={{
+                  ...thStyle, textAlign: 'center', background: 'var(--bg-muted)',
+                }}>{groupsLabel}</th>
+              )}
+              {canPodar && (
+                <th rowSpan={3} style={{ ...thStyle, textAlign: 'center', width: 64, minWidth: 64,
+                                         background: 'var(--bg-muted)', borderLeft: '1px solid var(--border)' }}>
+                  {t('measuregrid.col_accions')}
+                </th>
+              )}
+            </tr>
+          )}
           <tr>
-            <th rowSpan={2} style={stickyHd(0, COL_POM_W)}>{t('measuregrid.col_pom')}</th>
-            <th rowSpan={2} style={stickyHd(COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>
+            {!agrupat && <th rowSpan={2} style={identitatHd(0, COL_POM_W)}>{t('measuregrid.col_pom')}</th>}
+            {!agrupat && <th rowSpan={2} style={identitatHd(COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>}
             {leadCols.map((c, i) => (
-              <th key={c.key} rowSpan={2} style={stickyHd(leadLefts[i], c.width)}>{c.label}</th>
+              <th key={c.key} rowSpan={2} style={stickyHd(leadLefts[i], c.width, i)}>{c.label}</th>
             ))}
             {groups.map(g => {
               const span = (g.historyCols?.length || 0) + 1 + (g.trailCols?.length || 0)
@@ -351,7 +411,7 @@ export default function MeasureGrid({
                 }}>{g.label}</th>
               )
             })}
-            {canPodar && (
+            {!agrupat && canPodar && (
               <th rowSpan={2} style={{ ...thStyle, textAlign: 'center', width: 64, minWidth: 64,
                                        background: 'var(--bg-muted)', borderLeft: '1px solid var(--border)' }}>
                 {t('measuregrid.col_accions')}
@@ -392,7 +452,7 @@ export default function MeasureGrid({
                 <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} nomFitxa={r.nom_fitxa} bmId={r.bm_id}
                   editable={editable} onNomSave={onNomSave} editCodi={editCodi} style={stickyTd(COL_POM_W, COL_NOM_W, rowBg)} />
                 {leadCols.map((c, idx) => (
-                  <td key={c.key} style={stickyTd(leadLefts[idx], c.width, rowBg)}>{c.render(r)}</td>
+                  <td key={c.key} style={stickyTd(leadLefts[idx], c.width, rowBg, idx)}>{c.render(r)}</td>
                 ))}
                 {groups.flatMap(g => {
                   const cell = r.cells?.[g.key] || {}

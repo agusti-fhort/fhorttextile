@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
+import { etiquetaPeca, nomDelRol, nomOriginal } from './pieceText'
+
 /**
  * La llista de peces del patró: nom, rol, recomptes i bbox. Clicar-ne una la selecciona
  * al canvas (i tornar-la a clicar la deselecciona).
@@ -9,7 +11,7 @@ import { useTranslation } from 'react-i18next'
  * renderitza al document SVG). Mateixa llista, mateix comportament, un sol lloc.
  */
 export default function PieceList({ pieces, pecaSel, onTria }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const cm = mm => (mm / 10).toFixed(1)
 
   return (
@@ -33,7 +35,11 @@ export default function PieceList({ pieces, pecaSel, onTria }) {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <i className="ti ti-vector-triangle" style={{ color: 'var(--gold)' }} />
-              <strong style={{ fontSize: 'var(--fs-body)' }}>{p.nom_block}</strong>
+              {/* L'etiqueta és el nom que una persona ha triat, si n'hi ha; el nom del
+                  BLOCK no desapareix mai —va al títol— perquè és l'evidència del fitxer. */}
+              <strong style={{ fontSize: 'var(--fs-body)' }} title={nomOriginal(p)}>
+                {etiquetaPeca(p)}
+              </strong>
               {p.metadata?.material && (
                 <span style={{
                   fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
@@ -49,6 +55,16 @@ export default function PieceList({ pieces, pecaSel, onTria }) {
                 </span>
               )}
             </div>
+            {/* Segona línia (convenció FTP-1): el nom del ROL, en gris i cursiva. Si la
+                peça encara no en té, la línia no hi és — un buit no s'omple amb text. */}
+            {nomDelRol(p, i18n.language) && (
+              <span style={{
+                fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+                fontStyle: 'italic',
+              }}>
+                {nomDelRol(p, i18n.language)}
+              </span>
+            )}
             <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
               {t('pattern.piece_points', {
                 total: p.total_punts, turn: c.turn || 0, curve: c.curve || 0,

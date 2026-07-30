@@ -100,6 +100,79 @@ class GarmentTypeGlobal(models.Model):
         return f'{self.codi} · {self.nom_en}'
 
 
+class PatternPieceRole(models.Model):
+    """Rol CANÒNIC d'una peça de patró: què és aquesta peça, no com se'n diu.
+
+    Viu aquí i no a `patterns/` per una raó d'infraestructura, no de gust: `fhort.pom` és
+    l'única app que és a SHARED **i** a TENANT alhora, o sigui l'única on una taula pot
+    existir a `public` i replicar-se a cada tenant. `fhort.patterns` és tenant-only, i un
+    catàleg de sistema declarat allà no podria arribar mai al schema públic.
+
+    **CATÀLEG DE SISTEMA. El tenant PROPOSA; la promoció és un acte separat (D-1).**
+    Un rol amb `is_system=True` és propietat de la casa i no s'esborra. Un tenant que es
+    troba una peça que el catàleg no sap anomenar pot crear el seu rol —`is_system=False`,
+    `pendent_revisio=True`, `origen=MANUAL` o `IMPORT`—, i aquell rol serveix per treballar
+    des del primer dia; convertir-lo en canònic és una decisió humana, amb el seu gate, i
+    mai un efecte secundari d'una importació. És la mateixa llei que ja governa
+    `POMMaster.pom_global=None` i `CustomerPOMAlias.pendent_revisio`.
+
+    **LA SEMBRA NO ESBORRA MAI.** `update_or_create` per `slug`, cap `delete`, i el revers
+    de tota migració de dades és un noop: revertir un esquema no ha de destruir el catàleg
+    (mateix criteri que `0025_seed_canonical_task_types`).
+
+    El `slug` és la clau estable —el que viatja entre tenants i entre versions d'un patró—;
+    els noms són per als ulls i van en tres idiomes des del primer dia, com `POMGlobal`,
+    perquè afegir-los després vol dir repassar files a mà.
+
+    Un rol NO és la identitat d'una peça: hi ha camises amb tres vistes i pantalons amb
+    dues traves. La identitat es completa amb lateralitat i ordinal, que viuen a la peça.
+    """
+
+    CLASSE_COS = 'cos'
+    CLASSE_MANIGA = 'maniga'
+    CLASSE_BANDA = 'banda'
+    CLASSE_TIRA = 'tira'
+    CLASSE_PANELL = 'panell'
+    CLASSE_COMPLEMENT = 'complement'
+    CLASSE_CHOICES = [
+        (CLASSE_COS, 'Cos'),
+        (CLASSE_MANIGA, 'Màniga'),
+        (CLASSE_BANDA, 'Banda'),
+        (CLASSE_TIRA, 'Tira'),
+        (CLASSE_PANELL, 'Panell'),
+        (CLASSE_COMPLEMENT, 'Complement'),
+    ]
+
+    ORIGEN_SEED = 'SEED'
+    ORIGEN_MANUAL = 'MANUAL'
+    ORIGEN_IMPORT = 'IMPORT'
+    ORIGEN_CHOICES = [
+        (ORIGEN_SEED, 'Sembra'),
+        (ORIGEN_MANUAL, 'Manual'),
+        (ORIGEN_IMPORT, 'Importació'),
+    ]
+
+    slug = models.SlugField(max_length=60, unique=True)
+    nom_en = models.CharField(max_length=120)
+    nom_ca = models.CharField(max_length=120)
+    nom_es = models.CharField(max_length=120)
+    classe = models.CharField(max_length=12, choices=CLASSE_CHOICES)
+    #: Propietat de la casa: no s'esborra (mateix guard que `GarmentTypeGlobal.is_system`).
+    is_system = models.BooleanField(default=False)
+    #: Rol nascut al tenant i encara no promogut a canònic.
+    pendent_revisio = models.BooleanField(default=False)
+    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default=ORIGEN_MANUAL)
+    display_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = 'Rol de peça de patró'
+        verbose_name_plural = 'Rols de peça de patró'
+        ordering = ['display_order', 'slug']
+
+    def __str__(self):
+        return f'{self.slug} · {self.nom_ca or self.nom_en}'
+
+
 class POMEstadisticaGlobal(models.Model):
     pom_global = models.ForeignKey(POMGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')
     garment_type_global = models.ForeignKey(GarmentTypeGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')

@@ -14,16 +14,30 @@ logger = logging.getLogger(__name__)
 
 
 def _materialize_lines(size_check, model) -> int:
-    """Crea una SizeCheckLine per cada BaseMeasurement VIGENT del model.
+    """Completa el check amb una SizeCheckLine per cada BaseMeasurement VIGENT que no en tingui.
 
-    valor_teoric = snapshot del base_value_cm en aquest moment; valor_real null (el tècnic
-    l'anota); decisio/nota als defaults. Només s'invoca quan el check NO té cap línia
-    (crear de nou o reomplir un Pendent orfe) → no clobbera feina anotada. Retorna n línies.
+    valor_teoric = snapshot del base_value_cm EN AQUEST MOMENT; valor_real null (el tècnic
+    l'anota); decisio/nota als defaults.
+
+    FIX-3 (DIAGNOSI_MESURES_TEA_205) — abans això era tot-o-res: només s'invocava quan el
+    check no tenia CAP línia, de manera que un POM nascut DESPRÉS d'obrir el check (un import
+    que amplia la fitxa) no en rebia mai cap i quedava com una fila inerta a l'editor: es
+    veia, però no es podia anotar. Ara la funció COMPLETA: recorre els BaseMeasurement vigents
+    i crea només els que falten. Les línies ja existents no es toquen —ni el seu valor_teoric—
+    perquè un check pendent és un contracte amb el que el tècnic ja té anotat: el teòric
+    contra el qual mesura és el del moment en què es va obrir la seva línia, no un que li
+    canviï sota els peus. El teòric FRESC és el de la línia NOVA, que és la que no existia.
+
+    Retorna el nombre de línies CREADES.
     """
     from fhort.models_app.models import BaseMeasurement, SizeCheckLine
+    ja_hi_son = set(
+        SizeCheckLine.objects.filter(size_check=size_check).values_list('pom_id', flat=True)
+    )
     bms = (
         BaseMeasurement.objects
         .filter(model=model, is_active=True, base_value_cm__isnull=False)
+        .exclude(pom_id__in=ja_hi_son)
         .select_related('pom')
     )
     n = 0
@@ -46,10 +60,20 @@ def open_size_check(model_id: int, *, created_by_id: int | None = None):
     BaseMeasurement actiu amb valor (base_value_cm no null), valor_teoric = snapshot.
 
     GARANTIA: si el model té BaseMeasurements vigents, open MAI retorna un check sense
-    línies — si reusa un Pendent orfe (0 línies) el reomple; si ja en té, NO el regenera
-    (preserva valor_real/decisio anotats).
+    línies, ni amb POMs vigents sense línia. `_materialize_lines` només CREA les que falten,
+    de manera que els valor_real/decisio ja anotats no es toquen mai.
 
-    Retorna (SizeCheck, n_lines).
+    FIX-3 (DIAGNOSI_MESURES_TEA_205) — AQUEST és el punt on es completa un check Pendent, i
+    no el camí d'import. Raons: (1) `open` ja és la porta única del check i ja carrega la
+    responsabilitat de «garantir les línies» — completar-les hi és la mateixa promesa, no
+    una de nova; (2) l'editor la crida SEMPRE en obrir-se, de manera que confirmar un import
+    i després entrar a l'editor queda cobert sense que l'import hagi de saber que existeixen
+    els size checks; i (3) qualsevol altra via que ampliï la fitxa (alta manual d'un POM,
+    materialització família→item) queda coberta pel mateix preu. L'import no en sap res.
+
+    Un check ja RESOLT no s'hi toca: el filtre és `estat='Pendent'`.
+
+    Retorna (SizeCheck, n_lines) — n_lines és el TOTAL de línies del check, no les creades.
     """
     from fhort.models_app.models import Model, SizeCheck
 
@@ -60,11 +84,12 @@ def open_size_check(model_id: int, *, created_by_id: int | None = None):
         .order_by('-created_at').first()
     )
     if existing is not None:
+        # Completa: POMs vigents nascuts DESPRÉS d'obrir el check (o Pendent orfe amb 0
+        # línies) hi entren ara, amb el teòric d'ARA. Cap línia existent es reescriu.
+        creades = _materialize_lines(existing, model)
         n = existing.linies.count()
-        if n == 0:
-            # Pendent orfe → reomple des dels BaseMeasurements vigents (no regenera si ja en té).
-            n = _materialize_lines(existing, model)
-            logger.info(f"SizeCheck {existing.pk} reomplert (orfe): {n} lines")
+        if creades:
+            logger.info(f"SizeCheck {existing.pk} completat: +{creades} lines (total {n})")
         return existing, n
 
     sc = SizeCheck.objects.create(
