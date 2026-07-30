@@ -23,6 +23,7 @@ import math
 import re
 import unittest
 
+from django.db import connection
 from django.db.models import ProtectedError
 from dataclasses import replace
 from pathlib import Path
@@ -118,6 +119,7 @@ from django.core import signing
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
+from django.db import connection
 from django.db.models import ProtectedError
 from django_tenants.test.cases import TenantTestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
@@ -141,6 +143,7 @@ from fhort.patterns.services import save_pattern_file
 from fhort.patterns.serializers import PatternGeometrySerializer
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
                                   PatternFileViewSet)
+from fhort.pom.management.commands.seed_pattern_piece_roles import sembra
 from fhort.pom.models import GarmentType, PatternPieceRole, POMMaster
 from fhort.tasks.models import GarmentTypeItem
 
@@ -4813,3 +4816,56 @@ class CampsDIdentitatTest(PatternsAPITestBase):
 
         with self.assertRaises(ProtectedError):
             rol.delete()
+
+
+class BackfillRolSegmentPreferenceTest(PatternsAPITestBase):
+    """I1/T4: les preferències parlen en slugs del catàleg, i el que no sabem mapar es
+    queda com està.
+
+    Es prova la funció PURA de la migració, no la migració: el que ha de ser correcte és
+    la regla, i la regla ha de poder-se interrogar sense muntar un schema."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import importlib
+        cls.mig = importlib.import_module(
+            'fhort.patterns.migrations.0012_backfill_rol_segmentpreference')
+
+    def test_els_valors_reals_dstaging_es_mapen_tots(self):
+        """Els 10 noms que hi havia de debò a staging, amb el seu slug esperat."""
+        esperat = {
+            'BACK': 'back',
+            'TATE_BACK': 'back',
+            'FRONT': 'front',
+            'TATE_FRONT': 'front',
+            'MID SLEEVE': 'sleeve',
+            'TATE_SLEEVE': 'sleeve',
+            'TATE_FRONT_YOKE': 'yoke',
+            'TATE_FACING_YOKE': 'facing',
+            'TATE_FRONT_FACING': 'facing',
+            'TATE_NECK_BAND': 'neckband',
+            'TATE_NECK_BAND_INTERLINING': 'interlining',
+        }
+        for nom, slug in esperat.items():
+            with self.subTest(nom=nom):
+                self.assertEqual(self.mig.slug_del_rol(nom), slug)
+
+    def test_el_que_no_sabem_mapar_torna_buit(self):
+        """Buit vol dir «deixa-ho com està», mai «posa-hi el que sigui»."""
+        for nom in ('BUTXACA_RARA', 'CALLIE_FRONT', '', '   ', 'XYZ_1'):
+            with self.subTest(nom=nom):
+                self.assertEqual(self.mig.slug_del_rol(nom), '')
+
+    def test_normalitza_espais_i_majuscules(self):
+        self.assertEqual(self.mig.slug_del_rol('  back  '), 'back')
+        self.assertEqual(self.mig.slug_del_rol('tate_front'), 'front')
+
+    def test_tot_slug_del_mapa_existeix_al_cataleg(self):
+        """La invariant que fa el backfill legítim: no s'inventa cap slug. Si algú afegeix
+        una entrada al mapa i s'oblida de sembrar el rol, això ho canta."""
+        sembra(connection.schema_name)
+        slugs = set(PatternPieceRole.objects.values_list('slug', flat=True))
+        for nom, slug in self.mig.MAPA.items():
+            with self.subTest(nom=nom):
+                self.assertIn(slug, slugs)
