@@ -2156,9 +2156,25 @@ class EscalatTestBase(PatternsAPITestBase):
         self.profile, _ = UserProfile.objects.get_or_create(
             user=self.user, defaults={'nom_complet': 'Tec', 'rol_nom': 'admin'})
 
-        self.sf = SizeFitting.objects.create(
-            model=self.model, numero=1, codi='SF-QA-1', tipus='Fit',
-            estat='TallesGenerades', creat_per=self.profile)
+        # El `SizeFitting` número 1 d'aquest model JA EXISTEIX quan arribem aquí: el crea
+        # un signal de `models_app` en néixer el Model (models_app/signals.py), sempre que
+        # hi hagi un UserProfile al tenant — i n'hi ha, perquè `create_user` en dispara un
+        # altre (accounts/signals.py). Crear-ne un segon amb el mateix (model, numero)
+        # xocava contra el unique de `fitting_sizefitting` i tombava aquest setUp sencer.
+        #
+        # El fixture l'ADOPTA. El que aquests tests necessiten no és la fila, és l'estat:
+        # `self.sf` només fa de destí de la FK de `GradingVersion`. El `codi` que el signal
+        # li ha posat es queda tal com és — `SizeFitting.codi` és unique GLOBAL i cap test
+        # no el mira.
+        self.sf, _ = SizeFitting.objects.get_or_create(
+            model=self.model, numero=1,
+            defaults={'codi': 'SF-QA-1', 'tipus': 'Fit',
+                      'estat': 'TallesGenerades', 'creat_per': self.profile},
+        )
+        self.sf.tipus = 'Fit'
+        self.sf.estat = 'TallesGenerades'
+        self.sf.creat_per = self.profile
+        self.sf.save(update_fields=['tipus', 'estat', 'creat_per'])
         # aprovada=True i is_active=False A POSTA: són ORTOGONALS (S0-B7.1), i la versió
         # aprovada d'un model sovint NO és la que la UI serveix. Si el port confongués les
         # dues coses, aquest fixture el cantaria.
