@@ -2443,6 +2443,8 @@
     "col_pom": "POM",
     "col_nom": "Name",
     "nom_save_err": "Could not save the name.",
+    "nom_canonic_tip": "Canonical name (EN) for this model. Empty: the catalogue one applies.",
+    "nom_traduit_tip": "Customer translation for this model. Empty: the catalogue one applies.",
     "reorder": "Drag to reorder",
     "reorder_err": "Could not save the order.",
     "regle_delta": "Δ",
