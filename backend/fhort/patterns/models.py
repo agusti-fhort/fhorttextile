@@ -764,6 +764,72 @@ class _AppendOnlyQuerySet(models.QuerySet):
         raise ValueError('Append-only: esborrat no permès en aquest registre.')
 
 
+class PieceIdentityAcknowledgement(models.Model):
+    """L'acta de la identificació: algú ha dit QUÈ és cada peça d'aquest patró.
+
+    Germana d'`ExportAcknowledgement` i deliberadament amb la mateixa forma: un registre
+    APPEND-ONLY amb el que caldria per reconstruir la decisió mesos després —**qui** va
+    confirmar, **quan**, sobre **quina versió** del patró, **què** deia exactament de cada
+    peça, i el **text literal** que se li va ensenyar.
+
+    **Per què una acta i no un flag a la peça.** Un `confirmat=True` a `PatternPiece` es
+    reescriu sol al primer canvi i no diu ni qui ni quan; i, sobretot, una versió nova del
+    patró esborra les peces i se l'enduria. L'acta sobreviu perquè el que registra no és
+    l'estat d'una fila: és un ACTE. Que la pantalla en derivi un color verd és una
+    conseqüència, no el motiu (decisió D-4).
+
+    **L'snapshot és una CÒPIA, no una projecció per FK.** Es desa què deia cada peça al
+    moment de confirmar —nom de bloc inclòs— perquè el dia que algú reanomeni una peça,
+    reimporti el patró o esborri una fila, l'acta continuï dient què es va confirmar de
+    debò i no el que avui en diríem. Un registre que es reescriu sol no prova res.
+
+    Es crea NOMÉS amb `confirm=true`. Treballar a trossos —canviar un rol i marxar— no
+    genera acta: no s'ha confirmat res.
+    """
+
+    objects = _AppendOnlyQuerySet.as_manager()
+
+    pattern_file = models.ForeignKey(
+        PatternFile, on_delete=models.CASCADE,
+        related_name='identity_acknowledgements',
+    )
+    #: La versió del patró, COPIADA (mateix criteri que `ExportAcknowledgement`).
+    versio_patro = models.PositiveIntegerField()
+
+    #: [{piece_id, nom_block, rol_slug, nom, lateralitat, ordinal, estat_peca}] — el que
+    #: deia cada peça confirmada, literal.
+    snapshot = models.JSONField(default=list)
+
+    usuari = models.ForeignKey(
+        'accounts.UserProfile', on_delete=models.SET_NULL, null=True,
+        related_name='identitats_peces_confirmades',
+    )
+    data = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    #: El text EXACTE que l'usuari va veure i acceptar. No una clau i18n: el text.
+    texts_shown = models.TextField()
+
+    class Meta:
+        verbose_name = 'Acta d\'identitat de peces'
+        verbose_name_plural = 'Actes d\'identitat de peces'
+        ordering = ['-data']
+        indexes = [
+            models.Index(fields=['pattern_file', '-data']),
+        ]
+
+    def __str__(self):
+        return (f'{self.pattern_file_id} v{self.versio_patro} · '
+                f'{len(self.snapshot)} peces · {self.data:%Y-%m-%d %H:%M}')
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValueError('PieceIdentityAcknowledgement és append-only: no es modifica.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError('PieceIdentityAcknowledgement és append-only: no s\'esborra.')
+
+
 class SewToleranceAcceptance(models.Model):
     """Un tècnic ACCEPTA (o desaccepta) un desajust de costura/pinça, amb rastre.
 
