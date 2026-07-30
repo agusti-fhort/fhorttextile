@@ -117,6 +117,14 @@ class Fingerprint:
     separador_decimal: dict[str, str] = field(default_factory=dict)
     unitats: Optional[UnitsFingerprint] = None
     cens_entitats: dict[str, int] = field(default_factory=dict)
+    #: Entitats d'una capa que SÍ que entenem però amb un `dxftype` que el reader no sap
+    #: interpretar (un `LWPOLYLINE` o un `MTEXT` a la capa 1, posem per cas). Abans queien
+    #: pel forat del bucle de lectura sense deixar rastre: una capa coneguda no les envia a
+    #: `raw_entities` —que és el pou de les capes desconegudes— i el reader no en deia res.
+    #: Aquí no s'interpreten (seguim sense saber què són): es fan VISIBLES, que és una altra
+    #: cosa i és la que evita que un fitxer perdi mitja peça en silenci.
+    #: Cada element és `(dxftype, capa, handle)`.
+    entitats_no_interpretades: tuple[tuple[str, str, str], ...] = ()
     #: TEXTs de metadades del modelspace, literals (autoria, style name, sample size…).
     textos_document: tuple[str, ...] = ()
     #: On van aquests TEXT, i quina alçada tenen tots els TEXT del fitxer.

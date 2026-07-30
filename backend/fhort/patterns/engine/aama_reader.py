@@ -107,15 +107,17 @@ class AAMAReader:
         pieces = []
         capes_totals: set[str] = set()
         desconegudes: set[str] = set()
+        no_interpretades: list[tuple[str, str, str]] = []
 
         for block in blocks:
-            piece, capes, unknown, piece_issues = _read_piece(
+            piece, capes, unknown, piece_issues, opaques = _read_piece(
                 block, factor, inserts.get(block.name, (0.0, 0.0))
             )
             pieces.append(piece)
             capes_totals |= capes
             desconegudes |= unknown
             issues += piece_issues
+            no_interpretades += opaques
 
         buides = _empty_sections(data)
         fingerprint = Fingerprint(
@@ -129,6 +131,7 @@ class AAMAReader:
             separador_decimal=separadors,
             unitats=unitats,
             cens_entitats=_entity_census(doc),
+            entitats_no_interpretades=tuple(no_interpretades),
             textos_document=tuple(textos_doc),
             doc_text_anchor=_doc_text_anchor(doc),
             text_height=_dominant_text_height(doc),
@@ -262,10 +265,12 @@ def _max_piece_dimension(doc: Drawing) -> float:
 
 def _read_piece(
     block, factor: float, insert_at: tuple[float, float]
-) -> tuple[PieceData, set[str], set[str], list[ParseIssue]]:
+) -> tuple[PieceData, set[str], set[str], list[ParseIssue], list[tuple[str, str, str]]]:
     issues: list[ParseIssue] = []
     capes: set[str] = set()
     desconegudes: set[str] = set()
+    #: (dxftype, capa, handle) de les entitats de capa CONEGUDA que no sabem llegir.
+    no_interpretades: list[tuple[str, str, str]] = []
 
     polylines: list = []
     classificadors: dict[str, list[tuple[float, float]]] = {'2': [], '3': []}
@@ -316,6 +321,11 @@ def _read_piece(
             elif layer == '1':
                 textos_capa1.append(text)
                 meta_anchor = (e.dxf.insert.x * factor, e.dxf.insert.y * factor)
+        else:
+            # Capa coneguda, `dxftype` que no sabem llegir. No s'interpreta i no s'inventa
+            # res: es DEIXA CONSTAR. Sense aquest braç, un MTEXT amb el nom de la peça o un
+            # LWPOLYLINE amb el contorn desapareixien sense que ningú en sabés res.
+            no_interpretades.append((kind, layer, str(e.dxf.handle or '')))
 
     boundaries: list[BoundaryData] = []
     for pl in polylines:
@@ -382,7 +392,7 @@ def _read_piece(
         insert_at=insert_at,
         poms=poms,
     )
-    return piece, capes, desconegudes, issues
+    return piece, capes, desconegudes, issues, no_interpretades
 
 
 def _as_raw_entity(e, factor: float) -> RawEntity:

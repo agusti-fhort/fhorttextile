@@ -65,6 +65,7 @@ def fingerprint_to_json(fp: Fingerprint) -> dict:
         'separador_decimal': dict(fp.separador_decimal),
         'unitats': unitats,
         'cens_entitats': dict(fp.cens_entitats),
+        'entitats_no_interpretades': [list(e) for e in fp.entitats_no_interpretades],
         'textos_document': list(fp.textos_document),
         'doc_text_anchor': list(fp.doc_text_anchor),
         'text_height': fp.text_height,
@@ -97,6 +98,9 @@ def fingerprint_from_json(data: dict) -> Fingerprint:
         separador_decimal=dict(data.get('separador_decimal', {})),
         unitats=unitats,
         cens_entitats=dict(data.get('cens_entitats', {})),
+        entitats_no_interpretades=tuple(
+            tuple(e) for e in data.get('entitats_no_interpretades', [])
+        ),
         textos_document=tuple(data.get('textos_document', [])),
         doc_text_anchor=tuple(data.get('doc_text_anchor', [0.0, 0.0])),
         text_height=data.get('text_height', 0.0),

@@ -184,6 +184,26 @@ def mitja_peca_dxf() -> bytes:
     return _dxf_bytes(doc)
 
 
+def peca_amb_entitats_opaques_dxf() -> bytes:
+    """Una peça llegible + entitats de capa CONEGUDA que el reader no sap interpretar.
+
+    R2000 i no R12 perquè el que s'hi vol posar (MTEXT, LWPOLYLINE) no existeix a R12 —
+    i és exactament el que un CAD modern escriu a la capa 1 quan el nostre reader només
+    espera POLYLINE i TEXT.
+    """
+    doc = ezdxf.new('R2000')
+    block = doc.blocks.new(name='OPACA')
+    block.add_polyline2d(CONTORN_MITJA_PECA, dxfattribs={'layer': '1'})
+    for x, y in CONTORN_MITJA_PECA[:-1]:
+        block.add_point((x, y), dxfattribs={'layer': '2'})
+    # El cas que va motivar la visibilitat: el nom de la peça escrit com a MTEXT.
+    block.add_mtext('Piece Name: OPACA', dxfattribs={'layer': '1'})
+    # I un contorn escrit amb la polilínia moderna, que el reader tampoc no llegeix.
+    block.add_lwpolyline([(0, 0), (10, 0), (10, 10)], dxfattribs={'layer': '1'})
+    doc.modelspace().add_blockref('OPACA', (0, 0))
+    return _dxf_bytes(doc)
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # Material real — AMELIA (PolyPattern 11.0.1)
 # ═════════════════════════════════════════════════════════════════════════════
@@ -545,6 +565,35 @@ class DegradacioElegantTest(unittest.TestCase):
         self.assertEqual(table.regles[1].delta('XL'), (0.0, 0.0))  # forat → zero
 
 
+class EntitatsNoInterpretadesTest(unittest.TestCase):
+    """El que el motor no sap llegir es DIU. Abans queia pel forat del bucle de lectura:
+    una capa coneguda no va a `raw_entities` (que és el pou de les DESCONEGUDES), i un
+    `dxftype` inesperat no tenia cap braç que el recollís. Un MTEXT amb el nom de la peça
+    desapareixia sense que res ho cantés."""
+
+    def test_les_entitats_opaques_consten_a_lempremta(self):
+        doc = AAMAReader().read(peca_amb_entitats_opaques_dxf())
+        vistes = {(tipus, capa) for tipus, capa, _ in doc.fingerprint.entitats_no_interpretades}
+        self.assertIn(('MTEXT', '1'), vistes)
+        self.assertIn(('LWPOLYLINE', '1'), vistes)
+
+    def test_cada_entitat_porta_el_seu_handle(self):
+        """Sense handle, l'avís diu que falta alguna cosa però no on anar-la a buscar."""
+        doc = AAMAReader().read(peca_amb_entitats_opaques_dxf())
+        self.assertTrue(doc.fingerprint.entitats_no_interpretades)
+        for _tipus, _capa, handle in doc.fingerprint.entitats_no_interpretades:
+            self.assertTrue(handle)
+
+    def test_la_peca_es_llegeix_igualment(self):
+        """Visibilitat no és bloqueig: el contorn que SÍ que s'entén entra com sempre."""
+        peca = AAMAReader().read(peca_amb_entitats_opaques_dxf()).piece('OPACA')
+        self.assertEqual(len(peca.boundary(LayerRole.CUT).points), 5)
+
+    def test_un_fitxer_que_sentén_del_tot_no_en_declara_cap(self):
+        doc = AAMAReader().read(AMELIA_DXF.read_bytes())
+        self.assertEqual(doc.fingerprint.entitats_no_interpretades, ())
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # S2 · ESCRIPTURA — el fitxer torna a sortir tal com va entrar
 # ═════════════════════════════════════════════════════════════════════════════
@@ -884,6 +933,28 @@ class UploadTest(PatternsAPITestBase):
         self.assertEqual(fp.grade_table['talla_base'], 'M')
         # DXF i RUL són germans de debò: cap avís de coherència.
         self.assertNotIn('avisos_coherencia', resp.data)
+
+    def test_les_entitats_opaques_surten_al_201_i_a_lempremta(self):
+        """PC-6: el que el motor no ha sabut llegir arriba a qui puja el fitxer.
+
+        Pel MATEIX canal que els avisos de coherència, i sense bloquejar: el fitxer s'ha
+        desat i és llegible. El que no pot passar és que ningú no ho sàpiga."""
+        resp = self._upload(peca_amb_entitats_opaques_dxf())
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        avisos = resp.data.get('avisos_coherencia') or []
+        opacs = [a for a in avisos if a['codi'] == 'entitats_no_interpretades']
+        self.assertEqual(
+            {(a['detall']['dxftype'], a['detall']['capa']) for a in opacs},
+            {('MTEXT', '1'), ('LWPOLYLINE', '1')},
+        )
+        self.assertTrue(all(a['detall']['quantes'] == 1 for a in opacs))
+
+        fp = PatternFile.objects.get(pk=resp.data['id'])
+        self.assertEqual(
+            {tuple(e[:2]) for e in fp.empremta['entitats_no_interpretades']},
+            {('MTEXT', '1'), ('LWPOLYLINE', '1')},
+        )
 
     def test_upload_sense_rul(self):
         resp = self._upload(AMELIA_DXF.read_bytes())

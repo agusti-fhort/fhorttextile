@@ -241,6 +241,34 @@ def _preview_payload(resultat) -> dict:
     }
 
 
+def _avisos_no_interpretades(document) -> list:
+    """Les entitats de capa CONEGUDA que el reader no ha sabut llegir, dites en veu alta.
+
+    Agrupades per (tipus, capa): a qui puja el fitxer no li serveix una llista de handles,
+    li serveix saber que hi havia 12 LWPOLYLINE a la capa 1 que no han entrat. Els handles
+    queden a l'empremta per a qui hagi d'anar a mirar el fitxer amb el CAD obert.
+
+    No bloqueja mai: el fitxer s'ha llegit i s'ha desat. Callar-ho sí que seria greu —és
+    exactament així com un contorn desapareixia sense que ningú se n'assabentés.
+    """
+    per_tipus: dict[tuple[str, str], int] = {}
+    for dxftype, capa, _handle in document.fingerprint.entitats_no_interpretades:
+        per_tipus[(dxftype, capa)] = per_tipus.get((dxftype, capa), 0) + 1
+
+    return [
+        {
+            'codi': 'entitats_no_interpretades',
+            'missatge': (
+                f'{quantes} entitats de tipus {dxftype} a la capa {capa} no s\'han '
+                f'interpretat: el motor no en sap llegir la forma i no han entrat a la '
+                f'geometria.'
+            ),
+            'detall': {'dxftype': dxftype, 'capa': capa, 'quantes': quantes},
+        }
+        for (dxftype, capa), quantes in sorted(per_tipus.items())
+    ]
+
+
 def _rul_servable(fp: PatternFile):
     """Proxy que compleix el duck-type de `serve_fitxer` (fitxer / nom_fitxer / mimetype).
 
@@ -330,7 +358,10 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             dxf.seek(0)
 
         grade_table = None
-        avisos = []
+        # El que el motor ha vist i NO ha sabut llegir viatja pel mateix canal que els
+        # avisos de coherència: no bloqueja (el fitxer s'ha desat i és llegible), però qui
+        # el puja ha de saber que hi havia entitats que no han entrat.
+        avisos = _avisos_no_interpretades(document)
         if rul is not None:
             try:
                 grade_table = RULReader().read(rul.read())
@@ -339,7 +370,7 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             finally:
                 rul.seek(0)
             # El DXF i el RUL viatgen junts, però ningú no garanteix que siguin germans.
-            avisos = [
+            avisos += [
                 {'codi': i.codi, 'missatge': i.missatge, 'detall': i.detall}
                 for i in coherencia_dxf_rul(document, grade_table)
             ]
