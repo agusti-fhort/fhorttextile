@@ -20,6 +20,7 @@ import hashlib
 import io
 import logging
 import math
+import re
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -159,6 +160,26 @@ def _dxf_bytes(doc) -> bytes:
     stream = io.StringIO()
     doc.write(stream)
     return stream.getvalue().encode('utf-8')
+
+
+#: ezdxf estampa la SEVA versió i l'INSTANT d'escriptura dins de cada fitxer que emet
+#: (un XDATA de la forma `1.4.4 @ 2026-07-30T10:19:00.430231+00:00`). Conseqüència: dos
+#: DXF escrits del mateix document no són mai iguals byte a byte, ni al mateix procés.
+#: Verificat: dues crides seguides a `AAMAWriter().write()` donen dos sha256 diferents, i
+#: l'única diferència són aquestes dues línies.
+_RE_SEGELL_EZDXF = re.compile(r'\d+\.\d+\.\d+ @ \d{4}-\d{2}-\d{2}T[\d:.+\-]+')
+
+
+def empremta_dxf(data: bytes) -> str:
+    """sha256 del fitxer amb el segell d'ezdxf neutralitzat, i RES MÉS.
+
+    Serveix per comparar dos DXF de debò —literalment, byte a byte— en comptes de fer una
+    equivalència semàntica: una comparació per coordenades passaria per alt un canvi
+    d'ordre d'entitats, de format numèric o de cens, que és exactament el que un test
+    d'invisibilitat ha de poder caçar.
+    """
+    net = _RE_SEGELL_EZDXF.sub('<ezdxf>', data.decode('utf-8', errors='replace'))
+    return hashlib.sha256(net.encode('utf-8')).hexdigest()
 
 
 #: Mitja peça: el centre (x=0) recte —la vora que va sobre el doblec— i la resta del
@@ -2506,6 +2527,77 @@ class AutovalidacioTest(EscalatTestBase):
             any(d != (0.0, 0.0) for d in regla.deltes.values())
             for num, regla in taula.regles.items() if num != 0
         ))
+
+
+class ReplegatALExportTest(EscalatTestBase):
+    """D-6, la segona meitat: el motor guarda la peça sencera, però el FITXER surt com
+    l'autor el treballa. Un CAD que dibuixa les simètriques a mitges no reconeix com a
+    seva una peça desplegada."""
+
+    #: Segell congelat: sense això el DXF porta la data d'emissió i no hi ha dues
+    #: execucions que donin els mateixos bytes.
+    TS = '2026-01-01T00:00:00Z'
+
+    def test_una_peca_al_plec_torna_equivalent_a_loriginal_plegat(self):
+        """El cicle sencer: el fitxer entra plegat, es desa sencer, i torna a sortir
+        plegat. El que es compara és el fitxer EMÈS contra el fitxer d'ORIGEN."""
+        original = AAMAReader().read(mitja_peca_dxf()).piece('MITJA')
+        fp = PatternFile.objects.get(pk=self._upload(mitja_peca_dxf()).data['id'])
+
+        # A la BD hi és sencera (I0/T3): el que es plega és la sortida, no el que guardem.
+        desada = fp.pieces.get(nom_block='MITJA')
+        self.assertTrue(desada.doblec_original['materialitzat'])
+
+        res = build_export(fp, self.gv.id, 'polypattern', ts=self.TS)
+        tornada = AAMAReader().read(res.dxf).piece('MITJA')
+
+        a = original.boundary(LayerRole.CUT).points
+        b = tornada.boundary(LayerRole.CUT).points
+        self.assertEqual(len(a), len(b), 'el contorn no torna amb els mateixos punts')
+        deriva = max(max(abs(pa.x - pb.x), abs(pa.y - pb.y)) for pa, pb in zip(a, b))
+        self.assertLess(deriva, 0.01, f'deriva del contorn: {deriva} mm')
+
+        self.assertEqual(len(original.notches), len(tornada.notches))
+        deriva_piquets = max(
+            max(abs(na.x - nb.x), abs(na.y - nb.y))
+            for na, nb in zip(sorted(original.notches, key=lambda n: (n.x, n.y)),
+                              sorted(tornada.notches, key=lambda n: (n.x, n.y)))
+        )
+        self.assertLess(deriva_piquets, 0.01, f'deriva dels piquets: {deriva_piquets} mm')
+
+    def test_el_fitxer_emes_porta_la_peca_A_MITGES(self):
+        """La prova que el plegat s'ha aplicat de debò: si sortís desplegada, el contorn
+        emès tindria el doble d'amplada i el CAD d'origen rebria una peça que no és seva."""
+        fp = PatternFile.objects.get(pk=self._upload(mitja_peca_dxf()).data['id'])
+        res = build_export(fp, self.gv.id, 'polypattern', ts=self.TS)
+        xs = [p.x for p in AAMAReader().read(res.dxf).piece('MITJA')
+              .boundary(LayerRole.CUT).points]
+        self.assertAlmostEqual(max(xs) - min(xs), 120.0, places=2)
+
+
+class ExportSenseDoblecInvisibleTest(EscalatTestBase):
+    """INVISIBILITAT: el plegat només actua quan hi ha plec.
+
+    L'AMELIA no té cap peça al doblec, o sigui que I0/T4a no li ha de tocar ni un byte.
+    Es diu amb el fitxer sencer i no amb una equivalència de coordenades a posta: una
+    comparació semàntica passaria per alt un canvi d'ordre, de format numèric o de cens
+    d'entitats, i aquest test existeix justament per tancar aquesta porta."""
+
+    TS = '2026-01-01T00:00:00Z'
+    #: sha256 del DXF de niada de l'AMELIA amb el segell congelat, mesurat sobre l'arbre
+    #: ANTERIOR al plegat (I0/T4a). Si algun dia es mou, el plegat —o el writer— ha
+    #: començat a tocar peces que no tenen doblec.
+    SHA_NIADA_SENSE_DOBLEC = 'a87451a218e198130f56a5b1e76d2d34105b7ae04072985732f7434fc530b1de'
+
+    def test_el_dxf_emes_no_es_mou_ni_un_byte(self):
+        res = build_export(self.fp, self.gv.id, 'polypattern', ts=self.TS)
+        self.assertEqual(empremta_dxf(res.dxf), self.SHA_NIADA_SENSE_DOBLEC)
+
+    def test_cap_peca_de_lamelia_no_te_doblec(self):
+        """La premissa del test de sobre, dita en veu alta: si un dia l'AMELIA en tingués,
+        el sha de dalt deixaria de voler dir el que volem que digui."""
+        doc = DjangoGeometryStore().load_from(self.fp)
+        self.assertTrue(all(p.doblec_original is None for p in doc.pieces))
 
 
 # ═════════════════════════════════════════════════════════════════════════════

@@ -54,7 +54,7 @@ from .adapters import (
     pom_specs,
     sew_specs,
 )
-from .engine.aama_reader import AAMAReader
+from .engine.aama_reader import AAMAReader, fold_piece
 from .engine.aama_writer import AAMAWriter, UnknownProfileError
 from .engine.errors import PatternEngineError
 from .engine.geometry import POMAnchorData
@@ -190,6 +190,21 @@ def build_export(
         _amb_capa_pom(projeccio.document, specs, previews),
         grade_table=projeccio.grade_table,
     )
+
+    # ── 3b. EL FITXER SURT COM L'AUTOR EL TREBALLA (D-6).
+    # El motor guarda i mesura la peça SENCERA (I0/T3): mitja màniga no es pot mesurar.
+    # Però un CAD que dibuixa les simètriques a mitges espera rebre-les a mitges, i
+    # tornar-li la peça desplegada seria tornar-li una peça que no reconeix com a seva.
+    # `fold_piece` recupera el semiplà que `doblec_original` va congelar en importar; una
+    # peça sense doblec (o sense costat conegut) torna sense tocar-la.
+    #
+    # Va AQUÍ i no dins del writer a posta. L'autovalidació de sota compara «el que volia
+    # escriure» amb «el que he escrit i he tornat a llegir»: si el plec el fes el writer,
+    # les dues bandes serien coses diferents —una sencera i l'altra a mitges— i la porta
+    # bloquejaria TOTA exportació amb simetria per una diferència que no és cap
+    # degradació, sinó el format de destí fent la seva feina.
+    doc_final = replace(
+        doc_final, pieces=tuple(fold_piece(p) for p in doc_final.pieces))
 
     # ── 4. Escriure.
     meta = {
