@@ -2455,7 +2455,8 @@
     "poda_confirma": "Confirmar: quitarla",
     "poda_candidata": "Sin ningún valor real (base y tallas a cero o vacías): candidata a quitar.",
     "poda_ok": "Medida {{codi}} quitada del modelo (queda inactiva, con registro en el log).",
-    "poda_err": "No se ha podido quitar la medida."
+    "poda_err": "No se ha podido quitar la medida.",
+    "sense_linia": "Esta fila todavía no tiene línea para anotar en este check."
   },
   "sizecheck": {
     "col_date": "Fecha",

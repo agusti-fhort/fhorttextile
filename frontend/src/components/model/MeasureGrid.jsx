@@ -90,9 +90,19 @@ const stepBtnStyle = {
 }
 
 function ActiveCell({ active, editable, value, edited, onChange, onCommit, focusRef, unit }) {
+  const { t } = useTranslation()
   const [state, schedule] = useDebouncedSave(onCommit)
   const [focused, setFocused] = useState(false)
-  if (!active) return <td style={cellTd(true, false, false)} />
+  // FIX-3 (DIAGNOSI_MESURES_TEA_205) — CAP FILA INERTA. Sense línia activa, aquí hi havia una
+  // cel·la destacada i BUIDA: en una columna on totes les altres són caselles d'escriptura, es
+  // llegeix com un camp que no respon, no com una absència. Un guió mut i el motiu al tooltip
+  // diuen la veritat: en aquesta fila no hi ha res a anotar (encara).
+  if (!active) {
+    return (
+      <td style={{ ...cellTd(true, false, false), color: 'var(--text-muted)' }}
+        title={t('measuregrid.sense_linia')}>—</td>
+    )
+  }
   const modified = activeRed(value, active)
   // `active.readonly` força lectura en una cel·la concreta encara que la graella sigui editable
   // (p.ex. la talla base de l'Escalat, que no s'edita com a override).
