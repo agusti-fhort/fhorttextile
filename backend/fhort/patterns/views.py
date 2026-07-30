@@ -40,10 +40,13 @@ from .engine.aama_reader import AAMAReader, unfold_piece
 from .engine.errors import PatternParseError
 from .engine.rul_reader import RULReader, coherencia_dxf_rul
 from .export import PERFILS_DISPONIBLES, ExportBlocked, build_export
-from .models import ExportAcknowledgement, PatternFile, PatternPOM
+from .models import (ExportAcknowledgement, PatternFile, PatternPOM,
+                     PieceIdentityAcknowledgement)
 from .serializers import (PatternFileLlistaSerializer, PatternFileSerializer,
                           PatternGeometrySerializer, PatternPieceRoleSerializer)
-from .services import delete_pattern_bytes, save_pattern_file
+from .services import (CONFIRM_TEXT_CA, IdentificacioRebutjada,
+                       delete_pattern_bytes, identificar_peces,
+                       save_pattern_file)
 from .svg import render_document
 
 logger = logging.getLogger(__name__)
@@ -267,6 +270,21 @@ def _avisos_no_interpretades(document) -> list:
         }
         for (dxftype, capa), quantes in sorted(per_tipus.items())
     ]
+
+
+def _acta_com_a_dict(acta) -> dict | None:
+    """L'acta tal com la pantalla la necessita: qui, quan, sobre quina versió, i què."""
+    if acta is None:
+        return None
+    return {
+        'id': acta.id,
+        'data': acta.data,
+        'versio_patro': acta.versio_patro,
+        'usuari': acta.usuari_id,
+        'peces_confirmades': len(acta.snapshot),
+        'snapshot': acta.snapshot,
+        'texts_shown': acta.texts_shown,
+    }
 
 
 def _rul_servable(fp: PatternFile):
@@ -606,6 +624,62 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             'total': len(files),
             'ancorats': sum(1 for f in files if f['ancorat']),
             'results': files,
+        })
+
+    # ── La identitat de les peces ────────────────────────────────────────────
+    @action(detail=True, methods=['post'])
+    def identificar(self, request, pk=None):
+        """POST … /identificar/ — dir QUÈ és cada peça. Amb `confirm`, hi deixa acta.
+
+        `{peces: [{piece_id, piece_role_id?, nom?, lateralitat?, ordinal?, estat_peca?}],
+          confirm: bool}`
+
+        **En bloc i no peça a peça** perquè identificar un patró és un sol gest: qui mira
+        un davanter el mira contra l'esquena que té al costat. Trenta crides soltes podrien
+        fallar a la vintena i deixar mig patró dit.
+
+        L'escriptura la governa `services.identificar_peces`, mai un serializer: la llei del
+        mòdul (v. capçalera) i, aquí, dues raons concretes — `rol_origen` el decideix el
+        SERVIDOR comparant amb el que hi havia, i l'acta ha d'entrar amb les peces o no
+        entrar.
+        """
+        fp = self.get_object()
+        files = request.data.get('peces')
+        if not isinstance(files, list):
+            return Response(
+                {'error': 'Cal una llista `peces`.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            tocades, acta = identificar_peces(
+                pattern_file=fp,
+                files=files,
+                usuari=getattr(request.user, 'profile', None),
+                confirm=request.data.get('confirm') is True,
+                texts_shown=request.data.get('texts_shown') or '',
+            )
+        except IdentificacioRebutjada as e:
+            # Una petició que no es pot aplicar és un 400 amb el motiu, mai una avaria.
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'peces_actualitzades': len(tocades),
+            'acta': _acta_com_a_dict(acta),
+            'text_confirmacio': CONFIRM_TEXT_CA,
+        })
+
+    @action(detail=True, methods=['get'], url_path='identitat')
+    def identitat(self, request, pk=None):
+        """L'ÚLTIMA acta d'aquest patró, o `null`.
+
+        D'aquí surt el verd de la pantalla. Deriva del servidor i no del navegador a posta:
+        un estat de confirmació que viu a `localStorage` diu que algú va confirmar en
+        AQUELL ordinador, que no és el que la pregunta vol saber.
+        """
+        fp = self.get_object()
+        acta = fp.identity_acknowledgements.select_related('usuari').first()
+        return Response({
+            'acta': _acta_com_a_dict(acta),
+            'text_confirmacio': CONFIRM_TEXT_CA,
         })
 
     # ── L'escalat: previsualitzar i exportar ─────────────────────────────────

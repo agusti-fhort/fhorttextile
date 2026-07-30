@@ -135,9 +135,11 @@ from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentVi
                                              SewRelationViewSet, SewToleranceAcceptanceViewSet,
                                              comprovar_costura)
 from fhort.patterns.export import ExportBlocked, build_export
+from fhort.patterns.services import CONFIRM_TEXT_CA
 from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
                                    PatternPiece, PatternPOM, PatternPoint, PatternSegment,
                                    SegmentPreference, SewProposalRejection, SewRelation,
+                                   PieceIdentityAcknowledgement,
                                    SewToleranceAcceptance)
 from fhort.patterns.services import save_pattern_file
 from fhort.patterns.serializers import PatternGeometrySerializer
@@ -4929,3 +4931,151 @@ class CatalegDeRolsAPITest(PatternsAPITestBase):
         resp = self._get(PatternFileViewSet.as_view({'get': 'geometry'}), pk=self.fp.id)
         served = next(p for p in resp.data['pieces'] if p['nom_block'] == 'FRONT')
         self.assertIsNone(served['piece_role'])
+
+
+class IdentificacioAPITest(PatternsAPITestBase):
+    """I2a/T2: dir QUÈ és cada peça, i que quedi acta quan algú ho confirma."""
+
+    def setUp(self):
+        super().setUp()
+        sembra(connection.schema_name)
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        self.back = self.fp.pieces.get(nom_block='BACK')
+        self.front = self.fp.pieces.get(nom_block='FRONT')
+        self.rol_back = PatternPieceRole.objects.get(slug='back')
+        self.rol_front = PatternPieceRole.objects.get(slug='front')
+
+    def _post(self, cos):
+        request = self.factory.post('/', cos, format='json')
+        force_authenticate(request, user=self.user)
+        return PatternFileViewSet.as_view({'post': 'identificar'})(request, pk=self.fp.id)
+
+    def _get_identitat(self):
+        request = self.factory.get('/')
+        force_authenticate(request, user=self.user)
+        return PatternFileViewSet.as_view({'get': 'identitat'})(request, pk=self.fp.id)
+
+    # ── escriure ────────────────────────────────────────────────────────────
+    def test_assignar_rol_i_camps_dun_cop(self):
+        resp = self._post({'peces': [{
+            'piece_id': self.back.id, 'piece_role_id': self.rol_back.id,
+            'nom': 'Esquena principal', 'lateralitat': 'L', 'ordinal': 1,
+            'estat_peca': 'produccio',
+        }]})
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data['peces_actualitzades'], 1)
+
+        self.back.refresh_from_db()
+        self.assertEqual(self.back.piece_role_id, self.rol_back.id)
+        self.assertEqual(self.back.nom, 'Esquena principal')
+        self.assertEqual(self.back.lateralitat, 'L')
+        self.assertEqual(self.back.ordinal, 1)
+
+    def test_ratificar_no_es_corregir(self):
+        """El senyal ha de distingir «ho he canviat» de «ho he donat per bo»: el dia que
+        algú vulgui saber de què es fia el sistema, són coses diferents."""
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id}]})
+        self.back.refresh_from_db()
+        self.assertEqual(self.back.rol_origen, PatternPiece.ROL_ORIGEN_CORREGIT)
+
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id}]})
+        self.back.refresh_from_db()
+        self.assertEqual(self.back.rol_origen, PatternPiece.ROL_ORIGEN_CONFIRMAT)
+
+    def test_el_client_no_pot_dictar_rol_origen(self):
+        """Si el pogués enviar, podria dir que una persona ha confirmat el que no ha
+        mirat, i el senyal deixaria de valer per a qui l'hagi de creure."""
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id,
+                               'rol_origen': 'confirmat'}]})
+        self.back.refresh_from_db()
+        self.assertEqual(self.back.rol_origen, PatternPiece.ROL_ORIGEN_CORREGIT)
+
+    # ── validació ───────────────────────────────────────────────────────────
+    def test_una_peca_dun_altre_fitxer_es_rebutja(self):
+        altre = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+        forastera = altre.pieces.first()
+        resp = self._post({'peces': [{'piece_id': forastera.id,
+                                      'piece_role_id': self.rol_back.id}]})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('no és d\'aquest patró', resp.data['error'])
+
+    def test_un_rol_inexistent_es_rebutja(self):
+        resp = self._post({'peces': [{'piece_id': self.back.id,
+                                      'piece_role_id': 999999}]})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_una_lateralitat_inventada_es_rebutja(self):
+        resp = self._post({'peces': [{'piece_id': self.back.id, 'lateralitat': 'X'}]})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_res_no_es_desa_si_una_fila_es_dolenta(self):
+        """Atòmic: identificar un patró és un sol gest, i mig gest no val."""
+        resp = self._post({'peces': [
+            {'piece_id': self.back.id, 'piece_role_id': self.rol_back.id},
+            {'piece_id': self.front.id, 'lateralitat': 'X'},
+        ]})
+        self.assertEqual(resp.status_code, 400)
+        self.back.refresh_from_db()
+        self.assertIsNone(self.back.piece_role_id)
+
+    # ── acta ────────────────────────────────────────────────────────────────
+    def test_sense_confirm_no_hi_ha_acta(self):
+        """Treballar a trossos és legítim: el que no passa és que quedi acta."""
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id}]})
+        self.assertEqual(PieceIdentityAcknowledgement.objects.count(), 0)
+        self.assertIsNone(self._get_identitat().data['acta'])
+
+    def test_amb_confirm_queda_acta_amb_snapshot(self):
+        resp = self._post({'peces': [
+            {'piece_id': self.back.id, 'piece_role_id': self.rol_back.id,
+             'nom': 'Esquena'},
+            {'piece_id': self.front.id, 'piece_role_id': self.rol_front.id},
+        ], 'confirm': True})
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        acta = PieceIdentityAcknowledgement.objects.get()
+        self.assertEqual(acta.versio_patro, self.fp.versio)
+        self.assertEqual(len(acta.snapshot), 2)
+        per_bloc = {f['nom_block']: f for f in acta.snapshot}
+        self.assertEqual(per_bloc['BACK']['rol_slug'], 'back')
+        self.assertEqual(per_bloc['BACK']['nom'], 'Esquena')
+        self.assertEqual(per_bloc['FRONT']['rol_slug'], 'front')
+        # El text que se li va ensenyar, literal i vingut del SERVIDOR.
+        self.assertEqual(acta.texts_shown, CONFIRM_TEXT_CA)
+
+    def test_lacta_nomes_recull_les_peces_amb_rol(self):
+        """Confirmar la identitat d'una peça que encara no en té no vol dir res, i inflar
+        l'acta amb files buides faria que el recompte mentís."""
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id}], 'confirm': True})
+        acta = PieceIdentityAcknowledgement.objects.get()
+        self.assertEqual(len(acta.snapshot), 1)
+        self.assertEqual(self.fp.pieces.count(), 4)
+
+    def test_el_get_serveix_lULTIMA_acta(self):
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id}], 'confirm': True})
+        self._post({'peces': [{'piece_id': self.front.id,
+                               'piece_role_id': self.rol_front.id}], 'confirm': True})
+
+        dades = self._get_identitat().data['acta']
+        self.assertEqual(dades['peces_confirmades'], 2)
+        self.assertEqual(PieceIdentityAcknowledgement.objects.count(), 2)
+
+    def test_lacta_es_append_only(self):
+        """Un registre d'auditoria que s'esborra quan algú es repensa no audita res."""
+        self._post({'peces': [{'piece_id': self.back.id,
+                               'piece_role_id': self.rol_back.id}], 'confirm': True})
+        acta = PieceIdentityAcknowledgement.objects.get()
+        with self.assertRaises(ValueError):
+            acta.delete()
+        with self.assertRaises(ValueError):
+            acta.save()
+        with self.assertRaises(ValueError):
+            PieceIdentityAcknowledgement.objects.all().delete()
