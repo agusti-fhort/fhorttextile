@@ -24,6 +24,7 @@ import { useUnit, fmtMeasure } from './fittingShared'
 import { comptaPecesInserides, esPecaInserible } from '../utils/pecaInsercio'
 import { potTancar, treuAncoratgeFantasma } from '../utils/tracatPloma'
 import { reparteixCotes, superficieDeCotes } from '../utils/cotesAuto'
+import { nomenclaturaDePom } from '../utils/nomenclaturaPom'
 // F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
 import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
 
@@ -706,6 +707,21 @@ function rowDelta(row, unit = 'CM') {
   if (inc == null || Number(inc) === 0) return '—'
   const n = fmtMeasure(inc, unit)
   return Number(inc) > 0 ? `+${n}` : `${String(n).replace('-', '−')}`
+}
+
+// Tolerància d'una fila per a la columna «Tol ±». Les dues bandes són ASIMÈTRIQUES al domini
+// (`tolerancia_minus`/`tolerancia_plus`), però a la pràctica gairebé sempre coincideixen.
+//
+// Simètrica → la xifra PELADA ('0.6'). El signe ja el diu la capçalera, i pelada passa
+// `esNumeric` → la columna surt centrada i es llegeix d'un cop d'ull, com les altres columnes
+// de xifres (R4). Asimètrica → les dues bandes amb signe explícit i el menys tipogràfic de
+// `rowDelta`; deixa de ser numèrica i s'alinea a l'esquerra, que és el que toca quan la cel·la
+// és una expressió i no un nombre. Sense cap de les dues bandes → '—'.
+export function fmtTolerancia(minus, plus, unit = 'CM') {
+  if (minus == null && plus == null) return '—'
+  const m = fmtMeasure(minus ?? plus, unit)
+  const p = fmtMeasure(plus ?? minus, unit)
+  return m === p ? String(m) : `+${p} / −${m}`
 }
 
 // graded-table JSON (enriquit TS-4a) → {prims, totalW, totalH}. Camps: base_size,
@@ -4578,6 +4594,58 @@ export default function TechSheetEditor() {
     return grups.length
   }
 
+  // ── T0 · MESURES TALLA BASE ─────────────────────────────────────────────────
+  // La fitxa de la talla base i RES MÉS: els POMs del model amb el seu valor base i la seva
+  // tolerància. **Cap informació de graduació** — ni Δ, ni break, ni columnes de talla. És
+  // deliberadament la T1a MENYS les dues columnes de regla: qui munta una fitxa de mostra o
+  // una ordre de tall no vol la graduació al mig, i fins ara l'única manera de tenir la base
+  // impresa era inserir la T1a i esborrar-ne columnes a mà.
+  //
+  // La NOMENCLATURA surt de `nomenclaturaDePom` (utils/nomenclaturaPom.js) i no d'una cadena
+  // escrita aquí: aquesta taula neix ja amb el criteri bo (nom_fitxa → àlies del client →
+  // codi canònic → codi de la casa, mai buida). La T1a encara fa servir `pom_abbreviation` i
+  // té el seu propi fix en curs; quan convergeixi, ho farà cap a aquell mòdul.
+  const insertTableBaseMeasures = async () => {
+    if (!locked) return
+    let bms
+    try {
+      const r = await fetch(`${API}/api/v1/models/${model.id}/base-measurements/`, { headers: authHeaders })
+      if (!r.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
+      const d = await r.json()
+      bms = d.results || d || []
+    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
+    if (!bms.length) { flash(t('tech_sheet.flash_empty_table')); return }
+
+    const columns = [
+      { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
+      { key: 'pom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
+      { key: 'base', label: t('tech_sheet.tbl_col_base_cm'), width: 18 },
+      { key: 'tol', label: t('tech_sheet.tbl_col_tol'), width: 16 },
+      { key: 'coment', label: t('tech_sheet.tbl_col_comments'), width: 60 },
+    ]
+    // Files: TOTES les mesures vives del model, com fa la T1a — inclosos els POMs materialitzats
+    // sense valor encara. La cel·la buida en una fitxa impresa és on el tècnic anota a mà; podar
+    // les files en silenci seria decidir per ell què no li importa. La porta ja garanteix que
+    // almenys una fila porta xifra.
+    const rows = bms.map(bm => [
+      nomenclaturaDePom(bm),
+      { text: bm.nom_en || bm.nom_client || bm.pom_code_global || '', sub: bm.nom_ca || '' },
+      fmtMeasure(bm.base_value_cm, unit) ?? '',
+      fmtTolerancia(bm.tol_minus, bm.tol_plus, unit),
+      '',
+    ])
+    addObject(fitTableObj({
+      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
+      kind: 'base_measures', columns, rows,
+      style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+      snapshot: {
+        model_id: model.id, talla_base: model?.base_size_label || null,
+        snapshot_at: new Date().toISOString(),
+      },
+    }))
+    setTablePicker(null)
+  }
+
   // T1a — fitxa de treball fitting (POM base + regla de grading). Tol± queda buit: la
   // serialització de base-measurements no exposa tolerància (només impressió+anotació manual).
   // F1 — DUES fonts per a la regla, mai una URL amb `null`. Un model pot portar la graduació
@@ -4838,6 +4906,8 @@ export default function TechSheetEditor() {
   }
   const onPickTableVariant = (variant) => {
     if (variant === 't2') { insertTableT2(); return }
+    // T0 — com la T3: no hi ha res a triar. La base és del MODEL, no d'un size fitting.
+    if (variant === 'base_measures') { insertTableBaseMeasures(); return }
     // T3 — res a triar: el Repàs és del MODEL, no d'un size fitting. S'insereix i prou.
     if (variant === 'repas') { insertTableRepas(); return }
     // R3 — la personalitzada s'insereix ja, 3×3. Preguntar files i columnes abans de veure res
@@ -5073,8 +5143,18 @@ export default function TechSheetEditor() {
   // F3 — les seccions que el model porta de l'import. Surten de pomRows (base-measurements,
   // ja carregat en obrir), no d'una crida nova.
   const seccionsDelModel = seccionsDeFiles(pomRows)
+  // T0 — la porta és la seva pròpia: NO demana graduació (és justament la taula que no en
+  // porta). L'únic que necessita és que hi hagi almenys una mesura de talla base AMB XIFRA;
+  // un model amb només POMs materialitzats buits produiria una taula de cel·les buides.
+  const baseMeasuresOk = pomRows.some(r => r.base_value_cm != null)
   const TABLE_VARIANTS = [
     { k: 't1a', icon: 'ti-ruler-measure', label: t('tech_sheet.table_variant_t1a'), ok: t1aOk, motiu: t1aMotiu },
+    // T2 — SEGONA de la llista per decisió d'Agus (30/07): és la taula que més es demana i
+    // la primera que algú busca. Cap altra variant canvia d'ordre relatiu.
+    {
+      k: 'base_measures', icon: 'ti-ruler', label: t('tech_sheet.table_variant_base_measures'),
+      ok: baseMeasuresOk, motiu: t('tech_sheet.lib_table_no_base_values'),
+    },
     {
       k: 't1b', icon: 'ti-chart-grid-dots', label: t('tech_sheet.table_variant_t1b'),
       ok: sfAmbGrading.length > 0,
