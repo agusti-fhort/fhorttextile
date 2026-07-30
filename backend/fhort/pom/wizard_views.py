@@ -298,6 +298,20 @@ def confirm_base_size_view(request, model_id):
         return Response({'error': str(e)}, status=500)
 
 
+#: Últim recurs de tolerància de la casa. MATEIXA xifra que `pom.s10_views.TOL_FALLBACK` i
+#: `patterns.views.TOL_FALLBACK`: una mesura no pot tenir una tolerància diferent segons quina
+#: pantalla la miri. (DEUTE anotat, fora de scope: n'hi ha cinc còpies escampades.)
+TOL_FALLBACK = 0.6
+
+
+def _tol_vigent(de_la_mesura, del_cataleg):
+    """La tolerància de la MESURA mana; la del catàleg és el pla B; 0.6 és l'últim recurs."""
+    for v in (de_la_mesura, del_cataleg):
+        if v is not None:
+            return float(v)
+    return TOL_FALLBACK
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def base_measurements_view(request, model_id):
@@ -360,6 +374,12 @@ def base_measurements_view(request, model_id):
             'nom_en': bm.pom.pom_global.nom_en if bm.pom.pom_global_id else '',
             'categoria_nom': bm.pom.categoria.nom_ca if bm.pom.categoria_id else '',
             'base_value_cm': bm.base_value_cm,
+            # Tolerància VIGENT (ja resolta), no la columna crua: qui la consumeix pinta una
+            # cel·la, no ha de refer la cascada. Mateix criteri que `base_stages_view._tol`
+            # (models_app/views.py) i `patterns/views._tol` — la de la MESURA mana, la del
+            # catàleg és el pla B, 0.6 és l'últim recurs.
+            'tol_minus': _tol_vigent(bm.tolerancia_minus, bm.pom.tolerancia_default_minus),
+            'tol_plus': _tol_vigent(bm.tolerancia_plus, bm.pom.tolerancia_default_plus),
             'notes': bm.notes or '',
             'nom_fitxa': bm.nom_fitxa or '',
             'origen': bm.origen or '',
