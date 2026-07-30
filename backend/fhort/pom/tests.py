@@ -9,10 +9,12 @@ en silenci.**
 """
 import datetime
 
+from django.db import connection
 from django_tenants.test.cases import TenantTestCase
 
 from fhort.models_app.extraction_views import find_pom_master
-from fhort.pom.models import CustomerPOMAlias, POMMaster
+from fhort.pom.management.commands.seed_pattern_piece_roles import ROLS, sembra
+from fhort.pom.models import CustomerPOMAlias, PatternPieceRole, POMMaster
 from fhort.pom.serializers import CustomerPOMAliasSerializer
 from fhort.pom.services import maybe_learn_customer_alias
 from fhort.tasks.models import Customer
@@ -160,3 +162,57 @@ class AliasSensePomTest(_TenantBase):
         self.assertEqual(match_type, 'alias_match')
         self.assertEqual(conf, 'HIGH')
         self.assertEqual(pm.id, self.pom.id)
+
+
+class SembraRolsDePecaTest(_TenantBase):
+    """La sembra del catàleg de rols: **idempotent i sense esborrar mai res**.
+
+    La prova de foc d'un seed no és que funcioni el primer cop, és que la segona passada
+    no dupliqui, no esborri i no es descuidi cap fila. És la mateixa llei que ja governa
+    `extend_pom_catalog` i `0025_seed_canonical_task_types`.
+    """
+
+    def _sembra(self):
+        return sembra(connection.schema_name)
+
+    def test_la_segona_passada_no_duplica_ni_esborra(self):
+        creats_1, actualitzats_1 = self._sembra()
+        total_1 = PatternPieceRole.objects.count()
+        ids_1 = set(PatternPieceRole.objects.values_list('id', flat=True))
+
+        creats_2, actualitzats_2 = self._sembra()
+
+        self.assertEqual(creats_1, len(ROLS))
+        self.assertEqual(actualitzats_1, 0)
+        self.assertEqual(creats_2, 0, 'la segona passada ha creat files')
+        self.assertEqual(actualitzats_2, len(ROLS))
+        self.assertEqual(PatternPieceRole.objects.count(), total_1)
+        # Els MATEIXOS ids: `update_or_create` reforça la fila, no la substitueix. Si els
+        # ids es moguessin, qualsevol FK que hi apuntés hauria quedat òrfena.
+        self.assertEqual(set(PatternPieceRole.objects.values_list('id', flat=True)), ids_1)
+
+    def test_els_rols_sembrats_son_de_sistema_i_amb_els_tres_idiomes(self):
+        self._sembra()
+        for rol in PatternPieceRole.objects.all():
+            with self.subTest(slug=rol.slug):
+                self.assertTrue(rol.is_system)
+                self.assertFalse(rol.pendent_revisio)
+                self.assertEqual(rol.origen, PatternPieceRole.ORIGEN_SEED)
+                self.assertTrue(rol.nom_en and rol.nom_ca and rol.nom_es)
+                self.assertIn(rol.classe, dict(PatternPieceRole.CLASSE_CHOICES))
+
+    def test_un_rol_del_tenant_no_el_toca_la_sembra(self):
+        """Un rol que el tenant s'ha creat pel seu compte (D-1: el tenant proposa) ha de
+        sobreviure la sembra sencera: el seed només mana sobre els seus."""
+        propi = PatternPieceRole.objects.create(
+            slug='guarda-pit', nom_en='Chest guard', nom_ca='Guarda pit',
+            nom_es='Guarda pecho', classe=PatternPieceRole.CLASSE_COMPLEMENT,
+            is_system=False, pendent_revisio=True,
+            origen=PatternPieceRole.ORIGEN_MANUAL)
+
+        self._sembra()
+
+        propi.refresh_from_db()
+        self.assertFalse(propi.is_system)
+        self.assertTrue(propi.pendent_revisio)
+        self.assertEqual(PatternPieceRole.objects.count(), len(ROLS) + 1)
