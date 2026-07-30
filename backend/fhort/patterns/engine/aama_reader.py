@@ -553,6 +553,17 @@ def _costat(x: float, y: float, fold: FoldData) -> int:
     return 1 if creuament > 0 else -1
 
 
+def costat_respecte_del_doblec(x: float, y: float, fold: FoldData) -> int:
+    """A quin semiplà de l'eix cau un punt: +1, −1, o 0 si hi seu al damunt.
+
+    És `_costat` amb nom de contracte, per a qui hagi de saber, des de fora del motor, si
+    un punt sobreviurà al plegat: `fold_piece` es queda els del semiplà original i els de
+    l'eix, i descarta la resta. Hi ha d'haver UNA sola regla per a això —si el de fora se
+    la calculés pel seu compte, el dia que aquesta canviés hi hauria dues respostes.
+    """
+    return _costat(x, y, fold)
+
+
 def _costat_dominant(punts, fold: FoldData) -> int:
     for p in punts:
         costat = _costat(p.x, p.y, fold)

@@ -2600,6 +2600,45 @@ class ExportSenseDoblecInvisibleTest(EscalatTestBase):
         self.assertTrue(all(p.doblec_original is None for p in doc.pieces))
 
 
+class POMSobreSimetriaTest(EscalatTestBase):
+    """Un POM ancorat a la meitat MIRALLADA no es pot emetre: el fitxer surt plegat i
+    aquell punt no hi arriba. S'exclou i es DIU —mateixa llei que el mode landmark—, mai
+    en silenci. Substituir-lo pel seu equivalent de la meitat bona demanaria un mapatge
+    mirallat→original que aquest sprint no construeix."""
+
+    TS = '2026-01-01T00:00:00Z'
+
+    def _peca_amb_pom(self, sobre_mirall: bool):
+        fp = PatternFile.objects.get(pk=self._upload(mitja_peca_dxf()).data['id'])
+        peca = fp.pieces.get(nom_block='MITJA')
+        vertexs = list(peca.points.filter(mena='vertex', boundary_index=0))
+        mirallat = next(p for p in vertexs if p.x < 0)
+        originals = [p for p in vertexs if p.x > 0]
+
+        a = mirallat if sobre_mirall else originals[0]
+        PatternPOM.objects.create(
+            pattern_piece=peca, pom_master=self.pom,
+            definicio_mesura={'mode': 'points', 'a': a.id, 'b': originals[-1].id},
+        )
+        return fp
+
+    def test_el_pom_sobre_geometria_mirallada_no_sexporta_i_es_diu(self):
+        res = build_export(self._peca_amb_pom(sobre_mirall=True), self.gv.id,
+                           'polypattern', ts=self.TS)
+        self.assertTrue(
+            any('geometria de simetria' in p for p in res.problemes_poms),
+            f'cap avís de simetria a {res.problemes_poms}')
+        self.assertNotIn(self.pom.pom_code.encode(), res.dxf)
+
+    def test_un_pom_de_la_meitat_BONA_sí_que_sexporta(self):
+        """El control: sense això, el test de sobre passaria igual si l'exclusió fos
+        indiscriminada i cap POM no arribés mai al fitxer."""
+        res = build_export(self._peca_amb_pom(sobre_mirall=False), self.gv.id,
+                           'polypattern', ts=self.TS)
+        self.assertFalse([p for p in res.problemes_poms if 'simetria' in p])
+        self.assertIn(self.pom.pom_code.encode(), res.dxf)
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # TALLER DE PATRÓ · W1 — SEGMENTS DECLARATS
 # ═════════════════════════════════════════════════════════════════════════════

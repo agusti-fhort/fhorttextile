@@ -35,6 +35,7 @@ from .engine.geometry import (
 )
 from .engine.operations import POMSpec, PointRef, SegRef, SewSpec
 from .engine.ports import GradedPOMDelta, GradingSnapshot
+from .engine.aama_reader import costat_respecte_del_doblec
 from .engine.natural_segments import segmentar_peca_natural
 from .engine.segments import segmentar_peca
 from .models import PatternPiece, PatternPoint, PatternSegment
@@ -539,18 +540,50 @@ def point_refs(pattern_file) -> dict[int, PointRef]:
     return refs
 
 
+def punts_de_simetria(piece) -> set[int]:
+    """Els `PatternPoint` d'una peça que el plegat de l'exportació descarta.
+
+    Una peça que venia al plec es desa SENCERA (I0/T3) i s'emet PLEGADA (I0/T4a): la
+    meitat mirallada existeix a la nostra BD però no arriba mai al fitxer. Aquesta funció
+    diu quins punts són d'aquella meitat, amb la MATEIXA regla que fa servir `fold_piece`
+    per decidir què es queda — no una versió pròpia.
+
+    Una peça sense doblec materialitzat no en té cap: conjunt buit i s'acaba.
+    """
+    fold = piece.doblec_original or {}
+    if not fold.get('materialitzat') or not fold.get('costat'):
+        return set()
+
+    eix = FoldData(
+        eix_x1=fold['eix_x1'], eix_y1=fold['eix_y1'],
+        eix_x2=fold['eix_x2'], eix_y2=fold['eix_y2'],
+        materialitzat=True, costat=fold['costat'],
+    )
+    return {
+        p.id for p in piece.points.all()
+        if costat_respecte_del_doblec(p.x, p.y, eix) not in (0, eix.costat)
+    }
+
+
 def pom_specs(pattern_file) -> tuple[tuple[POMSpec, ...], list[str]]:
     """Els `PatternPOM` d'un fitxer → `POMSpec` de l'engine. → (specs, problemes).
 
     Els POMs amb una recepta que no es pot traduir (mode `landmark`, que la UI encara no
     ofereix, o un punt que ja no hi és) NO es descarten en silenci: surten a la llista de
     problemes perquè qui exporti sàpiga que aquell POM no entrarà a la niada.
+
+    Des d'I0/T4b hi ha un tercer motiu d'exclusió, i és de la MATEIXA família: un POM
+    ancorat sobre la meitat mirallada d'una peça de simetria. El punt existeix a la nostra
+    geometria però no al fitxer que emetem, que surt plegat. Emetre'l voldria dir triar un
+    punt de substitució, i decidir quin punt de la meitat bona correspon a un de la
+    mirallada és una capa que aquest sprint NO construeix.
     """
     refs = point_refs(pattern_file)
     specs: list[POMSpec] = []
     problemes: list[str] = []
 
     for piece in pattern_file.pieces.all():
+        simetria = punts_de_simetria(piece)
         for pom in piece.poms.all():
             codi = pom.pom_master.pom_code
             definicio = pom.definicio_mesura or {}
@@ -569,6 +602,14 @@ def pom_specs(pattern_file) -> tuple[tuple[POMSpec, ...], list[str]]:
                 problemes.append(
                     f'El POM {codi} apunta a un punt que ja no és a la geometria: la seva '
                     f'recepta ha quedat òrfena. No entrarà a la niada.'
+                )
+                continue
+
+            if definicio.get('a') in simetria or definicio.get('b') in simetria:
+                problemes.append(
+                    f'El POM {codi} té un extrem ancorat sobre geometria de simetria: la '
+                    f'peça «{piece.nom_block}» s\'exporta plegada i aquella meitat no '
+                    f'arriba al fitxer. No entrarà a la niada.'
                 )
                 continue
 
