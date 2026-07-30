@@ -2864,7 +2864,19 @@ def base_stages_view(request, model_id):
         return (float(tm) if tm is not None else 0.6, float(tp) if tp is not None else 0.6)
 
     # Estadis = events de MeasurementChangeLog agrupats per (context, segon), en ordre d'aparició.
-    logs = (MeasurementChangeLog.objects.filter(model=model)
+    #
+    # NOMÉS PRESES DE LA TALLA BASE (FIX-2, DIAGNOSI_MESURES_TEA_205 · fila B del 205).
+    # `MeasurementChangeLog` també registra els OVERRIDES de talla no-base (l'edició d'una
+    # cel·la d'Escalat i el `set_size_override`), i aquests s'escriuen amb `base_measurement`
+    # a NULL — és el senyal que distingeix «he tocat la base» de «he pinçat una talla».
+    # Sense el filtre entraven a la taula com si fossin preses de base i, com que els estadis
+    # són SNAPSHOTS per carry-forward, un override arrossegava el seu valor cap endavant per
+    # tota la fila: al 205, el POM B (base 46) es veia caure a 1 perquè algú havia escrit 1
+    # a les cel·les XXS i XS. La taula deia una base que la fitxa no ha tingut mai.
+    #
+    # Els logs NO es toquen (són auditoria): el que canvia és qui té dret a pintar-hi columna.
+    logs = (MeasurementChangeLog.objects
+            .filter(model=model, base_measurement__isnull=False)
             .select_related('pom').order_by('created_at', 'id'))
     events, ev_index, changes_by_ev = [], {}, {}
     for c in logs:
