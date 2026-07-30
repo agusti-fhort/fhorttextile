@@ -26,23 +26,22 @@ from fhort.models_app.services_ftt_document import PENDING_MARK, unfreeze_docume
 def _taula_base(**extra):
     """La T0 amb la forma REAL que insereix `insertTableBaseMeasures`.
 
-    Cinc columnes i cap de graduació; cel·la bilingüe al POM; tolerància pelada quan és
-    simètrica i amb les dues bandes quan no ho és (TechSheetEditor.fmtTolerancia).
+    TRES columnes —nomenclatura, POM bilingüe i mida de la talla base— i cap més. La talla
+    viatja DINS l'etiqueta de la columna `base` (les taules de la casa no tenen títol) i
+    també al snapshot.
     """
     obj = {
         'id': 'tb', 'type': 'table', 'layer': 'free', 'x': 10, 'y': 14,
-        'kind': 'base_measures', 'scale': 0.92, 'width': 162.0, 'height': 48.0,
+        'kind': 'base_measures', 'scale': 0.92, 'width': 92.0, 'height': 48.0,
         'columns': [
             {'key': 'ref', 'label': 'Nomenclatura', 'width': 22},
             {'key': 'pom', 'label': 'POM', 'width': 46},
-            {'key': 'base', 'label': 'Base (cm)', 'width': 18},
-            {'key': 'tol', 'label': 'Tol ±', 'width': 16},
-            {'key': 'coment', 'label': 'Comentaris', 'width': 60},
+            {'key': 'base', 'label': 'Base · M (cm)', 'width': 24},
         ],
         'rows': [
-            ['PIT', {'text': 'Chest width', 'sub': 'Amplada de pit'}, '47.0', '0.6', ''],
-            ['A', {'text': 'Waist', 'sub': 'Cintura'}, '38.0', '+0.5 / −0.3', 'revisar'],
-            ['X-CUSTOM', {'text': 'Mesura del tenant', 'sub': ''}, '', '0.6', ''],
+            ['PIT', {'text': 'Chest width', 'sub': 'Amplada de pit'}, '47.0'],
+            ['A', {'text': 'Waist', 'sub': 'Cintura'}, '38.0'],
+            ['X-CUSTOM', {'text': 'Mesura del tenant', 'sub': ''}, ''],
         ],
         'style': {'fontSize': 9, 'headerFill': '#111827', 'zebra': True},
         'snapshot': {'model_id': 163, 'talla_base': 'M',
@@ -90,23 +89,39 @@ class TaulaBaseMesuresRoundtripTest(SimpleTestCase):
         tornada = self._roundtrip(_doc(taula))['pages'][0]['objects'][0]
         self.assertEqual(tornada, taula)
 
-    def test_la_T0_no_porta_CAP_columna_de_graduacio(self):
-        """La raó de ser d'aquesta taula. Si algú hi encasta un Δ o un break copiant de la
-        T1a, cau aquí i no a la impremta."""
+    def test_la_T0_te_EXACTAMENT_TRES_columnes(self):
+        """La correcció d'Agus (30/07), fixada. La primera versió va sortir amb Tol± i
+        Comentaris per mimetisme amb la T1a i eren justament les dues que sobraven: aquesta
+        taula és POM + nomenclatura + mida, i res més."""
         tornada = self._roundtrip(_doc(_taula_base()))['pages'][0]['objects'][0]
         claus = [c['key'] for c in tornada['columns']]
-        self.assertEqual(claus, ['ref', 'pom', 'base', 'tol', 'coment'])
-        for prohibida in ('rule', 'break', 'delta'):
+        self.assertEqual(claus, ['ref', 'pom', 'base'])
+        self.assertEqual(len(tornada['rows'][0]), 3)
+
+    def test_la_T0_no_porta_CAP_columna_de_graduacio_ni_danotacio(self):
+        """Si algú hi encasta un Δ, un break o la Tol± copiant de la T1a, cau aquí i no a la
+        impremta."""
+        claus = [c['key'] for c in
+                 self._roundtrip(_doc(_taula_base()))['pages'][0]['objects'][0]['columns']]
+        for prohibida in ('rule', 'break', 'delta', 'tol', 'coment', 'nova'):
             self.assertNotIn(prohibida, claus)
-        # I cap columna de talla: les úniques xifres són la base i la tolerància.
-        self.assertEqual(len(tornada['rows'][0]), 5)
+
+    def test_la_capcalera_de_la_base_diu_QUINA_talla_es(self):
+        """La talla base viatja DINS l'etiqueta de la columna, no en un títol de taula: les
+        taules d'aquesta casa no en tenen (buildTableCellPrimitives pinta capçalera + files).
+        És l'única cosa del document que declara de quina talla parlen les xifres, i per això
+        es fixa aquí i no només al snapshot."""
+        tornada = self._roundtrip(_doc(_taula_base()))['pages'][0]['objects'][0]
+        base = next(c for c in tornada['columns'] if c['key'] == 'base')
+        self.assertIn('M', base['label'])
+        self.assertEqual(base['label'], 'Base · M (cm)')
+        # I el snapshot en guarda la versió en cru, per a la traça.
+        self.assertEqual(tornada['snapshot']['talla_base'], 'M')
 
     def test_els_valors_congelats_i_la_cel_la_bilingue_sobreviuen(self):
         files = self._roundtrip(_doc(_taula_base()))['pages'][0]['objects'][0]['rows']
         self.assertEqual(files[0][1], {'text': 'Chest width', 'sub': 'Amplada de pit'})
         self.assertEqual(files[0][2], '47.0')            # string, no número: congelat
-        self.assertEqual(files[0][3], '0.6')             # tolerància simètrica, pelada
-        self.assertEqual(files[1][3], '+0.5 / −0.3')     # asimètrica, menys tipogràfic intacte
         self.assertEqual(files[2][2], '')                # POM materialitzat sense valor
 
     def test_la_nomenclatura_arriba_sencera_i_mai_buida(self):
@@ -126,9 +141,16 @@ class TaulaBaseMesuresRoundtripTest(SimpleTestCase):
         self.assertTrue(neta[PENDING_MARK])
         self.assertEqual(report['taules_desvinculades'], 1)
         # L'estructura que el tècnic va compondre es queda: columnes i nombre de files.
-        self.assertEqual(len(neta['columns']), 5)
+        self.assertEqual(len(neta['columns']), 3)
         self.assertEqual(len(neta['rows']), 3)
         self.assertEqual(neta['rows'][0][0], '')       # cel·les buidades
+        # ⚠️ L'etiqueta de la columna NO es buida en descongelar: `_unfreeze_table` neteja
+        # VALORS, no estructura. Una plantilla treta d'aquest document arrossega la talla del
+        # model d'origen a la capçalera fins que algú re-insereix la taula. És el mateix
+        # comportament que ja tenen les columnes de talla de la T1b — es fixa perquè es vegi,
+        # no perquè estigui bé.
+        base = next(c for c in neta['columns'] if c['key'] == 'base')
+        self.assertEqual(base['label'], 'Base · M (cm)')
 
     # ── No-regressió de les taules que ja hi eren ────────────────────────────
     def test_T1a_T1b_i_T3_no_canvien_al_roundtrip(self):

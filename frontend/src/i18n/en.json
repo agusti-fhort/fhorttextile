@@ -2906,6 +2906,7 @@
     "tbl_col_nomenclatura": "Nomenclature",
     "tbl_col_pom": "POM",
     "tbl_col_base_cm": "Base (cm)",
+    "tbl_col_base_cm_talla": "Base · {{talla}} (cm)",
     "tbl_col_rule": "Rule/Δ",
     "tbl_col_break": "Break",
     "tbl_col_tol": "Tol ±",
