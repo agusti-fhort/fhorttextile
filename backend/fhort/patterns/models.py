@@ -177,6 +177,72 @@ class PatternPiece(models.Model):
     has_fold = models.BooleanField(default=False)
     unknown_layers = models.JSONField(default=list, blank=True)
 
+    # ── IDENTITAT (I1) ───────────────────────────────────────────────────────
+    # Aquests camps neixen BUITS i I1 no els omple: qui els sap escriure és la capa
+    # d'identificació (I2), i el pas de confirmació humana que la governa. Existir-hi
+    # abans és el que permet que aquella capa no hagi de migrar dades mentre les escriu.
+
+    #: QUÈ és aquesta peça, del catàleg de sistema. PROTECT i no CASCADE: un rol que
+    #: alguna peça reclama no pot desaparèixer sense que algú se n'adoni — mateixa llei
+    #: que `PatternPOM.pom_master`.
+    piece_role = models.ForeignKey(
+        'pom.PatternPieceRole', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='pieces',
+    )
+    #: El BATEIG del model: com en diu aquest patró, en aquest model, aquest taller. No
+    #: substitueix el rol ni el `nom_block` — conviuen: el rol diu què és, el bloc diu com
+    #: es deia al fitxer, i això diu com se'n parla.
+    nom = models.CharField(max_length=160, blank=True)
+
+    LAT_CAP = ''
+    LAT_ESQUERRA = 'L'
+    LAT_DRETA = 'R'
+    LAT_CHOICES = [
+        (LAT_CAP, 'Sense lateralitat'),
+        (LAT_ESQUERRA, 'Esquerra'),
+        (LAT_DRETA, 'Dreta'),
+    ]
+    #: Buit NO vol dir «encara no ho sabem»: vol dir que la peça no té costat (una esquena
+    #: al doblec no és ni esquerra ni dreta). Les que en tenen, en tenen dues.
+    lateralitat = models.CharField(
+        max_length=1, choices=LAT_CHOICES, blank=True, default=LAT_CAP)
+
+    #: Quan el mateix rol es repeteix a la mateixa peça de roba (tres vistes, dues traves).
+    #: null = no cal distingir-la de cap germana.
+    ordinal = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    ESTAT_PRODUCCIO = 'produccio'
+    ESTAT_TREBALL = 'treball'
+    ESTAT_REFERENCIA = 'referencia'
+    ESTAT_PLANTILLA = 'plantilla'
+    ESTAT_CHOICES = [
+        (ESTAT_PRODUCCIO, 'De producció'),
+        (ESTAT_TREBALL, 'De treball'),
+        (ESTAT_REFERENCIA, 'De referència'),
+        (ESTAT_PLANTILLA, 'Plantilla'),
+    ]
+    #: Un DXF de client porta barrejades les peces que es tallen i les que no (bases,
+    #: proves, plantilles). Per defecte tot és de producció: assumir el contrari faria
+    #: desaparèixer peces bones de la niada sense que ningú ho hagués decidit.
+    estat_peca = models.CharField(
+        max_length=12, choices=ESTAT_CHOICES, default=ESTAT_PRODUCCIO)
+
+    ROL_ORIGEN_CAP = ''
+    ROL_ORIGEN_LLEGIT = 'llegit'
+    ROL_ORIGEN_CONFIRMAT = 'confirmat'
+    ROL_ORIGEN_CORREGIT = 'corregit'
+    ROL_ORIGEN_CHOICES = [
+        (ROL_ORIGEN_CAP, 'Sense rol'),
+        (ROL_ORIGEN_LLEGIT, 'Llegit pel motor'),
+        (ROL_ORIGEN_CONFIRMAT, 'Confirmat per una persona'),
+        (ROL_ORIGEN_CORREGIT, 'Corregit per una persona'),
+    ]
+    #: D'ON ve el `piece_role`. Sense això, «FRONT» posat pel motor i «FRONT» confirmat per
+    #: la patronista valdrien igual, i el sistema aprendria del seu propi encert — el mateix
+    #: error que `SegmentPreference` evita aprenent només de la confirmació humana.
+    rol_origen = models.CharField(
+        max_length=10, choices=ROL_ORIGEN_CHOICES, blank=True, default=ROL_ORIGEN_CAP)
+
     class Meta:
         verbose_name = 'Peça de patró'
         verbose_name_plural = 'Peces de patró'

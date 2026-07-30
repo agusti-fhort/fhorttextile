@@ -22,6 +22,8 @@ import logging
 import math
 import re
 import unittest
+
+from django.db.models import ProtectedError
 from dataclasses import replace
 from pathlib import Path
 
@@ -132,14 +134,14 @@ from fhort.patterns.annotation_views import (PatternPOMViewSet, PatternSegmentVi
                                              comprovar_costura)
 from fhort.patterns.export import ExportBlocked, build_export
 from fhort.patterns.models import (DartProposalRejection, ExportAcknowledgement, PatternFile,
-                                   PatternPOM, PatternPoint, PatternSegment,
+                                   PatternPiece, PatternPOM, PatternPoint, PatternSegment,
                                    SegmentPreference, SewProposalRejection, SewRelation,
                                    SewToleranceAcceptance)
 from fhort.patterns.services import save_pattern_file
 from fhort.patterns.serializers import PatternGeometrySerializer
 from fhort.patterns.views import (PATTERN_DOWNLOAD_SALT, PATTERN_RUL_DOWNLOAD_SALT,
                                   PatternFileViewSet)
-from fhort.pom.models import GarmentType, POMMaster
+from fhort.pom.models import GarmentType, PatternPieceRole, POMMaster
 from fhort.tasks.models import GarmentTypeItem
 
 FIXTURES = Path(__file__).parent / 'tests' / 'fixtures'
@@ -4766,3 +4768,48 @@ class PincesProposadesAPITest(PatternsAPITestBase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['ja_hi_era'])
         self.assertEqual(DartProposalRejection.objects.count(), 1)
+
+
+class CampsDIdentitatTest(PatternsAPITestBase):
+    """I1/T3: els camps d'identitat existeixen, neixen BUITS i es poden llegir.
+
+    Que neixin buits no és un detall d'implementació, és la frontera de l'sprint: qui els
+    sap omplir és la capa d'identificació, i escriure'ls abans voldria dir endevinar."""
+
+    def setUp(self):
+        super().setUp()
+        self.fp = PatternFile.objects.get(
+            pk=self._upload(AMELIA_DXF.read_bytes()).data['id'])
+
+    def test_neixen_buits_a_totes_les_peces(self):
+        for peca in self.fp.pieces.all():
+            with self.subTest(peca=peca.nom_block):
+                self.assertIsNone(peca.piece_role_id)
+                self.assertEqual(peca.nom, '')
+                self.assertEqual(peca.lateralitat, '')
+                self.assertIsNone(peca.ordinal)
+                self.assertEqual(peca.estat_peca, PatternPiece.ESTAT_PRODUCCIO)
+                self.assertEqual(peca.rol_origen, '')
+
+    def test_la_geometria_els_serveix(self):
+        request = self.factory.get('/')
+        force_authenticate(request, user=self.user)
+        resp = PatternFileViewSet.as_view({'get': 'geometry'})(request, pk=self.fp.id)
+        self.assertEqual(resp.status_code, 200)
+        peca = resp.data['pieces'][0]
+        for camp in ('piece_role', 'nom', 'lateralitat', 'ordinal',
+                     'estat_peca', 'rol_origen'):
+            self.assertIn(camp, peca)
+
+    def test_un_rol_amb_peces_no_es_pot_esborrar(self):
+        """PROTECT: un rol que alguna peça reclama no desapareix sense que algú s'hi trobi.
+        Mateixa llei que `PatternPOM.pom_master`."""
+        rol = PatternPieceRole.objects.create(
+            slug='prova-rol', nom_en='Test', nom_ca='Prova', nom_es='Prueba',
+            classe=PatternPieceRole.CLASSE_COS)
+        peca = self.fp.pieces.first()
+        peca.piece_role = rol
+        peca.save(update_fields=['piece_role'])
+
+        with self.assertRaises(ProtectedError):
+            rol.delete()

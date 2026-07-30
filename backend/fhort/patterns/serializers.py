@@ -73,6 +73,9 @@ class PatternPieceSerializer(serializers.ModelSerializer):
             'id', 'nom_block', 'rol', 'contorns', 'grain', 'metadata',
             'doblec_original', 'has_sew', 'has_fold', 'unknown_layers',
             'punts_per_capa', 'bounding_box_mm', 'total_punts',
+            # Identitat (I1). Neixen buits i NINGÚ no els escriu encara: qui els sap
+            # omplir és la capa d'identificació. Aquí només es llegeixen.
+            'piece_role', 'nom', 'lateralitat', 'ordinal', 'estat_peca', 'rol_origen',
         ]
         read_only_fields = fields
 
@@ -222,6 +225,16 @@ class PatternGeometrySerializer(serializers.ModelSerializer):
             'id': piece.id,
             'nom_block': piece.nom_block,
             'rol': piece.rol,
+            # Identitat (I1): de moment sempre buits. Viatgen amb la geometria i no per
+            # una crida a part perquè són resposta a la mateixa pregunta que el visor ja
+            # fa ("què hi ha en aquesta peça?"), i perquè el dia que s'omplin la UI no
+            # hagi de canviar de font.
+            'piece_role': piece.piece_role_id,
+            'nom': piece.nom,
+            'lateralitat': piece.lateralitat,
+            'ordinal': piece.ordinal,
+            'estat_peca': piece.estat_peca,
+            'rol_origen': piece.rol_origen,
             'metadata': piece.metadata,
             'boundaries': boundaries,
             'notches': notches,
