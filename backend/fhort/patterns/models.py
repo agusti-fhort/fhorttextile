@@ -229,11 +229,17 @@ class PatternPiece(models.Model):
 
     ROL_ORIGEN_CAP = ''
     ROL_ORIGEN_LLEGIT = 'llegit'
+    ROL_ORIGEN_ASSIGNAT = 'assignat'
     ROL_ORIGEN_CONFIRMAT = 'confirmat'
     ROL_ORIGEN_CORREGIT = 'corregit'
     ROL_ORIGEN_CHOICES = [
         (ROL_ORIGEN_CAP, 'Sense rol'),
         (ROL_ORIGEN_LLEGIT, 'Llegit pel motor'),
+        # Posat per una persona sobre una peça que no en tenia cap. No és una CORRECCIÓ:
+        # no hi havia res a corregir, i el dia que el motor proposi rols (I2b) la diferència
+        # entre «ho he posat jo perquè no hi havia res» i «ho he canviat perquè estava
+        # malament» és justament el senyal que dirà si el motor encerta.
+        (ROL_ORIGEN_ASSIGNAT, 'Assignat per una persona'),
         (ROL_ORIGEN_CONFIRMAT, 'Confirmat per una persona'),
         (ROL_ORIGEN_CORREGIT, 'Corregit per una persona'),
     ]

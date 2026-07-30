@@ -4972,18 +4972,34 @@ class IdentificacioAPITest(PatternsAPITestBase):
         self.assertEqual(self.back.lateralitat, 'L')
         self.assertEqual(self.back.ordinal, 1)
 
-    def test_ratificar_no_es_corregir(self):
-        """El senyal ha de distingir «ho he canviat» de «ho he donat per bo»: el dia que
-        algú vulgui saber de què es fia el sistema, són coses diferents."""
-        self._post({'peces': [{'piece_id': self.back.id,
-                               'piece_role_id': self.rol_back.id}]})
+    def _origen_despres(self, **camps):
+        self._post({'peces': [{'piece_id': self.back.id, **camps}]})
         self.back.refresh_from_db()
-        self.assertEqual(self.back.rol_origen, PatternPiece.ROL_ORIGEN_CORREGIT)
+        return self.back.rol_origen
 
-        self._post({'peces': [{'piece_id': self.back.id,
-                               'piece_role_id': self.rol_back.id}]})
-        self.back.refresh_from_db()
-        self.assertEqual(self.back.rol_origen, PatternPiece.ROL_ORIGEN_CONFIRMAT)
+    def test_assignar_ratificar_i_corregir_son_TRES_senyals(self):
+        """Tres actes humans diferents no poden deixar la mateixa marca.
+
+        El dia que el motor proposi rols (I2b), la diferència entre «ho he posat jo perquè
+        no hi havia res», «ho he donat per bo» i «ho he canviat perquè estava malament» és
+        justament el senyal que dirà si el motor encerta."""
+        # Sobre una peça sense rol: ASSIGNAT — no hi havia res a corregir.
+        self.assertEqual(self._origen_despres(piece_role_id=self.rol_back.id),
+                         PatternPiece.ROL_ORIGEN_ASSIGNAT)
+        # El mateix rol una altra vegada: RATIFICAR.
+        self.assertEqual(self._origen_despres(piece_role_id=self.rol_back.id),
+                         PatternPiece.ROL_ORIGEN_CONFIRMAT)
+        # Un rol diferent sobre un que ja hi era: CORREGIR.
+        self.assertEqual(self._origen_despres(piece_role_id=self.rol_front.id),
+                         PatternPiece.ROL_ORIGEN_CORREGIT)
+
+    def test_treure_el_rol_no_deixa_procedencia(self):
+        """Un `rol_origen` que parla d'un rol que ja no hi és seria una dada que es
+        contradiu a si mateixa."""
+        self._origen_despres(piece_role_id=self.rol_back.id)
+        self.assertEqual(self._origen_despres(piece_role_id=None),
+                         PatternPiece.ROL_ORIGEN_CAP)
+        self.assertIsNone(self.back.piece_role_id)
 
     def test_el_client_no_pot_dictar_rol_origen(self):
         """Si el pogués enviar, podria dir que una persona ha confirmat el que no ha
@@ -4992,7 +5008,7 @@ class IdentificacioAPITest(PatternsAPITestBase):
                                'piece_role_id': self.rol_back.id,
                                'rol_origen': 'confirmat'}]})
         self.back.refresh_from_db()
-        self.assertEqual(self.back.rol_origen, PatternPiece.ROL_ORIGEN_CORREGIT)
+        self.assertEqual(self.back.rol_origen, PatternPiece.ROL_ORIGEN_ASSIGNAT)
 
     # ── validació ───────────────────────────────────────────────────────────
     def test_una_peca_dun_altre_fitxer_es_rebutja(self):

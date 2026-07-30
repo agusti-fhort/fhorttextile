@@ -212,13 +212,20 @@ def identificar_peces(*, pattern_file, files, usuari=None, confirm=False,
         canvis = []
         if 'piece_role_id' in fila:
             nou_rol = fila['piece_role_id']
-            # RATIFICAR no és CORREGIR: si el rol que arriba és el que ja hi havia, la
-            # persona no l'ha canviat, l'ha donat per bo. Els dos senyals valen coses
-            # diferents el dia que algú vulgui saber de què es fia el sistema.
-            peca.rol_origen = (
-                peca.ROL_ORIGEN_CONFIRMAT if peca.piece_role_id == nou_rol
-                else peca.ROL_ORIGEN_CORREGIT
-            )
+            # Tres actes humans diferents, tres senyals diferents. Col·lapsar-los faria
+            # que, el dia que el motor proposi rols (I2b), no es pogués saber de què es
+            # fia el sistema: quantes vegades encerta i quantes el corregeixen.
+            if nou_rol is None:
+                # Treure el rol: no queda cap rol de què dir la procedència.
+                peca.rol_origen = peca.ROL_ORIGEN_CAP
+            elif peca.piece_role_id == nou_rol:
+                # RATIFICAR no és corregir: la persona no l'ha canviat, l'ha donat per bo.
+                peca.rol_origen = peca.ROL_ORIGEN_CONFIRMAT
+            elif peca.piece_role_id is None:
+                # ASSIGNAR no és corregir: no hi havia res a corregir.
+                peca.rol_origen = peca.ROL_ORIGEN_ASSIGNAT
+            else:
+                peca.rol_origen = peca.ROL_ORIGEN_CORREGIT
             peca.piece_role_id = nou_rol
             canvis += ['piece_role', 'rol_origen']
 
