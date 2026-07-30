@@ -2838,6 +2838,74 @@ def base_measurements_reorder_view(request, model_id):
     return Response({'ok': True, 'n': len(bms)})
 
 
+# Sprint NOMS-POM (2026-07-30) — límit dur dels dos textos, el mateix que declara el model
+# (`BaseMeasurement.nom_canonic_model` / `nom_traduit_model`, CharField(160)). Es valida aquí
+# perquè un text massa llarg ha de tornar un 400 explicat, no una excepció de BD.
+NOMS_POM_MAX = 160
+NOMS_POM_CAMPS = ('nom_canonic_model', 'nom_traduit_model')
+
+
+@api_view(['PATCH'])
+@permission_classes([_ExecuteTasksCap])
+def base_measurement_noms_view(request, bm_id):
+    """PATCH /api/v1/base-measurements/<bm_id>/noms/  Body: {nom_canonic_model?, nom_traduit_model?}
+
+    EL BATEIG DEL MODEL: els dos textos amb què aquest model anomena la mesura (nom canònic EN
+    + traducció del client). Buit ('') NO és un valor: és tornar la fila al catàleg.
+
+    Endpoint PROPI i petit, no el serializer genèric de `BaseMeasurementViewSet`: aquell obre
+    tota la fila (valor base, origen, is_active, toleràncies…) i aquí només s'hi ha de poder
+    tocar la PRESENTACIÓ. Un camp qualsevol que hi entri de passada seria una mesura canviada
+    sense que ningú ho hagi demanat. Els camps que no arriben al body no es toquen.
+
+    Permís: `EXECUTE_TASKS` (`_ExecuteTasksCap`) — la MATEIXA capability que ja governa l'edició
+    de les mesures del model en aquesta superfície (`set_size_override_view` i
+    `base_measurements_reorder_view`, just aquí a sobre). Qui pot escriure el valor d'una mesura
+    del model pot anomenar-la; no s'inventa cap porta nova per a un camp de text.
+
+    REGISTRE: NO passa pel `MeasurementChangeLog` (F1), i és deliberat. Aquell log és la memòria
+    de les MESURES —el que va valer cada POM i quan—, i el llegeixen com a tal la taula
+    d'estadis (`base_stages_view`) i el Repàs: hi entra una fila i el model diria que algú ha
+    tornat a prendre la mesura. Rebatejar no és mesurar. `updated_at` (auto_now) ja diu quan
+    s'ha tocat, i el catàleg segueix sent recuperable en un sol gest (esborrar el text).
+    El signal de F1 tampoc no s'hi dispara sol: només registra canvis de `base_value_cm`.
+
+    El CATÀLEG no es toca mai des d'aquí (ni `POMGlobal` ni `POMMaster`): el bateig és d'aquest
+    model i no pot reescriure com anomenen la mesura els altres models de la casa.
+    """
+    try:
+        bm = BaseMeasurement.objects.get(id=bm_id)
+    except BaseMeasurement.DoesNotExist:
+        return Response({'error': 'Mesura no trobada'}, status=404)
+
+    canvis = {}
+    for camp in NOMS_POM_CAMPS:
+        if camp not in request.data:
+            continue
+        valor = request.data.get(camp)
+        # `null` i `''` volen dir el mateix: treure el bateig i tornar al catàleg.
+        valor = '' if valor is None else str(valor).strip()
+        if len(valor) > NOMS_POM_MAX:
+            return Response(
+                {'error': f'«{camp}» no pot passar de {NOMS_POM_MAX} caràcters.'}, status=400)
+        canvis[camp] = valor
+
+    if not canvis:
+        return Response(
+            {'error': 'Cal com a mínim un de: ' + ', '.join(NOMS_POM_CAMPS) + '.'}, status=400)
+
+    for camp, valor in canvis.items():
+        setattr(bm, camp, valor)
+    bm.save(update_fields=[*canvis.keys(), 'updated_at'])
+
+    return Response({
+        'id': bm.id,
+        'nom_canonic_model': bm.nom_canonic_model,
+        'nom_traduit_model': bm.nom_traduit_model,
+        'updated_at': bm.updated_at.isoformat(),
+    })
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def base_stages_view(request, model_id):
