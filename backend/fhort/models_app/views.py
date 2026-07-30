@@ -2649,7 +2649,7 @@ def escalat_ajustar_talla_view(request, model_id):
     """
     from fhort.models_app.models import ModelGradingOverride, MeasurementChangeLog
     from fhort.pom.models import POMMaster
-    from fhort.pom.services import generate_graded_specs, _load_grading_rules
+    from fhort.pom.services import generate_graded_specs, _load_grading_rules, escala_del_model
     from fhort.pom.grading_utils import propaga_ancoratges
     from fhort.fitting.services import _resolve_working_size_fitting, vigent_grading_version
     from fhort.fitting.models import GradedSpec
@@ -2704,8 +2704,19 @@ def escalat_ajustar_talla_view(request, model_id):
         with transaction.atomic():
             if propaga:
                 # Nova base de la corba ancorada a l'edició (per a la base, l'ancoratge ÉS la base).
-                nova_base = (valor if talla == base_size
-                             else propaga_ancoratges(rule, talla, valor, size_run).get(base_size))
+                # Geometria del MOTOR (`escala_del_model`): el relleu el manen el run del
+                # SISTEMA i la talla BASE (llei S24b + FIX-1). Amb el run del model, un forat
+                # col·lapsava el pas i el break queia on no toca — d'aquí que reescriure el
+                # valor vigent d'una cel·la moqués la base (DIAGNOSI_MESURES_TEA_205, B1).
+                nova_base = valor
+                if talla != base_size:
+                    try:
+                        _run_model, run_sistema, _pos, _bidx = escala_del_model(model)
+                    except ValueError as e:
+                        return Response({'error': str(e)}, status=400)
+                    nova_base = propaga_ancoratges(
+                        rule, talla, valor, size_run,
+                        run_sistema=run_sistema, base_label=base_size).get(base_size)
                 if nova_base is None:
                     return Response({'error': "No s'ha pogut derivar la base des de la talla ancorada."}, status=400)
                 _write_base(model, pom, round(float(nova_base), 2), auth_user,
