@@ -709,21 +709,6 @@ function rowDelta(row, unit = 'CM') {
   return Number(inc) > 0 ? `+${n}` : `${String(n).replace('-', '−')}`
 }
 
-// Tolerància d'una fila per a la columna «Tol ±». Les dues bandes són ASIMÈTRIQUES al domini
-// (`tolerancia_minus`/`tolerancia_plus`), però a la pràctica gairebé sempre coincideixen.
-//
-// Simètrica → la xifra PELADA ('0.6'). El signe ja el diu la capçalera, i pelada passa
-// `esNumeric` → la columna surt centrada i es llegeix d'un cop d'ull, com les altres columnes
-// de xifres (R4). Asimètrica → les dues bandes amb signe explícit i el menys tipogràfic de
-// `rowDelta`; deixa de ser numèrica i s'alinea a l'esquerra, que és el que toca quan la cel·la
-// és una expressió i no un nombre. Sense cap de les dues bandes → '—'.
-export function fmtTolerancia(minus, plus, unit = 'CM') {
-  if (minus == null && plus == null) return '—'
-  const m = fmtMeasure(minus ?? plus, unit)
-  const p = fmtMeasure(plus ?? minus, unit)
-  return m === p ? String(m) : `+${p} / −${m}`
-}
-
 // graded-table JSON (enriquit TS-4a) → {prims, totalW, totalH}. Camps: base_size,
 // size_labels, rows[{ref, nom_en, nom_ca, valors, deltas}].
 // Columnes: REF · Mesura(EN/CA) · [talles] · Δ (única). Talla base destacada.
@@ -4595,11 +4580,18 @@ export default function TechSheetEditor() {
   }
 
   // ── T0 · MESURES TALLA BASE ─────────────────────────────────────────────────
-  // La fitxa de la talla base i RES MÉS: els POMs del model amb el seu valor base i la seva
-  // tolerància. **Cap informació de graduació** — ni Δ, ni break, ni columnes de talla. És
-  // deliberadament la T1a MENYS les dues columnes de regla: qui munta una fitxa de mostra o
-  // una ordre de tall no vol la graduació al mig, i fins ara l'única manera de tenir la base
-  // impresa era inserir la T1a i esborrar-ne columnes a mà.
+  // POM, nomenclatura i mida de la talla base. **TRES columnes i prou** (correcció d'Agus,
+  // 30/07): ni tolerància, ni comentaris, ni cap dada de graduació —ni Δ, ni break, ni
+  // columnes de talla—. La primera versió hi va afegir Tol± i Comentaris per mimetisme amb la
+  // T1a i eren precisament les dues coses que sobraven: aquesta taula és la mida, no el full
+  // d'anotació.
+  //
+  // LA TALLA BASE VA A LA CAPÇALERA DE LA COLUMNA `base`, i no en un títol de taula, perquè
+  // **les taules d'aquesta casa no tenen títol**: `buildTableCellPrimitives` pinta capçalera
+  // de columnes + files, i res més (:779-863). Afegir-n'hi un canviaria el render de TOTES
+  // les variants, que és molt més que aquesta correcció. La columna que porta la xifra és qui
+  // declara de quina talla parla — el mateix criteri que la T1b, on la talla base es marca
+  // sobre la seva pròpia columna (`{sl}*`, buildTablePrimitives:733).
   //
   // La NOMENCLATURA surt de `nomenclaturaDePom` (utils/nomenclaturaPom.js) i no d'una cadena
   // escrita aquí: aquesta taula neix ja amb el criteri bo (nom_fitxa → àlies del client →
@@ -4616,12 +4608,20 @@ export default function TechSheetEditor() {
     } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
     if (!bms.length) { flash(t('tech_sheet.flash_empty_table')); return }
 
+    // La talla surt del MODEL (`base_size_label`, la mateixa que el run declara i que ja va al
+    // snapshot). Sense talla declarada es cau a l'etiqueta pelada: la porta hauria d'haver
+    // aturat aquest cas, i si algun dia no l'atura val més una capçalera correcta però muda
+    // que un separador penjant («Base · (cm)»).
+    const talla = (model?.base_size_label || '').trim()
     const columns = [
       { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
       { key: 'pom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
-      { key: 'base', label: t('tech_sheet.tbl_col_base_cm'), width: 18 },
-      { key: 'tol', label: t('tech_sheet.tbl_col_tol'), width: 16 },
-      { key: 'coment', label: t('tech_sheet.tbl_col_comments'), width: 60 },
+      {
+        key: 'base', width: 24,
+        label: talla
+          ? t('tech_sheet.tbl_col_base_cm_talla', { talla })
+          : t('tech_sheet.tbl_col_base_cm'),
+      },
     ]
     // Files: TOTES les mesures vives del model, com fa la T1a — inclosos els POMs materialitzats
     // sense valor encara. La cel·la buida en una fitxa impresa és on el tècnic anota a mà; podar
@@ -4631,8 +4631,6 @@ export default function TechSheetEditor() {
       nomenclaturaDePom(bm),
       { text: bm.nom_en || bm.nom_client || bm.pom_code_global || '', sub: bm.nom_ca || '' },
       fmtMeasure(bm.base_value_cm, unit) ?? '',
-      fmtTolerancia(bm.tol_minus, bm.tol_plus, unit),
-      '',
     ])
     addObject(fitTableObj({
       id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
