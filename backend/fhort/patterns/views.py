@@ -36,7 +36,7 @@ from fhort.pom.models import CustomerPOMAlias
 from fhort.tasks.models import GarmentTypeItem
 
 from .adapters import DjangoGeometryStore
-from .engine.aama_reader import AAMAReader
+from .engine.aama_reader import AAMAReader, unfold_piece
 from .engine.errors import PatternParseError
 from .engine.rul_reader import RULReader, coherencia_dxf_rul
 from .export import PERFILS_DISPONIBLES, ExportBlocked, build_export
@@ -356,6 +356,22 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             return Response(e.as_dict(), status=422)
         finally:
             dxf.seek(0)
+
+        # D-6 · EL QUE ES PERSISTEIX ÉS LA PEÇA SENCERA. El fitxer del client pot portar
+        # les peces simètriques dibuixades a mitges —la vora recta que el patronista posa
+        # sobre el doblec de la tela—, però mesurar mitja màniga no és mesurar una màniga:
+        # tot el que després llegeix aquesta geometria (POMs ancorats, costures, projecció
+        # del grading) l'ha de trobar desplegada, o mesurarà la meitat i no ho dirà.
+        #
+        # El desplegament és del CAMÍ D'IMPORTACIÓ, no del reader: `read()` ha de continuar
+        # tornant el fitxer tal com és (hi ha qui el vol així, i el comparador de round-trip
+        # se'n serveix). L'eix i el semiplà originals viatgen dins de `doblec_original` amb
+        # `materialitzat=True`, que és el que permet tornar-la a plegar en exportar.
+        #
+        # Una peça sense doblec surt d'`unfold_piece` sense tocar —retorna la mateixa
+        # instància—, així que això no altera cap patró que ja vingués sencer.
+        document = replace(
+            document, pieces=tuple(unfold_piece(p) for p in document.pieces))
 
         grade_table = None
         # El que el motor ha vist i NO ha sabut llegir viatja pel mateix canal que els

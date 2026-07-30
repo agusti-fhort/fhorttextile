@@ -994,6 +994,61 @@ class UploadTest(PatternsAPITestBase):
         self.assertIn(resp.status_code, (401, 403))
 
 
+class SimetriaMaterialitzadaTest(PatternsAPITestBase):
+    """D-6: el que arriba a la BD és la peça SENCERA, encara que el fitxer la porti a
+    mitges. Mesurar mitja màniga no és mesurar una màniga, i tot el que llegeix aquesta
+    geometria després —POMs, costures, projecció— no té manera de saber que en falta la
+    meitat."""
+
+    def _peca_desplegada(self):
+        resp = self._upload(mitja_peca_dxf())
+        self.assertEqual(resp.status_code, 201, resp.data)
+        return PatternFile.objects.get(pk=resp.data['id']).pieces.get(nom_block='MITJA')
+
+    def test_la_peca_al_plec_es_desa_sencera(self):
+        peca = self._peca_desplegada()
+        xs = [p.x for p in peca.points.filter(mena='vertex', boundary_index=0)]
+        # El fitxer la porta de x=0 a x=120; desplegada va de −120 a +120.
+        self.assertAlmostEqual(max(xs) - min(xs), 240.0, places=6)
+
+    def test_la_geometria_desada_es_simetrica_respecte_de_leix(self):
+        peca = self._peca_desplegada()
+        punts = [(round(p.x, 6), round(p.y, 6))
+                 for p in peca.points.filter(mena='vertex', boundary_index=0)]
+        self.assertEqual(sorted(punts), sorted([(-x, y) for x, y in punts]))
+
+    def test_el_doblec_queda_marcat_com_a_materialitzat(self):
+        """Sense la marca, l'exportació no sabria que ha de tornar a plegar la peça."""
+        fold = self._peca_desplegada().doblec_original
+        self.assertTrue(fold['materialitzat'])
+        # I el semiplà original es conserva: és l'única manera de saber quina meitat era
+        # la del fitxer un cop la peça té punts als dos costats.
+        self.assertNotEqual(fold['costat'], 0)
+
+    def test_els_piquets_fora_de_leix_es_mirallen(self):
+        peca = self._peca_desplegada()
+        piquets = sorted((round(p.x, 6), round(p.y, 6))
+                         for p in peca.points.filter(mena='notch'))
+        self.assertEqual(piquets, [(-60.0, 10.0), (60.0, 10.0)])
+
+    def test_una_peca_que_ja_venia_sencera_no_es_toca(self):
+        """L'AMELIA no té doblec: ha d'entrar EXACTAMENT com sempre. `unfold_piece`
+        retorna la mateixa instància quan no hi ha res a desplegar, i aquest test és el
+        que ho vigila des del camí real d'importació."""
+        resp = self._upload(AMELIA_DXF.read_bytes())
+        fp = PatternFile.objects.get(pk=resp.data['id'])
+        esperat = {'BACK': (28, 64), 'FRONT': (38, 108),
+                   'BACK_LINI': (24, 24), 'FRONT_LINI': (44, 62)}
+        for nom, (tall, totals) in esperat.items():
+            with self.subTest(peca=nom):
+                peca = fp.pieces.get(nom_block=nom)
+                vertexs = peca.points.filter(mena='vertex')
+                self.assertEqual(vertexs.filter(boundary_index=0).count(), tall)
+                self.assertEqual(vertexs.count(), totals)
+                self.assertIsNone(peca.doblec_original)
+                self.assertFalse(peca.has_fold)
+
+
 class SobiraniaTest(PatternsAPITestBase):
     """El XOR: un patró penja d'un Model O d'un ítem, mai de tots dos ni de cap."""
 
