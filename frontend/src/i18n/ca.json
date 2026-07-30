@@ -2443,6 +2443,8 @@
     "col_pom": "POM",
     "col_nom": "Nom",
     "nom_save_err": "No s'ha pogut desar el nom.",
+    "nom_canonic_tip": "Nom canònic (EN) d'aquest model. Buit: mana el del catàleg.",
+    "nom_traduit_tip": "Traducció del client per a aquest model. Buida: mana la del catàleg.",
     "reorder": "Arrossega per reordenar",
     "reorder_err": "No s'ha pogut desar l'ordre.",
     "regle_delta": "Δ",

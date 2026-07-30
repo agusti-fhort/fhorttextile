@@ -136,6 +136,10 @@ export const models = {
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).
 export const baseMeasurements = {
   update: (id, body) => client.patch(`/api/v1/base-measurements/${id}/`, body),
+  // Sprint NOMS-POM — el BATEIG de la línia (nom canònic EN + traducció del client). Porta
+  // pròpia i estreta: '' torna la fila al catàleg. Mai el PATCH genèric de sobre, que obriria
+  // el valor base i la resta de la fila.
+  setNoms: (id, body) => client.patch(`/api/v1/base-measurements/${id}/noms/`, body),
   // Reordena els POM del model en bloc (ordre ÚNIC i global; es materialitza a Grading en propagar).
   reorder: (modelId, ids) => client.post(`/api/v1/models/${modelId}/base-measurements/reorder/`, { ids }),
 }

@@ -2443,6 +2443,8 @@
     "col_pom": "POM",
     "col_nom": "Nombre",
     "nom_save_err": "No se ha podido guardar el nombre.",
+    "nom_canonic_tip": "Nombre canónico (EN) de este modelo. Vacío: manda el del catálogo.",
+    "nom_traduit_tip": "Traducción del cliente para este modelo. Vacía: manda la del catálogo.",
     "reorder": "Arrastra para reordenar",
     "reorder_err": "No se ha podido guardar el orden.",
     "regle_delta": "Δ",

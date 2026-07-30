@@ -6441,8 +6441,11 @@ export default function TechSheetEditor() {
                   // d'usuari, petit, gris i en cursiva. El xip amb el codi canònic ha marxat: era
                   // un tercer vocabulari competint amb la nomenclatura a la mateixa línia (el
                   // canònic segueix al tooltip i viatja amb la cota com a metadada).
-                  const nomLocal = bm.nom_ca || bm.nom_client || ''
-                  const nomCanonic = bm.nom_en || nomLocal
+                  // Sprint NOMS-POM (30/07) — el BATEIG DEL MODEL mana sobre el catàleg, aquí
+                  // NOMÉS EN LECTURA: el nom es bateja a la taula de Mesures, que és qui té la
+                  // superfície d'edició (i el permís). Buit → el catàleg, exactament com abans.
+                  const nomLocal = bm.nom_traduit_model || bm.nom_ca || bm.nom_client || ''
+                  const nomCanonic = bm.nom_canonic_model || bm.nom_en || nomLocal
                   const nomSota = nomCanonic && nomLocal !== nomCanonic ? nomLocal : ''
                   const colocat = bm.pom_id != null && cotesColocades.has(bm.pom_id)
                   const armat = cotaPreset?.bmId === bm.id && tool === 'cota_pom'
