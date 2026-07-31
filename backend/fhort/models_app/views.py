@@ -2989,7 +2989,15 @@ def base_stages_view(request, model_id):
             ev_index[key] = len(events)
             events.append({'key': key, 'context': c.context, 'at': c.created_at.isoformat()})
             changes_by_ev[key] = {}
-        changes_by_ev[key][c.pom_id] = float(c.valor_nou)
+        # C2/Onada 1 — CLAU COMPOSTA (pom, capa) a tota la cadena d'estadis. `changes_by_ev`,
+        # `snapshot`, `displayed` i el lookup de `takes` són el MATEIX espai de claus i han de
+        # créixer junts. El perill aquí no és perdre una fila: és que el carry-forward
+        # arrossegui el valor d'una capa cap endavant per la fila d'una altra —una base que
+        # aquella capa no ha tingut mai—, que és exactament el símptoma del 205 que FIX-2 va
+        # tancar per l'altra porta (els overrides de talla no-base).
+        # El payload NO canvia: les files segueixen sortint amb `pom_id` sol; la capa només
+        # viu a la clau interna, i `bm.capa` la porta a cada fila.
+        changes_by_ev[key][(c.pom_id, c.capa)] = float(c.valor_nou)
 
     # Snapshots acumulats (carry-forward) per estadi.
     snapshot, stages, stage_snaps = {}, [], []
@@ -3000,9 +3008,9 @@ def base_stages_view(request, model_id):
 
     # FaseD — descarta els estadis (columnes de presa) sense CAP valor displayable per a les files
     # mostrades (p.ex. events de POMs després desactivats): no es pinten columnes buides.
-    displayed = {bm.pom_id for bm in bms}
+    displayed = {(bm.pom_id, bm.capa) for bm in bms}
     keep = [i for i in range(len(stages))
-            if any(stage_snaps[i].get(pid) is not None for pid in displayed)]
+            if any(stage_snaps[i].get(clau) is not None for clau in displayed)]
     stages = [stages[i] for i in keep]
     stage_snaps = [stage_snaps[i] for i in keep]
 
@@ -3012,8 +3020,9 @@ def base_stages_view(request, model_id):
         pg = getattr(pom, 'pom_global', None)
         tm, tp = _tol(bm)
         takes = {}
+        clau_bm = (pom.id, bm.capa)   # C2/Onada 1 — la fila demana els seus estadis, no els del POM
         for i, st in enumerate(stages):
-            v = stage_snaps[i].get(pom.id)
+            v = stage_snaps[i].get(clau_bm)
             if v is not None:
                 takes[st['key']] = v
         rows.append({
