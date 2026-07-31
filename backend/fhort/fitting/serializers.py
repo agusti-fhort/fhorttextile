@@ -252,18 +252,25 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
         from fhort.pom.services import _load_grading_rules
         rules = _load_grading_rules(obj.model)
 
-        # BaseMeasurement del model (unique per (model, pom)): aporta nom_fitxa (nomenclatura
-        # client, autoritativa) i l'ordre de fitxa. Una sola query, reutilitzada per al 'nom' de
-        # cada línia i per a l'ordenació final.
+        # BaseMeasurement del model (unique per (model, pom, capa)): aporta nom_fitxa
+        # (nomenclatura client, autoritativa) i l'ordre de fitxa. Una sola query, reutilitzada
+        # per al 'nom' de cada línia i per a l'ordenació final.
+        #
+        # C2/Onada 1 — CLAU COMPOSTA (pom, capa): `PieceFittingLine` porta capa des de C1, o
+        # sigui que cada línia pot demanar la SEVA. Per POM sol, el folre i l'exterior d'un
+        # mateix pit es disputarien el `nom_fitxa` i —pitjor— el `bm_id`, que és per on
+        # aquesta superfície desa el bateig: s'escriuria el nom a la mesura de l'altra capa.
         from fhort.models_app.models import BaseMeasurement
         bm_data = list(BaseMeasurement.objects.filter(model_id=obj.model_id)
-                       .values_list('pom_id', 'ordre', 'nom_fitxa', 'id'))
-        ordre_map = {p: o for p, o, _, _ in bm_data}
-        nom_fitxa_map = {p: nf for p, _, nf, _ in bm_data}
-        bm_id_map = {p: i for p, _, _, i in bm_data}   # P4 — autoria de nom a nivell MODEL (BaseMeasurement)
+                       .values_list('pom_id', 'capa', 'ordre', 'nom_fitxa', 'id'))
+        ordre_map = {(p, c): o for p, c, o, _, _ in bm_data}
+        nom_fitxa_map = {(p, c): nf for p, c, _, nf, _ in bm_data}
+        bm_id_map = {(p, c): i for p, c, _, _, i in bm_data}   # P4 — autoria de nom a nivell MODEL (BaseMeasurement)
 
         out = []
+        ordres = []   # ordre de fitxa, paral·lel a `out`: la fila del payload no porta capa
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
+            clau_bm = (line.pom_id, line.capa)
             evolucio = []
             for v in versions:
                 val = spec_map.get((v.id, line.pom_id, line.size_label))
@@ -278,15 +285,16 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 })
             pom = line.pom
             r = rules.get(line.pom_id)
+            ordres.append(ordre_map.get(clau_bm, 10 ** 9))
             out.append({
                 'id': line.id,
                 'pom_id': line.pom_id,
                 'codi': pom.pom_code if pom else '',
-                'nom': (nom_fitxa_map.get(line.pom_id) or (pom.pom_code if pom else '')),  # nom_fitxa (croquis)
+                'nom': (nom_fitxa_map.get(clau_bm) or (pom.pom_code if pom else '')),  # nom_fitxa (croquis)
                 'nom_en': pom.name_en if pom else '',        # nom canònic EN (línia superior, nomenclatura 2 línies)
                 'nom_local': pom.name_cat if pom else '',    # nom en idioma usuari (línia inferior, canònic = sembra)
-                'nom_fitxa': nom_fitxa_map.get(line.pom_id),  # P4 — override d'autoria a nivell MODEL (precedència)
-                'bm_id': bm_id_map.get(line.pom_id),          # P4 — id de BaseMeasurement per editar el nom del model
+                'nom_fitxa': nom_fitxa_map.get(clau_bm),      # P4 — override d'autoria a nivell MODEL (precedència)
+                'bm_id': bm_id_map.get(clau_bm),              # P4 — id de BaseMeasurement per editar el nom del model
                 'is_key': pom.is_key_measure if pom else False,
                 'size_label': line.size_label,
                 'valor_teoric': line.valor_teoric,
@@ -301,5 +309,8 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
             })
         # FIX 4B — ordena les files per l'ordre de la fitxa (BaseMeasurement.ordre del model;
         # POMMaster no té 'ordre'). ordre_map ja s'ha construït a dalt amb la mateixa query.
-        out.sort(key=lambda r: ordre_map.get(r['pom_id'], 10 ** 9))
+        # C2/Onada 1 — l'ordre viatja a `ordres`, paral·lel a `out`, perquè la clau ara porta
+        # capa i la fila del payload no en té. `sorted` és estable i la clau és només el
+        # número: els empats conserven l'ordre d'inserció, igual que el `list.sort` d'abans.
+        out = [fila for _ordre, fila in sorted(zip(ordres, out), key=lambda t: t[0])]
         return out

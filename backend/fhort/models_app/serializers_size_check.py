@@ -77,9 +77,14 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
 
     def get_lines(self, obj):
         from .models import BaseMeasurement
-        # Una sola query: tolerància + ordre vigents per POM del model (sense N+1).
+        # Una sola query: tolerància + ordre vigents per (POM, capa) del model (sense N+1).
+        #
+        # C2/Onada 1 — CLAU COMPOSTA: `SizeCheckLine` porta capa des de C1 i cada línia demana
+        # la seva. Per POM sol, una línia de folre es jutjaria amb la tolerància de l'exterior
+        # i ensenyaria el seu `codi_fitxa` — un veredicte fora/dins de tolerància decidit amb
+        # la vara d'una altra capa és pitjor que no tenir-ne.
         bm_map = {
-            bm.pom_id: bm
+            (bm.pom_id, bm.capa): bm
             for bm in BaseMeasurement.objects.filter(model_id=obj.model_id)
         }
 
@@ -89,8 +94,9 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
         rules = _load_grading_rules(obj.model)
 
         out = []
+        ordres = []   # ordre de fitxa, paral·lel a `out`: la fila del payload no porta capa
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
-            bm = bm_map.get(line.pom_id)
+            bm = bm_map.get((line.pom_id, line.capa))
             r = rules.get(line.pom_id)
             tol_minus = float(bm.tolerancia_minus) if bm and bm.tolerancia_minus is not None else TOL_DEFAULT
             tol_plus = float(bm.tolerancia_plus) if bm and bm.tolerancia_plus is not None else TOL_DEFAULT
@@ -104,6 +110,7 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
             # SC-4: codi de fitxa = BaseMeasurement.nom_fitxa (com la taula Mesures, gold mono);
             # fallback al codi canònic del POM si encara no s'ha posat nomenclatura de croquis.
             codi_fitxa = (bm.nom_fitxa if bm and bm.nom_fitxa else '') or (pom.pom_code if pom else '')
+            ordres.append(bm.ordre if bm is not None else 10 ** 9)
             out.append({
                 'id': line.id,
                 'pom_id': line.pom_id,
@@ -127,6 +134,8 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
             })
 
         # Ordena per l'ordre de la fitxa (BaseMeasurement.ordre del model).
-        ordre_map = {pid: bm.ordre for pid, bm in bm_map.items()}
-        out.sort(key=lambda r: ordre_map.get(r['pom_id'], 10 ** 9))
+        # C2/Onada 1 — l'ordre viatja a `ordres`, paral·lel a `out`: la clau del `bm_map` ara
+        # porta capa i la fila del payload no en té. `sorted` és estable i la clau és només el
+        # número, o sigui que els empats conserven l'ordre d'inserció com el `list.sort` d'abans.
+        out = [fila for _ordre, fila in sorted(zip(ordres, out), key=lambda t: t[0])]
         return out
