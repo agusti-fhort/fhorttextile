@@ -2724,7 +2724,7 @@
     "page_n": "Pàg. {{n}}",
     "delete_page": "Eliminar pàgina",
     "readonly_overlay": "Mode consulta — només lectura",
-    "pen_trace_hint": "Traçat en curs ({{n}} nodes) — doble clic o Enter per acabar · Escape per cancel·lar",
+    "pen_trace_hint": "Traçat en curs ({{n}} nodes) — Enter, Escape o doble clic tanquen · Supr esborra el traç acabat de tancar",
     "insert_data_block": "Inserir bloc de dades",
     "model_header": "Capçalera del model",
     "insert_logo_title": "Insereix el logo del client",
