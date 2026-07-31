@@ -262,15 +262,6 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   useEffect(() => {
     if ((editing && editing !== activeTab) || (mesuresEntry && activeTab !== 'Mesures')) exitEdit()
   }, [activeTab, editing, mesuresEntry, exitEdit])
-  // G2 — marxar d'Escalat AVORTA la graduació i, amb ella, la propagació en cua. Navegar fora és
-  // una manera de cancel·lar tan legítima com el botó, i deixar el gest en cua darrere d'una
-  // pestanya faria que un clic a Propagar d'aquí a mitja hora es reprengués sol. Cap estat a mitges.
-  useEffect(() => {
-    if (activeTab !== 'Escalat' && (graduacioMode || propagarEnCua)) {
-      setGraduacioMode(false)
-      setPropagarEnCua(false)
-    }
-  }, [activeTab, graduacioMode, propagarEnCua])
   // Pausa la tasca NOMÉS en desmuntar el ModelSheet si quedava En curs (idempotent: si exitEdit ja
   // l'ha pausada, activeTaskRef és null i no es demana res → cap 400 Paused→Paused).
   useEffect(() => () => { pauseActiveTask() }, [pauseActiveTask])
@@ -366,6 +357,22 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // PROPAGAR i, en acceptar la graduació, el gest original es reprèn sol.
   const [graduacioMode, setGraduacioMode] = useState(false)
   const [propagarEnCua, setPropagarEnCua] = useState(false)
+
+  // G2 — marxar d'Escalat AVORTA la graduació i, amb ella, la propagació en cua. Navegar fora és
+  // una manera de cancel·lar tan legítima com el botó, i deixar el gest en cua darrere d'una
+  // pestanya faria que un clic a Propagar d'aquí a mitja hora es reprengués sol. Cap estat a mitges.
+  //
+  // ⚠️ AQUEST EFECTE HA DE VIURE SOTA LES DUES `useState`, NO amunt amb els altres efectes de
+  // pestanya. L'array de dependències s'AVALUA a cada render: posat abans de la declaració,
+  // llegeix `graduacioMode`/`propagarEnCua` dins la seva zona morta temporal i el ModelSheet
+  // sencer peta amb «Cannot access ... before initialization» (regressió del 31/07). Un
+  // `useEffect` no ajorna les seves deps encara que sí ajorni el seu cos.
+  useEffect(() => {
+    if (activeTab !== 'Escalat' && (graduacioMode || propagarEnCua)) {
+      setGraduacioMode(false)
+      setPropagarEnCua(false)
+    }
+  }, [activeTab, graduacioMode, propagarEnCua])
 
   // Obre Graduació: és Escalat en mode edició amb la franja de proposta. Una sola porta perquè
   // els dos camins d'entrada (botó Graduació · Propagar sense regla) acabin al mateix lloc.
