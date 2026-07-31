@@ -4,6 +4,10 @@ import { useTranslation } from 'react-i18next'
 import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
 import CustomerSelector from '../components/CustomerSelector'
 import { matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS, FITS } from '../components/grading/gradingAxes'
+// Els àtoms de UI i el PAS DE GRADUACIÓ viuen fora des del 31/07: el pas s'obre també com a
+// overlay sobre Mesures, i ha de ser el MATEIX component als dos llocs (mai una còpia).
+import GraduacioPanel from '../components/grading/GraduacioPanel'
+import { Chip, Field, labelStyle, MONO } from '../components/grading/wizardUI'
 import TargetLabel from '../components/grading/TargetLabel'
 import useAuthStore from '../store/auth'
 import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes } from '../api/endpoints'
@@ -13,7 +17,6 @@ import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes } fro
 // Sprint WIZARD-COMPLET: la graduació (pas 4) torna al wizard, amb matching ESTRICTE (size_system
 // obligatori, cap comodí NULL) i opció explícita «Sense graduació». POM detallat NO aquí.
 
-const MONO = 'IBM Plex Mono, monospace'
 const currentYear = new Date().getFullYear()
 const YEARS = [currentYear, currentYear + 1, currentYear + 2, currentYear + 3]
 
@@ -252,6 +255,11 @@ export default function ModelWizard() {
   // family.grup en creació; garment_type.grup del model en edició. Mai es re-tria a mà.
   const garmentGroupCodi = family?.grup ?? modelGarmentGrup ?? null
 
+  // F1.3 — quina de les tres peces del pas 3 falta (l'ordre és el del flux: sistema → run → base).
+  const sizingMissing = !selSystem ? 'system'
+    : (selectedSizes.length === 0 ? 'run'
+      : ((!baseSize || !selectedSizes.includes(baseSize)) ? 'base' : null))
+
   // Bloc 4 — carrega rulesets + mapa grup id→codi quan s'entra al pas. En edició, deriva el fit
   // vigent del ruleset del model perquè el picker el mostri seleccionat.
   useEffect(() => {
@@ -417,10 +425,7 @@ export default function ModelWizard() {
     } finally { setSaving(false) }
   }
 
-  // El pas 4 (Graduació) s'ha RETIRAT del wizard (Agus, 31/07): el model neix sempre net de
-  // graduació i la incorpora pel gest (botó Graduació · Propagar amb represa), amb acceptació
-  // explícita. Vegeu la nota de `block === 4`, més avall, sobre què queda i per què.
-  const BLOCKS = [t('model_wizard.block1'), t('model_wizard.block2'), t('model_wizard.block3')]
+  const BLOCKS = [t('model_wizard.block1'), t('model_wizard.block2'), t('model_wizard.block3'), t('model_wizard.block4')]
 
   // GATE entre contenidors: el client mana el prefix del codi i l'abast de la seqüència, així que
   // els passos 2 (Peça) i 3 (Talles) queden bloquejats fins que el pas 1 estigui resolt
@@ -701,19 +706,28 @@ export default function ModelWizard() {
           </div>
         )}
 
-        {/* PAS 4 (Graduació) RETIRAT — Agus, 31/07.
-            El model neix NET de graduació i la incorpora pel GEST (botó Graduació a Mesures →
-            Escalat, o Propagar, que hi porta i es reprèn en acceptar). Triar-la aquí volia dir
-            decidir-la abans de tenir cap mesura al davant, i el QA del 1302 va ensenyar el preu:
-            un model creat «sense graduació» acabava ensenyant la regla d'un altre.
-
-            COST DE LA RETIRADA COMPLETA (queda anotat, no fet): l'estat del pas —`noGrading`,
-            `gradingRuleSetId`, `autoProposed`, `gradingDropped`, `fit`, `perfilSuggestedRsId`,
-            `strictMatches`, `gradingAxes`— el llegeixen encara `skeletonPayload` (que envia
-            `grading_rule_set_id` en EDICIÓ) i l'efecte F1.5 de neteja del ruleset hidratat. Treure'l
-            del tot vol desmuntar aquesta cadena i decidir com edita la graduació un model que ja en
-            té —cosa que ara fa Escalat—, i és decisió d'arquitectura, no neteja. Amb el pas ocult i
-            l'autoselecció B1 retirada, cap model pot NÉIXER graduat, que és el que la llei demana. */}
+        {block === 4 && (
+          /* EL PAS DE GRADUACIÓ — el mateix component que el botó «Graduació» de Mesures obre
+             com a overlay. Aquí el wizard només hi porta el seu estat; qui decideix segueix
+             sent ell (el `grading_rule_set_id` viatja al seu payload i s'escriu en desar). */
+          <GraduacioPanel
+            axes={{
+              target, construction, garmentGroupCodi,
+              garmentTypeId: family?.id ?? null, garmentTypeItemId: item?.id ?? null,
+            }}
+            sizing={sizingResult ? {
+              size_system_id: sizingResult.size_system_id,
+              size_system_nom: sizingResult.size_system_nom,
+            } : null}
+            sizingMissing={sizingMissing}
+            fit={fit}
+            onFit={(codi) => { setFit(codi); setGradingRuleSetId(null) }}
+            gradingRuleSetId={gradingRuleSetId}
+            onUsar={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false) }}
+            noGrading={noGrading}
+            onNoGrading={(v) => { setNoGrading(v); if (v) { setFit(null); setGradingRuleSetId(null) } }}
+          />
+        )}
       </div>
 
       {/* Avís si no hi ha ítem */}
@@ -744,7 +758,6 @@ export default function ModelWizard() {
 }
 
 // ── UI atoms (tokens) ─────────────────────────────────────────────────────────
-const labelStyle = { fontSize: 'var(--fs-body)', color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: MONO }
 const inputStyle = { width: '100%', padding: '8px 10px', borderRadius: 4, border: '0.5px solid var(--gray-l)', fontFamily: MONO, fontSize: 'var(--fs-body)', background: 'var(--white)', boxSizing: 'border-box' }
 const refBox = { background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8, padding: '8px 14px', fontFamily: MONO, fontSize: 'var(--fs-h3)', color: 'var(--warn)', fontWeight: 500, minHeight: 36, display: 'flex', alignItems: 'center' }
 const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, padding: '0.6rem 1rem', margin: '12px 0 0', fontSize: 'var(--fs-body)', color: '#c00', fontFamily: MONO }
@@ -753,14 +766,6 @@ const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--
 const ghostBtn = { background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)', borderRadius: 6, padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
 const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : 'var(--warn)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-h3)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
 
-function Field({ label, children }) {
-  return (
-    <div style={{ flex: '1 1 auto' }}>
-      <div style={{ ...labelStyle, marginBottom: 6 }}>{label}</div>
-      {children}
-    </div>
-  )
-}
 function TextInput({ label, value, onChange, placeholder }) {
   return (
     <Field label={label}>
@@ -769,14 +774,3 @@ function TextInput({ label, value, onChange, placeholder }) {
   )
 }
 // `motiu` (C5): l'opció no porta enlloc, però NO s'amaga ni es bloqueja — s'atenua i ho diu.
-function Chip({ active, onClick, disabled, motiu, children }) {
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} title={motiu || undefined} style={{
-      padding: '6px 14px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)',
-      border: active ? '1.5px solid var(--warn)' : '0.5px solid var(--gray-l)',
-      background: active ? 'var(--warn)' : 'transparent', color: active ? 'var(--white)' : 'var(--text-main)',
-      cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: active ? 500 : 400,
-      opacity: (disabled || motiu) && !active ? 0.5 : 1,
-    }}>{children}</button>
-  )
-}
