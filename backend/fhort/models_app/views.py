@@ -1707,6 +1707,17 @@ def measurements_table_view(request, model_id):
             'pom_code': pom.codi_client,
             **camps_de(alias_by_pom, pom.id),
             'nom_fitxa': bm.nom_fitxa or '',
+            # Sprint NOMS-POM — el BATEIG d'aquest model, CRU i al costat del catàleg
+            # (`nom_en`/`nom_ca`, que no es toquen): '' vol dir «no batejat, mana el catàleg».
+            # La cascada la resol qui pinta, que és qui sap si mostra un input amb placeholder o
+            # un text pla. Camps NOUS: cap camp existent canvia de valor ni de nom.
+            #
+            # 31/07 — hi arriben ARA. El paquet del bateig els va posar a `base_stages_view` i a
+            # `wizard_views.base_measurements_view`, però NO aquí, i aquesta és justament la
+            # taula que alimenta la pantalla d'entrada de Mesures: la cel·la del nom hi sortia
+            # sense res a editar perquè el payload no li portava el bateig.
+            'nom_canonic_model': bm.nom_canonic_model or '',
+            'nom_traduit_model': bm.nom_traduit_model or '',
             'nom_en': pg.nom_en if pg else pom.nom_client,
             'nom_ca': pg.nom_ca if pg else pom.nom_client,
             'abbreviation': pg.abbreviation if pg else '',
