@@ -5831,7 +5831,7 @@ export default function TechSheetEditor() {
   const TOOL_DEFS = [
     { k: 'select', icon: 'ti-pointer-2', label: t('tech_sheet.tool_select') },
     { k: 'pan', icon: 'ti-hand-stop', label: t('tech_sheet.tool_pan') },
-    { k: 'node', icon: 'ti-vector', label: t('tech_sheet.tool_node') },
+    { k: 'node', icon: 'ti-pointer', label: t('tech_sheet.tool_node') },
     { k: 'subpath', icon: 'ti-vector-triangle', label: t('tech_sheet.tool_subpath') },
     { k: 'draw', icon: 'ti-pencil', label: t('tech_sheet.tool_draw') },
     { k: 'pen', icon: 'ti-vector-bezier', label: t('tech_sheet.tool_pen') },
@@ -6145,7 +6145,7 @@ export default function TechSheetEditor() {
       const shapeMode = nodeSel.mode === 'shape'
       const nShapes = nodeSel.shapeCount || 0
       const out = [
-        ribbonTool({ key: 'tool-node', icon: 'ti-vector', label: t('tech_sheet.tool_node'), onClick: () => setTool('node'), active: tool === 'node', disabled: !locked }),
+        ribbonTool({ key: 'tool-node', icon: 'ti-pointer', label: t('tech_sheet.tool_node'), onClick: () => setTool('node'), active: tool === 'node', disabled: !locked }),
         ribbonTool({ key: 'tool-subpath', icon: 'ti-vector-triangle', label: t('tech_sheet.tool_subpath'), onClick: () => setTool('subpath'), active: tool === 'subpath', disabled: !locked }),
         <span key="sep-entrada" style={ribbonSep} />,
       ]
@@ -7580,9 +7580,12 @@ const miniBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 
 // F1 — barra superior contextual del mode edició de nodes: eines + estil de botó.
 // G1 — els DOS CURSORS (jerarquia Illustrator), primers del grup: fletxa negra = selecció de FORMA
 // (subpath sencer), fletxa blanca = selecció DIRECTA (nodes/segments/nanses, tot el ja construït).
+// B3 — CONVENCIÓ D'ICONA de la selecció, la mateixa als dos nivells (objecte i sub-editor):
+// fletxa PLENA = forma · fletxa en FILET = nodes. És l'única parella del sistema que no és
+// outline: `ti-pointer-filled` està autoritzat NOMÉS aquí (acta d'Agus, 31/07, a CLAUDE.md).
 const SHAPE_TOOL_ITEMS = [
-  { k: 'shape', icon: 'ti-pointer', label: 'shape_select', sc: 'V' },
-  { k: 'select', icon: 'ti-vector-triangle', label: 'direct_select', sc: 'A' },
+  { k: 'shape', icon: 'ti-pointer-filled', label: 'shape_select', sc: 'V' },
+  { k: 'select', icon: 'ti-pointer', label: 'direct_select', sc: 'A' },
 ]
 // Sub-eines de la selecció DIRECTA (afegir/treure/convertir node, tisores).
 const NODE_TOOL_ITEMS = [
