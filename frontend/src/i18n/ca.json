@@ -92,16 +92,8 @@
   },
   "graduacio": {
     "button": "Graduació",
-    "vigents": "Regla de graduació del model. Pots revisar-la i editar-la aquí.",
-    "proposta_perfil": "Proposta del catàleg per a aquesta combinació: «{{ruleset}}». Revisa-la i accepta-la perquè passi a ser del model.",
-    "proposta_item": "Proposta heretada de la peça: «{{ruleset}}». Revisa-la i accepta-la perquè passi a ser del model.",
-    "sense_proposta": "El catàleg no proposa cap graduació per a aquesta combinació. Informa la regla a mà, o tria un joc de regles al pas de Graduació del model.",
-    "accepta": "Acceptar la graduació",
-    "acceptant": "Acceptant…",
-    "accepta_err": "No s'ha pogut acceptar la graduació.",
-    "regla_err": "No s'ha pogut desar la regla.",
-    "delta_no_numeric": "El delta ha de ser un número.",
-    "escalat_sense_graduacio": "Sense graduació — s'incorporarà en propagar."
+    "usar_err": "No s'ha pogut aplicar el joc de regles.",
+    "cua_propagar": "Informa la graduació i la propagació continuarà tota sola."
   },
   "size_map_title": "Sistemes de talles",
   "size_map_subtitle": "Runs de client derivats i sistemes canònics",

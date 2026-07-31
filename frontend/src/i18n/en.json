@@ -92,16 +92,8 @@
   },
   "graduacio": {
     "button": "Grading",
-    "vigents": "This model's grading rule. You can review and edit it here.",
-    "proposta_perfil": "Catalogue proposal for this combination: “{{ruleset}}”. Review it and accept it so it becomes the model's own.",
-    "proposta_item": "Proposal inherited from the garment: “{{ruleset}}”. Review it and accept it so it becomes the model's own.",
-    "sense_proposta": "The catalogue has no grading to propose for this combination. Enter the rule by hand, or pick a rule set in the model's Grading step.",
-    "accepta": "Accept grading",
-    "acceptant": "Accepting…",
-    "accepta_err": "Could not accept the grading.",
-    "regla_err": "Could not save the rule.",
-    "delta_no_numeric": "The delta must be a number.",
-    "escalat_sense_graduacio": "No grading — it will be added when propagating."
+    "usar_err": "Could not apply the rule set.",
+    "cua_propagar": "Set the grading and the propagation will carry on by itself."
   },
   "size_map_title": "Size systems",
   "size_map_subtitle": "Derived customer runs and canonical systems",

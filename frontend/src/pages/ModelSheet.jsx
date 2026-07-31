@@ -9,6 +9,7 @@ import { fittingSource } from '../components/model/measureSources'
 import MeasuresEntryPanel from '../components/model/MeasuresEntryPanel'
 import FittingRepasPanel from '../components/model/FittingRepasPanel'
 import PropagatedEditor from './PropagatedEditor'
+import GraduacioPanel from '../components/grading/GraduacioPanel'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
 import { MaduresaBadge, EncarrecDelClient } from '../components/model/FederacioBadge'
@@ -352,81 +353,72 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [propagating, setPropagating] = useState(false)
   const [propStatus, setPropStatus] = useState(null)   // {te_dades_propagades, segellada, version_number}
   const [propStep, setPropStep] = useState(0)           // 0 cap modal · 1 avís adaptat · 2 confirmació final
-  // G1/G2 (2026-07-31) — el gest GRADUACIÓ. `graduacioMode` obre Escalat amb el bloc de Regla
-  // editable; `propagarEnCua` és la REPRESA: recorda que hi hem arribat perquè algú volia
-  // PROPAGAR i, en acceptar la graduació, el gest original es reprèn sol.
-  const [graduacioMode, setGraduacioMode] = useState(false)
+  // EL GEST DE GRADUAR viu a MESURES (correcció de rumb, Agus 31/07). El botó «Graduació»
+  // obre EL PAS 4 DEL WIZARD com a OVERLAY sobre Mesures —el mateix `GraduacioPanel` que
+  // renderitza el wizard, no una còpia— i no navega enlloc. Escalat torna a ser la seva
+  // pestanya de sempre.
+  const [graduacioObert, setGraduacioObert] = useState(false)
   const [propagarEnCua, setPropagarEnCua] = useState(false)
-
-  // G2 — marxar d'Escalat AVORTA la graduació i, amb ella, la propagació en cua. Navegar fora és
-  // una manera de cancel·lar tan legítima com el botó, i deixar el gest en cua darrere d'una
-  // pestanya faria que un clic a Propagar d'aquí a mitja hora es reprengués sol. Cap estat a mitges.
-  //
-  // ⚠️ AQUEST EFECTE HA DE VIURE SOTA LES DUES `useState`, NO amunt amb els altres efectes de
-  // pestanya. L'array de dependències s'AVALUA a cada render: posat abans de la declaració,
-  // llegeix `graduacioMode`/`propagarEnCua` dins la seva zona morta temporal i el ModelSheet
-  // sencer peta amb «Cannot access ... before initialization» (regressió del 31/07). Un
-  // `useEffect` no ajorna les seves deps encara que sí ajorni el seu cos.
+  const [usantJoc, setUsantJoc] = useState(false)
+  // El fit amb què s'entra al panell: el que el model ja té desat (mai buit — `Model.fit_type`
+  // té default 'Regular'). Un desplegable, no un bloqueig: es pot canviar allà mateix.
+  const [graduacioFit, setGraduacioFit] = useState(null)
   useEffect(() => {
-    if (activeTab !== 'Escalat' && (graduacioMode || propagarEnCua)) {
-      setGraduacioMode(false)
-      setPropagarEnCua(false)
+    if (graduacioObert && graduacioFit == null && model?.fit_type) {
+      setGraduacioFit(String(model.fit_type).toUpperCase())
     }
-  }, [activeTab, graduacioMode, propagarEnCua])
+  }, [graduacioObert, graduacioFit, model?.fit_type])
 
-  // Obre Graduació: és Escalat en mode edició amb la franja de proposta. Una sola porta perquè
-  // els dos camins d'entrada (botó Graduació · Propagar sense regla) acabin al mateix lloc.
-  const obreGraduacio = useCallback(() => {
-    setGraduacioMode(true)
-    setEditing('Escalat')
-    setActiveTab('Escalat')
-  }, [])
+  const obreGraduacio = useCallback(() => setGraduacioObert(true), [])
 
-  // Tanca Graduació SENSE acceptar. Si hi havia una propagació en cua, s'avorta sencera: cap
-  // estat a mitges (G2). No s'ha escrit res —acceptar és l'únic que escriu—, o sigui que
+  // Tancar SENSE triar. Si hi havia una propagació en cua, s'avorta sencera: cap estat a
+  // mitges. Tancar no ha escrit res —«Usar aquest joc» és l'únic que escriu—, o sigui que
   // cancel·lar és, literalment, no haver passat per aquí.
   const cancelaGraduacio = useCallback(() => {
-    setGraduacioMode(false)
+    setGraduacioObert(false)
     setPropagarEnCua(false)
-    setEditing(null)
   }, [])
 
   // MIRA ABANS d'executar. Dues preguntes, en aquest ordre:
-  //   1. Hi ha REGLA? (G2, condició dura de P2: sense regla no es propaga MAI). Si no n'hi ha, el
-  //      gest no mor amb un toast: queda EN CUA i portem el tècnic a informar-la. El backend ja
-  //      barra el pas (generate_grading_view:2375) — aquí el que guanya és el camí bo en lloc del
-  //      400 mut.
+  //   1. Hi ha REGLA? Sense regla no es propaga MAI. Si no n'hi ha, el gest no mor amb un
+  //      toast: queda EN CUA i s'obre el pas de Graduació. El backend ja barra el pas; el que
+  //      guanya aquí és el camí bo en lloc del 400 mut.
   //   2. Hi ha propagació prèvia? → avís de 2 passos (pas 1 segons gravetat; pas 2 universal).
   const onPropagarClick = () => {
     if (propagating) return
     models.gradingStatus(parseInt(id))
       .then(res => {
         const st = res.data
-        if (!st.te_regles) { setPropagarEnCua(true); obreGraduacio(); return }
+        if (!st.te_regles) { setPropagarEnCua(true); setGraduacioObert(true); return }
         if (!st.te_dades_propagades) execPropagar(false)   // llenç ja net → directe
         else { setPropStatus(st); setPropStep(1) }
       })
       .catch(() => setFeedback({ type: 'err', text: t('grading_propagate.err') }))
   }
 
-  // LA REPRESA. La graduació s'ha acceptat: si el gest original era propagar, es reprèn SOL —
-  // no es re-clica res. Es torna a passar per `onPropagarClick` a posta i no per `execPropagar`:
-  // el model pot tenir propagació prèvia, i saltar-se l'avís de 2 passos aquí seria colar una
+  // «USAR AQUEST JOC» — el mecanisme VIGENT del wizard: assignar el ruleset per `update-step2`,
+  // que valida (D1) i materialitza les regles al model. Cap mecànica nova.
+  //
+  // En sortir bé: es tanca l'overlay, es rellegeix la taula —i és llavors quan les columnes de
+  // Regla apareixen a Mesures, perquè el model JA té regles— i, si el gest original era
+  // propagar, es reprèn SOL. Es torna a passar per `onPropagarClick` i no per `execPropagar` a
+  // posta: el model pot tenir propagació prèvia, i saltar-se l'avís de 2 passos seria colar una
   // substitució sense consentiment.
-  // `graduacioMode` es MANTÉ: el tècnic ha vingut a revisar la regla, i acceptar-la no pot
-  // tornar a bloquejar-li els camps que venia a ajustar. La franja de dalt passa sola de
-  // «proposta» a «regla del model» (el backend ja diu font='model'), i els Δ segueixen vius.
-  const onGraduacioAcceptada = useCallback(() => {
-    if (!propagarEnCua) return
-    setPropagarEnCua(false)
-    models.gradingStatus(parseInt(id))
-      .then(res => {
-        const st = res.data
-        if (!st.te_dades_propagades) execPropagar(false)
-        else { setPropStatus(st); setPropStep(1) }
+  const onUsarJoc = useCallback((rs) => {
+    if (usantJoc) return
+    setUsantJoc(true)
+    models.updateStep2(parseInt(id), { grading_rule_set_id: rs.id })
+      .then(() => {
+        setGraduacioObert(false)
+        reloadModel(); reloadTaula()
+        if (propagarEnCua) { setPropagarEnCua(false); onPropagarClick() }
       })
-      .catch(() => setFeedback({ type: 'err', text: t('grading_propagate.err') }))
-  }, [propagarEnCua, id, t])   // eslint-disable-line react-hooks/exhaustive-deps
+      .catch(e => setFeedback({
+        type: 'err',
+        text: e?.response?.data?.message || e?.response?.data?.error || t('graduacio.usar_err'),
+      }))
+      .finally(() => setUsantJoc(false))
+  }, [id, usantJoc, propagarEnCua, reloadModel, reloadTaula, t])   // eslint-disable-line react-hooks/exhaustive-deps
   const execPropagar = (allowReopen) => {
     if (propagating) return
     setPropagating(true)
@@ -618,9 +610,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                     {t('model_sheet.edit_pom')}
                   </button>
                 )}
-                {/* G1 — GRADUACIÓ: la revisió de la regla, que és OBLIGADA abans de propagar i
-                    fins avui no tenia porta pròpia. Obre Escalat amb el bloc «Regla de graduació»
-                    editable i, si el model no en té, amb la proposta del catàleg per acceptar. */}
+                {/* GRADUACIÓ — obre el PAS 4 DEL WIZARD com a overlay sobre Mesures, sense
+                    navegar enlloc: el mateix `GraduacioPanel` que el wizard renderitza. En triar
+                    un joc, les regles passen a ser del model i les columnes de Regla apareixen a
+                    la taula de Mesures. */}
                 <button type="button" disabled={openingTask}
                   onClick={obreGraduacio}
                   style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
@@ -677,13 +670,62 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 </button>
               )}
             </div>
-            <PropagatedEditor modelId={parseInt(id)} inline readOnly={editing !== 'Escalat'}
-              graduacio={graduacioMode}
-              onAccepted={onGraduacioAcceptada}
-              onCancelada={graduacioMode ? cancelaGraduacio : null} />
+            <PropagatedEditor modelId={parseInt(id)} inline readOnly={editing !== 'Escalat'} />
           </div>
         )}
         {/* FaseB — avís de 2 passos en propagar amb dades existents (mira abans). Pas 1 segons gravetat. */}
+        {/* EL PAS DE GRADUACIÓ, com a OVERLAY sobre Mesures (31/07). El MATEIX component que
+            el wizard renderitza al seu pas 4 — `GraduacioPanel` — sense navegar ni sortir del
+            context. S'hi entra pel botó «Graduació» o perquè Propagar hi ha portat el tècnic;
+            tancar-lo avorta el gest sencer. */}
+        {graduacioObert && model && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.45)',
+                        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+                        padding: '4vh 16px', overflow: 'auto' }}
+               onClick={e => { if (e.target === e.currentTarget) cancelaGraduacio() }}>
+            <div style={{ background: 'var(--white)', borderRadius: 10, padding: '1.25rem 1.5rem',
+                          width: 'min(920px, 100%)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            gap: 12, marginBottom: 14 }}>
+                <h3 style={{ margin: 0, fontSize: 'var(--fs-h3)', fontWeight: 600 }}>
+                  {t('graduacio.button')}
+                </h3>
+                <button type="button" onClick={cancelaGraduacio}
+                  style={{ background: 'none', border: 0, cursor: 'pointer', padding: 4,
+                           color: 'var(--text-muted)', fontSize: 'var(--fs-h3)' }}
+                  title={t('common.cancel')}>
+                  <i className="ti ti-x" />
+                </button>
+              </div>
+              {propagarEnCua && (
+                <p style={{ margin: '0 0 12px', padding: '8px 12px', borderRadius: 6,
+                            border: '0.5px solid var(--gold)', background: 'var(--gold-pale)',
+                            fontSize: 'var(--fs-body)' }}>
+                  {t('graduacio.cua_propagar')}
+                </p>
+              )}
+              <GraduacioPanel
+                /* El serializer del model serveix ids PLANS i el grup com a `garment_type_grup`
+                   (amb `garment_group` de reserva per als models que el porten directe). */
+                axes={{
+                  target: model.target, construction: model.construction,
+                  garmentGroupCodi: model.garment_type_grup || model.garment_group || null,
+                  garmentTypeId: model.garment_type ?? null,
+                  garmentTypeItemId: model.garment_type_item ?? null,
+                }}
+                sizing={model.size_system ? {
+                  size_system_id: model.size_system,
+                  size_system_nom: model.size_system_nom || '',
+                } : null}
+                fit={graduacioFit}
+                onFit={setGraduacioFit}
+                gradingRuleSetId={model.grading_rule_set ?? null}
+                onUsar={onUsarJoc}
+                customerCodi={model.customer_codi || null}
+              />
+            </div>
+          </div>
+        )}
         {propStatus && propStep === 1 && (
           <Modal
             title={t('grading_propagate.warn_title')}

@@ -10,8 +10,15 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 
 import { formatDelta } from '../../utils/format'
+
+// El bloc de REGLA es distingeix per FONS (crema de la casa) i per un SEPARADOR gruixut
+// respecte de la mesura: el color agrupa, el filet talla. Dos senyals, no un — la lliçó del
+// TEA 205, on un increment i una llargada mirats de reüll eren el mateix número.
+const REGLA_BG = 'var(--model-band)'
+const SEP = '2px solid var(--border)'
+const REGIME_OPTIONS = ['LINEAR', 'STEP', 'FIXED']
 import BateigInput from '../model/BateigInput'
-import { baseMeasurements } from '../../api/endpoints'
+import { baseMeasurements, models } from '../../api/endpoints'
 
 const thS = {
   padding: '6px 10px', textAlign: 'left', fontSize: 'var(--fs-body)',
@@ -93,6 +100,29 @@ export default function EditableTable({
     baseMeasurements.setNoms(bmId, camps)
       .then(() => setLocalRows(prev => prev.map(r => (r.id === bmId ? { ...r, ...camps } : r))))
       .catch(e => { console.error('No s\'ha pogut desar el nom', e) })
+
+  // LA REGLA es desa per la SEVA porta (`set_pom_regim_view`, upsert de la ModelGradingRule
+  // resident), immediatament i per POM. NO passa pel botó de desar de la taula, i `buildPayload`
+  // segueix sense enviar `rules`: aquell camí fabricava residents amb `logica||'LINEAR'` per a
+  // CADA fila, i desar mesures acabava donant graduació a un model que no en tenia. Aquell guard
+  // no torna.
+  const handleRegla = (row, camp, valor) => {
+    if (!row.pom_id) return
+    const cru = (valor ?? '').toString().trim()
+    let net = null
+    if (cru !== '') {
+      if (camp === 'logica' || camp === 'talla_break_label') net = cru
+      else {
+        const n = parseFloat(cru.replace(',', '.'))
+        if (Number.isNaN(n)) return
+        net = n
+      }
+    }
+    if (String(row[camp] ?? '') === String(net ?? '')) return
+    setLocalRows(prev => prev.map(r => (r.id === row.id ? { ...r, [camp]: net } : r)))
+    models.setPomRegla(modelId, row.pom_id, { [camp]: net })
+      .catch(e => console.error('No s\'ha pogut desar la regla', e))
+  }
 
   const handleDeleteRow = (rowId) => {
     setLocalRows(prev => prev.filter(r => r.id !== rowId).map((r, i) => ({ ...r, ordre: i })))
@@ -195,6 +225,14 @@ export default function EditableTable({
 
   const handleSave = () => desa()
 
+  // C2 (31/07) — LES COLUMNES DE REGLA, CONDICIONADES. Tornen a Mesures, però NOMÉS quan el
+  // model TÉ graduació de debò. El senyal surt de les pròpies files: el payload d'aquesta taula
+  // porta les regles del MODEL i prou (mai la proposta, mai el fallback del catàleg), o sigui
+  // que «alguna fila amb règim» ÉS «el model té regles».
+  //
+  // La lliçó del 1302 es conserva sencera: BD neta = taula neta. Un model sense graduació no
+  // ensenya columnes de regla, i per tant tampoc no en pot desar cap sense voler.
+  const teRegles = localRows.some(r => r.logica != null)
   const displaySize = baseSize || sizeRun?.[0]
   const colCount = (readOnly ? 0 : 2) + 7
   const stickyHd = (left, w) => ({ ...thS, position: 'sticky', left, zIndex: 3, width: w, minWidth: w, background: 'var(--bg-muted)' })
@@ -235,15 +273,28 @@ export default function EditableTable({
                 background: 'var(--bg-muted)',
                 borderBottom: '1px solid var(--border)',
               }}>
-                {!readOnly && <th style={thS}></th>}
-                <th style={thS}>#</th>
-                <th style={stickyHd(0, 90)}>{t('measuregrid.col_pom')}</th>
-                <th style={stickyHd(90, 190)}>{t('measuregrid.col_nom')}</th>
-                <th style={{ ...thS, textAlign: 'right', minWidth: 90, background: 'var(--gold-pale)' }}>
+                {!readOnly && <th rowSpan={teRegles ? 2 : 1} style={thS}></th>}
+                <th rowSpan={teRegles ? 2 : 1} style={thS}>#</th>
+                <th rowSpan={teRegles ? 2 : 1} style={stickyHd(0, 90)}>{t('measuregrid.col_pom')}</th>
+                <th rowSpan={teRegles ? 2 : 1} style={stickyHd(90, 190)}>{t('measuregrid.col_nom')}</th>
+                <th rowSpan={teRegles ? 2 : 1} style={{ ...thS, textAlign: 'right', minWidth: 90, background: 'var(--gold-pale)' }}>
                   {displaySize || t('editable_table.col.base_value')}
                 </th>
-                {!readOnly && <th style={thS}></th>}
+                {teRegles && (
+                  <th colSpan={4} style={{ ...thS, textAlign: 'center', background: REGLA_BG, borderLeft: SEP }}>
+                    {t('measuregrid.grup_regla')}
+                  </th>
+                )}
+                {!readOnly && <th rowSpan={teRegles ? 2 : 1} style={thS}></th>}
               </tr>
+              {teRegles && (
+                <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ ...thS, minWidth: 92, background: REGLA_BG, borderLeft: SEP }}>{t('editable_table.col.regime')}</th>
+                  <th style={{ ...thS, textAlign: 'right', minWidth: 82, background: REGLA_BG }}>{t('editable_table.col.delta')}</th>
+                  <th style={{ ...thS, textAlign: 'right', minWidth: 82, background: REGLA_BG }}>{t('editable_table.col.break_delta')}</th>
+                  <th style={{ ...thS, minWidth: 100, background: REGLA_BG }}>{t('editable_table.col.break_size')}</th>
+                </tr>
+              )}
             </thead>
             <SortableContext items={localRows.map(r => r.id)} strategy={verticalListSortingStrategy}>
               <tbody>
@@ -257,6 +308,8 @@ export default function EditableTable({
                     onDelete={handleDeleteRow}
                     delta={calcDelta(row)}
                     onBateig={handleBateig}
+                    teRegles={teRegles}
+                    onRegla={handleRegla}
                   />
                 ))}
               </tbody>
@@ -293,7 +346,7 @@ export default function EditableTable({
   )
 }
 
-function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta, onBateig }) {
+function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta, onBateig, teRegles, onRegla }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -392,8 +445,46 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
           onChange={v => onCellChange(row.id, 'base_value_cm', v)}
           mono right readOnly={readOnly} />
       </td>
-      {/* Les quatre cel·les de regla (Règim · Δ · Δ break · Talla break) han marxat amb el seu
-          bloc: la graduació s'informa al gest de Graduació, no aquí. V. la nota del `thead`. */}
+      {teRegles && (
+        <>
+          <td style={{ ...tdS, background: REGLA_BG, borderLeft: SEP }}>
+            {(() => {
+              const cur = row.logica || 'LINEAR'
+              // No emmascarar: si la fila porta un valor fora de les normes editables
+              // (ZERO/EXCEPTION), s'afegeix com a opció perquè el valor real es vegi i es pugui
+              // canviar a LINEAR/STEP/FIXED.
+              const opts = REGIME_OPTIONS.includes(cur) ? REGIME_OPTIONS : [...REGIME_OPTIONS, cur]
+              return (
+                <select value={cur} disabled={readOnly}
+                  onChange={e => onRegla(row, 'logica', e.target.value)}
+                  style={{ font: 'inherit', border: '1px solid var(--border)', borderRadius: 4,
+                           padding: '2px 4px', background: readOnly ? 'transparent' : 'var(--white)',
+                           color: 'var(--text-main)' }}>
+                  {opts.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              )
+            })()}
+          </td>
+          {/* `signed`: un delta es PINTA sempre amb signe (+1 / +1,5). En edició es tecleja el
+              número nu; el signe és de la LECTURA, que és on es confon amb una mesura. */}
+          <td style={{ ...tdS, textAlign: 'right', background: REGLA_BG }}>
+            <EditableCell value={row.increment_base ?? ''}
+              onChange={v => onRegla(row, 'increment_base', v)}
+              mono right signed readOnly={readOnly} />
+          </td>
+          <td style={{ ...tdS, textAlign: 'right', background: REGLA_BG }}>
+            <EditableCell value={row.increment_break}
+              onChange={v => onRegla(row, 'increment_break', v)}
+              mono right signed readOnly={readOnly} />
+          </td>
+          <td style={{ ...tdS, background: REGLA_BG }}>
+            {/* Etiqueta de talla: DADA de domini (XS, 3XL). Ni signe ni traducció. */}
+            <EditableCell value={row.talla_break_label || ''}
+              onChange={v => onRegla(row, 'talla_break_label', v)}
+              readOnly={readOnly} />
+          </td>
+        </>
+      )}
       {!readOnly && (
         <td style={tdS}>
           <button type="button" onClick={() => onDelete(row.id)}
