@@ -94,6 +94,12 @@ export const models = {
   unassign: (id) => client.post(`/api/v1/models/${id}/unassign/`),
   // PG-4b-3b — fixa el règim de grading d'un POM del model (l'usarà 3c). {logica}
   setPomRegim: (modelId, pomId, logica) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, { logica }),
+  // G1 — els ALTRES camps de la regla (increment_base / increment_break / talla_break_label) per
+  // la MATEIXA porta que el règim: `set_pom_regim_view` és un upsert de la ModelGradingRule
+  // resident amb actualització selectiva per presència de camp. Cap mecànica nova d'escriptura
+  // (llei P3); només un wrapper que no es limita a `logica`.
+  setPomRegla: (modelId, pomId, camps) =>
+    client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, camps || {}),
   // P3 — autoria de la REGLA viva del model per POM: delta + break (+ règim). Patrimoni del model
   // (origen MANUAL). payload: {logica?, increment_base?, increment_break?, talla_break_label?}.
   setPomRule: (modelId, pomId, payload) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, payload),
@@ -117,8 +123,15 @@ export const models = {
   escalatAjustarTalla: (modelId, pomId, talla, valor) =>
     client.post(`/api/v1/models/${modelId}/escalat/ajustar-talla/`, { pom_id: pomId, talla, valor }),
   // Fase B — estat de propagació perquè el botó Propagar MIRI ABANS (read-only):
-  // {te_dades_propagades, segellada, version_number}.
+  // {te_dades_propagades, segellada, version_number, te_regles}.
+  // G2 — `te_regles` és la condició dura: sense regla NO es propaga mai; el gest porta a
+  // informar-la (Graduació) en comptes d'ensenyar el toast mut del 400.
   gradingStatus: (modelId) => client.get(`/api/v1/models/${modelId}/grading-status/`),
+  // G1 — ACCEPTAR la proposta de graduació del catàleg: el model adopta el ruleset i les regles
+  // passen a ser residents seves (mecanisme del wizard, P3). `rule_set_id` opcional (per defecte,
+  // el que la cadena SizingProfile→GarmentTypeItem resolgui). 409 si el model ja en té.
+  graduacioAcceptar: (modelId, body) =>
+    client.post(`/api/v1/models/${modelId}/graduacio-acceptar/`, body || {}),
   // Sprint 5 — comptadors de models per fase (board del Dashboard). Respecta els mateixos
   // filtres que el Model list (customer/collection/data_objectiu_after|before/temporada/...).
   // → {counts:{<fase>:n}, total}.
