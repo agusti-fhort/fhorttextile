@@ -69,6 +69,17 @@ export const PAGE_FORMATS = {
   A3P: { w: 297, h: 420, pdf: [841.89, 1190.55], label: 'A3 ↕' },
 }
 
+// ── B7 · IDIOMA DEL DOCUMENT ────────────────────────────────────────────────────────────
+// L'idioma de la FITXA és una propietat del DOCUMENT, no de qui l'obre: la mateixa fitxa ha de
+// sortir igual la miri qui la miri, i el client la vol en anglès. Per això el default és 'en' i
+// per això viatja dins `metadata` del document.json (round-trip ja existent, cap canvi d'esquema).
+//
+// Dos idiomes INDEPENDENTS per disseny: la closca de l'editor (menús, panells, diàlegs) segueix
+// l'idioma de l'USUARI; el contingut del document, aquest. Un patronista català pot editar amb
+// l'editor en català una fitxa que s'imprimeix en anglès.
+export const DOC_LANGS = ['ca', 'en', 'es']
+export const DOC_LANG_DEFAULT = 'en'
+
 export const FONT = 'IBM Plex Mono, monospace'
 // Peça 3: conjunt reduït de fonts (només fonts ja carregades + famílies genèriques web-safe; cap
 // font externa nova). El valor és el fontFamily que Konva/CSS resoldran.
@@ -2442,10 +2453,17 @@ async function convertLegacySketchSvgObject(obj) {
 // ════════════════════════════════ Component ═════════════════════════════════
 export default function TechSheetEditor() {
   const { t, i18n } = useTranslation()
+  // B7 — idioma del DOCUMENT (≠ idioma de la interfície). Es carrega de `metadata.lang` i es
+  // desa amb el document; mentre no n'hi hagi cap declarat, mana el default.
+  const [docLang, setDocLang] = useState(DOC_LANG_DEFAULT)
+  // Traductor fixat a l'idioma del document: el mateix `t` de sempre, però responent en
+  // l'idioma de la fitxa. Tot el que és TEXT DEL DOCUMENT passa per aquí; tot el que és closca
+  // de l'editor segueix amb `t`. Tenir-los separats és el que fa que commutar l'idioma del
+  // document no toqui la interfície i a l'inrevés.
+  const tDoc = useMemo(() => i18n.getFixedT(docLang), [i18n, docLang])
   // B5 — les etiquetes de la capçalera, resoltes UN cop i passades als tres consumidors de
-  // prims (llenç viu · export/miniatures · desvincular). Avui la font és l'idioma de l'USUARI;
-  // el selector d'idioma del DOCUMENT només ha de canviar aquesta línia, no la capçalera.
-  const hdrLabels = useMemo(() => headerLabels(t), [t, i18n.language])
+  // prims (llenç viu · export/miniatures · desvincular). B7: la font és l'idioma del DOCUMENT.
+  const hdrLabels = useMemo(() => headerLabels(tDoc), [tDoc])
   const { id, fitxerId } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -3223,6 +3241,9 @@ export default function TechSheetEditor() {
           fttAssets.current = assets
           fttUrlToName.current = Object.fromEntries(Object.entries(assets).map(([n, u]) => [u, n]))
           fttMeta.current = data.document_json?.metadata || {}
+          // B7 — l'idioma del document. Un document anterior al selector no en porta: cau al
+          // default (anglès), que és el que ja s'hi veia escrit.
+          setDocLang(DOC_LANGS.includes(fttMeta.current.lang) ? fttMeta.current.lang : DOC_LANG_DEFAULT)
           fttHeadId.current = data.fitxer?.id || fitxerId
           setTemplateMode(data.manifest?.kind === 'template')
           setSheet(data.fitxer)   // versio ve de ModelFitxer.versio
@@ -3424,7 +3445,9 @@ export default function TechSheetEditor() {
         const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }
         // Desa una versió NOVA del .ftt (save_model_file encadena; renova el lock). La resposta
         // és el nou cap de cadena → s'hi reapunta per als propers desats i per a la versió mostrada.
-        const documentJson = v2ToDocument(serializePages(pages), pageFormat, fttMeta.current, fttUrlToName.current)
+        // B7 — l'idioma viatja a `metadata`: és propietat del document i s'ha de desar amb ell.
+        const documentJson = v2ToDocument(serializePages(pages), pageFormat,
+          { ...fttMeta.current, lang: docLang }, fttUrlToName.current)
         const r = await fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/`, {
           // `kind` viatja a cada desat: és el que fa que el mode plantilla sobrevisqui al
           // tancar l'editor (abans, cada desat el tornava a "document" en silenci).
@@ -3435,7 +3458,7 @@ export default function TechSheetEditor() {
       } catch { setSaveState('error') }
     }, 2000)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pages, locked, pageFormat])
+  }, [pages, locked, pageFormat, docLang])   // B7: canviar d'idioma és un canvi del document
 
   // ── Miniatures: re-render offscreen de totes les pàgines (debounce) ────────
   useEffect(() => {
@@ -6085,6 +6108,17 @@ export default function TechSheetEditor() {
       return [
         ribbonTool({ key: 'export', icon: 'ti-file-download', label: t('tech_sheet.export_pdf'), onClick: onExport, disabled: exporting }),
         ribbonTool({ key: 'save-template', icon: 'ti-template', label: t('tech_sheet.save_as_template'), onClick: () => setSaveAsTpl({ nom: '', descripcio: '' }), disabled: !locked }),
+        // B7 — l'idioma del DOCUMENT, al costat d'exportar: és una propietat del fitxer que
+        // s'imprimeix, no una preferència de qui l'edita. L'etiqueta del camp va en l'idioma
+        // de l'USUARI (és closca d'editor); els noms dels idiomes, cadascun en el seu, que és
+        // com se saben reconèixer sense saber llegir la llengua del costat.
+        <label key="doc-lang" style={ribbonFieldStyle} title={t('tech_sheet.doc_lang_title')}>
+          <span>{t('tech_sheet.doc_lang')}</span>
+          <select value={docLang} onChange={e => setDocLang(e.target.value)} disabled={!locked}
+            style={{ ...ribbonSelectStyle, height: 24, minWidth: 96 }}>
+            {DOC_LANGS.map(l => <option key={l} value={l}>{t(`lang.${l}`, { lng: l })}</option>)}
+          </select>
+        </label>,
         // Interruptor del MODE PLANTILLA: canvia el `kind` del document (es desa al proper
         // autosave) i, amb ell, el render de placeholders i la disponibilitat del tab Camps.
         ribbonTool({ key: 'template-mode', icon: 'ti-forms', label: t('tech_sheet.template_mode'), onClick: () => setTemplateMode(v => !v), active: templateMode, title: t('tech_sheet.template_mode_title'), disabled: !locked }),
