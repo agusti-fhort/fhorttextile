@@ -272,3 +272,103 @@ class SenseGraduacioNoPetaResTest(_G1Base):
 
         self.assertEqual(d['rows'], [])
         self.assertIsNone(d['graduacio']['font'])
+
+
+class LaGraduacioNoEsVeuFinsQueSInformaTest(_G1Base):
+    """EL CONTRACTE FINAL (Agus, 31/07) — bug del model 1302.
+
+    «La graduació no es veu enlloc fins que s'informa pel botó de Graduació.»
+
+    El 1302 es va crear expressament SENSE graduació i a Mesures hi sortia «CH · LINEAR
+    +2,0 / +3,0 @XS». La BD era NETA: el que passava és que la pantalla pintava com a regla del
+    model el ruleset penjat del seu ITEM. I no era només cosmètic — `EditableTable` reenviava el
+    que ensenyava i `set_measurements_view` en fa upsert, o sigui que desar les mesures hauria
+    materialitzat la regla d'un altre sense que ningú l'acceptés mai.
+
+    La frontera és el paràmetre `?proposta=1`: només la pantalla que porta un botó d'Acceptar al
+    davant té dret a ensenyar una regla que el model no ha adoptat.
+    """
+
+    def _model_amb_proposta_al_cataleg(self):
+        """El muntatge del 1302: model net, item amb ruleset."""
+        rs = self._ruleset('RS de litem', increment=2.0)
+        model = self._model(codi='TST-1302')
+        model.garment_type_item = self._gti('it-1302', rs)
+        model.save(update_fields=['garment_type_item'])
+        return model, rs
+
+    def test_mesures_no_ensenya_cap_rastre_de_graduacio(self):
+        model, _rs = self._model_amb_proposta_al_cataleg()
+
+        d = self._get(measurements_table_view, model).data
+
+        fila = d['rows'][0]
+        self.assertIsNone(fila['logica'], 'Mesures ha pintat un règim que el model no té')
+        self.assertIsNone(fila['increment_base'], 'Mesures ha pintat un Δ que el model no té')
+        self.assertIsNone(fila['increment_break'])
+        self.assertIsNone(fila['talla_break_label'])
+
+    def test_la_proposta_nomes_surt_si_es_demana(self):
+        """La MATEIXA vista, amb `?proposta=1`: aquí sí, perquè és la pantalla de Graduació."""
+        model, rs = self._model_amb_proposta_al_cataleg()
+
+        req = self.factory.get('/x', {'proposta': '1'})
+        force_authenticate(req, user=self.user)
+        d = measurements_table_view(req, model.id).data
+
+        fila = d['rows'][0]
+        self.assertEqual(fila['logica'], 'LINEAR')
+        self.assertEqual(fila['increment_base'], 2.0)
+        # …i segueix marcada com a PROPOSTA, no com a regla del model.
+        self.assertTrue(d['graduacio']['es_proposta'])
+        self.assertEqual(d['graduacio']['rule_set_id'], rs.id)
+
+    def test_veure_la_proposta_no_escriu_res(self):
+        """Q1/(b): la BD del 1302 era neta i ha de continuar essent-ho per molt que es miri."""
+        model, _rs = self._model_amb_proposta_al_cataleg()
+
+        req = self.factory.get('/x', {'proposta': '1'})
+        force_authenticate(req, user=self.user)
+        measurements_table_view(req, model.id)
+        self._get(measurements_table_view, model)
+
+        model.refresh_from_db()
+        self.assertIsNone(model.grading_rule_set_id)
+        self.assertEqual(ModelGradingRule.objects.filter(model=model).count(), 0)
+
+    def test_nomes_acceptar_escriu_i_llavors_escalat_ho_ensenya(self):
+        """El cicle sencer del contracte: net → proposta → ACCEPTAR → ara sí que és seva."""
+        model, rs = self._model_amb_proposta_al_cataleg()
+
+        # abans: Escalat (sense `proposta`) no ensenya res
+        self.assertIsNone(self._get(measurements_table_view, model).data['rows'][0]['logica'])
+
+        acc = self._post(accept_grading_proposal_view, model, {})
+        self.assertEqual(acc.status_code, 200, acc.data)
+
+        # després: la regla ÉS del model, i per tant surt sense demanar cap proposta
+        d = self._get(measurements_table_view, model).data
+        self.assertEqual(d['rows'][0]['logica'], 'LINEAR')
+        self.assertEqual(d['rows'][0]['increment_base'], 2.0)
+        self.assertEqual(d['graduacio']['font'], PROPOSTA_MODEL)
+        self.assertFalse(d['graduacio']['es_proposta'], 'ja no és una proposta: és la seva regla')
+        self.assertEqual(model.grading_rules.filter(actiu=True).count(), 1)
+
+    def test_desar_mesures_sense_regles_no_en_fabrica_cap(self):
+        """L'altra meitat del bug: el payload de Mesures ja no porta `rules`, o sigui que desar
+        mesures d'un model sense graduació no li'n pot inventar cap. Sense això, el model
+        passava a «tenir graduació» (LINEAR amb deltes buits) sense que ningú n'informés."""
+        from fhort.models_app.views import set_measurements_view
+        model, _rs = self._model_amb_proposta_al_cataleg()
+
+        req = self.factory.post('/x', {
+            'measurements': [{'pom_id': self.pom.id, 'base_value_cm': 101.0}],
+            'keep_pom_ids': [self.pom.id],
+        }, format='json')
+        force_authenticate(req, user=self.user)
+        r = set_measurements_view(req, model.id)
+
+        self.assertEqual(r.status_code, 201, getattr(r, 'data', None))
+        self.assertEqual(r.data['updated'], 1, 'la mesura sí que s\'ha de desar')
+        self.assertEqual(ModelGradingRule.objects.filter(model=model).count(), 0,
+                         'desar mesures ha fabricat una regla que ningú no ha informat')
