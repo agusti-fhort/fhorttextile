@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import BateigInput from './BateigInput'
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from '../../pages/fittingShared'
 
 // MeasureGrid — editor únic de mesures (un component, dos modes treball/consulta) que serveix els
@@ -167,35 +169,6 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
 // hover/focus (maqueta aprovada, pestanya 1). Desa on-blur i només si el text ha canviat de debò.
 // Buit no és un buit: el placeholder ensenya el que en diu el CATÀLEG, que és qui mana mentre
 // ningú no bategi la línia — la cel·la no es queda muda mai.
-function BateigInput({ value, placeholder, title, onSave, style }) {
-  const [val, setVal] = useState(value ?? '')
-  const [focused, setFocused] = useState(false)
-  const [hover, setHover] = useState(false)
-  useEffect(() => { if (!focused) setVal(value ?? '') }, [value, focused])
-  const commit = () => {
-    setFocused(false)
-    const v = (val ?? '').trim()
-    setVal(v)
-    if (v !== (value ?? '')) onSave(v)
-  }
-  const viu = focused || hover
-  return (
-    <input
-      value={val ?? ''} placeholder={placeholder} title={title} aria-label={title}
-      onChange={e => setVal(e.target.value)}
-      onFocus={() => setFocused(true)} onBlur={commit}
-      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-      style={{
-        font: 'inherit', width: '100%', padding: '0 2px', boxSizing: 'border-box', borderRadius: 3,
-        background: focused ? 'var(--white)' : 'transparent',
-        border: '1px solid transparent',
-        borderBottom: viu ? `1px ${focused ? 'solid' : 'dashed'} var(--border)` : '1px solid transparent',
-        ...style,
-      }}
-    />
-  )
-}
 
 // Nomenclatura a 2 línies (llei de presentació): nom EN canònic a dalt (sembra, read-only) + nom
 // local a sota (petit, cursiva, gris). Aquesta cel·la és DESCRIPTIVA (només noms); la nomenclatura
