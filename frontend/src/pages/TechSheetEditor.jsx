@@ -2466,6 +2466,12 @@ export default function TechSheetEditor() {
   // F1 — l'eina de node activa i l'estat de selecció viuen AQUÍ (barra superior contextual); el
   // sub-editor rep `nodeTool` i puja `onNodeState`. runNode() dispara accions sobre el canvas viu.
   const [nodeTool, setNodeTool] = useState('select')
+  // B2/D5 — mode amb què s'ENTRA a l'edició de nodes, per a la propera entrada i només per a
+  // ella. Per defecte s'hi entra en mode FORMA (llei G1); qui hi arriba amb un traç concret a
+  // la mà (acabar de tancar-lo, o doble clic damunt seu) hi entra en mode NODES, que és el que
+  // estalvia el clic que aquest sprint vol treure. Ref i no estat: és una consigna d'un sol ús
+  // que es consumeix a l'efecte d'entrada i no ha de provocar cap render per si sola.
+  const entradaNodeToolRef = useRef(null)
   const [nodeSel, setNodeSel] = useState({ selCount: 0 })
   const [spaceHeld, setSpaceHeld] = useState(false)           // PEÇA P: barra espaiadora premuda (pan temporal)
   const [panning, setPanning] = useState(false)              // PEÇA P: arrossegant amb pan actiu
@@ -3906,14 +3912,22 @@ export default function TechSheetEditor() {
       // B1 — de l'ESBORRANY, no de `tool`: el tancament ja no depèn de quina eina hi hagi
       // activa en el moment de tancar.
       const isArrow = penRef.current?.tool === 'arrow_curve'
-      addObject({
+      const obj = {
         id: uid(), type: 'path', layer: 'free', x: 0, y: 0,
         // Fix #2: stroke a nivell d'OBJECTE (no de subpath) → el selector "Color de traç" de
         // nivell superior recolora línia I punta alhora; el per-subpath segueix com a override.
         stroke: KONVA_COL.textMain,
         ...(isArrow ? { headEnd: true } : {}),
         paths: [{ closed: isArrow ? false : closed, fill: 'transparent', strokeWidth: isArrow ? 1.5 : 1.2, fillRule: 'nonzero', segments }],
-      })
+      }
+      addObject(obj)
+      // B2 — tancar un traç i voler-lo afinar és el MATEIX gest: ningú tanca una corba i se'n
+      // desentén. El traç acabat de néixer queda seleccionat i ja en edició de NODES (D5), de
+      // manera que la primera nansa es pot moure sense cap clic intermedi. És també el que fa
+      // que Escape ja no hagi de cancel·lar (B1): amb el traç seleccionat, Supr l'esborra.
+      entradaNodeToolRef.current = 'select'
+      setEditingFlatGroupId(null)
+      setEditingFlatId(obj.id)
     }
     penRef.current = null
     setPenTemp(null)
@@ -4398,8 +4412,11 @@ export default function TechSheetEditor() {
   const nodeMode = !!editingFlatId
   // G1 — en entrar/sortir del mode edició, el mode per defecte és FORMA (fletxa negra): el primer gest
   // natural és agafar una forma, no un node. Reinicia també l'estat de selecció.
+  // B2/D5 — tret que qui hi entra ja porti un traç concret a la mà i hagi deixat consigna.
   useEffect(() => {
-    setNodeTool('shape'); setNodeSel({ mode: 'shape', shapeCount: 0, selCount: 0 })
+    const inicial = entradaNodeToolRef.current || 'shape'
+    entradaNodeToolRef.current = null
+    setNodeTool(inicial); setNodeSel({ mode: inicial === 'shape' ? 'shape' : 'nodes', shapeCount: 0, selCount: 0 })
     // En entrar a editar nodes, el ribbon es planta a "Editar": abans la barra contextual
     // apareixia sola, ara les eines viuen a la tab i cal portar-hi l'usuari.
     if (editingFlatId) setRibbonGroup('editar')
