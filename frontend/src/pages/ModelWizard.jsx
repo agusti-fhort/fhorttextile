@@ -41,8 +41,23 @@ const ordenaPelSistema = (run, labels) =>
 // TARGETS i CONSTRUCTIONS: vocabulari ÚNIC de gradingAxes (fora la còpia privada — Onada 1). Objectes
 // {codi, nom_*}; aquí només en fem servir el `codi` (l'etiqueta la resol t('model_wizard.*')).
 
-export default function ModelWizard() {
-  const { id } = useParams()
+// EL WIZARD, també ENCASTAT (31/07). El botó «Graduació» de Mesures obre AQUEST wizard —el
+// d'editar model, el que ja existeix i funciona— posicionat al pas 4, com a calaix lateral
+// sobre la taula. No hi ha cap pantalla nova de graduació: si al pas 4 hi falta la
+// construcció, l'usuari fa «← Enrere» fins al pas 2, la posa i torna. Aquell atzucac
+// s'acaba aquí.
+//
+// Encastat vs. ruta és NOMÉS marc i navegació:
+//   · `embedModelId` substitueix el `:id` de la ruta (mode edició igualment);
+//   · `initialBlock` obre directament al pas que interessa;
+//   · `onClose`/`onSaved` substitueixen els `navigate()`, que dins d'un overlay se'n durien
+//     l'usuari de la pantalla on està treballant.
+// La LÒGICA (hidratació, gates, payload, desat) no es toca: és la mateixa als dos modes.
+export default function ModelWizard({ embedModelId = null, initialBlock = null,
+                                      onClose = null, onSaved = null, onUsarJoc = null }) {
+  const routeParams = useParams()
+  const id = embedModelId != null ? String(embedModelId) : routeParams.id
+  const encastat = embedModelId != null
   const navigate = useNavigate()
   const { t } = useTranslation()
   const isEditMode = !!id
@@ -50,7 +65,7 @@ export default function ModelWizard() {
   const canConfigure = !!me?.capabilities?.includes('configure')
 
   // WIZARD-COMPLET C.3 — «Canviar graduació» des de la fitxa obre el wizard directament al pas 4.
-  const [block, setBlock] = useState(1)
+  const [block, setBlock] = useState(initialBlock || 1)
   // Bloc 1 — identificació
   const [year, setYear] = useState(currentYear)
   const [season, setSeason] = useState(null)
@@ -85,6 +100,7 @@ export default function ModelWizard() {
   // Peça 4 — sistema/run/base que ja té el model (edició). NO és només memòria: és la FONT de la
   // rehidratació del pas 3 (F1.1). Sense ella el pas 4 neix cec en edició (DIAGNOSI_MODEL_174, risc #1).
   const [modelSizeSystemId, setModelSizeSystemId] = useState(null)
+  const [modelFitType, setModelFitType] = useState('')   // `Model.fit_type` desat (edició)
   const [modelSizeRun, setModelSizeRun] = useState('')
   const [modelBaseSize, setModelBaseSize] = useState(null)
   const [sizingHydrated, setSizingHydrated] = useState(false)
@@ -171,6 +187,7 @@ export default function ModelWizard() {
       setTarget(d.target || null); setConstruction(d.construction || null)
       setModelSizeSystemId(d.size_system ?? null)
       setModelSizeRun(d.size_run_model || '')
+      setModelFitType(d.fit_type || '')
       setModelBaseSize(d.base_size_label || null)
       // Bloc 4 — graduació vigent (edició): grup canònic (sempre present via garment_type.grup) i
       // ruleset actual, perquè el pas 4 mostri la selecció i permeti canviar-la (cas Regular→Slim).
@@ -282,10 +299,18 @@ export default function ModelWizard() {
   // gradingRuleSetId encara null (el prefill no havia resolt) i el fit no es derivava mai —
   // el picker quedava amagat justament al camí que F1.1 volia rescatar.
   useEffect(() => {
-    if (fit || !gradingRuleSetId || !gradingRuleSets_.length) return
-    const cur = gradingRuleSets_.find(r => r.id === gradingRuleSetId)
-    if (cur?.fit_type_codi) setFit(cur.fit_type_codi)
-  }, [gradingRuleSets_, gradingRuleSetId, fit])
+    if (fit) return
+    // El fit del RULESET mana quan n'hi ha (és el que el model gradua de debò)…
+    if (gradingRuleSetId && gradingRuleSets_.length) {
+      const cur = gradingRuleSets_.find(r => r.id === gradingRuleSetId)
+      if (cur?.fit_type_codi) { setFit(cur.fit_type_codi); return }
+    }
+    // …i si el model encara NO té graduació, se sembra del seu propi `fit_type` (31/07).
+    // Sense això, entrar al pas 4 des de Mesures deixava el picker amagat rere un `fit` null
+    // en el cas normal —un model sense graduació, que és qui hi ve— i la pantalla es veia
+    // completa i buida alhora: tots els eixos informats i cap joc a la vista.
+    if (isEditMode && modelFitType) setFit(String(modelFitType).toUpperCase())
+  }, [gradingRuleSets_, gradingRuleSetId, fit, isEditMode, modelFitType])
 
 
   // Sprint ÀMBIT — el node de la peça (item → família → grup) viatja als eixos: un contenidor amb
@@ -419,6 +444,7 @@ export default function ModelWizard() {
         if (!confirmaAltreClient(e)) throw e
         await models.updateStep2(id, { ...payload, confirmar_altre_client: true })
       }
+      if (encastat) { onSaved?.(); return }
       navigate(`/models/${id}`)
     } catch (e) {
       setError(errMsg(e))
@@ -433,12 +459,14 @@ export default function ModelWizard() {
   const block1Resolved = !!(customerId && year && season)
 
   return (
-    <div style={{ maxWidth: 820, margin: '0 auto', padding: '2rem 1rem' }}>
+    <div style={encastat ? {} : { maxWidth: 820, margin: '0 auto', padding: '2rem 1rem' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
-        <h1 style={{ fontFamily: MONO, fontSize: 'var(--fs-h1)', fontWeight: 500, margin: 0 }}>
+        <h1 style={{ fontFamily: MONO, fontSize: encastat ? 'var(--fs-h3)' : 'var(--fs-h1)', fontWeight: 500, margin: 0 }}>
           {isEditMode ? t('model_wizard.title_edit') : t('model_wizard.title_new')}
         </h1>
-        <button type="button" onClick={() => navigate('/models')} style={linkBtn}>✕ {t('model_wizard.cancel')}</button>
+        <button type="button" onClick={() => (encastat ? onClose?.() : navigate('/models'))} style={linkBtn}>
+          ✕ {t('model_wizard.cancel')}
+        </button>
       </div>
 
       {/* Stepper */}
@@ -723,7 +751,7 @@ export default function ModelWizard() {
             fit={fit}
             onFit={(codi) => { setFit(codi); setGradingRuleSetId(null) }}
             gradingRuleSetId={gradingRuleSetId}
-            onUsar={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false) }}
+            onUsar={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false); onUsarJoc?.(rs) }}
             noGrading={noGrading}
             onNoGrading={(v) => { setNoGrading(v); if (v) { setFit(null); setGradingRuleSetId(null) } }}
           />
