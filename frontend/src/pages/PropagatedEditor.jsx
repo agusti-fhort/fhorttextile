@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { IconAlertTriangle, IconLock } from '@tabler/icons-react'
+import { IconAlertTriangle, IconBulb, IconLock } from '@tabler/icons-react'
 import client from '../api/client'
 import { models } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
@@ -16,7 +16,16 @@ import { useUnit } from './fittingShared'
 // propagar). El règim per POM es canvia amb setPomRegim. S'alimenta de taula-mesures (UNA taula vigent
 // neta; LLEI: propagar = llenç net, no eix de versions). Versionar és l'acte conscient "Propagar a
 // grading" a MESURES, no aquí.
-export default function PropagatedEditor({ modelId, onClose, inline = false, readOnly = false }) {
+// G1 (2026-07-31) — MODE GRADUACIÓ (`graduacio`). La segona porta d'aquesta pantalla: s'hi entra
+// des del botó «Graduació» de Mesures (o perquè Propagar hi ha portat el tècnic, G2) i el que
+// canvia és que el bloc de Regla és EDITABLE i que, si el model no té graduació, la franja de
+// dalt diu d'on surt la proposta i ofereix acceptar-la.
+// `onAccepted` / `onCancelada` són el fil de la REPRESA de Propagar: acceptar reprèn el gest
+// original, cancel·lar l'avorta sencer (cap estat a mitges).
+export default function PropagatedEditor({
+  modelId, onClose, inline = false, readOnly = false,
+  graduacio = false, onAccepted = null, onCancelada = null,
+}) {
   const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [modelInfo, setModelInfo] = useState(null)
@@ -25,6 +34,7 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   const [reloadKey, setReloadKey] = useState(0)   // remunta MeasureGrid en canvi de règim (re-sembra)
   const [sealed, setSealed] = useState(null)      // payload del 409 {version_number, sortida, ...}
   const [bumping, setBumping] = useState(false)
+  const [acceptant, setAcceptant] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -141,8 +151,50 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
       .catch(() => setErr(t('model_measurements.regim_err')))
   }
 
+  // G1 — edició dels tres camps de la regla. Passa per la MATEIXA porta que el règim
+  // (`setPomRegim` = upsert de la ModelGradingRule resident): cap mecànica nova d'escriptura.
+  // Buit → null (esborra el camp), i és una operació legítima: un break que sobra es treu.
+  const onRuleChange = useCallback((row, camp, valor) => {
+    const cru = (valor ?? '').toString().trim()
+    let net = null
+    if (cru !== '') {
+      if (camp === 'talla_break_label') net = cru
+      else {
+        const n = parseFloat(cru.replace(',', '.'))
+        if (Number.isNaN(n)) { setErr(t('graduacio.delta_no_numeric')); return }
+        net = n
+      }
+    }
+    // Sense canvi real no es toca el backend (evita la re-sembra de tota la graella).
+    const previ = row[camp] ?? null
+    if (String(previ ?? '') === String(net ?? '')) return
+    setErr('')
+    models.setPomRegla(modelId, row.pom_id, { [camp]: net })
+      .then(() => load().then(() => setReloadKey(k => k + 1)))
+      .catch(() => setErr(t('graduacio.regla_err')))
+  }, [modelId, t, load])
+
+  // G1 — ACCEPTAR la proposta: el model adopta el ruleset del catàleg i les regles passen a ser
+  // residents seves (mecanisme del wizard, P3). En acceptar, `onAccepted` reprèn el gest que ens
+  // hagi portat aquí (G2: la propagació en cua) — el tècnic no ha de re-clicar res.
+  const grad = data?.graduacio || null
+  const esProposta = !!grad?.es_proposta
+  const onAcceptar = () => {
+    if (acceptant) return
+    setAcceptant(true)
+    setErr('')
+    models.graduacioAcceptar(modelId, { rule_set_id: grad?.rule_set_id || undefined })
+      .then(() => load().then(() => {
+        setReloadKey(k => k + 1)
+        if (onAccepted) onAccepted()
+      }))
+      .catch(e => setErr(e?.response?.data?.message || t('graduacio.accepta_err')))
+      .finally(() => setAcceptant(false))
+  }
+
   const unit = useUnit()
-  const leadCols = escalatRuleLeadCols(t, onRegimChange, readOnly, unit)
+  const leadCols = escalatRuleLeadCols(
+    t, onRegimChange, readOnly, unit, graduacio ? onRuleChange : null)
 
   // inline=true: incrustat com a contingut de pestanya (sense overlay fix ni botó tancar).
   const outerStyle = inline
@@ -177,6 +229,53 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
           }
         />
         {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 8 }}>{err}</div>}
+        {/* G1 — LA FRANJA DE GRADUACIÓ. Només en mode graduació. Diu QUÈ s'està mirant (les
+            regles del model, una proposta del catàleg, o res) i, si és proposta, ofereix
+            acceptar-la. El botó de cancel·lar hi és sempre que algú ens hagi portat aquí amb un
+            gest en cua (G2): avortar-lo ha de ser tan fàcil com acceptar-lo. */}
+        {graduacio && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                        marginBottom: 10, padding: '10px 12px', borderRadius: 6,
+                        border: `0.5px solid ${esProposta ? 'var(--gold)' : 'var(--border)'}`,
+                        background: esProposta ? 'var(--gold-pale)' : 'var(--bg-subtle)' }}>
+            <IconBulb size={18} stroke={1.5}
+                      style={{ color: esProposta ? 'var(--gold)' : 'var(--text-muted)', flexShrink: 0 }} />
+            <span style={{ fontSize: 'var(--fs-body)', flex: 1, minWidth: 240 }}>
+              {esProposta
+                ? t(grad.font === 'perfil' ? 'graduacio.proposta_perfil' : 'graduacio.proposta_item',
+                    { ruleset: grad.rule_set_nom })
+                : (grad?.font === 'model'
+                    ? t('graduacio.vigents')
+                    : t('graduacio.sense_proposta'))}
+            </span>
+            {esProposta && (
+              <button type="button" onClick={onAcceptar} disabled={acceptant}
+                style={{ padding: '6px 14px', borderRadius: 6, border: 0, background: 'var(--gold)',
+                         color: 'var(--white)', cursor: acceptant ? 'default' : 'pointer',
+                         opacity: acceptant ? 0.6 : 1, fontSize: 'var(--fs-body)', whiteSpace: 'nowrap' }}>
+                {acceptant ? t('graduacio.acceptant') : t('graduacio.accepta')}
+              </button>
+            )}
+            {onCancelada && (
+              <button type="button" onClick={onCancelada}
+                style={{ padding: '6px 10px', borderRadius: 6, border: 0, background: 'transparent',
+                         cursor: 'pointer', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                {t('common.cancel')}
+              </button>
+            )}
+          </div>
+        )}
+        {/* G4 — ESTAT BUIT HONEST. Escalat d'un model sense graduació ensenya la base i les
+            columnes de regla buides; sense aquesta línia, això es llegeix com «s'ha trencat
+            alguna cosa». No és una advertència: un model amb només talla base és COMPLET per a
+            la seva fase (P4), i la graduació s'incorporarà quan calgui propagar. */}
+        {!graduacio && grad && grad.font !== 'model' && gridRows.length > 0 && (
+          <div style={{ marginBottom: 10, padding: '8px 12px', borderRadius: 6,
+                        border: '0.5px solid var(--border)', background: 'var(--bg-subtle)',
+                        fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+            {t('graduacio.escalat_sense_graduacio')}
+          </div>
+        )}
         {/* G6-B/T3 — La versió vigent està segellada i el backend ha refusat l'escriptura. El
             rebuig ha de tenir CARA i SORTIDA: què passa, i què pots fer-hi. */}
         {sealed && (

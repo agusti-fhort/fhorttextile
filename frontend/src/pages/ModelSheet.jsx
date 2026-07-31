@@ -262,6 +262,15 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   useEffect(() => {
     if ((editing && editing !== activeTab) || (mesuresEntry && activeTab !== 'Mesures')) exitEdit()
   }, [activeTab, editing, mesuresEntry, exitEdit])
+  // G2 — marxar d'Escalat AVORTA la graduació i, amb ella, la propagació en cua. Navegar fora és
+  // una manera de cancel·lar tan legítima com el botó, i deixar el gest en cua darrere d'una
+  // pestanya faria que un clic a Propagar d'aquí a mitja hora es reprengués sol. Cap estat a mitges.
+  useEffect(() => {
+    if (activeTab !== 'Escalat' && (graduacioMode || propagarEnCua)) {
+      setGraduacioMode(false)
+      setPropagarEnCua(false)
+    }
+  }, [activeTab, graduacioMode, propagarEnCua])
   // Pausa la tasca NOMÉS en desmuntar el ModelSheet si quedava En curs (idempotent: si exitEdit ja
   // l'ha pausada, activeTaskRef és null i no es demana res → cap 400 Paused→Paused).
   useEffect(() => () => { pauseActiveTask() }, [pauseActiveTask])
@@ -352,18 +361,65 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [propagating, setPropagating] = useState(false)
   const [propStatus, setPropStatus] = useState(null)   // {te_dades_propagades, segellada, version_number}
   const [propStep, setPropStep] = useState(0)           // 0 cap modal · 1 avís adaptat · 2 confirmació final
-  // MIRA ABANS d'executar: si no hi ha propagació prèvia → propaga directe; si n'hi ha → avís de 2 passos
-  // (pas 1 segons gravetat: segellada/producció vs substitució; pas 2 universal "n'estàs segur?").
+  // G1/G2 (2026-07-31) — el gest GRADUACIÓ. `graduacioMode` obre Escalat amb el bloc de Regla
+  // editable; `propagarEnCua` és la REPRESA: recorda que hi hem arribat perquè algú volia
+  // PROPAGAR i, en acceptar la graduació, el gest original es reprèn sol.
+  const [graduacioMode, setGraduacioMode] = useState(false)
+  const [propagarEnCua, setPropagarEnCua] = useState(false)
+
+  // Obre Graduació: és Escalat en mode edició amb la franja de proposta. Una sola porta perquè
+  // els dos camins d'entrada (botó Graduació · Propagar sense regla) acabin al mateix lloc.
+  const obreGraduacio = useCallback(() => {
+    setGraduacioMode(true)
+    setEditing('Escalat')
+    setActiveTab('Escalat')
+  }, [])
+
+  // Tanca Graduació SENSE acceptar. Si hi havia una propagació en cua, s'avorta sencera: cap
+  // estat a mitges (G2). No s'ha escrit res —acceptar és l'únic que escriu—, o sigui que
+  // cancel·lar és, literalment, no haver passat per aquí.
+  const cancelaGraduacio = useCallback(() => {
+    setGraduacioMode(false)
+    setPropagarEnCua(false)
+    setEditing(null)
+  }, [])
+
+  // MIRA ABANS d'executar. Dues preguntes, en aquest ordre:
+  //   1. Hi ha REGLA? (G2, condició dura de P2: sense regla no es propaga MAI). Si no n'hi ha, el
+  //      gest no mor amb un toast: queda EN CUA i portem el tècnic a informar-la. El backend ja
+  //      barra el pas (generate_grading_view:2375) — aquí el que guanya és el camí bo en lloc del
+  //      400 mut.
+  //   2. Hi ha propagació prèvia? → avís de 2 passos (pas 1 segons gravetat; pas 2 universal).
   const onPropagarClick = () => {
     if (propagating) return
     models.gradingStatus(parseInt(id))
       .then(res => {
         const st = res.data
+        if (!st.te_regles) { setPropagarEnCua(true); obreGraduacio(); return }
         if (!st.te_dades_propagades) execPropagar(false)   // llenç ja net → directe
         else { setPropStatus(st); setPropStep(1) }
       })
       .catch(() => setFeedback({ type: 'err', text: t('grading_propagate.err') }))
   }
+
+  // LA REPRESA. La graduació s'ha acceptat: si el gest original era propagar, es reprèn SOL —
+  // no es re-clica res. Es torna a passar per `onPropagarClick` a posta i no per `execPropagar`:
+  // el model pot tenir propagació prèvia, i saltar-se l'avís de 2 passos aquí seria colar una
+  // substitució sense consentiment.
+  // `graduacioMode` es MANTÉ: el tècnic ha vingut a revisar la regla, i acceptar-la no pot
+  // tornar a bloquejar-li els camps que venia a ajustar. La franja de dalt passa sola de
+  // «proposta» a «regla del model» (el backend ja diu font='model'), i els Δ segueixen vius.
+  const onGraduacioAcceptada = useCallback(() => {
+    if (!propagarEnCua) return
+    setPropagarEnCua(false)
+    models.gradingStatus(parseInt(id))
+      .then(res => {
+        const st = res.data
+        if (!st.te_dades_propagades) execPropagar(false)
+        else { setPropStatus(st); setPropStep(1) }
+      })
+      .catch(() => setFeedback({ type: 'err', text: t('grading_propagate.err') }))
+  }, [propagarEnCua, id, t])   // eslint-disable-line react-hooks/exhaustive-deps
   const execPropagar = (allowReopen) => {
     if (propagating) return
     setPropagating(true)
@@ -555,6 +611,16 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                     {t('model_sheet.edit_pom')}
                   </button>
                 )}
+                {/* G1 — GRADUACIÓ: la revisió de la regla, que és OBLIGADA abans de propagar i
+                    fins avui no tenia porta pròpia. Obre Escalat amb el bloc «Regla de graduació»
+                    editable i, si el model no en té, amb la proposta del catàleg per acceptar. */}
+                <button type="button" disabled={openingTask}
+                  onClick={obreGraduacio}
+                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
+                           opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
+                  <i className="ti ti-chart-arrows-vertical" style={{ fontSize: 14 }} />
+                  {t('graduacio.button')}
+                </button>
                 {/* Propagar a grading (origen): inicia fase nova sobre llenç net i porta a Escalat.
                     Mira abans i adverteix (2 passos) si ja hi ha propagació. */}
                 <button type="button" disabled={openingTask || propagating}
@@ -604,7 +670,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 </button>
               )}
             </div>
-            <PropagatedEditor modelId={parseInt(id)} inline readOnly={editing !== 'Escalat'} />
+            <PropagatedEditor modelId={parseInt(id)} inline readOnly={editing !== 'Escalat'}
+              graduacio={graduacioMode}
+              onAccepted={onGraduacioAcceptada}
+              onCancelada={graduacioMode ? cancelaGraduacio : null} />
           </div>
         )}
         {/* FaseB — avís de 2 passos en propagar amb dades existents (mira abans). Pas 1 segons gravetat. */}
