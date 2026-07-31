@@ -680,3 +680,50 @@ class FittingPhotoViewSet(mixins.ListModelMixin,
     filterset_fields = ['session', 'piece_fitting']
     ordering = ['session', 'id']
     queryset = FittingPhoto.objects.select_related('session', 'piece_fitting').all()
+
+    def create(self, request, *args, **kwargs):
+        """Les fotos de fitting passen per l'EMBUT abans de tocar el serializer.
+
+        Aquesta era la porta crua del sistema: un `ImageField` nu, sense el guard d'extensió
+        i mida que regeix a Arxius (`validate_upload`, D12) i sense conversió. I és justament
+        la porta per on entren les fotos de mòbil — les més grosses i les úniques que arriben
+        en HEIC. L'`ImageField` de DRF les rebutjava amb un "puja una imatge vàlida" que no
+        deia res a qui l'havia feta amb un iPhone.
+
+        L'embut ha d'anar ABANS del serializer, no a `validate_fitxer`: la validació de camp
+        (`ImageField.to_internal_value`) corre primer i la HEIC ja hi hauria mort. Per això
+        aquí es reconstrueix el `data` amb el fitxer ja convertit, en lloc de delegar a
+        `CreateModelMixin.create` — `request.data` es cacheja i mutar `request.FILES` no hi
+        arribaria.
+        """
+        from fhort.models_app.services_fitxers import (ConversioFallida, UploadRejected,
+                                                       redueix_imatge, validate_upload)
+
+        foto = request.FILES.get('fitxer')
+        if foto is None:
+            return super().create(request, *args, **kwargs)
+
+        nom = getattr(foto, 'name', '') or 'foto.jpg'
+        try:
+            validate_upload(foto, nom)
+        except UploadRejected as e:
+            return Response({'fitxer': [str(e)]}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            foto, nom = redueix_imatge(foto, nom, getattr(foto, 'content_type', ''))
+        except ConversioFallida as e:
+            return Response({'fitxer': [str(e)]},
+                            status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        foto.name = nom
+
+        # Dict pla, no `request.data.copy()`: el `.copy()` d'un QueryDict fa DEEPCOPY dels
+        # valors, i una foto de més de 2,5 MB l'ha escrita el parser al disc
+        # (`TemporaryUploadedFile`) — un handle de fitxer no es pot copiar («cannot pickle
+        # BufferedRandom»). Justament les fotos grosses, que són les que aquest embut existeix
+        # per atendre.
+        dades = {clau: valor for clau, valor in request.data.items()}
+        dades['fitxer'] = foto
+        serializer = self.get_serializer(data=dades)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED,
+                        headers=self.get_success_headers(serializer.data))
