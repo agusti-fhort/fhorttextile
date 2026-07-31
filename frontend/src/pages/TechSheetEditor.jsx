@@ -1260,6 +1260,15 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
 // perquè el primer menteix en silenci. Encongeix fins al sòl de 10pt i, si allà encara no cap,
 // es pinta igualment: voldrà dir que la caixa és curta per a aquell sistema de talles, i això
 // s'ha de VEURE per poder-ho reportar.
+// Abreujament DETERMINISTA d'una talla: treu els zeros a l'esquerra a cada costat de la barra
+// (00/01→0/1 · 03/06→3/6 · 09/12→9/12). Determinista i reversible de cap: no inventa noms, no
+// n'ajunta dos i no toca res que no sigui un nombre amb zeros al davant (XS/S es queda igual).
+// Verificat sobre els 1.054 runs del tenant: en canvia 211 i no en col·lisiona cap.
+export function _abreujaTalla(lab) {
+  if (!lab || !lab.includes('/')) return lab
+  return lab.split('/').map(p => (/^\d+$/.test(p) ? String(Number(p)) : p)).join('/')
+}
+
 function _pushSizeRun(prims, m, placeholderMode, camp, P, INK) {
   const availPt = camp.r - camp.x
   if (placeholderMode) {
@@ -1269,8 +1278,19 @@ function _pushSizeRun(prims, m, placeholderMode, camp, P, INK) {
   }
   const raw = (m?.size_run_model || '').trim()
   if (!raw) return
-  const labels = raw.split(/[·;,]/).map(s => s.trim()).filter(Boolean)
-  const base = (m?.base_size_label || '').trim()
+  const canonics = raw.split(/[·;,]/).map(s => s.trim()).filter(Boolean)
+  const baseCanonic = (m?.base_size_label || '').trim()
+  // DECISIÓ RUN (Agus, 2026-07-31) · tres graons, en ordre:
+  //   1r la nomenclatura CANÒNICA del catàleg, si cap (al cos nominal o encongida fins a 10pt);
+  //   2n si no cap, abreujament DETERMINISTA — i només al render d'aquesta capçalera: el
+  //      catàleg, la taula de mesures i el .ftt segueixen dient 00/01;
+  //   3r si ni abreujat cap, desborda VISIBLE. Mai es talla: un run a mitges menteix.
+  // La talla activa es compara en la MATEIXA forma en què es pinta, o el filet la perdria just
+  // en els runs que l'abreujament toca (que són els de nadó, on més falta fa distingir-la).
+  const cabenA = (labs, cos) => (labs.reduce((n, l) => n + l.length, 0) + labs.length - 1) * cos * HDR_CHAR_W <= availPt
+  const abreujat = cabenA(canonics, HDR_SOL_PT) ? null : canonics.map(_abreujaTalla)
+  const labels = abreujat || canonics
+  const base = abreujat ? _abreujaTalla(baseCanonic) : baseCanonic
   const nChars = labels.reduce((n, l) => n + l.length, 0) + (labels.length - 1)
   const cos = Math.max(HDR_SOL_PT, Math.min(HDR_STYLE.v12.cos, availPt / (nChars * HDR_CHAR_W)))
   const f = cos * P
