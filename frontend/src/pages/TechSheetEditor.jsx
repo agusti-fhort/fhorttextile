@@ -1829,7 +1829,7 @@ async function addObjectToLayer(layer, obj, ctx, cotaLabel) {
         const isMaster = !!(obj.config && obj.config.layout === 'masterFtt')
         const isV2 = !!(obj.config && obj.config.layout === 'blocks4')
         const r = isMaster
-          ? headerMasterLogoRect(lw, lh, obj.config, pageCtx?.fmtKey)
+          ? headerMasterLogoRect(lw, lh, obj.config, ctx?.fmtKey)
           : isV2
             ? headerV2LogoRect(lw, lh, built.totalW, obj.config)
             : { x: built.totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, w: 40 * MM_TO_PX, h: 16 * MM_TO_PX }
