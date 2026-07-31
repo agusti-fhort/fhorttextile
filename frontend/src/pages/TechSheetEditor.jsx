@@ -4388,8 +4388,11 @@ export default function TechSheetEditor() {
       setEditingFlatGroupId(selObj.id); setEditingFlatId(groupPathChild.id)
     }
   }
-  const startVectorEdit = (obj) => {
+  // `nodeToolInicial` — consigna d'un sol ús per a D5: qui hi entra amb UN traç concret a la mà
+  // (la fletxa de nodes damunt seu) hi entra en mode nodes; la resta, en mode forma (llei G1).
+  const startVectorEdit = (obj, nodeToolInicial = null) => {
     if (!locked || penTraceBusy() || !['sketch_svg', 'path'].includes(obj?.type)) return
+    entradaNodeToolRef.current = nodeToolInicial
     setEditingText(null)
     setTool('select')
     selectOnly(obj.id)
@@ -6019,6 +6022,24 @@ export default function TechSheetEditor() {
       <span style={ribbonLabelStyle}>{label}</span>
     </button>
   )
+  // B4 — LES DUES FLETXES DE SELECCIÓ SÓN PERMANENTS. Fins ara vivien dins la tab Editar, que
+  // és justament on no ets quan les necessites: seleccionar és el gest que TALLA qualsevol
+  // altre, i haver-lo d'anar a buscar a una tab el converteix en tres clics. Ara viuen a
+  // l'esquerra de la fila d'eines, FORA del render per tab, de manera que cap tab les pot
+  // perdre ni duplicar-les.
+  //
+  // Són SENSIBLES AL NIVELL (D3): els mateixos dos botons manen sobre l'eina d'OBJECTE fora de
+  // l'edició de nodes i sobre el cursor del SUB-EDITOR a dins. És la jerarquia que l'usuari ja
+  // té al cap (fletxa plena = forma · filet = nodes) i estalvia quatre botons per a dues
+  // intencions. Les eines FINES de node (afegir/treure/convertir/tisores/topologia) es queden
+  // contextuals a Editar: aquelles sí que depenen d'estar editant.
+  const seleccioDeNivell = (k) => (editingFlatId
+    ? { onClick: () => setNodeTool(k), active: nodeTool === k }
+    : { onClick: () => setTool(k === 'shape' ? 'select' : 'node'), active: tool === (k === 'shape' ? 'select' : 'node') })
+  const fletxesSeleccio = SHAPE_TOOL_ITEMS.map(it => ribbonTool({
+    key: `sel-${it.k}`, icon: it.icon, label: paperFlatLabels[it.label],
+    title: `${paperFlatLabels[it.label]} · ${it.sc}`, disabled: !locked, ...seleccioDeNivell(it.k),
+  }))
   const renderRibbonContent = () => {
     if (!locked) {
       return <span style={{ color: COL.textMuted, padding: '0 8px' }}><i className="ti ti-eye" aria-hidden="true" style={{ marginRight: 5 }} />{t('tech_sheet.readonly_overlay')}</span>
@@ -6070,7 +6091,8 @@ export default function TechSheetEditor() {
     })
     if (ribbonGroup === 'draw') {
       return [
-        eina('select', 'ti-pointer-2', t('tech_sheet.tool_select')),
+        // B4 — la fletxa de selecció ja no es repeteix aquí: viu a l'esquerra de la fila, a
+        // totes les tabs. La mà (pan) sí que es queda: és una eina de VISTA, no de selecció.
         eina('pan', 'ti-hand-stop', t('tech_sheet.tool_pan')),
         <span key="sep-crea" style={ribbonSep} />,
         eina('draw', 'ti-pencil', t('tech_sheet.tool_draw')),
@@ -6144,8 +6166,9 @@ export default function TechSheetEditor() {
     if (ribbonGroup === 'editar') {
       const shapeMode = nodeSel.mode === 'shape'
       const nShapes = nodeSel.shapeCount || 0
+      // B4 — l'entrada per "Selecció de nodes" ha marxat a les fletxes permanents; aquí només
+      // queda `subpath`, que segueix sent contextual (no és una de les dues fletxes).
       const out = [
-        ribbonTool({ key: 'tool-node', icon: 'ti-pointer', label: t('tech_sheet.tool_node'), onClick: () => setTool('node'), active: tool === 'node', disabled: !locked }),
         ribbonTool({ key: 'tool-subpath', icon: 'ti-vector-triangle', label: t('tech_sheet.tool_subpath'), onClick: () => setTool('subpath'), active: tool === 'subpath', disabled: !locked }),
         <span key="sep-entrada" style={ribbonSep} />,
       ]
@@ -6153,10 +6176,8 @@ export default function TechSheetEditor() {
         out.push(<span key="hint" style={{ color: COL.textMuted, fontSize: 'var(--fs-label)', padding: '0 8px', alignSelf: 'center' }}>{t('tech_sheet.edit_tab_hint')}</span>)
         return out
       }
-      SHAPE_TOOL_ITEMS.forEach(it => out.push(ribbonTool({
-        key: `nt-${it.k}`, icon: it.icon, label: paperFlatLabels[it.label],
-        onClick: () => setNodeTool(it.k), active: nodeTool === it.k, title: `${paperFlatLabels[it.label]} · ${it.sc}`,
-      })))
+      // B4 — els dos cursors (forma/nodes) tampoc es repeteixen aquí: són les fletxes
+      // permanents de l'esquerra, que dins de l'edició manen sobre `nodeTool`.
       NODE_TOOL_ITEMS.forEach(it => out.push(ribbonTool({
         key: `nt-${it.k}`, icon: it.icon, label: paperFlatLabels[it.label],
         onClick: () => setNodeTool(it.k), active: nodeTool === it.k, title: `${paperFlatLabels[it.label]} · ${it.sc}`,
@@ -6352,6 +6373,9 @@ export default function TechSheetEditor() {
             amaga eines darrere d'un gest que ningú fa, i el ribbon existeix justament per
             no haver d'anar a buscar res. Amb els tabs partits, el cas normal és una fila. */}
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, minHeight: 64, padding: '6px 12px 8px' }}>
+          {/* B4 — les dues fletxes de selecció, a totes les tabs i sempre al mateix lloc. */}
+          {fletxesSeleccio}
+          <span style={ribbonSep} />
           {renderRibbonContent()}
         </div>
       </div>
@@ -6722,7 +6746,9 @@ export default function TechSheetEditor() {
                     selectable={locked && o.layer !== 'template' && !o.locked}
                     draggable={locked && tool === 'select' && !panActive && o.layer !== 'template' && !o.locked && activeGroup !== o.id}
                     onSelect={(e) => (tool === 'node' && (o.type === 'path' || o.type === 'sketch_svg'))
-                      ? startVectorEdit(o)                         // S1.1: eina "Selecció directa (nodes)" → obre l'editor de nodes
+                      // S1.1: l'eina "Selecció de nodes" obre l'editor de nodes. B4 — i hi entra
+                      // en mode NODES: una fletxa que es diu de nodes no pot aterrar en forma.
+                      ? startVectorEdit(o, 'select')
                       : handleSelectObject(e, o.id)}
                     onDragStart={handleDragStart(o)}
                     onDragMove={handleDragMove(o)}
