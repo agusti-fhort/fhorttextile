@@ -6755,7 +6755,13 @@ export default function TechSheetEditor() {
                     onDragEnd={handleDragEnd(o)}
                     onTransformEnd={handleTransformEnd(o)}
                     onDblText={() => startTextEdit(o)}
-                    onDblVector={() => startVectorEdit(o)}
+                    // B5 — doble clic damunt d'un traç existent = entrar-hi a afinar la corba.
+                    // Amb la fletxa de forma activa, el doble clic ja era la porta d'entrada a
+                    // l'edició; el que faltava era que aterrés on l'usuari volia anar (nodes),
+                    // i no en mode forma, que és el mateix que acabava de fer amb un sol clic.
+                    // Protegit per `penTraceBusy` dins de startVectorEdit i per
+                    // `konvaOwnsPointer`: mentre es traça, el doble clic és tancar, no entrar.
+                    onDblVector={() => startVectorEdit(o, 'select')}
                     entered={locked && activeGroup === o.id}
                     onDblGroup={() => { if (o.type === 'group' && !penTraceBusy()) { setActiveGroup(o.id); setSelectedChildId(null); clearSelection() } }}
                     onChildSelect={handleChildSelect}
