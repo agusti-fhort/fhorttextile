@@ -1214,6 +1214,11 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
 // negreta i subratllada) i per això NO el protegeix l'el·lipsi de `PrimNode`, que actua per
 // node: 20 segments curts mai desborden individualment, però el conjunt sí. El topall és
 // explícit — el mateix 9→8 que els valors i, si encara no hi cap, es talla amb '…'.
+// R4 — gruix (pt) i separació del subratllat de la talla activa. La separació s'expressa en
+// fraccions del cos perquè segueixi el text si el cos canvia (12pt de la maqueta, o el 9/10
+// d'ara): 0,12·cos deixa el filet just sota les descendents sense tocar-les.
+const HDR_UNDERLINE_PT = 1.2
+const HDR_UNDERLINE_GAP = 0.12
 const _HDR_L_IDENT = { mx: x => x }
 function _pushSizeRun(prims, m, placeholderMode, sx, by, P, L = _HDR_L_IDENT) {
   const OX = HDR_M.OX
@@ -1247,7 +1252,17 @@ function _pushSizeRun(prims, m, placeholderMode, sx, by, P, L = _HDR_L_IDENT) {
       tallat = true
       return
     }
-    prims.push({ t: 't', x: (cxPt - OX) * P, y, w: wPt * P + 4, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, underline: !!opts.underline })
+    prims.push({ t: 't', x: (cxPt - OX) * P, y, w: wPt * P + 4, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold })
+    // R4 — el subratllat de la talla ACTIVA és una primitiva de LÍNIA pròpia, no
+    // `textDecoration`. Motiu: la maqueta el vol d'1,2pt i Konva no deixa triar el gruix del
+    // subratllat natiu (surt del cos de la lletra). Fer-lo línia el fa mesurable, i de retruc
+    // travessa sol els tres traductors de prims — el llenç i l'export ja saben pintar 'l', i
+    // desvincular la capçalera el converteix en un objecte `line` editable en lloc de perdre'l.
+    // El subratllat natiu es conserva per a qui el fa servir sense gruix declarat (taula T1b).
+    if (opts.underline) {
+      const uy = (by + HDR_UNDERLINE_GAP * fpt - HDR_M.OY) * P
+      prims.push({ t: 'l', points: [(cxPt - OX) * P, uy, (cxPt + wPt - OX) * P, uy], stroke: INK, sw: HDR_UNDERLINE_PT * P })
+    }
     cxPt += wPt
   }
   labels.forEach((lab, i) => {
