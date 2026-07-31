@@ -83,10 +83,17 @@ class GradedSpecTableView(APIView):
         # BaseMeasurement del model, no del GradedSpec (la graduació no en sap res, i no li
         # pertoca: la secció és una propietat del document d'origen, no de l'escalat).
         bms = BaseMeasurement.objects.filter(model_id=sf.model_id).values(
-            'pom_id', 'ordre', 'nom_fitxa', 'seccio')
+            'pom_id', 'ordre', 'nom_fitxa', 'seccio',
+            # R1 (31/07) — el BATEIG viatja pel MATEIX camí que `ordre`/`nom_fitxa`: surt de la
+            # BaseMeasurement del model, perquè és del MODEL i no de la graduació. Sense això,
+            # la taula T1b de la fitxa imprimia el nom del catàleg d'un POM que el tècnic havia
+            # rebatejat — el panell de cotes deia una cosa i el paper una altra.
+            'nom_canonic_model', 'nom_traduit_model')
         ordre_map = {bm['pom_id']: bm['ordre'] for bm in bms}
         nom_fitxa_map = {bm['pom_id']: bm['nom_fitxa'] for bm in bms}
         seccio_map = {bm['pom_id']: bm['seccio'] for bm in bms}
+        bateig_map = {bm['pom_id']: (bm['nom_canonic_model'] or '',
+                                     bm['nom_traduit_model'] or '') for bm in bms}
 
         # LA REGLA per fila. `deltas` (increment_applied_cm) és la distància ACUMULADA a la
         # base — invariant declarada a patterns/engine/ports.py:64 i grading_projection.py:29 —
@@ -105,6 +112,10 @@ class GradedSpecTableView(APIView):
         for row in rows:
             row['ref'] = nom_fitxa_map.get(row['pom_id']) or row['abbreviation']
             row['seccio'] = seccio_map.get(row['pom_id']) or ''
+            # R1 — CRUS i al costat del catàleg (`nom_en`/`nom_ca`, que no es toquen):
+            # '' = no batejat → mana el catàleg. La cascada la resol qui pinta. Camps NOUS.
+            _bat = bateig_map.get(row['pom_id']) or ('', '')
+            row['nom_canonic_model'], row['nom_traduit_model'] = _bat
             r = regles.get(row['pom_id'])
             # Increment PER SALT ascendent (positiu). Sense regla, o amb regla sense increment
             # (STEP/FIXED), viatja null: el pintor decideix el placeholder, la vista no en posa.
