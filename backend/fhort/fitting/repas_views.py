@@ -250,7 +250,14 @@ class FittingRepasView(APIView):
         # R1 (31/07) — el BATEIG hi viatja també: és del MODEL, com `ordre` i `nom_fitxa`, i
         # sense ell la taula fitting_history de la fitxa imprimia el nom del catàleg d'un POM
         # que el tècnic havia rebatejat.
-        bm_data = list(BaseMeasurement.objects.filter(model_id=model.id)
+        # C2/Onada 1 — ÀNCORA EXTERIOR EXPLÍCITA per als QUATRE mapes, i tots quatre alhora:
+        # ancorar-ne un i deixar-ne un altre per POM sol donaria files amb l'ordre d'una capa
+        # i el nom d'una altra. La fila que els consulta (`_fila`, aquí sota) s'indexa per
+        # `pom_id` i no porta capa; donar-n'hi seria afegir un camp al payload, i el
+        # contracte no es toca fins a C4. El Repàs, fins llavors, és el de l'exterior.
+        from fhort.pom.models import MeasurementLayer
+        bm_data = list(BaseMeasurement.objects
+                       .filter(model_id=model.id, capa=MeasurementLayer.SLUG_DEFECTE)
                        .values_list('pom_id', 'ordre', 'nom_fitxa', 'id',
                                     'nom_canonic_model', 'nom_traduit_model'))
         ordre_map = {p: o for p, o, _, _, _, _ in bm_data}
