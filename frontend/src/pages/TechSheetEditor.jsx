@@ -159,6 +159,9 @@ const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
 // Fora: `draw` (mà alçada, drag continu sense nodes) i les de dos clics (`note`,
 // `cota_pom`), que tenen la seva pròpia màquina i la seva pròpia sortida.
 const PATH_TOOLS = ['pen', 'arrow_curve']
+// B4-fix — tabs del ribbon que porten les dues fletxes de selecció (forma · nodes): les que
+// són de TREBALLAR damunt del dibuix. A la resta no hi ha res a seleccionar.
+const TABS_AMB_FLETXES = ['draw', 'editar']
 // Peça C: eines que mostren cursor de creu (dibuix + nodes). 'select' → fletxa; 'pan' → grab.
 const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, ...PATH_TOOLS, 'draw', 'polygon', 'note', 'cota_pom']
 // S3b — dreceres de teclat de les eines (mostrades al tooltip de la paleta per a la descobribilitat).
@@ -6407,9 +6410,15 @@ export default function TechSheetEditor() {
             amaga eines darrere d'un gest que ningú fa, i el ribbon existeix justament per
             no haver d'anar a buscar res. Amb els tabs partits, el cas normal és una fila. */}
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, minHeight: 64, padding: '6px 12px 8px' }}>
-          {/* B4 — les dues fletxes de selecció, a totes les tabs i sempre al mateix lloc. */}
-          {fletxesSeleccio}
-          <span style={ribbonSep} />
+          {/* B4-fix — les dues fletxes viuen a les tabs on es SELECCIONA per treballar
+              (Dibuixar i Editar), no a les vuit. A Fitxer o Pàgina no hi ha res a seleccionar,
+              i una eina que no serveix on és ocupa lloc i ensenya soroll. Dins d'aquestes dues,
+              la posició segueix sent fixa: sempre les primeres de la fila. Les dreceres V/A
+              segueixen valent a tot arreu, també a les tabs on els botons no es veuen. */}
+          {TABS_AMB_FLETXES.includes(ribbonGroup) && (<>
+            {fletxesSeleccio}
+            <span style={ribbonSep} />
+          </>)}
           {renderRibbonContent()}
         </div>
       </div>
