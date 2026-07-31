@@ -4774,8 +4774,11 @@ export default function TechSheetEditor() {
     // aturat aquest cas, i si algun dia no l'atura val més una capçalera correcta però muda
     // que un separador penjant («Base · (cm)»).
     const talla = (model?.base_size_label || '').trim()
+    // La 1a columna no porta títol (decisió d'Agus, 31/07): el que hi ha sota és la
+    // nomenclatura amb què el client anomena la mesura, i posar-hi la paraula «Nomenclatura»
+    // era etiquetar una columna que s'explica sola. La columna es queda; cau el títol.
     const columns = [
-      { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
+      { key: 'ref', label: '', width: 22 },
       { key: 'pom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
       {
         key: 'base', width: 24,
@@ -4844,13 +4847,14 @@ export default function TechSheetEditor() {
     bms.forEach(bm => {
       if (rulesByPom[bm.pom_id] == null && bm.regla_model) rulesByPom[bm.pom_id] = bm.regla_model
     })
+    // La taula del FITTING és per anotar-hi a mà el que es mesura damunt la peça: hi queden la
+    // referència, el POM, la base i les dues columnes on s'escriu. Regla/Δ, Break i Tol± en
+    // surten (Agus, 31/07) — són dades de GRADUACIÓ, i el fitting no és on es decideixen; el
+    // que hi feien era omplir amplada que ara és per escriure-hi. La 1a columna es queda sense títol.
     const columns = [
-      { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
+      { key: 'ref', label: '', width: 22 },
       { key: 'pom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
       { key: 'base', label: t('tech_sheet.tbl_col_base_cm'), width: 18 },
-      { key: 'rule', label: t('tech_sheet.tbl_col_rule'), width: 18 },
-      { key: 'break', label: t('tech_sheet.tbl_col_break'), width: 18 },
-      { key: 'tol', label: t('tech_sheet.tbl_col_tol'), width: 14 },
       { key: 'nova', label: t('tech_sheet.tbl_col_new_measure'), width: 34 },
       { key: 'coment', label: t('tech_sheet.tbl_col_comments'), width: 60 },
     ]
@@ -4862,9 +4866,7 @@ export default function TechSheetEditor() {
         // i el nom canònic és el `nom_en` que base-measurements ja exposa.
         { text: rule?.pom_nom_en || bm.nom_en || bm.nom_client || bm.pom_code_global || '', sub: bm.nom_ca || '' },
         fmtMeasure(bm.base_value_cm, unit) ?? '',
-        fmtMeasure(rule?.increment_base, unit) ?? '',
-        rule?.talla_break_label || '',
-        '', '', '',
+        '', '',                                  // mesura nova · comentaris: per omplir a mà
       ]
     })
     // F3 — una taula per secció NOMÉS si el tècnic ho ha demanat I el document en té més
@@ -4902,8 +4904,11 @@ export default function TechSheetEditor() {
     if (!data.rows || !data.rows.length) { flash(t('tech_sheet.flash_empty_table')); return }
 
     const sizeLabels = data.size_labels || []
+    // La taula de GRADUACIÓ ensenya el que el patronista ha de llegir: la mesura de cada talla.
+    // Δ i Break en surten senceres (Agus, 31/07): són el CÀLCUL amb què s'hi ha arribat, i
+    // viuen a Escalat, que és on es decideixen. La 1a columna es queda sense títol. Les talles NO es tradueixen: són dades de domini.
     const columns = [
-      { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
+      { key: 'ref', label: '', width: 22 },
       { key: 'nom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
       // T1 — la columna de la talla base porta marca al MODEL (`base`), no només el sufix `*`:
       // el builder la necessita per pintar-hi la franja de realçat. El `*` es manté perquè
@@ -4911,9 +4916,6 @@ export default function TechSheetEditor() {
       ...sizeLabels.map(sl => (sl === data.base_size
         ? { key: sl, label: `${sl}*`, width: 16, base: true }
         : { key: sl, label: sl, width: 16 })),
-      { key: 'delta', label: 'Δ', width: 16 },
-      // Ordre final: ...talles... · Δ · Break. Amplada mínima suficient per a un resum curt.
-      { key: 'break', label: t('tech_sheet.tbl_col_break'), width: 22 },
     ]
     const cellForSize = (row, sl) => fmtMeasure(row.valors?.[sl], unit) ?? '–'
     // Break = la talla DECLARADA a la regla (`talla_break_label`), com fa la T1a (:4565) i la
@@ -4921,13 +4923,10 @@ export default function TechSheetEditor() {
     // l'anterior — però amb deltes ACUMULATS el delta canvia a cada talla per construcció, i
     // una LINEAR pura sense cap break les marcava totes (TATE: 0 regles amb break, 18 files
     // de 23 amb Break pintat). Un break no es dedueix: està declarat o no hi és.
-    const breakResum = (row) => row.talla_break_label || ''
     const filesDe = (sub) => sub.map(row => [
       row.ref || row.abbreviation || row.codi || '',
       { text: row.nom_en || '', sub: row.nom_ca || '' },
       ...sizeLabels.map(sl => cellForSize(row, sl)),
-      rowDelta(row, unit),
-      breakResum(row),
     ])
     // F3 — mateix criteri que a la T1a: opcional, i només si el document té més d'una secció.
     const seccions = seccionsDeFiles(data.rows)
