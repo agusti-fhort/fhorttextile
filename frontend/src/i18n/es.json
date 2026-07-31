@@ -90,6 +90,19 @@
     "confirm_supersede": "Confirmar propagación",
     "warn_sealed_stale": "La versión v{{version}} está SELLADA en producción — y ya se ha quedado atrás: la base ha cambiado {{n}} vez/veces desde el sellado. Propagar la superará."
   },
+  "graduacio": {
+    "button": "Graduación",
+    "vigents": "Regla de graduación del modelo. Puedes revisarla y editarla aquí.",
+    "proposta_perfil": "Propuesta del catálogo para esta combinación: «{{ruleset}}». Revísala y acéptala para que pase a ser del modelo.",
+    "proposta_item": "Propuesta heredada de la prenda: «{{ruleset}}». Revísala y acéptala para que pase a ser del modelo.",
+    "sense_proposta": "El catálogo no propone ninguna graduación para esta combinación. Informa la regla a mano, o elige un juego de reglas en el paso de Graduación del modelo.",
+    "accepta": "Aceptar la graduación",
+    "acceptant": "Aceptando…",
+    "accepta_err": "No se ha podido aceptar la graduación.",
+    "regla_err": "No se ha podido guardar la regla.",
+    "delta_no_numeric": "El delta debe ser un número.",
+    "escalat_sense_graduacio": "Sin graduación — se incorporará al propagar."
+  },
   "size_map_title": "Sistemas de tallas",
   "size_map_subtitle": "Runs de cliente derivados y sistemas canónicos",
   "size_map_step_target": "Destino",
