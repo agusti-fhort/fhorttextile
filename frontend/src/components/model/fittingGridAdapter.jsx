@@ -169,91 +169,31 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel) {
 //
 // Els deltes es pinten SEMPRE amb signe (`formatDelta`) i les capçaleres porten Δ; les cel·les de
 // talla, planes amb la seva unitat. Cap cel·la de talla mostra mai un '+'.
-// G1 (2026-07-31) — MODE GRADUACIÓ: els tres camps de la regla passen a ser EDITABLES.
-//
-// Fins avui aquestes columnes eren sempre de lectura i l'únic camp viu del bloc era el
-// desplegable de Règim. Però la regla és patrimoni del MODEL (Sobirania de la Regla,
-// DECISIONS.md:280-294) i revisar-la vol dir poder-la tocar: el flux nou porta el tècnic aquí
-// precisament perquè la informi. `onRuleChange(row, camp, valor)` és OPT-IN — sense ell, el bloc
-// es comporta exactament com abans (Escalat en consulta i en edició normal no canvien gens).
-//
-// Escriuen per la MATEIXA porta que el Règim (`set_pom_regim_view`, upsert de la resident): cap
-// mecànica nova. Es desa a onBlur i amb Enter, no a cada tecla — un Δ a mig escriure ('−' o '2.')
-// no és cap valor, i desar-lo dispararia una re-sembra de la graella per res.
-function ruleInput({ value, onCommit, align = 'right', placeholder = '—' }) {
-  const style = {
-    font: 'inherit', fontSize: 'var(--fs-label)', width: '100%', padding: '1px 3px',
-    textAlign: align, fontVariantNumeric: 'tabular-nums',
-    border: '1px solid var(--border)', borderRadius: 4,
-    background: 'var(--white)', color: 'var(--text-main)', boxSizing: 'border-box',
-  }
-  return (
-    <input
-      type="text" inputMode="decimal" defaultValue={value ?? ''} placeholder={placeholder}
-      style={style}
-      onBlur={e => onCommit(e.target.value)}
-      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-    />
-  )
-}
-
-export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = 'CM',
-                                    onRuleChange = null) {
+export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = 'CM') {
   const cap = { fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }
   const buit = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }
   // Un règim sense delta (FIXED, o STEP amb valors lliures) no té Δ que ensenyar: guió, no zero.
   const mostraDelta = (row) => effectiveRegime(row) === 'LINEAR'
-  // Editable NOMÉS quan qui munta la graella ho demana i la taula no és de consulta.
-  const editable = !readOnly && typeof onRuleChange === 'function'
-  // La KEY del re-muntatge: quan la fila canvia de valors (re-sembra post-desat), l'input ha de
-  // reprendre el `defaultValue` nou. Sense això, un input no controlat es quedaria amb el text vell.
-  const k = (row, camp) => `${row.pom_id}:${camp}:${row.logica}:${row.increment_base}:${row.increment_break}:${row.talla_break_label}`
   return [
     regimeLeadCol(t, onRegimChange, readOnly, { compacte: true }),
     {
       key: 'delta', label: t('measuregrid.regla_delta'), width: 72,
-      render: (row) => {
-        // En mode graduació el Δ s'ha de poder ESCRIURE encara que ara sigui buit: és l'estat
-        // normal d'un model que ve a informar la regla per primera vegada.
-        if (editable && effectiveRegime(row) !== 'STEP') {
-          return <span key={k(row, 'delta')}>{ruleInput({
-            value: row.increment_base,
-            onCommit: v => onRuleChange(row, 'increment_base', v),
-          })}</span>
-        }
-        return mostraDelta(row) && row.increment_base != null
-          ? <span style={cap}>{formatDelta(row.increment_base, unit)}</span>
-          : <span style={buit}>—</span>
-      },
+      render: (row) => (mostraDelta(row) && row.increment_base != null
+        ? <span style={cap}>{formatDelta(row.increment_base, unit)}</span>
+        : <span style={buit}>—</span>),
     },
     {
       key: 'delta_break', label: t('measuregrid.regla_delta_break'), width: 82,
-      render: (row) => {
-        if (editable && effectiveRegime(row) !== 'STEP') {
-          return <span key={k(row, 'delta_break')}>{ruleInput({
-            value: row.increment_break,
-            onCommit: v => onRuleChange(row, 'increment_break', v),
-          })}</span>
-        }
-        return mostraDelta(row) && row.increment_break != null
-          ? <span style={cap}>{formatDelta(row.increment_break, unit)}</span>
-          : <span style={buit}>—</span>
-      },
+      render: (row) => (mostraDelta(row) && row.increment_break != null
+        ? <span style={cap}>{formatDelta(row.increment_break, unit)}</span>
+        : <span style={buit}>—</span>),
     },
     {
       key: 'talla_break', label: t('measuregrid.regla_talla_break'), width: 92,
       // Etiqueta de talla: DADA de domini (XS, 3XL) — no es tradueix ni porta signe.
-      render: (row) => {
-        if (editable && effectiveRegime(row) !== 'STEP') {
-          return <span key={k(row, 'talla_break')}>{ruleInput({
-            value: row.talla_break_label, align: 'center',
-            onCommit: v => onRuleChange(row, 'talla_break_label', v),
-          })}</span>
-        }
-        return mostraDelta(row) && row.talla_break_label
-          ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>{row.talla_break_label}</span>
-          : <span style={buit}>—</span>
-      },
+      render: (row) => (mostraDelta(row) && row.talla_break_label
+        ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>{row.talla_break_label}</span>
+        : <span style={buit}>—</span>),
     },
   ]
 }
