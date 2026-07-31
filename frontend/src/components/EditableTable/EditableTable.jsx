@@ -10,6 +10,8 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 
 import { formatDelta } from '../../utils/format'
+import BateigInput from '../model/BateigInput'
+import { baseMeasurements } from '../../api/endpoints'
 
 const thS = {
   padding: '6px 10px', textAlign: 'left', fontSize: 'var(--fs-body)',
@@ -80,6 +82,17 @@ export default function EditableTable({
     }))
     setDirty(true)
   }
+
+  // EL BATEIG — desa IMMEDIATAMENT per la porta pròpia i estreta del paquet NOMS-POM
+  // (`PATCH base-measurements/<id>/noms/`), com ja fa la graella de consulta. No passa pel
+  // botó de desar de la taula a posta: rebatejar una mesura no és editar-ne el valor, i
+  // barrejar-ho voldria dir que canviar un nom deixés la taula «bruta» i arrossegués les
+  // mesures a un desat que ningú ha demanat. `localRows` s'actualitza a mà perquè el que es
+  // veu sigui el que s'acaba de desar sense haver de recarregar la taula sencera.
+  const handleBateig = (bmId, camps) =>
+    baseMeasurements.setNoms(bmId, camps)
+      .then(() => setLocalRows(prev => prev.map(r => (r.id === bmId ? { ...r, ...camps } : r))))
+      .catch(e => { console.error('No s\'ha pogut desar el nom', e) })
 
   const handleDeleteRow = (rowId) => {
     setLocalRows(prev => prev.filter(r => r.id !== rowId).map((r, i) => ({ ...r, ordre: i })))
@@ -243,6 +256,7 @@ export default function EditableTable({
                     onCellChange={handleCellChange}
                     onDelete={handleDeleteRow}
                     delta={calcDelta(row)}
+                    onBateig={handleBateig}
                   />
                 ))}
               </tbody>
@@ -279,7 +293,7 @@ export default function EditableTable({
   )
 }
 
-function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta }) {
+function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta, onBateig }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -332,15 +346,41 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
           // per a una columna que es llegeix a cada fila: puja al token immediatament superior
           // (--fs-label, 10px). Segueix per sota del nom (--fs-body, 12px).
           const sota = row.client_name_en ? row.client_name_local : row.nom_ca
+          const estilDalt = { fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }
+          const estilSota = { fontSize: 'var(--fs-label)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }
+          // EL BATEIG (31/07) — les DUES línies s'editen aquí, que és on es treballa.
+          //
+          // El paquet del bateig va cablejar això a `MeasureGrid` (consulta/check) i aquesta
+          // taula —la d'entrada de Mesures— es va quedar amb dos `div` estàtics: el clic no
+          // armava res perquè no hi havia res a armar. Mateix camp i MATEIXA PORTA que allà
+          // (`baseMeasurements.setNoms` → PATCH base-measurements/<id>/noms/), no un segon mecanisme.
+          //
+          // El catàleg va de PLACEHOLDER: buidar el camp torna a deixar-lo manar, i mentre el
+          // bateig és buit el que es llegeix és exactament el d'abans.
+          //
+          // Una fila encara no desada (`tmp-…`) no té BaseMeasurement a què penjar el nom:
+          // es queda com a text fins que es desa. Batejar-la abans seria escriure a un id
+          // que no existeix.
+          const bmId = row.id != null && !String(row.id).startsWith('tmp-') ? row.id : null
+          if (!readOnly && bmId != null && onBateig) {
+            return (
+              <>
+                <BateigInput value={row.nom_canonic_model || ''} placeholder={dalt || ''}
+                  title={t('measuregrid.nom_canonic_tip')}
+                  onSave={v => onBateig(bmId, { nom_canonic_model: v })}
+                  style={estilDalt} />
+                <BateigInput value={row.nom_traduit_model || ''} placeholder={sota || dalt || ''}
+                  title={t('measuregrid.nom_traduit_tip')}
+                  onSave={v => onBateig(bmId, { nom_traduit_model: v })}
+                  style={estilSota} />
+              </>
+            )
+          }
           return (
             <>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>
-                {dalt}
-              </div>
-              {sota && sota !== dalt && (
-                <div style={{ fontSize: 'var(--fs-label)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }}>
-                  {sota}
-                </div>
+              <div style={estilDalt}>{row.nom_canonic_model || dalt}</div>
+              {(row.nom_traduit_model || (sota && sota !== dalt)) && (
+                <div style={estilSota}>{row.nom_traduit_model || sota}</div>
               )}
             </>
           )
