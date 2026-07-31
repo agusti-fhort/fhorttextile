@@ -2464,6 +2464,27 @@ export default function TechSheetEditor() {
   // B5 — les etiquetes de la capçalera, resoltes UN cop i passades als tres consumidors de
   // prims (llenç viu · export/miniatures · desvincular). B7: la font és l'idioma del DOCUMENT.
   const hdrLabels = useMemo(() => headerLabels(tDoc), [tDoc])
+
+  // B7 — EL MODEL TAL COM EL DIU AQUEST DOCUMENT. Target, fit i construcció són valors de
+  // CATÀLEG: tenen nom a cada idioma i s'han de dir en el de la fitxa. El backend els envia
+  // tots tres alhora (`grading_noms`), de manera que commutar l'idioma re-renderitza sense
+  // tornar a demanar el model.
+  //
+  // El que NO es toca: nom de la peça, col·lecció, referències, temporada. Són DADES escrites
+  // per algú, no tokens d'un catàleg; traduir-les seria inventar-se-les. La frontera és
+  // exactament aquesta i val per a tot el document, no només per a la capçalera — per això es
+  // resol aquí i baixa com a `modelData` a tots els blocs.
+  const modelDoc = useMemo(() => {
+    const g = model?.grading_noms
+    if (!g) return model
+    const nom = (n, llegat) => (n ? (n[docLang] || n.en || llegat) : llegat)
+    return {
+      ...model,
+      grading_target_nom: nom(g.target, model.grading_target_nom),
+      grading_fit_nom: nom(g.fit, model.grading_fit_nom),
+      grading_construction_nom: nom(g.construction, model.grading_construction_nom),
+    }
+  }, [model, docLang])
   const { id, fitxerId } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -2994,7 +3015,7 @@ export default function TechSheetEditor() {
   const materialitzaHeader = useCallback((objId) => {
     const hdr = objectsOf(currentPage).find(o => o.id === objId && o.type === 'data_block' && o.kind === 'header')
     if (!hdr) return
-    const { prims } = buildHeaderPrimitives(model, sheet?.versio, false, !!customerLogoUrl, hdr.config,
+    const { prims } = buildHeaderPrimitives(modelDoc, sheet?.versio, false, !!customerLogoUrl, hdr.config,
       { index: currentPage, total: pages.length }, hdrLabels)
     const fills = []
     prims.forEach(pr => {
@@ -3029,7 +3050,7 @@ export default function TechSheetEditor() {
     setSelectedIds([grup.id])
     flash(t('tech_sheet.header_materialized', { n: fills.filter(f => f.type === 'field').length }))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, pages, model, sheet, customerLogoUrl, updatePageObjects, t, hdrLabels])
+  }, [currentPage, pages, modelDoc, sheet, customerLogoUrl, updatePageObjects, t, hdrLabels])
 
   const alignSelection = useCallback((mode) => {
     const ids = new Set(selectedIds)
@@ -3470,7 +3491,7 @@ export default function TechSheetEditor() {
           // des del pageW/pageH del canvas (que és el de la pàgina activa). Amb un document
           // mixt, les miniatures han de sortir cadascuna amb la seva proporció.
           const f = fmtDe(pages[pi])
-          const ctx = { tableData, modelData: model, versio: sheet?.versio, hdrLabels,
+          const ctx = { tableData, modelData: modelDoc, versio: sheet?.versio, hdrLabels,
             pageW: Math.round(f.w * MM_TO_PX), pageH: Math.round(f.h * MM_TO_PX),
             fmtKey: pages[pi]?.format || pageFormat,
             customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
@@ -5130,7 +5151,7 @@ export default function TechSheetEditor() {
         // full apaïsat.
         const f = fmtDe(pages[pi])
         const [pdfW, pdfH] = f.pdf
-        const ctx = { tableData, modelData: model, versio: sheet?.versio, hdrLabels,
+        const ctx = { tableData, modelData: modelDoc, versio: sheet?.versio, hdrLabels,
           pageW: Math.round(f.w * MM_TO_PX), pageH: Math.round(f.h * MM_TO_PX),
           fmtKey: pages[pi]?.format || pageFormat,
           customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
@@ -5524,7 +5545,7 @@ export default function TechSheetEditor() {
     setF2Msg(t('tech_sheet.ia_proposant'))
     try {
       const netaObjs = (curObjs || []).filter(o => !(o.type === 'group' && o.pomId != null))
-      const ctx = { tableData, modelData: model, versio: sheet?.versio, hdrLabels, pageW, pageH, customerLogoUrl,
+      const ctx = { tableData, modelData: modelDoc, versio: sheet?.versio, hdrLabels, pageW, pageH, customerLogoUrl,
         fmtKey: pages[currentPage]?.format || pageFormat }
       const pageImage = await renderPageToDataURL({ ...pages[currentPage], objects: netaObjs }, 1.5, ctx)
       const sketches = hosts.map(o => {
@@ -6814,7 +6835,7 @@ export default function TechSheetEditor() {
                 <Rect x={0} y={0} width={pageW} height={pageH} fill={KONVA_COL.white} listening={false} />
                 {ordered.filter(o => o.visible !== false).map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
-                    tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
+                    tableData={tableData} modelData={modelDoc} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
                     hdrLabels={hdrLabels}
                     placeholderMode={templateMode}
                     hideTextChildren={editingFlatGroupId === o.id}
