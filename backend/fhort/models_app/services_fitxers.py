@@ -45,9 +45,9 @@ ALLOWED_UPLOAD_EXTENSIONS = frozenset({
     # `.xls` acompanya `.xlsx` pel mateix motiu que `.jpg` acompanya `.jpeg`.
     '.xlsx', '.xls',                         # fulls de càlcul (mesures, BOM)
     # Les fotos de fitting es fan amb el mòbil, i un iPhone les desa en HEIC. S'accepten a la
-    # PUJADA, però no es desen mai en HEIC: es converteixen a JPEG aquí al servidor
-    # (`converteix_heic_a_jpeg`) i el que arriba a la BD és sempre un .jpg. Cap navegador
-    # d'escriptori no pinta HEIC, i el visor de fitxers del model ha de poder ensenyar la foto.
+    # PUJADA, però no es desen mai en HEIC: passen per l'embut (`redueix_imatge`) i el que
+    # arriba a la BD és sempre un .jpg. Cap navegador d'escriptori no pinta HEIC, i el visor
+    # de fitxers del model ha de poder ensenyar la foto.
     '.heic', '.heif',                        # fotos de mòbil → es desen convertides a .jpg
 })
 
