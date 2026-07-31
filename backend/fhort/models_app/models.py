@@ -689,71 +689,11 @@ class BaseMeasurement(models.Model):
                   "Buit: mana el catàleg (POMGlobal.nom_ca / POMMaster.nom_client).",
     )
 
-    # ── C1 (2026-07-30) — LA CAPA. Declaració canònica del camp; les altres set taules
-    # de mesura el porten igual i apunten aquí.
-    #
-    # De quina MATÈRIA de la peça parla aquesta mesura: l'exterior, el folre, l'entretela…
-    # El pit de l'exterior i el pit del folre no són el mateix valor, i fins avui el sistema
-    # no els sabia distingir perquè la clau era `(model, pom)` i prou. Aquest camp és l'eix
-    # que hi faltava; la clau ampliada arriba a C1/T3.
-    #
-    # REFERÈNCIA PER SLUG, MAI PER PK (llei G9). No és un FK a `pom.MeasurementLayer` a
-    # posta: el catàleg viu a `fhort.pom` (SHARED **i** TENANT) i aquestes taules són
-    # tenant-only o creuen schemas — un FK real petaria a `public` pel mateix motiu que ja
-    # obliga `db_constraint=False` a mig arxiu. El slug, a més, és el que viatja entre
-    # tenants i entre versions; una PK no viatja.
-    #
-    # La VALIDACIÓ contra el catàleg NO és aquí: arriba a C2/C4. Fins llavors mana la
-    # COMPORTA de C1/T4 — un CHECK a BD que només deixa passar 'exterior'. Cap escriptor pot
-    # crear una segona capa per accident abans que la cadena de consumidors hi estigui
-    # adaptada; C4 el retirarà per migració.
-    capa = models.CharField(
-        max_length=20, default='exterior', db_index=True,
-        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
-                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
-    )
-
     class Meta:
         verbose_name = 'Mesura base'
         verbose_name_plural = 'Mesures base'
-        # C1/T3 — la clau incorpora la CAPA. Fins avui un model no podia tenir el pit de
-        # l'exterior i el pit del folre alhora: la segona fila xocava amb la primera. Amb tot
-        # a 'exterior' la clau nova és estrictament més permissiva que la vella (mateixes
-        # columnes + una), o sigui que no pot rebutjar res que abans passés ni deixar entrar
-        # cap duplicat que abans es barrés. Qui de debò impedeix una segona capa avui és la
-        # comporta CHECK de T4, no aquesta clau.
-        unique_together = [('model', 'pom', 'capa')]
-        # `capa` entra a l'ordre entre el model i l'ordre de fitxa: quan hi hagi més d'una
-        # capa, la fitxa les vol AGRUPADES, no barrejades per `ordre`. Avui és un no-op
-        # observable —amb una sola capa el valor és constant i l'ordre relatiu no es mou—,
-        # i el fumeig de base-stages ho verifica byte a byte.
-        ordering = ['model', 'capa', 'ordre', 'pom']
-        constraints = [
-            # ── C1/T4 — LA COMPORTA. Declaració canònica; les altres set taules de mesura
-            # en porten una d'igual i apunten aquí.
-            #
-            # El tancament de seguretat del pla de capes. C1 ensenya l'IDIOMA de la capa al
-            # sistema (catàleg + columna + claus) però NO el deixa parlar-lo encara: la
-            # cadena de consumidors —serializers, motor, UI, import, fitxa— continua
-            # assumint una mesura per (model, POM) i no s'adapta fins a C2/C3. Entre C1 i
-            # C3, doncs, hi ha una finestra en què l'esquema ja admetria una segona capa i
-            # el codi encara no la sabria llegir: una fila 'folre' escrita per accident en
-            # aquesta finestra no petaria enlloc, es fondria dins les llistes com si fos de
-            # l'exterior i corrompria en silenci mesures que són el producte.
-            #
-            # Aquest CHECK tanca la finestra a la BD, que és l'únic lloc on cap camí
-            # d'escriptura no la pot esquivar: ni un `bulk_create`, ni un `update()`, ni un
-            # loader, ni un `psql` a mà. No hi ha guard d'aplicació que ho iguali, i per
-            # això no n'hi escrivim cap.
-            #
-            # **C4 EL RETIRA PER MIGRACIÓ.** És bastida, no arquitectura: el dia que la
-            # cadena sap llegir capes, aquest constraint és justament el que ho impedeix.
-            # Si el trobes vigent i C4 ja ha passat, és un deute, no una llei.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_basemeasurement_capa_gate_c1',
-            ),
-        ]
+        unique_together = [('model', 'pom')]
+        ordering = ['model', 'ordre', 'pom']
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client} = {self.base_value_cm}cm'
@@ -791,33 +731,11 @@ class MeasurementChangeLog(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='measurement_changes',
     )
-    # C1 — la capa (declaració canònica a `BaseMeasurement.capa`).
-    #
-    # AFEGIR AQUESTA COLUMNA NO VIOLA L'APPEND-ONLY. L'append-only d'aquesta taula prohibeix
-    # que una fila ja escrita CANVIÏ de sentit: un `UPDATE` que reescrigui valor_anterior,
-    # valor_nou o el context seria reescriure la història. Un `AddField` amb default de
-    # columna és DDL, no DML: cap fila queda reescrita semànticament. Les 100% de files
-    # històriques parlen, de fet i sense excepció, de la capa exterior —era l'única que el
-    # sistema sabia mesurar—, o sigui que el default no els atribueix res que no diguessin
-    # ja. Les overrides de talla no-base segueixen entrant amb `base_measurement=NULL`; això
-    # no canvia.
-    capa = models.CharField(
-        max_length=20, default='exterior', db_index=True,
-        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
-                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
-    )
 
     class Meta:
         verbose_name = 'Canvi de mesura'
         verbose_name_plural = 'Canvis de mesura'
         ordering = ['model', 'pom', 'created_at']
-        constraints = [
-            # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_measurementchangelog_capa_gate_c1',
-            ),
-        ]
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client}: {self.valor_anterior}→{self.valor_nou}cm'
@@ -861,29 +779,12 @@ class ModelGradingOverride(models.Model):
         'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='grading_overrides_created',
     )
-    # C1 — la capa (declaració canònica a `BaseMeasurement.capa`). L'override sí que en porta,
-    # a diferència de `ModelGradingRule`: un override és un VALOR mesurat en una talla concreta,
-    # i el valor és de la capa que s'ha mesurat. La REGLA, en canvi, es comparteix entre capes
-    # (§3c: «mateixos deltes») i per això no en té.
-    capa = models.CharField(
-        max_length=20, default='exterior', db_index=True,
-        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
-                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
-    )
 
     class Meta:
         verbose_name = 'Override de grading (model)'
         verbose_name_plural = 'Overrides de grading (model)'
-        # C1/T3 — la clau incorpora la CAPA (v. `BaseMeasurement.Meta`).
-        unique_together = [('model', 'pom', 'size_label', 'capa')]
+        unique_together = [('model', 'pom', 'size_label')]
         ordering = ['model', 'pom', 'size_label']
-        constraints = [
-            # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_modelgradingoverride_capa_gate_c1',
-            ),
-        ]
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client} @ {self.size_label} = {self.value_cm}cm'
@@ -899,15 +800,6 @@ class ModelGradingRule(models.Model):
     del model, igual que fa _apply_rule avui.
 
     PG-0 només crea l'entitat — RES la consumeix encara. Cap canvi de comportament.
-
-    ⚠️ **SENSE `capa`, PER DECISIÓ DE DOMINI (C1 · §3c).** Aquesta és l'ÚNICA taula del cicle
-    de mesura que la capa de C1 no travessa, i no és un oblit. Una regla de graduació és una
-    llei d'INCREMENTS, no un valor: el folre d'un pit creix el mateix que l'exterior d'aquell
-    pit —«mateixos deltes»— perquè la peça és la mateixa peça. Donar-li capa voldria dir
-    demanar a algú que declari sis vegades el mateix delta i mantenir-les sincronitzades a mà.
-    Els VALORS sí que en porten (`BaseMeasurement`, `GradedSpec`, `ModelGradingOverride`…):
-    la regla és compartida, el resultat d'aplicar-la és per capa. Qui vulgui revisar-ho: és
-    decisió d'arquitectura (Patró C), no una peça d'sprint.
     """
     # R8 (2026-07-21) — 'CLIENT_RUN' hi faltava. El vocabulari de GradingRuleSet.origen
     # (CANONICAL/CLIENT_RUN/IMPORT) i el d'aquí no s'alineaven, i el wizard resolia la
@@ -1149,26 +1041,12 @@ class SizeCheckLine(models.Model):
     ]
     decisio = models.CharField(max_length=24, choices=DECISIO_CHOICES, null=True, blank=True)
     nota = models.CharField(max_length=200, blank=True, default='')
-    # C1 — la capa (declaració canònica a `models_app.BaseMeasurement.capa`).
-    capa = models.CharField(
-        max_length=20, default='exterior', db_index=True,
-        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
-                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
-    )
 
     class Meta:
         verbose_name = 'Línia de validació de talla'
         verbose_name_plural = 'Línies de validació de talla'
         ordering = ['size_check', 'pom']
-        # C1/T3 — la clau incorpora la CAPA (v. `BaseMeasurement.Meta`).
-        unique_together = [('size_check', 'pom', 'capa')]
-        constraints = [
-            # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_sizecheckline_capa_gate_c1',
-            ),
-        ]
+        unique_together = [('size_check', 'pom')]
 
     def __str__(self):
         return f'{self.size_check_id} · {self.pom.codi_client}'
@@ -1318,29 +1196,14 @@ class POMPlacement(models.Model):
         related_name='pom_placements_creats')
     creat_el = models.DateTimeField(auto_now_add=True)
     actualitzat_el = models.DateTimeField(auto_now=True)
-    # C1 — la capa (declaració canònica a `models_app.BaseMeasurement.capa`). Una cota del
-    # folre i una cota de l'exterior poden voler dos traços diferents sobre el mateix sketch.
-    capa = models.CharField(
-        max_length=20, default='exterior', db_index=True,
-        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
-                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
-    )
 
     class Meta:
         verbose_name = 'Col·locació de cota POM (precedent)'
         verbose_name_plural = 'Col·locacions de cota POM (precedent)'
         constraints = [
-            # C1/T3 — la clau incorpora la CAPA (v. `BaseMeasurement.Meta`). El nom canvia
-            # amb els camps a posta: un constraint que digui `_item_pom_view` i en guardi
-            # quatre menteix a qui llegeixi l'esquema. Cap consumidor el referencia pel nom.
             models.UniqueConstraint(
-                fields=['item_fitxer', 'pom', 'view_slot', 'capa'],
-                name='uniq_pomplacement_item_pom_view_capa'),
-            # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_pomplacement_capa_gate_c1',
-            ),
+                fields=['item_fitxer', 'pom', 'view_slot'],
+                name='uniq_pomplacement_item_pom_view'),
         ]
         indexes = [
             models.Index(fields=['item_fitxer', 'view_slot'],

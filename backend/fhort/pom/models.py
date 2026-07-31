@@ -173,75 +173,6 @@ class PatternPieceRole(models.Model):
         return f'{self.slug} · {self.nom_ca or self.nom_en}'
 
 
-class MeasurementLayer(models.Model):
-    """CAPA d'una mesura: de QUINA matèria de la peça parla aquesta mesura.
-
-    Un mateix POM es mesura més d'un cop sobre la mateixa peça segons la capa: el pit de
-    l'exterior i el pit del folre no són el mateix valor, i avui el sistema no els sap
-    distingir perquè la clau de mesura és `(model, pom)` i prou. Aquest catàleg és el
-    vocabulari amb què s'anomenaran; la clau ampliada arriba a T3 i el permís d'usar-la
-    més enllà d'`exterior`, a C4 (fins llavors mana la comporta CHECK de T4).
-
-    **Viu aquí i no a `models_app` per la mateixa raó d'infraestructura que
-    `PatternPieceRole`**: `fhort.pom` és l'única app que és a SHARED **i** a TENANT alhora,
-    o sigui l'única on una taula pot existir a `public` i replicar-se a cada tenant. Les
-    taules que hi faran referència viuen escampades entre `models_app`, `fitting` i `pom`
-    (totes tenant-only excepte les del propi `pom`); un catàleg declarat a qualsevol
-    d'elles no podria arribar mai al schema públic.
-
-    **CATÀLEG DE SISTEMA. El tenant PROPOSA; la promoció és un acte separat (D-1).**
-    Una capa amb `is_system=True` és propietat de la casa i no s'esborra. Un tenant que es
-    troba una matèria que el catàleg no sap anomenar pot crear la seva capa —`is_system=False`,
-    `pendent_revisio=True`, `origen=MANUAL` o `IMPORT`—, i aquella capa serveix per treballar
-    des del primer dia; convertir-la en canònica és una decisió humana, amb el seu gate, i
-    mai un efecte secundari d'una importació. És la mateixa llei que ja governa
-    `PatternPieceRole`, `POMMaster.pom_global=None` i `CustomerPOMAlias.pendent_revisio`.
-
-    **LA SEMBRA NO ESBORRA MAI.** `update_or_create` per `slug`, cap `delete`, i el revers
-    de tota migració de dades és un noop: revertir un esquema no ha de destruir el catàleg.
-
-    El `slug` és la clau estable —el que viatja entre tenants i el que les taules de mesura
-    referencien, mai la PK (llei G9)—; els noms són per als ulls i van en tres idiomes des
-    del primer dia, com `POMGlobal` i `PatternPieceRole`, perquè afegir-los després vol dir
-    repassar files a mà.
-
-    ⚠️ Els noms sembrats a `seed_measurement_layers` són PROVISIONALS, pendents de la
-    nomenclatura definitiva de la Montse. Els `slug` són el contracte i no es toquen; els
-    tres noms es poden reescriure amb una passada més de la sembra sense migrar cap fila.
-    """
-
-    ORIGEN_SEED = 'SEED'
-    ORIGEN_MANUAL = 'MANUAL'
-    ORIGEN_IMPORT = 'IMPORT'
-    ORIGEN_CHOICES = [
-        (ORIGEN_SEED, 'Sembra'),
-        (ORIGEN_MANUAL, 'Manual'),
-        (ORIGEN_IMPORT, 'Importació'),
-    ]
-
-    #: La capa per defecte de tot el sistema: el que fins avui era «la mesura», sense adjectiu.
-    SLUG_DEFECTE = 'exterior'
-
-    slug = models.SlugField(max_length=20, unique=True)
-    nom_en = models.CharField(max_length=120)
-    nom_ca = models.CharField(max_length=120)
-    nom_es = models.CharField(max_length=120)
-    #: Propietat de la casa: no s'esborra (mateix guard que `PatternPieceRole.is_system`).
-    is_system = models.BooleanField(default=False)
-    #: Capa nascuda al tenant i encara no promoguda a canònica.
-    pendent_revisio = models.BooleanField(default=False)
-    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default=ORIGEN_MANUAL)
-    display_order = models.PositiveSmallIntegerField(default=0)
-
-    class Meta:
-        verbose_name = 'Capa de mesura'
-        verbose_name_plural = 'Capes de mesura'
-        ordering = ['display_order', 'slug']
-
-    def __str__(self):
-        return f'{self.slug} · {self.nom_ca or self.nom_en}'
-
-
 class POMEstadisticaGlobal(models.Model):
     pom_global = models.ForeignKey(POMGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')
     garment_type_global = models.ForeignKey(GarmentTypeGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')
@@ -592,32 +523,12 @@ class GarmentPOMMap(models.Model):
     ordre = models.PositiveIntegerField(default=0)
     # Migration família → item: clons de germà es marquen per revisió (Montse ajusta el delta).
     pendent_revisio = models.BooleanField(default=False)
-    # C1 (2026-07-30) — la capa (declaració canònica a `models_app.BaseMeasurement.capa`):
-    # slug de `MeasurementLayer`, per SLUG i mai per PK (llei G9). Aquí la capa diu de quina
-    # matèria de la peça és el POM que la plantilla de l'item reclama: un item pot demanar el
-    # mateix POM a l'exterior i al folre i són DUES pertinences, no una. La validació contra
-    # el catàleg arriba a C2/C4; fins llavors mana la comporta CHECK de C1/T4.
-    capa = models.CharField(
-        max_length=20, default='exterior', db_index=True,
-        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
-                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
-    )
 
     class Meta:
         verbose_name = 'Mapa garment ↔ POM'
         verbose_name_plural = 'Mapes garment ↔ POM'
         ordering = ['garment_type_item', 'ordre']
-        # C1/T3 — la clau incorpora la CAPA (v. `models_app.BaseMeasurement.Meta`): un item
-        # pot reclamar el mateix POM a l'exterior i al folre, i són dues pertinences.
-        unique_together = [('garment_type_item', 'pom', 'capa')]
-        constraints = [
-            # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`, on hi ha
-            # l'argument sencer). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='pom_garmentpommap_capa_gate_c1',
-            ),
-        ]
+        unique_together = [('garment_type_item', 'pom')]
 
     def __str__(self):
         anchor = self.garment_type_item.code if self.garment_type_item_id else '?'
@@ -877,13 +788,6 @@ class ItemBaseMeasurement(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='item_base_measurements_updated',
     )
-    # C1 — la capa (declaració canònica a `models_app.BaseMeasurement.capa`). És el mirall de
-    # la capa Item del mateix eix: el valor típic de plantilla també és el valor D'UNA capa.
-    capa = models.CharField(
-        max_length=20, default='exterior', db_index=True,
-        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
-                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
-    )
 
     class Meta:
         verbose_name = 'Mesura base d\'item'
@@ -893,16 +797,7 @@ class ItemBaseMeasurement(models.Model):
         # item amb DOS sets no podria tenir el mateix POM als dos, que és justament el que la
         # llei del BaseSet condicionat demana (la mateixa peça vestida en dos mons, cadascun amb
         # el seu valor per al mateix POM). El set ja porta l'item, així que no es perd unicitat.
-        # C1/T3 (2026-07-30) — i ara hi entra la CAPA (v. `models_app.BaseMeasurement.Meta`):
-        # el mateix POM del mateix set té un valor a l'exterior i un altre al folre.
-        unique_together = [('base_set', 'pom', 'capa')]
-        constraints = [
-            # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`). C4 la retira.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='pom_itembasemeasurement_capa_gate_c1',
-            ),
-        ]
+        unique_together = [('base_set', 'pom')]
 
     def __str__(self):
         anchor = self.garment_type_item.code if self.garment_type_item_id else '?'

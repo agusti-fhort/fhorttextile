@@ -13,11 +13,8 @@ from django.db import connection
 from django_tenants.test.cases import TenantTestCase
 
 from fhort.models_app.extraction_views import find_pom_master
-from fhort.pom.management.commands.seed_measurement_layers import CAPES
-from fhort.pom.management.commands.seed_measurement_layers import sembra as sembra_capes
 from fhort.pom.management.commands.seed_pattern_piece_roles import ROLS, sembra
-from fhort.pom.models import (CustomerPOMAlias, MeasurementLayer, PatternPieceRole,
-                              POMMaster)
+from fhort.pom.models import CustomerPOMAlias, PatternPieceRole, POMMaster
 from fhort.pom.serializers import CustomerPOMAliasSerializer
 from fhort.pom.services import maybe_learn_customer_alias
 from fhort.tasks.models import Customer
@@ -219,63 +216,3 @@ class SembraRolsDePecaTest(_TenantBase):
         self.assertFalse(propi.is_system)
         self.assertTrue(propi.pendent_revisio)
         self.assertEqual(PatternPieceRole.objects.count(), len(ROLS) + 1)
-
-
-class SembraCapesDeMesuraTest(_TenantBase):
-    """La sembra del catàleg de capes (C1/T1): **idempotent i sense esborrar mai res**.
-
-    Calc literal de `SembraRolsDePecaTest`, que és la llei d'aquesta casa per a tot catàleg
-    de sistema. La prova de foc d'un seed no és que funcioni el primer cop, és que la segona
-    passada no dupliqui, no esborri i no es descuidi cap fila — i que els ids no es moguin,
-    perquè el dia que alguna cosa hi apunti, una fila substituïda seria una FK òrfena.
-    """
-
-    def _sembra(self):
-        return sembra_capes(connection.schema_name)
-
-    def test_la_segona_passada_no_duplica_ni_esborra(self):
-        creats_1, actualitzats_1 = self._sembra()
-        total_1 = MeasurementLayer.objects.count()
-        ids_1 = set(MeasurementLayer.objects.values_list('id', flat=True))
-
-        creats_2, actualitzats_2 = self._sembra()
-
-        self.assertEqual(creats_1, len(CAPES))
-        self.assertEqual(actualitzats_1, 0)
-        self.assertEqual(creats_2, 0, 'la segona passada ha creat files')
-        self.assertEqual(actualitzats_2, len(CAPES))
-        self.assertEqual(MeasurementLayer.objects.count(), total_1)
-        self.assertEqual(set(MeasurementLayer.objects.values_list('id', flat=True)), ids_1)
-
-    def test_les_capes_sembrades_son_de_sistema_i_amb_els_tres_idiomes(self):
-        self._sembra()
-        for capa in MeasurementLayer.objects.all():
-            with self.subTest(slug=capa.slug):
-                self.assertTrue(capa.is_system)
-                self.assertFalse(capa.pendent_revisio)
-                self.assertEqual(capa.origen, MeasurementLayer.ORIGEN_SEED)
-                self.assertTrue(capa.nom_en and capa.nom_ca and capa.nom_es)
-
-    def test_exterior_es_la_primera_i_es_el_defecte_del_sistema(self):
-        """`exterior` no és una capa qualsevol: és el valor per defecte de la columna `capa`
-        de vuit taules i l'únic que la comporta de C1 deixa passar. Si el seed la mogués de
-        lloc o li canviés el slug, tots aquells defaults apuntarien al no-res."""
-        self._sembra()
-        primera = MeasurementLayer.objects.first()
-        self.assertEqual(primera.slug, MeasurementLayer.SLUG_DEFECTE)
-        self.assertEqual(primera.slug, 'exterior')
-
-    def test_una_capa_del_tenant_no_la_toca_la_sembra(self):
-        """Una capa que el tenant s'ha creat pel seu compte (D-1: el tenant proposa) ha de
-        sobreviure la sembra sencera: el seed només mana sobre les seves."""
-        propia = MeasurementLayer.objects.create(
-            slug='termosegellat', nom_en='Heat seal', nom_ca='Termosegellat',
-            nom_es='Termosellado', is_system=False, pendent_revisio=True,
-            origen=MeasurementLayer.ORIGEN_MANUAL)
-
-        self._sembra()
-
-        propia.refresh_from_db()
-        self.assertFalse(propia.is_system)
-        self.assertTrue(propia.pendent_revisio)
-        self.assertEqual(MeasurementLayer.objects.count(), len(CAPES) + 1)

@@ -203,30 +203,11 @@ class GradedSpec(models.Model):
     # to detect stale specs — NOT implemented here, only the link is stored.
     generated_from_version = models.IntegerField(null=True, blank=True)
 
-    # C1 (2026-07-30) — la capa (declaració canònica a `models_app.BaseMeasurement.capa`):
-    # slug de `pom.MeasurementLayer`, per SLUG i mai per PK (llei G9). La validació contra el
-    # catàleg arriba a C2/C4; fins llavors mana la comporta CHECK de C1/T4, que només deixa
-    # passar 'exterior'. El motor de grading NO es toca a C1: escriu el default i prou.
-    capa = models.CharField(
-        max_length=20, default='exterior', db_index=True,
-        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
-                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
-    )
-
     class Meta:
         verbose_name = 'Spec generat'
         verbose_name_plural = 'Specs generats'
-        # C1/T3 — la clau incorpora la CAPA (v. `models_app.BaseMeasurement.Meta`).
-        unique_together = [('grading_version', 'pom', 'size_label', 'capa')]
+        unique_together = [('grading_version', 'pom', 'size_label')]
         ordering = ['grading_version', 'pom', 'size_label']
-        constraints = [
-            # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`, on hi ha
-            # l'argument sencer). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='fitting_gradedspec_capa_gate_c1',
-            ),
-        ]
 
     def __str__(self):
         return f'v{self.grading_version_id} · {self.pom.codi_client} @ {self.size_label} = {self.graded_value_cm}cm'
@@ -385,26 +366,12 @@ class PieceFittingLine(models.Model):
     valor_teoric = models.FloatField()
     valor_real = models.FloatField(null=True, blank=True)
     nota = models.CharField(max_length=200, blank=True, default='')
-    # C1 — la capa (declaració canònica a `models_app.BaseMeasurement.capa`).
-    capa = models.CharField(
-        max_length=20, default='exterior', db_index=True,
-        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
-                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
-    )
 
     class Meta:
         verbose_name = 'Línia de fitting de peça'
         verbose_name_plural = 'Línies de fitting de peça'
         ordering = ['piece_fitting', 'pom', 'size_label']
-        # C1/T3 — la clau incorpora la CAPA (v. `models_app.BaseMeasurement.Meta`).
-        unique_together = [('piece_fitting', 'pom', 'size_label', 'capa')]
-        constraints = [
-            # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`). C4 la retira.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='fitting_piecefittingline_capa_gate_c1',
-            ),
-        ]
+        unique_together = [('piece_fitting', 'pom', 'size_label')]
 
     def __str__(self):
         return f'{self.piece_fitting_id} · {self.pom.codi_client} @ {self.size_label}'
