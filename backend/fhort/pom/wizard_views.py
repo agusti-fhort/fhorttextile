@@ -372,6 +372,11 @@ def base_measurements_view(request, model_id):
             # costat" (PomNamePair) no es pot muntar sense ell, i fins ara els consumidors
             # d'aquest endpoint se l'havien d'anar a buscar a la GradingRule.
             'nom_en': bm.pom.pom_global.nom_en if bm.pom.pom_global_id else '',
+            # Sprint NOMS-POM (30/07) — el BATEIG d'aquest model (nom canònic + traducció del
+            # client), CRU. '' = no batejat → qui llegeix cau al catàleg (`nom_en`/`nom_ca`),
+            # que segueixen exactament igual que abans. Camps NOUS, res existent no es toca.
+            'nom_canonic_model': bm.nom_canonic_model or '',
+            'nom_traduit_model': bm.nom_traduit_model or '',
             'categoria_nom': bm.pom.categoria.nom_ca if bm.pom.categoria_id else '',
             'base_value_cm': bm.base_value_cm,
             # Tolerància VIGENT (ja resolta), no la columna crua: qui la consumeix pinta una

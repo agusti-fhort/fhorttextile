@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import BateigInput from './BateigInput'
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from '../../pages/fittingShared'
 
 // MeasureGrid — editor únic de mesures (un component, dos modes treball/consulta) que serveix els
@@ -163,17 +165,33 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
   )
 }
 
+// Sprint NOMS-POM (30/07) — input inline del BATEIG: ASPECTE DE TEXT PLA en repòs, camp en
+// hover/focus (maqueta aprovada, pestanya 1). Desa on-blur i només si el text ha canviat de debò.
+// Buit no és un buit: el placeholder ensenya el que en diu el CATÀLEG, que és qui mana mentre
+// ningú no bategi la línia — la cel·la no es queda muda mai.
+
 // Nomenclatura a 2 línies (llei de presentació): nom EN canònic a dalt (sembra, read-only) + nom
 // local a sota (petit, cursiva, gris). Aquesta cel·la és DESCRIPTIVA (només noms); la nomenclatura
 // CURTA (nom_fitxa, CH/WA/HI) s'edita a la columna POM (CodiCell) quan `editCodi`. Llegat: quan
 // `editCodi` és fals (fitting), la 2a línia mostra nom_fitxa amb precedència i és EDITABLE via
 // `onNomSave(bmId, value)` (P4: NO toca el POM tenant compartit).
-function NomCell({ nomEn, nomLocal, nomFitxa, bmId, editable, onNomSave, editCodi = false, style }) {
-  const top = nomEn || nomLocal || ''
+function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitModel = '',
+                   bmId, editable, onNomSave, onNomsSave = null, editCodi = false, style }) {
+  const { t } = useTranslation()
+  const catCanonic = nomEn || nomLocal || ''
   const canon = nomEn && nomLocal && nomLocal !== nomEn ? nomLocal : (nomLocal || '')
   // editCodi → la 2a línia és el nom LOCAL (la nomenclatura curta viu a la columna POM, no aquí).
-  const modelName = editCodi ? canon : ((nomFitxa != null && nomFitxa !== '') ? nomFitxa : canon)
+  const catLocal = editCodi ? canon : ((nomFitxa != null && nomFitxa !== '') ? nomFitxa : canon)
   const canEdit = !!(editable && bmId != null && onNomSave && !editCodi)
+  // Sprint NOMS-POM (30/07) — EL BATEIG DEL MODEL. Amb `onNomsSave` les DUES línies passen a ser
+  // el bateig d'aquesta línia de mesura (nom canònic EN + traducció del client) i s'editen aquí
+  // mateix. Sense `onNomsSave` (fitting, repàs, consulta) la cel·la és EXACTAMENT la d'abans:
+  // el bateig només hi entra com a precedència de LECTURA, i buit no canvia res.
+  const bateig = !!(onNomsSave && editable && bmId != null)
+  const top = nomCanonicModel || catCanonic
+  // El llegat que edita `nom_fitxa` a la 2a línia mana sobre la precedència del bateig: allà
+  // l'input ÉS la nomenclatura curta i no s'hi pot sobreposar un altre text.
+  const modelName = canEdit ? catLocal : (nomTraduitModel || catLocal)
   const [val, setVal] = useState(modelName ?? '')
   const [focused, setFocused] = useState(false)
   useEffect(() => { if (!focused) setVal(modelName ?? '') }, [modelName, focused])
@@ -181,6 +199,22 @@ function NomCell({ nomEn, nomLocal, nomFitxa, bmId, editable, onNomSave, editCod
     setFocused(false)
     const v = (val ?? '').trim()
     if (v !== (modelName ?? '')) onNomSave(bmId, v)
+  }
+  // Les DUES línies del nom, editables i amb el catàleg de fons (Mesures). Cada input desa el
+  // seu camp per separat: rebatejar el canònic no ha d'arrossegar la traducció, ni al revés.
+  if (bateig) {
+    return (
+      <td style={style}>
+        <BateigInput value={nomCanonicModel} placeholder={catCanonic || ''}
+          title={t('measuregrid.nom_canonic_tip')}
+          onSave={(v) => onNomsSave(bmId, { nom_canonic_model: v })}
+          style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }} />
+        <BateigInput value={nomTraduitModel} placeholder={catLocal || ''}
+          title={t('measuregrid.nom_traduit_tip')}
+          onSave={(v) => onNomsSave(bmId, { nom_traduit_model: v })}
+          style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-muted)' }} />
+      </td>
+    )
   }
   return (
     <td style={style}>
@@ -270,6 +304,9 @@ export default function MeasureGrid({
   editable = false,
   onSave,                 // (lineId, rawValue) => Promise (pot resoldre amb {lines:[{id,valor_real}]} per propagar)
   onNomSave = null,       // (bmId, value) => Promise — desa la nomenclatura curta del MODEL (nom_fitxa, P4); null = no editable
+  // Sprint NOMS-POM — (bmId, {nom_canonic_model?|nom_traduit_model?}) => Promise: desa el BATEIG
+  // de la línia. OPT-IN: null (fitting, repàs, consulta) → la cel·la del nom és la de sempre.
+  onNomsSave = null,
   editCodi = false,       // on s'edita nom_fitxa: true → columna POM (codi curt CH/WA/HI, Mesures); false → 2a línia del Nom (fitting, llegat)
   reorderable = false,    // DnD de files (NOMÉS Mesures-edició); default false → Escalat/fitting/consulta intactes
   onReorder = null,       // (orderedBmIds) => Promise — desa el nou ordre global del model
@@ -450,7 +487,9 @@ export default function MeasureGrid({
                     : stickyTd(0, COL_POM_W, rowBg)}
                   title={soroll ? t('measuregrid.poda_candidata') : undefined} />
                 <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} nomFitxa={r.nom_fitxa} bmId={r.bm_id}
-                  editable={editable} onNomSave={onNomSave} editCodi={editCodi} style={stickyTd(COL_POM_W, COL_NOM_W, rowBg)} />
+                  nomCanonicModel={r.nom_canonic_model} nomTraduitModel={r.nom_traduit_model}
+                  editable={editable} onNomSave={onNomSave} onNomsSave={onNomsSave}
+                  editCodi={editCodi} style={stickyTd(COL_POM_W, COL_NOM_W, rowBg)} />
                 {leadCols.map((c, idx) => (
                   <td key={c.key} style={stickyTd(leadLefts[idx], c.width, rowBg, idx)}>{c.render(r)}</td>
                 ))}

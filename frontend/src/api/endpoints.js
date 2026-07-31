@@ -94,6 +94,12 @@ export const models = {
   unassign: (id) => client.post(`/api/v1/models/${id}/unassign/`),
   // PG-4b-3b — fixa el règim de grading d'un POM del model (l'usarà 3c). {logica}
   setPomRegim: (modelId, pomId, logica) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, { logica }),
+  // G1 — els ALTRES camps de la regla (increment_base / increment_break / talla_break_label) per
+  // la MATEIXA porta que el règim: `set_pom_regim_view` és un upsert de la ModelGradingRule
+  // resident amb actualització selectiva per presència de camp. Cap mecànica nova d'escriptura
+  // (llei P3); només un wrapper que no es limita a `logica`.
+  setPomRegla: (modelId, pomId, camps) =>
+    client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, camps || {}),
   // P3 — autoria de la REGLA viva del model per POM: delta + break (+ règim). Patrimoni del model
   // (origen MANUAL). payload: {logica?, increment_base?, increment_break?, talla_break_label?}.
   setPomRule: (modelId, pomId, payload) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, payload),
@@ -117,7 +123,9 @@ export const models = {
   escalatAjustarTalla: (modelId, pomId, talla, valor) =>
     client.post(`/api/v1/models/${modelId}/escalat/ajustar-talla/`, { pom_id: pomId, talla, valor }),
   // Fase B — estat de propagació perquè el botó Propagar MIRI ABANS (read-only):
-  // {te_dades_propagades, segellada, version_number}.
+  // {te_dades_propagades, segellada, version_number, te_regles}.
+  // G2 — `te_regles` és la condició dura: sense regla NO es propaga mai; el gest porta a
+  // informar-la (Graduació) en comptes d'ensenyar el toast mut del 400.
   gradingStatus: (modelId) => client.get(`/api/v1/models/${modelId}/grading-status/`),
   // Sprint 5 — comptadors de models per fase (board del Dashboard). Respecta els mateixos
   // filtres que el Model list (customer/collection/data_objectiu_after|before/temporada/...).
@@ -136,6 +144,10 @@ export const models = {
 // Mesura base d'un POM (talla base). PATCH per editar nom_fitxa per-POM (escriu NOMÉS BaseMeasurement).
 export const baseMeasurements = {
   update: (id, body) => client.patch(`/api/v1/base-measurements/${id}/`, body),
+  // Sprint NOMS-POM — el BATEIG de la línia (nom canònic EN + traducció del client). Porta
+  // pròpia i estreta: '' torna la fila al catàleg. Mai el PATCH genèric de sobre, que obriria
+  // el valor base i la resta de la fila.
+  setNoms: (id, body) => client.patch(`/api/v1/base-measurements/${id}/noms/`, body),
   // Reordena els POM del model en bloc (ordre ÚNIC i global; es materialitza a Grading en propagar).
   reorder: (modelId, ids) => client.post(`/api/v1/models/${modelId}/base-measurements/reorder/`, { ids }),
 }

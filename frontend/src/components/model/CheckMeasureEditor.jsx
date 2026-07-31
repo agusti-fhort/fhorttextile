@@ -223,6 +223,9 @@ const checkSource = {
         codi: r.nom_fitxa || r.pom_code,
         pom_code: r.pom_code,
         nom_en: r.nom_en, nom_local: r.nom_ca,
+        // Sprint NOMS-POM — el bateig del model (buit = mana el catàleg de sobre).
+        nom_canonic_model: r.nom_canonic_model || '',
+        nom_traduit_model: r.nom_traduit_model || '',
         nom_fitxa: r.nom_fitxa, bm_id: r.base_measurement_id,
         is_key: r.is_key,
         logica: line?.logica, increment_base: line?.increment_base,
@@ -243,6 +246,13 @@ const checkSource = {
 
   onNomSave(bmId, value) {
     return baseMeasurements.update(bmId, { nom_fitxa: value || null })
+  },
+
+  // Sprint NOMS-POM — el BATEIG (nom canònic + traducció). Només la font CHECK el declara: la
+  // taula de Mesures és la superfície on el model és patrimoni. Al fitting una fila és una presa
+  // d'una sessió i el nom no s'hi rebateja.
+  onNomsSave(bmId, camps) {
+    return baseMeasurements.setNoms(bmId, camps)
   },
 
   onReorder(model, orderedBmIds) {
@@ -359,6 +369,14 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.nom_save_err') })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [src, load, onFeedback, t])
+  // Sprint NOMS-POM — desa el bateig d'UNA línia i rellegeix (mateix patró que onNomSave: la
+  // graella és controlada i la font de veritat torna del servidor, mai del buffer local).
+  const onNomsSave = useCallback((bmId, camps) =>
+    Promise.resolve(src.onNomsSave?.(bmId, camps))
+      .then(() => load())
+      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.nom_save_err') })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [src, load, onFeedback, t])
   const onReorder = useCallback((orderedBmIds) =>
     Promise.resolve(src.onReorder?.(model, orderedBmIds))
       .then(() => load())
@@ -403,6 +421,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       )}
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
         onSave={readOnly ? undefined : onSave} onNomSave={canEditNom ? onNomSave : undefined}
+        onNomsSave={canEditNom && src.onNomsSave ? onNomsSave : undefined}
         editCodi reorderable={canReorder} onReorder={canReorder ? onReorder : undefined}
         onPodar={canPodar ? onPodar : undefined}
         empty={

@@ -1653,17 +1653,19 @@ def measurements_table_view(request, model_id):
     except Exception:
         rules_by_pom = {}
 
-    # C4 — GRADING INFORMAT AL WIZARD. El resolutor canònic mira el model (regla resident) i
-    # el seu `grading_rule_set`; el ruleset del client, però, sovint penja del GARMENT TYPE
-    # ITEM (RS146-149 hi són assignats), i llavors el tècnic es trobava les columnes Règim /
-    # Delta / Break buides tot i que la regla existeix. Aquí s'hi cau NOMÉS PER OMPLIR LA
-    # PANTALLA: és lectura, i el motor de graduació no en sap res —si el tècnic desa, la regla
-    # passa a ser resident del model, que és qui mana. Sense ruleset al GTI, res canvia.
-    gti_rule_set_id = getattr(model.garment_type_item, 'grading_rule_set_id', None)
-    if gti_rule_set_id:
-        from fhort.pom.models import GradingRule
-        for r in GradingRule.objects.filter(rule_set_id=gti_rule_set_id, actiu=True):
-            rules_by_pom.setdefault(r.pom_id, r)
+    # LES REGLES QUE AQUESTA TAULA DIU SÓN LES DEL MODEL, I NOMÉS LES SEVES (31/07).
+    #
+    # `_load_grading_rules` ja respon exactament això: ModelGradingRule resident amb prioritat i
+    # fallback al `grading_rule_set` que el MODEL té assignat. Res més s'hi fusiona.
+    #
+    # Aquí hi va haver, i ja no hi és, un fallback que omplia els forats amb el ruleset del
+    # catàleg (l'item primer, després també el SizingProfile). El QA del model 1302 va ensenyar
+    # el preu: un model creat expressament SENSE graduació ensenyava «CH · LINEAR +2,0/+3,0 @XS»
+    # —la regla d'un altre— i, com que la taula reenviava el que pintava, desar les mesures
+    # l'hauria materialitzada sense que ningú l'acceptés. LLEI: BD neta = taula neta.
+    #
+    # La proposta del catàleg NO s'ha perdut: viu al pas de Graduació (`GraduacioPanel`), que és
+    # on hi ha un «Usar aquest joc» al davant i on triar és un acte, no un efecte secundari.
 
     def _flt(v):
         return float(v) if v is not None else None
@@ -1684,6 +1686,17 @@ def measurements_table_view(request, model_id):
             'pom_code': pom.codi_client,
             **camps_de(alias_by_pom, pom.id),
             'nom_fitxa': bm.nom_fitxa or '',
+            # Sprint NOMS-POM — el BATEIG d'aquest model, CRU i al costat del catàleg
+            # (`nom_en`/`nom_ca`, que no es toquen): '' vol dir «no batejat, mana el catàleg».
+            # La cascada la resol qui pinta, que és qui sap si mostra un input amb placeholder o
+            # un text pla. Camps NOUS: cap camp existent canvia de valor ni de nom.
+            #
+            # 31/07 — hi arriben ARA. El paquet del bateig els va posar a `base_stages_view` i a
+            # `wizard_views.base_measurements_view`, però NO aquí, i aquesta és justament la
+            # taula que alimenta la pantalla d'entrada de Mesures: la cel·la del nom hi sortia
+            # sense res a editar perquè el payload no li portava el bateig.
+            'nom_canonic_model': bm.nom_canonic_model or '',
+            'nom_traduit_model': bm.nom_traduit_model or '',
             'nom_en': pg.nom_en if pg else pom.nom_client,
             'nom_ca': pg.nom_ca if pg else pom.nom_client,
             'abbreviation': pg.abbreviation if pg else '',
@@ -2817,11 +2830,18 @@ def grading_status_view(request, model_id):
     # el mateix acte que propagar sobre un de fresc — qui ho decideix ho ha de saber abans, no
     # després.
     from fhort.fitting.staleness import com_a_dict, estalitud
+    # G2 (2026-07-31) — «té regles?» viatja amb l'estat perquè Propagar pugui MIRAR ABANS també
+    # això, no només si hi ha propagació prèvia. Sense regla NO es propaga mai (condició dura de
+    # P2), i el front ha de poder portar el tècnic a informar-la en lloc d'ensenyar-li el toast
+    # mut del 400. És EL MATEIX predicat que el gate dur de `generate_grading_view` (:2354) i que
+    # el del motor: un sol `_te_regles`, com mana G6/0b — dos predicats serien dues veritats.
+    from fhort.pom.services import _te_regles
     return Response({
         'te_dades_propagades': te_dades,
         'segellada': bool(gv and gv.aprovada),
         'version_number': gv.version_number if gv else None,
         'estalitud': com_a_dict(estalitud(gv)) if gv else None,
+        'te_regles': _te_regles(model),
     })
 
 
@@ -2849,6 +2869,74 @@ def base_measurements_reorder_view(request, model_id):
                 bm.ordre = pos
                 bm.save(update_fields=['ordre'])
     return Response({'ok': True, 'n': len(bms)})
+
+
+# Sprint NOMS-POM (2026-07-30) — límit dur dels dos textos, el mateix que declara el model
+# (`BaseMeasurement.nom_canonic_model` / `nom_traduit_model`, CharField(160)). Es valida aquí
+# perquè un text massa llarg ha de tornar un 400 explicat, no una excepció de BD.
+NOMS_POM_MAX = 160
+NOMS_POM_CAMPS = ('nom_canonic_model', 'nom_traduit_model')
+
+
+@api_view(['PATCH'])
+@permission_classes([_ExecuteTasksCap])
+def base_measurement_noms_view(request, bm_id):
+    """PATCH /api/v1/base-measurements/<bm_id>/noms/  Body: {nom_canonic_model?, nom_traduit_model?}
+
+    EL BATEIG DEL MODEL: els dos textos amb què aquest model anomena la mesura (nom canònic EN
+    + traducció del client). Buit ('') NO és un valor: és tornar la fila al catàleg.
+
+    Endpoint PROPI i petit, no el serializer genèric de `BaseMeasurementViewSet`: aquell obre
+    tota la fila (valor base, origen, is_active, toleràncies…) i aquí només s'hi ha de poder
+    tocar la PRESENTACIÓ. Un camp qualsevol que hi entri de passada seria una mesura canviada
+    sense que ningú ho hagi demanat. Els camps que no arriben al body no es toquen.
+
+    Permís: `EXECUTE_TASKS` (`_ExecuteTasksCap`) — la MATEIXA capability que ja governa l'edició
+    de les mesures del model en aquesta superfície (`set_size_override_view` i
+    `base_measurements_reorder_view`, just aquí a sobre). Qui pot escriure el valor d'una mesura
+    del model pot anomenar-la; no s'inventa cap porta nova per a un camp de text.
+
+    REGISTRE: NO passa pel `MeasurementChangeLog` (F1), i és deliberat. Aquell log és la memòria
+    de les MESURES —el que va valer cada POM i quan—, i el llegeixen com a tal la taula
+    d'estadis (`base_stages_view`) i el Repàs: hi entra una fila i el model diria que algú ha
+    tornat a prendre la mesura. Rebatejar no és mesurar. `updated_at` (auto_now) ja diu quan
+    s'ha tocat, i el catàleg segueix sent recuperable en un sol gest (esborrar el text).
+    El signal de F1 tampoc no s'hi dispara sol: només registra canvis de `base_value_cm`.
+
+    El CATÀLEG no es toca mai des d'aquí (ni `POMGlobal` ni `POMMaster`): el bateig és d'aquest
+    model i no pot reescriure com anomenen la mesura els altres models de la casa.
+    """
+    try:
+        bm = BaseMeasurement.objects.get(id=bm_id)
+    except BaseMeasurement.DoesNotExist:
+        return Response({'error': 'Mesura no trobada'}, status=404)
+
+    canvis = {}
+    for camp in NOMS_POM_CAMPS:
+        if camp not in request.data:
+            continue
+        valor = request.data.get(camp)
+        # `null` i `''` volen dir el mateix: treure el bateig i tornar al catàleg.
+        valor = '' if valor is None else str(valor).strip()
+        if len(valor) > NOMS_POM_MAX:
+            return Response(
+                {'error': f'«{camp}» no pot passar de {NOMS_POM_MAX} caràcters.'}, status=400)
+        canvis[camp] = valor
+
+    if not canvis:
+        return Response(
+            {'error': 'Cal com a mínim un de: ' + ', '.join(NOMS_POM_CAMPS) + '.'}, status=400)
+
+    for camp, valor in canvis.items():
+        setattr(bm, camp, valor)
+    bm.save(update_fields=[*canvis.keys(), 'updated_at'])
+
+    return Response({
+        'id': bm.id,
+        'nom_canonic_model': bm.nom_canonic_model,
+        'nom_traduit_model': bm.nom_traduit_model,
+        'updated_at': bm.updated_at.isoformat(),
+    })
 
 
 @api_view(['GET'])
@@ -2934,6 +3022,12 @@ def base_stages_view(request, model_id):
             'nom_fitxa': bm.nom_fitxa or '',
             'nom_ca': pg.nom_ca if pg else pom.nom_client,
             'nom_en': pg.nom_en if pg else pom.nom_client,
+            # Sprint NOMS-POM (30/07) — el BATEIG d'aquest model, CRU i al costat del catàleg
+            # (`nom_ca`/`nom_en`, que no es toquen): '' vol dir «no batejat, mana el catàleg».
+            # La cascada la resol qui pinta, que és qui sap si mostra un input amb placeholder
+            # o un text pla. Camps NOUS: cap camp existent canvia de valor ni de nom.
+            'nom_canonic_model': bm.nom_canonic_model or '',
+            'nom_traduit_model': bm.nom_traduit_model or '',
             'is_key': bm.is_key,
             'tol_minus': tm,
             'tol_plus': tp,

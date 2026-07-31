@@ -659,6 +659,36 @@ class BaseMeasurement(models.Model):
     # travessa 5 taules més, i és decisió d'arquitectura (Patró C), no d'aquest sprint.
     seccio = models.CharField(max_length=60, blank=True, default='')
 
+    # Sprint NOMS-POM (2026-07-30) — EL BATEIG DEL MODEL.
+    #
+    # LLEI: bateig del model; buit = catàleg mana. Els dos textos amb què aquest MODEL anomena
+    # la mesura — el nom canònic (EN, el del sector) i la traducció que en fa servir el client —
+    # viuen a la LÍNIA de mesura, no al catàleg. Buits (''), qui llegeix cau al catàleg
+    # (`POMGlobal.nom_en` / `nom_ca`, o `POMMaster.nom_client`), que és el comportament d'abans
+    # d'aquest sprint: cap fila neix rebatejada.
+    #
+    # És la TERCERA aplicació del mateix patró canònic+bateig que ja governa el projecte:
+    #   1. les peces (D-3): rol canònic del catàleg + nom que el patronista hi posa;
+    #   2. `nom_fitxa` (S14-A, just aquí a sobre): codi canònic del POM + nomenclatura curta
+    #      que el model escriu al croquis;
+    #   3. aquests dos camps: nom del catàleg + nom que el model (i el seu client) fa servir.
+    # El catàleg NO es toca mai des d'aquí: rebatejar una mesura d'un model no pot reescriure
+    # com l'anomenen els altres 900 models de la casa.
+    #
+    # Són DADA DE PRESENTACIÓ, no estructura: ningú hi decideix res (ni el motor de grading, ni
+    # el matcher, ni la clau (model, pom)). Per això no passen pel `MeasurementChangeLog` —
+    # veg. l'argument sencer a `base_measurement_noms_view` (models_app/views.py).
+    nom_canonic_model = models.CharField(
+        max_length=160, blank=True, default='',
+        help_text="Nom canònic (EN) amb què AQUEST model anomena la mesura. "
+                  "Buit: mana el catàleg (POMGlobal.nom_en).",
+    )
+    nom_traduit_model = models.CharField(
+        max_length=160, blank=True, default='',
+        help_text="Traducció del nom que fa servir el client d'aquest model. "
+                  "Buit: mana el catàleg (POMGlobal.nom_ca / POMMaster.nom_client).",
+    )
+
     class Meta:
         verbose_name = 'Mesura base'
         verbose_name_plural = 'Mesures base'

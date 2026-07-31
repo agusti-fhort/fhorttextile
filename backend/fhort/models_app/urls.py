@@ -15,6 +15,7 @@ from .views import (
     set_size_override_view,
     escalat_ajustar_talla_view,
     grading_status_view,
+    base_measurement_noms_view,
     base_measurements_reorder_view,
     base_stages_view,
     iso_shrinkage_view,
@@ -221,6 +222,9 @@ urlpatterns = (
         path('models/<int:model_id>/escalat/ajustar-talla/', escalat_ajustar_talla_view),
         path('models/<int:model_id>/grading-status/', grading_status_view),
         path('models/<int:model_id>/base-measurements/reorder/', base_measurements_reorder_view),
+        # Sprint NOMS-POM — el BATEIG de la línia (nom canònic + traducció del client). Porta
+        # pròpia i estreta, abans del router: el ViewSet genèric obriria tota la fila.
+        path('base-measurements/<int:bm_id>/noms/', base_measurement_noms_view),
         path('models/<int:model_id>/base-stages/', base_stages_view),
         path('models/<int:model_id>/pom/<int:pom_id>/regim/', set_pom_regim_view),
         # C1 — poda SOFT d'un POM del model des de la graella (mai DELETE dur).

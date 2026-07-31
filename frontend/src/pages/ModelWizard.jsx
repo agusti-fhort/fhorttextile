@@ -1,21 +1,22 @@
 import { useState, useEffect, useMemo } from 'react'
-import { IconBulb } from '@tabler/icons-react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
 import CustomerSelector from '../components/CustomerSelector'
-import RuleSetPicker from '../components/grading/RuleSetPicker'
-import { availableFitsStrict, matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS, FITS } from '../components/grading/gradingAxes'
+import { matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS, FITS } from '../components/grading/gradingAxes'
+// Els àtoms de UI i el PAS DE GRADUACIÓ viuen fora des del 31/07: el pas s'obre també com a
+// overlay sobre Mesures, i ha de ser el MATEIX component als dos llocs (mai una còpia).
+import GraduacioPanel from '../components/grading/GraduacioPanel'
+import { Chip, Field, labelStyle, MONO } from '../components/grading/wizardUI'
 import TargetLabel from '../components/grading/TargetLabel'
 import useAuthStore from '../store/auth'
-import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, sizingProfiles } from '../api/endpoints'
+import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles + GRADUACIÓ.
 // Sprint WIZARD-COMPLET: la graduació (pas 4) torna al wizard, amb matching ESTRICTE (size_system
 // obligatori, cap comodí NULL) i opció explícita «Sense graduació». POM detallat NO aquí.
 
-const MONO = 'IBM Plex Mono, monospace'
 const currentYear = new Date().getFullYear()
 const YEARS = [currentYear, currentYear + 1, currentYear + 2, currentYear + 3]
 
@@ -40,17 +41,31 @@ const ordenaPelSistema = (run, labels) =>
 // TARGETS i CONSTRUCTIONS: vocabulari ÚNIC de gradingAxes (fora la còpia privada — Onada 1). Objectes
 // {codi, nom_*}; aquí només en fem servir el `codi` (l'etiqueta la resol t('model_wizard.*')).
 
-export default function ModelWizard() {
-  const { id } = useParams()
+// EL WIZARD, també ENCASTAT (31/07). El botó «Graduació» de Mesures obre AQUEST wizard —el
+// d'editar model, el que ja existeix i funciona— posicionat al pas 4, com a calaix lateral
+// sobre la taula. No hi ha cap pantalla nova de graduació: si al pas 4 hi falta la
+// construcció, l'usuari fa «← Enrere» fins al pas 2, la posa i torna. Aquell atzucac
+// s'acaba aquí.
+//
+// Encastat vs. ruta és NOMÉS marc i navegació:
+//   · `embedModelId` substitueix el `:id` de la ruta (mode edició igualment);
+//   · `initialBlock` obre directament al pas que interessa;
+//   · `onClose`/`onSaved` substitueixen els `navigate()`, que dins d'un overlay se'n durien
+//     l'usuari de la pantalla on està treballant.
+// La LÒGICA (hidratació, gates, payload, desat) no es toca: és la mateixa als dos modes.
+export default function ModelWizard({ embedModelId = null, initialBlock = null,
+                                      onClose = null, onSaved = null, onUsarJoc = null }) {
+  const routeParams = useParams()
+  const id = embedModelId != null ? String(embedModelId) : routeParams.id
+  const encastat = embedModelId != null
   const navigate = useNavigate()
   const { t } = useTranslation()
   const isEditMode = !!id
-  const [searchParams] = useSearchParams()
   const me = useAuthStore(s => s.user)
   const canConfigure = !!me?.capabilities?.includes('configure')
 
   // WIZARD-COMPLET C.3 — «Canviar graduació» des de la fitxa obre el wizard directament al pas 4.
-  const [block, setBlock] = useState(isEditMode && searchParams.get('block') === '4' ? 4 : 1)
+  const [block, setBlock] = useState(initialBlock || 1)
   // Bloc 1 — identificació
   const [year, setYear] = useState(currentYear)
   const [season, setSeason] = useState(null)
@@ -71,9 +86,6 @@ export default function ModelWizard() {
   // servir el `nom_peca` que la composició del catàleg ja declara.
   const [setNoms, setSetNoms] = useState({})
   // El ruleset que el CATÀLEG proposa per a la combinació (SizingProfile). Només SUGGEREIX: es
-  // marca i puja al capdamunt del picker, mai s'assigna sol (això seria arrossegar, i el pas 4
-  // no ho fa). Fins al 2026-07-23 la font era `GarmentTypeItem.grading_rule_set` (C1).
-  const [perfilSuggestedRsId, setPerfilSuggestedRsId] = useState(null)
   const [picking, setPicking] = useState(false)
   // Navegació controlada del picker de peça (CascadeSelector single, grup→ítem). Es sembra des de
   // family/item en reobrir; onConfirm (triar ítem) commita a family/item i tanca.
@@ -88,9 +100,9 @@ export default function ModelWizard() {
   // Peça 4 — sistema/run/base que ja té el model (edició). NO és només memòria: és la FONT de la
   // rehidratació del pas 3 (F1.1). Sense ella el pas 4 neix cec en edició (DIAGNOSI_MODEL_174, risc #1).
   const [modelSizeSystemId, setModelSizeSystemId] = useState(null)
+  const [modelFitType, setModelFitType] = useState('')   // `Model.fit_type` desat (edició)
   const [modelSizeRun, setModelSizeRun] = useState('')
   const [modelBaseSize, setModelBaseSize] = useState(null)
-  const [modelSizeSystemNom, setModelSizeSystemNom] = useState('')
   const [sizingHydrated, setSizingHydrated] = useState(false)
   const [runPerdut, setRunPerdut] = useState([])   // talles del run desat que ja no són al sistema
   // Bloc 4 — GRADUACIÓ (sprint WIZARD-COMPLET). Eixos target/construction/grup + size_system venen
@@ -100,8 +112,6 @@ export default function ModelWizard() {
   const [fit, setFit] = useState(null)               // codi de fit triat (eix del matching)
   const [gradingRuleSetId, setGradingRuleSetId] = useState(null)  // ruleset triat (null = cap)
   const [noGrading, setNoGrading] = useState(false)  // «Sense graduació» explícit
-  const [autoProposed, setAutoProposed] = useState(false)  // B1: ruleset preseleccionat per única coincidència
-  const [gradingDropped, setGradingDropped] = useState(false)  // F1.5: el ruleset previ ja no casa amb els eixos
   const [modelGarmentGrup, setModelGarmentGrup] = useState(null)  // grup del model en edició (prefill)
 
   const [saving, setSaving] = useState(false)
@@ -111,7 +121,7 @@ export default function ModelWizard() {
   // peça: seria fer caure la resposta que acabes de donar. `resetGrading` neteja la tria de
   // graduació; `resetGradingIFit` afegeix el fit i es reserva per als canvis que el invaliden de
   // debò (canviar de construcció: els fits disponibles en depenen).
-  const resetGrading = () => { setGradingRuleSetId(null); setNoGrading(false); setAutoProposed(false); setGradingDropped(false) }
+  const resetGrading = () => { setGradingRuleSetId(null); setNoGrading(false) }
   const resetGradingIFit = () => { setFit(null); resetGrading() }
 
   // LLEI 5 CAPES: el pas Talles retorna NOMÉS escala (sistema/run/base). La graduació (capa 4) es
@@ -129,10 +139,6 @@ export default function ModelWizard() {
 
   const resetSizing = () => { setSelSystem(null); setSelectedSizes([]); setBaseSize(null); setSizeDefs([]) }
 
-  // F1.3 — quina de les tres peces del pas 3 falta (l'ordre és el del flux: sistema → run → base).
-  const sizingMissing = !selSystem ? 'system'
-    : (selectedSizes.length === 0 ? 'run'
-      : ((!baseSize || !selectedSizes.includes(baseSize)) ? 'base' : null))
 
   // Coherència Onada 1+2: en CANVIAR el target, si la família seleccionada ja no és al catàleg filtrat
   // pel nou target, es neteja família+item (+graduació, que en depèn del garment). Si SÍ hi és, es
@@ -181,8 +187,8 @@ export default function ModelWizard() {
       setTarget(d.target || null); setConstruction(d.construction || null)
       setModelSizeSystemId(d.size_system ?? null)
       setModelSizeRun(d.size_run_model || '')
+      setModelFitType(d.fit_type || '')
       setModelBaseSize(d.base_size_label || null)
-      setModelSizeSystemNom(d.size_system_nom || '')
       // Bloc 4 — graduació vigent (edició): grup canònic (sempre present via garment_type.grup) i
       // ruleset actual, perquè el pas 4 mostri la selecció i permeti canviar-la (cas Regular→Slim).
       setModelGarmentGrup(d.garment_type_grup || null)
@@ -266,6 +272,11 @@ export default function ModelWizard() {
   // family.grup en creació; garment_type.grup del model en edició. Mai es re-tria a mà.
   const garmentGroupCodi = family?.grup ?? modelGarmentGrup ?? null
 
+  // F1.3 — quina de les tres peces del pas 3 falta (l'ordre és el del flux: sistema → run → base).
+  const sizingMissing = !selSystem ? 'system'
+    : (selectedSizes.length === 0 ? 'run'
+      : ((!baseSize || !selectedSizes.includes(baseSize)) ? 'base' : null))
+
   // Bloc 4 — carrega rulesets + mapa grup id→codi quan s'entra al pas. En edició, deriva el fit
   // vigent del ruleset del model perquè el picker el mostri seleccionat.
   useEffect(() => {
@@ -288,31 +299,19 @@ export default function ModelWizard() {
   // gradingRuleSetId encara null (el prefill no havia resolt) i el fit no es derivava mai —
   // el picker quedava amagat justament al camí que F1.1 volia rescatar.
   useEffect(() => {
-    if (fit || !gradingRuleSetId || !gradingRuleSets_.length) return
-    const cur = gradingRuleSets_.find(r => r.id === gradingRuleSetId)
-    if (cur?.fit_type_codi) setFit(cur.fit_type_codi)
-  }, [gradingRuleSets_, gradingRuleSetId, fit])
+    if (fit) return
+    // El fit del RULESET mana quan n'hi ha (és el que el model gradua de debò)…
+    if (gradingRuleSetId && gradingRuleSets_.length) {
+      const cur = gradingRuleSets_.find(r => r.id === gradingRuleSetId)
+      if (cur?.fit_type_codi) { setFit(cur.fit_type_codi); return }
+    }
+    // …i si el model encara NO té graduació, se sembra del seu propi `fit_type` (31/07).
+    // Sense això, entrar al pas 4 des de Mesures deixava el picker amagat rere un `fit` null
+    // en el cas normal —un model sense graduació, que és qui hi ve— i la pantalla es veia
+    // completa i buida alhora: tots els eixos informats i cap joc a la vista.
+    if (isEditMode && modelFitType) setFit(String(modelFitType).toUpperCase())
+  }, [gradingRuleSets_, gradingRuleSetId, fit, isEditMode, modelFitType])
 
-  // El suggeriment de graduació ve del PERFIL, no de l'item (C1, 2026-07-23). Abans es llegia
-  // `GarmentTypeItem.grading_rule_set`, que ja no existirà: el joc de regles s'assigna al MODEL i
-  // l'item no en porta. La font correcta és el `SizingProfile` de la combinació
-  // target×construcció×fit×família, que és exactament el preset que el catàleg proposa.
-  //
-  // Tolerant a NULL per disseny (C3): un perfil pot declarar només ÀMBIT i no portar graduació →
-  // cap suggeriment i cap error; el picker es comporta com si no n'hi hagués, que és el que és.
-  // SUGGERIR ≠ ARROSSEGAR segueix intacte: això només ordena el picker del pas 4.
-  useEffect(() => {
-    if (!target || !construction || !fit || !family?.id) { setPerfilSuggestedRsId(null); return }
-    let viu = true
-    sizingProfiles.list({ target, construction, fit, garment_type: family.id })
-      .then(({ data }) => {
-        if (!viu) return
-        const amb = (data?.results || []).find(p => p.grading_rule_set?.id != null)
-        setPerfilSuggestedRsId(amb?.grading_rule_set?.id ?? null)
-      })
-      .catch(() => { if (viu) setPerfilSuggestedRsId(null) })
-    return () => { viu = false }
-  }, [target, construction, fit, family?.id])
 
   // Sprint ÀMBIT — el node de la peça (item → família → grup) viatja als eixos: un contenidor amb
   // àmbit aplica si el conté a ell o a un ancestre seu. Sense àmbit → fallback al garment_group.
@@ -322,23 +321,9 @@ export default function ModelWizard() {
     garmentTypeItemId: item?.id ?? null,
   }
 
-  // Fits que porten a una graduació REAL per a la combinació fixada (matching estricte).
-  const fitOptions = useMemo(
-    () => availableFitsStrict(
-      gradingRuleSets_, nodeAxes, ggCodiById, sizingResult?.size_system_id ?? null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gradingRuleSets_, target, construction, garmentGroupCodi, family?.id, item?.id, ggCodiById, sizingResult],
-  )
 
   const gradingAxes = { ...nodeAxes, fit }
 
-  // F1.3 — eixos del matching estricte que encara no estan resolts. Sense això, qualsevol eix a null
-  // buidava la llista i la UI ho reportava com «no hi ha cap joc de regles» (motiu fals).
-  const eixosGradingMancants = [
-    !target && t('grading.axis_target'),
-    !construction && t('grading.axis_construction'),
-    !garmentGroupCodi && t('grading.axis_group'),
-  ].filter(Boolean)
 
   // B1 — coincidències estrictes per als eixos FIXATS (incloent el fit triat). Consumeix el matcher
   // canònic de gradingAxes.js (no es duplica cap lògica aquí).
@@ -349,17 +334,13 @@ export default function ModelWizard() {
     [gradingRuleSets_, target, construction, garmentGroupCodi, family?.id, item?.id, fit, ggCodiById, sizingResult],
   )
 
-  // B1 — autoselecció quan la coincidència és ÚNICA: preselecciona l'únic ruleset possible. Visible
-  // (bàner «proposat automàticament») i REVOCABLE (canviar de card, «Sense graduació» o canviar fit).
-  // No dispara si ja hi ha tria (manual o hidratada en edició) ni amb 0/>1 candidats.
-  useEffect(() => {
-    if (noGrading || !fit || !sizingResult) return
-    if (gradingRuleSetId != null) return
-    if (strictMatches.length === 1) {
-      setGradingRuleSetId(strictMatches[0].id)
-      setAutoProposed(true)
-    }
-  }, [strictMatches, fit, noGrading, sizingResult, gradingRuleSetId])
+  // B1 — autoselecció RETIRADA (31/07). Preseleccionava l'únic ruleset compatible en quant el
+  // `fit` quedava resolt, i el `fit` es tria al pas de PEÇA: un model podia NÉIXER graduat sense
+  // que ningú hagués passat pel pas de graduació ni l'hagués vist. Amb el pas ja retirat, això
+  // hauria estat una assignació invisible — exactament el contrari de la llei: el model neix
+  // NET i la graduació s'incorpora pel gest (botó Graduació · Propagar), amb acceptació
+  // explícita. La proposta del catàleg no s'ha perdut: viu allà, que és on hi ha un botó
+  // d'Acceptar al davant.
 
   // F1.5 — el ruleset hidratat en edició no es netejava mai encara que deixés de casar amb els eixos
   // triats, i skeletonPayload seguia enviant l'id antic (risc #8). Es neteja, i es DIU (mai en silenci).
@@ -371,8 +352,6 @@ export default function ModelWizard() {
     if (!gradingRuleSets_.some(rs => rs.id === gradingRuleSetId)) return
     if (strictMatches.some(rs => rs.id === gradingRuleSetId)) return
     setGradingRuleSetId(null)
-    setAutoProposed(false)
-    setGradingDropped(true)
   }, [strictMatches, gradingRuleSets_, fit, sizingResult, gradingRuleSetId, noGrading])
 
   const skeletonPayload = () => {
@@ -465,6 +444,7 @@ export default function ModelWizard() {
         if (!confirmaAltreClient(e)) throw e
         await models.updateStep2(id, { ...payload, confirmar_altre_client: true })
       }
+      if (encastat) { onSaved?.(); return }
       navigate(`/models/${id}`)
     } catch (e) {
       setError(errMsg(e))
@@ -479,12 +459,14 @@ export default function ModelWizard() {
   const block1Resolved = !!(customerId && year && season)
 
   return (
-    <div style={{ maxWidth: 820, margin: '0 auto', padding: '2rem 1rem' }}>
+    <div style={encastat ? {} : { maxWidth: 820, margin: '0 auto', padding: '2rem 1rem' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
-        <h1 style={{ fontFamily: MONO, fontSize: 'var(--fs-h1)', fontWeight: 500, margin: 0 }}>
+        <h1 style={{ fontFamily: MONO, fontSize: encastat ? 'var(--fs-h3)' : 'var(--fs-h1)', fontWeight: 500, margin: 0 }}>
           {isEditMode ? t('model_wizard.title_edit') : t('model_wizard.title_new')}
         </h1>
-        <button type="button" onClick={() => navigate('/models')} style={linkBtn}>✕ {t('model_wizard.cancel')}</button>
+        <button type="button" onClick={() => (encastat ? onClose?.() : navigate('/models'))} style={linkBtn}>
+          ✕ {t('model_wizard.cancel')}
+        </button>
       </div>
 
       {/* Stepper */}
@@ -591,7 +573,7 @@ export default function ModelWizard() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {FITS.map(f => (
                     <Chip key={f.codi} active={fit === f.codi}
-                      onClick={() => { if (fit !== f.codi) { setGradingRuleSetId(null); setAutoProposed(false) } setFit(f.codi) }}>
+                      onClick={() => { if (fit !== f.codi) setGradingRuleSetId(null); setFit(f.codi) }}>
                       {t(`model_wizard.fit_${f.codi}`, f.nom_en)}
                     </Chip>
                   ))}
@@ -753,83 +735,26 @@ export default function ModelWizard() {
         )}
 
         {block === 4 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Context FIX de la peça+talles (arbre únic: no es re-tria aquí; el grup el mana l'item) */}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <ReadChip label={t('model_wizard.target')} value={target ? t(`model_wizard.target_${target}`) : '—'} />
-              <ReadChip label={t('model_wizard.construction')} value={construction ? t(`model_wizard.construction_${construction}`) : '—'} />
-              <ReadChip label={t('model_wizard.grading_group')} value={garmentGroupCodi || '—'} />
-              {/* F1.3 — fallback al sistema DEL MODEL (com fa la fitxa, ModelSheet): un model que en té
-                  un no pot pintar '—'. El guió queda per als models que de debò no en tenen. */}
-              <ReadChip label={t('model_wizard.grading_system')} value={sizingResult?.size_system_nom || modelSizeSystemNom || '—'} />
-            </div>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', cursor: 'pointer', color: 'var(--text-main)' }}>
-              <input type="checkbox" checked={noGrading}
-                onChange={e => { setNoGrading(e.target.checked); setAutoProposed(false); if (e.target.checked) { setFit(null); setGradingRuleSetId(null) } }} />
-              {t('model_wizard.no_grading')}
-            </label>
-
-            {/* F1.3 — el missatge diu QUÈ falta de veritat. Abans deia sempre «defineix les talles»
-                encara que el que faltés fos només la talla base (risc #2 de la diagnosi 174). */}
-            {!noGrading && !sizingResult && (
-              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>
-                {t(`model_wizard.grading_needs_${sizingMissing}`)}
-              </p>
-            )}
-
-            {!noGrading && sizingResult && (
-              <>
-                {/* El fit ja s'ha triat al pas Peça; aquí es pot canviar sense tornar-hi. C5: la
-                    llista NO s'escurça als fits que porten a graduació — es marquen els que no
-                    hi porten. Abans desapareixien, i una llista buida deia un motiu fals. */}
-                <Field label={t('model_wizard.pick_fit')}>
-                  {eixosGradingMancants.length > 0 && (
-                    <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: '0 0 8px' }}>
-                      {t('model_wizard.grading_missing_axes', { eixos: eixosGradingMancants.join(' · ') })}
-                    </p>
-                  )}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {FITS.map(f => {
-                      const ambGraduacio = fitOptions.some(o => o.codi === f.codi)
-                      return (
-                        <Chip key={f.codi} active={fit === f.codi}
-                          motiu={ambGraduacio ? null : t('model_wizard.fit_sense_graduacio')}
-                          onClick={() => { setFit(f.codi); setGradingRuleSetId(null); setAutoProposed(false) }}>
-                          {t(`model_wizard.fit_${f.codi}`, f.nom_en)}
-                        </Chip>
-                      )
-                    })}
-                  </div>
-                </Field>
-                {gradingDropped && (
-                  <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--warn)', background: 'var(--warn-bg)',
-                                border: '0.5px solid var(--warn)', borderRadius: 6, padding: '8px 12px' }}>
-                    {t(gradingRuleSetId != null ? 'model_wizard.grading_dropped_replaced' : 'model_wizard.grading_dropped')}
-                  </div>
-                )}
-                {fit && autoProposed && gradingRuleSetId != null && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gold)', background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 6, padding: '8px 12px' }}>
-                    <IconBulb size={16} stroke={1.5} />
-                    {t('model_wizard.grading_auto_proposed')}
-                  </div>
-                )}
-                {fit && (
-                  <RuleSetPicker
-                    ruleSets={gradingRuleSets_}
-                    garmentGroupCodiById={ggCodiById}
-                    axes={gradingAxes}
-                    strict
-                    sizeSystemId={sizingResult?.size_system_id ?? null}
-                    selectedId={gradingRuleSetId}
-                    suggestedId={perfilSuggestedRsId}
-                    actionLabel={t('model_sheet.use_ruleset')}
-                    onPick={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false); setAutoProposed(false) }}
-                  />
-                )}
-              </>
-            )}
-          </div>
+          /* EL PAS DE GRADUACIÓ — el mateix component que el botó «Graduació» de Mesures obre
+             com a overlay. Aquí el wizard només hi porta el seu estat; qui decideix segueix
+             sent ell (el `grading_rule_set_id` viatja al seu payload i s'escriu en desar). */
+          <GraduacioPanel
+            axes={{
+              target, construction, garmentGroupCodi,
+              garmentTypeId: family?.id ?? null, garmentTypeItemId: item?.id ?? null,
+            }}
+            sizing={sizingResult ? {
+              size_system_id: sizingResult.size_system_id,
+              size_system_nom: sizingResult.size_system_nom,
+            } : null}
+            sizingMissing={sizingMissing}
+            fit={fit}
+            onFit={(codi) => { setFit(codi); setGradingRuleSetId(null) }}
+            gradingRuleSetId={gradingRuleSetId}
+            onUsar={(rs) => { setGradingRuleSetId(rs.id); setNoGrading(false); onUsarJoc?.(rs) }}
+            noGrading={noGrading}
+            onNoGrading={(v) => { setNoGrading(v); if (v) { setFit(null); setGradingRuleSetId(null) } }}
+          />
         )}
       </div>
 
@@ -846,7 +771,7 @@ export default function ModelWizard() {
           style={{ ...ghostBtn, opacity: block === 1 ? 0.4 : 1 }}>← {t('model_wizard.back')}</button>
         {block < 4 ? (
           <button type="button" disabled={block === 1 && !block1Resolved}
-            onClick={() => { if (!(block === 1 && !block1Resolved)) setBlock(b => Math.min(4, b + 1)) }}
+            onClick={() => { if (!(block === 1 && !block1Resolved)) setBlock(b => Math.min(BLOCKS.length, b + 1)) }}
             style={primaryBtn(block === 1 && !block1Resolved)}>{t('model_wizard.next')} →</button>
         ) : (
           <button type="button" disabled={saving || baseSizeInvalid} onClick={isEditMode ? handleSaveEdit : handleCreate} style={primaryBtn(saving || baseSizeInvalid)}>
@@ -861,7 +786,6 @@ export default function ModelWizard() {
 }
 
 // ── UI atoms (tokens) ─────────────────────────────────────────────────────────
-const labelStyle = { fontSize: 'var(--fs-body)', color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: MONO }
 const inputStyle = { width: '100%', padding: '8px 10px', borderRadius: 4, border: '0.5px solid var(--gray-l)', fontFamily: MONO, fontSize: 'var(--fs-body)', background: 'var(--white)', boxSizing: 'border-box' }
 const refBox = { background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8, padding: '8px 14px', fontFamily: MONO, fontSize: 'var(--fs-h3)', color: 'var(--warn)', fontWeight: 500, minHeight: 36, display: 'flex', alignItems: 'center' }
 const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, padding: '0.6rem 1rem', margin: '12px 0 0', fontSize: 'var(--fs-body)', color: '#c00', fontFamily: MONO }
@@ -870,14 +794,6 @@ const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--
 const ghostBtn = { background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)', borderRadius: 6, padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
 const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : 'var(--warn)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-h3)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
 
-function Field({ label, children }) {
-  return (
-    <div style={{ flex: '1 1 auto' }}>
-      <div style={{ ...labelStyle, marginBottom: 6 }}>{label}</div>
-      {children}
-    </div>
-  )
-}
 function TextInput({ label, value, onChange, placeholder }) {
   return (
     <Field label={label}>
@@ -885,23 +801,4 @@ function TextInput({ label, value, onChange, placeholder }) {
     </Field>
   )
 }
-function ReadChip({ label, value }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 12px', borderRadius: 6, border: '0.5px solid var(--gray-l)', background: 'var(--bg-card)', minWidth: 90 }}>
-      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</span>
-      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontWeight: 500 }}>{value}</span>
-    </div>
-  )
-}
 // `motiu` (C5): l'opció no porta enlloc, però NO s'amaga ni es bloqueja — s'atenua i ho diu.
-function Chip({ active, onClick, disabled, motiu, children }) {
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} title={motiu || undefined} style={{
-      padding: '6px 14px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)',
-      border: active ? '1.5px solid var(--warn)' : '0.5px solid var(--gray-l)',
-      background: active ? 'var(--warn)' : 'transparent', color: active ? 'var(--white)' : 'var(--text-main)',
-      cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: active ? 500 : 400,
-      opacity: (disabled || motiu) && !active ? 0.5 : 1,
-    }}>{children}</button>
-  )
-}

@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- ⚠️ SUPERAT 2026-07-31 — la spec canònica de la capçalera és ara
+     docs/spec/capcalera_ftt_v3.md (maqueta v3.3, aprovada per l'Agus). Aquest SVG és la
+     banda de 3 caixes i 90,2pt d'alt que la v3.3 substitueix per 4 caixes i 70,4pt (i per
+     una estructura pròpia en vertical, que aquí no existia). Es conserva com a HISTÒRIC:
+     no s'hi mesura res i cap implementació nova s'hi ha de referir. -->
 <svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 841.9 595.3">
   <!-- ═══════════════════════════════════════════════════════════════════════
        FTT · TEMPLATE FTT — ESPECIFICACIÓ CANÒNICA DE LA CAPÇALERA

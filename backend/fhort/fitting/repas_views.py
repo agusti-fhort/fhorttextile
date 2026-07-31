@@ -247,11 +247,16 @@ class FittingRepasView(APIView):
 
         # Nomenclatura i ordre de fitxa: BaseMeasurement del model, el mateix camí que
         # l'editor G1 i la taula de mesures (una query, tres mapes).
+        # R1 (31/07) — el BATEIG hi viatja també: és del MODEL, com `ordre` i `nom_fitxa`, i
+        # sense ell la taula fitting_history de la fitxa imprimia el nom del catàleg d'un POM
+        # que el tècnic havia rebatejat.
         bm_data = list(BaseMeasurement.objects.filter(model_id=model.id)
-                       .values_list('pom_id', 'ordre', 'nom_fitxa', 'id'))
-        ordre_map = {p: o for p, o, _, _ in bm_data}
-        nom_fitxa_map = {p: nf for p, _, nf, _ in bm_data}
-        bm_id_map = {p: i for p, _, _, i in bm_data}
+                       .values_list('pom_id', 'ordre', 'nom_fitxa', 'id',
+                                    'nom_canonic_model', 'nom_traduit_model'))
+        ordre_map = {p: o for p, o, _, _, _, _ in bm_data}
+        nom_fitxa_map = {p: nf for p, _, nf, _, _, _ in bm_data}
+        bm_id_map = {p: i for p, _, _, i, _, _ in bm_data}
+        bateig_map = {p: (nc or '', nt or '') for p, _, _, _, nc, nt in bm_data}
 
         # Files = els POMs que s'han fitat en aquesta talla (no el cens sencer de POMs del
         # model: una fila buida a totes les sessions no és repàs, és soroll). Els POMs que
@@ -268,6 +273,9 @@ class FittingRepasView(APIView):
                     'pom_code': pom.pom_code if pom else '',
                     'nom_en': pom.name_en if pom else '',
                     'nom_local': pom.name_cat if pom else '',
+                    # CRUS i al costat del catàleg: '' = no batejat → mana el catàleg.
+                    'nom_canonic_model': (bateig_map.get(pom_id) or ('', ''))[0],
+                    'nom_traduit_model': (bateig_map.get(pom_id) or ('', ''))[1],
                     'nom_fitxa': nom_fitxa_map.get(pom_id),
                     'bm_id': bm_id_map.get(pom_id),
                     'is_key': pom.is_key_measure if pom else False,

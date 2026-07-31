@@ -24,7 +24,7 @@ const COPY_FLAGS = ['copy_values', 'copy_run', 'copy_grading', 'copy_files']
 // NO inclou el camí 'size_check' (CheckMeasureEditor): això és el flux de TREBALL del tab, no la
 // genesi (es reapuntarà a J1b). Quan la base queda materialitzada, crida onMaterialized() perquè el
 // tab rellegeixi taula-mesures i passi a la superfície de consulta/treball (CheckMeasureEditor).
-export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, entryMode = false, intent = null }) {
+export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, entryMode = false, intent = null, onGraduacio = null }) {
   const { t } = useTranslation()
   const id = model?.id
   const token = localStorage.getItem('access_token')
@@ -426,11 +426,23 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                 {t('model_measurements.pom_subtitle')}
               </div>
             </div>
-            <button type="button" onClick={() => setMode('import')}
-              style={{ background: 'transparent', color: 'var(--gold)', border: '0.5px solid var(--gold)',
-                       borderRadius: 6, padding: '7px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
-              <i className="ti ti-upload" /> {t('model_measurements.import_table')}
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {/* GRADUACIÓ des d'AQUÍ (31/07): és la vista on es treballa la taula, i on les
+                  columnes de Regla es veuen buides esperant. Obre el mateix wizard al pas 4
+                  que el botó de la barra de consulta. */}
+              {onGraduacio && (
+                <button type="button" onClick={onGraduacio}
+                  style={{ background: 'transparent', color: 'var(--gold)', border: '0.5px solid var(--gold)',
+                           borderRadius: 6, padding: '7px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
+                  <i className="ti ti-chart-arrows-vertical" /> {t('graduacio.button')}
+                </button>
+              )}
+              <button type="button" onClick={() => setMode('import')}
+                style={{ background: 'transparent', color: 'var(--gold)', border: '0.5px solid var(--gold)',
+                         borderRadius: 6, padding: '7px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
+                <i className="ti ti-upload" /> {t('model_measurements.import_table')}
+              </button>
+            </div>
           </div>
           {/* C2 — els xips de POMs suggerits han mort. La taula ARRENCA amb totes les files de
               l'item i el tècnic hi treu el que no vol amb la ✕ de cada fila (i n'afegeix amb el

@@ -206,6 +206,12 @@ class LiniaContracteSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+# B7 — idioma del document → columna del catàleg. Els catàlegs de graduació (Target, FitType,
+# ConstructionType) porten el nom als tres idiomes; el codi de l'idioma és el de la UI ('ca'),
+# el de la columna és el del model de dades ('nom_cat'), i no són el mateix nom.
+_CATALEG_NOM_ATTR = {'ca': 'nom_cat', 'en': 'nom_en', 'es': 'nom_es'}
+
+
 class ModelDetailSerializer(serializers.ModelSerializer):
     fitxers = ModelFitxerSerializer(many=True, read_only=True)
     garment_type_nom = serializers.CharField(source='garment_type.nom_client', read_only=True)
@@ -228,6 +234,8 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     grading_target_nom = serializers.SerializerMethodField()
     grading_fit_nom = serializers.SerializerMethodField()
     grading_construction_nom = serializers.SerializerMethodField()
+    # B7 — els mateixos tres, en els TRES idiomes, per a la fitxa amb idioma propi.
+    grading_noms = serializers.SerializerMethodField()
     customer_logo = serializers.SerializerMethodField()   # TS-4c: logo del client (URL)
     # L'ESTAT DE LA FEINA DE POM ÉS UN FET DEL MODEL, no una fila de la llista de tasques.
     #
@@ -290,6 +298,39 @@ class ModelDetailSerializer(serializers.ModelSerializer):
         if rs and rs.construction_id:
             return rs.construction.nom_en
         return (obj.construction or '').strip() or None
+
+    def get_grading_noms(self, obj):
+        """Target/fit/construction en ELS TRES IDIOMES: {target: {ca,en,es}, fit: …, …}.
+
+        B7 — la fitxa tècnica té idioma PROPI (propietat del document, no de qui l'obre), i
+        aquests tres són valors de CATÀLEG: tenen nom a cada idioma i s'han de dir en el del
+        document. Es donen els tres alhora, no un de resolt per petició, perquè commutar
+        l'idioma de la fitxa ha de re-renderitzar el document sense tornar a demanar el model.
+
+        `grading_*_nom` (anglès) es conserven intactes: hi ha consumidors que no són la fitxa.
+        Un idioma sense traducció al catàleg cau a l'anglès — una capçalera no es queda en
+        blanc mai. Els camps legacy de text lliure del Model no es tradueixen (són dades
+        escrites a mà, no tokens de catàleg): el mateix valor als tres idiomes.
+        """
+        rs = obj.grading_rule_set if obj.grading_rule_set_id else None
+
+        def per_idiomes(items, legacy):
+            if items:
+                return {
+                    idioma: ' / '.join((getattr(it, attr, '') or '').strip() or it.nom_en for it in items)
+                    for idioma, attr in _CATALEG_NOM_ATTR.items()
+                }
+            val = (legacy or '').strip()
+            return {idioma: val for idioma in _CATALEG_NOM_ATTR} if val else None
+
+        targets = list(rs.targets.all()) if rs else []
+        if rs and not targets and rs.target_id:
+            targets = [rs.target]
+        return {
+            'target': per_idiomes(targets, obj.target),
+            'fit': per_idiomes([rs.fit_type] if rs and rs.fit_type_id else [], obj.fit_type),
+            'construction': per_idiomes([rs.construction] if rs and rs.construction_id else [], obj.construction),
+        }
 
     def get_customer_logo(self, obj):
         if obj.customer_id and obj.customer.logo:

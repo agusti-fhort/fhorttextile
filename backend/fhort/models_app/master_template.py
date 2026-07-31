@@ -21,16 +21,20 @@ logger = logging.getLogger(__name__)
 
 MASTER_TEMPLATE_NAME = 'Template FTT'
 MASTER_TEMPLATE_DESC = (
-    'Plantilla mestra de capçalera de fitxa tècnica (3 caixes: document · identificació · '
-    'definició tècnica). Etiquetes angleses fixes; valors del model + logo del client al '
-    'render. Consciència de pàgina (PAGE i/n). Sembrada a cada tenant per bootstrap_tenant.'
+    'Plantilla mestra de capçalera de fitxa tècnica (maqueta v3.3: logo · identificació de '
+    'la peça · run i definició tècnica · data i pàgina). Etiquetes en l\'idioma del DOCUMENT; '
+    'valors del model + logo del client al render. Consciència de pàgina (PAGE i/n). '
+    'Sembrada a cada tenant per bootstrap_tenant.'
 )
 
-# Caixa de la capçalera (mm), mapada des de la geometria del brief en pt (×0.3528 mm/pt):
-# banda x=28.6 y=39 w=784.7 h=90.2 pt. La POSICIÓ de l'objecte es deriva d'aquests pt de l'SVG
-# canònic × 0.3528 mm/pt, i ha de coincidir EXACTAMENT amb MASTER_HEADER_GEOM del frontend
-# (insert manual). Font única de veritat: docs/spec/plantilla_capcalera_ftt.svg.
-_HDR_PT = {'x': 28.6, 'y': 39, 'w': 784.7, 'h': 90.2}
+# Caixa de la capçalera (mm), mapada des de la geometria de l'spec en pt (×0.3528 mm/pt). La
+# plantilla sembrada és d'UNA pàgina A4 APAÏSAT, i per això aquí hi ha la banda horitzontal:
+# x=28.6 y=39 w=784.7 h=70.4 pt. La vertical (535.7×92.8) existeix al renderer i s'aplica per
+# format de pàgina; aquí no en cal cap literal perquè aquest document no en té cap, de vertical.
+# Ha de coincidir EXACTAMENT amb MASTER_HEADER_GEOM del frontend (insert manual).
+# Font única de veritat: docs/spec/capcalera_ftt_v3.md (maqueta v3.3, 2026-07-31; l'SVG
+# anterior, de 90.2pt i tres caixes, queda SUPERAT).
+_HDR_PT = {'x': 28.6, 'y': 39, 'w': 784.7, 'h': 70.4}
 _PT_TO_MM = 0.3528
 _HEADER_OBJ = {
     'id': 'hdr1', 'type': 'data_block', 'kind': 'header', 'layer': 'template',
