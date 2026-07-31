@@ -3959,8 +3959,16 @@ def _sembra_step_des_dels_specs(model, pom_id):
     if gv is None:
         return {}
 
+    # C2/Onada 1 — ÀNCORA DE SEMBRA: regla compartida (3c.1). La regla de graduació és una
+    # llei d'INCREMENTS i no té capa per decisió de domini —el folre d'un pit creix el mateix
+    # que el seu exterior, perquè la peça és la mateixa peça—, o sigui que sembrar-ne els
+    # `valors_step` demana UNA font i no la barreja de totes les capes del POM. L'exterior és
+    # l'àncora. Sense el filtre, `dict()` es quedaria amb l'últim `size_label` llegit i la
+    # regla naixeria amb valors de capes diferents barrejats, sense cap rastre.
+    from fhort.pom.models import MeasurementLayer
     valors = dict(GradedSpec.objects
-                  .filter(grading_version=gv, pom_id=pom_id, is_active=True)
+                  .filter(grading_version=gv, pom_id=pom_id, is_active=True,
+                          capa=MeasurementLayer.SLUG_DEFECTE)
                   .values_list('size_label', 'graded_value_cm'))
     if not valors:
         return {}
