@@ -83,8 +83,13 @@ def base_measurements_with_units_view(request, model_id):
     try:
         from fhort.models_app.models import BaseMeasurement
 
+        # C2/Onada 1 — àncora EXTERIOR explícita: la resposta és una llista plana on cada
+        # element s'identifica per `pom_id`, i qui la consumeix hi indexa. Amb dues capes
+        # servides alhora, dos elements portarien el mateix `pom_id` i el consumidor en
+        # perdria un en silenci. La capa entra al contracte a C4, no aquí.
+        from fhort.pom.models import MeasurementLayer
         bms = BaseMeasurement.objects.filter(
-            model_id=model_id, is_active=True
+            model_id=model_id, is_active=True, capa=MeasurementLayer.SLUG_DEFECTE
         ).select_related('pom', 'pom__pom_global', 'pom__categoria').order_by(
             'pom__categoria__display_order', 'pom__codi_client'
         )

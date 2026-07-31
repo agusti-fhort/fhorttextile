@@ -158,9 +158,15 @@ def check_tolerances_view(request, model_id):
         from fhort.fitting.models import POMAlert
 
         model = Model.objects.get(pk=model_id)
+        # C2/Onada 1 — àncora EXTERIOR explícita: el body d'aquest endpoint és
+        # `{pom_id, value_cm}` i no diu de quina capa parla. Mentre el contracte no porti
+        # capa (C4), una mesura presa a mà es compara amb l'exterior, que és el que el
+        # tècnic té al davant. Per POM sol, la base d'una altra capa podria manar aquí.
+        from fhort.pom.models import MeasurementLayer
         base_map = {
             bm.pom_id: float(bm.base_value_cm)
-            for bm in BaseMeasurement.objects.filter(model=model, is_active=True)
+            for bm in BaseMeasurement.objects.filter(
+                model=model, is_active=True, capa=MeasurementLayer.SLUG_DEFECTE)
             if bm.base_value_cm is not None
         }
 
