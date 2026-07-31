@@ -1660,16 +1660,33 @@ def measurements_table_view(request, model_id):
     # no en sap res —si el tècnic desa, la regla passa a ser resident del model, que és qui mana.
     #
     # D-B (2026-07-31) — la cadena del catàleg passa a ser SizingProfile → GarmentTypeItem, i
-    # viu en UN sol lloc (`ruleset_de_catalec`) compartit amb la pantalla de Graduació. Abans
-    # aquí només es mirava el GTI: la font viva del suggeriment és el perfil des del 2026-07-23
-    # (el 98% del catàleg de staging hi és, contra el 6% dels items). `setdefault` es manté —
-    # omple FORATS, no substitueix res que el model ja digui.
+    # viu en UN sol lloc (`ruleset_de_catalec`) compartit amb la pantalla de Graduació.
+    #
+    # ⚠️ SOTA DEMANDA EXPLÍCITA (`?proposta=1`), i això és la correcció del 31/07 (bug de
+    # PRESENTACIÓ del QA d'Agus, model 1302). Fins ara el fallback s'aplicava SEMPRE, i el
+    # resultat era que un model creat expressament SENSE graduació ensenyava a Mesures un
+    # «CH · LINEAR +2,0 / +3,0 @XS» que no era seu: era el ruleset penjat del seu item. Dues
+    # conseqüències, i la segona és la greu:
+    #   1. la pantalla presentava una PROPOSTA com si fos la regla del model;
+    #   2. `EditableTable` reenvia el que ensenya (`buildPayload → rules`) i
+    #      `set_measurements_view` en fa UPSERT de ModelGradingRule → desar mesures hauria
+    #      materialitzat la proposta com a regla del model **sense que ningú l'acceptés mai**,
+    #      que és exactament el que P4 prohibeix.
+    #
+    # LLEI (Agus, 31/07): «El C4 només pinta regles REALS del model.» Les files porten el que
+    # `_load_grading_rules` diu —resident del model, o del seu propi ruleset— i prou. La
+    # proposta del catàleg segueix viva, però només per al GEST de Graduació, que la demana
+    # explícitament i té un botó d'Acceptar al davant. El bloc `graduacio` de la resposta (més
+    # avall) sempre hi és: és METADADA sobre què hi ha, mai una regla pintada.
     from fhort.models_app.services import ruleset_de_catalec, resol_proposta_graduacio
-    _font_cat, _rs_cat = ruleset_de_catalec(model)
-    if _rs_cat is not None:
-        from fhort.pom.models import GradingRule
-        for r in GradingRule.objects.filter(rule_set_id=_rs_cat.id, actiu=True):
-            rules_by_pom.setdefault(r.pom_id, r)
+    vol_proposta = str(request.query_params.get('proposta', '')).lower() in ('1', 'true', 'yes')
+    if vol_proposta:
+        _font_cat, _rs_cat = ruleset_de_catalec(model)
+        if _rs_cat is not None:
+            from fhort.pom.models import GradingRule
+            # `setdefault`: omple FORATS, no substitueix res que el model ja digui.
+            for r in GradingRule.objects.filter(rule_set_id=_rs_cat.id, actiu=True):
+                rules_by_pom.setdefault(r.pom_id, r)
 
     def _flt(v):
         return float(v) if v is not None else None
