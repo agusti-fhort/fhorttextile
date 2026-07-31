@@ -11,6 +11,7 @@ from .views import (
     model_dashboard_view,
     model_timeline_view,
     create_model_wizard,
+    accept_grading_proposal_view,
     generate_grading_view,
     set_size_override_view,
     escalat_ajustar_talla_view,
@@ -217,6 +218,8 @@ urlpatterns = (
         path('models/<int:model_id>/analisi-ia/', ai_analysis_view),
         path('models/<int:model_id>/xat-mesures/', measurements_chat_view),
         path('models/<int:model_id>/generar-grading/', generate_grading_view),
+        # G1 — ACCEPTAR la proposta de graduació del catàleg (mecanisme del wizard, P3).
+        path('models/<int:model_id>/graduacio-acceptar/', accept_grading_proposal_view),
         # D5 — `set-size-override/` JUBILADA: el wrapper JS existia i cap component el cridava;
         # l'editor real fa servir escalat/ajustar-talla. Vista conservada per a test_g6_segell.
         path('models/<int:model_id>/escalat/ajustar-talla/', escalat_ajustar_talla_view),

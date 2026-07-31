@@ -149,6 +149,89 @@ def config_missing_text(missing):
     return f'Completa la configuració del model abans de definir POMs: {labels}.'
 
 
+#: D'on ha sortit la regla que la pantalla de Graduació ensenya. Vocabulari TANCAT: el front
+#: hi penja el rètol de la franja, i el gest d'Acceptar només existeix per a les PROPOSTES.
+PROPOSTA_MODEL = 'model'    # el model ja té graduació (resident o ruleset seu) — no és proposta
+PROPOSTA_PERFIL = 'perfil'  # SizingProfile de la combinació (target×construcció×fit×família)
+PROPOSTA_ITEM = 'item'      # GarmentTypeItem.grading_rule_set (fallback)
+
+
+def ruleset_de_catalec(model):
+    """El GradingRuleSet que el CATÀLEG proposa per a aquest model → `(font, rule_set)`.
+
+    NO mira si el model ja en té: només diu què proposaria el catàleg. Els dos consumidors en
+    volen coses diferents —`resol_proposta_graduacio` hi decideix la proposta, i
+    `measurements_table_view` l'usa per OMPLIR ELS FORATS de la pantalla— i partir-ho evita que
+    l'un hagi de desfer la decisió de l'altre.
+
+    LA CADENA (decisió D-B, Agus 2026-07-31):
+      1. `SizingProfile` de la combinació (target×construcció×fit×família) → 'perfil'. És la font
+         VIVA del suggeriment des del 2026-07-23 i cobreix el 98% del catàleg de staging.
+      2. `GarmentTypeItem.grading_rule_set` → 'item'. Fallback: és on la S4 va assignar a PROD
+         (RS146-149) i on `measurements_table_view` ja queia per omplir la pantalla.
+      3. Res → (None, None).
+
+    AGNÒSTIC D'ENTORN (D-C): cap id cablejat. Proposa el que la cadena resolgui, sigui el
+    catàleg de staging (75..217) o el de PROD (146-149).
+
+    El `fit` surt de `Model.fit_type`, que MAI és buit (CharField amb default 'Regular',
+    models_app/models.py:224); `normalize_fit_type` fa el pont entre el seu vocabulari CamelCase
+    i el `FitType.codi` del catàleg. Un fit fora de catàleg no és un error: només vol dir que cap
+    perfil hi casa, i la cadena baixa al fallback de l'item.
+    """
+    # 1 — SizingProfile. Tolerant a NULL a cada baula: si falta qualsevol eix, no hi ha perfil
+    # que hi pugui casar i es baixa al fallback sense soroll.
+    if model.target and model.construction and model.garment_type_id:
+        from fhort.pom.models import (FitTypeDesconegut, SizingProfile,
+                                      normalize_fit_type)
+        try:
+            fit = normalize_fit_type(model.fit_type)
+        except FitTypeDesconegut:
+            # Un fit que el catàleg no coneix ('Tailored' no té equivalent, v. FIT_ALIES_MODEL)
+            # no és un error de pantalla: vol dir que cap perfil hi pot casar. Es busca sense
+            # filtrar per fit i, si tampoc, la cadena baixa a l'item.
+            fit = None
+        qs = SizingProfile.objects.filter(
+            target__codi=model.target,
+            construction__codi=model.construction,
+            garment_type_id=model.garment_type_id,
+            grading_rule_set__isnull=False,
+        ).select_related('grading_rule_set')
+        if fit is not None:
+            qs = qs.filter(fit_type_id=fit.id)
+        # Perfil del CLIENT del model abans que el genèric: mateix criteri de prioritat que
+        # `sizing_profiles_view` (pom/s2_views.py:107-119), aquí reduït al que decideix.
+        perfil = (qs.filter(customer_id=model.customer_id).first() if model.customer_id else None) \
+            or qs.filter(customer__isnull=True).first() \
+            or qs.first()
+        if perfil is not None:
+            return (PROPOSTA_PERFIL, perfil.grading_rule_set)
+
+    # 2 — l'item. `garment_type_item` pot ser NULL (models antics): getattr, no accés directe.
+    rs = getattr(model.garment_type_item, 'grading_rule_set', None)
+    if rs is not None:
+        return (PROPOSTA_ITEM, rs)
+
+    return (None, None)
+
+
+def resol_proposta_graduacio(model):
+    """Què ha d'ensenyar la pantalla de GRADUACIÓ d'aquest model → `(font, rule_set)`.
+
+    El model MANA sempre: si ja té graduació (resident o ruleset seu) la resposta és
+    ('model', None) i no hi ha res a acceptar — el catàleg proposa, el model disposa. Només
+    quan no en té es baixa al catàleg (`ruleset_de_catalec`).
+
+    `(None, None)` no és un error: és un model que encara no sap graduar, i el flux de
+    Graduació existeix precisament per a ell.
+    """
+    from fhort.pom.services import _te_regles
+
+    if _te_regles(model):
+        return (PROPOSTA_MODEL, None)
+    return ruleset_de_catalec(model)
+
+
 #: R8 — traducció entre els dos vocabularis de provinença. `GradingRuleSet.origen` diu
 #: CANONICAL/CLIENT_RUN/IMPORT (o NULL, no classificat); `ModelGradingRule.origen` diu
 #: IMPORTED/CANONICAL/CLIENT_RUN/MANUAL. Abans el wizard resolia la diferència escrivint
