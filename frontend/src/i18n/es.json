@@ -2746,7 +2746,7 @@
     "hdr_label_collection": "COLECCIÓN",
     "hdr_label_target_fit_construction": "TARGET | TIPO DE FIT | CONSTRUCCIÓN",
     "hdr_label_size_run": "JUEGO DE TALLAS",
-    "hdr_label_copyright": "© FHORT",
+    "hdr_label_copyright": "FHORT TEXTILE TECH © {{year}}",
     "doc_lang": "Idioma de la ficha",
     "doc_lang_title": "Idioma en el que se imprime el documento. Es del documento, no de quien lo edita: la interfaz sigue tu idioma.",
     "pen_trace_hint": "Trazado en curso ({{n}} nodos) — Enter, Escape o doble clic lo cierran · Supr borra el trazo recién cerrado",

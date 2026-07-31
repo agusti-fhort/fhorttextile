@@ -2746,7 +2746,7 @@
     "hdr_label_collection": "COL·LECCIÓ",
     "hdr_label_target_fit_construction": "TARGET | TIPUS DE FIT | CONSTRUCCIÓ",
     "hdr_label_size_run": "JOC DE TALLES",
-    "hdr_label_copyright": "© FHORT",
+    "hdr_label_copyright": "FHORT TEXTILE TECH © {{year}}",
     "doc_lang": "Idioma de la fitxa",
     "doc_lang_title": "Idioma en què s'imprimeix el document. És del document, no de qui l'edita: la interfície segueix el teu idioma.",
     "pen_trace_hint": "Traçat en curs ({{n}} nodes) — Enter, Escape o doble clic tanquen · Supr esborra el traç acabat de tancar",
