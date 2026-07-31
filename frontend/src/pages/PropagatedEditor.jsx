@@ -38,11 +38,15 @@ export default function PropagatedEditor({
 
   const load = useCallback(() => {
     setLoading(true)
-    return client.get(`/api/v1/models/${modelId}/taula-mesures/`)
+    // `?proposta=1` NOMÉS en mode graduació: és l'única pantalla que té dret a ensenyar una
+    // regla que el model encara no ha adoptat, perquè és l'única que hi posa un botó
+    // d'Acceptar al davant. A Escalat normal i a Mesures, les columnes diuen el que el MODEL
+    // diu — buides si no en té. (Correcció del 31/07; v. `measurements_table_view`.)
+    return client.get(`/api/v1/models/${modelId}/taula-mesures/${graduacio ? '?proposta=1' : ''}`)
       .then(res => setData(res.data))
       .catch(() => setErr(t('model_measurements.propagated_load_err')))
       .finally(() => setLoading(false))
-  }, [modelId, t])
+  }, [modelId, t, graduacio])
 
   useEffect(() => { load() }, [load])
   // Identitat de model per a la capçalera unificada (EditorHeader).

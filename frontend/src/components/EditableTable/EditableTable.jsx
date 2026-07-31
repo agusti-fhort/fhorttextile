@@ -9,13 +9,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-import { formatDelta, formatLen } from '../../utils/format'
-import { deltaSemblaMesura } from '../../utils/plausibilitatMesura'
-
-// FIX-4 (DIAGNOSI_MESURES_TEA_205) — el bloc de REGLA es distingeix per FONS (crema de la casa) i
-// per un SEPARADOR gruixut respecte de la mesura. Dos senyals, no un: el color agrupa, el filet talla.
-const REGLA_BG = 'var(--model-band)'
-const SEP = '2px solid var(--border)'
+import { formatDelta } from '../../utils/format'
 
 const thS = {
   padding: '6px 10px', textAlign: 'left', fontSize: 'var(--fs-body)',
@@ -27,7 +21,6 @@ const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 'var(--fs-
 // norma igual que LINEAR/STEP → canviable des del desplegable. ZERO/EXCEPTION NO s'ofereixen com a tria
 // nova (ZERO = nínxol "sempre 0"; EXCEPTION = tipus APLICAT per cel·la pel motor —override/excepció—,
 // no un règim de POM); si una fila ja en porta un, es manté com a opció perquè el valor real no s'emmascari.
-const REGIME_OPTIONS = ['LINEAR', 'STEP', 'FIXED']
 const btnPrimary = (disabled) => ({
   background: disabled ? 'var(--bg-muted)' : 'var(--gold)', color: disabled ? 'var(--text-muted)' : 'var(--white)',
   border: 'none', borderRadius: 6, padding: '7px 18px',
@@ -55,7 +48,6 @@ export default function EditableTable({
   const [localRows, setLocalRows] = useState(rows)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [confirmDelta, setConfirmDelta] = useState(null)   // FIX-4 — sospites pendents de resposta
 
   useEffect(() => { setLocalRows(rows); setDirty(false) }, [rows])
 
@@ -135,29 +127,20 @@ export default function EditableTable({
         nom_fitxa: r.nom_fitxa || '',
       }))
     const keep_pom_ids = localRows.map(r => r.pom_id).filter(Boolean)
-    const rules = localRows
-      .filter(r => r.pom_id)
-      .map(r => ({
-        pom_id: r.pom_id,
-        logica: r.logica || 'LINEAR',
-        increment_base: r.increment_base ?? null,
-        increment_break: r.increment_break ?? null,
-        talla_break_label: r.talla_break_label || null,
-      }))
-    return { measurements, keep_pom_ids, rules }
+    // CAP `rules` (31/07). Aquesta taula ja no ensenya la regla, o sigui que tampoc no la pot
+    // desar: enviava una entrada per CADA fila amb `logica: r.logica || 'LINEAR'`, i
+    // `set_measurements_view` en fa upsert de ModelGradingRule. Efecte: desar mesures d'un
+    // model sense graduació li creava regles residents —i per tant «ja té graduació»— sense
+    // que ningú n'hagués informat cap. Amb la proposta del catàleg pintada a sobre, a més, el
+    // que es materialitzava era la regla d'un altre. El backend segueix acceptant `rules`
+    // (l'usen altres camins); el que desapareix és que aquesta pantalla n'enviï.
+    return { measurements, keep_pom_ids }
   }
 
-  // FIX-4 — GUARDA DE PLAUSIBILITAT del camp Δ, en DESAR (mai en teclejar: interrompre a cada
-  // tecla faria impossible escriure «1» abans de «1.5»). És la inversa de la guarda d'Escalat:
-  // allà una cel·la de talla molt lluny de la base sembla un increment; aquí un increment massa
-  // gros respecte de la base sembla la mesura sencera. MAI bloqueja — pregunta, i el «sí» desa.
-  const sospites = localRows.flatMap(r => {
-    const base = r.base_value_cm
-    const out = []
-    if (deltaSemblaMesura(r.increment_base, base)) out.push({ r, camp: 'Δ', valor: r.increment_base, base })
-    if (deltaSemblaMesura(r.increment_break, base)) out.push({ r, camp: 'Δ break', valor: r.increment_break, base })
-    return out
-  })
+  // La GUARDA DE PLAUSIBILITAT del Δ (FIX-4) se'n va amb el bloc de regla: sense camp Δ en
+  // aquesta taula no hi pot haver cap delta sospitós que confondre amb una mesura. La guarda
+  // INVERSA —una cel·la de talla que sembla un increment— segueix viva a Escalat
+  // (`PropagatedEditor`), que és on ara es toquen els deltes.
 
   const desa = async () => {
     setSaving(true)
@@ -197,12 +180,7 @@ export default function EditableTable({
     }
   }
 
-  // El botó de desar: si hi ha sospites, primer la pregunta; si no, l'escriptura de sempre.
-  const handleSave = () => {
-    if (sospites.length > 0 && !confirmDelta) { setConfirmDelta(sospites); return }
-    setConfirmDelta(null)
-    return desa()
-  }
+  const handleSave = () => desa()
 
   const displaySize = baseSize || sizeRun?.[0]
   const colCount = (readOnly ? 0 : 2) + 7
@@ -228,34 +206,30 @@ export default function EditableTable({
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <table style={{ borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
             <thead>
-              {/* FIX-4 (DIAGNOSI_MESURES_TEA_205) — la REGLA i la MESURA són coses diferents, i
-                  aquí seien de costat com a columnes germanes. El bloc de regla guanya capçalera
-                  pròpia, el fons crema de la casa i un filet gruixut que el separa de la mesura.
-                  La columna base conserva el seu destacat daurat: segueix essent la protagonista. */}
+              {/* LA GRADUACIÓ NO ES VEU AQUÍ (decisió d'Agus, 31/07). Mesures és POMs,
+                  nomenclatura i valors — res més.
+                  Fins avui aquesta taula portava el bloc «Regla de graduació» (Règim · Δ ·
+                  Δ break · Talla break) que hi va posar FIX-4/C4. El QA del model 1302 va
+                  ensenyar per què no hi pot ser: un model creat expressament SENSE graduació
+                  hi mostrava «CH · LINEAR +2,0/+3,0 @XS» —el ruleset penjat del seu item, que
+                  el model no havia adoptat mai— i, com que `buildPayload` reenviava el que la
+                  taula ensenyava i `set_measurements_view` en feia upsert, desar les mesures
+                  hauria convertit aquella PROPOSTA en regla del model sense que ningú
+                  l'acceptés. La graduació s'informa pel seu gest (botó Graduació → Escalat) i
+                  només allà.
+                  El codi de RESOLUCIÓ de regles no s'ha tocat: Escalat el segueix fent servir. */}
               <tr style={{
                 background: 'var(--bg-muted)',
                 borderBottom: '1px solid var(--border)',
               }}>
-                {!readOnly && <th rowSpan={2} style={thS}></th>}
-                <th rowSpan={2} style={thS}>#</th>
-                <th rowSpan={2} style={stickyHd(0, 90)}>{t('measuregrid.col_pom')}</th>
-                <th rowSpan={2} style={stickyHd(90, 190)}>{t('measuregrid.col_nom')}</th>
-                <th rowSpan={2} style={{ ...thS, textAlign: 'right', minWidth: 90, background: 'var(--gold-pale)' }}>
+                {!readOnly && <th style={thS}></th>}
+                <th style={thS}>#</th>
+                <th style={stickyHd(0, 90)}>{t('measuregrid.col_pom')}</th>
+                <th style={stickyHd(90, 190)}>{t('measuregrid.col_nom')}</th>
+                <th style={{ ...thS, textAlign: 'right', minWidth: 90, background: 'var(--gold-pale)' }}>
                   {displaySize || t('editable_table.col.base_value')}
                 </th>
-                <th colSpan={4} style={{ ...thS, textAlign: 'center', background: REGLA_BG, borderLeft: SEP }}>
-                  {t('measuregrid.grup_regla')}
-                </th>
-                {!readOnly && <th rowSpan={2} style={thS}></th>}
-              </tr>
-              <tr style={{
-                background: 'var(--bg-muted)',
-                borderBottom: '1px solid var(--border)',
-              }}>
-                <th style={{ ...thS, minWidth: 92, background: REGLA_BG, borderLeft: SEP }}>{t('editable_table.col.regime')}</th>
-                <th style={{ ...thS, textAlign: 'right', minWidth: 82, background: REGLA_BG }}>{t('editable_table.col.delta')}</th>
-                <th style={{ ...thS, textAlign: 'right', minWidth: 82, background: REGLA_BG }}>{t('editable_table.col.break_delta')}</th>
-                <th style={{ ...thS, minWidth: 100, background: REGLA_BG }}>{t('editable_table.col.break_size')}</th>
+                {!readOnly && <th style={thS}></th>}
               </tr>
             </thead>
             <SortableContext items={localRows.map(r => r.id)} strategy={verticalListSortingStrategy}>
@@ -286,38 +260,6 @@ export default function EditableTable({
         </DndContext>
       </div>
 
-      {/* FIX-4 — la pregunta de plausibilitat del Δ. MAI un bloqueig dur: hi ha deltes grans
-          legítims, i una validació que impedeix desar només ensenya a esquivar-la. */}
-      {!readOnly && confirmDelta && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-                      marginTop: 12, padding: '10px 12px', borderRadius: 6,
-                      border: '1px solid var(--warn)', background: 'var(--warn-bg)' }}>
-          <i className="ti ti-alert-triangle" style={{ color: 'var(--warn)', fontSize: 16 }} />
-          <div style={{ fontSize: 'var(--fs-body)', flex: 1, minWidth: 260 }}>
-            {confirmDelta.map((s, i) => (
-              <div key={`${s.r.id}-${s.camp}-${i}`}>
-                <strong>{s.r.nom_fitxa || s.r.client_code || s.r.pom_code}</strong>{' · '}
-                {t('editable_table.plaus_delta', {
-                  camp: s.camp,
-                  valor: formatDelta(s.valor),
-                  base: formatLen(s.base),
-                })}
-              </div>
-            ))}
-          </div>
-          <button type="button" onClick={handleSave} disabled={saving}
-            style={{ padding: '6px 14px', borderRadius: 6, border: '0.5px solid var(--border)',
-                     background: 'var(--white)', cursor: saving ? 'wait' : 'pointer',
-                     fontSize: 'var(--fs-body)', whiteSpace: 'nowrap' }}>
-            {t('editable_table.plaus_desa')}
-          </button>
-          <button type="button" onClick={() => setConfirmDelta(null)}
-            style={{ padding: '6px 10px', borderRadius: 6, border: 0, background: 'transparent',
-                     cursor: 'pointer', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-            {t('common.cancel')}
-          </button>
-        </div>
-      )}
 
       {!readOnly && (dirty || onPomSave) && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
@@ -410,46 +352,8 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
           onChange={v => onCellChange(row.id, 'base_value_cm', v)}
           mono right readOnly={readOnly} />
       </td>
-      <td style={{ ...tdS, background: REGLA_BG, borderLeft: SEP }}>
-        {(() => {
-          const cur = row.logica || 'LINEAR'
-          // No emmascarar: si la fila ja porta un valor fora de les normes editables (ZERO/EXCEPTION),
-          // s'afegeix com a opció perquè es vegi el valor real i es pugui canviar a LINEAR/STEP/FIXED.
-          const opts = REGIME_OPTIONS.includes(cur) ? REGIME_OPTIONS : [...REGIME_OPTIONS, cur]
-          return (
-            <select
-              value={cur}
-              disabled={readOnly}
-              onChange={e => onCellChange(row.id, 'logica', e.target.value)}
-              style={{
-                font: 'inherit', border: '1px solid var(--border)', borderRadius: 4,
-                padding: '2px 4px', background: readOnly ? 'transparent' : 'var(--white)',
-                color: 'var(--text-main)',
-              }}
-            >
-              {opts.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          )
-        })()}
-      </td>
-      {/* `signed`: un delta es PINTA sempre amb signe (+1 / +1,5). En edició es tecleja el número
-          nu, com sempre; el signe és de la LECTURA, que és on es confon amb una mesura. */}
-      <td style={{ ...tdS, textAlign: 'right', background: REGLA_BG }}>
-        <EditableCell value={row.increment_base ?? ''}
-          onChange={v => onCellChange(row.id, 'increment_base', v)}
-          mono right signed readOnly={readOnly} />
-      </td>
-      <td style={{ ...tdS, textAlign: 'right', background: REGLA_BG }}>
-        <EditableCell value={row.increment_break}
-          onChange={v => onCellChange(row.id, 'increment_break', v)}
-          mono right signed readOnly={readOnly} />
-      </td>
-      <td style={{ ...tdS, background: REGLA_BG }}>
-        {/* Etiqueta de talla: DADA de domini (XS, 3XL). Ni signe ni traducció. */}
-        <EditableCell value={row.talla_break_label || ''}
-          onChange={v => onCellChange(row.id, 'talla_break_label', v)}
-          readOnly={readOnly} />
-      </td>
+      {/* Les quatre cel·les de regla (Règim · Δ · Δ break · Talla break) han marxat amb el seu
+          bloc: la graduació s'informa al gest de Graduació, no aquí. V. la nota del `thead`. */}
       {!readOnly && (
         <td style={tdS}>
           <button type="button" onClick={() => onDelete(row.id)}
