@@ -56,7 +56,19 @@ HEIC_EXTENSIONS = frozenset({'.heic', '.heif'})
 HEIC_MIMETYPES = frozenset({
     'image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence',
 })
-JPEG_QUALITY = 90
+JPEG_QUALITY = 90            # transcodificació pura (HEIC petita: només canvia de contenidor)
+JPEG_QUALITY_REDUIDA = 80    # q0.8 — la imatge ja ha perdut píxels, no cal guardar-ne el gra
+
+# Sostre del costat llarg. Una foto de mòbil fa 4000+ px i a la fitxa s'hi veu a 15 cm: els
+# píxels de més no els mira ningú, però viatgen a cada desat i ocupen RAM al navegador.
+MAX_COSTAT_LLARG_PX = 2000
+
+# Ràsters que passen per l'embut. `.gif` en queda FORA a posta: Pillow en llegiria només el
+# primer fotograma i desar-lo mataria l'animació en silenci — reduir no pot destruir dades.
+# `.svg` tampoc hi és: és vectorial, no té píxels que reduir.
+RASTER_EXTENSIONS = frozenset({'.png', '.jpg', '.jpeg', '.webp'}) | HEIC_EXTENSIONS
+
+_EXT_PER_FORMAT = {'JPEG': '.jpg', 'PNG': '.png', 'WEBP': '.webp'}
 
 
 class UploadRejected(ValueError):
@@ -82,64 +94,132 @@ def es_heic(nom, content_type=''):
     return (content_type or '').split(';')[0].strip().lower() in HEIC_MIMETYPES
 
 
-def converteix_heic_a_jpeg(file, nom):
-    """HEIC/HEIF → JPEG q=90. Retorna `(fitxer_nou, nom_nou)` amb el nom original i `.jpg`.
+def _registra_heif():
+    """Ensenya a Pillow a obrir HEIC/HEIF. False si la dep no hi és (lock desalineat)."""
+    try:
+        import pillow_heif
+    except ImportError:
+        return False
+    pillow_heif.register_heif_opener()
+    return True
 
-    ORIENTACIÓ: les fotos de mòbil vénen girades i amb un tag EXIF que diu com desgirar-les.
-    `pillow_heif` JA aplica l'orientació en descodificar (torna la imatge dreta i el tag
-    normalitzat a 1), o sigui que `exif_transpose` és aquí un no-op en el camí d'avui. S'hi
-    deixa a posta: és la crida que ho garanteix si un dia el descodificador canvia de criteri,
-    i no costa res quan el tag ja val 1.
 
-    NO es conserva la resta d'EXIF (data, càmera, GPS). Reinjectar-lo obligaria a netejar-ne
-    l'orientació —si no, un visor que l'honrés giraria una imatge que ja ve dreta— i el que la
-    decisió demanava és la foto, no les seves metadades.
+def redueix_imatge(file, nom, content_type=''):
+    """EMBUT ÚNIC d'imatge del servidor. Retorna `(fitxer, nom)` — el mateix o un de nou.
+
+    Fa dues coses en UNA descodificació, perquè són la mateixa decisió sobre els mateixos
+    píxels i separar-les significaria obrir la imatge dues vegades a la mateixa porta:
+
+    1. **HEIC/HEIF → JPEG.** Cap navegador d'escriptori pinta HEIC. No es desa mai l'original:
+       guardar les dues coses duplicaria l'emmagatzematge sense que ningú obrís la HEIC.
+    2. **Costat llarg > MAX_COSTAT_LLARG_PX → es redimensiona.** Una foto de mòbil entra amb
+       4000+ px i a la fitxa es veu a 15 cm. Els píxels de més viatgen a cada desat del `.ftt`
+       i s'acumulen en RAM al navegador; aquí és on es paren.
+
+    FORMAT DE SORTIDA: JPEG, tret que la imatge porti transparència (llavors PNG, o WEBP si ja
+    ho era) — aplanar l'alfa contra negre destruiria el retall d'un sketch. Les HEIC sempre
+    surten JPEG: són fotos, i el canal alfa no hi juga.
+
+    NO ES TOCA RES que no calgui: una imatge que ja compleix (≤2000 px i no-HEIC) torna
+    BYTE A BYTE com ha entrat. Re-encodar-la només hi afegiria pèrdua. `.gif` i `.svg` queden
+    fora de l'embut (vegeu RASTER_EXTENSIONS), i els no-ràsters (.pdf, .dxf, …) hi passen de llarg.
+
+    ORIENTACIÓ: les fotos de mòbil vénen girades amb un tag EXIF que diu com desgirar-les.
+    S'aplica sempre (`exif_transpose`) perquè la sortida NO conserva EXIF: si es desés el gir
+    sense el tag, la foto quedaria tombada per sempre. La resta d'EXIF (data, càmera, GPS) es
+    perd a posta — el que la decisió demanava és la foto, no les seves metadades.
+
+    ERRORS, dues lleis distintes segons qui promet què:
+    - HEIC il·legible → `ConversioFallida` (el caller: 422). Hem promès convertir-la i no podem;
+      desar els bytes crus seria desar un fitxer que ningú podrà obrir.
+    - Qualsevol altra imatge que Pillow no sàpiga llegir → es desa l'ORIGINAL i es reporta al
+      log. És la llei de `pom_vision_service`: un downscale mai no bloqueja una pujada vàlida.
     """
     import io
 
     from django.core.files.base import ContentFile
+    from PIL import Image, ImageOps
 
-    try:
-        import pillow_heif
-        from PIL import Image, ImageOps
-    except ImportError as exc:   # dep nova al lock: si el desplegament no ha fet pip install
+    heic = es_heic(nom, content_type)
+    ext = os.path.splitext(nom or '')[1].lower()
+    if not heic and ext not in RASTER_EXTENSIONS:
+        return file, nom
+    if not _registra_heif() and heic:
+        # dep nova al lock: si el desplegament no ha fet pip install
         raise ConversioFallida(
             "El servidor no pot convertir fotos HEIC (falta pillow-heif). "
-            "Puja la foto en JPEG o avisa l'administrador."
-        ) from exc
+            "Puja la foto en JPEG o avisa l'administrador.")
 
-    pillow_heif.register_heif_opener()
     try:
         try:
             file.seek(0)
         except (AttributeError, ValueError):
             pass
         imatge = Image.open(file)
+        format_origen = (imatge.format or '').upper()
         imatge = ImageOps.exif_transpose(imatge) or imatge
-        if imatge.mode != 'RGB':
-            # JPEG no té canal alfa ni paleta; una HEIC amb transparència peta en desar-se.
+        imatge.load()
+    except Exception as exc:
+        if heic:
+            logger.warning('HEIC il·legible (%s): %s', nom, exc)
+            raise ConversioFallida(
+                "No s'ha pogut llegir la foto HEIC: pot estar corrupta o incompleta."
+            ) from exc
+        logger.warning("Imatge no reduïda, es desa l'original (%s): %s", nom, exc)
+        return file, nom
+
+    amplada, alcada = imatge.size
+    cal_reduir = max(amplada, alcada) > MAX_COSTAT_LLARG_PX
+    if not cal_reduir and not heic:
+        return file, nom          # ja compleix: torna byte a byte, sense re-encodar
+
+    try:
+        if cal_reduir:
+            factor = MAX_COSTAT_LLARG_PX / max(amplada, alcada)
+            imatge = imatge.resize(
+                (max(1, round(amplada * factor)), max(1, round(alcada * factor))),
+                Image.LANCZOS)
+        te_alfa = imatge.mode in ('RGBA', 'LA', 'PA') or 'transparency' in imatge.info
+        if heic or not te_alfa:
+            format_sortida = 'JPEG'
+        else:
+            format_sortida = 'WEBP' if format_origen == 'WEBP' else 'PNG'
+        if format_sortida == 'JPEG' and imatge.mode != 'RGB':
+            # JPEG no té canal alfa ni paleta; desar-hi una RGBA peta.
             imatge = imatge.convert('RGB')
         sortida = io.BytesIO()
-        imatge.save(sortida, format='JPEG', quality=JPEG_QUALITY)
-    except ConversioFallida:
-        raise
+        if format_sortida == 'JPEG':
+            imatge.save(sortida, format='JPEG',
+                        quality=JPEG_QUALITY_REDUIDA if cal_reduir else JPEG_QUALITY,
+                        optimize=True)
+        else:
+            imatge.save(sortida, format=format_sortida, optimize=True)
     except Exception as exc:
-        logger.warning('HEIC il·legible (%s): %s', nom, exc)
-        raise ConversioFallida(
-            "No s'ha pogut llegir la foto HEIC: pot estar corrupta o incompleta."
-        ) from exc
+        if heic:
+            logger.warning('HEIC no convertible (%s): %s', nom, exc)
+            raise ConversioFallida(
+                "No s'ha pogut convertir la foto HEIC a JPEG.") from exc
+        logger.warning("Imatge no reduïda, es desa l'original (%s): %s", nom, exc)
+        return file, nom
 
-    bytes_jpeg = sortida.getvalue()
+    bytes_nous = sortida.getvalue()
     # El sostre de mida es torna a mirar SOBRE EL RESULTAT: un JPEG pesa més que la HEIC
     # d'origen, i acceptar per la porta de la conversió un fitxer que la llei del sistema
     # rebutja per la porta del davant seria obrir-hi un forat.
-    if len(bytes_jpeg) > MAX_UPLOAD_BYTES:
-        raise ConversioFallida(
-            f'La foto convertida a JPEG ocupa {len(bytes_jpeg) / (1024 * 1024):.1f} MB, '
-            f'per sobre del màxim de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.')
+    if len(bytes_nous) > MAX_UPLOAD_BYTES:
+        if heic:
+            raise ConversioFallida(
+                f'La foto convertida a JPEG ocupa {len(bytes_nous) / (1024 * 1024):.1f} MB, '
+                f'per sobre del màxim de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.')
+        logger.warning("Imatge reduïda més gran que el màxim, es desa l'original (%s)", nom)
+        return file, nom
+    # NO hi ha guard de "si el resultat pesa més, torna l'original": el que aquí es persegueix
+    # són els PÍXELS, no només els bytes. Una imatge de 4000 px que comprimeix bé segueix
+    # ocupant 4000×3000×4 bytes de RAM quan el navegador la descodifica, que és exactament el
+    # que fa anar espès l'editor. La mida en disc és la conseqüència, no el criteri.
 
-    nom_jpg = os.path.splitext(nom or 'foto')[0] + '.jpg'
-    return ContentFile(bytes_jpeg, name=nom_jpg), nom_jpg
+    nom_nou = os.path.splitext(nom or 'imatge')[0] + _EXT_PER_FORMAT[format_sortida]
+    return ContentFile(bytes_nous, name=nom_nou), nom_nou
 
 
 def validate_upload(file, nom=None):

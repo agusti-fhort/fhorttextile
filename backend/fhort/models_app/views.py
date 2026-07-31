@@ -2051,8 +2051,8 @@ def upload_file_view(request, model_id):
     if not uploaded_file:
         return Response({'error': 'fitxer és obligatori'}, status=400)
 
-    from .services_fitxers import (ConversioFallida, UploadRejected, converteix_heic_a_jpeg,
-                                   es_heic, save_model_file, validate_upload)
+    from .services_fitxers import (ConversioFallida, UploadRejected, redueix_imatge,
+                                   save_model_file, validate_upload)
 
     # Contracte Finder: `tipus` opcional (neutre si no es dona). Sense autoincrement per
     # tipus — la versió la governa el servei via la cadena. `categoria` ja no s'accepta
@@ -2067,16 +2067,15 @@ def upload_file_view(request, model_id):
     except UploadRejected as e:
         return Response({'error': str(e)}, status=400)
 
-    # Les fotos de fitting es fan amb el mòbil i un iPhone les desa en HEIC, que cap navegador
-    # d'escriptori no pinta. S'accepten a la pujada i es converteixen AQUÍ: el que entra a la
-    # cadena de versions és sempre un JPEG. No es desa mai l'original — la decisió és desar
-    # NOMÉS el JPEG, i guardar les dues coses duplicaria l'emmagatzematge sense que ningú
-    # arribés a obrir la HEIC.
-    if es_heic(nom, getattr(uploaded_file, 'content_type', '')):
-        try:
-            uploaded_file, nom = converteix_heic_a_jpeg(uploaded_file, nom)
-        except ConversioFallida as e:
-            return Response({'error': str(e)}, status=422)
+    # EMBUT D'IMATGE (una sola porta per a HEIC i mida): les fotos es fan amb el mòbil, arriben
+    # en HEIC —que cap navegador d'escriptori no pinta— i amb 4000+ px que ningú mira. El que
+    # entra a la cadena de versions és sempre pintable i de mida raonable. Els no-ràsters
+    # (.pdf, .dxf, .ftt, …) hi passen de llarg intactes.
+    try:
+        uploaded_file, nom = redueix_imatge(
+            uploaded_file, nom, getattr(uploaded_file, 'content_type', ''))
+    except ConversioFallida as e:
+        return Response({'error': str(e)}, status=422)
 
     # versio_anterior_id opcional → encadena una nova versió d'un fitxer existent.
     versio_anterior = None
