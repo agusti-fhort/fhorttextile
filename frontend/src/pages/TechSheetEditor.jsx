@@ -4777,14 +4777,15 @@ export default function TechSheetEditor() {
     // La 1a columna no porta títol (decisió d'Agus, 31/07): el que hi ha sota és la
     // nomenclatura amb què el client anomena la mesura, i posar-hi la paraula «Nomenclatura»
     // era etiquetar una columna que s'explica sola. La columna es queda; cau el títol.
+    // Els títols segueixen l'idioma del DOCUMENT (`tDoc`), no el de qui insereix la taula.
     const columns = [
       { key: 'ref', label: '', width: 22 },
-      { key: 'pom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
+      { key: 'pom', label: tDoc('tech_sheet.tbl_col_pom'), width: 46 },
       {
         key: 'base', width: 24,
         label: talla
-          ? t('tech_sheet.tbl_col_base_cm_talla', { talla })
-          : t('tech_sheet.tbl_col_base_cm'),
+          ? tDoc('tech_sheet.tbl_col_base_cm_talla', { talla })
+          : tDoc('tech_sheet.tbl_col_base_cm'),
       },
     ]
     // Files: TOTES les mesures vives del model, com fa la T1a — inclosos els POMs materialitzats
@@ -4850,13 +4851,14 @@ export default function TechSheetEditor() {
     // La taula del FITTING és per anotar-hi a mà el que es mesura damunt la peça: hi queden la
     // referència, el POM, la base i les dues columnes on s'escriu. Regla/Δ, Break i Tol± en
     // surten (Agus, 31/07) — són dades de GRADUACIÓ, i el fitting no és on es decideixen; el
-    // que hi feien era omplir amplada que ara és per escriure-hi. La 1a columna es queda sense títol.
+    // que hi feien era omplir amplada que ara és per escriure-hi. Títols en l'idioma del
+    // DOCUMENT, i la 1a columna sense títol.
     const columns = [
       { key: 'ref', label: '', width: 22 },
-      { key: 'pom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
-      { key: 'base', label: t('tech_sheet.tbl_col_base_cm'), width: 18 },
-      { key: 'nova', label: t('tech_sheet.tbl_col_new_measure'), width: 34 },
-      { key: 'coment', label: t('tech_sheet.tbl_col_comments'), width: 60 },
+      { key: 'pom', label: tDoc('tech_sheet.tbl_col_pom'), width: 46 },
+      { key: 'base', label: tDoc('tech_sheet.tbl_col_base_cm'), width: 18 },
+      { key: 'nova', label: tDoc('tech_sheet.tbl_col_new_measure'), width: 34 },
+      { key: 'coment', label: tDoc('tech_sheet.tbl_col_comments'), width: 60 },
     ]
     const filesDe = (sub) => sub.map(bm => {
       const rule = rulesByPom[bm.pom_id]
@@ -4906,10 +4908,11 @@ export default function TechSheetEditor() {
     const sizeLabels = data.size_labels || []
     // La taula de GRADUACIÓ ensenya el que el patronista ha de llegir: la mesura de cada talla.
     // Δ i Break en surten senceres (Agus, 31/07): són el CÀLCUL amb què s'hi ha arribat, i
-    // viuen a Escalat, que és on es decideixen. La 1a columna es queda sense títol. Les talles NO es tradueixen: són dades de domini.
+    // viuen a Escalat, que és on es decideixen. Títols en l'idioma del DOCUMENT; la 1a columna,
+    // sense títol. Les talles NO es tradueixen: són dades de domini.
     const columns = [
       { key: 'ref', label: '', width: 22 },
-      { key: 'nom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
+      { key: 'nom', label: tDoc('tech_sheet.tbl_col_pom'), width: 46 },
       // T1 — la columna de la talla base porta marca al MODEL (`base`), no només el sufix `*`:
       // el builder la necessita per pintar-hi la franja de realçat. El `*` es manté perquè
       // sobreviu a l'imprès en blanc i negre.
