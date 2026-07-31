@@ -149,8 +149,18 @@ const RULER_SIZE = 18   // S2: gruix (px) de les regles superior/esquerra
 // TS-4c — eines per "família" de creació (mateixa mecànica de drag).
 const RECT_TOOLS = ['rect', 'rect_round', 'ellipse']   // drag = bounding box
 const LINE_TOOLS = ['line', 'line_dot', 'arrow', 'arrow2']   // drag = 2 punts
+// B1 — EINES DE TRAÇAT (clic a clic): comparteixen la MÀQUINA de la ploma (`penRef`,
+// `finishPen`) i, amb ella, tota la gramàtica de tancament (Enter · Escape · doble clic ·
+// clic al 1r node · Backspace). Fins ara la pertinença s'escrivia a mà a quatre gates
+// (`tool === 'pen' || tool === 'arrow_curve'`) i una eina nova no heretava res: només
+// entrava per la porta que algú recordés d'ampliar. Ara la porta d'ENTRADA és aquesta
+// llista i les SORTIDES es gaten per l'esborrany en curs, no pel nom de l'eina — afegir
+// una eina de path aquí li dona el tancament sencer per construcció.
+// Fora: `draw` (mà alçada, drag continu sense nodes) i les de dos clics (`note`,
+// `cota_pom`), que tenen la seva pròpia màquina i la seva pròpia sortida.
+const PATH_TOOLS = ['pen', 'arrow_curve']
 // Peça C: eines que mostren cursor de creu (dibuix + nodes). 'select' → fletxa; 'pan' → grab.
-const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, 'draw', 'pen', 'arrow_curve', 'polygon', 'note', 'cota_pom']
+const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, ...PATH_TOOLS, 'draw', 'polygon', 'note', 'cota_pom']
 // S3b — dreceres de teclat de les eines (mostrades al tooltip de la paleta per a la descobribilitat).
 const TOOL_SHORTCUT = { select: 'V', node: 'A', text: 'T', rect: 'R', ellipse: 'E', line: 'L', pen: 'P' }
 // S8: tipus convertibles a Paper.js (objectToPaperPath) — únics vàlids per al pathfinder.
@@ -3574,18 +3584,24 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locked, editingText, editingFlatId])
 
-  // ── S7 — Teclat de la ploma: Enter tanca obert, Escape cancel·la TOT el traç
-  // (el simple guanya — no treu punt a punt), Backspace treu l'últim ancoratge ──
+  // ── B1 — Teclat de la GRAMÀTICA DE TANCAMENT (qualsevol eina de PATH_TOOLS) ──
+  // El gate és l'ESBORRANY, no l'eina: mentre hi hagi traç en curs, les tres sortides
+  // valen. Enter, Escape i doble clic fan el MATEIX — tanquen conservant el dibuixat i
+  // sense afegir cap node. Escape ja no llença el traç fet (D2 · Agus 31/07): abandonar
+  // és Esc → Supr, perquè B2 deixa el traç tancat seleccionat i en mode nodes. Amb menys
+  // de dos ancoratges no hi ha res a conservar i Escape segueix cancel·lant en sec.
+  // Backspace treu l'últim ancoratge (l'única sortida que sí desfà punt a punt).
   useEffect(() => {
     const onKey = (e) => {
-      if ((tool !== 'pen' && tool !== 'arrow_curve') || !penRef.current) return
+      if (!penRef.current) return
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (e.key === 'Enter') {
         e.preventDefault()
-        if (penRef.current.points.length >= 2) finishPen(false)
+        if (potTancar(penRef.current.points)) finishPen(false)
       } else if (e.key === 'Escape') {
         e.preventDefault()
+        if (potTancar(penRef.current.points)) { finishPen(false); return }
         penRef.current = null
         setPenTemp(null)
         setTool('select')   // Bloc 2 (ii): cancel·lar també surt de l'eina, no la deixa activa.
@@ -3883,11 +3899,13 @@ export default function TechSheetEditor() {
   // ── S7: tanca el traç de ploma → un sol objecte type:'path' amb segments editables (mm) ──
   const finishPen = (closed) => {
     const points = penRef.current?.points || []
-    if (points.length >= 2) {
+    if (potTancar(points)) {
       const segments = points.map(p => ({ x: toMm(p.x), y: toMm(p.y), inX: toMm(p.inX), inY: toMm(p.inY), outX: toMm(p.outX), outY: toMm(p.outY) }))
       // COMMIT 5: la fletxa curva reutilitza la màquina de ploma, però surt oberta, amb
       // gruix de fletxa i headEnd:true (la punta la dibuixa el render sobre la tangent final).
-      const isArrow = tool === 'arrow_curve'
+      // B1 — de l'ESBORRANY, no de `tool`: el tancament ja no depèn de quina eina hi hagi
+      // activa en el moment de tancar.
+      const isArrow = penRef.current?.tool === 'arrow_curve'
       addObject({
         id: uid(), type: 'path', layer: 'free', x: 0, y: 0,
         // Fix #2: stroke a nivell d'OBJECTE (no de subpath) → el selector "Color de traç" de
@@ -3999,11 +4017,14 @@ export default function TechSheetEditor() {
       setTool('select')
       return
     }
-    if (tool === 'pen' || tool === 'arrow_curve') {
+    if (PATH_TOOLS.includes(tool)) {
       // Clic a prop del 1r punt (amb ≥2 punts) tanca el traç; si no, afegeix un nou ancoratge.
       const pts = penRef.current?.points
-      if (pts && pts.length >= 2 && Math.hypot(pos.x - pts[0].x, pos.y - pts[0].y) <= 8) { finishPen(true); return }
-      if (!penRef.current) penRef.current = { points: [], dragging: false }
+      if (pts && potTancar(pts) && Math.hypot(pos.x - pts[0].x, pos.y - pts[0].y) <= 8) { finishPen(true); return }
+      // B1 — l'esborrany recorda de QUINA eina ha nascut. És l'única porta on el nom de
+      // l'eina encara mana, i per això és aquí on es desa: a partir d'aquest punt, tancar
+      // el traç no depèn de si l'eina segueix activa ni de com s'ha demanat el tancament.
+      if (!penRef.current) penRef.current = { tool, points: [], dragging: false }
       penRef.current.points.push({ x: pos.x, y: pos.y, inX: 0, inY: 0, outX: 0, outY: 0 })
       penRef.current.dragging = true
       setPenTemp({ points: [...penRef.current.points], cursor: pos })
@@ -4058,7 +4079,7 @@ export default function TechSheetEditor() {
       }
       return
     }
-    if ((tool === 'pen' || tool === 'arrow_curve') && penRef.current) {
+    if (penRef.current) {
       if (!cur) return
       const points = penRef.current.points
       if (penRef.current.dragging && points.length) {
@@ -4095,7 +4116,7 @@ export default function TechSheetEditor() {
   }
   const onStageMouseUp = (e) => {
     if (!konvaOwnsPointer) return
-    if ((tool === 'pen' || tool === 'arrow_curve') && penRef.current) {
+    if (penRef.current) {
       penRef.current.dragging = false
       const pos = stagePoint()
       setPenTemp({ points: [...penRef.current.points], cursor: pos })

@@ -2724,7 +2724,7 @@
     "page_n": "Page {{n}}",
     "delete_page": "Delete page",
     "readonly_overlay": "Consultation mode — read only",
-    "pen_trace_hint": "Path in progress ({{n}} nodes) — double-click or Enter to finish · Escape to cancel",
+    "pen_trace_hint": "Path in progress ({{n}} nodes) — Enter, Escape or double-click close it · Delete removes the path you just closed",
     "insert_data_block": "Insert data block",
     "model_header": "Model header",
     "insert_logo_title": "Insert client logo",
