@@ -65,15 +65,21 @@ def _cascada(request, item):
 
     # bm_id del model destí (opcional) → materialitzar la cota VIVA de F1 (pomId+bmId).
     model_id = request.query_params.get('model_id')
+    # C2/Onada 1 — CLAU COMPOSTA: `POMPlacement` porta capa des de C1 i la cota es
+    # materialitza contra la mesura de la SEVA capa. Per POM sol, una cota col·locada sobre
+    # el folre rebria el `bm_id` de l'exterior i el dibuix quedaria lligat a una altra
+    # mesura —el pitjor cas d'aquesta vista, perquè no peta: pinta.
     bm_by_pom = {}
     if model_id:
-        bm_by_pom = dict(BaseMeasurement.objects.filter(
-            model_id=model_id, is_active=True).values_list('pom_id', 'id'))
+        bm_by_pom = {
+            (p, c): i for p, c, i in BaseMeasurement.objects.filter(
+                model_id=model_id, is_active=True).values_list('pom_id', 'capa', 'id')
+        }
 
     placements, no_al_model = [], []
     for pom_id, (p, derivat) in merged.items():
         codi = p.pom.pom_global.codi if p.pom.pom_global_id else ''
-        bm_id = bm_by_pom.get(pom_id)
+        bm_id = bm_by_pom.get((pom_id, p.capa))
         if model_id and bm_id is None:
             # El POM del precedent NO existeix al model destí → a llista manual, mai crash.
             no_al_model.append({'pom_id': pom_id, 'codi': codi})
