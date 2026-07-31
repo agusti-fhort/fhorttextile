@@ -9,7 +9,7 @@ import { fittingSource } from '../components/model/measureSources'
 import MeasuresEntryPanel from '../components/model/MeasuresEntryPanel'
 import FittingRepasPanel from '../components/model/FittingRepasPanel'
 import PropagatedEditor from './PropagatedEditor'
-import GraduacioPanel from '../components/grading/GraduacioPanel'
+import ModelWizard from './ModelWizard'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
 import { MaduresaBadge, EncarrecDelClient } from '../components/model/FederacioBadge'
@@ -354,20 +354,11 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [propStatus, setPropStatus] = useState(null)   // {te_dades_propagades, segellada, version_number}
   const [propStep, setPropStep] = useState(0)           // 0 cap modal · 1 avís adaptat · 2 confirmació final
   // EL GEST DE GRADUAR viu a MESURES (correcció de rumb, Agus 31/07). El botó «Graduació»
-  // obre EL PAS 4 DEL WIZARD com a OVERLAY sobre Mesures —el mateix `GraduacioPanel` que
-  // renderitza el wizard, no una còpia— i no navega enlloc. Escalat torna a ser la seva
-  // pestanya de sempre.
+  // obre EL WIZARD D'EDITAR MODEL al pas 4, com a calaix lateral sobre la taula. Escalat
+  // torna a ser la seva pestanya de sempre.
   const [graduacioObert, setGraduacioObert] = useState(false)
   const [propagarEnCua, setPropagarEnCua] = useState(false)
   const [usantJoc, setUsantJoc] = useState(false)
-  // El fit amb què s'entra al panell: el que el model ja té desat (mai buit — `Model.fit_type`
-  // té default 'Regular'). Un desplegable, no un bloqueig: es pot canviar allà mateix.
-  const [graduacioFit, setGraduacioFit] = useState(null)
-  useEffect(() => {
-    if (graduacioObert && graduacioFit == null && model?.fit_type) {
-      setGraduacioFit(String(model.fit_type).toUpperCase())
-    }
-  }, [graduacioObert, graduacioFit, model?.fit_type])
 
   const obreGraduacio = useCallback(() => setGraduacioObert(true), [])
 
@@ -396,18 +387,31 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       .catch(() => setFeedback({ type: 'err', text: t('grading_propagate.err') }))
   }
 
-  // «USAR AQUEST JOC» — el mecanisme VIGENT del wizard: assignar el ruleset per `update-step2`,
-  // que valida (D1) i materialitza les regles al model. Cap mecànica nova.
+  // «USAR AQUEST JOC» al pas 4 → el mecanisme VIGENT del wizard (`update-step2`: valida D1 i
+  // materialitza les regles al model). Cap mecànica nova.
   //
-  // En sortir bé: es tanca l'overlay, es rellegeix la taula —i és llavors quan les columnes de
-  // Regla apareixen a Mesures, perquè el model JA té regles— i, si el gest original era
-  // propagar, es reprèn SOL. Es torna a passar per `onPropagarClick` i no per `execPropagar` a
-  // posta: el model pot tenir propagació prèvia, i saltar-se l'avís de 2 passos seria colar una
-  // substitució sense consentiment.
+  // En sortir bé es tanca el calaix i es rellegeix la taula: les columnes de Regla, que ja es
+  // veien BUIDES a sota, queden PLENES. I si el gest original era propagar, es reprèn sol —
+  // passant altre cop per `onPropagarClick`, no per `execPropagar`, perquè el model pot tenir
+  // propagació prèvia i saltar-se l'avís de 2 passos seria colar una substitució.
+  //
+  // El 409 «ruleset d'un altre client» és un AVÍS CONSCIENT, no un error: aplicar la forma
+  // d'un altre client és un flux de taller legítim. Es demana i es reintenta amb el consentiment,
+  // exactament com fa el wizard al seu propi desat (`confirmaAltreClient`). Sense això, triar un
+  // joc del catàleg d'un altre client moria en silenci amb el calaix obert.
   const onUsarJoc = useCallback((rs) => {
     if (usantJoc) return
     setUsantJoc(true)
-    models.updateStep2(parseInt(id), { grading_rule_set_id: rs.id })
+    const desa = (extra) => models.updateStep2(parseInt(id), { grading_rule_set_id: rs.id, ...extra })
+    desa({})
+      .catch(e => {
+        const d = e?.response?.data
+        if (e?.response?.status === 409 && d?.tipus === 'ruleset_altre_client'
+            && window.confirm(`${d.message}\n\n${t('model_wizard.grading_other_customer_confirm')}`)) {
+          return desa({ confirmar_altre_client: true })
+        }
+        throw e
+      })
       .then(() => {
         setGraduacioObert(false)
         reloadModel(); reloadTaula()
@@ -419,6 +423,15 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       }))
       .finally(() => setUsantJoc(false))
   }, [id, usantJoc, propagarEnCua, reloadModel, reloadTaula, t])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // El wizard desat pel seu propi botó (l'usuari ha tocat més coses que la graduació): mateix
+  // tancament, mateixa rellegida. No reprèn la propagació: desar el model sencer és un altre
+  // acte que el gest que havia quedat en cua.
+  const acabaGraduacio = useCallback(() => {
+    setGraduacioObert(false)
+    setPropagarEnCua(false)
+    reloadModel(); reloadTaula()
+  }, [reloadModel, reloadTaula])
   const execPropagar = (allowReopen) => {
     if (propagating) return
     setPropagating(true)
@@ -534,6 +547,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           mesuresEntry && editing !== 'Mesures' ? (
             <MeasuresEntryPanel model={model} entryMode={mesuresEntry} intent={mesuresIntent}
               onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }}
+              onGraduacio={obreGraduacio}
               onPomSaved={finishPomEntry} />
           ) : (!taskParam && editing !== 'Mesures' && !pomReady) ? (
             <div style={{
@@ -610,10 +624,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                     {t('model_sheet.edit_pom')}
                   </button>
                 )}
-                {/* GRADUACIÓ — obre el PAS 4 DEL WIZARD com a overlay sobre Mesures, sense
-                    navegar enlloc: el mateix `GraduacioPanel` que el wizard renderitza. En triar
-                    un joc, les regles passen a ser del model i les columnes de Regla apareixen a
-                    la taula de Mesures. */}
+                {/* GRADUACIÓ — obre el WIZARD D'EDITAR MODEL al pas 4, en calaix lateral, amb
+                    els quatre passos navegables. En triar un joc, les regles passen a ser del
+                    model i les columnes de Regla de la taula queden plenes. */}
                 <button type="button" disabled={openingTask}
                   onClick={obreGraduacio}
                   style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
@@ -674,56 +687,34 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           </div>
         )}
         {/* FaseB — avís de 2 passos en propagar amb dades existents (mira abans). Pas 1 segons gravetat. */}
-        {/* EL PAS DE GRADUACIÓ, com a OVERLAY sobre Mesures (31/07). El MATEIX component que
-            el wizard renderitza al seu pas 4 — `GraduacioPanel` — sense navegar ni sortir del
-            context. S'hi entra pel botó «Graduació» o perquè Propagar hi ha portat el tècnic;
-            tancar-lo avorta el gest sencer. */}
+        {/* EL WIZARD D'EDITAR MODEL, obert al PAS 4, com a CALAIX LATERAL (31/07).
+            No és cap pantalla nova de graduació: és el wizard real, amb els seus quatre
+            passos navegables i el «← Enrere» viu. Si al pas 4 falta la construcció, l'usuari
+            va al pas 2, la posa i torna — l'atzucac s'acaba.
+
+            LATERAL i sense enfosquir: la taula de Mesures ha de quedar VISIBLE i llegible a
+            sota mentre es decideix. Qui vulgui entrar la graduació a mà tanca el calaix i es
+            troba les columnes de Regla buides, allà mateix, per treballar-les. */}
         {graduacioObert && model && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.45)',
-                        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-                        padding: '4vh 16px', overflow: 'auto' }}
-               onClick={e => { if (e.target === e.currentTarget) cancelaGraduacio() }}>
-            <div style={{ background: 'var(--white)', borderRadius: 10, padding: '1.25rem 1.5rem',
-                          width: 'min(920px, 100%)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            gap: 12, marginBottom: 14 }}>
-                <h3 style={{ margin: 0, fontSize: 'var(--fs-h3)', fontWeight: 600 }}>
-                  {t('graduacio.button')}
-                </h3>
-                <button type="button" onClick={cancelaGraduacio}
-                  style={{ background: 'none', border: 0, cursor: 'pointer', padding: 4,
-                           color: 'var(--text-muted)', fontSize: 'var(--fs-h3)' }}
-                  title={t('common.cancel')}>
-                  <i className="ti ti-x" />
-                </button>
-              </div>
-              {propagarEnCua && (
-                <p style={{ margin: '0 0 12px', padding: '8px 12px', borderRadius: 6,
-                            border: '0.5px solid var(--gold)', background: 'var(--gold-pale)',
-                            fontSize: 'var(--fs-body)' }}>
-                  {t('graduacio.cua_propagar')}
-                </p>
-              )}
-              <GraduacioPanel
-                /* El serializer del model serveix ids PLANS i el grup com a `garment_type_grup`
-                   (amb `garment_group` de reserva per als models que el porten directe). */
-                axes={{
-                  target: model.target, construction: model.construction,
-                  garmentGroupCodi: model.garment_type_grup || model.garment_group || null,
-                  garmentTypeId: model.garment_type ?? null,
-                  garmentTypeItemId: model.garment_type_item ?? null,
-                }}
-                sizing={model.size_system ? {
-                  size_system_id: model.size_system,
-                  size_system_nom: model.size_system_nom || '',
-                } : null}
-                fit={graduacioFit}
-                onFit={setGraduacioFit}
-                gradingRuleSetId={model.grading_rule_set ?? null}
-                onUsar={onUsarJoc}
-                customerCodi={model.customer_codi || null}
-              />
-            </div>
+          <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(760px, 92vw)',
+                        zIndex: 60, background: 'var(--white)', overflowY: 'auto',
+                        padding: '1.25rem 1.5rem 2rem',
+                        boxShadow: '-8px 0 28px rgba(0,0,0,0.16)',
+                        borderLeft: '0.5px solid var(--border)' }}>
+            {propagarEnCua && (
+              <p style={{ margin: '0 0 12px', padding: '8px 12px', borderRadius: 6,
+                          border: '0.5px solid var(--gold)', background: 'var(--gold-pale)',
+                          fontSize: 'var(--fs-body)' }}>
+                {t('graduacio.cua_propagar')}
+              </p>
+            )}
+            <ModelWizard
+              embedModelId={parseInt(id)}
+              initialBlock={4}
+              onClose={cancelaGraduacio}
+              onSaved={acabaGraduacio}
+              onUsarJoc={onUsarJoc}
+            />
           </div>
         )}
         {propStatus && propStep === 1 && (
