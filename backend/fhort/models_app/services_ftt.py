@@ -114,6 +114,38 @@ _MIME_EXT = {
 }
 
 
+def nom_asset(data, ext):
+    """Nom canònic d'un asset: sha16 del contingut + extensió.
+
+    El nom SURT del contingut, no de qui el puja: el mateix binari col·locat dues vegades
+    (o re-desat) hi cau al mateix nom i el `.ftt` no engreixa. Font única — hi beuen
+    l'extracció inline i l'embut d'imatge de l'editor, que han de coincidir o el segon
+    desaria un duplicat del que el primer ja té.
+    """
+    return "%s.%s" % (_sha256(data)[:16], (ext or "bin").lstrip("."))
+
+
+def noms_assets_referenciats(document_json):
+    """Noms d'asset que el document REFERENCIA de debò (`src='assets/<nom>'`), fills inclosos.
+
+    Serveix per no acceptar bytes que ningú mira: un asset que arriba sense referència seria
+    un orfe dins del `.ftt` per sempre —`save_document` fusiona i no poda mai— i és
+    exactament així com un document engreixa sense que ningú sàpiga per què.
+    """
+    noms = set()
+
+    def mapper(obj):
+        src = obj.get("src")
+        if isinstance(src, str) and src.startswith(ASSETS_PREFIX):
+            noms.add(src[len(ASSETS_PREFIX):])
+        return obj
+
+    for page in (document_json or {}).get("pages") or []:
+        for obj in page.get("objects") or []:
+            _map_object_tree(obj, mapper)
+    return noms
+
+
 def _decode_dataurl(src):
     """Retorna (bytes, mime) d'un dataURL, o None si no ho és."""
     m = _DATAURL_RE.match(src)
@@ -149,8 +181,7 @@ def _extract_inline_objects(objects, assets):
             decoded = _decode_dataurl(src)
             if decoded is not None:
                 data, mime = decoded
-                # sha16 del contingut: el mateix binari mai es duplica i re-desar és estable.
-                name = "%s.%s" % (_sha256(data)[:16], _MIME_EXT.get(mime, "bin"))
+                name = nom_asset(data, _MIME_EXT.get(mime, "bin"))
                 assets[name] = data
                 obj["src"] = ASSETS_PREFIX + name
         return obj
