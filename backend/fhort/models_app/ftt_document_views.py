@@ -7,13 +7,19 @@ nova encadenada via save_model_file (invariant is_current intacta).
 NOTA (B3): encara NO hi ha enforcement de lock; arriba a B7 (lock sobre el document
 lògic + timer-gap). De moment només IsAuthenticated.
 """
+import base64
+import binascii
+import io
 import logging
 import mimetypes
+import os
+import re
 
 from django.core.files.base import ContentFile
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,6 +30,8 @@ from . import services_ftt, services_ftt_document as svc
 from .ftt_template_views import DocumentTemplateSerializer
 from .models import DocumentTemplate, Model, ModelFitxer
 from .serializers import ModelFitxerSerializer
+from .services_fitxers import (MAX_UPLOAD_BYTES, ConversioFallida, UploadRejected,
+                               redueix_imatge, validate_upload)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +52,102 @@ def _asset_urls(request, fitxer, asset_names):
         )
         for name in asset_names
     }
+
+
+_NOM_ASSET_RE = re.compile(r"^[0-9a-f]{16}\.[a-z0-9]{1,5}$")
+
+
+def _assets_del_payload(assets, document_json):
+    """`{nom: base64}` del client → `{nom: bytes}` per a `save_document`. {} si no en ve cap.
+
+    L'editor puja la imatge en COL·LOCAR-LA (FttAssetPrepareView) i n'obté el nom; els bytes
+    viatgen amb el PRIMER desat que la referencia, i cap més: a partir d'aquí el document
+    només en porta `assets/<nom>`. Abans, la imatge anava inline dins document.json a CADA
+    autosave, i cada autosave n'escriu una versió nova del `.ftt`.
+
+    Dos guards, tots dos durs:
+    - **el nom l'ha fet el servidor** (sha16 + extensió). Els noms viatgen a rutes dins del zip
+      i un nom lliure hi escriuria on volgués.
+    - **només s'accepta el que el document REFERENCIA.** Un asset sense referència seria un
+      orfe per sempre (`save_document` fusiona i no poda mai). Col·locar una foto i desfer-ho
+      abans de desar no ha de deixar-ne rastre: s'ignora en silenci, no és cap error.
+    """
+    if not assets:
+        return {}
+    if not isinstance(assets, dict):
+        raise ValueError("assets ha de ser un objecte {nom: base64}.")
+    referenciats = services_ftt.noms_assets_referenciats(document_json)
+    sortida = {}
+    for nom, b64 in assets.items():
+        if not isinstance(nom, str) or not _NOM_ASSET_RE.match(nom):
+            raise ValueError("Nom d'asset no vàlid: '%s'." % nom)
+        if nom not in referenciats:
+            logger.info("Asset '%s' rebut sense referència al document: ignorat.", nom)
+            continue
+        try:
+            data = base64.b64decode(b64 or "", validate=True)
+        except (binascii.Error, TypeError, ValueError) as e:
+            raise ValueError("Asset '%s' amb base64 no vàlid." % nom) from e
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise ValueError("Asset '%s' massa gran." % nom)
+        sortida[nom] = data
+    return sortida
+
+
+class FttAssetPrepareView(APIView):
+    """POST ftt-documents/<fitxer_id>/prepare-asset/ → passa una imatge per l'EMBUT.
+
+    És la porta de l'editor, i no desa RES: rep el fitxer tal com surt del mòbil, li aplica
+    el mateix embut que Arxius i fitting (`redueix_imatge`: HEIC→JPEG, costat llarg a
+    2000 px) i torna els bytes ja reduïts amb el NOM canònic que tindran dins del `.ftt`.
+
+    Per què no desa: els assets viuen dins del zip de la versió vigent. Escriure-hi ara
+    voldria dir encadenar una versió nova per cada foto col·locada —justament el churn que
+    patim— o inventar un magatzem paral·lel. Amb aquesta forma, els bytes creuen la xarxa
+    EXACTAMENT UN COP (amb el primer desat que els referencia) i el document mai no torna a
+    portar-los. El que aquí es guanya és que el navegador deixa de carregar 4000 px a la RAM
+    i que l'usuari veu l'error de pujada quan puja, no en silenci a l'autosave.
+
+    El `fitxer_id` no s'hi fa servir per a res més que per acotar la porta al document que
+    s'està editant: la conversió és pura.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, fitxer_id):
+        get_object_or_404(ModelFitxer, pk=fitxer_id, tipus=ModelFitxer.TIPUS_TECHSHEET)
+        pujat = request.FILES.get("fitxer")
+        if pujat is None:
+            return Response({"detail": "Falta fitxer."}, status=status.HTTP_400_BAD_REQUEST)
+
+        nom = getattr(pujat, "name", "") or "imatge"
+        try:
+            validate_upload(pujat, nom)
+        except UploadRejected as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            pujat, nom = redueix_imatge(pujat, nom, getattr(pujat, "content_type", ""))
+        except ConversioFallida as e:
+            return Response({"detail": str(e)},
+                            status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        data = pujat.read()
+        ext = os.path.splitext(nom)[1]
+        mime = mimetypes.guess_type(nom)[0] or "application/octet-stream"
+        amplada = alcada = None
+        try:
+            from PIL import Image
+            amplada, alcada = Image.open(io.BytesIO(data)).size
+        except Exception:   # noqa: BLE001 — un SVG no té mida en píxels i no és cap error
+            pass
+        return Response({
+            "nom": services_ftt.nom_asset(data, ext),
+            "dataurl": "data:%s;base64,%s" % (mime, base64.b64encode(data).decode()),
+            "mida_bytes": len(data),
+            "amplada": amplada,
+            "alcada": alcada,
+        })
 
 
 class FttDocumentCreateView(APIView):
@@ -132,7 +236,11 @@ class FttDocumentDetailView(APIView):
                 {"detail": "kind ha de ser 'document' o 'template'."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        new_head = svc.save_document(head, document_json, kind=kind)
+        try:
+            assets = _assets_del_payload(request.data.get("assets"), document_json)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        new_head = svc.save_document(head, document_json, assets=assets or None, kind=kind)
         # Arreglo del timer-gap: desar renova locked_at → editar >TTL no perd el lock.
         svc.renew_lock(new_head, request.user)
         return Response(ModelFitxerSerializer(new_head).data, status=status.HTTP_200_OK)

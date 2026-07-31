@@ -178,6 +178,7 @@ except Exception:
 # Documents .ftt sobre el Finder (ModelFitxer tipus TECHSHEET). Crear/carregar/desar.
 try:
     from .ftt_document_views import (
+        FttAssetPrepareView,
         FttDocumentAssetView,
         FttDocumentCreateView,
         FttDocumentDetailView,
@@ -194,6 +195,7 @@ try:
         path('ftt-documents/<int:fitxer_id>/export/', FttDocumentExportView.as_view(), name='ftt-document-export'),
         path('ftt-documents/<int:fitxer_id>/save-as-template/', FttSaveAsTemplateView.as_view(), name='ftt-save-as-template'),
         path('ftt-documents/<int:fitxer_id>/asset/<str:asset_name>/', FttDocumentAssetView.as_view(), name='ftt-document-asset'),
+        path('ftt-documents/<int:fitxer_id>/prepare-asset/', FttAssetPrepareView.as_view(), name='ftt-asset-prepare'),
     ]
 except Exception:
     _ftt_document_paths = []
