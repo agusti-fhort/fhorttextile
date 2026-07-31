@@ -2543,6 +2543,7 @@ export default function TechSheetEditor() {
   const [lockState, setLockState] = useState((isEditMode || fttMode) ? 'loading' : 'readonly')
   const [conflict, setConflict] = useState(null)
   const [saveState, setSaveState] = useState(null)  // null|'saving'|'saved'|'error'
+  const [imatgesPujant, setImatgesPujant] = useState(0)   // imatges en vol cap a l'embut
   // Fitxers del model. Es demanaven i es llençaven (l'estat era `[, setFitxers]`): ara els
   // llegeix la biblioteca de l'esquerra (C1), que és qui els ofereix per inserir.
   const [fitxers, setFitxers] = useState([])
@@ -2675,6 +2676,10 @@ export default function TechSheetEditor() {
   // Mode .ftt: estat del document (assets carregats + metadata + cap de cadena actual).
   const fttAssets = useRef({})         // {nom: dataURL} dels assets, ja baixats (vegeu carregarAssets)
   const fttUrlToName = useRef({})      // {dataURL: nom} per desar (dataURL → 'assets/<nom>')
+  // Assets pujats en col·locar-los que encara no han arribat a cap versió desada del .ftt.
+  // Els bytes hi viuen fins que el PRIMER desat que els referencia se'ls emporta; a partir
+  // d'aquí el document només en porta el nom. {nom: base64}
+  const fttAssetsPendents = useRef({})
   const fttMeta = useRef({})           // metadata del document.json (es conserva en desar)
   const fttHeadId = useRef(fitxerId || null)  // cap de cadena vigent (canvia en desar: nova versió)
   const didInitialFit = useRef(false)
@@ -3508,13 +3513,27 @@ export default function TechSheetEditor() {
         // B7 — l'idioma viatja a `metadata`: és propietat del document i s'ha de desar amb ell.
         const documentJson = v2ToDocument(serializePages(pages), pageFormat,
           { ...fttMeta.current, lang: docLang }, fttUrlToName.current)
+        // Els bytes de les imatges col·locades des de l'últim desat viatgen AQUÍ, i només
+        // aquí: el document ja només en porta 'assets/<nom>'. El servidor ignora els que
+        // ningú referencia, de manera que col·locar una foto i desfer-ho no deixa orfes.
+        const pendents = { ...fttAssetsPendents.current }
+        const docSerialitzat = JSON.stringify(documentJson)
+        const cos = { document_json: documentJson, kind: templateMode ? 'template' : 'document' }
+        if (Object.keys(pendents).length) cos.assets = pendents
         const r = await fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/`, {
           // `kind` viatja a cada desat: és el que fa que el mode plantilla sobrevisqui al
           // tancar l'editor (abans, cada desat el tornava a "document" en silenci).
-          method: 'PATCH', headers, body: JSON.stringify({ document_json: documentJson, kind: templateMode ? 'template' : 'document' }),
+          method: 'PATCH', headers, body: JSON.stringify(cos),
         })
-        if (r.ok) { const nh = await r.json(); fttHeadId.current = nh.id; setSheet(nh); setSaveState('saved') }
-        else setSaveState('error')
+        if (r.ok) {
+          const nh = await r.json(); fttHeadId.current = nh.id; setSheet(nh); setSaveState('saved')
+          // Només s'obliden els que el document REFERENCIAVA de debò: si la imatge s'havia
+          // esborrat abans d'aquest desat, el servidor n'ha ignorat els bytes i els hem de
+          // conservar — un "desfés" en tornaria a necessitar el contingut.
+          Object.keys(pendents).forEach(nom => {
+            if (docSerialitzat.includes(`assets/${nom}`)) delete fttAssetsPendents.current[nom]
+          })
+        } else setSaveState('error')
       } catch { setSaveState('error') }
     }, 2000)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4386,11 +4405,44 @@ export default function TechSheetEditor() {
     const obj = { id: uid(), type: 'image', layer: 'free', x: 50, y: 50, ...box, src: dataURL, ...extra }
     addObject(obj)
   }
-  const handleFile = (file) => {
-    if (!file || !locked) return
+  // Camí LEGACY (editor sense document .ftt al darrere): no hi ha cap document on penjar
+  // l'asset, de manera que la imatge entra tal com ha entrat sempre.
+  const colocaImatgeLocal = (file) => {
     const fr = new FileReader()
     fr.onload = () => { addImageFromDataURL(fr.result) }
     fr.readAsDataURL(file)
+  }
+
+  // La imatge puja EN COL·LOCAR-LA, no en desar. El fitxer va a l'embut del servidor
+  // (prepare-asset: HEIC→JPEG i costat llarg a 2000 px) i el que entra al llenç són els
+  // bytes JA REDUÏTS. Abans, una foto de mòbil de 4 MB es quedava dins de document.json com
+  // a dataURL i viatjava sencera a CADA autosave — i cada autosave escriu una versió nova
+  // del .ftt. D'aquí sortien les fitxes de desenes de MB.
+  const handleFile = async (file) => {
+    if (!file || !locked) return
+    if (!fttMode) { colocaImatgeLocal(file); return }
+    setImatgesPujant(n => n + 1)
+    try {
+      const fd = new FormData()
+      fd.append('fitxer', file, file.name || 'imatge')
+      const r = await fetch(`${API}/api/v1/ftt-documents/${fttHeadId.current}/prepare-asset/`, {
+        method: 'POST', headers: uploadHeaders, body: fd,
+      })
+      if (!r.ok) throw new Error('upload')
+      const { nom, dataurl } = await r.json()
+      // L'ORDRE IMPORTA: registrar abans de col·locar. L'autosave el dispara el canvi de
+      // `pages`, i si el nom encara no hi fos, el primer PATCH tornaria a portar el base64
+      // sencer — que és exactament el que aquest camí ve a matar.
+      fttUrlToName.current[dataurl] = nom
+      fttAssetsPendents.current[nom] = dataurl.split(',')[1] || ''
+      await addImageFromDataURL(dataurl)
+    } catch {
+      // Pujada fallida = CAP objecte al document. Una imatge fantasma al llenç que ningú ha
+      // desat és pitjor que no tenir-la: es desaria trencada al proper autosave.
+      flash(t('tech_sheet.image_upload_error'))
+    } finally {
+      setImatgesPujant(n => Math.max(0, n - 1))
+    }
   }
   const onDrop = (e) => {
     e.preventDefault()
@@ -6860,6 +6912,15 @@ export default function TechSheetEditor() {
             <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: COL.sidebar, border: `1px solid ${COL.gold}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-label)', color: COL.textMain, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
               <i className="ti ti-vector-spline" style={{ marginRight: 6, color: COL.gold }} />
               {t('tech_sheet.pen_trace_hint', { n: penTemp.points.length })}
+            </div>
+          )}
+          {/* La imatge puja al servidor abans d'entrar al document, i una foto de mòbil hi pot
+              trigar. Es diu que està en camí perquè ningú no cregui que el clic s'ha perdut i
+              torni a deixar-la anar: qui fa un fitting no espera mirant el llenç. */}
+          {imatgesPujant > 0 && (
+            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: COL.sidebar, border: `1px solid ${COL.gold}`, borderRadius: 6, padding: '4px 12px', fontSize: 'var(--fs-label)', color: COL.textMain, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
+              <i className="ti ti-photo-up" style={{ marginRight: 6, color: COL.gold }} />
+              {t('tech_sheet.image_uploading', { count: imatgesPujant })}
             </div>
           )}
           <div style={{ width: pageW * zoom, height: pageH * zoom, position: 'relative', margin: '0 auto' }}>
