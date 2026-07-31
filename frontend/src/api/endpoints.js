@@ -127,11 +127,6 @@ export const models = {
   // G2 — `te_regles` és la condició dura: sense regla NO es propaga mai; el gest porta a
   // informar-la (Graduació) en comptes d'ensenyar el toast mut del 400.
   gradingStatus: (modelId) => client.get(`/api/v1/models/${modelId}/grading-status/`),
-  // G1 — ACCEPTAR la proposta de graduació del catàleg: el model adopta el ruleset i les regles
-  // passen a ser residents seves (mecanisme del wizard, P3). `rule_set_id` opcional (per defecte,
-  // el que la cadena SizingProfile→GarmentTypeItem resolgui). 409 si el model ja en té.
-  graduacioAcceptar: (modelId, body) =>
-    client.post(`/api/v1/models/${modelId}/graduacio-acceptar/`, body || {}),
   // Sprint 5 — comptadors de models per fase (board del Dashboard). Respecta els mateixos
   // filtres que el Model list (customer/collection/data_objectiu_after|before/temporada/...).
   // → {counts:{<fase>:n}, total}.

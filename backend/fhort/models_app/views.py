@@ -1653,40 +1653,19 @@ def measurements_table_view(request, model_id):
     except Exception:
         rules_by_pom = {}
 
-    # C4 — GRADING INFORMAT AL WIZARD. El resolutor canònic mira el model (regla resident) i
-    # el seu `grading_rule_set`; el ruleset del client, però, sovint penja d'un altre lloc, i
-    # llavors el tècnic es trobava les columnes Règim / Delta / Break buides tot i que la regla
-    # existeix. Aquí s'hi cau NOMÉS PER OMPLIR LA PANTALLA: és lectura, i el motor de graduació
-    # no en sap res —si el tècnic desa, la regla passa a ser resident del model, que és qui mana.
+    # LES REGLES QUE AQUESTA TAULA DIU SÓN LES DEL MODEL, I NOMÉS LES SEVES (31/07).
     #
-    # D-B (2026-07-31) — la cadena del catàleg passa a ser SizingProfile → GarmentTypeItem, i
-    # viu en UN sol lloc (`ruleset_de_catalec`) compartit amb la pantalla de Graduació.
+    # `_load_grading_rules` ja respon exactament això: ModelGradingRule resident amb prioritat i
+    # fallback al `grading_rule_set` que el MODEL té assignat. Res més s'hi fusiona.
     #
-    # ⚠️ SOTA DEMANDA EXPLÍCITA (`?proposta=1`), i això és la correcció del 31/07 (bug de
-    # PRESENTACIÓ del QA d'Agus, model 1302). Fins ara el fallback s'aplicava SEMPRE, i el
-    # resultat era que un model creat expressament SENSE graduació ensenyava a Mesures un
-    # «CH · LINEAR +2,0 / +3,0 @XS» que no era seu: era el ruleset penjat del seu item. Dues
-    # conseqüències, i la segona és la greu:
-    #   1. la pantalla presentava una PROPOSTA com si fos la regla del model;
-    #   2. `EditableTable` reenvia el que ensenya (`buildPayload → rules`) i
-    #      `set_measurements_view` en fa UPSERT de ModelGradingRule → desar mesures hauria
-    #      materialitzat la proposta com a regla del model **sense que ningú l'acceptés mai**,
-    #      que és exactament el que P4 prohibeix.
+    # Aquí hi va haver, i ja no hi és, un fallback que omplia els forats amb el ruleset del
+    # catàleg (l'item primer, després també el SizingProfile). El QA del model 1302 va ensenyar
+    # el preu: un model creat expressament SENSE graduació ensenyava «CH · LINEAR +2,0/+3,0 @XS»
+    # —la regla d'un altre— i, com que la taula reenviava el que pintava, desar les mesures
+    # l'hauria materialitzada sense que ningú l'acceptés. LLEI: BD neta = taula neta.
     #
-    # LLEI (Agus, 31/07): «El C4 només pinta regles REALS del model.» Les files porten el que
-    # `_load_grading_rules` diu —resident del model, o del seu propi ruleset— i prou. La
-    # proposta del catàleg segueix viva, però només per al GEST de Graduació, que la demana
-    # explícitament i té un botó d'Acceptar al davant. El bloc `graduacio` de la resposta (més
-    # avall) sempre hi és: és METADADA sobre què hi ha, mai una regla pintada.
-    from fhort.models_app.services import ruleset_de_catalec, resol_proposta_graduacio
-    vol_proposta = str(request.query_params.get('proposta', '')).lower() in ('1', 'true', 'yes')
-    if vol_proposta:
-        _font_cat, _rs_cat = ruleset_de_catalec(model)
-        if _rs_cat is not None:
-            from fhort.pom.models import GradingRule
-            # `setdefault`: omple FORATS, no substitueix res que el model ja digui.
-            for r in GradingRule.objects.filter(rule_set_id=_rs_cat.id, actiu=True):
-                rules_by_pom.setdefault(r.pom_id, r)
+    # La proposta del catàleg NO s'ha perdut: viu al pas de Graduació (`GraduacioPanel`), que és
+    # on hi ha un «Usar aquest joc» al davant i on triar és un acte, no un efecte secundari.
 
     def _flt(v):
         return float(v) if v is not None else None
@@ -1766,14 +1745,6 @@ def measurements_table_view(request, model_id):
     except Exception:
         tancat = False
 
-    # G1 (2026-07-31) — el bloc que la pantalla de GRADUACIÓ necessita per saber QUÈ està
-    # ensenyant: les regles pròpies del model o una PROPOSTA del catàleg (i d'on surt). Additiu:
-    # els consumidors que no el llegeixen no en noten res.
-    #
-    # Sense això, la franja de Graduació hauria d'endevinar-ho comparant files, i el gest
-    # d'Acceptar no sabria quin ruleset materialitzar. `rule_set_id` és NULL quan font=='model'
-    # (no hi ha res a acceptar: les regles ja són seves) i quan no hi ha proposta possible.
-    _font, _rs = resol_proposta_graduacio(model)
     return Response({
         'model_id': model.id,
         'codi_intern': model.codi_intern,
@@ -1785,13 +1756,6 @@ def measurements_table_view(request, model_id):
         'rows': rows,
         'total_poms': len(rows),
         'tancat': tancat,
-        'graduacio': {
-            'font': _font,                                  # 'model' | 'perfil' | 'item' | None
-            'es_proposta': _font is not None and _font != 'model',
-            'rule_set_id': _rs.id if _rs is not None else None,
-            'rule_set_nom': _rs.nom if _rs is not None else None,
-            'fit_model': model.fit_type or '',
-        },
     })
 
 
@@ -2386,90 +2350,6 @@ def measurements_chat_view(request, model_id):
         return Response({'error': f'Error parsing IA: {e}'}, status=500)
     except Exception as e:
         return Response({'error': f'Error: {e}'}, status=500)
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def accept_grading_proposal_view(request, model_id):
-    """POST /api/v1/models/<model_id>/graduacio-acceptar/   Body: {rule_set_id?: int}
-
-    G1/P3 — ACCEPTAR la proposta de graduació: el model adopta el ruleset que el catàleg li
-    proposava i les seves regles passen a ser RESIDENTS seves.
-
-    **CAP MECÀNICA NOVA D'ESCRIPTURA** (llei P3). Aquest endpoint no escriu regles: assigna la
-    FK i crida `materialize_model_grading_rules`, que és literalment el que fa el wizard a
-    `update_model_step2` (:995-1002) i a la creació (:848-858). Si algun dia canvia com el
-    sistema materialitza, canvia aquí sol perquè no hi ha cap còpia.
-
-    NOMÉS OMPLE EL BUIT. Si el model ja té graduació es retorna 409 i no es toca res: el
-    `materialize` és wipe-and-recreate, i deixar-lo caure sobre un model que ja té regles
-    residents (potser ajustades a mà pel tècnic) les esborraria totes. Acceptar una proposta és
-    per definició un acte sobre un model que no en té —és el que la pantalla ofereix— i el guard
-    fa que això sigui veritat també quan la petició arriba per una altra porta o dos cops seguits.
-
-    `rule_set_id` és opcional: per defecte s'accepta el que la cadena del catàleg resol
-    (SizingProfile → GarmentTypeItem). Enviar-lo explícitament permet acceptar-ne un altre sense
-    passar pel wizard, i passa per la MATEIXA validació D1 que el wizard (`_validar_ruleset_assignable`):
-    un ruleset buit o d'un altre sistema de talles no pot entrar per una porta lateral.
-    """
-    from fhort.models_app.services import (materialize_model_grading_rules,
-                                           origen_mgr_des_de_ruleset,
-                                           resol_proposta_graduacio)
-    from fhort.pom.models import GradingRuleSet
-
-    try:
-        model = Model.objects.get(id=model_id)
-    except Model.DoesNotExist:
-        return Response({'error': 'Model no trobat'}, status=404)
-
-    if _te_regles(model):
-        return Response({
-            'error': 'ja_te_graduacio',
-            'message': "Aquest model ja té graduació: acceptar una proposta n'esborraria les "
-                       'regles vigents. Edita-les a la taula de Regla de graduació.',
-        }, status=409)
-
-    rs_id = request.data.get('rule_set_id')
-    if rs_id:
-        rs = GradingRuleSet.objects.filter(id=rs_id).first()
-        font = 'explicit'
-        if rs is None:
-            return Response({'error': 'ruleset_inexistent',
-                             'message': 'El joc de regles indicat no existeix.'}, status=400)
-    else:
-        font, rs = resol_proposta_graduacio(model)
-
-    if rs is None:
-        # G4 — sense proposta no es peta: es diu que no n'hi ha. El model segueix sent vàlid
-        # sense graduació, i el tècnic pot triar-ne una al wizard (pas 4) quan la sàpiga.
-        return Response({
-            'error': 'sense_proposta',
-            'message': 'El catàleg no proposa cap graduació per a aquesta combinació. '
-                       'Tria un joc de regles al pas de Graduació del model.',
-        }, status=404)
-
-    # D1 — la MATEIXA porta que el wizard: ruleset buit o de sistema de talles divergent no
-    # entra (és el forat que va buidar el 163).
-    _err = _validar_ruleset_assignable(
-        rs, size_system_id=model.size_system_id, customer_id=model.customer_id,
-        confirmat=bool(request.data.get('confirmar_altre_client')),
-    )
-    if _err is not None:
-        payload, status_code = _err
-        return Response(payload, status=status_code)
-
-    with transaction.atomic():
-        model.grading_rule_set = rs
-        model.save(update_fields=['grading_rule_set'])
-        n_regles = materialize_model_grading_rules(
-            model, rs.regles.all(), origen=origen_mgr_des_de_ruleset(rs))
-
-    return Response({
-        'rule_set_id': rs.id,
-        'rule_set_nom': rs.nom,
-        'font': font,
-        'n_regles': n_regles,
-    })
 
 
 @api_view(['POST'])
