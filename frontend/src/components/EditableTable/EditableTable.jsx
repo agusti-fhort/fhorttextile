@@ -225,14 +225,17 @@ export default function EditableTable({
 
   const handleSave = () => desa()
 
-  // C2 (31/07) — LES COLUMNES DE REGLA, CONDICIONADES. Tornen a Mesures, però NOMÉS quan el
-  // model TÉ graduació de debò. El senyal surt de les pròpies files: el payload d'aquesta taula
-  // porta les regles del MODEL i prou (mai la proposta, mai el fallback del catàleg), o sigui
-  // que «alguna fila amb règim» ÉS «el model té regles».
+  // W3 (31/07) — LES COLUMNES DE REGLA ES MOSTREN SEMPRE, buides si el model no té graduació.
   //
-  // La lliçó del 1302 es conserva sencera: BD neta = taula neta. Un model sense graduació no
-  // ensenya columnes de regla, i per tant tampoc no en pot desar cap sense voler.
-  const teRegles = localRows.some(r => r.logica != null)
+  // Abans es condicionaven a «alguna fila amb règim», i això deixava l'usuari sense lloc on
+  // entrar la regla A MÀ: qui cancel·la el wizard de Graduació ha de trobar les columnes
+  // allà, buides, per treballar-les. Ensenyar-les buides no és soroll — és la superfície de
+  // treball, i el guió ('–') diu la veritat: aquest model encara no gradua.
+  //
+  // LA PROTECCIÓ QUE ES MANTÉ, i que és la lliçó del 1302: mai PRE-OMPLERTES. El payload
+  // d'aquesta taula porta les regles del MODEL i prou (mai la proposta, mai el fallback del
+  // catàleg) → BD neta = columnes buides. I desar mesures segueix sense fabricar cap regla:
+  // `buildPayload` no envia `rules`, i aquell guard mort no torna.
   const displaySize = baseSize || sizeRun?.[0]
   const colCount = (readOnly ? 0 : 2) + 7
   const stickyHd = (left, w) => ({ ...thS, position: 'sticky', left, zIndex: 3, width: w, minWidth: w, background: 'var(--bg-muted)' })
@@ -273,21 +276,21 @@ export default function EditableTable({
                 background: 'var(--bg-muted)',
                 borderBottom: '1px solid var(--border)',
               }}>
-                {!readOnly && <th rowSpan={teRegles ? 2 : 1} style={thS}></th>}
-                <th rowSpan={teRegles ? 2 : 1} style={thS}>#</th>
-                <th rowSpan={teRegles ? 2 : 1} style={stickyHd(0, 90)}>{t('measuregrid.col_pom')}</th>
-                <th rowSpan={teRegles ? 2 : 1} style={stickyHd(90, 190)}>{t('measuregrid.col_nom')}</th>
-                <th rowSpan={teRegles ? 2 : 1} style={{ ...thS, textAlign: 'right', minWidth: 90, background: 'var(--gold-pale)' }}>
+                {!readOnly && <th rowSpan={2} style={thS}></th>}
+                <th rowSpan={2} style={thS}>#</th>
+                <th rowSpan={2} style={stickyHd(0, 90)}>{t('measuregrid.col_pom')}</th>
+                <th rowSpan={2} style={stickyHd(90, 190)}>{t('measuregrid.col_nom')}</th>
+                <th rowSpan={2} style={{ ...thS, textAlign: 'right', minWidth: 90, background: 'var(--gold-pale)' }}>
                   {displaySize || t('editable_table.col.base_value')}
                 </th>
-                {teRegles && (
+                {(
                   <th colSpan={4} style={{ ...thS, textAlign: 'center', background: REGLA_BG, borderLeft: SEP }}>
                     {t('measuregrid.grup_regla')}
                   </th>
                 )}
-                {!readOnly && <th rowSpan={teRegles ? 2 : 1} style={thS}></th>}
+                {!readOnly && <th rowSpan={2} style={thS}></th>}
               </tr>
-              {teRegles && (
+              {(
                 <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
                   <th style={{ ...thS, minWidth: 92, background: REGLA_BG, borderLeft: SEP }}>{t('editable_table.col.regime')}</th>
                   <th style={{ ...thS, textAlign: 'right', minWidth: 82, background: REGLA_BG }}>{t('editable_table.col.delta')}</th>
@@ -308,7 +311,6 @@ export default function EditableTable({
                     onDelete={handleDeleteRow}
                     delta={calcDelta(row)}
                     onBateig={handleBateig}
-                    teRegles={teRegles}
                     onRegla={handleRegla}
                   />
                 ))}
@@ -346,7 +348,7 @@ export default function EditableTable({
   )
 }
 
-function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta, onBateig, teRegles, onRegla }) {
+function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta, onBateig, onRegla }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -445,7 +447,7 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
           onChange={v => onCellChange(row.id, 'base_value_cm', v)}
           mono right readOnly={readOnly} />
       </td>
-      {teRegles && (
+      {(
         <>
           <td style={{ ...tdS, background: REGLA_BG, borderLeft: SEP }}>
             {(() => {
