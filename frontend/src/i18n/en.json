@@ -2747,6 +2747,8 @@
     "hdr_label_target_fit_construction": "TARGET | FIT TYPE | CONSTRUCTION",
     "hdr_label_size_run": "SIZE RUN",
     "hdr_label_copyright": "© FHORT",
+    "doc_lang": "Sheet language",
+    "doc_lang_title": "Language the document is printed in. It belongs to the document, not to whoever edits it: the interface keeps your own language.",
     "pen_trace_hint": "Path in progress ({{n}} nodes) — Enter, Escape or double-click close it · Delete removes the path you just closed",
     "insert_data_block": "Insert data block",
     "model_header": "Model header",
