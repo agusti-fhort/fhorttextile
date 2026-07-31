@@ -709,12 +709,32 @@ def _load_grading_rules(model) -> dict:
 
 
 def _load_model_overrides(model_id: int) -> dict:
-    """Return {(pom_id, size_label): value_cm} of per-model fitting overrides."""
+    """Return {(pom_id, size_label): value_cm} of per-model fitting overrides.
+
+    C2/Onada 1 — ÀNCORA EXTERIOR EXPLÍCITA, i la clau es queda per POM a posta.
+
+    ⚠️ FRONTERA C3. Els dos consumidors (`generate_graded_specs` i el preview del wizard)
+    recorren `for pom_id, base_val in base_measurements.items()`: la capa NO hi és a
+    l'abast, perquè `_load_base_measurements` —zona intocable, C3 amb decisió humana—
+    encara indexa per POM sol. Posar-hi `{((pom_id, capa), size): v}` obligaria a inventar
+    la capa al lloc del lookup, dins del motor, i això és precisament la decisió que C3 ha
+    de prendre en fred.
+
+    Mentrestant el filtre fa la feina que importa: un override de folre NO es pot colar a
+    la cel·la de l'exterior. Sense ell, la clau `(pom_id, size_label)` col·lapsaria les
+    dues capes i l'última llegida guanyaria — un valor de folre escrit sobre una fila
+    d'exterior, amb petja 'EXCEPTION' i sense cap rastre de d'on ve.
+
+    El dia que C3 doni capa a `_load_base_measurements`, aquesta clau ha de créixer amb
+    ella i el filtre se'n va: van junts, i per això queden dits al mateix lloc.
+    """
     try:
         from fhort.models_app.models import ModelGradingOverride
+        from fhort.pom.models import MeasurementLayer
         return {
             (o.pom_id, o.size_label): o.value_cm
-            for o in ModelGradingOverride.objects.filter(model_id=model_id)
+            for o in ModelGradingOverride.objects.filter(
+                model_id=model_id, capa=MeasurementLayer.SLUG_DEFECTE)
         }
     except Exception as e:
         logger.warning(f"Could not load ModelGradingOverride: {e}")
