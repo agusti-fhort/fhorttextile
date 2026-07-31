@@ -135,7 +135,7 @@ export const COL = {
 const ROT_SNAPS = [0, 45, 90, 135, 180, 225, 270, 315]
 const ROT_SNAP_TOL = 22.5001
 const SENSE_SNAP = []
-const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', labelGray: '#777776', pom: '#dc2626' }
+const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', inkSoft: '#8a857c', pom: '#dc2626' }
 
 // F1 — la caixa on entra una peça de patró. Una peça és MOLT més gran que la pàgina (el
 // TATE_FRONT fa 588×502 mm i un A4 apaïsat en fa 297×210): entra encaixada a aquesta caixa,
@@ -1023,27 +1023,36 @@ function _headerSizeRun(m, placeholderMode) {
 // (dues bandes, 20mm+12mm) perquè els documents/plantilles existents no canviïn.
 // placeholderMode=true (editor de plantilla): mostra `{model.codi}` etc. en lloc de valors
 // reals (no hi ha model), excepte customer_nom que SÍ és real (la plantilla és per client).
-// ─── Template FTT (S12) — capçalera mestra "3 caixes". REFERÈNCIA CANÒNICA:
-// docs/spec/plantilla_capcalera_ftt.svg. Coordenades transcrites LITERALMENT de l'SVG (pt
-// absoluts, viewBox A4L 841.9×595.3). NO s'interpreta, es MESURA. El canvas Konva té 1pt = P px
-// (P = 0.3528*MM_TO_PX); a l'export P px torna a 1pt (CANVAS_W 713 ↔ PDF 841.89). Per això TANT
-// geometria com cossos es multipliquen per P (el bug D5 era cossos 6/9 sense P). Els `y` de
-// l'SVG són BASELINES → top Konva = baseline − ASC·cos.
-const HDR_M = {
-  OX: 28.6, OY: 39, W: 784.7, H: 90.2, D1: 170.3, D2: 491.8, PAD: 6,
-  R1: 170.3, R2: 491.8, R3: 813.3,     // vores dretes de caixa 1/2/3
-  SUB1: 105.45, SUB2: 337.05,          // subcolumnes (PAGE · SEASON)
-  ASC: 0.8,                            // baseline→top ≈ 0.8·cos (IBM Plex Mono)
-  // Separació entre les DUES columnes d'una mateixa caixa. `PAD` (6pt) és el marge contra la
-  // vora de la caixa, i servia també aquí: amb un valor llarg a l'esquerra, l'el·lipsi
-  // acabava a 6pt de l'etiqueta del costat i SEASON semblava enganxat a INTERNAL REFERENCE.
-  // Un marge contra una vora i un carrer entre columnes no són la mateixa mesura.
-  GUT: 12,
-}
+// ─── Template FTT — CAPÇALERA MESTRA. REFERÈNCIA CANÒNICA: docs/spec/capcalera_ftt_v3.md
+// (maqueta v3.3, aprovada per l'Agus el 2026-07-31; l'SVG anterior queda marcat SUPERAT).
+// La llei no canvia: NO s'interpreta, es MESURA. El que canvia és que ara hi ha DUES
+// transcripcions literals, una per orientació — el retrat ha deixat de ser una derivació de
+// l'apaïsat i té estructura pròpia (tira superior + dues caixes, en comptes de quatre caixes
+// en una banda). Amb spec pròpia, la vella excepció declarada desapareix.
+//
+// Unitats: pt de document RELATIUS a la cantonada superior esquerra de la banda (la spec ja
+// els dona així; abans eren absoluts del viewBox i calia restar l'origen). El canvas Konva té
+// 1pt = P px (P = 0.3528*MM_TO_PX) i a l'export P px torna a ser 1pt: per això geometria I
+// cossos es multipliquen per P (el bug D5 era cossos sense P).
+//
+// ⚠️ Les `y` de la spec v3 són el TOP de la caixa de text (line-height 1), NO la baseline.
+// L'spec anterior donava baselines i calia restar l'ascendent; aquí no hi ha cap conversió.
+// L'ascendent només se segueix necessitant per a UNA cosa: on cau el subratllat de la talla
+// activa, que la spec situa 2pt sota la línia BASE.
 const _hdrP = () => 0.3528 * MM_TO_PX
+const HDR_ASC = 0.8            // baseline ≈ top + 0.8·cos (IBM Plex Mono)
+const HDR_CHAR_W = 0.6         // amplada del glif en cossos (mono)
+const HDR_SOL_PT = 10          // R3 — sòl de cos a tota la fitxa (abans 8)
+const HDR_UNDERLINE_PT = 1.2   // gruix del subratllat de la talla activa
+const HDR_UNDERLINE_GAP = 2    // pt sota la línia base
+// Estils de la spec. `ls` és el tracking en em (només les etiquetes en porten).
+const HDR_STYLE = {
+  lbl: { cos: 7, gris: true, ls: 0.02, fix: true },   // `fix`: no encongeix (ja és sota el sòl)
+  v10: { cos: 10 }, v12: { cos: 12 }, v18: { cos: 18 },
+}
 
 // ── B5 · LES ETIQUETES DE LA CAPÇALERA ENTREN, NO ES COUEN ──────────────────────────────
-// El builder és una funció PURA fora del component: no té `t()` a l'abast, i per això les 12
+// El builder és una funció PURA fora del component: no té `t()` a l'abast, i per això les
 // etiquetes hi vivien com a literals anglesos (excepció i18n declarada des del header v2).
 // Ara hi entren com a DICCIONARI. Dos guanys en un: el gate d'i18n deixa de tenir excepció, i
 // l'idioma de la capçalera passa a ser un PARÀMETRE — que és exactament el que necessita el
@@ -1055,194 +1064,207 @@ const _hdrP = () => 0.3528 * MM_TO_PX
 export const HDR_LABEL_KEYS = ['date', 'page', 'internal_ref', 'season', 'client_ref', 'model',
   'collection', 'target_fit_construction', 'size_run', 'copyright']
 export function headerLabels(tr) {
-  return Object.fromEntries(HDR_LABEL_KEYS.map(k => [k, tr(`tech_sheet.hdr_label_${k}`)]))
+  // L'any del copyright surt de la data d'EMISSIÓ, no d'un literal: la fitxa es re-data a
+  // cada render (R5) i un any cuit envelliria sol. La resta de claus ignoren `year`.
+  const year = new Date().getFullYear()
+  return Object.fromEntries(HDR_LABEL_KEYS.map(k => [k, tr(`tech_sheet.hdr_label_${k}`, { year })]))
 }
 
-// FONT ÚNICA de la posició/mida de l'OBJECTE capçalera mestra (mm), DERIVADA de la geometria de
-// l'SVG canònic (HDR_M, en pt) × 0.3528 mm/pt. La usen l'insert manual (insertHeader) i, amb els
-// MATEIXOS valors, la instanciació des de template (backend master_template._HEADER_OBJ). No
-// tornar a escriure literals de posició del header en cap altre lloc.
+// ── GEOMETRIA · transcripció literal de docs/spec/capcalera_ftt_v3.md ────────────────────
+// `camps` és la spec en forma de dada, en el mateix ordre que les seves taules: `e` = estil,
+// `k` = clau d'etiqueta, `f` = camp de valor, `r` = límit dret.
+//
+// Els `r` NO són a la maqueta (dona l'origen de cada text, no el seu final) i l'anti-
+// desbordament els necessita: són DERIVACIONS declarades, escrites també a la spec. Marge
+// contra vora de caixa = el mateix sagnat que el text té per l'esquerra dins d'aquella caixa;
+// carrer entre dues columnes d'una mateixa fila = 6pt.
+const HDR_H_V3 = {
+  W: 784.7, H: 70.4,
+  divisors: [141.4, 463.2, 714.2],                  // verticals, de dalt a baix
+  logo: { x: 7.0, y: 18.0, w: 126.0, h: 28.0 },     // B3 · caixa intocable
+  camps: [
+    // C1 · logo + copyright
+    { e: 'lbl', k: 'copyright', x: 6.3, y: 60.9, r: 135.1 },
+    // C2 · identificació de la peça
+    { e: 'lbl', k: 'model', x: 148.5, y: 1.6, r: 456.1 },
+    { e: 'v12', f: 'nom', x: 147.1, y: 9.8, r: 456.1 },
+    { e: 'lbl', k: 'season', x: 148.7, y: 28.2, r: 192.0 },
+    { e: 'lbl', k: 'collection', x: 198.0, y: 28.2, r: 456.1 },
+    { e: 'v10', f: 'temporada', x: 148.2, y: 36.8, r: 191.2 },
+    { e: 'v10', f: 'collection', x: 197.2, y: 36.8, r: 456.1 },
+    { e: 'lbl', k: 'internal_ref', x: 148.9, y: 49.4, r: 234.3 },
+    { e: 'lbl', k: 'client_ref', x: 240.3, y: 49.4, r: 456.1 },
+    { e: 'v10', f: 'codi_intern', x: 148.5, y: 57.7, r: 233.7 },
+    { e: 'v10', f: 'codi_client', x: 239.7, y: 57.7, r: 456.1 },
+    // C3 · run + definició tècnica
+    { e: 'lbl', k: 'size_run', x: 473.4, y: 1.6, r: 704.0 },
+    { e: 'run', x: 472.6, y: 9.8, r: 704.0 },
+    { e: 'lbl', k: 'target_fit_construction', x: 473.3, y: 27.5, r: 704.0 },
+    { e: 'v10', f: 'target', x: 472.7, y: 34.8, r: 704.0 },
+    // C4 · data + pàgina (caixa quadrada)
+    { e: 'lbl', k: 'date', x: 718.2, y: 1.6, r: 780.7 },
+    { e: 'v10', f: 'data', x: 718.2, y: 9.5, r: 780.7 },
+    { e: 'lbl', k: 'page', x: 718.2, y: 23.3, r: 780.7 },
+    { e: 'v10', f: 'format', x: 718.2, y: 31.2, r: 780.7 },
+    { e: 'v18', f: 'pagina', x: 731.1, y: 44.1, r: 780.7 },
+  ],
+}
+const HDR_V_V3 = {
+  W: 535.7, H: 92.8,
+  divH: 22.2, divV: 321.0,                          // tira superior + partició de sota
+  logo: { x: 6.5, y: 5.5, w: 49.0, h: 11.0 },       // B3 · caixa intocable
+  camps: [
+    // Tira superior
+    { e: 'lbl', k: 'date', x: 242.8, y: 1.3, r: 341.1 },
+    { e: 'v10', f: 'data', x: 242.8, y: 9.2, r: 341.1 },
+    { e: 'lbl', k: 'page', x: 347.1, y: 1.6, r: 372.7 },
+    { e: 'v10', f: 'format', x: 347.1, y: 9.6, r: 372.7 },
+    { e: 'v18', f: 'pagina', x: 378.7, y: 1.8, r: 422.6 },
+    { e: 'lbl', k: 'copyright', x: 428.6, y: 11.6, r: 529.2 },
+    // Caixa esquerra (mateixa estructura que C2 de l'apaïsat)
+    { e: 'lbl', k: 'model', x: 6.7, y: 24.0, r: 314.3 },
+    { e: 'v12', f: 'nom', x: 5.4, y: 32.3, r: 314.3 },
+    { e: 'lbl', k: 'season', x: 6.9, y: 50.6, r: 50.2 },
+    { e: 'lbl', k: 'collection', x: 56.2, y: 50.6, r: 314.3 },
+    { e: 'v10', f: 'temporada', x: 6.5, y: 59.2, r: 49.5 },
+    { e: 'v10', f: 'collection', x: 55.5, y: 59.2, r: 314.3 },
+    { e: 'lbl', k: 'internal_ref', x: 7.1, y: 71.8, r: 92.5 },
+    { e: 'lbl', k: 'client_ref', x: 98.5, y: 71.8, r: 314.3 },
+    { e: 'v10', f: 'codi_intern', x: 6.7, y: 80.1, r: 91.9 },
+    { e: 'v10', f: 'codi_client', x: 97.9, y: 80.1, r: 314.3 },
+    // Caixa dreta
+    { e: 'lbl', k: 'size_run', x: 331.1, y: 24.0, r: 526.3 },
+    { e: 'run', x: 330.4, y: 32.3, r: 526.3 },
+    { e: 'lbl', k: 'target_fit_construction', x: 331.1, y: 49.9, r: 526.3 },
+    { e: 'v10', f: 'target', x: 330.5, y: 57.2, r: 526.3 },
+  ],
+}
+// L'orientació de LA PÀGINA tria la transcripció. Cap altra branca de layout.
+function _hdrSpec(fmtKey) {
+  const f = PAGE_FORMATS[fmtKey]
+  return (f && f.h > f.w) ? HDR_V_V3 : HDR_H_V3
+}
+
+// FONT ÚNICA de la posició/mida de l'OBJECTE capçalera (mm). La posició dins la pàgina
+// (28.6 · 39 pt) és l'única cosa que es conserva de l'spec anterior: la v3 no la torna a
+// declarar. La usen l'insert manual (insertHeader) i, amb els MATEIXOS valors, la
+// instanciació des de template (backend master_template._HEADER_OBJ). No tornar a escriure
+// literals de posició del header en cap altre lloc.
 const _PT_TO_MM = 0.3528
 const _mm2 = pt => Math.round(pt * _PT_TO_MM * 100) / 100
+const HDR_ORIGEN_PT = { x: 28.6, y: 39 }
 export const MASTER_HEADER_GEOM = {
-  x: _mm2(HDR_M.OX),      // 28.6pt  → 10.09mm
-  y: _mm2(HDR_M.OY),      // 39pt    → 13.76mm
-  width: _mm2(HDR_M.W),   // 784.7pt → 276.84mm
-  height: _mm2(HDR_M.H),  // 90.2pt  → 31.82mm
+  x: _mm2(HDR_ORIGEN_PT.x),   // 28.6pt  → 10.09mm
+  y: _mm2(HDR_ORIGEN_PT.y),   // 39pt    → 13.76mm
+  width: _mm2(HDR_H_V3.W),    // 784.7pt → 276.84mm
+  height: _mm2(HDR_H_V3.H),   // 70.4pt  → 24.84mm
+}
+// Geometria de l'OBJECTE capçalera segons el format de LA PÀGINA. Només afecta la caixa de
+// l'objecte al document: el render surt dels prims, no d'aquí.
+export function masterHeaderGeomFor(fmtKey) {
+  const S = _hdrSpec(fmtKey)
+  return { x: MASTER_HEADER_GEOM.x, y: MASTER_HEADER_GEOM.y, width: _mm2(S.W), height: _mm2(S.H) }
 }
 
-// Logo del customer: zona x 34.6→164.3 (w 129.7) · y 42.7→81.8 (h 39.1) [alçada de les files
-// 1-2 de la caixa 2: top etiqueta fila1 = 47.5−0.8·6 = 42.7 · bottom valor fila2 = 80+0.2·9 = 81.8].
-// Contain amb aspecte preservat SENSE tope a la mida natural (pot fer UPSCALE fins que la primera
-// dimensió topi): s = min(ZW/w_logo, ZH/h_logo). Alineat a l'ESQUERRA (x=34.6) i centrat vertical.
-const HDR_LOGO = { X: 34.6, Y: 42.7, W: 129.7, H: 39.1 }
-export function headerMasterLogoRect(natW, natH, _config) {
+// B3 · LA CAIXA DEL LOGO LA FIXA EL DISSENY APROVAT. L'asset del client s'hi escala CONTAIN
+// (proporcions intactes, alineat a l'esquerra, centrat vertical) i ningú li canvia ni la mida
+// ni la proporció — regla amb acta al CLAUDE.md. Pot fer UPSCALE fins que la primera dimensió
+// topi: el que no pot és deformar-se ni sortir de la caixa.
+export function headerMasterLogoRect(natW, natH, _config, fmtKey) {
   const P = _hdrP()
-  const { X, Y, W, H } = HDR_LOGO
+  const { x: X, y: Y, w: W, h: H } = _hdrSpec(fmtKey).logo
   let wPt, hPt
   if (natW > 0 && natH > 0) {
-    const s = Math.min(W / natW, H / natH)     // contain sense clamp s<=1 (creix fins a tocar)
+    const s = Math.min(W / natW, H / natH)
     wPt = natW * s; hPt = natH * s
   } else {
     hPt = H; wPt = Math.min(W, H * 2.4)        // fallback aspecte 2.4 si no hi ha mida natural
   }
-  return { x: (X - HDR_M.OX) * P, y: (Y - HDR_M.OY) * P + (H - hPt) * P / 2, w: wPt * P, h: hPt * P }
-}
-
-// ── F4 · LAYOUT DERIVAT PER AMPLADA (la capçalera en pàgina VERTICAL) ────────────────────
-//
-// ⚠️ EXCEPCIÓ DECLARADA a la llei "es MESURA, no s'interpreta" (vegeu el bloc HDR_M de sobre).
-// La geometria de la capçalera és transcripció LITERAL de docs/spec/plantilla_capcalera_ftt.svg,
-// que és un SVG A4 APAÏSAT. Per a retrat NO EXISTEIX cap spec canònica: ningú no l'ha
-// dibuixada. Aquest layout és DERIVAT mecànicament de l'apaïsat i queda EN ESPERA d'una spec
-// SVG de retrat que el substitueixi. Quan arribi, aquesta funció s'esborra i es transcriu
-// aquella, igual que es va fer amb l'apaïsat.
-//
-// Què es conserva i què canvia:
-//   · Es conserva TOT el que és mesura — tipografia (6pt etiqueta / 9pt valor amb el sòl a
-//     8pt), contingut, ordre dels camps, alçada de caixa (90.2pt), l'estructura de UNA BANDA
-//     amb tres caixes i les subcolumnes.
-//   · Canvia NOMÉS l'amplada de les caixes:
-//       apaïsat (spec):  [1][2][3]  en una banda de 784.7pt
-//       retrat (derivat):[1][2][3]  en una banda de 538.08pt
-//   · La CAIXA 1 no es comprimeix. El seu contingut té terra: una data i una paginació
-//     ocupen el que ocupen —no es poden escurçar sense mentir— i el logo hi viu amb una zona
-//     mesurada. Les caixes 2 i 3, que porten text elàstic (MODEL, COLLECTION, GARMENT TYPE),
-//     absorbeixen TOTA la compressió, i a parts iguals perquè a l'spec ja són iguals.
-//   · Cap camp es perd. Un valor que no hi cap baixa de 9 a 8pt (el sòl de la llei) i, si
-//     encara no hi cap, es retalla per el·lipsi — que és el que ja fa `PrimNode`.
-//
-// La geometria es deriva amb UN mapa d'abscisses `mx`: identitat dins la caixa 1, lineal
-// des de D1 fins a R3. Com que és continu a D1 i les caixes 2 i 3 són iguals a l'spec, el
-// repartiment surt sol i les ~20 crides a label()/value() de sota no canvien.
-function _hdrLayout(fmtKey) {
-  const f = PAGE_FORMATS[fmtKey]
-  const vertical = !!f && f.h > f.w
-  if (!vertical) {
-    // Apaïsat = la spec, intacta. Identitat: cap abscissa reescrita.
-    return { vertical: false, W: HDR_M.W, H: HDR_M.H, mx: x => x }
-  }
-  const Wp = f.pdf[0] - 2 * HDR_M.OX               // amplada útil entre marges, en pt
-  const B1 = HDR_M.D1 - HDR_M.OX                   // caixa 1, intacta (141.7pt)
-  const k = (Wp - B1) / (HDR_M.R3 - HDR_M.D1)      // factor de les caixes 2+3
-  return {
-    vertical: true, W: Wp, H: HDR_M.H,
-    mx: x => (x <= HDR_M.D1 ? x : HDR_M.D1 + (x - HDR_M.D1) * k),
-  }
-}
-
-// Separació a la DRETA d'un text: contra una vora de caixa, el marge (PAD); contra la
-// columna del costat dins la mateixa caixa, el carrer (GUT). Vegeu HDR_M.GUT.
-const _hdrGut = rightPt => (rightPt === HDR_M.SUB1 || rightPt === HDR_M.SUB2 ? HDR_M.GUT : HDR_M.PAD)
-
-// F4 — geometria de l'OBJECTE capçalera segons el format de la pàgina. En apaïsat és la de
-// sempre (MASTER_HEADER_GEOM, derivada de l'SVG canònic); en vertical, la del layout derivat.
-// Només afecta la caixa de l'objecte al document: el render surt dels prims, no d'aquí.
-export function masterHeaderGeomFor(fmtKey) {
-  const L = _hdrLayout(fmtKey)
-  if (!L.vertical) return MASTER_HEADER_GEOM
-  return { x: MASTER_HEADER_GEOM.x, y: MASTER_HEADER_GEOM.y, width: _mm2(L.W), height: _mm2(L.H) }
+  return { x: X * P, y: (Y + (H - hPt) / 2) * P, w: wPt * P, h: hPt * P }
 }
 
 function _hdrDate(d) {
   const p = n => String(n).padStart(2, '0')
-  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`   // DD-MM-YYYY (D7)
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`   // DD-MM-YYYY (R5)
+}
+
+// Valor de cada camp de la spec. `fk` (field key) marca els que tenen clau exacta a
+// FIELD_CATALOG: no canvia el render, però permet que en desvincular la capçalera aquell text
+// neixi com a `type:'field'` i segueixi resolent-se sol en instanciar una plantilla.
+function _hdrValor(f, m, ph, pageCtx) {
+  const V = (real, marca) => (ph ? marca : (real == null ? '' : String(real)))
+  const join = parts => parts.filter(v => v != null && v !== '').join(' | ')
+  switch (f) {
+    case 'nom': return { text: V(m?.nom_prenda, '{model}'), fk: 'nom_prenda' }
+    case 'temporada': return { text: ph ? '{season}' : [m?.temporada, m?.any].filter(Boolean).join(' '), fk: 'temporada_any' }
+    case 'collection': return { text: V(m?.collection, '{collection}'), fk: 'collection' }
+    case 'codi_intern': return { text: V(m?.codi_intern, '{internal ref}'), fk: 'codi_intern' }
+    case 'codi_client': return { text: V(m?.codi_client, '{client ref}'), fk: 'codi_client' }
+    case 'target': return { text: ph ? '{target} | {fit} | {construction}' : join([m?.grading_target_nom, m?.grading_fit_nom, m?.grading_construction_nom]) }
+    case 'data': return { text: ph ? '{date}' : _hdrDate(new Date()), fk: 'data_avui' }
+    // El format REAL de la pàgina (A4/A3), no un literal: un document mixt ho ha de dir bé.
+    case 'format': return { text: (pageCtx?.fmtKey || 'A4L').replace(/[LP]$/, '') }
+    case 'pagina': return { text: ph ? '{page}' : `${(pageCtx?.index ?? 0) + 1}/${pageCtx?.total ?? 1}` }
+    default: return { text: '' }
+  }
 }
 
 function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx, labels = {}) {
   const P = _hdrP()
-  const { OX, OY, ASC } = HDR_M
-  // F4 — el layout depèn del format de LA PÀGINA (pageCtx.fmtKey). Sense pageCtx, o amb un
-  // format apaïsat, `_hdrLayout` torna la identitat i tot això és exactament el d'abans.
-  const L = _hdrLayout(pageCtx?.fmtKey)
-  const W = L.W * P, H = L.H * P
-  const GRAY = KONVA_COL.labelGray, INK = KONVA_COL.textMain, FRAME = KONVA_COL.textMain
-  const gx = sx => (L.mx(sx) - OX) * P
+  const S = _hdrSpec(pageCtx?.fmtKey)
+  const W = S.W * P, H = S.H * P
+  const GRIS = KONVA_COL.inkSoft, INK = KONVA_COL.textMain
   const prims = []
-  // UNA banda als dos formats: marc ÚNIC + 2 divisòries (mai 3 rects — D4). Frame 0.5pt.
-  // En retrat les divisòries cauen on les posa `mx`; no hi ha cap branca de layout.
-  prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: FRAME, sw: 0.5 * P })
-  prims.push({ t: 'l', points: [gx(HDR_M.D1), 0, gx(HDR_M.D1), H], stroke: FRAME, sw: 0.5 * P })
-  prims.push({ t: 'l', points: [gx(HDR_M.D2), 0, gx(HDR_M.D2), H], stroke: FRAME, sw: 0.5 * P })
-
-  const V = (real, ph) => placeholderMode ? ph : (real == null ? '' : String(real))
-  const join = parts => parts.filter(v => v != null && v !== '').join(' | ')   // UN valor per línia (D3)
-  // Amplada disponible d'un text: de la seva `sx` a `rightPt`, tots dos passats pel mapa
-  // d'abscisses, menys la separació que toqui (marge de caixa o carrer entre columnes).
-  const avail = (sx, rightPt) => L.mx(rightPt) - _hdrGut(rightPt) - L.mx(sx)
-  // Etiqueta 6pt a baseline `by`, x `sx`, fins a `rightPt`.
-  const label = (sx, by, text, rightPt) => {
-    if (!text) return   // B5 — una clau que no arribi no pinta «undefined» damunt la fitxa
-    const f = 6 * P
-    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: avail(sx, rightPt) * P, h: f + 2, text, fill: GRAY, size: f })
-  }
-  // Valor 9pt (baixa a 8pt si no cap; el·lipsi via PrimNode). MAI desborda ni trenca línia.
-  // B2 — `fk` (field key) marca les prims de VALOR que tenen una clau exacta a FIELD_CATALOG.
-  // No canvia res del render (PrimNode l'ignora): serveix perquè, en materialitzar la
-  // capçalera, aquell text pugui néixer com a `type:'field'` i seguir resolent-se sol en
-  // instanciar una plantilla, en lloc de quedar congelat amb les dades d'aquest model.
-  const value = (sx, by, text, rightPt, opts = {}) => {
-    if (!text) return
-    const availPt = avail(sx, rightPt)
-    const fpt = (text.length * 9 * 0.6 > availPt) ? 8 : 9   // 9→8 = sòl de la llei
-    const f = fpt * P
-    prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, fk: opts.fk })
+  // Filets de 0,5pt COMPARTITS: un rect exterior i les divisòries, mai dos rects adossats
+  // (això sí que faria línia doble). En apaïsat, tres verticals de dalt a baix; en vertical,
+  // una horitzontal sencera i una vertical que només baixa des d'ella.
+  prims.push({ t: 'r', x: 0, y: 0, w: W, h: H, fill: KONVA_COL.white, stroke: INK, sw: 0.5 * P })
+  if (S.divisors) {
+    S.divisors.forEach(x => prims.push({ t: 'l', points: [x * P, 0, x * P, H], stroke: INK, sw: 0.5 * P }))
+  } else {
+    prims.push({ t: 'l', points: [0, S.divH * P, W, S.divH * P], stroke: INK, sw: 0.5 * P })
+    prims.push({ t: 'l', points: [S.divV * P, S.divH * P, S.divV * P, H], stroke: INK, sw: 0.5 * P })
   }
 
-  // ── CAIXA 1 ── logo (files 1-2) · DATE+PAGE (fila 3). DATE alineat amb MODEL.
-  label(34.6, 92.5, labels.date, HDR_M.SUB1)
-  value(34.6, 102.5, placeholderMode ? '{date}' : _hdrDate(new Date()), HDR_M.SUB1, { fk: 'data_avui' })
-  label(HDR_M.SUB1, 92.5, labels.page, HDR_M.R1)
-  value(HDR_M.SUB1, 102.5, placeholderMode ? '{page}' : `${(pageCtx?.index ?? 0) + 1} / ${pageCtx?.total ?? 1}`, HDR_M.R1)
-
-  // ── CAIXA 2 ── identificació de la peça (STYLE NAME → MODEL)
-  label(176.3, 47.5, labels.internal_ref, HDR_M.SUB2)
-  value(176.3, 57.5, V(m?.codi_intern, '{internal ref}'), HDR_M.SUB2, { fk: 'codi_intern' })
-  label(HDR_M.SUB2, 47.5, labels.season, HDR_M.R2)
-  value(HDR_M.SUB2, 57.5, placeholderMode ? '{season}' : [m?.temporada, m?.any].filter(Boolean).join(' '), HDR_M.R2, { fk: 'temporada_any' })
-  label(176.3, 70, labels.client_ref, HDR_M.R2)
-  value(176.3, 80, V(m?.codi_client, '{client ref}'), HDR_M.R2, { fk: 'codi_client' })
-  label(176.3, 92.5, labels.model, HDR_M.R2)
-  value(176.3, 102.5, V(m?.nom_prenda, '{model}'), HDR_M.R2, { fk: 'nom_prenda' })
-  label(176.3, 115, labels.collection, HDR_M.R2)
-  value(176.3, 125, V(m?.collection, '{collection}'), HDR_M.R2, { fk: 'collection' })
-
-  // ── CAIXA 3 ── definició tècnica · UNA etiqueta / UN valor per línia (D3)
-  // B4 (maqueta v3.3) — GARMENT TYPE | ITEM i SIZE SYSTEM han sortit de la capçalera, com
-  // TECHNICIAN de la caixa 1: la fitxa els diu al cos, i a la capçalera només hi ha d'haver el
-  // que identifica el document. Els camps segueixen vius al model i al serializer; el que
-  // desapareix és la seva línia aquí.
-  label(497.8, 70, labels.target_fit_construction, HDR_M.R3)
-  value(497.8, 80, placeholderMode ? '{target} | {fit} | {construction}' : join([m?.grading_target_nom, m?.grading_fit_nom, m?.grading_construction_nom]), HDR_M.R3)
-  label(497.8, 115, labels.size_run, HDR_M.R3)
-  _pushSizeRun(prims, m, placeholderMode, 497.8, 125, P, L)
-
+  // R3 · ANTI-DESBORDAMENT. Un valor prova el seu cos nominal (12 el nom i el run, 18 la
+  // paginació, 10 la resta), s'encongeix fins al sòl de 10pt i, si encara no hi cap, s'el·lipsa
+  // (ho fa PrimNode). MAI una segona línia: la graella de la capçalera no es trenca. Les
+  // etiquetes no encongeixen — ja són a 7pt, sota el sòl, i el sòl és una llei de LEGIBILITAT
+  // de valors, no una mida mínima universal.
+  const cosQueCap = (nominal, text, availPt) => {
+    if (!text) return nominal
+    const cal = availPt / (text.length * HDR_CHAR_W)
+    return Math.max(HDR_SOL_PT, Math.min(nominal, cal))
+  }
+  S.camps.forEach(c => {
+    const st = HDR_STYLE[c.e] || HDR_STYLE.v10
+    const availPt = c.r - c.x
+    if (c.e === 'run') { _pushSizeRun(prims, m, placeholderMode, c, P, INK); return }
+    const { text, fk } = c.k ? { text: labels[c.k], fk: undefined } : _hdrValor(c.f, m, placeholderMode, pageCtx)
+    if (!text) return                        // ni «undefined» ni caixes buides damunt la fitxa
+    const cos = st.fix ? st.cos : cosQueCap(st.cos, text, availPt)
+    const f = cos * P
+    prims.push({
+      t: 't', x: c.x * P, y: c.y * P, w: availPt * P, h: f + 2, text,
+      fill: st.gris ? GRIS : INK, size: f, ls: (st.ls || 0) * f, fk,
+    })
+  })
   return { prims, totalW: W, totalH: H }
 }
 
-// SIZE RUN: run compacte "·" (sense espais, com l'SVG). La talla base = segment PROPI
-// bold+underline; el separador "·" NO es subratlla (D6). Mètrica mono charW=cos·0.6.
-// `L` és el layout: en retrat, el mapa d'abscisses estreny la caixa 3. Per defecte, identitat.
+// SIZE RUN: run compacte amb separador "·". La talla ACTIVA és un segment propi (negreta) amb
+// el seu subratllat de gruix declarat — per això el bloc es dibuixa segment a segment i NO el
+// protegeix l'el·lipsi de PrimNode, que actua per node.
 //
-// Aquest bloc es dibuixa segment a segment (la base necessita el seu propi node per anar en
-// negreta i subratllada) i per això NO el protegeix l'el·lipsi de `PrimNode`, que actua per
-// node: 20 segments curts mai desborden individualment, però el conjunt sí. El topall és
-// explícit — el mateix 9→8 que els valors i, si encara no hi cap, es talla amb '…'.
-// R4 — gruix (pt) i separació del subratllat de la talla activa. La separació s'expressa en
-// fraccions del cos perquè segueixi el text si el cos canvia (12pt de la maqueta, o el 9/10
-// d'ara): 0,12·cos deixa el filet just sota les descendents sense tocar-les.
-const HDR_UNDERLINE_PT = 1.2
-const HDR_UNDERLINE_GAP = 0.12
-const _HDR_L_IDENT = { mx: x => x }
-function _pushSizeRun(prims, m, placeholderMode, sx, by, P, L = _HDR_L_IDENT) {
-  const OX = HDR_M.OX
-  const gx = x => (L.mx(x) - OX) * P
-  const INK = KONVA_COL.textMain
-  const availPt = L.mx(HDR_M.R3) - HDR_M.PAD - L.mx(sx)
-  const yFor = f => (by - HDR_M.OY) * P - HDR_M.ASC * f
+// El run NO S'EL·LIPSA MAI (spec v3): un joc de talles a mitges és pitjor que un que sobresurt,
+// perquè el primer menteix en silenci. Encongeix fins al sòl de 10pt i, si allà encara no cap,
+// es pinta igualment: voldrà dir que la caixa és curta per a aquell sistema de talles, i això
+// s'ha de VEURE per poder-ho reportar.
+function _pushSizeRun(prims, m, placeholderMode, camp, P, INK) {
+  const availPt = camp.r - camp.x
   if (placeholderMode) {
-    const f = 9 * P
-    prims.push({ t: 't', x: gx(sx), y: yFor(f), w: availPt * P, h: f + 2, text: '{size run}', fill: INK, size: f })
+    const f = HDR_STYLE.v12.cos * P
+    prims.push({ t: 't', x: camp.x * P, y: camp.y * P, w: availPt * P, h: f + 2, text: '{size run}', fill: INK, size: f })
     return
   }
   const raw = (m?.size_run_model || '').trim()
@@ -1250,39 +1272,25 @@ function _pushSizeRun(prims, m, placeholderMode, sx, by, P, L = _HDR_L_IDENT) {
   const labels = raw.split(/[·;,]/).map(s => s.trim()).filter(Boolean)
   const base = (m?.base_size_label || '').trim()
   const nChars = labels.reduce((n, l) => n + l.length, 0) + (labels.length - 1)
-  const fpt = (nChars * 9 * 0.6 > availPt) ? 8 : 9   // 9→8 = sòl de la llei
-  const f = fpt * P
-  const y = yFor(f)
-  const charWpt = fpt * 0.6
-  const maxPt = L.mx(sx) + availPt
-  let cxPt = L.mx(sx)
-  let tallat = false
-  const seg = (text, opts = {}) => {
-    if (tallat) return
+  const cos = Math.max(HDR_SOL_PT, Math.min(HDR_STYLE.v12.cos, availPt / (nChars * HDR_CHAR_W)))
+  const f = cos * P
+  const charWpt = cos * HDR_CHAR_W
+  let cxPt = camp.x
+  const seg = (text, actiu) => {
     const wPt = text.length * charWpt
-    if (cxPt + wPt > maxPt) {
-      // No hi cap: es tanca amb '…' allà on s'ha arribat i no s'hi afegeix res més.
-      prims.push({ t: 't', x: (cxPt - OX) * P, y, w: charWpt * P + 4, h: f + 2, text: '…', fill: INK, size: f })
-      tallat = true
-      return
-    }
-    prims.push({ t: 't', x: (cxPt - OX) * P, y, w: wPt * P + 4, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold })
-    // R4 — el subratllat de la talla ACTIVA és una primitiva de LÍNIA pròpia, no
-    // `textDecoration`. Motiu: la maqueta el vol d'1,2pt i Konva no deixa triar el gruix del
-    // subratllat natiu (surt del cos de la lletra). Fer-lo línia el fa mesurable, i de retruc
-    // travessa sol els tres traductors de prims — el llenç i l'export ja saben pintar 'l', i
-    // desvincular la capçalera el converteix en un objecte `line` editable en lloc de perdre'l.
-    // El subratllat natiu es conserva per a qui el fa servir sense gruix declarat (taula T1b).
-    if (opts.underline) {
-      const uy = (by + HDR_UNDERLINE_GAP * fpt - HDR_M.OY) * P
-      prims.push({ t: 'l', points: [(cxPt - OX) * P, uy, (cxPt + wPt - OX) * P, uy], stroke: INK, sw: HDR_UNDERLINE_PT * P })
+    prims.push({ t: 't', x: cxPt * P, y: camp.y * P, w: wPt * P + 4, h: f + 2, text, fill: INK, size: f, bold: actiu })
+    // R4 — el subratllat de la talla activa és una LÍNIA pròpia, no `textDecoration`: la spec
+    // en declara el gruix (1,2pt) i Konva no deixa triar el del subratllat natiu. L'amplada és
+    // la del glif i la posició, 2pt sota la línia base (per això aquí sí que cal l'ascendent).
+    if (actiu) {
+      const uy = (camp.y + HDR_ASC * cos + HDR_UNDERLINE_GAP) * P
+      prims.push({ t: 'l', points: [cxPt * P, uy, (cxPt + wPt) * P, uy], stroke: INK, sw: HDR_UNDERLINE_PT * P })
     }
     cxPt += wPt
   }
   labels.forEach((lab, i) => {
-    const isBase = base && lab === base
-    seg(lab, isBase ? { bold: true, underline: true } : {})   // NOMÉS el label de la base (D6)
-    if (i < labels.length - 1) seg('·')                        // separador net, sense underline
+    seg(lab, !!base && lab === base)
+    if (i < labels.length - 1) seg('·', false)   // el separador no és talla: mai actiu
   })
 }
 
@@ -1336,7 +1344,7 @@ function PrimNode({ p }) {
   // demanen, perquè un títol de columna tallat no es pot endevinar.
   return <Text x={p.x} y={p.y} width={p.w} height={p.h} text={p.text} fill={p.fill}
     fontSize={p.size} fontFamily={FONT} fontStyle={p.bold ? 'bold' : p.italic ? 'italic' : 'normal'}
-    textDecoration={p.underline ? 'underline' : ''}
+    textDecoration={p.underline ? 'underline' : ''} letterSpacing={p.ls || 0}
     align={p.align || 'left'} verticalAlign={p.mid ? 'middle' : 'top'}
     ellipsis={!p.wrap} wrap={p.wrap ? 'word' : 'none'} listening={false} />
 }
@@ -1346,7 +1354,7 @@ function addPrimsToGroup(group, prims) {
   for (const p of prims) {
     if (p.t === 'r') group.add(new Konva.Rect({ x: p.x, y: p.y, width: p.w, height: p.h, fill: p.fill, stroke: p.stroke, strokeWidth: p.sw, dash: p.dash }))
     else if (p.t === 'l') group.add(new Konva.Line({ points: p.points, stroke: p.stroke, strokeWidth: p.sw }))
-    else group.add(new Konva.Text({ x: p.x, y: p.y, width: p.w, height: p.h, text: p.text, fill: p.fill, fontSize: p.size, fontFamily: FONT, fontStyle: p.bold ? 'bold' : p.italic ? 'italic' : 'normal', textDecoration: p.underline ? 'underline' : '', align: p.align || 'left', verticalAlign: p.mid ? 'middle' : 'top', ellipsis: !p.wrap, wrap: p.wrap ? 'word' : 'none' }))
+    else group.add(new Konva.Text({ x: p.x, y: p.y, width: p.w, height: p.h, text: p.text, fill: p.fill, fontSize: p.size, fontFamily: FONT, fontStyle: p.bold ? 'bold' : p.italic ? 'italic' : 'normal', textDecoration: p.underline ? 'underline' : '', letterSpacing: p.ls || 0, align: p.align || 'left', verticalAlign: p.mid ? 'middle' : 'top', ellipsis: !p.wrap, wrap: p.wrap ? 'word' : 'none' }))
   }
 }
 
@@ -1401,7 +1409,7 @@ function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, config, page
     [modelData, versio, placeholderMode, hasLogo, config, pageCtx, hdrLabels])
   // master: logo a la caixa 1 (dalt-esq, ≤40pt); v2: logo contingut al BLOC 4; legacy: 40×16mm.
   const logoR = (hasLogo && isMaster)
-    ? headerMasterLogoRect(logoImg.width, logoImg.height, config)
+    ? headerMasterLogoRect(logoImg.width, logoImg.height, config, pageCtx?.fmtKey)
     : (hasLogo && isV2)
       ? headerV2LogoRect(logoImg.width, logoImg.height, totalW, config)
       : { x: totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, w: 40 * MM_TO_PX, h: 16 * MM_TO_PX }
@@ -1821,7 +1829,7 @@ async function addObjectToLayer(layer, obj, ctx, cotaLabel) {
         const isMaster = !!(obj.config && obj.config.layout === 'masterFtt')
         const isV2 = !!(obj.config && obj.config.layout === 'blocks4')
         const r = isMaster
-          ? headerMasterLogoRect(lw, lh, obj.config)
+          ? headerMasterLogoRect(lw, lh, obj.config, pageCtx?.fmtKey)
           : isV2
             ? headerV2LogoRect(lw, lh, built.totalW, obj.config)
             : { x: built.totalW - 45 * MM_TO_PX, y: 2 * MM_TO_PX, w: 40 * MM_TO_PX, h: 16 * MM_TO_PX }
@@ -3016,7 +3024,7 @@ export default function TechSheetEditor() {
     const hdr = objectsOf(currentPage).find(o => o.id === objId && o.type === 'data_block' && o.kind === 'header')
     if (!hdr) return
     const { prims } = buildHeaderPrimitives(modelDoc, sheet?.versio, false, !!customerLogoUrl, hdr.config,
-      { index: currentPage, total: pages.length }, hdrLabels)
+      { index: currentPage, total: pages.length, fmtKey: pages[currentPage]?.format || pageFormat }, hdrLabels)
     const fills = []
     prims.forEach(pr => {
       if (pr.t === 'r') {
@@ -3035,13 +3043,16 @@ export default function TechSheetEditor() {
         fontSize: pr.size, fontFamily: FONT, fill: pr.fill,
         fontStyle: pr.bold ? 'bold' : pr.italic ? 'italic' : 'normal',
         textDecoration: pr.underline ? 'underline' : '',
+        // Gate de paritat: el tracking viatja a l'objecte tot i que `textBoxParts` encara no
+        // el llegeix — desvincular ja perd coses per disseny, però que no les perdi EN SILENCI.
+        letterSpacing: pr.ls || 0,
       }
       fills.push(pr.fk
         ? { ...base, type: 'field', key: pr.fk, label: t('tech_sheet.' + (FIELD_CATALOG.find(f => f.key === pr.fk)?.tk || pr.fk)) }
         : { ...base, type: 'text', text: pr.text || '' })
     })
     if (customerLogoUrl) {
-      const r = headerMasterLogoRect(0, 0, hdr.config)
+      const r = headerMasterLogoRect(0, 0, hdr.config, pages[currentPage]?.format || pageFormat)
       fills.push({ id: uid(), type: 'field', key: 'customer_logo', label: t('tech_sheet.field_customer_logo'),
         x: toMm(r.x), y: toMm(r.y), width: toMm(r.w), height: toMm(r.h), layer: 'free', fontSize: 9 })
     }
