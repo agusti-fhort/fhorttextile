@@ -140,10 +140,21 @@ def redueix_imatge(file, nom, content_type=''):
     from django.core.files.base import ContentFile
     from PIL import Image, ImageOps
 
+    def _intacte():
+        # El punter torna SEMPRE a l'inici: qui rep el fitxer (un serializer d'imatge, el
+        # checksum, el storage) el llegeix des de zero, i llegir-lo aquí per decidir si calia
+        # tocar-lo el deixava a EOF. Un `ImageField` de DRF hi veia zero bytes i responia
+        # "imatge no vàlida" per una foto perfectament sana.
+        try:
+            file.seek(0)
+        except (AttributeError, ValueError):
+            pass
+        return file, nom
+
     heic = es_heic(nom, content_type)
     ext = os.path.splitext(nom or '')[1].lower()
     if not heic and ext not in RASTER_EXTENSIONS:
-        return file, nom
+        return _intacte()
     if not _registra_heif() and heic:
         # dep nova al lock: si el desplegament no ha fet pip install
         raise ConversioFallida(
@@ -166,12 +177,12 @@ def redueix_imatge(file, nom, content_type=''):
                 "No s'ha pogut llegir la foto HEIC: pot estar corrupta o incompleta."
             ) from exc
         logger.warning("Imatge no reduïda, es desa l'original (%s): %s", nom, exc)
-        return file, nom
+        return _intacte()
 
     amplada, alcada = imatge.size
     cal_reduir = max(amplada, alcada) > MAX_COSTAT_LLARG_PX
     if not cal_reduir and not heic:
-        return file, nom          # ja compleix: torna byte a byte, sense re-encodar
+        return _intacte()         # ja compleix: torna byte a byte, sense re-encodar
 
     try:
         if cal_reduir:
@@ -200,7 +211,7 @@ def redueix_imatge(file, nom, content_type=''):
             raise ConversioFallida(
                 "No s'ha pogut convertir la foto HEIC a JPEG.") from exc
         logger.warning("Imatge no reduïda, es desa l'original (%s): %s", nom, exc)
-        return file, nom
+        return _intacte()
 
     bytes_nous = sortida.getvalue()
     # El sostre de mida es torna a mirar SOBRE EL RESULTAT: un JPEG pesa més que la HEIC
@@ -212,7 +223,7 @@ def redueix_imatge(file, nom, content_type=''):
                 f'La foto convertida a JPEG ocupa {len(bytes_nous) / (1024 * 1024):.1f} MB, '
                 f'per sobre del màxim de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.')
         logger.warning("Imatge reduïda més gran que el màxim, es desa l'original (%s)", nom)
-        return file, nom
+        return _intacte()
     # NO hi ha guard de "si el resultat pesa més, torna l'original": el que aquí es persegueix
     # són els PÍXELS, no només els bytes. Una imatge de 4000 px que comprimeix bé segueix
     # ocupant 4000×3000×4 bytes de RAM quan el navegador la descodifica, que és exactament el
