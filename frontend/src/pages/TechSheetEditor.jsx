@@ -1158,13 +1158,11 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
     prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: availPt * P, h: f + 2, text, fill: INK, size: f, bold: !!opts.bold, fk: opts.fk })
   }
 
-  // ── CAIXA 1 ── logo (files 1-2) · DATE+PAGE (fila 3) · TECHNICIAN (fila 4). DATE alineat amb MODEL.
+  // ── CAIXA 1 ── logo (files 1-2) · DATE+PAGE (fila 3). DATE alineat amb MODEL.
   label(34.6, 92.5, 'DATE', HDR_M.SUB1)
   value(34.6, 102.5, placeholderMode ? '{date}' : _hdrDate(new Date()), HDR_M.SUB1, { fk: 'data_avui' })
   label(HDR_M.SUB1, 92.5, 'PAGE', HDR_M.R1)
   value(HDR_M.SUB1, 102.5, placeholderMode ? '{page}' : `${(pageCtx?.index ?? 0) + 1} / ${pageCtx?.total ?? 1}`, HDR_M.R1)
-  label(34.6, 115, 'TECHNICIAN', HDR_M.R1)
-  value(34.6, 125, V(m?.responsable_nom, '{technician}'), HDR_M.R1, { fk: 'responsable_nom' })
 
   // ── CAIXA 2 ── identificació de la peça (STYLE NAME → MODEL)
   label(176.3, 47.5, 'INTERNAL REFERENCE', HDR_M.SUB2)
@@ -1179,12 +1177,12 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   value(176.3, 125, V(m?.collection, '{collection}'), HDR_M.R2, { fk: 'collection' })
 
   // ── CAIXA 3 ── definició tècnica · UNA etiqueta / UN valor per línia (D3)
-  label(497.8, 47.5, 'GARMENT TYPE | ITEM', HDR_M.R3)
-  value(497.8, 57.5, placeholderMode ? '{garment} | {item}' : join([m?.garment_type_nom, m?.garment_type_item_nom]), HDR_M.R3)
+  // B4 (maqueta v3.3) — GARMENT TYPE | ITEM i SIZE SYSTEM han sortit de la capçalera, com
+  // TECHNICIAN de la caixa 1: la fitxa els diu al cos, i a la capçalera només hi ha d'haver el
+  // que identifica el document. Els camps segueixen vius al model i al serializer; el que
+  // desapareix és la seva línia aquí.
   label(497.8, 70, 'TARGET | FIT TYPE | CONSTRUCTION', HDR_M.R3)
   value(497.8, 80, placeholderMode ? '{target} | {fit} | {construction}' : join([m?.grading_target_nom, m?.grading_fit_nom, m?.grading_construction_nom]), HDR_M.R3)
-  label(497.8, 92.5, 'SIZE SYSTEM', HDR_M.R3)
-  value(497.8, 102.5, V(m?.size_system_nom, '{size system}'), HDR_M.R3, { fk: 'size_system_nom' })
   label(497.8, 115, 'SIZE RUN', HDR_M.R3)
   _pushSizeRun(prims, m, placeholderMode, 497.8, 125, P, L)
 
