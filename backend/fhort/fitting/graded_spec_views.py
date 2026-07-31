@@ -82,7 +82,17 @@ class GradedSpecTableView(APIView):
         # F3 — `seccio` viatja pel MATEIX camí que `ordre`/`nom_fitxa`: surt de la
         # BaseMeasurement del model, no del GradedSpec (la graduació no en sap res, i no li
         # pertoca: la secció és una propietat del document d'origen, no de l'escalat).
-        bms = BaseMeasurement.objects.filter(model_id=sf.model_id).values(
+        #
+        # C2/Onada 1 — ÀNCORA EXTERIOR EXPLÍCITA per als QUATRE mapes de sota, i han
+        # d'anar-hi tots quatre alhora: si un s'ancorés i un altre no, una fila podria
+        # acabar amb l'ordre d'una capa i el nom d'una altra.
+        # La clau es queda per POM perquè la FILA que la consulta (`rows_by_pom`, aquí a
+        # sobre) tampoc no porta capa, i donar-n'hi voldria dir afegir un camp al payload
+        # —canvi de contracte, i el contracte no es toca fins a C4—. Les taules per capa al
+        # paper són C4; fins llavors la fitxa parla de l'exterior i ho diu aquí.
+        from fhort.pom.models import MeasurementLayer
+        bms = BaseMeasurement.objects.filter(
+            model_id=sf.model_id, capa=MeasurementLayer.SLUG_DEFECTE).values(
             'pom_id', 'ordre', 'nom_fitxa', 'seccio',
             # R1 (31/07) — el BATEIG viatja pel MATEIX camí que `ordre`/`nom_fitxa`: surt de la
             # BaseMeasurement del model, perquè és del MODEL i no de la graduació. Sense això,
