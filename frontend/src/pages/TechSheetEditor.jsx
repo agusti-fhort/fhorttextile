@@ -1117,10 +1117,10 @@ const HDR_V_V3 = {
     // Tira superior
     { e: 'lbl', k: 'date', x: 242.8, y: 1.3, r: 341.1 },
     { e: 'v10', f: 'data', x: 242.8, y: 9.2, r: 341.1 },
-    { e: 'lbl', k: 'page', x: 347.1, y: 1.6, r: 372.7 },
+    { e: 'lbl', k: 'page', x: 347.1, y: 1.6, r: 376.7 },     // fins a l'1/n (378,7) menys 2
     { e: 'v10', f: 'format', x: 347.1, y: 9.6, r: 372.7 },
     { e: 'v18', f: 'pagina', x: 378.7, y: 1.8, r: 422.6 },
-    { e: 'lbl', k: 'copyright', x: 428.6, y: 11.6, r: 529.2 },
+    { e: 'lbl', k: 'copyright', x: 428.6, y: 11.6, r: 535.7 },  // últim de la tira: fins a la vora
     // Caixa esquerra (mateixa estructura que C2 de l'apaïsat)
     { e: 'lbl', k: 'model', x: 6.7, y: 24.0, r: 314.3 },
     { e: 'v12', f: 'nom', x: 5.4, y: 32.3, r: 314.3 },
@@ -1244,9 +1244,16 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
     if (!text) return                        // ni «undefined» ni caixes buides damunt la fitxa
     const cos = st.fix ? st.cos : cosQueCap(st.cos, text, availPt)
     const f = cos * P
+    // El TRACKING és un refinament; el text és el missatge. Una etiqueta que hi cap per TINTA
+    // però no amb el tracking posat, es pinta sense tracking abans que amb punts suspensius:
+    // «PÀGINA» val més sencera i justa que «PÀ…». (Vist a pantalla, no al càlcul: a la tira de
+    // la vertical hi cabien totes dues per tinta i Konva les tallava per l'espai de més.)
+    const tintaPt = text.length * cos * HDR_CHAR_W
+    const lsPt = (st.ls || 0) * cos
+    const ls = (lsPt && tintaPt + text.length * lsPt > availPt) ? 0 : lsPt
     prims.push({
       t: 't', x: c.x * P, y: c.y * P, w: availPt * P, h: f + 2, text,
-      fill: st.gris ? GRIS : INK, size: f, ls: (st.ls || 0) * f, fk,
+      fill: st.gris ? GRIS : INK, size: f, ls: ls * P, fk,
     })
   })
   return { prims, totalW: W, totalH: H }
