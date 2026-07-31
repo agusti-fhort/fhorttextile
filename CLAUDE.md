@@ -40,7 +40,10 @@
 - **i18n-gate ca/en/es a tota UI nova.** Tot text de cara a l'usuari amb clau `t()` i
   paritat als tres idiomes (`frontend/src/i18n/{ca,en,es}.json`). Dades de domini
   (LINEAR/STEP, codis POM) NO es tradueixen.
-- **Icones Tabler outline** (mai `-filled`). **Colors via tokens CSS, mai hex**
+- **Icones Tabler outline** (mai `-filled`). Única excepció amb acta:
+  `ti-pointer-filled` autoritzat únicament per a l'eina Selecció de forma
+  (Agus, 2026-07-31); tota la resta del sistema segueix outline-only.
+  **Colors via tokens CSS, mai hex**
   (única excepció: `KONVA_COL` literal, perquè el canvas Konva no resol `var()`).
 
 ## Migracions i BD
