@@ -2473,6 +2473,19 @@ export default function TechSheetEditor() {
   // prims (llenç viu · export/miniatures · desvincular). B7: la font és l'idioma del DOCUMENT.
   const hdrLabels = useMemo(() => headerLabels(tDoc), [tDoc])
 
+  const { id, fitxerId } = useParams()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const taskId = searchParams.get('task_id')
+  // Mode .ftt: l'editor llegeix/desa el document .ftt (ModelFitxer) en comptes del TechSheet (O2O).
+  const fttMode = !!fitxerId
+  const isEditMode = !!taskId
+  const token = localStorage.getItem('access_token')
+  const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const uploadHeaders = { Authorization: `Bearer ${token}` }
+
+  const [model, setModel] = useState(null)
+
   // B7 — EL MODEL TAL COM EL DIU AQUEST DOCUMENT. Target, fit i construcció són valors de
   // CATÀLEG: tenen nom a cada idioma i s'han de dir en el de la fitxa. El backend els envia
   // tots tres alhora (`grading_noms`), de manera que commutar l'idioma re-renderitza sense
@@ -2493,18 +2506,6 @@ export default function TechSheetEditor() {
       grading_construction_nom: nom(g.construction, model.grading_construction_nom),
     }
   }, [model, docLang])
-  const { id, fitxerId } = useParams()
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const taskId = searchParams.get('task_id')
-  // Mode .ftt: l'editor llegeix/desa el document .ftt (ModelFitxer) en comptes del TechSheet (O2O).
-  const fttMode = !!fitxerId
-  const isEditMode = !!taskId
-  const token = localStorage.getItem('access_token')
-  const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-  const uploadHeaders = { Authorization: `Bearer ${token}` }
-
-  const [model, setModel] = useState(null)
   const [sheet, setSheet] = useState(null)
   const [pages, setPages] = useState([{ id: uid(), objects: [] }])
   const [currentPage, setCurrentPage] = useState(0)
