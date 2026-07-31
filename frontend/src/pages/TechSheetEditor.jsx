@@ -1028,6 +1028,22 @@ const HDR_M = {
 }
 const _hdrP = () => 0.3528 * MM_TO_PX
 
+// ── B5 · LES ETIQUETES DE LA CAPÇALERA ENTREN, NO ES COUEN ──────────────────────────────
+// El builder és una funció PURA fora del component: no té `t()` a l'abast, i per això les 12
+// etiquetes hi vivien com a literals anglesos (excepció i18n declarada des del header v2).
+// Ara hi entren com a DICCIONARI. Dos guanys en un: el gate d'i18n deixa de tenir excepció, i
+// l'idioma de la capçalera passa a ser un PARÀMETRE — que és exactament el que necessita el
+// selector d'idioma del document (B7): la capçalera no ha de saber d'on surt l'idioma, només
+// rebre'l. Qui el hi dona decideix si és el de l'usuari o el del document.
+//
+// El mapa és pla i sense fallback silenciós: una clau que faltés es veuria buida a la fitxa, i
+// val més això que un literal anglès amagat que ningú sap d'on surt.
+export const HDR_LABEL_KEYS = ['date', 'page', 'internal_ref', 'season', 'client_ref', 'model',
+  'collection', 'target_fit_construction', 'size_run', 'copyright']
+export function headerLabels(tr) {
+  return Object.fromEntries(HDR_LABEL_KEYS.map(k => [k, tr(`tech_sheet.hdr_label_${k}`)]))
+}
+
 // FONT ÚNICA de la posició/mida de l'OBJECTE capçalera mestra (mm), DERIVADA de la geometria de
 // l'SVG canònic (HDR_M, en pt) × 0.3528 mm/pt. La usen l'insert manual (insertHeader) i, amb els
 // MATEIXOS valors, la instanciació des de template (backend master_template._HEADER_OBJ). No
@@ -1119,7 +1135,7 @@ function _hdrDate(d) {
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`   // DD-MM-YYYY (D7)
 }
 
-function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx) {
+function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx, labels = {}) {
   const P = _hdrP()
   const { OX, OY, ASC } = HDR_M
   // F4 — el layout depèn del format de LA PÀGINA (pageCtx.fmtKey). Sense pageCtx, o amb un
@@ -1142,6 +1158,7 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   const avail = (sx, rightPt) => L.mx(rightPt) - _hdrGut(rightPt) - L.mx(sx)
   // Etiqueta 6pt a baseline `by`, x `sx`, fins a `rightPt`.
   const label = (sx, by, text, rightPt) => {
+    if (!text) return   // B5 — una clau que no arribi no pinta «undefined» damunt la fitxa
     const f = 6 * P
     prims.push({ t: 't', x: gx(sx), y: (by - OY) * P - ASC * f, w: avail(sx, rightPt) * P, h: f + 2, text, fill: GRAY, size: f })
   }
@@ -1159,21 +1176,21 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   }
 
   // ── CAIXA 1 ── logo (files 1-2) · DATE+PAGE (fila 3). DATE alineat amb MODEL.
-  label(34.6, 92.5, 'DATE', HDR_M.SUB1)
+  label(34.6, 92.5, labels.date, HDR_M.SUB1)
   value(34.6, 102.5, placeholderMode ? '{date}' : _hdrDate(new Date()), HDR_M.SUB1, { fk: 'data_avui' })
-  label(HDR_M.SUB1, 92.5, 'PAGE', HDR_M.R1)
+  label(HDR_M.SUB1, 92.5, labels.page, HDR_M.R1)
   value(HDR_M.SUB1, 102.5, placeholderMode ? '{page}' : `${(pageCtx?.index ?? 0) + 1} / ${pageCtx?.total ?? 1}`, HDR_M.R1)
 
   // ── CAIXA 2 ── identificació de la peça (STYLE NAME → MODEL)
-  label(176.3, 47.5, 'INTERNAL REFERENCE', HDR_M.SUB2)
+  label(176.3, 47.5, labels.internal_ref, HDR_M.SUB2)
   value(176.3, 57.5, V(m?.codi_intern, '{internal ref}'), HDR_M.SUB2, { fk: 'codi_intern' })
-  label(HDR_M.SUB2, 47.5, 'SEASON', HDR_M.R2)
+  label(HDR_M.SUB2, 47.5, labels.season, HDR_M.R2)
   value(HDR_M.SUB2, 57.5, placeholderMode ? '{season}' : [m?.temporada, m?.any].filter(Boolean).join(' '), HDR_M.R2, { fk: 'temporada_any' })
-  label(176.3, 70, 'CLIENT REFERENCE', HDR_M.R2)
+  label(176.3, 70, labels.client_ref, HDR_M.R2)
   value(176.3, 80, V(m?.codi_client, '{client ref}'), HDR_M.R2, { fk: 'codi_client' })
-  label(176.3, 92.5, 'MODEL', HDR_M.R2)
+  label(176.3, 92.5, labels.model, HDR_M.R2)
   value(176.3, 102.5, V(m?.nom_prenda, '{model}'), HDR_M.R2, { fk: 'nom_prenda' })
-  label(176.3, 115, 'COLLECTION', HDR_M.R2)
+  label(176.3, 115, labels.collection, HDR_M.R2)
   value(176.3, 125, V(m?.collection, '{collection}'), HDR_M.R2, { fk: 'collection' })
 
   // ── CAIXA 3 ── definició tècnica · UNA etiqueta / UN valor per línia (D3)
@@ -1181,9 +1198,9 @@ function buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx
   // TECHNICIAN de la caixa 1: la fitxa els diu al cos, i a la capçalera només hi ha d'haver el
   // que identifica el document. Els camps segueixen vius al model i al serializer; el que
   // desapareix és la seva línia aquí.
-  label(497.8, 70, 'TARGET | FIT TYPE | CONSTRUCTION', HDR_M.R3)
+  label(497.8, 70, labels.target_fit_construction, HDR_M.R3)
   value(497.8, 80, placeholderMode ? '{target} | {fit} | {construction}' : join([m?.grading_target_nom, m?.grading_fit_nom, m?.grading_construction_nom]), HDR_M.R3)
-  label(497.8, 115, 'SIZE RUN', HDR_M.R3)
+  label(497.8, 115, labels.size_run, HDR_M.R3)
   _pushSizeRun(prims, m, placeholderMode, 497.8, 125, P, L)
 
   return { prims, totalW: W, totalH: H }
@@ -1243,8 +1260,8 @@ function _pushSizeRun(prims, m, placeholderMode, sx, by, P, L = _HDR_L_IDENT) {
 // Capçalera del model → {prims, totalW, totalH}. `config.layout`: 'masterFtt' (Template FTT S12,
 // 3 caixes, amb consciència de pàgina via pageCtx) · 'blocks4' (v2) · absent → LEGACY intacte
 // (cap regressió a documents/plantilles existents).
-export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLogo = false, config = null, pageCtx = null) {
-  if (config && config.layout === 'masterFtt') return buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx)
+export function buildHeaderPrimitives(m, versio, placeholderMode = false, hasLogo = false, config = null, pageCtx = null, labels = {}) {
+  if (config && config.layout === 'masterFtt') return buildMasterHeaderPrimitives(m, versio, placeholderMode, config, pageCtx, labels)
   if (config && config.layout === 'blocks4') return buildHeaderV2Primitives(m, versio, placeholderMode, config)
   const W = 277 * MM_TO_PX
   const B1 = 20 * MM_TO_PX, B2 = 12 * MM_TO_PX
@@ -1345,14 +1362,14 @@ function FieldChipNode({ obj, groupProps, isSelected }) {
 
 // Capçalera del model — Konva natiu. Resol els camps en render. Si hi ha logoUrl,
 // es pinta el logo real (cantonada superior dreta) en lloc del placeholder "(logo)".
-function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, config, pageCtx, groupProps, isSelected }) {
+function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, config, pageCtx, hdrLabels, groupProps, isSelected }) {
   const logoImg = useImage(logoUrl || '')
   const hasLogo = !!logoImg
   const isV2 = !!(config && config.layout === 'blocks4')
   const isMaster = !!(config && config.layout === 'masterFtt')
   const { prims, totalW, totalH } = useMemo(
-    () => buildHeaderPrimitives(modelData, versio, placeholderMode, hasLogo, config, pageCtx),
-    [modelData, versio, placeholderMode, hasLogo, config, pageCtx])
+    () => buildHeaderPrimitives(modelData, versio, placeholderMode, hasLogo, config, pageCtx, hdrLabels),
+    [modelData, versio, placeholderMode, hasLogo, config, pageCtx, hdrLabels])
   // master: logo a la caixa 1 (dalt-esq, ≤40pt); v2: logo contingut al BLOC 4; legacy: 40×16mm.
   const logoR = (hasLogo && isMaster)
     ? headerMasterLogoRect(logoImg.width, logoImg.height, config)
@@ -1758,7 +1775,7 @@ async function addObjectToLayer(layer, obj, ctx, cotaLabel) {
       const pageCtx = (ctx?.pageIndex != null)
         ? { index: ctx.pageIndex, total: ctx.pageTotal, fmtKey: ctx.fmtKey }
         : (ctx?.fmtKey ? { fmtKey: ctx.fmtKey } : null)
-      built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl, obj.config, pageCtx)
+      built = buildHeaderPrimitives(ctx?.modelData, ctx?.versio, ctx?.placeholderMode, !!logoEl, obj.config, pageCtx, ctx?.hdrLabels)
     } else if (obj.kind === 'graded_table') {
       const data = ctx?.tableData?.[obj.id]
       // Desvinculada (BIB S0): no hi ha dades ni n'hi haurà fins que el tècnic la torni a
@@ -1981,7 +1998,7 @@ function PathObj({ obj, common, onDblVector, selected, activeSubIndex, onSubSele
   )
 }
 
-export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, subpathTool, onEndpointDrag, onCotaEndpointDrag, onCotaLabelDrag, cotaLabel, hideTextChildren }) {
+export function ObjectNode({ obj, src, tableData, modelData, versio, placeholderMode, customerLogoUrl, pageCtx, hdrLabels, onHeaderContextMenu, selected, selectable, draggable, onSelect, onDragStart, onDragMove, onDragEnd, onTransformEnd, onDblText, onDblVector, entered, onDblGroup, onChildSelect, onChildDragEnd, selectedChildId, activeSubIndex, onSubSelect, subpathTool, onEndpointDrag, onCotaEndpointDrag, onCotaLabelDrag, cotaLabel, hideTextChildren }) {
   const common = {
     id: obj.id,
     x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1,
@@ -2002,7 +2019,7 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
       const hdrProps = onHeaderContextMenu
         ? { ...dataCommon, onContextMenu: (e) => onHeaderContextMenu(e, obj) }
         : dataCommon
-      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} config={obj.config} pageCtx={pageCtx} groupProps={hdrProps} isSelected={selected} />
+      return <HeaderBlock modelData={modelData} versio={versio} placeholderMode={placeholderMode} logoUrl={customerLogoUrl} config={obj.config} pageCtx={pageCtx} hdrLabels={hdrLabels} groupProps={hdrProps} isSelected={selected} />
     }
     // Desvinculada (BIB S0): mateixos prims que el PDF. Sense això queia al «Carregant
     // taula…» de sota i s'hi quedava per sempre — una taula desvinculada no carrega mai.
@@ -2406,7 +2423,11 @@ async function convertLegacySketchSvgObject(obj) {
 
 // ════════════════════════════════ Component ═════════════════════════════════
 export default function TechSheetEditor() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // B5 — les etiquetes de la capçalera, resoltes UN cop i passades als tres consumidors de
+  // prims (llenç viu · export/miniatures · desvincular). Avui la font és l'idioma de l'USUARI;
+  // el selector d'idioma del DOCUMENT només ha de canviar aquesta línia, no la capçalera.
+  const hdrLabels = useMemo(() => headerLabels(t), [t, i18n.language])
   const { id, fitxerId } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -2938,7 +2959,7 @@ export default function TechSheetEditor() {
     const hdr = objectsOf(currentPage).find(o => o.id === objId && o.type === 'data_block' && o.kind === 'header')
     if (!hdr) return
     const { prims } = buildHeaderPrimitives(model, sheet?.versio, false, !!customerLogoUrl, hdr.config,
-      { index: currentPage, total: pages.length })
+      { index: currentPage, total: pages.length }, hdrLabels)
     const fills = []
     prims.forEach(pr => {
       if (pr.t === 'r') {
@@ -2972,7 +2993,7 @@ export default function TechSheetEditor() {
     setSelectedIds([grup.id])
     flash(t('tech_sheet.header_materialized', { n: fills.filter(f => f.type === 'field').length }))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, pages, model, sheet, customerLogoUrl, updatePageObjects, t])
+  }, [currentPage, pages, model, sheet, customerLogoUrl, updatePageObjects, t, hdrLabels])
 
   const alignSelection = useCallback((mode) => {
     const ids = new Set(selectedIds)
@@ -3408,7 +3429,7 @@ export default function TechSheetEditor() {
           // des del pageW/pageH del canvas (que és el de la pàgina activa). Amb un document
           // mixt, les miniatures han de sortir cadascuna amb la seva proporció.
           const f = fmtDe(pages[pi])
-          const ctx = { tableData, modelData: model, versio: sheet?.versio,
+          const ctx = { tableData, modelData: model, versio: sheet?.versio, hdrLabels,
             pageW: Math.round(f.w * MM_TO_PX), pageH: Math.round(f.h * MM_TO_PX),
             fmtKey: pages[pi]?.format || pageFormat,
             customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
@@ -5068,7 +5089,7 @@ export default function TechSheetEditor() {
         // full apaïsat.
         const f = fmtDe(pages[pi])
         const [pdfW, pdfH] = f.pdf
-        const ctx = { tableData, modelData: model, versio: sheet?.versio,
+        const ctx = { tableData, modelData: model, versio: sheet?.versio, hdrLabels,
           pageW: Math.round(f.w * MM_TO_PX), pageH: Math.round(f.h * MM_TO_PX),
           fmtKey: pages[pi]?.format || pageFormat,
           customerLogoUrl, pageIndex: pi, pageTotal: pages.length }
@@ -5462,7 +5483,7 @@ export default function TechSheetEditor() {
     setF2Msg(t('tech_sheet.ia_proposant'))
     try {
       const netaObjs = (curObjs || []).filter(o => !(o.type === 'group' && o.pomId != null))
-      const ctx = { tableData, modelData: model, versio: sheet?.versio, pageW, pageH, customerLogoUrl,
+      const ctx = { tableData, modelData: model, versio: sheet?.versio, hdrLabels, pageW, pageH, customerLogoUrl,
         fmtKey: pages[currentPage]?.format || pageFormat }
       const pageImage = await renderPageToDataURL({ ...pages[currentPage], objects: netaObjs }, 1.5, ctx)
       const sketches = hosts.map(o => {
@@ -6736,6 +6757,7 @@ export default function TechSheetEditor() {
                 {ordered.filter(o => o.visible !== false).map(o => (
                   <ObjectNode key={o.id} obj={o} src={o.src}
                     tableData={tableData} modelData={model} versio={sheet?.versio} customerLogoUrl={customerLogoUrl}
+                    hdrLabels={hdrLabels}
                     placeholderMode={templateMode}
                     hideTextChildren={editingFlatGroupId === o.id}
                     pageCtx={{ index: currentPage, total: pages.length, fmtKey: pages[currentPage]?.format || pageFormat }}
