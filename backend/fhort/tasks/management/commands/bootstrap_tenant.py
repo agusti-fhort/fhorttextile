@@ -159,7 +159,12 @@ def _spec():
         # GarmentPOMMap respecte del seu item). `is_set` no necessita entrada pròpia: és un
         # camp concret i `_concrete()` el copia sol.
         (GarmentTypeItemPart, ('set_item', 'part_item'), {}, (), None),
-        (GarmentPOMMap,      ('garment_type_item', 'pom'), {}, (), None),
+        # FASE_3/C1-ins — la clau natural creix amb els DOS EIXOS. Era el deute de C1 que
+        # el dossier va trobar: `(garment_type_item, pom)` no és la unicitat real de la
+        # taula —ho és `(garment_type_item, pom, capa, instancia)`—, i un tenant nou
+        # sembrat des d'un origen amb dues pertinences germanes n'hauria rebut UNA. Els
+        # valors surten sols de la fila d'origen: `_concrete()` copia els camps.
+        (GarmentPOMMap,      ('garment_type_item', 'pom', 'capa', 'instancia'), {}, (), None),
         (GradingRule,        ('rule_set', 'pom'), {}, (), None),
         # (GradingException) — jubilada G6/1a: model retirat, 0 files. No hi ha res a copiar.
         (SizingProfile,      ('target', 'garment_type', 'construction', 'fit_type',

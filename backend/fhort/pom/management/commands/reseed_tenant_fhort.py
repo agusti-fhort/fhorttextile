@@ -22,6 +22,8 @@ Adaptations vs original plan:
 """
 import openpyxl
 from django.core.management.base import BaseCommand, CommandError
+
+from fhort.pom.models import MeasurementLayer
 from django.db import transaction
 from django_tenants.utils import schema_context
 
@@ -293,8 +295,23 @@ class Command(BaseCommand):
                     if not pm:
                         saltats_b.append(f"POM no trobat: {d['pom_code']}")
                         continue
+                    # FASE_3/C1-ins — els eixos, declarats. ⚠️ AQUEST COMMAND JA NO CORRE:
+                    # construeix el mapa amb `garment_type=`, una FK que es va retirar de
+                    # `GarmentPOMMap` (avui la pertinença penja de `garment_type_item`), o
+                    # sigui que peta abans d'arribar a la BD. No s'arregla aquí —és fora de
+                    # l'abast d'aquesta fase i el seu guard obsolet ja està anotat al
+                    # dossier (§II.10, «codi mort o inabastable»)—, però tampoc es deixa com
+                    # a únic escriptor de les 9 taules sense els dos eixos: si algú el
+                    # ressuscita, que neixi dient la veritat.
+                    #
+                    # `bulk_create(ignore_conflicts=True)` és, a més, l'únic punt del repo on
+                    # obrir la clau canviaria el comportament de debò: un ON CONFLICT DO
+                    # NOTHING sobre una clau més ampla deixa de saltar-se el que abans
+                    # saltava. Amb els eixos fixats al parell canònic, segueix saltant-se
+                    # exactament el mateix.
                     maps.append(GarmentPOMMap(
                         garment_type=gt, pom=pm,
+                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                         ordre=d['ordre'],
                         is_key=d['is_key'],
                         obligatori=d['obligatori'],
