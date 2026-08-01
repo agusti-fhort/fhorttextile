@@ -261,6 +261,28 @@ def clone_sizing_profile_view(request, pk):
         return Response({'error': str(e)}, status=500)
 
 
+def _prioritat_codi_mostrat(pom_codi):
+    """Ordre determinista quan un `pom_codi` casa amb MÉS D'UNA regla del mateix ruleset.
+
+    El codi de la URL és una CADENA, no una clau: el filtre casa per codi global O per
+    `codi_client`, i res impedeix que dos POMMaster del mateix ruleset hi responguin
+    (cas viu a staging: ruleset 217, codi 'BJ' → poms 514 i 418, increments 0.20 i 0.50).
+    Sense `order_by`, quina regla s'edita el decidia el pla de Postgres.
+
+    Criteri: guanya la regla el codi de la qual la LLISTA MOSTRA per aquell POM —
+    `grading_rules_with_units_view` (s4_views.py) emet el codi global si n'hi ha, i si no
+    el `codi_client`. Així el que s'edita és la fila que l'usuari veu amb aquell codi.
+    Empat (dos POMs que mostren el mateix codi) → `pk` més baix: el més antic.
+    """
+    from django.db.models import Case, IntegerField, Value, When
+    return Case(
+        When(pom__pom_global__codi=pom_codi, then=Value(0)),
+        When(pom__pom_global__isnull=True, pom__codi_client=pom_codi, then=Value(0)),
+        default=Value(1),
+        output_field=IntegerField(),
+    )
+
+
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def update_grading_rule_view(request, rule_set_id, pom_codi):
@@ -283,7 +305,9 @@ def update_grading_rule_view(request, rule_set_id, pom_codi):
             rule_set=rs,
         ).filter(
             Q(pom__pom_global__codi=pom_codi) | Q(pom__codi_client=pom_codi)
-        ).select_related('pom', 'pom__pom_global').first()
+        ).annotate(
+            _prioritat=_prioritat_codi_mostrat(pom_codi),
+        ).select_related('pom', 'pom__pom_global').order_by('_prioritat', 'pk').first()
 
         if not rule:
             return Response({'error': f'Regla {pom_codi} no trobada'}, status=404)

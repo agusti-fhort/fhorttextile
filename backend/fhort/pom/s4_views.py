@@ -56,11 +56,14 @@ def update_grading_rule_with_history_view(request, rule_set_id, pom_codi):
             }, status=400)
 
         from django.db.models import Q
+        from fhort.pom.s2_views import _prioritat_codi_mostrat
         rule = GradingRule.objects.filter(
             rule_set=rs,
         ).filter(
             Q(pom__pom_global__codi=pom_codi) | Q(pom__codi_client=pom_codi)
-        ).select_related('pom', 'pom__pom_global').first()
+        ).annotate(
+            _prioritat=_prioritat_codi_mostrat(pom_codi),
+        ).select_related('pom', 'pom__pom_global').order_by('_prioritat', 'pk').first()
 
         if not rule:
             return Response({'error': f'Regla {pom_codi} no trobada'}, status=404)
