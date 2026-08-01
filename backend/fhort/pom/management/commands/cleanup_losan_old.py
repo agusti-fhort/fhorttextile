@@ -29,7 +29,12 @@ OWNED_RULESET = {'regles', 'scope_nodes'}
 OWNED_SYSTEM = {'talles'}
 # Relacions inverses de SizeDefinition que SÍ són externes i cal comprovar (una talla no pot
 # estar en ús per una regla d'un altre ruleset ni ser talla base d'un item).
-SIZEDEF_EXTERNAL = {'regles_base', 'base_for_items'}
+# Les TRES que SizeDefinition té de debò: `regles_base` (GradingRule, PROTECT),
+# `base_for_items` (GarmentTypeItem.talla_base, SET_NULL) i `base_set_for_items`
+# (ItemBaseSet, PROTECT) — aquesta última hi faltava, i com que el filtre de sota descarta
+# tot el que no és a la llista, el guard mirava cap a una altra banda justament davant d'un
+# PROTECT: el que hauria de dir STOP acabava petant a `.delete()` amb l'esborrat començat.
+SIZEDEF_EXTERNAL = {'regles_base', 'base_for_items', 'base_set_for_items'}
 
 
 def scan_refs(obj, owned):
