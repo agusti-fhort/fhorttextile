@@ -18,6 +18,7 @@ from .models import (
     GradingRuleSet,
     ItemBaseMeasurement,
     ItemBaseSet,
+    MeasurementLayer,
     POMCategory,
     POMMaster,
     SizeDefinition,
@@ -505,8 +506,14 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
         # el seu propi endpoint i hi posa PROMOTED.
         defaults['origen'] = ItemBaseMeasurement.ORIGEN_MANUAL
         defaults['updated_by'] = request.user
+        # FASE_3/C1-ins — literals: `pom_id` ve del body i el contracte no porta eixos fins
+        # a C4-ins. La clau del lookup s'alinea amb la unicitat real
+        # `(base_set, pom, capa, instancia)`: sense això, l'alta manual d'un valor típic
+        # reescrivia una germana en comptes de crear la fila que el tècnic demanava.
         obj, created = ItemBaseMeasurement.objects.update_or_create(
-            base_set=base_set, pom_id=pom_id, defaults=defaults)
+            base_set=base_set, pom_id=pom_id,
+            capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+            defaults=defaults)
         return Response(self.get_serializer(obj).data,
                         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
