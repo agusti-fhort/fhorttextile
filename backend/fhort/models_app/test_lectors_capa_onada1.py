@@ -107,7 +107,8 @@ class LectorsCapaOnada1Test(TenantTestCase):
         """
         from fhort.pom.s10_views import _tolerance_map
 
-        with comporta_alcada('models_app_basemeasurement'):
+        with comporta_alcada('models_app_basemeasurement',
+                             'models_app_measurementchangelog'):
             self._dues_capes_de_base()
             tol = _tolerance_map(self.model)
 
@@ -122,7 +123,9 @@ class LectorsCapaOnada1Test(TenantTestCase):
         per POM sol, la línia de folre el rebia amb la vara de l'exterior."""
         from fhort.models_app.serializers_size_check import SizeCheckGridSerializer
 
-        with comporta_alcada('models_app_basemeasurement', 'models_app_sizecheckline'):
+        with comporta_alcada('models_app_basemeasurement',
+                             'models_app_measurementchangelog',
+                             'models_app_sizecheckline'):
             self._dues_capes_de_base()
             check = SizeCheck.objects.create(model=self.model, talla_base_label='M')
             # Mateixa desviació (+1.0) a totes dues: dins de la tolerància del folre (±2.0),
@@ -226,7 +229,8 @@ class LectorsCapaOnada1Test(TenantTestCase):
         from fhort.fitting.models import GradedSpec
 
         # Porta 1 · mesures base, sense graduació.
-        with comporta_alcada('models_app_basemeasurement'):
+        with comporta_alcada('models_app_basemeasurement',
+                             'models_app_measurementchangelog'):
             self._dues_capes_de_base()          # exterior 100.0 · folre 98.0
             sf, _ = self._size_fitting(amb_graduacio=False)
 
@@ -281,20 +285,19 @@ class LectorsCapaOnada1Test(TenantTestCase):
             files = {f['nom_fitxa']: f for f in resp.data['rows']}
             self.assertEqual(set(files), {'A-EXT', 'A-FOL'})
 
-            # La presa de folre (7.0) NO pot aparèixer a la fila de l'exterior, i la fila de
-            # folre no veu res que no sigui seu. Si el carry-forward col·lapsés, 7.0 seria a
-            # totes dues.
-            self.assertNotIn(7.0, set(files['A-EXT']['takes'].values()),
-                             'una presa de folre s\'ha arrossegat a la fila de l\'exterior')
-            self.assertEqual(set(files['A-FOL']['takes'].values()), {7.0})
-
-            # ⚠️ ONADA 2, no aquesta: l'assert de sobre és `assertNotIn` i no una igualtat
-            # perquè la fila d'exterior encara veu el 98.0 de la BASE del folre. No hi arriba
-            # per aquest lector sinó pel SIGNAL de F1 (`signals.py:299`), que escriu
-            # `MeasurementChangeLog` sense estampar-hi `capa` i el deixa caure al default
-            # 'exterior'. És un ESCRIPTOR, i els escriptors són l'Onada 2 (§C2, punt 9). Quan
-            # aquell sprint passi, aquesta igualtat es pot estrènyer a {100.0}.
-            self.assertIn(100.0, set(files['A-EXT']['takes'].values()))
+            # ✅ FASE_3 · L'ASSERT ESTRET. Abans això era un `assertNotIn` amb una nota que
+            # deia «quan l'Onada 2 passi, aquesta igualtat es pot estrènyer a {100.0}».
+            # L'Onada 2 ha passat: el signal de F1 ja estampa `capa` i `instancia` de la
+            # `BaseMeasurement` que ha canviat, i la fila d'exterior ja NOMÉS veu el seu.
+            #
+            # La fila de folre en veu DOS, i els dos són seus: l'alta (98.0, que el signal
+            # registra en néixer la mesura i que abans queia a l'exterior) i la presa
+            # explícita (7.0). Que el 98.0 hagi APAREGUT aquí és, precisament, la prova que
+            # el forat s'ha tancat: fins avui vivia a la fila de l'altra capa.
+            self.assertEqual(set(files['A-EXT']['takes'].values()), {100.0},
+                             'la fila d\'exterior ha de veure NOMÉS les seves preses')
+            self.assertEqual(set(files['A-FOL']['takes'].values()), {98.0, 7.0},
+                             'la fila de folre ha de veure la seva alta i la seva presa')
 
     # ── El rastre: cap ───────────────────────────────────────────────────────────────
 

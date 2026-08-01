@@ -218,8 +218,12 @@ class ComportaInstanciaExigeixNomTest(_BaseInstanciaTest):
 
     def test_instancia_amb_nom_de_fitxa_entra(self):
         """La cara B: el CHECK no barra la instància, barra la instància ANÒNIMA. Si barrés
-        totes dues, C4-ins es trobaria una llei que no deixa fer justament el que ha de fer."""
-        with comporta_instancia_alcada(self.TAULA):
+        totes dues, C4-ins es trobaria una llei que no deixa fer justament el que ha de fer.
+
+        ⚠️ FASE_3 — cal alçar també la comporta del LOG: el signal F1 ja estampa els dos
+        eixos, o sigui que crear una mesura amb instància hi escriu una fila amb instància.
+        """
+        with comporta_instancia_alcada(self.TAULA, 'models_app_measurementchangelog'):
             bm = BaseMeasurement.objects.create(
                 model=self.model, pom=self.pom, base_value_cm=100.0,
                 instancia=LEFT, nom_fitxa='A-ESQ')

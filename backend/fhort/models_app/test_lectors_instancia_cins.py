@@ -113,7 +113,8 @@ class LectorsInstanciaCinsTest(TenantTestCase):
         i jutjava la sisa dreta amb la tolerància de l'esquerra. Tres files, tres entrades."""
         from fhort.pom.s10_views import _tolerance_map
 
-        with comportes_alcades('models_app_basemeasurement'):
+        with comportes_alcades('models_app_basemeasurement',
+                               'models_app_measurementchangelog'):
             self._tres_germanes()
             tol = _tolerance_map(self.model)
 
@@ -129,7 +130,9 @@ class LectorsInstanciaCinsTest(TenantTestCase):
         de dos trams, la línia de la instància el rebia amb la vara de l'exterior."""
         from fhort.models_app.serializers_size_check import SizeCheckGridSerializer
 
-        with comportes_alcades('models_app_basemeasurement', 'models_app_sizecheckline'):
+        with comportes_alcades('models_app_basemeasurement',
+                               'models_app_measurementchangelog',
+                               'models_app_sizecheckline'):
             self._tres_germanes()
             check = SizeCheck.objects.create(model=self.model, talla_base_label='M')
             # Mateixa desviació (+1.0) a totes tres: FORA de ±0.5 (exterior), dins de ±2.0
@@ -186,28 +189,20 @@ class LectorsInstanciaCinsTest(TenantTestCase):
             files = {f['nom_fitxa']: f for f in resp.data['rows']}
             self.assertEqual(set(files), {'A-EXT', 'A-FOL', 'A-ESQ'})
 
-            # Cada germana veu la SEVA presa i no la de les altres dues.
-            self.assertEqual(set(files['A-FOL']['takes'].values()), {7.0})
+            # Cada germana veu les SEVES preses i no les de les altres dues. Les files de
+            # folre i d'exterior/'' en veuen una de sola perquè l'alta i la presa coincideixen
+            # en valor; la de folre en veu dues (l'alta 98.0 i la presa 7.0).
+            self.assertEqual(set(files['A-FOL']['takes'].values()), {98.0, 7.0})
             self.assertEqual(set(files['A-ESQ']['takes'].values()), {40.0})
             vals_ext = set(files['A-EXT']['takes'].values())
-            self.assertIn(100.0, vals_ext)
 
-            # ⚠️ FASE_3, no aquesta. La fila d'exterior encara veu valors que no són seus, i
-            # NO hi arriben per aquest lector —que ja llegeix amb la clau completa— sinó pel
-            # SIGNAL de F1 (`signals.py`): en donar d'alta les tres germanes, escriu tres
-            # `MeasurementChangeLog` sense estampar cap dels dos eixos i els deixa caure als
-            # defaults, o sigui tots tres a `(pom, exterior, '')`. És un ESCRIPTOR, i els
-            # escriptors són FASE_3 (mateixa nota que el cas C9 d'Onada 1 porta des del
-            # 31/07).
-            #
-            # Aquest assert és el TRIPWIRE que ho vigila: el dia que el signal estampi els
-            # dos eixos, aquesta línia petarà i s'ha de substituir per
-            # `assertEqual(vals_ext, {100.0})`. Fins llavors, que peti si algú "arregla" el
-            # signal a mitges.
-            self.assertNotEqual(
-                vals_ext, {100.0},
-                'la fila d\'exterior ja només veu el seu valor: el signal F1 estampa els '
-                'dos eixos → estreny això a assertEqual(vals_ext, {100.0}) (FASE_3)')
+            # ✅ FASE_3 · L'ASSERT ESTRET. Aquí hi havia un tripwire —`assertNotEqual`— que
+            # deia: la fila d'exterior encara veu valors que no són seus, i NO hi arriben per
+            # cap lector sinó pel signal F1, que escrivia `MeasurementChangeLog` sense
+            # estampar cap dels dos eixos i deixava caure les tres altes a `(pom, exterior,
+            # '')`. El signal ja els estampa, i la fila només veu el seu.
+            self.assertEqual(vals_ext, {100.0},
+                             'la fila d\'exterior ha de veure NOMÉS la seva presa')
 
     # ── Els lectors ancorats (FORMA B): la instància NO s'hi cola ────────────────────
 
@@ -221,7 +216,8 @@ class LectorsInstanciaCinsTest(TenantTestCase):
 
         from fhort.pom.s6_views import base_measurements_with_units_view
 
-        with comportes_alcades('models_app_basemeasurement'):
+        with comportes_alcades('models_app_basemeasurement',
+                               'models_app_measurementchangelog'):
             self._tres_germanes()
 
             req = APIRequestFactory().get(
@@ -244,7 +240,8 @@ class LectorsInstanciaCinsTest(TenantTestCase):
         from fhort.patterns.models import PatternFile
         from fhort.patterns.views import PatternFileViewSet
 
-        with comportes_alcades('models_app_basemeasurement'):
+        with comportes_alcades('models_app_basemeasurement',
+                               'models_app_measurementchangelog'):
             self._tres_germanes()
             fp = PatternFile.objects.create(model=self.model, nom_fitxer='TST-PAT.dxf')
 
@@ -267,7 +264,8 @@ class LectorsInstanciaCinsTest(TenantTestCase):
         les dues cases se n'assabentés."""
         from fhort.tenants.federation_service import _llegeix_patrimoni
 
-        with comportes_alcades('models_app_basemeasurement'):
+        with comportes_alcades('models_app_basemeasurement',
+                               'models_app_measurementchangelog'):
             self._tres_germanes()
             patrimoni = _llegeix_patrimoni(self.model)
 
@@ -282,7 +280,8 @@ class LectorsInstanciaCinsTest(TenantTestCase):
     def test_les_dues_comportes_tornen_a_estar_vives(self):
         """El harness alça DUES famílies: si el savepoint no les tornés totes, la BD de test
         quedaria sense guard i la resta de tests del tram passarien per una raó falsa."""
-        with comportes_alcades('models_app_basemeasurement'):
+        with comportes_alcades('models_app_basemeasurement',
+                               'models_app_measurementchangelog'):
             pass
 
         with connection.cursor() as cur:
