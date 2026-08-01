@@ -110,9 +110,18 @@ def measurements_table_view(request, sf_id):
         poms_seen = set()
         ordre_pom = {}
 
+        # C2/Onada 1 — ÀNCORA EXTERIOR EXPLÍCITA a les DUES branques de sota (specs graduats i
+        # base), perquè totes dues omplen els MATEIXOS `cells`/`poms_seen`: ancorar-ne una i
+        # deixar l'altra oberta faria una taula mig d'una capa i mig de l'altra.
+        # No pot ser clau composta: `cells` es serialitza tal qual a la resposta
+        # (`{str(k): v}`) i `poms_info` porta l'`id` del POM — la clau ÉS el contracte, i el
+        # contracte no es toca fins a C4.
+        from fhort.pom.models import MeasurementLayer
+
         if grading_version:
             specs = GradedSpec.objects.filter(
-                grading_version=grading_version, is_active=True
+                grading_version=grading_version, is_active=True,
+                capa=MeasurementLayer.SLUG_DEFECTE,
             ).select_related(
                 'pom', 'pom__pom_global', 'pom__categoria'
             ).order_by('pom__categoria__display_order', 'size_label')
@@ -143,7 +152,7 @@ def measurements_table_view(request, sf_id):
             try:
                 from fhort.models_app.models import BaseMeasurement
                 base_ms = BaseMeasurement.objects.filter(
-                    model=model, is_active=True
+                    model=model, is_active=True, capa=MeasurementLayer.SLUG_DEFECTE
                 ).select_related('pom', 'pom__pom_global', 'pom__categoria')
                 for bm in base_ms:
                     pom_id = bm.pom_id
