@@ -746,7 +746,12 @@ class BaseMeasurement(models.Model):
         # columnes + una), o sigui que no pot rebutjar res que abans passés ni deixar entrar
         # cap duplicat que abans es barrés. Qui de debò impedeix una segona capa avui és la
         # comporta CHECK de T4, no aquesta clau.
-        unique_together = [('model', 'pom', 'capa')]
+        #
+        # C1-ins/T3 — i ara també la INSTÀNCIA, pel mateix argument literal: mateixes
+        # columnes + una, amb `instancia` constant ('') a totes les files → estrictament més
+        # permissiva, 0 duplicats latents possibles. Qui impedeix la segona instància avui és
+        # la comporta `_instancia_gate_cins`, no aquesta clau.
+        unique_together = [('model', 'pom', 'capa', 'instancia')]
         # `capa` entra a l'ordre entre el model i l'ordre de fitxa: quan hi hagi més d'una
         # capa, la fitxa les vol AGRUPADES, no barrejades per `ordre`. Avui és un no-op
         # observable —amb una sola capa el valor és constant i l'ordre relatiu no es mou—,
@@ -776,6 +781,39 @@ class BaseMeasurement(models.Model):
             models.CheckConstraint(
                 condition=models.Q(capa='exterior'),
                 name='models_app_basemeasurement_capa_gate_c1',
+            ),
+            # ── C1-ins — LA SEGONA COMPORTA. Declaració canònica; les altres vuit taules de
+            # la cadena en porten una d'igual i apunten aquí.
+            #
+            # Mateixa bastida, mateix motiu, eix diferent. L'esquema ja sap dir «sisa
+            # esquerra» i «sisa dreta», però la cadena de lectors encara indexa per
+            # `pom_id` (o, com a molt, per `(pom_id, capa)`): una segona instància escrita
+            # per accident abans de FASE_2/FASE_3 no petaria enlloc —es fondria dins les
+            # llistes com la primera— i corrompria en silenci mesures que són el producte.
+            #
+            # Va a la BD i no a l'aplicació pel mateix motiu que la de capa: és l'únic lloc
+            # que un `bulk_create`, un `update()`, un loader de paquet o un `psql` a mà no
+            # poden esquivar.
+            #
+            # **C4-ins LA RETIRA PER MIGRACIÓ**, al costat de la seva germana de capa.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='models_app_basemeasurement_instancia_gate_cins',
+            ),
+            # ── C1-ins · DECISIÓ D1 — UNA INSTÀNCIA SENSE NOM DE FITXA ÉS IL·LEGAL.
+            #
+            # Aquesta no és bastida: és una llei de domini, i sobreviu a C4-ins. Si una
+            # mesura es desdobla, l'única cosa que fa que les dues files siguin
+            # distingibles per a un humà —al croquis, a la taula, al paper— és el
+            # `nom_fitxa`. Dues files «pit» sense res que les separi visualment no són dues
+            # mesures: són un duplicat amb aparença de dada bona, que és exactament el mode
+            # de fallada que tot aquest tram existeix per evitar.
+            #
+            # Amb la comporta tancada (`instancia` sempre '') la condició és trivialment
+            # certa a totes les files, present i futures: no rebutja res que avui passi.
+            models.CheckConstraint(
+                condition=~models.Q(instancia__gt='', nom_fitxa=''),
+                name='models_app_basemeasurement_instancia_exigeix_nom',
             ),
         ]
 
@@ -851,6 +889,11 @@ class MeasurementChangeLog(models.Model):
                 condition=models.Q(capa='exterior'),
                 name='models_app_measurementchangelog_capa_gate_c1',
             ),
+            # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='models_app_measurementchangelog_instancia_gate_cins',
+            ),
         ]
 
     def __str__(self):
@@ -916,14 +959,19 @@ class ModelGradingOverride(models.Model):
     class Meta:
         verbose_name = 'Override de grading (model)'
         verbose_name_plural = 'Overrides de grading (model)'
-        # C1/T3 — la clau incorpora la CAPA (v. `BaseMeasurement.Meta`).
-        unique_together = [('model', 'pom', 'size_label', 'capa')]
+        # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA (v. `BaseMeasurement.Meta`).
+        unique_together = [('model', 'pom', 'size_label', 'capa', 'instancia')]
         ordering = ['model', 'pom', 'size_label']
         constraints = [
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
             models.CheckConstraint(
                 condition=models.Q(capa='exterior'),
                 name='models_app_modelgradingoverride_capa_gate_c1',
+            ),
+            # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='models_app_modelgradingoverride_instancia_gate_cins',
             ),
         ]
 
@@ -1216,13 +1264,18 @@ class SizeCheckLine(models.Model):
         verbose_name = 'Línia de validació de talla'
         verbose_name_plural = 'Línies de validació de talla'
         ordering = ['size_check', 'pom']
-        # C1/T3 — la clau incorpora la CAPA (v. `BaseMeasurement.Meta`).
-        unique_together = [('size_check', 'pom', 'capa')]
+        # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA (v. `BaseMeasurement.Meta`).
+        unique_together = [('size_check', 'pom', 'capa', 'instancia')]
         constraints = [
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
             models.CheckConstraint(
                 condition=models.Q(capa='exterior'),
                 name='models_app_sizecheckline_capa_gate_c1',
+            ),
+            # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='models_app_sizecheckline_instancia_gate_cins',
             ),
         ]
 
@@ -1397,13 +1450,22 @@ class POMPlacement(models.Model):
             # C1/T3 — la clau incorpora la CAPA (v. `BaseMeasurement.Meta`). El nom canvia
             # amb els camps a posta: un constraint que digui `_item_pom_view` i en guardi
             # quatre menteix a qui llegeixi l'esquema. Cap consumidor el referencia pel nom.
+            # C1-ins/T3 hi afegeix la INSTÀNCIA, i el nom torna a créixer amb els camps pel
+            # mateix motiu: dues cotes del mateix POM al mateix slot són justament el cas
+            # que aquesta taula ha de saber guardar (la sisa dreta i l'esquerra
+            # s'assenyalen amb dues fletxes al mateix croquis).
             models.UniqueConstraint(
-                fields=['item_fitxer', 'pom', 'view_slot', 'capa'],
-                name='uniq_pomplacement_item_pom_view_capa'),
+                fields=['item_fitxer', 'pom', 'view_slot', 'capa', 'instancia'],
+                name='uniq_pomplacement_item_pom_view_capa_instancia'),
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
             models.CheckConstraint(
                 condition=models.Q(capa='exterior'),
                 name='models_app_pomplacement_capa_gate_c1',
+            ),
+            # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='models_app_pomplacement_instancia_gate_cins',
             ),
         ]
         indexes = [
