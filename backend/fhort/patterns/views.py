@@ -33,7 +33,8 @@ from fhort.fitting.staleness import com_a_dict, estalitud
 from fhort.models_app.models import BaseMeasurement, Model
 from fhort.models_app.services_fitxers import (DOWNLOAD_TTL, UploadRejected,
                                                serve_fitxer, validate_upload)
-from fhort.pom.models import CustomerPOMAlias, PatternPieceRole
+from fhort.pom.models import (CustomerPOMAlias, MeasurementLayer,
+                              PatternPieceRole)
 from fhort.tasks.models import GarmentTypeItem
 
 from .adapters import DjangoGeometryStore
@@ -587,9 +588,24 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             ancorats[p.pom_master_id].append(p)
 
         files = []
+        # 🚨 FASE_2/C1-ins — ÀNCORA que aquesta lectura no havia tingut mai (el forat que
+        # `RECENS_DELTA_ONADA1_2026-07-31` va deixar obert en declarar `patterns/*` fora
+        # d'abast). Peta amb la segona CAPA sense esperar cap instància: la fila d'aquesta
+        # llista es creua amb els ancoratges per `bm.pom_id` (v. `ancorats.get` aquí sota),
+        # o sigui que amb N mesures del mateix POM el taller veuria N files repetint el
+        # MATEIX conjunt d'ancoratges, sense res que digués quina fila és quina.
+        #
+        # Àncora i no clau composta, i el motiu és de DOMINI, no mecànic: la unicitat de
+        # `PatternPOM` és `(pattern_piece, pom_master)` i aquella taula no té cap dels dos
+        # eixos. Creuar-la per clau completa voldria dir decidir com un ancoratge de patró
+        # sap de quina capa i de quina instància parla — decisió humana, i és el sostre dur
+        # de `F2-patrons` (§II.10 del dossier: el format DXF no sobreviu un roundtrip amb
+        # instància). Fins llavors, la llista de treball del taller és la de l'exterior i la
+        # de la instància única, i ho diu aquí.
         base = (
             BaseMeasurement.objects
-            .filter(model_id=fp.model_id, is_active=True)
+            .filter(model_id=fp.model_id, is_active=True,
+                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
             .select_related('pom', 'pom__pom_global')
             .order_by('ordre', 'pom__codi_client')
         )

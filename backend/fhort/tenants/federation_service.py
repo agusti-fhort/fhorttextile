@@ -587,11 +587,26 @@ def _llegeix_patrimoni(model):
     Els bytes es llegeixen AQUÍ i no al destí a posta: `FileField.name` és relatiu al TENANT
     (memòria `ftt-media-namespace-tenant`), de manera que obrir el fitxer un cop ja som a
     l'altre schema el buscaria al calaix equivocat.
+
+    🚨 FASE_2/C1-ins — ÀNCORA `capa='exterior', instancia=''` a les mesures, que aquesta
+    lectura no havia tingut mai (la federació no es va mirar a l'Onada 1). El motiu és el
+    mateix que fa que aquesta funció existeixi: el que en surt és el que VIATJA, i la clau
+    amb què viatja és `_clau_natural_pom` —el codi del diccionari i el del client—, que no
+    porta cap dels dos eixos. Dues mesures del mateix POM emetrien la MATEIXA clau, el destí
+    en desaria una i l'altra desapareixeria sense que cap de les dues cases se n'assabentés.
+
+    Que la clau natural creixi a 4-tupla i que els paquets es versionin és FASE_3: aquí no
+    s'endevina res, es deixa de dir el que no se sap dir. Mentrestant, el patrimoni que
+    viatja és el de l'exterior i el de la instància única, que és exactament el que fins avui
+    hi havia.
     """
     from fhort.models_app.models import BaseMeasurement, ModelFitxer, ModelGradingRule
+    from fhort.pom.models import MeasurementLayer
 
     mesures = []
-    for bm in (BaseMeasurement.objects.filter(model=model, is_active=True)
+    for bm in (BaseMeasurement.objects.filter(
+                   model=model, is_active=True,
+                   capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
                .select_related('pom__pom_global').order_by('ordre', 'pom_id')):
         mesures.append({
             'clau': _clau_natural_pom(bm.pom),
