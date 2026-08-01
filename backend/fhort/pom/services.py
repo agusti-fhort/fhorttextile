@@ -727,6 +727,12 @@ def _load_model_overrides(model_id: int) -> dict:
 
     El dia que C3 doni capa a `_load_base_measurements`, aquesta clau ha de créixer amb
     ella i el filtre se'n va: van junts, i per això queden dits al mateix lloc.
+
+    FASE_2/C1-ins — **i el mateix, exactament, per a la INSTÀNCIA**. L'àncora de capa tapava
+    la capa i prou: un override de la sisa ESQUERRA es colava igual a la cel·la de la dreta,
+    perquè la clau `(pom_id, size_label)` no les distingeix. El segon filtre tanca el segon
+    forat, i la frontera de C3 no es mou ni un pam: quan `_load_base_measurements` creixi,
+    aquesta clau ha de créixer amb els DOS eixos i els DOS filtres se'n van alhora.
     """
     try:
         from fhort.models_app.models import ModelGradingOverride
@@ -734,7 +740,8 @@ def _load_model_overrides(model_id: int) -> dict:
         return {
             (o.pom_id, o.size_label): o.value_cm
             for o in ModelGradingOverride.objects.filter(
-                model_id=model_id, capa=MeasurementLayer.SLUG_DEFECTE)
+                model_id=model_id,
+                capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
         }
     except Exception as e:
         logger.warning(f"Could not load ModelGradingOverride: {e}")
