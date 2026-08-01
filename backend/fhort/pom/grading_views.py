@@ -53,6 +53,29 @@ def regenerate_sizes_view(request, sf_id):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+def clau_ordre_taula(pom, capa):
+    """L'ordre de la taula de mesures, decidit i TOTAL (Agus, 2026-08-01).
+
+    Ordre del catàleg → capa (exterior primer) → codi del POM. Fins avui la taula
+    s'ordenava només pel primer, i el `sort` de Python és estable: els empats —que són la
+    norma, perquè `display_order` és de la CATEGORIA i no del POM— conservaven l'ordre
+    d'inserció, o sigui l'ordre en què Postgres havia tornat les files. Un `WHERE` nou, un
+    índex nou o un ANALYZE el movien: mateixos POMs, mateixos ids, un altre ordre.
+
+    Els dos últims trams de la clau són desempats que no es veuen però fan la clau total:
+    el `slug` de la capa (entre dues capes que no són l'exterior) i l'`id` del POM (perquè
+    el codi tampoc no és únic — dos POMMaster del tenant poden compartir `codi_client`).
+    """
+    from fhort.pom.models import MeasurementLayer
+    return (
+        pom.display_order,
+        0 if capa == MeasurementLayer.SLUG_DEFECTE else 1,
+        capa or '',
+        pom.pom_code or '',
+        pom.id,
+    )
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def measurements_table_view(request, sf_id):
@@ -85,6 +108,7 @@ def measurements_table_view(request, sf_id):
         cells = {}
         poms_info = []
         poms_seen = set()
+        ordre_pom = {}
 
         if grading_version:
             specs = GradedSpec.objects.filter(
@@ -97,6 +121,7 @@ def measurements_table_view(request, sf_id):
                 pom_id = spec.pom_id
                 if pom_id not in poms_seen:
                     poms_seen.add(pom_id)
+                    ordre_pom[pom_id] = clau_ordre_taula(spec.pom, spec.capa)
                     poms_info.append({
                         'id': pom_id,
                         'codi': spec.pom.pom_code,
@@ -124,6 +149,7 @@ def measurements_table_view(request, sf_id):
                     pom_id = bm.pom_id
                     if pom_id not in poms_seen:
                         poms_seen.add(pom_id)
+                        ordre_pom[pom_id] = clau_ordre_taula(bm.pom, bm.capa)
                         poms_info.append({
                             'id': pom_id,
                             'codi': bm.pom.pom_code,
@@ -142,7 +168,11 @@ def measurements_table_view(request, sf_id):
             except Exception:
                 pass
 
-        poms_info.sort(key=lambda x: x.get('display_order', 999))
+        poms_info.sort(key=lambda x: ordre_pom[x['id']])
+        # Les cel·les segueixen l'ordre dels POMs. `cells` és un objecte JSON i el seu ordre
+        # de claus és el d'inserció: deixar-lo com sortia de la consulta feia que la taula i
+        # les seves cel·les anessin per camins diferents (i que el payload es mogués sol).
+        cells = {p['id']: cells[p['id']] for p in poms_info if p['id'] in cells}
 
         return Response({
             'sf_id': sf_id,
