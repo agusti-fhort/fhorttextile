@@ -77,14 +77,17 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
 
     def get_lines(self, obj):
         from .models import BaseMeasurement
-        # Una sola query: tolerància + ordre vigents per (POM, capa) del model (sense N+1).
+        # Una sola query: tolerància + ordre vigents per (POM, capa, instància) del model,
+        # sense N+1.
         #
         # C2/Onada 1 — CLAU COMPOSTA: `SizeCheckLine` porta capa des de C1 i cada línia demana
         # la seva. Per POM sol, una línia de folre es jutjaria amb la tolerància de l'exterior
         # i ensenyaria el seu `codi_fitxa` — un veredicte fora/dins de tolerància decidit amb
         # la vara d'una altra capa és pitjor que no tenir-ne.
+        # FASE_2/C1-ins — i la INSTÀNCIA, exactament igual: la línia la porta, i el veredicte
+        # de la sisa dreta no es pot decidir amb la tolerància de l'esquerra. FORMA A.
         bm_map = {
-            (bm.pom_id, bm.capa): bm
+            (bm.pom_id, bm.capa, bm.instancia): bm
             for bm in BaseMeasurement.objects.filter(model_id=obj.model_id)
         }
 
@@ -96,7 +99,7 @@ class SizeCheckGridSerializer(serializers.ModelSerializer):
         out = []
         ordres = []   # ordre de fitxa, paral·lel a `out`: la fila del payload no porta capa
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
-            bm = bm_map.get((line.pom_id, line.capa))
+            bm = bm_map.get((line.pom_id, line.capa, line.instancia))
             r = rules.get(line.pom_id)
             tol_minus = float(bm.tolerancia_minus) if bm and bm.tolerancia_minus is not None else TOL_DEFAULT
             tol_plus = float(bm.tolerancia_plus) if bm and bm.tolerancia_plus is not None else TOL_DEFAULT
