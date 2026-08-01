@@ -712,6 +712,30 @@ class BaseMeasurement(models.Model):
         help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
                   "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
     )
+    # ── C1-ins — LA INSTÀNCIA. Declaració canònica del camp; les altres vuit taules de la
+    # cadena en porten una d'igual i apunten aquí.
+    #
+    # SEGON EIX, ORTOGONAL A LA CAPA. La capa diu de quina MATÈRIA parla la mesura
+    # (exterior, folre, entretela…); la instància diu de QUINA DE LES REPETICIONS d'aquest
+    # mateix POM sobre la mateixa matèria parla: la sisa dreta i l'esquerra, el pit RELAXED i
+    # l'EXTENDED. Fins avui la segona d'aquestes files no podia existir: xocava amb la
+    # primera, i el sistema es defensava BLOQUEJANT-LA (els set nodes de §II.13 del dossier).
+    #
+    # SLUG COMPOST CANÒNIC, mai FK i mai `choices` — exactament com `capa`, i pel mateix
+    # motiu (llei G9: per slug, mai per PK; el slug viatja entre tenants i entre versions).
+    # L'ORDRE DE COMPOSICIÓ ('left-relaxed' i no 'relaxed-left') el decidirà la UI a C4-ins:
+    # la BD només en guarda l'string ja compost, i no el sap desmuntar.
+    #
+    # `''` (cadena buida, MAI NULL) és la instància ÚNICA: el que fins avui era «la mesura»,
+    # sense qualificar. NULL voldria dir «no se sap», i aquí sempre se sap.
+    #
+    # La VALIDACIÓ contra un diccionari d'instàncies NO és aquí: arriba amb C4-ins i la
+    # Montse. Fins llavors mana la COMPORTA — un CHECK a BD que només deixa passar ''.
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Mesura base'
@@ -806,6 +830,16 @@ class MeasurementChangeLog(models.Model):
         help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
                   "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
     )
+    # C1-ins — la instància (declaració canònica a `BaseMeasurement.instancia`).
+    #
+    # MATEIX ARGUMENT QUE `capa`: afegir-la NO viola l'append-only. Un `AddField` és DDL, no
+    # DML — cap fila queda reescrita semànticament —, i el 100% de la història d'aquesta
+    # taula parla, de fet, de la instància única: era l'única que el sistema sabia escriure.
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Canvi de mesura'
@@ -870,6 +904,14 @@ class ModelGradingOverride(models.Model):
         help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
                   "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
     )
+    # C1-ins — la instància (declaració canònica a `BaseMeasurement.instancia`). Mateix
+    # argument que la capa: l'override és un VALOR mesurat, i la sisa dreta i l'esquerra es
+    # poden corregir per separat en una talla. La REGLA segueix sense cap dels dos eixos.
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Override de grading (model)'
@@ -908,6 +950,14 @@ class ModelGradingRule(models.Model):
     Els VALORS sí que en porten (`BaseMeasurement`, `GradedSpec`, `ModelGradingOverride`…):
     la regla és compartida, el resultat d'aplicar-la és per capa. Qui vulgui revisar-ho: és
     decisió d'arquitectura (Patró C), no una peça d'sprint.
+
+    ⚠️ **I TAMPOC SENSE `instancia` (C1-ins), pel mateix motiu i amb la mateixa acta.**
+    Decisió Montse: la sisa dreta i l'esquerra **gradúen igual**. Són dues mesures diferents
+    —dos valors, dues fletxes al croquis, dues caselles a la fitxa— però una sola llei
+    d'increments, com ho són l'exterior i el folre. Aquesta taula és, doncs, l'única del
+    cicle que **no** travessa CAP dels dos eixos, i és a posta a les dues bandes. El pin que
+    ho vigila: `test_instancia_comporta_cins.py` (columna absent a `information_schema`),
+    germà del que ja hi ha per a `capa`. El mateix val per a `pom.GradingRule`.
     """
     # R8 (2026-07-21) — 'CLIENT_RUN' hi faltava. El vocabulari de GradingRuleSet.origen
     # (CANONICAL/CLIENT_RUN/IMPORT) i el d'aquí no s'alineaven, i el wizard resolia la
@@ -1155,6 +1205,12 @@ class SizeCheckLine(models.Model):
         help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
                   "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
     )
+    # C1-ins — la instància (declaració canònica a `models_app.BaseMeasurement.instancia`).
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Línia de validació de talla'
@@ -1324,6 +1380,14 @@ class POMPlacement(models.Model):
         max_length=20, default='exterior', db_index=True,
         help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
                   "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
+    )
+    # C1-ins — la instància (declaració canònica a `models_app.BaseMeasurement.instancia`).
+    # És l'eix que la cota necessita més literalment de tots: la sisa dreta i l'esquerra
+    # s'assenyalen amb DUES fletxes en llocs diferents del mateix croquis.
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
     )
 
     class Meta:
