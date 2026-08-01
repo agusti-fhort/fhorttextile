@@ -17,6 +17,7 @@ from fhort.pom.services import SealedGradingVersionError, _te_regles
 from fhort.pom.grading_regime import (
     CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada,
 )
+from fhort.pom.models import MeasurementLayer
 from fhort.pom.plausibilitat import CODI_MESURA_FORA_RANG, mesura_fora_de_rang
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
 from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
@@ -1132,8 +1133,14 @@ def materialize_poms_view(request, model_id):
     base_set = resolve_item_base_set(item, model.size_system_id, model.fit_type)
     base_set_absent = base_set is None
 
+    # FASE_3/C1-ins — la clau del mapa de valors de l'item és COMPLETA. Aquí neix la capa i
+    # la instància del model (decisió D6: neixen a l'ITEM), i per `pom_id` sol dues
+    # pertinences germanes del mateix POM es fonien en una i l'última llegida donava el valor
+    # a totes dues. El `GarmentPOMMap` diu QUÈ es reclama i quantes vegades; l'`ItemBaseMeasurement`
+    # diu amb quin valor. Els dos parlen la mateixa clau o la sembra menteix.
     if base_set is not None:
-        ibms = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(base_set=base_set)}
+        ibms = {(i.pom_id, i.capa, i.instancia): i
+                for i in ItemBaseMeasurement.objects.filter(base_set=base_set)}
         talla_item = (getattr(base_set.base_size_definition, 'etiqueta', None) or '').strip()
     else:
         # CAMÍ LLEGAT (conviu mentre no tots els mons tinguin set). Només s'hi cau si el món del
@@ -1142,8 +1149,8 @@ def materialize_poms_view(request, model_id):
         # món val — se sembra la pertinença i cap valor, que és el que diu la llei 7.
         sets_item = ItemBaseSet.objects.filter(garment_type_item=item).count()
         if sets_item <= 1:
-            ibms = {i.pom_id: i for i in ItemBaseMeasurement.objects.filter(
-                garment_type_item=item)}
+            ibms = {(i.pom_id, i.capa, i.instancia): i
+                    for i in ItemBaseMeasurement.objects.filter(garment_type_item=item)}
             talla_item = (getattr(item.base_size_definition, 'etiqueta', None) or '').strip()
         else:
             ibms = {}
@@ -1175,16 +1182,19 @@ def materialize_poms_view(request, model_id):
     materialized = seeded = skipped = 0
     with transaction.atomic():
         for m in maps:
-            ibm = ibms.get(m.pom_id)
+            # La clau completa surt del `GarmentPOMMap`, que és el portador de la pertinença.
+            ibm = ibms.get((m.pom_id, m.capa, m.instancia))
             # P1 — amb talles divergents un valor de plantilla és una mesura FALSA: la pertinença
             # sí es materialitza (fila TEMPLATE buida), el valor no viatja.
             has_value = (not talla_divergent) and ibm is not None and ibm.base_value_cm is not None
-            existing = BaseMeasurement.objects.filter(model=model, pom=m.pom).first()
+            existing = BaseMeasurement.objects.filter(
+                model=model, pom=m.pom, capa=m.capa, instancia=m.instancia).first()
 
             if existing is None:
                 if has_value:
                     BaseMeasurement.objects.create(
                         model=model, pom=m.pom,
+                        capa=m.capa, instancia=m.instancia,
                         base_value_cm=ibm.base_value_cm,
                         nom_fitxa=ibm.nom_fitxa or '',
                         tolerancia_minus=ibm.tol_minus,
@@ -1195,6 +1205,7 @@ def materialize_poms_view(request, model_id):
                 else:
                     BaseMeasurement.objects.create(
                         model=model, pom=m.pom,
+                        capa=m.capa, instancia=m.instancia,
                         base_value_cm=None, origen='TEMPLATE',
                         is_key=m.is_key, ordre=m.ordre,
                     )
@@ -1414,11 +1425,16 @@ def copiar_de_model_view(request, model_id, src_id):
 
         for rang, bm in enumerate(src_mesures, start=1):
             te_valor = (copy_values and not talla_divergent and bm.base_value_cm is not None)
-            existent = BaseMeasurement.objects.filter(model=dst, pom_id=bm.pom_id).first()
+            # FASE_3/C1-ins — la còpia COPIA: els eixos surten de la fila d'origen, no de cap
+            # literal. Un model copiat d'un altre ha de tenir les mateixes mesures, i «les
+            # mateixes» inclou de quina matèria i de quina repetició parla cadascuna.
+            existent = BaseMeasurement.objects.filter(
+                model=dst, pom_id=bm.pom_id, capa=bm.capa, instancia=bm.instancia).first()
 
             if existent is None:
                 nova = BaseMeasurement(
                     model=dst, pom_id=bm.pom_id,
+                    capa=bm.capa, instancia=bm.instancia,
                     base_value_cm=bm.base_value_cm if te_valor else None,
                     # `notes` NO viatja: és text lliure escrit SOBRE l'altre model (p.ex. «el
                     # proveïdor va confirmar 62 cm en aquesta peça») i copiat aquí seria una
@@ -1790,8 +1806,10 @@ def set_measurements_view(request, model_id):
                 continue
             try:
                 pom = POMMaster.objects.get(id=pom_id)
+                # FASE_3/C1-ins — literals (v. `_write_base`).
                 _, was_created = BaseMeasurement.objects.update_or_create(
                     model=model, pom=pom,
+                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                     defaults={
                         'base_value_cm': float(value),
                         'notes': m.get('notes', ''),
@@ -1811,8 +1829,11 @@ def set_measurements_view(request, model_id):
 
         if keep_pom_ids is not None:
             keep = [int(x) for x in keep_pom_ids]
+            # FASE_3/C1-ins — la poda és per FILA, no per POM (v. el germà bessó
+            # d'aquesta mateixa poda a `set_grading_view`, amb l'argument sencer).
             deactivated = (BaseMeasurement.objects
-                           .filter(model=model, is_active=True)
+                           .filter(model=model, is_active=True,
+                                   capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
                            .exclude(pom_id__in=keep)
                            .update(is_active=False))
 
@@ -1918,9 +1939,16 @@ def gravar_pom_view(request, model_id):
                     errors.append(f"POMMaster {m.get('pom_id')} no trobat")
                     continue
 
-                bm = BaseMeasurement.objects.filter(model=model, pom=pom).first()
+                # FASE_3/C1-ins — literals: el body és `{'pom_id': …}` i no porta eixos
+                # (v. `_write_base`, l'explicació canònica).
+                bm = BaseMeasurement.objects.filter(
+                    model=model, pom=pom,
+                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='').first()
                 if bm is None:
-                    bm = BaseMeasurement(model=model, pom=pom, created_by=request.user)
+                    bm = BaseMeasurement(
+                        model=model, pom=pom,
+                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                        created_by=request.user)
                     created += 1
                 else:
                     updated += 1
@@ -1940,8 +1968,16 @@ def gravar_pom_view(request, model_id):
 
             if keep_pom_ids is not None:
                 keep = [int(x) for x in keep_pom_ids]
+                # FASE_3/C1-ins — LA PODA NO ÉS PER POM: la identitat de la baixa és la
+                # FILA. `keep_pom_ids` és una llista de `pom_id` pelats que ve del front, i
+                # amb dues germanes vives podar per POM en mataria una que ningú no ha tret
+                # de la taula — un esborrat silenciós, que és el mode de fallada que tot
+                # aquest tram existeix per matar. Mentre el contracte no porti eixos
+                # (C4-ins), la poda es limita a l'exterior de la instància única: la fila
+                # que el front SÍ que està mirant.
                 deactivated = (BaseMeasurement.objects
-                               .filter(model=model, is_active=True)
+                               .filter(model=model, is_active=True,
+                                       capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
                                .exclude(pom_id__in=keep)
                                .update(is_active=False))
 
@@ -2310,8 +2346,10 @@ def measurements_chat_view(request, model_id):
                         codi_client__iexact=accio['pom_codi']
                     ).first()
                     if pom and accio.get('valor') is not None:
+                        # FASE_3/C1-ins — literals (v. `_write_base`).
                         bm, created = BaseMeasurement.objects.update_or_create(
                             model=model, pom=pom,
+                            capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                             defaults={
                                 'base_value_cm': float(accio['valor']),
                                 'origen': 'MANUAL',
@@ -2584,11 +2622,16 @@ def set_size_override_view(request, model_id):
         # 6. Override upsert idempotent (origen MODEL, no sessió → fitting_ref=None). Aquest és
         #    l'ÚNIC camí que escriu ModelGradingOverride per talla des de PEÇA 4 (la sessió de
         #    fitting ja no n'escriu; vegeu close_piece_fitting).
+        # FASE_3/C1-ins — literals als TRES punts d'aquest bloc (la lectura de `prev`,
+        # l'upsert i el log): han de parlar de la MATEIXA fila o el rastre diria que s'ha
+        # canviat una mesura que no s'ha tocat. V. `_write_base`.
         prev = (ModelGradingOverride.objects
-                .filter(model=model, pom=pom, size_label=size_label)
+                .filter(model=model, pom=pom, size_label=size_label,
+                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
                 .values_list('value_cm', flat=True).first())
         ModelGradingOverride.objects.update_or_create(
             model=model, pom=pom, size_label=size_label,
+            capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
             defaults={
                 'value_cm': valor,
                 'motiu': 'Edició manual de talla (taula propagada)',
@@ -2602,6 +2645,7 @@ def set_size_override_view(request, model_id):
         if prev is None or abs(float(prev) - valor) > 1e-9:
             MeasurementChangeLog.objects.create(
                 model=model, pom=pom, base_measurement=None,
+                capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                 valor_anterior=(float(prev) if prev is not None else None),
                 valor_nou=valor,
                 context='manual',
@@ -2748,7 +2792,12 @@ def escalat_ajustar_talla_view(request, model_id):
                             f'Escalat · ajust talla {talla} (propaga per regla)')
                 # La corba de la regla mana: neteja els pins per cel·la del POM (el fitting sobreescriu
                 # els valor_real de les germanes; aquí l'equivalent és treure els overrides residuals).
-                ModelGradingOverride.objects.filter(model=model, pom=pom).delete()
+                # FASE_3/C1-ins — l'esborrat tampoc no és per POM. Aquest `delete()` neteja
+                # els overrides de la mesura que es torna a propagar; sense els eixos
+                # s'enduria també els de les germanes, que ningú no ha tocat.
+                ModelGradingOverride.objects.filter(
+                    model=model, pom=pom,
+                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='').delete()
                 propagat, motiu = True, (logica or 'CANONIC')
             elif talla == base_size:
                 # Base sense règim LINEAR: desa la base; germanes intactes (mirall del fitting STEP).
@@ -2756,17 +2805,21 @@ def escalat_ajustar_talla_view(request, model_id):
                 propagat, motiu = False, (logica or 'BASE')
             else:
                 # STEP/FIXED/ZERO o sense regla → override puntual (germanes intactes, com el fitting).
+                # FASE_3/C1-ins — literals als tres punts (v. el bloc germà d'`_editar_talla`).
                 prev = (ModelGradingOverride.objects
-                        .filter(model=model, pom=pom, size_label=talla)
+                        .filter(model=model, pom=pom, size_label=talla,
+                                capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
                         .values_list('value_cm', flat=True).first())
                 ModelGradingOverride.objects.update_or_create(
                     model=model, pom=pom, size_label=talla,
+                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                     defaults={'value_cm': valor, 'motiu': 'Escalat · ajust talla (sense propagació)',
                               'fitting_ref': None, 'created_by': profile},
                 )
                 if prev is None or abs(float(prev) - valor) > 1e-9:
                     MeasurementChangeLog.objects.create(
                         model=model, pom=pom, base_measurement=None,
+                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                         valor_anterior=(float(prev) if prev is not None else None), valor_nou=valor,
                         context='manual', motiu=f'Escalat talla {talla}', created_by=auth_user)
                 propagat, motiu = False, (logica or 'sense_regla')
@@ -2795,10 +2848,29 @@ def escalat_ajustar_talla_view(request, model_id):
 
 
 def _write_base(model, pom, valor, auth_user, motiu):
-    """Escriu BaseMeasurement(model, pom).base_value_cm i deixa que el signal F1 registri el canvi."""
+    """Escriu BaseMeasurement(model, pom, exterior, instància única) i deixa que F1 registri.
+
+    ── FASE_3/C1-ins · L'EXPLICACIÓ CANÒNICA DELS LITERALS D'AQUEST FITXER ──────────────
+    Els escriptors de `models_app/views.py` que reben el POM per HTTP (`{'pom_id': …}`) no
+    poden COPIAR els eixos de cap fila d'origen: el contracte d'entrada no els porta, i no
+    els portarà fins a C4-ins. La llei de la fase és que **cap escriptor de les 9 taules
+    deixi els eixos al default implícit**: o els copia d'una fila que els sap dir, o els
+    declara amb el literal del cas. Aquí toca el segon.
+
+    La diferència amb el que hi havia no és cosmètica. Amb el lookup curt, un
+    `get_or_create(model, pom)` sobre una família de dues germanes o bé n'agafa una a l'atzar
+    o bé peta amb `MultipleObjectsReturned`; amb el lookup complet, sap exactament sobre
+    quina escriu. I quan C4-ins obri el contracte, el lloc on posar el valor real ja hi és:
+    només canvia d'on ve.
+
+    Els altres punts d'aquest fitxer porten una nota d'una línia que apunta aquí.
+    """
     from fhort.models_app.models import BaseMeasurement
+    from fhort.pom.models import MeasurementLayer
     bm, _created = BaseMeasurement.objects.get_or_create(
-        model=model, pom=pom, defaults={'base_value_cm': valor, 'origen': 'STANDARD'})
+        model=model, pom=pom,
+        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+        defaults={'base_value_cm': valor, 'origen': 'STANDARD'})
     bm.base_value_cm = valor
     bm._changed_by = auth_user
     bm._motiu = motiu
@@ -3660,23 +3732,36 @@ def promoure_a_item_view(request, model_id):
                       f"«{talla_set}». Promoure aquests valors hi escriuria mesures d'una altra "
                       "talla. No s'escriurà cap valor.")
 
-    actuals = ({i.pom_id: i for i in ItemBaseMeasurement.objects.filter(base_set=base_set)}
+    # FASE_3/C1-ins — el DIFF de promoció es fa amb la CLAU COMPLETA a les tres bandes
+    # (`actuals`, `poms_item`, `poms_model`). Aquest endpoint compara el patrimoni d'un model
+    # amb el d'un item i decideix què s'hi escriu: per `pom_id` sol, dues germanes del model
+    # es comparaven totes dues contra la mateixa fila de l'item, i el veredicte
+    # forat/divergent/igual sortia de l'última llegida. La promoció escriuria l'estàndard del
+    # taller a partir d'un diff que no sap de què parla.
+    actuals = ({(i.pom_id, i.capa, i.instancia): i
+                for i in ItemBaseMeasurement.objects.filter(base_set=base_set)}
                if base_set is not None else {})
     # LLEI 6 — el superset de POMs de l'item. El que en surti s'ha d'AMPLIAR amb confirmació.
     poms_item = set(GarmentPOMMap.objects.filter(garment_type_item=item)
-                    .values_list('pom_id', flat=True))
+                    .values_list('pom_id', 'capa', 'instancia'))
 
     # ── El DIFF (pur, sense escriure).
     forats, divergents, iguals, ampliaria_item = [], [], [], []
     for bm in fonts:
-        actual = actuals.get(bm.pom_id)
+        clau_bm = (bm.pom_id, bm.capa, bm.instancia)
+        actual = actuals.get(clau_bm)
         fila = {
             'pom_id': bm.pom_id,
             'codi': bm.nom_fitxa or bm.pom.codi_client or '',
             'nom': bm.pom.nom_client or '',
             'valor_model': float(bm.base_value_cm),
+            # Camps INTERNS (no de contracte): el bucle d'aplicació els necessita per
+            # retrobar la fila exacta, i el `next(...)` de sota no els pot deduir del
+            # `pom_id`. El payload els ignora fins a C4-ins.
+            '_capa': bm.capa,
+            '_instancia': bm.instancia,
         }
-        if bm.pom_id not in poms_item:
+        if clau_bm not in poms_item:
             ampliaria_item.append(dict(fila))
         if actual is None:
             forats.append(fila)
@@ -3693,7 +3778,10 @@ def promoure_a_item_view(request, model_id):
         else:
             iguals.append(fila)
 
-    poms_model = {bm.pom_id for bm in fonts}
+    # «Sobrarien» és el complement del diff, i s'ha de calcular amb la MATEIXA clau. L'ORM no
+    # sap fer `exclude` per tupla, o sigui que el complement es fa en Python sobre el conjunt
+    # de claus completes — que és el que `exclude(pom_id__in=…)` volia dir i no deia.
+    poms_model = {(bm.pom_id, bm.capa, bm.instancia) for bm in fonts}
     sobrarien = ([{
         'pom_id': i.pom_id,
         'codi': i.nom_fitxa or i.pom.codi_client or '',
@@ -3701,8 +3789,16 @@ def promoure_a_item_view(request, model_id):
         'valor_item': float(i.base_value_cm) if i.base_value_cm is not None else None,
         'origen_item': i.origen,
     } for i in ItemBaseMeasurement.objects
-        .filter(base_set=base_set).exclude(pom_id__in=poms_model)
-        .select_related('pom').order_by('pom__codi_client')] if base_set is not None else [])
+        .filter(base_set=base_set)
+        .select_related('pom').order_by('pom__codi_client')
+        if (i.pom_id, i.capa, i.instancia) not in poms_model] if base_set is not None else [])
+
+    # FASE_3/C1-ins — el PAYLOAD no canvia. Les files de treball porten `_capa`/`_instancia`
+    # perquè el bucle d'aplicació ha de retrobar la fila EXACTA, però són estat intern: el
+    # contracte d'aquest endpoint no porta eixos fins a C4-ins, i afegir-hi camps ara seria
+    # el primer canvi visible del tram. Es netegen aquí, en un sol lloc.
+    def _sense_intern(files):
+        return [{k: v for k, v in f.items() if not k.startswith('_')} for f in files]
 
     diff = {
         'model': model.id,
@@ -3719,12 +3815,12 @@ def promoure_a_item_view(request, model_id):
                       'base_size_label': base_set.base_size_definition.etiqueta,
                       'origen': base_set.origen} if base_set is not None else None),
         'naixement': naixement,
-        'forats': forats,
+        'forats': _sense_intern(forats),
         # LLEI 5 — es mostren els dos valors i NO es toquen. Modificar-los és l'acte canònic.
-        'divergents': divergents,
-        'iguals': iguals,
+        'divergents': _sense_intern(divergents),
+        'iguals': _sense_intern(iguals),
         # LLEI 6 — mai en silenci.
-        'ampliaria_item': ampliaria_item,
+        'ampliaria_item': _sense_intern(ampliaria_item),
         # NO s'esborren mai: es llisten perquè el tècnic decideixi a ItemAuthoring.
         'sobrarien': sobrarien,
         'resum': {'forats': len(forats), 'divergents': len(divergents),
@@ -3763,8 +3859,12 @@ def promoure_a_item_view(request, model_id):
                          .order_by('-ordre').values_list('ordre', flat=True).first() or 0)
         for fila in ampliaria_item:
             ordre_seguent += 1
+            # FASE_3/C1-ins — la pertinença nova neix amb els eixos de la mesura que la
+            # justifica, no amb literals: si el model mesura la sisa esquerra, la plantilla
+            # ha de reclamar la sisa esquerra.
             GarmentPOMMap.objects.get_or_create(
                 garment_type_item=item, pom_id=fila['pom_id'],
+                capa=fila['_capa'], instancia=fila['_instancia'],
                 # pendent_revisio=False: els confirma un tècnic amb gate CONFIGURE, no un clon
                 # automàtic de germà (que és el cas que va inventar la marca).
                 defaults={'ordre': ordre_seguent, 'pendent_revisio': False},
@@ -3773,12 +3873,17 @@ def promoure_a_item_view(request, model_id):
         escrits = 0
         if not talla_divergent:
             for fila in forats:
-                bm = next(b for b in fonts if b.pom_id == fila['pom_id'])
+                # Per la clau COMPLETA: amb `pom_id` sol, el `next(...)` es quedava amb la
+                # primera germana i el valor promogut podia ser el de l'altra.
+                bm = next(b for b in fonts
+                          if (b.pom_id, b.capa, b.instancia)
+                          == (fila['pom_id'], fila['_capa'], fila['_instancia']))
                 # LLEI 4 — NOMÉS forats. `update_or_create` sobre una fila amb valor seria
                 # exactament l'acte que aquesta llei prohibeix; per això la clau del create és
                 # el forat i els divergents ni entren al bucle.
                 obj, creat = ItemBaseMeasurement.objects.get_or_create(
                     base_set=base_set, pom_id=bm.pom_id,
+                    capa=bm.capa, instancia=bm.instancia,
                     defaults={
                         'garment_type_item': item,
                         'base_value_cm': bm.base_value_cm,
@@ -3854,8 +3959,13 @@ def acte_canonic_base_set_view(request, base_set_id):
     if not pom_id:
         return Response({'error': 'pom requerit.'}, status=400)
 
+    # FASE_3/C1-ins — literals: el body és `{'pom': …}` i no porta eixos. El `.first()` per
+    # `pom_id` sol escrivia l'ACTE CANÒNIC de la marca sobre una germana a l'atzar, i aquest
+    # endpoint és precisament el que existeix perquè el valor de l'estàndard no el decideixi
+    # ningú de passada. V. `_write_base` per a l'argument sencer dels literals.
     actual = (ItemBaseMeasurement.objects.select_related('pom')
-              .filter(base_set=base_set, pom_id=pom_id).first())
+              .filter(base_set=base_set, pom_id=pom_id,
+                      capa=MeasurementLayer.SLUG_DEFECTE, instancia='').first())
     if actual is None or actual.base_value_cm is None:
         return Response({
             'error': ("Aquest POM no té cap valor al set: omplir un forat NO és un acte canònic, "
