@@ -41,22 +41,27 @@ TOL_FALLBACK = 0.6
 
 
 def _tolerance_map(model):
-    """Asymmetric tolerance per (pom, capa) from BaseMeasurement(model, pom, capa).
+    """Asymmetric tolerance per (pom, capa, instancia), from BaseMeasurement.
 
-    Returns {(pom_id, capa): (tol_minus, tol_plus)} with TOL_FALLBACK (0.6) when a bound
-    is unset. POMs without a BaseMeasurement fall back to (0.6, 0.6) on lookup.
+    Returns {(pom_id, capa, instancia): (tol_minus, tol_plus)} with TOL_FALLBACK (0.6) when
+    a bound is unset. POMs without a BaseMeasurement fall back to (0.6, 0.6) on lookup.
 
     C2/Onada 1 — the key carries the layer because `PieceFittingLine` does: the lining of
     a chest and its shell are two different measurements of the same POM, and each must be
     judged against its own tolerance. Keyed by pom alone, whichever layer the map met last
     would silently rule the whole family.
+
+    FASE_2/C1-ins — and it carries the INSTANCE for exactly the same reason: the right
+    armhole and the left one are two measurements, each with its own tolerance, and the
+    consuming line knows which one it is talking about. Whenever the row can name the axis,
+    the key carries it — no anchoring here, because there is nothing to anchor to.
     """
     from fhort.models_app.models import BaseMeasurement
     tol = {}
     for bm in BaseMeasurement.objects.filter(model=model, is_active=True):
         tm = float(bm.tolerancia_minus) if bm.tolerancia_minus is not None else TOL_FALLBACK
         tp = float(bm.tolerancia_plus) if bm.tolerancia_plus is not None else TOL_FALLBACK
-        tol[(bm.pom_id, bm.capa)] = (tm, tp)
+        tol[(bm.pom_id, bm.capa, bm.instancia)] = (tm, tp)
     return tol
 
 
@@ -91,7 +96,7 @@ def fitting_vs_spec_view(request, pf_id):
         for line in lines:
             spec_cm = float(line.valor_teoric) if line.valor_teoric is not None else None
             val_cm = float(line.valor_real) if line.valor_real is not None else None
-            tol_minus, tol_plus = tol_map.get((line.pom_id, line.capa),
+            tol_minus, tol_plus = tol_map.get((line.pom_id, line.capa, line.instancia),
                                               (TOL_FALLBACK, TOL_FALLBACK))
 
             desv = None

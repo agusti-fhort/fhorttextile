@@ -162,11 +162,15 @@ def check_tolerances_view(request, model_id):
         # `{pom_id, value_cm}` i no diu de quina capa parla. Mentre el contracte no porti
         # capa (C4), una mesura presa a mà es compara amb l'exterior, que és el que el
         # tècnic té al davant. Per POM sol, la base d'una altra capa podria manar aquí.
+        # FASE_2/C1-ins — i tampoc diu de quina INSTÀNCIA parla, o sigui que l'àncora ha de
+        # cobrir els dos eixos: el `base_map` s'indexa per `pom_id` pelat i, sense el segon
+        # filtre, la base de la sisa esquerra podria jutjar una presa de la dreta.
         from fhort.pom.models import MeasurementLayer
         base_map = {
             bm.pom_id: float(bm.base_value_cm)
             for bm in BaseMeasurement.objects.filter(
-                model=model, is_active=True, capa=MeasurementLayer.SLUG_DEFECTE)
+                model=model, is_active=True,
+                capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
             if bm.base_value_cm is not None
         }
 
