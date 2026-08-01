@@ -267,6 +267,12 @@ def log_measurement_change(sender, instance, created, raw=False, **kwargs):
         MeasurementChangeLog.objects.create(
             model=instance.model,
             pom=instance.pom,
+            # FASE_3/C1-ins — els DOS EIXOS surten de la `instance`, que ÉS la
+            # `BaseMeasurement` podada. V. la nota llarga del log de canvi de valor, més
+            # avall: aquí el motiu és el mateix i és més urgent, perquè una poda mal
+            # atribuïda diu que s'ha esborrat una mesura que segueix viva.
+            capa=instance.capa,
+            instancia=instance.instancia,
             base_measurement=instance,
             valor_anterior=instance.base_value_cm,
             # `valor_nou` no és nullable i la poda no canvia el valor: 0.0 vol dir
@@ -296,9 +302,25 @@ def log_measurement_change(sender, instance, created, raw=False, **kwargs):
     motiu = getattr(instance, '_motiu', '') or ''
     fora_de_tolerancia = getattr(instance, '_fora_de_tolerancia', False) or False
 
+    # 🚨 FASE_3/C1-ins — **AQUÍ ES TANCA EL FORAT QUE ARROSSEGA DES DE L'ONADA 1.**
+    #
+    # Aquest signal és l'ÚNIC escriptor automàtic del log, i fins avui no estampava cap dels
+    # dos eixos: les files queien als defaults ('exterior', ''). Amb dues germanes vives, les
+    # dues preses aterraven a la mateixa clau i `base_stages_view` —que és el node del pin—
+    # arrossegava el valor d'una per la fila de l'altra: una base que aquella germana no ha
+    # tingut mai. Els lectors ja s'havien adaptat a FASE_2; el que quedava era que l'escriptor
+    # digués la veritat.
+    #
+    # I aquesta taula és APPEND-ONLY: una fila escrita amb l'eix equivocat NO es pot corregir
+    # després. Per això no podia esperar a C4-ins.
+    #
+    # Els dos valors surten de la `instance` —que ÉS la `BaseMeasurement` que ha canviat—, no
+    # de cap literal: el log no ha d'endevinar res, ha de copiar.
     MeasurementChangeLog.objects.create(
         model=instance.model,
         pom=instance.pom,
+        capa=instance.capa,
+        instancia=instance.instancia,
         base_measurement=instance,
         valor_anterior=old_value,
         valor_nou=instance.base_value_cm,
