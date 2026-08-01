@@ -1019,6 +1019,8 @@ def _upsert_graded_spec(
     grading_type_applied: str,
     increment_applied_cm: float,
     generated_from_version: int | None = None,
+    capa: str | None = None,
+    instancia: str = '',
 ):
     """Create or update a GradedSpec.
 
@@ -1026,8 +1028,30 @@ def _upsert_graded_spec(
     que ja ha passat pel guard de `_get_or_create_grading_version`; això protegeix el cridador
     de DEMÀ, que rebrà un `grading_version_id` d'on sigui i podria apuntar a una versió
     segellada sense passar per la porta. Cap `GradedSpec` no pot aterrar sobre un segell.
+
+    🚨 FASE_3/C1-ins — **AQUEST ERA EL NODE QUE ARMAVA L'ACCIDENT DE C4.** La unicitat de
+    `GradedSpec` és `(grading_version, pom, size_label, capa, instancia)` i el lookup en deia
+    TRES: mentre només hi hagi una fila per (versió, pom, talla) l'`update_or_create` la
+    reescriu i sembla que funciona; el dia que la comporta caigui i n'hi hagi dues, o bé en
+    reescriu una a l'atzar o bé el `get()` intern llança `MultipleObjectsReturned`. La clau
+    de lookup ha d'anar SEMPRE alineada amb la unicitat real de la taula: aquesta és la llei
+    de tota la fase.
+
+    Els eixos són PARÀMETRES amb default explícit, no literals amagats dins del cos, i el
+    motiu és la FRONTERA C3: l'únic cridador d'avui recorre el dict de
+    `_load_base_measurements` —zona intocable— que indexa per POM sol i **no els sap dir**.
+    Amb la signatura oberta, el dia que C3 doni eixos al motor només cal passar-los-hi; sense
+    ella, caldria tornar a tocar aquesta funció. El default declara el que el sistema fa avui,
+    i no ho amaga.
     """
     from fhort.fitting.models import GradedSpec, GradingVersion
+    from fhort.pom.models import MeasurementLayer
+
+    # `None` → l'exterior. El default real és el de `MeasurementLayer`, i es resol aquí i no
+    # a la signatura perquè aquest mòdul importa els models sempre en diferit (cicle
+    # pom↔fitting↔models_app); posar-hi la constant faria l'import a temps de definició.
+    if capa is None:
+        capa = MeasurementLayer.SLUG_DEFECTE
 
     segellada = (GradingVersion.objects
                  .select_related('size_fitting')
@@ -1041,6 +1065,8 @@ def _upsert_graded_spec(
             grading_version_id=grading_version_id,
             pom_id=pom_id,
             size_label=size_label,
+            capa=capa,
+            instancia=instancia,
             defaults={
                 'graded_value_cm': graded_value_cm,
                 'grading_type_applied': grading_type_applied,
@@ -1050,5 +1076,7 @@ def _upsert_graded_spec(
             }
         )
     except Exception as e:
-        logger.error(f"Error creating GradedSpec pom={pom_id} size={size_label}: {e}")
+        logger.error(
+            f"Error creating GradedSpec pom={pom_id} size={size_label} "
+            f"capa={capa} instancia={instancia!r}: {e}")
         raise
