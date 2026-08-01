@@ -602,6 +602,15 @@ class GarmentPOMMap(models.Model):
         help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
                   "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
     )
+    # C1-ins — la instància (declaració canònica a `models_app.BaseMeasurement.instancia`).
+    # Aquí la instància diu QUANTES VEGADES la plantilla de l'item reclama el mateix POM: una
+    # americana demana la sisa dues vegades —dreta i esquerra— i són DUES pertinences, no una.
+    # És l'origen de tot: el que aquesta taula declara és el que la sembra item→model copia.
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Mapa garment ↔ POM'
@@ -609,13 +618,21 @@ class GarmentPOMMap(models.Model):
         ordering = ['garment_type_item', 'ordre']
         # C1/T3 — la clau incorpora la CAPA (v. `models_app.BaseMeasurement.Meta`): un item
         # pot reclamar el mateix POM a l'exterior i al folre, i són dues pertinences.
-        unique_together = [('garment_type_item', 'pom', 'capa')]
+        # C1-ins/T3 — i la INSTÀNCIA: també en són dues si el reclama dos cops a la mateixa
+        # capa (sisa dreta i esquerra).
+        unique_together = [('garment_type_item', 'pom', 'capa', 'instancia')]
         constraints = [
             # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`, on hi ha
             # l'argument sencer). C4 la retira per migració.
             models.CheckConstraint(
                 condition=models.Q(capa='exterior'),
                 name='pom_garmentpommap_capa_gate_c1',
+            ),
+            # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
+            # C4-ins la retira per migració.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='pom_garmentpommap_instancia_gate_cins',
             ),
         ]
 
@@ -884,6 +901,14 @@ class ItemBaseMeasurement(models.Model):
         help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
                   "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
     )
+    # C1-ins — la instància (declaració canònica a `models_app.BaseMeasurement.instancia`).
+    # Mirall de la instància del `GarmentPOMMap` del mateix eix: si la plantilla reclama el
+    # POM dues vegades, el valor típic també és doble.
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Mesura base d\'item'
@@ -895,12 +920,20 @@ class ItemBaseMeasurement(models.Model):
         # el seu valor per al mateix POM). El set ja porta l'item, així que no es perd unicitat.
         # C1/T3 (2026-07-30) — i ara hi entra la CAPA (v. `models_app.BaseMeasurement.Meta`):
         # el mateix POM del mateix set té un valor a l'exterior i un altre al folre.
-        unique_together = [('base_set', 'pom', 'capa')]
+        # C1-ins/T3 — i la INSTÀNCIA, pel mateix camí: dues repeticions del POM a la mateixa
+        # capa són dos valors típics.
+        unique_together = [('base_set', 'pom', 'capa', 'instancia')]
         constraints = [
             # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`). C4 la retira.
             models.CheckConstraint(
                 condition=models.Q(capa='exterior'),
                 name='pom_itembasemeasurement_capa_gate_c1',
+            ),
+            # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
+            # C4-ins la retira per migració.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='pom_itembasemeasurement_instancia_gate_cins',
             ),
         ]
 
@@ -1116,6 +1149,15 @@ class GradingRule(models.Model):
     class Meta:
         verbose_name = 'Regla grading'
         verbose_name_plural = 'Regles grading'
+        # ⚠️ SENSE `capa` i SENSE `instancia`, PER DECISIÓ DE DOMINI — igual que la seva
+        # germana resident `models_app.ModelGradingRule`, on hi ha l'argument sencer.
+        # Una regla és una llei d'INCREMENTS, no un valor: el folre d'un pit creix el mateix
+        # que l'exterior d'aquell pit, i (decisió Montse, C1-ins) la sisa dreta i l'esquerra
+        # GRADÚEN IGUAL. Els VALORS sí que porten els dos eixos (BaseMeasurement, GradedSpec,
+        # ItemBaseMeasurement…): la regla és compartida, el resultat d'aplicar-la és per capa
+        # i per instància. Donar-li cap dels dos eixos voldria dir demanar que es declari n
+        # vegades el mateix delta i mantenir-les sincronitzades a mà.
+        # Qui vulgui revisar-ho: és decisió d'arquitectura (Patró C), no una peça d'sprint.
         unique_together = [('rule_set', 'pom')]
 
     def __str__(self):
