@@ -53,24 +53,32 @@ def regenerate_sizes_view(request, sf_id):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-def clau_ordre_taula(pom, capa):
+def clau_ordre_taula(pom, capa, instancia=''):
     """L'ordre de la taula de mesures, decidit i TOTAL (Agus, 2026-08-01).
 
-    Ordre del catàleg → capa (exterior primer) → codi del POM. Fins avui la taula
-    s'ordenava només pel primer, i el `sort` de Python és estable: els empats —que són la
-    norma, perquè `display_order` és de la CATEGORIA i no del POM— conservaven l'ordre
-    d'inserció, o sigui l'ordre en què Postgres havia tornat les files. Un `WHERE` nou, un
-    índex nou o un ANALYZE el movien: mateixos POMs, mateixos ids, un altre ordre.
+    Ordre del catàleg → capa (exterior primer) → instància (la única primer) → codi del POM.
+    Fins avui la taula s'ordenava només pel primer, i el `sort` de Python és estable: els
+    empats —que són la norma, perquè `display_order` és de la CATEGORIA i no del POM—
+    conservaven l'ordre d'inserció, o sigui l'ordre en què Postgres havia tornat les files.
+    Un `WHERE` nou, un índex nou o un ANALYZE el movien: mateixos POMs, mateixos ids, un
+    altre ordre.
 
-    Els dos últims trams de la clau són desempats que no es veuen però fan la clau total:
-    el `slug` de la capa (entre dues capes que no són l'exterior) i l'`id` del POM (perquè
-    el codi tampoc no és únic — dos POMMaster del tenant poden compartir `codi_client`).
+    FASE_2/C1-ins — la INSTÀNCIA entra al mateix lloc i pel mateix motiu que la capa. Sense
+    ella la clau tornaria a ser PARCIAL el dia que hi hagi dues instàncies del mateix POM a
+    la mateixa capa: empat a tots els trams, desempat per l'ordre del pla de Postgres, i el
+    bug que aquesta funció existeix per matar tornaria per la porta del costat.
+
+    Els últims trams són desempats que no es veuen però fan la clau total: el `slug` de la
+    capa (entre dues que no són l'exterior), el de la instància, i l'`id` del POM (perquè el
+    codi tampoc no és únic — dos POMMaster del tenant poden compartir `codi_client`).
     """
     from fhort.pom.models import MeasurementLayer
     return (
         pom.display_order,
         0 if capa == MeasurementLayer.SLUG_DEFECTE else 1,
         capa or '',
+        0 if not instancia else 1,
+        instancia or '',
         pom.pom_code or '',
         pom.id,
     )
@@ -116,12 +124,16 @@ def measurements_table_view(request, sf_id):
         # No pot ser clau composta: `cells` es serialitza tal qual a la resposta
         # (`{str(k): v}`) i `poms_info` porta l'`id` del POM — la clau ÉS el contracte, i el
         # contracte no es toca fins a C4.
+        # FASE_2/C1-ins — l'àncora es duplica als DOS eixos a les DUES branques, per la
+        # mateixa raó al quadrat: `cells`, `poms_seen` i `ordre_pom` són tres diccionaris
+        # per `pom_id` pelat, i una segona instància del mateix POM se'ls repartiria entre
+        # les dues branques exactament com ho hauria fet una segona capa.
         from fhort.pom.models import MeasurementLayer
 
         if grading_version:
             specs = GradedSpec.objects.filter(
                 grading_version=grading_version, is_active=True,
-                capa=MeasurementLayer.SLUG_DEFECTE,
+                capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
             ).select_related(
                 'pom', 'pom__pom_global', 'pom__categoria'
             ).order_by('pom__categoria__display_order', 'size_label')
@@ -130,7 +142,7 @@ def measurements_table_view(request, sf_id):
                 pom_id = spec.pom_id
                 if pom_id not in poms_seen:
                     poms_seen.add(pom_id)
-                    ordre_pom[pom_id] = clau_ordre_taula(spec.pom, spec.capa)
+                    ordre_pom[pom_id] = clau_ordre_taula(spec.pom, spec.capa, spec.instancia)
                     poms_info.append({
                         'id': pom_id,
                         'codi': spec.pom.pom_code,
@@ -152,13 +164,14 @@ def measurements_table_view(request, sf_id):
             try:
                 from fhort.models_app.models import BaseMeasurement
                 base_ms = BaseMeasurement.objects.filter(
-                    model=model, is_active=True, capa=MeasurementLayer.SLUG_DEFECTE
+                    model=model, is_active=True,
+                    capa=MeasurementLayer.SLUG_DEFECTE, instancia=''
                 ).select_related('pom', 'pom__pom_global', 'pom__categoria')
                 for bm in base_ms:
                     pom_id = bm.pom_id
                     if pom_id not in poms_seen:
                         poms_seen.add(pom_id)
-                        ordre_pom[pom_id] = clau_ordre_taula(bm.pom, bm.capa)
+                        ordre_pom[pom_id] = clau_ordre_taula(bm.pom, bm.capa, bm.instancia)
                         poms_info.append({
                             'id': pom_id,
                             'codi': bm.pom.pom_code,
