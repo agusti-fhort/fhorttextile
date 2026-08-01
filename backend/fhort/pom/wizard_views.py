@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 
+from fhort.pom.models import MeasurementLayer
 from fhort.pom.services import SealedGradingVersionError, _te_regles
 
 
@@ -202,9 +203,13 @@ def save_base_size_view(request, model_id):
                     tol_minus = pom.tolerancia_default_minus
                 if tol_plus is None and pom:
                     tol_plus = pom.tolerancia_default_plus
+                # FASE_3/C1-ins — literals: el wizard encara no demana capa ni instància
+                # (Onada 3, amb maqueta). Declarats, no implícits.
                 BaseMeasurement.objects.update_or_create(
                     model=model,
                     pom_id=pom_id,
+                    capa=MeasurementLayer.SLUG_DEFECTE,
+                    instancia='',
                     defaults={
                         'base_value_cm': float(value),
                         'is_active': True,

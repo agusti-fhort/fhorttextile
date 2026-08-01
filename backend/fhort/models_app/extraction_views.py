@@ -11,6 +11,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework import status
 
+from fhort.pom.models import MeasurementLayer
 from fhort.pom.size_labels import canonical_size_label
 from fhort.pom.grading_utils import normalitza_cm
 from fhort.models_app.extraction_utils import registra_us_ia
@@ -2557,7 +2558,15 @@ def import_session_confirmar_view(request, token):
                 _defaults['tolerancia_minus'] = p['tol_minus']
             if p.get('tol_plus') is not None:
                 _defaults['tolerancia_plus'] = p['tol_plus']
-            BaseMeasurement.objects.update_or_create(model=model, pom=pm, defaults=_defaults)
+            # FASE_3/C1-ins — literals: el document importat encara no diu de quina capa ni
+            # de quina instància parla cada fila. El lèxic multilingüe que ho sabrà llegir
+            # (LINING/FORRO/FOLRE→folre, i el mateix per a les repeticions) és l'Onada 3, que
+            # té UI i maqueta pendent. Fins llavors l'import escriu a l'exterior i a la
+            # instància única, i ho declara aquí en comptes de deixar-ho al default implícit.
+            BaseMeasurement.objects.update_or_create(
+                model=model, pom=pm,
+                capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                defaults=_defaults)
             n_bm += 1
             if base_val is not None:
                 n_bm_valors += 1
@@ -2692,6 +2701,7 @@ def import_session_confirmar_view(request, token):
                                     continue
                                 ModelGradingOverride.objects.update_or_create(
                                     model=model, pom_id=pom_id, size_label=label,
+                                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                                     defaults={'value_cm': float(val), 'created_by': user_profile,
                                               'motiu': ("Import W5 — divergència vs catàleg del "
                                                         "contenidor (INTOCABLE)")})
