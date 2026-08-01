@@ -14,6 +14,7 @@ Convencions calcades de `commerce/` (S0-B9) i del pipeline de fitxers (S0-B1):
     d'allà obriria el patró id=5 d'aquí.
 """
 import logging
+from collections import defaultdict
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -68,6 +69,38 @@ def _tol(de_la_mesura, del_cataleg):
         if v is not None:
             return float(v)
     return TOL_FALLBACK
+
+
+#: Les caselles de l'ancoratge quan el POM encara no és al patró.
+SENSE_ANCORATGE = {
+    'pattern_pom': None,
+    'pattern_piece': None,
+    'peca': None,
+    'valor_mesurat_cm': None,
+    'delta_cm': None,
+    'dins_tolerancia': None,
+}
+
+
+def _mesura_ancorada(anc, bm, tol_minus, tol_plus) -> dict:
+    """El que UN ancoratge mesura, i com queda contra la fitxa.
+
+    La Δ només existeix si hi ha les DUES xifres. Un POM col·locat sobre una mesura sense
+    valor de fitxa (origen TEMPLATE) es pot mesurar igualment, però no hi ha res amb què
+    comparar-lo: la Δ es queda a None i no s'inventa.
+    """
+    delta = dins = None
+    if anc.valor_mesurat_cm is not None and bm.base_value_cm is not None:
+        delta = round(anc.valor_mesurat_cm - bm.base_value_cm, 2)
+        dins = -tol_minus <= delta <= tol_plus
+    return {
+        'pattern_pom': anc.id,
+        'pattern_piece': anc.pattern_piece_id,
+        'peca': anc.pattern_piece.nom_block,
+        'valor_mesurat_cm': anc.valor_mesurat_cm,
+        'delta_cm': delta,
+        'dins_tolerancia': dins,
+    }
 
 
 def _noms_del_global(glob) -> dict:
@@ -541,12 +574,17 @@ class PatternFileViewSet(mixins.CreateModelMixin,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        ancorats = {
-            p.pom_master_id: p
-            for p in PatternPOM.objects
-            .filter(pattern_piece__pattern_file=fp)
-            .select_related('pattern_piece', 'pom_master')
-        }
+        # La unicitat de PatternPOM és (pattern_piece, pom_master): el MATEIX POM es pot
+        # ancorar a DUES peces (l'amplada de pit es mesura al davant i a l'esquena), i són
+        # dues mesures diferents, no dues versions de la mateixa. Un diccionari per
+        # `pom_master_id` en descartava una en silenci — i quina, ho decidia l'ordre de la
+        # consulta. Es resolen totes, per peça.
+        ancorats = defaultdict(list)
+        for p in (PatternPOM.objects
+                  .filter(pattern_piece__pattern_file=fp)
+                  .select_related('pattern_piece', 'pom_master')
+                  .order_by('pattern_piece_id', 'pk')):
+            ancorats[p.pom_master_id].append(p)
 
         files = []
         base = (
@@ -558,12 +596,14 @@ class PatternFileViewSet(mixins.CreateModelMixin,
         alies = _alies_unics_del_customer(fp.model_id, [bm.pom_id for bm in base])
         for bm in base:
             pom, glob = bm.pom, bm.pom.pom_global
-            anc = ancorats.get(bm.pom_id)
 
             # La tolerància de la mesura mana sobre la del catàleg; el 0.6 de la casa és
             # l'últim recurs (mateixa escala que `s10_views._tolerance_map`).
             tol_minus = _tol(bm.tolerancia_minus, pom.tolerancia_default_minus)
             tol_plus = _tol(bm.tolerancia_plus, pom.tolerancia_default_plus)
+
+            mesures = [_mesura_ancorada(a, bm, tol_minus, tol_plus)
+                       for a in ancorats.get(bm.pom_id, ())]
 
             fila = {
                 'base_measurement': bm.id,
@@ -592,29 +632,14 @@ class PatternFileViewSet(mixins.CreateModelMixin,
                 'tolerancia_minus_cm': tol_minus,
                 'tolerancia_plus_cm': tol_plus,
                 'is_key': bm.is_key,
-                'ancorat': anc is not None,
-                'pattern_pom': None,
-                'pattern_piece': None,
-                'peca': None,
-                'valor_mesurat_cm': None,
-                'delta_cm': None,
-                'dins_tolerancia': None,
+                'ancorat': bool(mesures),
+                # TOTS els ancoratges d'aquest POM, un per peça i en ordre de peça.
+                'ancoratges': mesures,
+                # Les caselles planes de sempre (el consumidor viu les llegeix): el PRIMER
+                # ancoratge per ordre de peça. Amb un de sol —el cas normal— és exactament
+                # el que hi havia; amb més d'un, ara es pot saber que n'hi ha més.
+                **(mesures[0] if mesures else SENSE_ANCORATGE),
             }
-
-            if anc is not None:
-                fila.update({
-                    'pattern_pom': anc.id,
-                    'pattern_piece': anc.pattern_piece_id,
-                    'peca': anc.pattern_piece.nom_block,
-                    'valor_mesurat_cm': anc.valor_mesurat_cm,
-                })
-                # La Δ només existeix si hi ha les DUES xifres. Un POM col·locat sobre una
-                # mesura sense valor de fitxa (origen TEMPLATE) es pot mesurar igualment,
-                # però no hi ha res amb què comparar-lo: la Δ es queda a None i no s'inventa.
-                if anc.valor_mesurat_cm is not None and bm.base_value_cm is not None:
-                    delta = round(anc.valor_mesurat_cm - bm.base_value_cm, 2)
-                    fila['delta_cm'] = delta
-                    fila['dins_tolerancia'] = -tol_minus <= delta <= tol_plus
 
             files.append(fila)
 
