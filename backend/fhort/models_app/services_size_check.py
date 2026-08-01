@@ -29,22 +29,43 @@ def _materialize_lines(size_check, model) -> int:
     canviï sota els peus. El teòric FRESC és el de la línia NOVA, que és la que no existia.
 
     Retorna el nombre de línies CREADES.
+
+    🚨 FASE_3/C1-ins — **EL PITJOR CAS DEL CENS, i el que aquesta funció fa que ho sigui.**
+
+    L'aparellament era per `pom_id` PELAT a les dues bandes: `ja_hi_son` era un conjunt de
+    `pom_id` i l'`exclude` filtrava per `pom_id__in`. Amb dues germanes del mateix POM al
+    model, la PRIMERA que rebia línia BLOQUEJAVA totes les altres — la sisa esquerra no en
+    tindria mai cap, i quedaria com una fila inerta a l'editor: es veu, però no es pot
+    anotar. És exactament el símptoma que FIX-3 va tancar per l'altra porta, tornant a entrar
+    pel segon eix.
+
+    L'`exclude` no es pot expressar per tupla amb l'ORM (no hi ha `__in` de tuples), i per
+    això el filtre passa a Python. El cost és irrellevant —una consulta per check— i
+    l'alternativa (un `Q` gegant de `AND`/`OR`) diria pitjor el que fa.
+
+    I el `create` estampa els eixos de la mesura d'origen: la línia parla de la mateixa fila
+    que la va fer néixer, no d'una que se li assembla.
     """
     from fhort.models_app.models import BaseMeasurement, SizeCheckLine
     ja_hi_son = set(
-        SizeCheckLine.objects.filter(size_check=size_check).values_list('pom_id', flat=True)
+        SizeCheckLine.objects
+        .filter(size_check=size_check)
+        .values_list('pom_id', 'capa', 'instancia')
     )
     bms = (
         BaseMeasurement.objects
         .filter(model=model, is_active=True, base_value_cm__isnull=False)
-        .exclude(pom_id__in=ja_hi_son)
         .select_related('pom')
     )
     n = 0
     for bm in bms:
+        if (bm.pom_id, bm.capa, bm.instancia) in ja_hi_son:
+            continue
         SizeCheckLine.objects.create(
             size_check=size_check,
             pom=bm.pom,
+            capa=bm.capa,
+            instancia=bm.instancia,
             valor_teoric=bm.base_value_cm,   # snapshot del vigent en crear la línia
             valor_real=None,                 # el tècnic l'anota
         )
@@ -201,8 +222,12 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
             if line.valor_real is None:
                 continue
             lines_accepted += 1
+            # FASE_3/C1-ins — el veredicte del check torna a la SEVA mesura base. La línia
+            # sap dir els dos eixos (els va heretar de la BaseMeasurement que la va fer
+            # néixer, a `_materialize_lines`): el lookup els diu també, o el valor acceptat
+            # d'una germana aterraria sobre l'altra.
             bm, _created = BaseMeasurement.objects.get_or_create(
-                model=model, pom=line.pom,
+                model=model, pom=line.pom, capa=line.capa, instancia=line.instancia,
                 defaults={'base_value_cm': line.valor_real, 'origen': 'CHECKED'},
             )
             # Guarda contra el valor VIGENT: no escriure canvis nuls.
