@@ -329,10 +329,19 @@ def create_piece_fitting(session_id: int, model_id: int, *, created_by_id: int |
     specs = GradedSpec.objects.filter(grading_version=version, is_active=True).select_related('pom')
     n = 0
     for spec in specs:
+        # FASE_3/C1-ins — la línia CLONA l'spec, i per tant n'ha de clonar els DOS EIXOS.
+        # Aquesta és la propagació més literal del tram: si l'spec és del folre, la línia és
+        # del folre; si és de la sisa esquerra, la línia és de la sisa esquerra. Copiant
+        # només `pom`/`size_label`/`valor`, dos specs germans generaven dues línies
+        # indistingibles que xocaven amb la unicitat
+        # `(piece_fitting, pom, size_label, capa, instancia)` — i, mentre la comporta ho
+        # impedia, la modista hauria pres dues vegades la mateixa mesura sense saber quina.
         PieceFittingLine.objects.create(
             piece_fitting=pf,
             pom=spec.pom,
             size_label=spec.size_label,
+            capa=spec.capa,
+            instancia=spec.instancia,
             valor_teoric=spec.graded_value_cm,
             valor_real=spec.graded_value_cm,  # copy, editable before close
         )
@@ -366,8 +375,12 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
             continue  # no change on this line
         if line.size_label.strip() != base_size:
             continue  # PEÇA 4: la sessió de fitting toca NOMÉS la talla base
+        # FASE_3/C1-ins — la consolidació torna el valor mesurat a la SEVA mesura base. La
+        # línia sap dir els dos eixos (els va heretar de l'spec, aquí a sobre); el lookup
+        # els ha de dir també, o la rectificació d'una germana aterraria sobre l'altra i el
+        # `get()` intern petaria amb MultipleObjectsReturned el dia que n'hi hagi dues.
         bm, _created = BaseMeasurement.objects.get_or_create(
-            model=model, pom=line.pom,
+            model=model, pom=line.pom, capa=line.capa, instancia=line.instancia,
             defaults={'base_value_cm': line.valor_real, 'origen': 'FITTED'},
         )
         bm.base_value_cm = line.valor_real
