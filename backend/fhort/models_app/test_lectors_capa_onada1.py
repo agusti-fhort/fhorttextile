@@ -99,7 +99,12 @@ class LectorsCapaOnada1Test(TenantTestCase):
 
     def test_c1_el_mapa_de_tolerancies_no_col·lapsa_les_dues_capes(self):
         """`_tolerance_map` per POM sol es quedava amb l'última capa llegida i jutjava tota
-        la família amb la seva vara."""
+        la família amb la seva vara.
+
+        FASE_2/C1-ins — la clau del mapa és ara `(pom, capa, instancia)`. Aquest test segueix
+        provant EXACTAMENT el mateix (que les dues capes no es col·lapsen); només parla la
+        clau nova. La instància té el seu propi harness a `test_lectors_instancia_cins`.
+        """
         from fhort.pom.s10_views import _tolerance_map
 
         with comporta_alcada('models_app_basemeasurement'):
@@ -107,8 +112,8 @@ class LectorsCapaOnada1Test(TenantTestCase):
             tol = _tolerance_map(self.model)
 
             self.assertEqual(len(tol), 2, 'les dues capes han de tenir entrada pròpia')
-            self.assertEqual(tol[(self.pom.id, EXTERIOR)], (0.5, 0.5))
-            self.assertEqual(tol[(self.pom.id, FOLRE)], (2.0, 2.0))
+            self.assertEqual(tol[(self.pom.id, EXTERIOR, '')], (0.5, 0.5))
+            self.assertEqual(tol[(self.pom.id, FOLRE, '')], (2.0, 2.0))
 
     # ── C5 · el serializer de Size Check ─────────────────────────────────────────────
 

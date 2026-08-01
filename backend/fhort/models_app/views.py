@@ -2996,7 +2996,12 @@ def base_stages_view(request, model_id):
         # tancar per l'altra porta (els overrides de talla no-base).
         # El payload NO canvia: les files segueixen sortint amb `pom_id` sol; la capa només
         # viu a la clau interna, i `bm.capa` la porta a cada fila.
-        changes_by_ev[key][(c.pom_id, c.capa)] = float(c.valor_nou)
+        # FASE_2/C1-ins — i la INSTÀNCIA entra al mateix espai de claus, amb el mateix perill
+        # exacte i un de propi: aquí el carry-forward arrossegaria la presa de la sisa dreta
+        # per la fila de l'esquerra. La comporta encara ho fa impossible, però aquest lector
+        # és el node del PIN —13 tests el vigilen— i és el que ha d'arribar-hi ja correcte.
+        # El payload segueix sense canviar: `pom_id` sol a la fila, els dos eixos a la clau.
+        changes_by_ev[key][(c.pom_id, c.capa, c.instancia)] = float(c.valor_nou)
 
     # Snapshots acumulats (carry-forward) per estadi.
     snapshot, stages, stage_snaps = {}, [], []
@@ -3007,7 +3012,7 @@ def base_stages_view(request, model_id):
 
     # FaseD — descarta els estadis (columnes de presa) sense CAP valor displayable per a les files
     # mostrades (p.ex. events de POMs després desactivats): no es pinten columnes buides.
-    displayed = {(bm.pom_id, bm.capa) for bm in bms}
+    displayed = {(bm.pom_id, bm.capa, bm.instancia) for bm in bms}
     keep = [i for i in range(len(stages))
             if any(stage_snaps[i].get(clau) is not None for clau in displayed)]
     stages = [stages[i] for i in keep]
@@ -3019,7 +3024,8 @@ def base_stages_view(request, model_id):
         pg = getattr(pom, 'pom_global', None)
         tm, tp = _tol(bm)
         takes = {}
-        clau_bm = (pom.id, bm.capa)   # C2/Onada 1 — la fila demana els seus estadis, no els del POM
+        # C2/Onada 1 + C1-ins — la fila demana ELS SEUS estadis, no els del POM.
+        clau_bm = (pom.id, bm.capa, bm.instancia)
         for i, st in enumerate(stages):
             v = stage_snaps[i].get(clau_bm)
             if v is not None:
@@ -3973,10 +3979,14 @@ def _sembra_step_des_dels_specs(model, pom_id):
     # `valors_step` demana UNA font i no la barreja de totes les capes del POM. L'exterior és
     # l'àncora. Sense el filtre, `dict()` es quedaria amb l'últim `size_label` llegit i la
     # regla naixeria amb valors de capes diferents barrejats, sense cap rastre.
+    # FASE_2/C1-ins — el segon eix va al mateix filtre i tapa el mateix forat: la clau del
+    # `dict()` és la TALLA, o sigui que dues instàncies del mateix POM es disputarien cada
+    # cel·la i la regla naixeria mig d'una i mig de l'altra. Una regla és compartida entre
+    # instàncies (decisió Montse), però la SEMBRA de la qual neix ha de sortir d'una de sola.
     from fhort.pom.models import MeasurementLayer
     valors = dict(GradedSpec.objects
                   .filter(grading_version=gv, pom_id=pom_id, is_active=True,
-                          capa=MeasurementLayer.SLUG_DEFECTE)
+                          capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
                   .values_list('size_label', 'graded_value_cm'))
     if not valors:
         return {}
