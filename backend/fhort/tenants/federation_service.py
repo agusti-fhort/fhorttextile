@@ -539,8 +539,16 @@ TIPUS_FEDERABLES = ('EXPORT', 'SKETCH_FLETXES', 'SKETCH_NET', 'SKETCH_SVG')
 ORIGEN_FEDERAT = 'FEDERAT'
 
 
-def _clau_natural_pom(pom):
-    """La clau amb què un POM es reconeix a l'altra casa: (codi del diccionari, codi de client).
+#: Versió del paquet de patrimoni que viatja entre cases. **1** = clau natural de 2 trams
+#: (només el POM); **2** = clau de 4 trams, amb capa i instància. Un paquet sense el camp és
+#: de la versió 1 per definició, i es llegeix com a exterior + instància única.
+FORMAT_PATRIMONI = 2
+
+
+def _clau_natural_pom(pom, capa=None, instancia=''):
+    """La clau amb què una MESURA es reconeix a l'altra casa.
+
+    `(codi del diccionari, codi de client, capa, instància)`.
 
     `POMGlobal.codi` és el diccionari CANÒNIC i és la clau forta —és el mateix vocabulari a
     totes les cases—; `POMMaster.codi_client` és la nomenclatura local i només serveix de
@@ -548,8 +556,41 @@ def _clau_natural_pom(pom):
     ESTRICTA que `find_pom_master`: aquell matcher és per a fitxes de proveïdor, on cal
     endevinar; aquí les dues cases parlen el mateix sistema i endevinar seria posar una mesura
     sobre el POM equivocat sense que ningú se n'assabentés.
+
+    🚨 FASE_3/C1-ins — **LA CLAU CREIX A 4 TRAMS, i és per l'argument que aquest docstring ja
+    feia.** El POM identifica QUÈ es mesura; els dos eixos identifiquen DE QUÈ i DE QUINA
+    REPETICIÓ. Amb la clau de 2, dues mesures germanes emetien la MATEIXA clau: el destí en
+    resolia una, l'altra hi queia a sobre, i cap de les dues cases se n'assabentava. Endevinar
+    hauria estat posar la mesura sobre el POM equivocat; col·lapsar-les és pitjor, perquè ni
+    tan sols hi ha un POM equivocat a què assenyalar.
+
+    Els eixos NO es resolen al catàleg del destí: no són del `POMMaster`, són de la FILA de
+    mesura. Viatgen dins de la clau i s'escriuen tal qual a l'altra banda.
+
+    `pom.GradingRule` i `models_app.ModelGradingRule` no tenen eixos (decisió Montse:
+    «gradúen igual»); les regles viatgen amb el parell canònic com a farciment, perquè les
+    dues cases parlin una sola forma de clau i no dues.
     """
-    return ((pom.pom_global.codi if pom.pom_global_id else None), pom.codi_client)
+    from fhort.pom.models import MeasurementLayer
+    if capa is None:
+        capa = MeasurementLayer.SLUG_DEFECTE
+    return ((pom.pom_global.codi if pom.pom_global_id else None), pom.codi_client,
+            capa, instancia)
+
+
+def _clau_amb_eixos(clau):
+    """Normalitza una clau de paquet a 4 trams. Un paquet VELL (format 1) en porta 2.
+
+    Els paquets ja enviats abans de C1-ins parlen, de fet i sense excepció, de l'exterior i
+    de la instància única —era l'única cosa que el sistema sabia escriure—, o sigui que
+    completar-los amb el parell canònic no els atribueix res que no diguessin ja. Es fa aquí,
+    a la porta d'entrada, i no a cada lloc que toca una clau.
+    """
+    from fhort.pom.models import MeasurementLayer
+    if len(clau) == 4:
+        return tuple(clau)
+    global_codi, codi_client = clau
+    return (global_codi, codi_client, MeasurementLayer.SLUG_DEFECTE, '')
 
 
 def _nom_del_no_aparellat(clau):
@@ -559,10 +600,16 @@ def _nom_del_no_aparellat(clau):
     al seu catàleg; el `codi_client` és el que l'estudi veu a la seva pantalla. Un informe que
     només digués un dels dos obligaria una de les dues cases a traduir-lo a mà.
     """
-    global_codi, codi_client = clau
-    if global_codi and codi_client:
-        return f'{global_codi} ({codi_client})'
-    return global_codi or codi_client or '?'
+    global_codi, codi_client, capa, instancia = _clau_amb_eixos(clau)
+    nom = (f'{global_codi} ({codi_client})' if (global_codi and codi_client)
+           else (global_codi or codi_client or '?'))
+    # FASE_3/C1-ins — els eixos només surten a l'informe quan diuen alguna cosa. Escriure
+    # «(exterior, instància única)» a cada línia d'un informe on TOT és exterior seria soroll
+    # que taparia les poques línies on de debò importa.
+    from fhort.pom.models import MeasurementLayer
+    qualificadors = [q for q in (capa if capa != MeasurementLayer.SLUG_DEFECTE else '',
+                                 instancia) if q]
+    return f'{nom} · {" · ".join(qualificadors)}' if qualificadors else nom
 
 
 def _resol_pom_al_desti(clau, cache):
@@ -571,7 +618,10 @@ def _resol_pom_al_desti(clau, cache):
         return cache[clau]
     from fhort.pom.models import POMMaster
 
-    global_codi, codi_client = clau
+    # Els DOS EIXOS no es resolen aquí i no hi han de ser: no són del `POMMaster` sinó de la
+    # fila de mesura. Aquesta funció respon «quin POM del catàleg del destí és aquest», i la
+    # resposta no depèn ni de la capa ni de la instància.
+    global_codi, codi_client, _capa, _instancia = _clau_amb_eixos(clau)
     pom = None
     if global_codi:
         pom = POMMaster.objects.filter(pom_global__codi=global_codi, actiu=True).first()
@@ -609,7 +659,7 @@ def _llegeix_patrimoni(model):
                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
                .select_related('pom__pom_global').order_by('ordre', 'pom_id')):
         mesures.append({
-            'clau': _clau_natural_pom(bm.pom),
+            'clau': _clau_natural_pom(bm.pom, bm.capa, bm.instancia),
             'base_value_cm': bm.base_value_cm,
             'is_key': bm.is_key,
             'nom_fitxa': bm.nom_fitxa or '',
@@ -622,6 +672,9 @@ def _llegeix_patrimoni(model):
     for r in (ModelGradingRule.objects.filter(model=model, actiu=True)
               .select_related('pom__pom_global').order_by('pom_id')):
         regles.append({
+            # La regla NO té eixos (decisió Montse: la sisa dreta i l'esquerra gradúen
+            # igual). Viatja amb el parell canònic com a farciment perquè les dues cases
+            # parlin una sola forma de clau; el destí la resol pel POM i prou.
             'clau': _clau_natural_pom(r.pom),
             'logica': r.logica,
             'increment': r.increment,
@@ -651,6 +704,10 @@ def _llegeix_patrimoni(model):
                         'checksum': f.checksum, 'bytes': contingut})
 
     return {
+        # FASE_3/C1-ins — el paquet es VERSIONA. Sense això, un destí que ja sap llegir claus
+        # de 4 trams no podria distingir un paquet vell d'un de nou i hauria d'endevinar, que
+        # és precisament el que aquesta cadena de funcions existeix per no fer mai.
+        'format': FORMAT_PATRIMONI,
         'mesures': mesures,
         'regles': regles,
         'fitxers': fitxers,
@@ -700,12 +757,18 @@ def _escriu_a_la_marca(brand_schema, codi_intern, patrimoni):
                 if pom is None:
                     no_aparellat.append(_nom_del_no_aparellat(row['clau']))
                     continue
+                # FASE_3/C1-ins — els eixos viatgen DINS de la clau i s'escriuen tal qual.
+                # `_clau_amb_eixos` accepta paquets vells (format 1, clau de 2 trams) i els
+                # llegeix com a exterior + instància única.
+                _g, _c, capa_row, instancia_row = _clau_amb_eixos(row['clau'])
                 te_valor = (not talla_divergent) and row['base_value_cm'] is not None
-                existent = BaseMeasurement.objects.filter(model=twin, pom=pom).first()
+                existent = BaseMeasurement.objects.filter(
+                    model=twin, pom=pom, capa=capa_row, instancia=instancia_row).first()
 
                 if existent is None:
                     BaseMeasurement.objects.create(
                         model=twin, pom=pom,
+                        capa=capa_row, instancia=instancia_row,
                         base_value_cm=row['base_value_cm'] if te_valor else None,
                         # `notes` NO viatja: és text lliure escrit sobre l'altra fila i portat
                         # aquí seria una afirmació amb aparença d'auditoria (mateix criteri
