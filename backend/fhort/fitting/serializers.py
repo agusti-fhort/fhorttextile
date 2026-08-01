@@ -242,38 +242,53 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
             GradingVersion.objects.filter(size_fitting=sf).order_by('version_number')
         )
         # Single query for ALL graded specs of those versions → no N+1.
+        # FASE_2/C1-ins — la clau del `spec_map` creix amb els DOS eixos. La fila que hi
+        # consulta és una `PieceFittingLine`, que els porta tots dos: FORMA A, sense àncora,
+        # perquè aquí hi ha de qui copiar-los. Per `(gv, pom, talla)` l'evolució de la sisa
+        # dreta ensenyaria les xifres de l'esquerra a cada versió conservada — i és
+        # precisament la columna que serveix per veure si una mesura s'ha mogut.
         spec_map = {}
         for s in GradedSpec.objects.filter(grading_version__size_fitting=sf).values(
-            'grading_version_id', 'pom_id', 'size_label', 'graded_value_cm',
+            'grading_version_id', 'pom_id', 'capa', 'instancia', 'size_label',
+            'graded_value_cm',
         ):
-            spec_map[(s['grading_version_id'], s['pom_id'], s['size_label'])] = s['graded_value_cm']
+            spec_map[(s['grading_version_id'], s['pom_id'], s['capa'], s['instancia'],
+                      s['size_label'])] = s['graded_value_cm']
 
         # PG-4b-3a — règim per POM (resident→fallback) per al desplegable + etiqueta de regla.
         from fhort.pom.services import _load_grading_rules
         rules = _load_grading_rules(obj.model)
 
-        # BaseMeasurement del model (unique per (model, pom, capa)): aporta nom_fitxa
-        # (nomenclatura client, autoritativa) i l'ordre de fitxa. Una sola query, reutilitzada
-        # per al 'nom' de cada línia i per a l'ordenació final.
+        # BaseMeasurement del model (unique per (model, pom, capa, instancia)): aporta
+        # nom_fitxa (nomenclatura client, autoritativa) i l'ordre de fitxa. Una sola query,
+        # reutilitzada per al 'nom' de cada línia i per a l'ordenació final.
         #
         # C2/Onada 1 — CLAU COMPOSTA (pom, capa): `PieceFittingLine` porta capa des de C1, o
         # sigui que cada línia pot demanar la SEVA. Per POM sol, el folre i l'exterior d'un
         # mateix pit es disputarien el `nom_fitxa` i —pitjor— el `bm_id`, que és per on
         # aquesta superfície desa el bateig: s'escriuria el nom a la mesura de l'altra capa.
+        # FASE_2/C1-ins — i la INSTÀNCIA hi entra amb el mateix argument, agreujat: el
+        # `nom_fitxa` és justament el que distingeix la sisa dreta de l'esquerra al croquis.
+        # Amb la clau curta, batejar una escriuria el nom sobre l'altra i les dues quedarien
+        # amb el mateix rètol — el duplicat amb aparença de dada bona que la comporta i el
+        # CHECK «instància ⇒ nom» existeixen per evitar. Els TRES mapes creixen alhora: si un
+        # s'ancorés i un altre no, una fila portaria l'ordre d'una instància i el nom d'una
+        # altra.
         from fhort.models_app.models import BaseMeasurement
         bm_data = list(BaseMeasurement.objects.filter(model_id=obj.model_id)
-                       .values_list('pom_id', 'capa', 'ordre', 'nom_fitxa', 'id'))
-        ordre_map = {(p, c): o for p, c, o, _, _ in bm_data}
-        nom_fitxa_map = {(p, c): nf for p, c, _, nf, _ in bm_data}
-        bm_id_map = {(p, c): i for p, c, _, _, i in bm_data}   # P4 — autoria de nom a nivell MODEL (BaseMeasurement)
+                       .values_list('pom_id', 'capa', 'instancia', 'ordre', 'nom_fitxa', 'id'))
+        ordre_map = {(p, c, i): o for p, c, i, o, _, _ in bm_data}
+        nom_fitxa_map = {(p, c, i): nf for p, c, i, _, nf, _ in bm_data}
+        bm_id_map = {(p, c, i): bid for p, c, i, _, _, bid in bm_data}   # P4 — autoria de nom a nivell MODEL
 
         out = []
         ordres = []   # ordre de fitxa, paral·lel a `out`: la fila del payload no porta capa
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
-            clau_bm = (line.pom_id, line.capa)
+            clau_bm = (line.pom_id, line.capa, line.instancia)
             evolucio = []
             for v in versions:
-                val = spec_map.get((v.id, line.pom_id, line.size_label))
+                val = spec_map.get((v.id, line.pom_id, line.capa, line.instancia,
+                                    line.size_label))
                 if val is None:
                     continue
                 evolucio.append({
