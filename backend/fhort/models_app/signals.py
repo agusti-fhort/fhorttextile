@@ -207,6 +207,22 @@ _ORIGEN_TO_CONTEXT = {
     # (:273). El resultat hi coincidiria per casualitat ('copied'), però el mapa és la font
     # declarada del vocabulari del log i un origen viu no hi ha de faltar.
     'COPIED': 'copied',
+    # C3/C (2026-08-02) — EL VALOR QUE DISTINGEIX UNA PRESA D'UNA DERIVACIÓ. Sense ell, una
+    # auditoria exterior↔folre no pot saber si el folre el va mesurar algú o el va moure el
+    # sistema en corregir la seva germana: es compara amb ella mateixa i sempre dona verd.
+    # És l'entrada del REGISTRE la que ho ha de dir, perquè l'`origen` de la fila el
+    # sobreescriu el canvi següent i aquesta taula és append-only.
+    'DERIVAT': 'derivat',
+    # C3/C — ELS QUATRE QUE FALTAVEN. Cap d'ells estava mapat i tots quatre queien al fallback
+    # silenciós `origen.lower()`: el mapa deia ser «la font declarada del vocabulari del log» i
+    # n'hi havia DOS vivint al registre de staging per la porta del darrere ('checked' ×17,
+    # 'item_standard' ×2, comptats el 02/08). El valor resultant hi coincideix —el fallback fa
+    # exactament el mateix `.lower()`— o sigui que això no canvia ni una fila existent; el que
+    # canvia és que el vocabulari torna a estar declarat en un sol lloc.
+    'TEMPLATE': 'template',
+    'CHECKED': 'checked',
+    'ITEM_STANDARD': 'item_standard',
+    'FEDERAT': 'federat',
 }
 
 
@@ -324,7 +340,11 @@ def log_measurement_change(sender, instance, created, raw=False, **kwargs):
         base_measurement=instance,
         valor_anterior=old_value,
         valor_nou=instance.base_value_cm,
-        context=_ORIGEN_TO_CONTEXT.get(instance.origen, instance.origen.lower()),
+        # C3/C — la germana de :297 protegia contra `origen` nul i aquesta no: feia
+        # `instance.origen.lower()` pelat, que amb un NULL hauria petat amb AttributeError dins
+        # d'un signal. Avui és inaccessible (la columna és NOT NULL amb default 'STANDARD'),
+        # però dues línies que fan la mateixa feina no poden dir coses diferents.
+        context=_ORIGEN_TO_CONTEXT.get(instance.origen, (instance.origen or '').lower()),
         created_by=changed_by,
         fitting_ref=fitting_ref,
         motiu=motiu,

@@ -608,6 +608,21 @@ class BaseMeasurement(models.Model):
         # pont. La distinció importa el dia que algú pregunti «qui va mesurar això»: la
         # resposta és «l'estudi», i cap dels altres valors ho diu.
         ('FEDERAT', "Arribat de l'altra casa (federació)"),
+        # C3/C (2026-08-02) — DERIVAT D'UNA GERMANA. El valor no l'ha mesurat ningú: el sistema
+        # l'ha mogut perquè s'ha corregit una altra fila del MATEIX POM dins del mateix model
+        # (l'exterior puja de 54 a 56 → el folre puja de 52 a 54). Es mou el VALOR, mai el
+        # grading; la folgança es conserva sola perquè ningú no la toca.
+        #
+        # Cap dels valors anteriors ho pot dir: 'CALCULATED' parla de talla base + delta dins
+        # d'una mateixa fila, i 'COPIED'/'FEDERAT' parlen de valors que vénen de fora del model.
+        # Aquest ve de la fila del costat.
+        #
+        # La distinció no és decorativa: sense ella una auditoria exterior↔folre es compara amb
+        # ella mateixa i sempre dona verd, perquè no pot saber si el folre el va mesurar algú o
+        # el va moure el sistema. I el que ho ha de dir sobretot és L'ENTRADA DEL REGISTRE, no
+        # aquesta columna: l'origen d'una fila el sobreescriu el canvi següent, mentre que el
+        # `MeasurementChangeLog` és append-only i conserva la seqüència.
+        ('DERIVAT', 'Derivat d\'una germana (mateix POM, altra capa o instància)'),
     ]
 
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='base_measurements')
