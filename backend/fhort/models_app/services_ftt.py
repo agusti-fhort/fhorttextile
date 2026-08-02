@@ -41,6 +41,38 @@ def _sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def _document_bytes(document_json):
+    """Serialització CANÒNICA de document.json. Determinista per construcció (`sort_keys`):
+    el mateix contingut lògic dona sempre els mateixos bytes, sense dependre del rellotge."""
+    return json.dumps(
+        document_json, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+
+
+def _checksums(document_bytes, assets, preview):
+    checksums = {DOCUMENT_NAME: _sha256(document_bytes)}
+    for name, data in assets.items():
+        checksums[ASSETS_PREFIX + name] = _sha256(data)
+    if preview is not None:
+        checksums[PREVIEW_NAME] = _sha256(preview)
+    return checksums
+
+
+def empremta_logica(document_json, assets=None, preview=None):
+    """Empremta del CONTINGUT LÒGIC d'un .ftt: {peça → sha256}. Estable i comparable.
+
+    És exactament el mapa que `pack` desa al manifest (`manifest['checksums']`), extret aquí
+    perquè es pugui calcular SENSE empaquetar i comparar contra el manifest d'una versió ja
+    desada.
+
+    ⚠️ NO fer servir `ModelFitxer.checksum` per a això: aquell és el sha del BLOB ZIP, i
+    `zipfile.writestr` hi estampa la data-hora de cada entrada → dos desats del mateix
+    contingut donen bytes diferents sempre que caiguin en finestres de 2 s distintes. Mesurat:
+    604/604 checksums distints a staging i 3.603/3.606 a PROD (DIAGNOSI_DESAT_FITXA §A4).
+    """
+    return _checksums(_document_bytes(document_json), assets or {}, preview)
+
+
 def new_empty_document(metadata=None, page_format=DEFAULT_PAGE_FORMAT):
     """Document.json mínim vàlid: una pàgina buida, metadata buida.
 
@@ -66,15 +98,8 @@ def pack(document_json, assets=None, preview=None, app_version=FTT_APP_VERSION, 
     El manifest hi inclou un sha256 per cada peça per a auditoria/integritat futura.
     """
     assets = assets or {}
-    document_bytes = json.dumps(
-        document_json, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-
-    checksums = {DOCUMENT_NAME: _sha256(document_bytes)}
-    for name, data in assets.items():
-        checksums[ASSETS_PREFIX + name] = _sha256(data)
-    if preview is not None:
-        checksums[PREVIEW_NAME] = _sha256(preview)
+    document_bytes = _document_bytes(document_json)
+    checksums = _checksums(document_bytes, assets, preview)
 
     manifest = {
         "magic": FTT_MAGIC,

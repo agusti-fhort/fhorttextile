@@ -13,16 +13,24 @@ import logging
 import os
 
 from django.core.files.base import ContentFile
+from django.db import transaction
 from django.utils import timezone
 
 from . import services_ftt
 from .models import FttDocumentLock, ModelFitxer
-from .services_fitxers import save_model_file
+from .services_fitxers import delete_fitxer_bytes, save_model_file
 
 logger = logging.getLogger(__name__)
 
 # Caducitat del lock: passat aquest temps sense renovar, un altre usuari el pot forçar.
 FTT_LOCK_TTL = datetime.timedelta(minutes=30)
+
+#: Quantes versions ANTERIORS al cap es conserven en podar una cadena de document .ftt.
+#: El total viu són aquestes + el cap + l'arrel (v1), que no es poda mai (v. `poda_cadena`).
+#: L'autosave de l'editor encadena una versió cada ~8 s de mediana i cada `.ftt` pesa ~4,4 MB
+#: (DIAGNOSI_DESAT_FITXA §A2.3/§Resum): sense sostre, una hora d'edició són ~2 GB. 20 cobreix
+#: de sobres el «desfés» real d'una sessió i deixa el creixement acotat.
+FTT_VERSIONS_A_CONSERVAR = 20
 
 
 def document_root(fitxer):
@@ -515,13 +523,151 @@ def save_document(head_fitxer, document_json, *, assets=None, preview=None, kind
     # s'HERETA del predecessor si el caller no en diu res, i el caller el pot canviar
     # explícitament (és el que fa l'interruptor de mode plantilla de l'editor).
     kind_final = kind or anterior.get("kind") or services_ftt.FTT_KIND_DOCUMENT
+
+    # ── DESAT IDEMPOTENT. Un autosave que no porta cap canvi lògic NO encadena versió.
+    # Es compara l'EMPREMTA LÒGICA (sha per peça) i el `kind`, mai el blob: el zip du la
+    # data-hora estampada i el seu sha no es repeteix mai (v. `services_ftt.empremta_logica`).
+    # El manifest de la versió vigent ja la porta desada i `load_document` ja l'ha llegida
+    # aquí sobre: la comparació no costa ni una lectura de més.
+    # Sense empremta al manifest (fitxers antics o corruptes) es desa, com sempre: davant del
+    # dubte, MAI es descarta una escriptura de l'usuari.
+    empremta_nova = services_ftt.empremta_logica(document_json, assets=existing, preview=preview)
+    empremta_vella = (anterior.get("manifest") or {}).get("checksums")
+    if empremta_vella and empremta_vella == empremta_nova and anterior.get("kind") == kind_final:
+        logger.debug(
+            "save_document: sense canvi lògic a ModelFitxer %s; no s'encadena versió",
+            head_fitxer.pk,
+        )
+        return head_fitxer
+
     blob = services_ftt.pack(document_json, assets=existing, preview=preview, kind=kind_final)
-    return save_model_file(
+    nou = save_model_file(
         head_fitxer.model,
         ContentFile(blob, name=head_fitxer.nom_fitxer),
         versio_anterior=head_fitxer,  # tipus heretat
         nom=head_fitxer.nom_fitxer,
     )
+    # La poda és MANTENIMENT, no part del desat: si peta, el desat de l'usuari ja és a la BD i
+    # no se li pot fer perdre. Queda al log com a ERROR (no en silenci) i la cadena es podarà
+    # al desat següent.
+    try:
+        poda_cadena(nou)
+    except Exception:   # noqa: BLE001 — cap fallada de manteniment pot tombar un desat
+        logger.exception("Poda de la cadena .ftt fallida per a ModelFitxer %s", nou.pk)
+    return nou
+
+
+def _cadena_ids(head, files):
+    """Ids de la cadena que acaba a `head`, del CAP cap enrere fins a l'arrel.
+
+    Rep les files ja carregades (una sola query): recórrer amb `.versio_anterior` faria una
+    query per versió i les cadenes reals en tenen centenars. El `vistos` és per si alguna
+    cadena històrica té un cicle: val més podar de menys que penjar-se.
+    """
+    pare = {f.pk: f.versio_anterior_id for f in files}
+    ids, node, vistos = [], head.pk, set()
+    while node is not None and node in pare and node not in vistos:
+        vistos.add(node)
+        ids.append(node)
+        node = pare[node]
+    return ids
+
+
+@transaction.atomic
+def poda_cadena(head, conservar=FTT_VERSIONS_A_CONSERVAR):
+    """Reté la cua de la cadena .ftt d'aquest document i esborra la resta (fila + bytes).
+
+    NOMÉS toca TECHSHEET de la cadena del document desat: ni altres tipus, ni altres models,
+    ni les ALTRES fitxes del mateix model (F2: un model pot tenir-ne N, i cadascuna és una
+    cadena amb el seu cap viu).
+
+    ES CONSERVA SEMPRE:
+      · el cap (`head`) i les `conservar` versions anteriors, per `data_pujada`;
+      · **l'ARREL (v1)**, perquè és la IDENTITAT del document lògic: `document_root()` hi
+        arriba caminant `versio_anterior` i el lock hi penja (`FttDocumentLock.document_root`).
+        Perdre-la voldria dir que `user_holds_lock` deixaria de trobar el lock i el desat
+        següent respondria 403 a l'usuari que està editant;
+      · qualsevol versió amb lock;
+      · qualsevol versió referenciada per `generat_des_de` (el PDF d'export diu de quina
+        versió va sortir) o per `derivat_de_model` (còpia model→model).
+
+    LA CADENA NO ES TRENCA: la versió conservada més antiga es RE-ENGANXA a l'arrel, de manera
+    que `document_root()` hi segueix arribant. Sense això, retenir l'arrel com a fila no
+    serviria de res —quedaria inabastable— i el lock cauria igual.
+
+    ORDRE D'ESBORRAT (imposat per la BD, no per l'ORM): totes les FK entrants cap a
+    `models_app_modelfitxer` són **NO ACTION** a Postgres (`confdeltype='a'`) encara que
+    l'ORM digui SET_NULL/CASCADE — Django ho emula al collector i no ho declara a l'esquema.
+    Un DELETE en cru sense deslligar peta. Per això: 1) re-enganxar la frontera · 2) posar a
+    NULL les referències entrants · 3) DELETE de les files · 4) esborrar els bytes.
+
+    Retorna la llista d'ids esborrats.
+    """
+    files = list(
+        ModelFitxer.objects
+        .filter(model_id=head.model_id, tipus=ModelFitxer.TIPUS_TECHSHEET)
+        .only('id', 'versio_anterior_id', 'data_pujada', 'fitxer')
+    )
+    cadena = _cadena_ids(head, files)
+    if len(cadena) <= conservar + 1:
+        return []
+
+    de_la_cadena = [f for f in files if f.pk in set(cadena)]
+    # `data_pujada` mana (és el que demana la llei de retenció); `pk` desempata perquè dues
+    # versions creades dins del mateix microsegon no facin la tria no determinista.
+    per_data = sorted(de_la_cadena, key=lambda f: (f.data_pujada, f.pk), reverse=True)
+    arrel_id = cadena[-1]
+
+    protegits = {f.pk for f in per_data[:conservar + 1]}
+    protegits.add(head.pk)
+    protegits.add(arrel_id)
+    protegits.update(
+        FttDocumentLock.objects
+        .filter(document_root_id__in=cadena).values_list('document_root_id', flat=True)
+    )
+    protegits.update(
+        ModelFitxer.objects
+        .filter(generat_des_de_id__in=cadena)
+        .values_list('generat_des_de_id', flat=True)
+    )
+    protegits.update(
+        ModelFitxer.objects
+        .filter(derivat_de_model_id__in=cadena)
+        .values_list('derivat_de_model_id', flat=True)
+    )
+    protegits.discard(None)
+
+    a_esborrar = [pk for pk in cadena if pk not in protegits]
+    if not a_esborrar:
+        return []
+    morts = set(a_esborrar)
+
+    # 1) La frontera es re-enganxa a l'arrel: la cadena segueix caminable fins a la v1.
+    ModelFitxer.objects.filter(
+        pk__in=protegits, versio_anterior_id__in=morts
+    ).exclude(pk=arrel_id).update(versio_anterior_id=arrel_id)
+
+    # 2) Deslligar TOTA referència entrant que quedi (les de les pròpies mortes entre elles i
+    #    qualsevol enllaç no-cadena). Les FK són NO ACTION: sense això el DELETE peta.
+    ModelFitxer.objects.filter(versio_anterior_id__in=morts).update(versio_anterior_id=None)
+    ModelFitxer.objects.filter(generat_des_de_id__in=morts).update(generat_des_de_id=None)
+    ModelFitxer.objects.filter(derivat_de_model_id__in=morts).update(derivat_de_model_id=None)
+    FttDocumentLock.objects.filter(document_root_id__in=morts).delete()
+
+    # 3) Les files. Es materialitzen abans per conservar el nom del fitxer al disc.
+    condemnats = list(ModelFitxer.objects.filter(pk__in=morts))
+    ModelFitxer.objects.filter(pk__in=morts).delete()
+
+    # 4) Els bytes. `delete_fitxer_bytes` ja és a prova de disc (log i continua): un fitxer que
+    #    no es pot esborrar deixa un orfe recollible, mai una fila viva sense bytes.
+    for f in condemnats:
+        delete_fitxer_bytes(f)
+
+    logger.info(
+        "Poda .ftt: model %s, cadena %s → %s versions esborrades (conservades %s + arrel)",
+        head.model_id, len(cadena), len(a_esborrar), conservar + 1,
+    )
+    return a_esborrar
 
 
 def save_export(source_ftt, file, *, nom=None):

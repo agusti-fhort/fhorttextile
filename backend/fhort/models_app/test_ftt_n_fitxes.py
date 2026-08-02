@@ -90,7 +90,14 @@ class NFitxesPerModelTest(TenantTestCase):
 
     def test_el_desat_PRESERVA_el_nom_al_llarg_de_la_cadena(self):
         """La que sosté F2: si el desat tornés a derivar el nom del model, N fitxes
-        col·lapsarien a un sol nom al primer autosave."""
+        col·lapsarien a un sol nom al primer autosave.
+
+        ⚠️ 2026-08-02 — el segon desat ARA porta un canvi propi. Abans reenviava el MATEIX
+        `doc` i comptava amb que això encadenés igualment una v3; des del fix del vessament
+        de .ftt un desat sense canvi lògic ja no crea versió (`save_document` retorna el cap
+        vigent), i aquell tercer salt no existiria. El que aquest test defensa —que el nom
+        sobreviu la cadena— no canvia gens: es prova igualment sobre DOS salts, ara amb dos
+        canvis reals. La idempotència té els seus tests a `test_desat_fitxa_poda.py`."""
         f1 = create_document(self.model, nom='HEADBAND')
         doc = load_document(f1)['document_json']
         doc['metadata'] = {'tocat': True}
@@ -99,6 +106,7 @@ class NFitxesPerModelTest(TenantTestCase):
         self.assertEqual(f2.nom_fitxer, 'HEADBAND.ftt')
         self.assertEqual(f2.versio, 2)
 
+        doc['metadata'] = {'tocat': True, 'i_retocat': True}
         f3 = save_document(f2, doc)
         self.assertEqual(f3.nom_fitxer, 'HEADBAND.ftt')
         self.assertEqual(f3.versio, 3)
