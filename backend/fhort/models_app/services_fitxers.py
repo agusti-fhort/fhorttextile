@@ -63,6 +63,13 @@ JPEG_QUALITY_REDUIDA = 80    # q0.8 — la imatge ja ha perdut píxels, no cal g
 # píxels de més no els mira ningú, però viatgen a cada desat i ocupen RAM al navegador.
 MAX_COSTAT_LLARG_PX = 2000
 
+# Sostre PROPI dels adjunts de model (`save_model_file`). Més estret que el dels assets del
+# `.ftt`, i a posta: un asset viu DINS del document i el dibuix s'hi mira a prop; un adjunt
+# és material de referència que es consulta al visor. 1500 px cobreix mig A4 a 150 dpi amb
+# marge i deixa llegible el text d'una taula d'Excel exportada com a imatge (Agus, 02/08).
+# Els assets del `.ftt` NO el toquen: segueixen amb MAX_COSTAT_LLARG_PX.
+MAX_ADJUNT_DIM = 1500
+
 # Ràsters que passen per l'embut. `.gif` en queda FORA a posta: Pillow en llegiria només el
 # primer fotograma i desar-lo mataria l'animació en silenci — reduir no pot destruir dades.
 # `.svg` tampoc hi és: és vectorial, no té píxels que reduir.
@@ -104,7 +111,7 @@ def _registra_heif():
     return True
 
 
-def redueix_imatge(file, nom, content_type=''):
+def redueix_imatge(file, nom, content_type='', max_dim=None):
     """EMBUT ÚNIC d'imatge del servidor. Retorna `(fitxer, nom)` — el mateix o un de nou.
 
     Fa dues coses en UNA descodificació, perquè són la mateixa decisió sobre els mateixos
@@ -112,15 +119,21 @@ def redueix_imatge(file, nom, content_type=''):
 
     1. **HEIC/HEIF → JPEG.** Cap navegador d'escriptori pinta HEIC. No es desa mai l'original:
        guardar les dues coses duplicaria l'emmagatzematge sense que ningú obrís la HEIC.
-    2. **Costat llarg > MAX_COSTAT_LLARG_PX → es redimensiona.** Una foto de mòbil entra amb
-       4000+ px i a la fitxa es veu a 15 cm. Els píxels de més viatgen a cada desat del `.ftt`
-       i s'acumulen en RAM al navegador; aquí és on es paren.
+    2. **Costat llarg > sostre → es redimensiona.** Una foto de mòbil entra amb 4000+ px i a
+       la fitxa es veu a 15 cm. Els píxels de més viatgen a cada desat del `.ftt` i s'acumulen
+       en RAM al navegador; aquí és on es paren.
+
+    EL SOSTRE ÉS DE QUI CRIDA, no de l'embut: `max_dim` per defecte és MAX_COSTAT_LLARG_PX
+    (els assets del `.ftt`, les fotos de fitting), i els adjunts de model hi passen amb
+    MAX_ADJUNT_DIM, que és més estret. La DECISIÓ de quants píxels val la pena guardar depèn
+    de com es mira la imatge, i això només ho sap la porta; el que no canvia mai és COM es
+    redueix, que és el que viu aquí.
 
     FORMAT DE SORTIDA: JPEG, tret que la imatge porti transparència (llavors PNG, o WEBP si ja
     ho era) — aplanar l'alfa contra negre destruiria el retall d'un sketch. Les HEIC sempre
     surten JPEG: són fotos, i el canal alfa no hi juga.
 
-    NO ES TOCA RES que no calgui: una imatge que ja compleix (≤2000 px i no-HEIC) torna
+    NO ES TOCA RES que no calgui: una imatge que ja compleix (≤`max_dim` i no-HEIC) torna
     BYTE A BYTE com ha entrat. Re-encodar-la només hi afegiria pèrdua. `.gif` i `.svg` queden
     fora de l'embut (vegeu RASTER_EXTENSIONS), i els no-ràsters (.pdf, .dxf, …) hi passen de llarg.
 
@@ -180,13 +193,14 @@ def redueix_imatge(file, nom, content_type=''):
         return _intacte()
 
     amplada, alcada = imatge.size
-    cal_reduir = max(amplada, alcada) > MAX_COSTAT_LLARG_PX
+    sostre = max_dim or MAX_COSTAT_LLARG_PX
+    cal_reduir = max(amplada, alcada) > sostre
     if not cal_reduir and not heic:
         return _intacte()         # ja compleix: torna byte a byte, sense re-encodar
 
     try:
         if cal_reduir:
-            factor = MAX_COSTAT_LLARG_PX / max(amplada, alcada)
+            factor = sostre / max(amplada, alcada)
             imatge = imatge.resize(
                 (max(1, round(amplada * factor)), max(1, round(alcada * factor))),
                 Image.LANCZOS)
@@ -268,6 +282,39 @@ def _guess_mimetype(file, nom):
     return mimetypes.guess_type(nom)[0] or ''
 
 
+def _redueix_si_es_raster(file, nom_fitxer):
+    """Endolla l'embut únic (`redueix_imatge`) al coll de la cadena de versions.
+
+    L'embut ja vivia a les PORTES (`upload_file_view`, l'editor de fitxa, les fotos de
+    fitting), però no al COLL: tot el que arriba a `save_model_file` per una altra via
+    —còpia model→model, import de catàleg, federació, re-import d'extracció— hi entrava
+    cru. Posat aquí, la llei «el que es desa és pintable i de mida raonable» deixa de
+    dependre de qui crida i passa a ser una propietat del que hi ha desat.
+
+    Gate per EXTENSIÓ, la llei de la casa (vegeu ALLOWED_UPLOAD_EXTENSIONS): els .dxf,
+    .pdf, .xlsx i .ftt no arriben ni a obrir-se. `redueix_imatge` es torna a guardar sola
+    per dins, però el gate explícit aquí manté local la decisió de què toca aquest coll.
+
+    IDEMPOTENT: passar-hi una imatge que ja compleix la torna BYTE A BYTE (≤MAX_ADJUNT_DIM i
+    no-HEIC → `_intacte()`), de manera que la segona passada del camí d'upload —que ja havia
+    reduït a la porta— no re-encoda res ni hi afegeix pèrdua.
+
+    El sostre és MAX_ADJUNT_DIM, i `upload_file_view` hi passa EL MATEIX a la seva crida:
+    amb dos sostres diferents, una foto que entrés per allà es re-encodaria dues vegades i
+    cada re-encodat de JPEG hi deixa pèrdua. Igualats, la porta redueix i el coll ho
+    confirma sense tornar a tocar-ho.
+
+    `ConversioFallida` puja al caller: és una `ValueError`, i els tres camins de còpia
+    (model→model, catàleg→model, federació) ja capturen `ValueError` i la converteixen en
+    avís o 400 — cap d'ells no peta amb un 500.
+    """
+    ext = os.path.splitext(nom_fitxer or '')[1].lower()
+    if ext not in RASTER_EXTENSIONS:
+        return file, nom_fitxer
+    return redueix_imatge(file, nom_fitxer, getattr(file, 'content_type', '') or '',
+                          max_dim=MAX_ADJUNT_DIM)
+
+
 @transaction.atomic
 def save_model_file(model, file, *, versio_anterior=None,
                     tipus=None, origen='upload', nom=None):
@@ -280,8 +327,16 @@ def save_model_file(model, file, *, versio_anterior=None,
     Retorna el `ModelFitxer` creat. És l'ÚNIC punt que escriu `is_current`/`versio` en una
     pujada; cap autoincrement per `tipus`. `categoria` (eix deprecat, S03a · P1.2) es deixa
     buida: ningú l'escriu amb valor semàntic ni la llegeix.
+
+    Les imatges hi passen per l'embut ABANS de res (`_redueix_si_es_raster`). La invariant
+    de cadena no en queda tocada: l'embut només decideix QUINS BYTES es desen, mai quina
+    versió són ni qui és el cap.
     """
     nom_fitxer = nom or getattr(file, 'name', None) or 'fitxer'
+    # ORDRE: primer l'embut, DESPRÉS les metadades. Calculades sobre l'original, `mida_bytes`
+    # i `checksum` descriurien un fitxer que no és el que hi ha a disc — i el checksum és
+    # justament el que la federació compara per no encadenar dues vegades el mateix fitxer.
+    file, nom_fitxer = _redueix_si_es_raster(file, nom_fitxer)
     checksum = _compute_checksum(file)
     mida = getattr(file, 'size', None) or 0
     mimetype = _guess_mimetype(file, nom_fitxer)

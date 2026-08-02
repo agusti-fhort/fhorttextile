@@ -2051,8 +2051,8 @@ def upload_file_view(request, model_id):
     if not uploaded_file:
         return Response({'error': 'fitxer és obligatori'}, status=400)
 
-    from .services_fitxers import (ConversioFallida, UploadRejected, redueix_imatge,
-                                   save_model_file, validate_upload)
+    from .services_fitxers import (MAX_ADJUNT_DIM, ConversioFallida, UploadRejected,
+                                   redueix_imatge, save_model_file, validate_upload)
 
     # Contracte Finder: `tipus` opcional (neutre si no es dona). Sense autoincrement per
     # tipus — la versió la governa el servei via la cadena. `categoria` ja no s'accepta
@@ -2071,9 +2071,17 @@ def upload_file_view(request, model_id):
     # en HEIC —que cap navegador d'escriptori no pinta— i amb 4000+ px que ningú mira. El que
     # entra a la cadena de versions és sempre pintable i de mida raonable. Els no-ràsters
     # (.pdf, .dxf, .ftt, …) hi passen de llarg intactes.
+    #
+    # `save_model_file` també hi passa la imatge (l'embut viu al COLL, no només aquí), i el
+    # sostre ha de ser EL MATEIX als dos llocs: amb sostres diferents la foto es re-encodaria
+    # dues vegades —3000→2000 aquí, 2000→1500 al coll— i cada re-encodat de JPEG hi deixa
+    # pèrdua. Igualats, la segona passada la reconeix com a conforme i la torna byte a byte.
+    # Aquesta crida es queda perquè és qui sap traduir `ConversioFallida` en un 422: al coll,
+    # que serveix camins sense request, l'excepció puja com a ValueError.
     try:
         uploaded_file, nom = redueix_imatge(
-            uploaded_file, nom, getattr(uploaded_file, 'content_type', ''))
+            uploaded_file, nom, getattr(uploaded_file, 'content_type', ''),
+            max_dim=MAX_ADJUNT_DIM)
     except ConversioFallida as e:
         return Response({'error': str(e)}, status=422)
 

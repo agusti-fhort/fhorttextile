@@ -16,7 +16,8 @@ from PIL import Image
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from fhort.models_app.models import Model, ModelFitxer
-from fhort.models_app.services_fitxers import MAX_COSTAT_LLARG_PX, redueix_imatge
+from fhort.models_app.services_fitxers import (MAX_ADJUNT_DIM, MAX_COSTAT_LLARG_PX,
+                                               redueix_imatge)
 from fhort.models_app.views import upload_file_view
 
 
@@ -146,7 +147,10 @@ class UploadImatgeDoorTest(TenantTestCase):
             desat = mf.fitxer.read()
         finally:
             mf.fitxer.close()
-        self.assertEqual(Image.open(io.BytesIO(desat)).size, (MAX_COSTAT_LLARG_PX, 1333))
+        # El sostre dels ADJUNTS de model és MAX_ADJUNT_DIM, no el de l'embut per defecte:
+        # una imatge de referència es consulta al visor, no es mira a prop com un asset del
+        # `.ftt` (Agus, 02/08). La porta i el coll el comparteixen; vegeu `upload_file_view`.
+        self.assertEqual(Image.open(io.BytesIO(desat)).size, (MAX_ADJUNT_DIM, 1000))
         # `mida_bytes` descriu el que hi ha al disc, no el que va sortir del mòbil.
         self.assertEqual(mf.mida_bytes, len(desat))
         self.assertLess(mf.mida_bytes, len(original))
