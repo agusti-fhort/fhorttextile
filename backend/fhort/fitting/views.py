@@ -614,8 +614,13 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
             return rebuig
 
         def _resp(propagat, motiu, warnings=None):
+            # C3/E4 — la RESPOSTA també parla la clau sencera. El filtre era
+            # `(piece_fitting, pom)` i amb germanes vives la graella hauria rebut les línies de
+            # totes barrejades, indistingibles per `size_label`. Els eixos surten de `line`,
+            # que és la cel·la que el tècnic ha editat: es refresca la SEVA fila.
             linies = (PieceFittingLine.objects
-                      .filter(piece_fitting=pf, pom=line.pom)
+                      .filter(piece_fitting=pf, pom=line.pom,
+                              capa=line.capa, instancia=line.instancia)
                       .select_related('pom').order_by('size_label'))
             return Response({
                 'propagat': propagat,
@@ -662,8 +667,16 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
             for sl, val in teorics.items():
                 if val is None:
                     continue
+                # C3/E3 — la clau declarada de `PieceFittingLine` és de 5 camps
+                # (fitting/models.py:425) i aquest filtre en deia 3: era estrictament més ampli
+                # que la identitat, de manera que ancorar una cel·la escampava el seu
+                # `valor_real` derivat a TOTES les germanes de la mateixa talla. Els eixos
+                # surten de `line`, l'ancoratge que el tècnic ha fet.
+                # Segueix sent `.update()` de queryset —no dispara signal— i `valor_teoric` no
+                # es toca: les dues coses estan documentades a :596-598 i no canvien.
                 (PieceFittingLine.objects
-                 .filter(piece_fitting=pf, pom=line.pom, size_label=sl)
+                 .filter(piece_fitting=pf, pom=line.pom, size_label=sl,
+                         capa=line.capa, instancia=line.instancia)
                  .update(valor_real=val))
         return _resp(True, logica or 'CANONIC', warnings)
 
