@@ -20,7 +20,8 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from fhort.fitting.models import GradedSpec, GradingVersion, SizeFitting
 from fhort.models_app.models import BaseMeasurement, Model, ModelGradingRule
-from fhort.pom.models import GradingRule, GradingRuleSet, POMMaster, SizeDefinition, SizeSystem
+from fhort.pom.models import (GradingRule, GradingRuleSet, MeasurementLayer, POMMaster,
+                              SizeDefinition, SizeSystem)
 from fhort.pom.services import generate_graded_specs, preview_graded_specs
 
 
@@ -146,10 +147,20 @@ class GateDeLesReglesResidentsTest(_G6Base):
 
     def test_el_preview_diu_el_MATEIX_que_el_generador(self):
         """El gate viu a dos llocs (generador i preview). Si divergeixen, el wizard ensenya
-        una taula buida per a un model que després gradua igualment."""
+        una taula buida per a un model que després gradua igualment.
+
+        C3/B (2026-08-02) — la clau de SORTIDA del preview ha crescut a la identitat sencera
+        `(pom_id, capa, instancia)`, alhora que la del generador. L'entrada segueix admetent la
+        clau escalar, que és el que li arriba del wizard d'importació per JSON.
+        ⚠️ Aquest test estava en VERMELL PREEXISTENT quan es va fer el canvi (col·lisió
+        `fitting_sizefitting_model_id_numero`, 28/07), o sigui que el seu cos no s'executava:
+        l'actualització de la clau és CORRECTA PER CONSTRUCCIÓ però no s'ha pogut observar en
+        verd. Quan es resolgui aquella col·lisió, aquest assert ha de passar tal com és.
+        """
         preview = preview_graded_specs(self.model, {self.pom.id: 40.0})
 
-        self.assertEqual(preview, {self.pom.id: {'S': 38.0, 'M': 40.0, 'L': 42.0}})
+        unica = (self.pom.id, MeasurementLayer.SLUG_DEFECTE, '')
+        self.assertEqual(preview, {unica: {'S': 38.0, 'M': 40.0, 'L': 42.0}})
 
     def test_un_model_SENSE_regles_enlloc_continua_sense_poder_graduar(self):
         """La porta s'alinea amb el motor; no s'obre. Un model sense regles ni residents ni de

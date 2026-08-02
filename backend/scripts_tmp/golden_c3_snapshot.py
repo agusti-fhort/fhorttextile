@@ -74,31 +74,30 @@ with schema_context(SCHEMA):
             continue
 
         # ── Identitat: qui són, de debò, les files que alimenten el motor ────────────
-        # Mateix filtre que `_load_base_measurements` (services.py:784-786), perquè el join
-        # parli exactament del mateix conjunt que el motor ha llegit.
+        # Mateix filtre que `_load_base_measurements`, per comptar el mateix conjunt.
         files = list(BaseMeasurement.objects
                      .filter(model_id=model_id, is_active=True, base_value_cm__isnull=False)
                      .exclude(base_value_cm=0)
                      .values('pom_id', 'capa', 'instancia', 'base_value_cm'))
-        eixos_per_pom = {}
+        germanes_per_pom = {}
         for f in files:
-            eixos_per_pom.setdefault(f['pom_id'], []).append((f['capa'], f['instancia']))
+            germanes_per_pom.setdefault(f['pom_id'], []).append((f['capa'], f['instancia']))
 
         # ── MÈTRICA 1 · preview (read-only, els 7) ───────────────────────────────────
+        # C3/B — el JOIN de tornada contra `BaseMeasurement` per recuperar els eixos JA NO CAL:
+        # des de la Fase B el motor els porta a la clau. Es manté el recompte de germanes
+        # perquè `n_germanes` segueixi sent el senyal visible del dia que n'hi hagi més d'una.
         bases = _load_base_measurements(model_id)
         specs = preview_graded_specs(m, bases)
         n_prev = 0
-        for pom_id, fila in specs.items():
-            germanes = eixos_per_pom.get(pom_id) or [('?', '?')]
-            for (capa, instancia) in germanes:
-                for size_label, val in fila.items():
-                    preview_cells[_clau(model_id, pom_id, capa, instancia, size_label)] = {
-                        'v': val,
-                        # Amb 1 germana això és soroll; amb 2+ és EL senyal: dues claus
-                        # distintes amb el mateix valor = el motor les ha col·lapsat.
-                        'n_germanes': len(germanes),
-                    }
-                    n_prev += 1
+        for (pom_id, capa, instancia), fila in specs.items():
+            for size_label, val in fila.items():
+                preview_cells[_clau(model_id, pom_id, capa, instancia, size_label)] = {
+                    'v': val,
+                    # Amb 1 germana això és soroll; amb 2+ és EL senyal.
+                    'n_germanes': len(germanes_per_pom.get(pom_id) or [1]),
+                }
+                n_prev += 1
 
         # ── MÈTRICA 2 · generador (dins de rollback, els NO segellats) ───────────────
         n_gen = 0
@@ -145,7 +144,7 @@ with schema_context(SCHEMA):
             'n_celles_preview': n_prev,
             'n_celles_generador': n_gen,
             'motiu_sense_generador': motiu_gen,
-            'poms_amb_germanes': sorted(p for p, g in eixos_per_pom.items() if len(g) > 1),
+            'poms_amb_germanes': sorted(p for p, g in germanes_per_pom.items() if len(g) > 1),
         }
 
     payload = {

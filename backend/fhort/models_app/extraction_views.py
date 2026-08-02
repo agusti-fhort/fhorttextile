@@ -1979,7 +1979,16 @@ def import_session_grading_preview_view(request, token):
     grading_avisos: list[str] = []
     grading = preview_graded_specs(model, base_values, warnings=grading_avisos)
     # Claus a string per a JSON consistent al frontend.
-    grading = {str(pid): row for pid, row in grading.items()}
+    #
+    # C3/B5 — el motor ja indexa per la identitat sencera `(pom_id, capa, instancia)`, però
+    # AQUEST CONTRACTE NO ES TOCA: el cos que arriba és un objecte JSON `{pom_id: valor}` i un
+    # objecte JSON no pot expressar una clau composta, ni a l'entrada ni a la sortida. El
+    # `base_values` que hi entra és escalar i `preview_graded_specs` el normalitza a la mesura
+    # única del POM ('exterior', ''); aquí es desfà la identitat per tornar al `pom_id` que el
+    # frontend espera. Avui és una equivalència exacta —les comportes de C1/C1-ins garanteixen
+    # una sola germana per POM— i per això el col·lapse no perd res.
+    # Fer créixer aquest payload és INTERFÍCIE i va a C4 amb maqueta (llei 3c.5).
+    grading = {str(pom_id): row for (pom_id, _capa, _instancia), row in grading.items()}
     return Response({'grading': grading, 'base_size': model.base_size_label,
                      'size_run': (model.size_run_model or '').split('·'),
                      'avisos': grading_avisos}, status=200)

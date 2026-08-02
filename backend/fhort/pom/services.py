@@ -230,7 +230,12 @@ def generate_graded_specs(size_fitting_id: int) -> int:
     created = 0
     warnings: list[str] = []
     sense_regla: set[int] = set()   # D2: POMs amb base i sense regla → no emeten cap cel·la
-    for pom_id, base_val in base_measurements.items():
+    for (pom_id, capa, instancia), base_val in base_measurements.items():
+        # C3/B2 — el `pom_id` s'EXTREU de la clau. La regla de graduació NO porta eixos (v.
+        # `_load_grading_rules`): el mateix POM té el mateix increment a totes les capes i a
+        # totes les instàncies, i per tant es busca per POM sol. Si aquí s'hi passés la tupla,
+        # `rules.get(...)` no trobaria mai res i TOTS els POMs caurien a la branca `rule is
+        # None`: el motor quedaria mut i no emetria cap cel·la.
         rule = rules.get(pom_id)
 
         for size_label in size_run:
@@ -239,7 +244,12 @@ def generate_graded_specs(size_fitting_id: int) -> int:
             i = _pos(size_label)
             steps = i - base_idx  # negative = smaller size, positive = larger
 
-            override = model_overrides.get((pom_id, size_label))
+            # C3/B4 — l'override s'adreça amb la identitat SENCERA. Abans la clau era
+            # `(pom_id, size_label)` i `_load_model_overrides` compensava filtrant a
+            # ('exterior', ''): l'àncora impedia que un override de folre es colés a la cel·la
+            # de l'exterior, però al preu de fer invisibles els overrides de qualsevol altra
+            # capa. Ara que la clau distingeix, l'àncora sobra i s'ha retirat.
+            override = model_overrides.get((pom_id, capa, instancia, size_label))
             if override is not None:
                 # Per-model validated-fitting override wins over everything.
                 # G6/1a: aquí hi havia una segona branca, `elif exc:` (GradingException), que
@@ -247,7 +257,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 # ni tan sols distingia quin dels dos forks havia guanyat. Jubilada.
                 graded_val = override
                 gt_applied = 'EXCEPTION'
-            elif pom_id in poms_nomes_override and i == base_idx:
+            elif (pom_id, capa, instancia) in poms_nomes_override and i == base_idx:
                 # D2 — POM NOMÉS-OVERRIDE, cel·la de la talla BASE. Vegeu `_poms_amb_override`.
                 # L'import mai escriu override a la talla base (el seu valor viu a
                 # BaseMeasurement), de manera que aquesta és l'ÚNICA cel·la de la fila que la
@@ -265,7 +275,7 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 # Segueix valent per a les talles del run que el POM només-override no cobreix:
                 # el rescat de dalt és NOMÉS la base. Un POM que gradua pels seus overrides no
                 # és cobertura parcial per manca de regla → no entra a `sense_regla`.
-                if pom_id not in poms_nomes_override:
+                if (pom_id, capa, instancia) not in poms_nomes_override:
                     sense_regla.add(pom_id)
                 continue
             else:
@@ -281,6 +291,10 @@ def generate_graded_specs(size_fitting_id: int) -> int:
             graded_val = round(graded_val, 2)
             increment = round(graded_val - base_val, 2)
 
+            # C3/B3 — els dos eixos arriben a l'escriptura. `_upsert_graded_spec` ja els sabia
+            # rebre des de FASE_3/C1-ins (paràmetres amb default explícit) i el seu lookup ja
+            # era de 5 camps, alineat amb la unicitat real de `fitting_gradedspec`: l'únic que
+            # faltava era que el cridador els sabés dir. Ara els sap.
             _upsert_graded_spec(
                 grading_version_id=grading_version.pk,
                 pom_id=pom_id,
@@ -289,6 +303,8 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 grading_type_applied=gt_applied,
                 increment_applied_cm=increment,
                 generated_from_version=current_version,
+                capa=capa,
+                instancia=instancia,
             )
             created += 1
 
@@ -339,9 +355,31 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     SizeFitting/GradingVersion/GradedSpec. Pensat per omplir talles buides a la taula del
     wizard abans del desament definitiu (W5).
 
-    base_values: {pom_id (POMMaster): base_value_cm}
-    Retorna: {pom_id: {size_label: graded_value}} (buit si manquen regles/run/base).
+    base_values: {(pom_id, capa, instancia): base_value_cm}
+    Retorna: {(pom_id, capa, instancia): {size_label: graded_value}} (buit si manquen
+    regles/run/base).
+
+    C3/B5 — LA CLAU CREIX AMB LA DEL GENERADOR, i ha de créixer alhora: hi ha tests que
+    exigeixen que el preview i el generador diguin exactament el mateix (`test_g6_grading_gates
+    ::test_el_preview_diu_el_MATEIX_que_el_generador`, `test_d2_nomes_override`), i si només en
+    creixés un deixarien de coincidir.
+
+    COMPATIBILITAT D'ENTRADA — les claus escalars segueixen valent. Aquesta funció té dues
+    fonts i només una pot parlar en tuples: el generador li passa el retorn de
+    `_load_base_measurements`, però el wizard d'importació li passa un cos HTTP
+    (`extraction_views.py`, `{pom_id: valor}` parsejat de JSON) i **un objecte JSON no pot
+    expressar una clau composta**. Una clau escalar s'interpreta doncs com la mesura única del
+    POM, `(pom_id, 'exterior', '')` — que és exactament el que aquell camí sempre ha volgut
+    dir, i l'única cosa que la BD hi admet mentre les comportes de C1/C1-ins siguin vives.
+    Sense aquesta normalització l'import de fitxa petaria.
     """
+    from fhort.pom.models import MeasurementLayer
+
+    def _identitat(clau):
+        """Clau escalar → identitat completa. Clau ja completa → tal qual."""
+        if isinstance(clau, tuple):
+            return clau
+        return (clau, MeasurementLayer.SLUG_DEFECTE, '')
     # G6/0b — el mateix criteri que el gate dur de generate_graded_specs (via `_te_regles`), i no
     # una còpia amb matisos: si el generador i el preview no coincideixen en "aquest model pot
     # graduar?", el wizard ensenya una taula buida per a un model que després gradua igualment.
@@ -363,22 +401,24 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     poms_nomes_override = _poms_amb_override(model_overrides)
 
     out = {}
-    for pom_id, base_val in base_values.items():
+    for clau, base_val in base_values.items():
+        pom_id, capa, instancia = _identitat(clau)
         # D2 — base absent O A ZERO: el POM no existeix per a aquest model → cap cel·la.
         # Mateix criteri que _load_base_measurements, perquè el preview no pot prometre
         # una taula que el generador després no emetrà.
         if base_val is None or float(base_val) == 0.0:
             continue
         base_val = float(base_val)
+        # El `pom_id` extret de la identitat: la regla no porta eixos (v. `_load_grading_rules`).
         rule = rules.get(pom_id)
         row = {}
         for size_label in size_run:
             i = _pos(size_label)          # S24b: posició en espai de sistema
             steps = i - base_idx
-            override = model_overrides.get((pom_id, size_label))
+            override = model_overrides.get((pom_id, capa, instancia, size_label))
             if override is not None:
                 graded_val = float(override)
-            elif pom_id in poms_nomes_override and i == base_idx:
+            elif (pom_id, capa, instancia) in poms_nomes_override and i == base_idx:
                 # D2 — talla base d'un POM només-override. MATEIXA branca que el generador
                 # (v. `_poms_amb_override`): si el preview se la saltés, el wizard ensenyaria
                 # la fila coixa que la propagació després omple.
@@ -398,7 +438,7 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
         # D2 — POM que no emet cap cel·la no apareix a la taula (fila ABSENT, no fila buida):
         # el generador tampoc no en crearà cap GradedSpec.
         if row:
-            out[pom_id] = row
+            out[(pom_id, capa, instancia)] = row
     return out
 
 
@@ -680,6 +720,13 @@ def _te_regles(model) -> bool:
 
 
 def _load_grading_rules(model) -> dict:
+    # C3/B6 — AQUESTA CLAU NO CREIX, i és a posta. La regla de graduació no porta capa ni
+    # instància ni a l'ORM ni a Postgres: verificat contra `information_schema` el 02/08, cap
+    # de les dues taules (`models_app_modelgradingrule`, `pom_gradingrule`) té aquestes
+    # columnes. És decisió de domini —mateix POM, mateix increment a totes les capes i a totes
+    # les instàncies— i per això el motor busca la regla amb el `pom_id` EXTRET de la identitat
+    # i no amb la identitat sencera. Si algun dia la regla ha de distingir capes, això és una
+    # decisió humana i una migració, no un retoc d'aquest lookup.
     """Return {pom_id: rule_obj} for the model's grading rules.
 
     PG-1 — Fallback: ModelGradingRule (resident al model) té prioritat; si el model
@@ -709,39 +756,27 @@ def _load_grading_rules(model) -> dict:
 
 
 def _load_model_overrides(model_id: int) -> dict:
-    """Return {(pom_id, size_label): value_cm} of per-model fitting overrides.
+    """Return {(pom_id, capa, instancia, size_label): value_cm} of per-model fitting overrides.
 
-    C2/Onada 1 — ÀNCORA EXTERIOR EXPLÍCITA, i la clau es queda per POM a posta.
+    C3/B4 — LA CLAU HA CRESCUT I LES DUES ÀNCORES HAN MARXAT, tal com el codi d'aquesta
+    funció ja anunciava: «quan `_load_base_measurements` creixi, aquesta clau ha de créixer
+    amb els DOS eixos i els DOS filtres se'n van alhora». Van junts, i han anat junts.
 
-    ⚠️ FRONTERA C3. Els dos consumidors (`generate_graded_specs` i el preview del wizard)
-    recorren `for pom_id, base_val in base_measurements.items()`: la capa NO hi és a
-    l'abast, perquè `_load_base_measurements` —zona intocable, C3 amb decisió humana—
-    encara indexa per POM sol. Posar-hi `{((pom_id, capa), size): v}` obligaria a inventar
-    la capa al lloc del lookup, dins del motor, i això és precisament la decisió que C3 ha
-    de prendre en fred.
+    Què hi havia abans i per què: entre C1 i C3 la clau era `(pom_id, size_label)` i el
+    queryset filtrava `capa='exterior', instancia=''`. L'àncora no era una preferència sinó
+    una contenció — sense ella, la clau col·lapsava les capes i l'última llegida guanyava: un
+    valor de folre escrit sobre la cel·la de l'exterior, amb petja 'EXCEPTION' i sense cap
+    rastre d'on venia. El preu era que un override de folre o de la sisa esquerra fos
+    invisible per al motor.
 
-    Mentrestant el filtre fa la feina que importa: un override de folre NO es pot colar a
-    la cel·la de l'exterior. Sense ell, la clau `(pom_id, size_label)` col·lapsaria les
-    dues capes i l'última llegida guanyaria — un valor de folre escrit sobre una fila
-    d'exterior, amb petja 'EXCEPTION' i sense cap rastre de d'on ve.
-
-    El dia que C3 doni capa a `_load_base_measurements`, aquesta clau ha de créixer amb
-    ella i el filtre se'n va: van junts, i per això queden dits al mateix lloc.
-
-    FASE_2/C1-ins — **i el mateix, exactament, per a la INSTÀNCIA**. L'àncora de capa tapava
-    la capa i prou: un override de la sisa ESQUERRA es colava igual a la cel·la de la dreta,
-    perquè la clau `(pom_id, size_label)` no les distingeix. El segon filtre tanca el segon
-    forat, i la frontera de C3 no es mou ni un pam: quan `_load_base_measurements` creixi,
-    aquesta clau ha de créixer amb els DOS eixos i els DOS filtres se'n van alhora.
+    Ara que la clau distingeix, la contenció sobra i el filtre seria una pèrdua: tornaria
+    invisibles precisament els overrides que el motor ja sabria col·locar bé.
     """
     try:
         from fhort.models_app.models import ModelGradingOverride
-        from fhort.pom.models import MeasurementLayer
         return {
-            (o.pom_id, o.size_label): o.value_cm
-            for o in ModelGradingOverride.objects.filter(
-                model_id=model_id,
-                capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+            (o.pom_id, o.capa, o.instancia, o.size_label): o.value_cm
+            for o in ModelGradingOverride.objects.filter(model_id=model_id)
         }
     except Exception as e:
         logger.warning(f"Could not load ModelGradingOverride: {e}")
@@ -767,12 +802,32 @@ def _poms_amb_override(model_overrides: dict) -> set:
 
     El predicat viu en UNA funció perquè el generador i el preview no divergeixin — el mateix
     criteri que ja obliga `_te_regles` i `escala_del_model` a ser fonts úniques.
+
+    C3/B4 — CONSERVA ELS EIXOS. Abans retornava `{pom_id}`, descartant el `size_label`: era
+    correcte mentre la clau només tenia aquells dos camps. Ara que en té quatre, quedar-se amb
+    el `pom_id` sol fusionaria en un únic element els overrides de capes i instàncies
+    diferents, i la branca de rescat de la talla base del motor escriuria el valor base d'una
+    germana a la cel·la de l'altra.
     """
-    return {pom_id for pom_id, _label in model_overrides}
+    return {(pom_id, capa, instancia) for pom_id, capa, instancia, _label in model_overrides}
 
 
 def _load_base_measurements(model_id: int) -> dict:
-    """Return {pom_id: base_value_cm}."""
+    """Return {(pom_id, capa, instancia): base_value_cm}.
+
+    C3/B1 — LA CLAU CREIX A LA IDENTITAT DE LA MESURA. Fins aquí la clau era `pom_id` sol,
+    i era el node mestre del col·lapse: la unicitat de `BaseMeasurement` és
+    `(model, pom, capa, instancia)` des de C1/C1-ins (models_app/models.py:754), de manera que
+    dues files germanes del mateix POM —exterior i folre, o sisa esquerra i dreta— entraven al
+    dict amb la MATEIXA clau i l'última llegida guanyava. La perdedora no perdia una cel·la:
+    desapareixia la fila graduada sencera, sense excepció, sense log i sense cap rastre.
+
+    Amb `ordre` empatat entre germanes, a més, qui guanyava ho decidia el pla de Postgres.
+
+    Els filtres NO es toquen: `is_active`, valor no nul i l'exclusió del 0 són la llei D2 (una
+    talla base a zero vol dir que el POM no existeix per a aquest model), i l'ordre segueix
+    sent `ordre` perquè és el de la fitxa.
+    """
     try:
         from fhort.models_app.models import BaseMeasurement
         # Ignora files materialitzades sense valor (base_value_cm=None) → no es graden.
@@ -780,7 +835,7 @@ def _load_base_measurements(model_id: int) -> dict:
         # sigui que el POM no existeix per a aquest model. No gradua, no emet cel·la. Que
         # un 0 no arribi mai a la base és feina de la validació d'entrada (autoria/import).
         return {
-            bm.pom_id: bm.base_value_cm
+            (bm.pom_id, bm.capa, bm.instancia): bm.base_value_cm
             for bm in BaseMeasurement.objects.filter(
                 model_id=model_id, is_active=True, base_value_cm__isnull=False
             ).exclude(base_value_cm=0).order_by('ordre')

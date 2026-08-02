@@ -28,7 +28,7 @@ from fhort.fitting.models import GradedSpec, GradingVersion, SizeFitting
 from fhort.models_app.models import (
     BaseMeasurement, Model, ModelGradingOverride, ModelGradingRule,
 )
-from fhort.pom.models import POMMaster, SizeDefinition, SizeSystem
+from fhort.pom.models import MeasurementLayer, POMMaster, SizeDefinition, SizeSystem
 from fhort.pom.services import generate_graded_specs, preview_graded_specs
 
 
@@ -128,12 +128,21 @@ class PomNomesOverrideGraduaTest(_D2Base):
         )
 
     def test_preview_diu_el_mateix_que_el_generador(self):
-        """El wizard no pot ensenyar una taula que el generador després no reprodueix."""
+        """El wizard no pot ensenyar una taula que el generador després no reprodueix.
+
+        C3/B (2026-08-02) — la clau del preview ha crescut de `pom_id` a la identitat sencera
+        `(pom_id, capa, instancia)`, alhora que la del generador, perquè si només en creixés una
+        aquest assert deixaria de tenir sentit. L'ENTRADA segueix acceptant claus escalars (és
+        el que li arriba del wizard d'importació, en JSON, que no pot expressar tuples) i es
+        normalitza a la mesura única del POM; el que canvia és com s'indexa la SORTIDA.
+        El que el test defensa —que preview i generador diuen el mateix— no s'ha tocat.
+        """
         generate_graded_specs(self.sf.id)
         prev = preview_graded_specs(
             self.model, {self.pom_regla.id: 100.0, self.pom_ovr.id: 58.5})
-        self.assertEqual(prev[self.pom_ovr.id], self._taula(self.pom_ovr))
-        self.assertEqual(prev[self.pom_regla.id], self._taula(self.pom_regla))
+        unica = (MeasurementLayer.SLUG_DEFECTE, '')
+        self.assertEqual(prev[(self.pom_ovr.id, *unica)], self._taula(self.pom_ovr))
+        self.assertEqual(prev[(self.pom_regla.id, *unica)], self._taula(self.pom_regla))
 
 
 class CelLaAbsentTest(_D2Base):
