@@ -2465,62 +2465,85 @@ def generate_grading_view(request, model_id):
                             f'(aprovada a producció); cal confirmació explícita per superar-la.'),
             }, status=409)
         profile = getattr(request.user, 'profile', None)
-        # LLENÇ NET (LLEI): propagar inicia una FASE NOVA des de base+regla, esborrant els ajustos per
-        # cel·la (ModelGradingOverride) de la propagació anterior; el motor (helper) regenera de zero.
-        # NO és un eix de versions per comparar: el botó ja ha advertit (2 passos) abans d'arribar aquí.
-        from fhort.models_app.models import ModelGradingOverride
-        ModelGradingOverride.objects.filter(model=model).delete()
-        # B3 (decisió b1): abans que el motor llegeixi la base, consolida la realitat mesurada
-        # que viu en fittings OBERTS (línies de talla base amb valor_real rectificat) a
-        # BaseMeasurement.base_value_cm → es propaga sobre l'última mesura vàlida, no sobre la
-        # base original. NO toca el motor (pom/services.py); només actualitza la base abans.
-        from fhort.fitting.models import PieceFitting
-        from fhort.fitting.services import consolidate_base_from_fitting
-        _open_pfs = (PieceFitting.objects
-                     .filter(model=model, session__estat='Oberta')
-                     .select_related('model', 'grading_version', 'grading_version__size_fitting'))
-        for _pf in _open_pfs:
-            n_consolidat += len(consolidate_base_from_fitting(_pf, auth_user=request.user))
-        try:
-            new_v = bump_grading_version_and_generate(
-                sf.id,
-                base_changed=False,
-                profile_id=(profile.id if profile else None),
-                allow_reopen_sealed=allow_reopen_sealed,
-                nom='Propagació conscient',
-                reopen_context='Propagació conscient',
-            )
-        except ValueError as e:
-            return Response({'error': str(e)}, status=400)
-        except Exception as e:
-            return Response({'error': f'Error generant grading: {e}'}, status=500)
-        graded_count = GradedSpec.objects.filter(grading_version=new_v).count()
-        # Watchpoint informatiu de traça quan s'ha superat una versió segellada (NO bloca).
-        if sealed_active is not None and allow_reopen_sealed:
-            from fhort.tasks.models import ModelTask
-            grading_task = (ModelTask.objects
-                            .filter(model=model, task_type__code='grading')
-                            .order_by('-id').first())
-            Watchpoint.objects.create(
-                model=model,
-                task=grading_task,
-                text=(f'Versió segellada v{sealed_active.version_number} superada per '
-                      f'{str(profile) if profile else "usuari desconegut"} '
-                      f'propagant a v{new_v.version_number}.'),
-                estat='open',
-                created_by=profile,
-            )
+        # C3-A2 — LA PROPAGACIÓ ÉS UN ACTE, NO TRES. `ATOMIC_REQUESTS` no existeix
+        # (settings.py:118-127) i aquesta vista no obria cap atòmic: el llenç net d'overrides
+        # de sota es commitava tot sol, i si el motor petava després, la vista retornava 400 o
+        # 500 amb els ajustos per cel·la JA ESBORRATS i sense manera de recuperar-los. Pitjor:
+        # `bump_grading_version_and_generate` desactiva les versions actives i crea la v+1
+        # abans de propagar-hi (pom/services.py:876-880), o sigui que una petada del motor
+        # podia deixar la v+1 viva i BUIDA amb l'anterior ja desactivada — el model sense cap
+        # graduació llegible i sense cap error que ho expliqués.
+        # Mateixa atomicitat que les germanes del fitxer (:1583 tancar-taula, :2773 escalat).
+        # NO es toca res de la lògica de grading: només l'embolcall.
+        with transaction.atomic():
+            # LLENÇ NET (LLEI): propagar inicia una FASE NOVA des de base+regla, esborrant els ajustos per
+            # cel·la (ModelGradingOverride) de la propagació anterior; el motor (helper) regenera de zero.
+            # NO és un eix de versions per comparar: el botó ja ha advertit (2 passos) abans d'arribar aquí.
+            from fhort.models_app.models import ModelGradingOverride
+            ModelGradingOverride.objects.filter(model=model).delete()
+            # B3 (decisió b1): abans que el motor llegeixi la base, consolida la realitat mesurada
+            # que viu en fittings OBERTS (línies de talla base amb valor_real rectificat) a
+            # BaseMeasurement.base_value_cm → es propaga sobre l'última mesura vàlida, no sobre la
+            # base original. NO toca el motor (pom/services.py); només actualitza la base abans.
+            from fhort.fitting.models import PieceFitting
+            from fhort.fitting.services import consolidate_base_from_fitting
+            _open_pfs = (PieceFitting.objects
+                         .filter(model=model, session__estat='Oberta')
+                         .select_related('model', 'grading_version', 'grading_version__size_fitting'))
+            for _pf in _open_pfs:
+                n_consolidat += len(consolidate_base_from_fitting(_pf, auth_user=request.user))
+            try:
+                new_v = bump_grading_version_and_generate(
+                    sf.id,
+                    base_changed=False,
+                    profile_id=(profile.id if profile else None),
+                    allow_reopen_sealed=allow_reopen_sealed,
+                    nom='Propagació conscient',
+                    reopen_context='Propagació conscient',
+                )
+            except ValueError as e:
+                # Rollback explícit: es retorna des de DINS de l'atòmic, i sense això Django
+                # el donaria per bo i commitaria el llenç net (mateix motiu que a :2840).
+                transaction.set_rollback(True)
+                return Response({'error': str(e)}, status=400)
+            except Exception as e:
+                transaction.set_rollback(True)
+                return Response({'error': f'Error generant grading: {e}'}, status=500)
+            graded_count = GradedSpec.objects.filter(grading_version=new_v).count()
+            # Watchpoint informatiu de traça quan s'ha superat una versió segellada (NO bloca).
+            if sealed_active is not None and allow_reopen_sealed:
+                from fhort.tasks.models import ModelTask
+                grading_task = (ModelTask.objects
+                                .filter(model=model, task_type__code='grading')
+                                .order_by('-id').first())
+                Watchpoint.objects.create(
+                    model=model,
+                    task=grading_task,
+                    text=(f'Versió segellada v{sealed_active.version_number} superada per '
+                          f'{str(profile) if profile else "usuari desconegut"} '
+                          f'propagant a v{new_v.version_number}.'),
+                    estat='open',
+                    created_by=profile,
+                )
     else:
-        try:
-            graded_count = generate_graded_specs(sf.id)
-        except SealedGradingVersionError as e:
-            # G6-B/T1 · camí 1/6. Regenerar in-place sobre una versió segellada: refusat. La
-            # sortida és el `new_version=True` d'aquest mateix endpoint (el bump), no forçar.
-            return Response(e.payload, status=409)
-        except ValueError as e:
-            return Response({'error': str(e)}, status=400)
-        except Exception as e:
-            return Response({'error': f'Error generant grading: {e}'}, status=500)
+        # C3-A2 — el camí in-place també. Aquí el motor és l'únic escriptor, però escriu cel·la
+        # a cel·la (`_upsert_graded_spec` per (POM, talla)) i posa l'estat de l'SF al final:
+        # una petada a mitja graella deixava files noves i files velles barrejades a la versió
+        # vigent, amb l'estat sense actualitzar i un 500 que no deia què havia quedat escrit.
+        with transaction.atomic():
+            try:
+                graded_count = generate_graded_specs(sf.id)
+            except SealedGradingVersionError as e:
+                # G6-B/T1 · camí 1/6. Regenerar in-place sobre una versió segellada: refusat. La
+                # sortida és el `new_version=True` d'aquest mateix endpoint (el bump), no forçar.
+                transaction.set_rollback(True)
+                return Response(e.payload, status=409)
+            except ValueError as e:
+                transaction.set_rollback(True)
+                return Response({'error': str(e)}, status=400)
+            except Exception as e:
+                transaction.set_rollback(True)
+                return Response({'error': f'Error generant grading: {e}'}, status=500)
 
     # Build a measurements-table-style response
     size_run = [s.strip() for s in model.size_run_model.split('·') if s.strip()]
