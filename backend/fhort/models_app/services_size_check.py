@@ -173,6 +173,7 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
     from fhort.models_app.models import (
         BaseMeasurement, SizeCheck, SizeCheckLine,
     )
+    from fhort.models_app.services_derivacio import aplica as aplica_derivacio
 
     if estat not in ('Acceptat', 'Descartat'):
         raise ValueError(f"Estat invàlid: {estat!r} (Acceptat | Descartat).")
@@ -234,11 +235,21 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
             if not _created and bm.base_value_cm is not None \
                     and abs(line.valor_real - bm.base_value_cm) < 1e-6:
                 continue
+            # C3/E1 — el valor d'ABANS, capturat abans de trepitjar-lo (v. la nota bessona a
+            # `fitting/services.py`). En una creació és None i no es deriva.
+            valor_anterior = None if _created else bm.base_value_cm
             bm.base_value_cm = line.valor_real
             bm.origen = 'CHECKED'
             bm._changed_by = auth_user
             bm._motiu = f'Size check · check {sc.pk}'   # deute (b): sense size_check_ref
             bm.save()
+            # C3/E1 — LA DERIVACIÓ. L'altre dels dos punts que coneixen els seus eixos per
+            # còpia (els hereta de la línia, que els va heretar de la mesura que la va fer
+            # néixer). Mateix mecanisme, mateix rastre: es mou el valor de les germanes i la
+            # folgança es conserva sola. No-op mentre visquin les comportes.
+            aplica_derivacio(
+                bm, valor_anterior, line.valor_real, auth_user=auth_user,
+                motiu_origen=f'size check {sc.pk}')
             written += 1
 
         base_changed = written > 0

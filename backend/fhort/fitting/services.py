@@ -364,6 +364,7 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
     """
     from fhort.fitting.models import PieceFittingLine
     from fhort.models_app.models import BaseMeasurement
+    from fhort.models_app.services_derivacio import aplica as aplica_derivacio
     model = pf.model
     sf = pf.grading_version.size_fitting
     base_size = (model.base_size_label or '').strip()
@@ -383,12 +384,25 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
             model=model, pom=line.pom, capa=line.capa, instancia=line.instancia,
             defaults={'base_value_cm': line.valor_real, 'origen': 'FITTED'},
         )
+        # C3/E1 — el valor d'ABANS, capturat abans de trepitjar-lo: és el que fa calculable
+        # l'increment que han de rebre les germanes. En una creació és None i no es deriva
+        # (una fila nova no és conseqüència de res).
+        valor_anterior = None if _created else bm.base_value_cm
         bm.base_value_cm = line.valor_real
         bm.origen = 'FITTED'
         bm._changed_by = auth_user
         bm._fitting_ref = sf            # MeasurementChangeLog.fitting_ref (→ SizeFitting)
         bm._motiu = f'Fitting · sessió {pf.session_id} · peça {pf.pk}'
         bm.save()
+        # C3/E1 — LA DERIVACIÓ. Aquest és un dels dos únics punts d'escriptura de mesura de tot
+        # el backend que coneix els seus eixos per CÒPIA i no per literal (els hereta de la
+        # línia), i on el valor anterior, el nou i la fila hi són alhora: l'increment ja és
+        # calculable aquí, sense endevinar res. Es mou el VALOR de les germanes, mai el
+        # grading; la folgança es conserva sola.
+        # Amb les comportes de C1/C1-ins vives no hi ha cap germana i això és un no-op.
+        aplica_derivacio(
+            bm, valor_anterior, line.valor_real, auth_user=auth_user, fitting_ref=sf,
+            motiu_origen=f'fitting sessió {pf.session_id}')
         consolidated.append(line)
     return consolidated
 

@@ -119,3 +119,36 @@ def deriva(bm, valor_anterior, valor_nou, *, nomes_actives=True):
             valor_proposat=round(actual + increment, 2),
         ))
     return fora
+
+
+def aplica(bm, valor_anterior, valor_nou, *, auth_user=None, motiu_origen='',
+           fitting_ref=None, nomes_actives=True):
+    """C3/E — calcula la derivació i l'ESCRIU a les germanes. Retorna el que ha aplicat.
+
+    És l'única porta d'escriptura de la derivació, i hi és perquè els dos punts que la criden
+    facin exactament el mateix: un sol mecanisme, els dos eixos, el mateix rastre.
+
+    Cada germana moguda queda amb `origen='DERIVAT'`, i és això el que fa que el signal F1
+    estampi `context='derivat'` a la seva entrada del `MeasurementChangeLog` — el registre és
+    qui ha de poder dir després que aquell valor no el va mesurar ningú (v. la nota de C).
+    El `motiu` diu de quina germana ve, perquè una entrada que digui «derivada» sense dir
+    d'on obliga a endevinar.
+
+    NO obre transacció: la vol del cridador, que és qui sap si la correcció d'origen i la seva
+    propagació han de caure juntes. Tots dos punts de la Fase E ja en tenen una.
+    """
+    aplicades = []
+    for d in deriva(bm, valor_anterior, valor_nou, nomes_actives=nomes_actives):
+        from fhort.models_app.models import BaseMeasurement
+        germana = BaseMeasurement.objects.get(pk=d.base_measurement_id)
+        germana.base_value_cm = d.valor_proposat
+        germana.origen = ORIGEN_DERIVAT
+        germana._changed_by = auth_user
+        germana._fitting_ref = fitting_ref
+        germana._motiu = (
+            f'Derivat de {bm.capa}/{bm.instancia or "—"} '
+            f'({d.increment:+.2f} cm){" · " + motiu_origen if motiu_origen else ""}'
+        )
+        germana.save(update_fields=['base_value_cm', 'origen', 'updated_at'])
+        aplicades.append(d)
+    return aplicades
