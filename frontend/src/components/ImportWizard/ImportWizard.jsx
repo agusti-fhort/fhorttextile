@@ -875,8 +875,14 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
       {step === 1 && !cribratge && (
         <div>
           <div style={{ marginBottom: 16 }}>
+            {/* El backend NO valida extensió en aquesta porta: `import_session_cribratge_view`
+                desa el que li arriba, o sigui que aquesta llista és l'ÚNIC filtre del camí i ha
+                de dir exactament el que el cribratge sap llegir — `_cribratge_content_block`
+                (extraction_views.py:530-563): PDF · xlsx/xls · image/jpeg · image/png ·
+                image/webp. El `.webp` hi faltava: és l'únic format que el servidor anomena
+                explícitament i que el diàleg de fitxers no deixava triar. */}
             <FileDropCard
-              accept={['.xlsx', '.xls', '.pdf', '.png', '.jpg', '.jpeg']}
+              accept={['.xlsx', '.xls', '.pdf', '.png', '.jpg', '.jpeg', '.webp']}
               icon="ti-file-spreadsheet"
               title={t('import_wizard.drop_file')}
               required
