@@ -29,7 +29,10 @@ def cv(val, unit):
 def pom_alerts_summary_view(request):
     """
     GET /api/v1/alerts/summary/
-    Filtres: ?estat=Obert&model_id=X&dies=30
+    Filtres: ?estat=Pendent&model_id=X&dies=30
+
+    L'exemple deia `?estat=Obert`, un valor que cap disparador escriu ja i que mai va ser
+    a `POMAlert.ESTAT_CHOICES`: filtrar-hi hauria retornat sempre zero alertes.
     """
     try:
         from fhort.fitting.models import POMAlert
@@ -200,7 +203,10 @@ def check_tolerances_view(request, model_id):
                         'desviacio_cm': desv,
                         'tolerancia_cm': tol,
                         'missatge': f'{pom.codi_client}: desvia {desv:+.2f}cm (tol ±{tol}cm)',
-                        'estat': 'Obert',
+                        # 'Obert' → 'Pendent': v. la nota bessona a `pom/s10_views.py`.
+                        # Vocabulari declarat (`POMAlert.ESTAT_CHOICES`), i és el `default`
+                        # del camp: sinònim, no estat nou.
+                        'estat': 'Pendent',
                         'origen': 'MANUAL',
                     }
                 )

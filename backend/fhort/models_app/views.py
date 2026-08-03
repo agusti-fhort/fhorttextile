@@ -3382,10 +3382,14 @@ def model_dashboard_view(request, model_id):
     } for t in pla_tasks]
 
     # --- Q3: atenció tècnica — alertes POM PENDENTS de resoldre ---
-    # Anomalia de dades coneguda (ANOTAR): els ESTAT_CHOICES del model són
-    # Pendent/Acceptat/Corregit, però els disparadors vius escriuen valors fora-de-choice
-    # ('Obert' a FITTING pom/s10_views.py:144 i MANUAL pom/s11_views.py:191; 'Resolt' al
-    # resoldre pom/s11_views.py:96). Per NO amagar alertes reals, "pendent" = NO resolt:
+    # Anomalia de dades PARCIALMENT tancada (03/08): els ESTAT_CHOICES del model són
+    # Pendent/Acceptat/Corregit. L''Obert' que escrivien els dos disparadors de creació
+    # (FITTING pom/s10_views.py i MANUAL pom/s11_views.py) ja NO s'escriu: era sinònim de
+    # 'Pendent' —el `default` del camp— i s'ha substituït pel valor declarat.
+    # 🚩 QUEDA OBERT el 'Resolt' de pom/s11_views.py:96, que NO té sinònim declarat exacte:
+    # 'Acceptat' (la desviació s'accepta) i 'Corregit' (la mesura s'ha corregit) són
+    # resolucions DIFERENTS, i triar-ne una és decisió de domini, no de neteja.
+    # Per això aquest lector es queda com és. Per NO amagar alertes reals, "pendent" = NO resolt:
     # excloem el conjunt de resolts → surten 'Pendent', 'Obert' i qualsevol valor inesperat
     # (en un panell d'atenció és més segur surar que amagar). select_related(pom) evita N+1.
     RESOLVED_ALERT_STATES = ('Acceptat', 'Corregit', 'Resolt')

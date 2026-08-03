@@ -151,7 +151,15 @@ def fitting_vs_spec_view(request, pf_id):
                             'missatge': (f"Fitting peça {pf_id}: {r['codi_client']} "
                                          f"talla {r['talla']} desvia {r['desviacio_cm']:+.2f}cm "
                                          f"(tol -{r['tolerancia_minus_cm']}/+{r['tolerancia_plus_cm']}cm)"),
-                            'estat': 'Obert',
+                            # 'Obert' NO és a `POMAlert.ESTAT_CHOICES`
+                            # (Pendent/Acceptat/Corregit): era vocabulari no declarat que
+                            # entrava en silenci —Django no valida choices a BD—, i el lector
+                            # del dashboard ho havia d'anar tolerant (models_app/views.py:3384).
+                            # Mateixa família que el fallback d'origens que C3/C va tancar el
+                            # 02/08: es fa servir el valor que JA hi és. 'Pendent' és, a més,
+                            # el `default` del camp, o sigui que 'Obert' n'era un sinònim, no
+                            # un estat distint: cap decisió de domini, cap migració.
+                            'estat': 'Pendent',
                             'origen': 'FITTING',
                         }
                     )
