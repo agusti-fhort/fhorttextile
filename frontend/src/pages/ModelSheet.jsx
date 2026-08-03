@@ -1581,6 +1581,15 @@ function TabFiles({ modelId }) {
     setPreviewCarregant(true)
     setPopup({ url: previewUrl(fitxer), nom: fitxer.nom_fitxer })
   }
+  // D-31.9c — obrir un arxiu DES DE LA FILA. Què vol dir «obrir» depèn del que és: una fitxa
+  // `.ftt` és un ZIP i la seva vista prèvia no ensenyaria res, o sigui que obre l'editor —
+  // exactament la mateixa bifurcació que ja fa el panell de detall (`FileDetail`, isTechSheet).
+  // Una sola llei d'obertura per a les dues portes.
+  const esFitxaTecnica = (f) => f.tipus === 'TECHSHEET' || fileExt(f.nom_fitxer) === 'ftt'
+  const obrirFitxer = (f) => {
+    if (esFitxaTecnica(f)) navigate(`/models/${modelId}/ftt/${f.id}`)
+    else obrirPreview(f)
+  }
   const [history, setHistory] = useState(null)   // { fitxer, chain[], loading }
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState(null)   // Finder: CAP selecció per defecte
@@ -1817,10 +1826,12 @@ function TabFiles({ modelId }) {
               <span style={{ width: 80, flexShrink: 0 }}>{t('model_sheet.files.col_type')}</span>
               <span style={{ width: 96, flexShrink: 0 }}>{t('model_sheet.files.col_date')}</span>
               <span style={{ width: 44, flexShrink: 0, textAlign: 'right' }}>{t('model_sheet.files.col_version')}</span>
+              <span style={{ width: 26, flexShrink: 0 }} />
             </div>
             {sorted.map(f => (
               <FileRow key={f.id} fitxer={f} selected={f.id === selectedId}
-                onSelect={() => setSelectedId(f.id)} />
+                onSelect={() => setSelectedId(f.id)}
+                onOpen={() => obrirFitxer(f)} />
             ))}
           </div>
           {/* DRETA — detall del fitxer seleccionat; buit discret si cap. */}
@@ -1850,14 +1861,22 @@ function TabFiles({ modelId }) {
 }
 
 // Una fila de la llista (esquerra). Columnes: icona · nom · tipus · data · versió.
-function FileRow({ fitxer, selected, onSelect }) {
-  const { i18n } = useTranslation()
+function FileRow({ fitxer, selected, onSelect, onOpen }) {
+  const { t, i18n } = useTranslation()
   const ext = fileExt(fitxer.nom_fitxer)
+  const esFitxa = fitxer.tipus === 'TECHSHEET' || ext === 'ftt'
+  const obrirLabel = esFitxa ? t('model_sheet.files.edit') : t('model_sheet.view')
   const date = fitxer.data_pujada
     ? new Date(fitxer.data_pujada).toLocaleDateString(i18n.language || 'ca', { day: '2-digit', month: '2-digit', year: '2-digit' })
     : '—'
   return (
-    <div onClick={onSelect} title={fitxer.nom_fitxer}
+    // D-31.9c — la fila obre l'arxiu, i ho fa per les DUES vies que un Finder ofereix: doble
+    // clic sobre la fila sencera (convenció del patró que aquest component ja segueix) i un
+    // botó explícit al final. El clic simple segueix SELECCIONANT i no obrint: si obrís,
+    // recórrer la llista amb el teclat o mirar el detall de tres fitxers seguits obriria tres
+    // modals, i el panell de detall —que és la meitat dreta d'aquesta pantalla— perdria l'única
+    // manera d'omplir-se. El botó és el que fa la funció DESCOBRIBLE; el doble clic, ràpida.
+    <div onClick={onSelect} onDoubleClick={onOpen} title={fitxer.nom_fitxer}
       style={{
         display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', cursor: 'pointer',
         borderBottom: '0.5px solid var(--border)',
@@ -1874,6 +1893,14 @@ function FileRow({ fitxer, selected, onSelect }) {
                      color: 'var(--text-muted)' }}>{date}</span>
       <span style={{ width: 44, flexShrink: 0, textAlign: 'right', fontSize: 'var(--fs-label)',
                      fontFamily: FILES_MONO, color: 'var(--text-muted)' }}>v{fitxer.versio}</span>
+      {/* `stopPropagation`: el botó obre, i no ha de tornar a disparar la selecció de la fila. */}
+      <button type="button" onClick={e => { e.stopPropagation(); onOpen() }}
+        title={obrirLabel} aria-label={`${obrirLabel} — ${fitxer.nom_fitxer}`}
+        style={{ width: 26, flexShrink: 0, background: 'none', border: 'none', padding: 0,
+                 cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1 }}>
+        <i className={`ti ${esFitxa ? 'ti-edit' : 'ti-eye'}`} aria-hidden="true"
+           style={{ fontSize: 16 }} />
+      </button>
     </div>
   )
 }
