@@ -57,10 +57,20 @@ class _G6Base(TenantTestCase):
         )
 
     def _sf(self, model, codi, estat='Pendent'):
-        return SizeFitting.objects.create(
-            model=model, numero=1, codi=codi, tipus='SizeSet', estat=estat,
-            creat_per=self.profile,
+        # EL SIGNAL JA N'HA CREAT UN (v. la nota llarga a `fhort/fitting/tests.py`):
+        # `sync_size_fitting` crea el SizeFitting nº1 en crear el Model, i declarar-ne un
+        # segon viola `unique_together (model, numero)`.
+        #
+        # ES CORREGEIX AQUÍ, A L'HELPER, I NO ALS `setUp`: `_sf` també es crida des del COS
+        # de dos tests (`test_un_model_SENSE_regles_enlloc_continua_sense_poder_graduar` i
+        # `test_el_cami_vell_del_ruleset_no_es_toca`), de manera que arreglar només els
+        # `setUp` en deixaria dos de vius.
+        sf, _ = SizeFitting.objects.update_or_create(
+            model=model, numero=1,
+            defaults={'codi': codi, 'tipus': 'SizeSet', 'estat': estat,
+                      'creat_per': self.profile},
         )
+        return sf
 
 
 class Fork4VersioVigentTest(_G6Base):

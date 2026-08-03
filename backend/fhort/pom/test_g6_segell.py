@@ -76,9 +76,14 @@ class _SegellBase(TenantTestCase):
                 actiu=True, origen='MANUAL')
             BaseMeasurement.objects.create(
                 model=self.model, pom=pom, base_value_cm=40, is_active=True)
-        self.sf = SizeFitting.objects.create(
-            model=self.model, numero=1, codi='SF-182', tipus='SizeSet', estat='Pendent',
-            creat_per=self.profile)
+        # EL SIGNAL JA N'HA CREAT UN (v. la nota llarga a `fhort/fitting/tests.py`):
+        # `sync_size_fitting` crea el SizeFitting nº1 en crear el Model, i declarar-ne un
+        # segon viola `unique_together (model, numero)`. Es reutilitza i s'ajusta.
+        self.sf, _ = SizeFitting.objects.update_or_create(
+            model=self.model, numero=1,
+            defaults={'codi': 'SF-182', 'tipus': 'SizeSet', 'estat': 'Pendent',
+                      'creat_per': self.profile},
+        )
 
         # Gradua una vegada (encara no segellada) i SEGELLA: la forma exacta de la gv 67 real.
         generate_graded_specs(self.sf.id)

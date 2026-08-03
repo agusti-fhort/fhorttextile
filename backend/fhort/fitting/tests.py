@@ -57,8 +57,17 @@ class PropagarActionTest(TenantTestCase):
             temporada='SS26', size_run_model='S·M·L·XL', base_size_label='M',
             grading_rule_set=self.rs,
         )
-        sf = SizeFitting.objects.create(model=self.model, codi='SF-TST-1', tipus='PRINCIPAL',
-                                        numero=1, creat_per=self.profile)
+        # EL SIGNAL JA N'HA CREAT UN. `sync_size_fitting` (models_app/signals.py) crea el
+        # SizeFitting nº1 en crear el Model; des de a2d4222d (20/07) ho fa SEMPRE —abans se
+        # saltava quan el model no tenia responsable, i per això aquest fixture en podia
+        # declarar un de seu sense xocar. Declarar-ne un SEGON viola `unique_together
+        # (model, numero)`. El fixture reutilitza el que el sistema li dona i només l'ajusta;
+        # el branc de creació cobreix el cas en què el signal no ha pogut (tenant sense cap
+        # UserProfile). No es toca ni el signal ni cap codi de producció.
+        sf, _ = SizeFitting.objects.update_or_create(
+            model=self.model, numero=1,
+            defaults={'codi': 'SF-TST-1', 'tipus': 'PRINCIPAL', 'creat_per': self.profile},
+        )
         gv = GradingVersion.objects.create(size_fitting=sf, version_number=1, is_active=True,
                                            creat_per=self.profile)
         session = FittingSession.objects.create(
