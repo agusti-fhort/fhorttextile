@@ -170,9 +170,14 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // quines tasques veus no pot decidir si el model té mesures.
   const pomDone = !!model?.pom_task_done
   const pomGenesisOpen = pomTask && ['InProgress', 'Paused'].includes(pomTask.status)
-  const pomReady = pomDone && hasBaseValue
+  const pomReady = pomDone || hasBaseValue
 
-  // POM-genesi surt del tab Mesures lliure: Mesures només és treballable amb POM Done + base.
+  // POM-genesi surt del tab Mesures lliure: Mesures és treballable si el model està DEFINIT
+  // — o bé té POMs amb valor base, o bé la feina de POM del model consta Done. L'AND anterior
+  // mesurava el testimoni de procés (la ModelTask), que és un proxy de la definició, no la
+  // definició: un model amb POMs amb valor està definit, hi hagi tasca o no. `hasBaseValue` sol
+  // ja demostra que no és verge; `pomDone` sol segueix cobrint el model que ve de la gènesi amb
+  // POMs materialitzats i encara SENSE valors, que és on el tècnic ha d'entrar a escriure'ls.
   // `task_id` de size_check continua sent treball, no genesi; `mode=entry` i pom oberta/pausada
   // obren la pantalla POM pròpia.
   const [mesuresEntry, setMesuresEntry] = useState(false)
