@@ -42,8 +42,18 @@ class PropagarActionTest(TenantTestCase):
         self.profile, _ = UserProfile.objects.get_or_create(
             user=self.user, defaults={'nom_complet': 'Tester', 'rol_nom': 'admin'})
 
+        # EL SISTEMA HA DE CONÈIXER TOT EL RUN. La llei S24b (`escala_del_model`,
+        # pom/services.py:104) diu que l'ordre i la distància entre talles els mana el
+        # SizeSystem, no la posició dins el run del model — és el que va matar la inversió de
+        # signe del model 166. Aquest fixture definia NOMÉS la 'M' d'un run de quatre i no
+        # enganxava el sistema al Model: una forma que cap camí real produeix (a `fhort`,
+        # 0 de 44 models sense `size_system`; els 21 de `los` que no en tenen són `estat='Nou'`
+        # amb 0 regles i 0 mesures, i per tant no arriben mai al motor). El fixture deia una
+        # mentida que el vermell del 28/07 tapava.
         ss = SizeSystem.objects.create(codi='SS_T', nom='SS test', base_unit='ALPHA')
-        self.talla_base = SizeDefinition.objects.create(size_system=ss, etiqueta='M', ordre=2)
+        talles = {et: SizeDefinition.objects.create(size_system=ss, etiqueta=et, ordre=i)
+                  for i, et in enumerate(['S', 'M', 'L', 'XL'], start=1)}
+        self.talla_base = talles['M']
         self.rs = GradingRuleSet.objects.create(nom='RS test')
         self.pom = POMMaster.objects.create(codi_client='P1', nom_client='POM 1')
         # Regla canònica LINEAR uniforme (fallback al rule_set; ModelGradingRule buida).
@@ -55,7 +65,7 @@ class PropagarActionTest(TenantTestCase):
         self.model = Model.objects.create(
             codi_intern='TST-1', codi_tenant='TST', any=2026, sequencial=1,
             temporada='SS26', size_run_model='S·M·L·XL', base_size_label='M',
-            grading_rule_set=self.rs,
+            size_system=ss, grading_rule_set=self.rs,
         )
         # EL SIGNAL JA N'HA CREAT UN. `sync_size_fitting` (models_app/signals.py) crea el
         # SizeFitting nº1 en crear el Model; des de a2d4222d (20/07) ho fa SEMPRE —abans se
