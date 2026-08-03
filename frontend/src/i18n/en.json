@@ -879,7 +879,8 @@
       "select_prompt": "Select a file",
       "no_preview": "No preview",
       "delete": "Delete",
-      "edit": "Edit"
+      "edit": "Edit",
+      "loading_preview": "Loading file…"
     },
     "err_unknown": "Unknown error",
     "ai_description": "Analyzes the uploaded files (patterns, gradings, sketches) and detects discrepancies with the recorded measurements. Available when there are patterns or gradings uploaded.",

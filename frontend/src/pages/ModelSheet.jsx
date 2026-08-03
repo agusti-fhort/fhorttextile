@@ -1572,6 +1572,15 @@ function TabFiles({ modelId }) {
   const [orderBy, setOrderBy] = useState('data')
   const [uploading, setUploading] = useState(false)
   const [popup, setPopup] = useState(null)
+  // D-31.9b — obrir un adjunt no donava CAP senyal: entre el clic i el primer píxel hi ha una
+  // URL signada, una petició i el pintat del PDF, i la pantalla es quedava amb un rectangle
+  // blanc. Es reposa a `true` a cada obertura (i no només al muntatge) perquè el segon fitxer
+  // que s'obre sense tancar el modal ha de tornar a avisar.
+  const [previewCarregant, setPreviewCarregant] = useState(false)
+  const obrirPreview = (fitxer) => {
+    setPreviewCarregant(true)
+    setPopup({ url: previewUrl(fitxer), nom: fitxer.nom_fitxer })
+  }
   const [history, setHistory] = useState(null)   // { fitxer, chain[], loading }
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState(null)   // Finder: CAP selecció per defecte
@@ -1668,11 +1677,26 @@ function TabFiles({ modelId }) {
               <button type="button" onClick={() => setPopup(null)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-h2)' }}>✕</button>
             </div>
+            {previewCarregant && (
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '10px 0', fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+              }}>
+                <i className="ti ti-loader-2" aria-hidden="true"
+                   style={{ fontSize: 16, animation: 'spin 0.8s linear infinite' }} />
+                {t('model_sheet.files.loading_preview')}
+              </div>
+            )}
+            {/* `onError` tanca el senyal igual que `onLoad`: si la URL signada ha caducat o el
+                fitxer no es pot pintar, la roda no pot quedar-se girant per sempre. */}
             {PREVIEW_IMG_RE.test(popup.nom || '') ? (
               <img src={popup.url} alt={popup.nom}
+                onLoad={() => setPreviewCarregant(false)}
+                onError={() => setPreviewCarregant(false)}
                 style={{ maxWidth: '80vw', maxHeight: '80vh', objectFit: 'contain' }} />
             ) : (
               <iframe src={popup.url} title={popup.nom}
+                onLoad={() => setPreviewCarregant(false)}
                 style={{ width: '80vw', height: '80vh', border: 'none' }} />
             )}
           </div>
@@ -1716,7 +1740,7 @@ function TabFiles({ modelId }) {
                       </span>
                     )}
                     <button type="button"
-                      onClick={() => setPopup({ url: previewUrl(v), nom: v.nom_fitxer })}
+                      onClick={() => obrirPreview(v)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                       <i className="ti ti-eye" aria-hidden="true" />
                     </button>
@@ -1756,6 +1780,23 @@ function TabFiles({ modelId }) {
         </label>
       </div>
 
+      {/* D-31.9b — LA BARRA DE PUJADA. Fins ara l'únic senyal era que el text del botó canviava
+          a «Pujant…»: 12 píxels de text en un cantó, en una pantalla plena de taules, mentre un
+          fitxer de 20 MB puja sense dir res. La barra és INDETERMINADA a posta — `authFetch`
+          torna una promesa i no exposa `onUploadProgress`, i fabricar un percentatge fals seria
+          pitjor que no donar-ne cap. Diu «està passant alguna cosa», que és el que faltava.
+          El keyframe local segueix el precedent de la casa (SizeMapSetup.jsx:982); el `spin`
+          global d'`index.css:75` no serveix aquí perquè el moviment és de translació. */}
+      {uploading && (
+        <div role="progressbar" aria-busy="true" aria-label={t('model_sheet.uploading')}
+          style={{ height: 3, borderRadius: 2, background: 'var(--bg-muted)',
+                   overflow: 'hidden', marginBottom: 12 }}>
+          <style>{'@keyframes ftt-upload-bar{from{transform:translateX(-100%)}to{transform:translateX(400%)}}'}</style>
+          <div style={{ width: '25%', height: '100%', background: 'var(--gold)',
+                        animation: 'ftt-upload-bar 1.1s ease-in-out infinite' }} />
+        </div>
+      )}
+
       {sorted.length === 0 ? (
         <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                       padding: '8px 0', fontStyle: 'italic' }}>
@@ -1786,7 +1827,7 @@ function TabFiles({ modelId }) {
           <div style={{ width: 340, flexShrink: 0 }}>
             {selected ? (
               <FileDetail key={selected.id} fitxer={selected}
-                onPreview={() => setPopup({ url: previewUrl(selected), nom: selected.nom_fitxer })}
+                onPreview={() => obrirPreview(selected)}
                 onHistory={() => openHistory(selected)}
                 onNewVersion={file => handleUpload(file, selected.id)}
                 onEdit={() => navigate(`/models/${modelId}/ftt/${selected.id}`)}

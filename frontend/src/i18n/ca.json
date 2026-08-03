@@ -879,7 +879,8 @@
       "select_prompt": "Selecciona un fitxer",
       "no_preview": "Sense vista prèvia",
       "delete": "Eliminar",
-      "edit": "Edita"
+      "edit": "Edita",
+      "loading_preview": "Carregant l'arxiu…"
     },
     "err_unknown": "Error desconegut",
     "ai_description": "Analitza els fitxers pujats (patrons, escalats, sketches) i detecta discrepàncies amb les mesures registrades. Disponible quan hi ha patrons o escalats pujats.",
