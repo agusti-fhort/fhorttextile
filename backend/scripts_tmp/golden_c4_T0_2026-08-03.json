@@ -1,0 +1,2487 @@
+{
+"clau": "model_id|pom_id|capa|instancia|size_label",
+"generator": {
+"162|275|exterior||M": 37.0,
+"162|275|exterior||S": 35.5,
+"162|275|exterior||XS": 34.0,
+"162|276|exterior||M": 49.0,
+"162|276|exterior||S": 47.0,
+"162|276|exterior||XS": 45.0,
+"162|283|exterior||M": 105.75,
+"162|283|exterior||S": 105.0,
+"162|283|exterior||XS": 104.25,
+"162|284|exterior||M": 45.0,
+"162|284|exterior||S": 44.5,
+"162|284|exterior||XS": 44.0,
+"162|301|exterior||M": 12.3,
+"162|301|exterior||S": 12.0,
+"162|301|exterior||XS": 11.7,
+"162|305|exterior||M": 15.0,
+"162|305|exterior||S": 15.0,
+"162|305|exterior||XS": 15.0,
+"162|326|exterior||M": 302.0,
+"162|326|exterior||S": 300.0,
+"162|326|exterior||XS": 298.0,
+"174|273|exterior||L": 52.0,
+"174|273|exterior||M": 49.0,
+"174|273|exterior||S": 46.0,
+"174|273|exterior||XS": 43.0,
+"174|277|exterior||L": 10.6,
+"174|277|exterior||M": 9.8,
+"174|277|exterior||S": 9.0,
+"174|277|exterior||XS": 8.2,
+"174|278|exterior||L": 39.0,
+"174|278|exterior||M": 37.0,
+"174|278|exterior||S": 35.0,
+"174|278|exterior||XS": 33.0,
+"174|284|exterior||L": 23.5,
+"174|284|exterior||M": 22.5,
+"174|284|exterior||S": 21.5,
+"174|284|exterior||XS": 20.5,
+"174|286|exterior||L": 2.6,
+"174|286|exterior||M": 2.3,
+"174|286|exterior||S": 2.0,
+"174|286|exterior||XS": 1.7,
+"174|295|exterior||L": 18.5,
+"174|295|exterior||M": 17.5,
+"174|295|exterior||S": 16.5,
+"174|295|exterior||XS": 15.5,
+"174|297|exterior||L": 10.0,
+"174|297|exterior||M": 9.5,
+"174|297|exterior||S": 9.0,
+"174|297|exterior||XS": 8.5,
+"174|301|exterior||L": 18.0,
+"174|301|exterior||M": 17.5,
+"174|301|exterior||S": 17.0,
+"174|301|exterior||XS": 16.5,
+"174|326|exterior||L": 60.0,
+"174|326|exterior||M": 57.0,
+"174|326|exterior||S": 54.0,
+"174|326|exterior||XS": 51.0,
+"186|275|exterior||L": 50.0,
+"186|275|exterior||M": 47.0,
+"186|275|exterior||S": 44.0,
+"186|275|exterior||XL": 53.0,
+"186|275|exterior||XXL": 57.0,
+"186|276|exterior||L": 57.0,
+"186|276|exterior||M": 54.0,
+"186|276|exterior||S": 51.0,
+"186|276|exterior||XL": 60.0,
+"186|276|exterior||XXL": 63.0,
+"186|309|exterior||L": 33.9,
+"186|309|exterior||M": 32.2,
+"186|309|exterior||S": 30.5,
+"186|309|exterior||XL": 35.6,
+"186|309|exterior||XXL": 37.3,
+"186|311|exterior||L": 18.4,
+"186|311|exterior||M": 17.7,
+"186|311|exterior||S": 17.0,
+"186|311|exterior||XL": 19.1,
+"186|311|exterior||XXL": 19.8,
+"186|320|exterior||L": 4.0,
+"186|320|exterior||M": 4.0,
+"186|320|exterior||S": 4.0,
+"186|320|exterior||XL": 4.0,
+"186|320|exterior||XXL": 4.0,
+"186|321|exterior||L": 32.0,
+"186|321|exterior||M": 31.0,
+"186|321|exterior||S": 30.0,
+"186|321|exterior||XL": 33.0,
+"186|321|exterior||XXL": 34.0,
+"186|322|exterior||L": 43.0,
+"186|322|exterior||M": 41.5,
+"186|322|exterior||S": 40.0,
+"186|322|exterior||XL": 44.5,
+"186|322|exterior||XXL": 46.0,
+"186|345|exterior||L": 4.0,
+"186|345|exterior||M": 4.0,
+"186|345|exterior||S": 4.0,
+"186|345|exterior||XL": 4.0,
+"186|345|exterior||XXL": 4.0,
+"186|349|exterior||L": 5.9,
+"186|349|exterior||M": 5.7,
+"186|349|exterior||S": 5.5,
+"186|349|exterior||XL": 6.1,
+"186|349|exterior||XXL": 6.3,
+"186|385|exterior||L": 5.0,
+"186|385|exterior||M": 5.0,
+"186|385|exterior||S": 5.0,
+"186|385|exterior||XL": 5.0,
+"186|385|exterior||XXL": 5.0,
+"186|386|exterior||L": 21.5,
+"186|386|exterior||M": 21.0,
+"186|386|exterior||S": 20.5,
+"186|386|exterior||XL": 22.0,
+"186|386|exterior||XXL": 22.5,
+"186|389|exterior||L": 102.0,
+"186|389|exterior||M": 101.0,
+"186|389|exterior||S": 100.0,
+"186|389|exterior||XL": 103.0,
+"186|389|exterior||XXL": 104.0,
+"186|390|exterior||L": 15.0,
+"186|390|exterior||M": 14.5,
+"186|390|exterior||S": 14.0,
+"186|390|exterior||XL": 15.5,
+"186|390|exterior||XXL": 16.0,
+"186|391|exterior||L": 23.0,
+"186|391|exterior||M": 22.5,
+"186|391|exterior||S": 22.0,
+"186|391|exterior||XL": 23.5,
+"186|391|exterior||XXL": 24.0,
+"186|392|exterior||L": 25.0,
+"186|392|exterior||M": 25.0,
+"186|392|exterior||S": 25.0,
+"186|392|exterior||XL": 25.0,
+"186|392|exterior||XXL": 25.0,
+"186|393|exterior||L": 12.6,
+"186|393|exterior||M": 12.3,
+"186|393|exterior||S": 12.0,
+"186|393|exterior||XL": 12.9,
+"186|393|exterior||XXL": 13.2,
+"186|394|exterior||L": 1.5,
+"186|394|exterior||M": 1.5,
+"186|394|exterior||S": 1.5,
+"186|394|exterior||XL": 1.5,
+"186|394|exterior||XXL": 1.5,
+"186|395|exterior||L": 10.4,
+"186|395|exterior||M": 10.2,
+"186|395|exterior||S": 10.0,
+"186|395|exterior||XL": 10.6,
+"186|395|exterior||XXL": 10.8,
+"186|396|exterior||L": 11.5,
+"186|396|exterior||M": 11.0,
+"186|396|exterior||S": 10.5,
+"186|396|exterior||XL": 12.0,
+"186|396|exterior||XXL": 12.5,
+"186|397|exterior||L": 7.0,
+"186|397|exterior||M": 6.5,
+"186|397|exterior||S": 6.0,
+"186|397|exterior||XL": 7.5,
+"186|397|exterior||XXL": 8.0,
+"268|273|exterior||L": 52.0,
+"268|273|exterior||M": 49.0,
+"268|273|exterior||S": 46.0,
+"268|273|exterior||XS": 43.0,
+"268|273|exterior||XXS": 41.0,
+"268|277|exterior||L": 9.8,
+"268|277|exterior||M": 9.4,
+"268|277|exterior||S": 9.0,
+"268|277|exterior||XS": 8.6,
+"268|277|exterior||XXS": 8.35,
+"268|284|exterior||L": 23.5,
+"268|284|exterior||M": 22.5,
+"268|284|exterior||S": 21.5,
+"268|284|exterior||XS": 20.5,
+"268|284|exterior||XXS": 19.8,
+"268|286|exterior||L": 2.0,
+"268|286|exterior||M": 2.0,
+"268|286|exterior||S": 2.0,
+"268|286|exterior||XS": 2.0,
+"268|286|exterior||XXS": 2.0,
+"268|292|exterior||L": 63.5,
+"268|292|exterior||M": 62.5,
+"268|292|exterior||S": 61.5,
+"268|292|exterior||XS": 60.5,
+"268|292|exterior||XXS": 59.5,
+"268|295|exterior||L": 18.1,
+"268|295|exterior||M": 17.3,
+"268|295|exterior||S": 16.5,
+"268|295|exterior||XS": 15.7,
+"268|295|exterior||XXS": 15.1,
+"268|297|exterior||L": 10.0,
+"268|297|exterior||M": 9.5,
+"268|297|exterior||S": 9.0,
+"268|297|exterior||XS": 8.5,
+"268|297|exterior||XXS": 8.2,
+"268|299|exterior||L": 0.7,
+"268|299|exterior||M": 0.7,
+"268|299|exterior||S": 0.7,
+"268|299|exterior||XS": 0.7,
+"268|299|exterior||XXS": 0.7,
+"268|301|exterior||L": 18.5,
+"268|301|exterior||M": 17.75,
+"268|301|exterior||S": 17.0,
+"268|301|exterior||XS": 16.25,
+"268|301|exterior||XXS": 15.75,
+"268|326|exterior||L": 60.0,
+"268|326|exterior||M": 57.0,
+"268|326|exterior||S": 54.0,
+"268|326|exterior||XS": 51.0,
+"268|326|exterior||XXS": 49.0,
+"268|420|exterior||L": 36.0,
+"268|420|exterior||M": 34.5,
+"268|420|exterior||S": 33.0,
+"268|420|exterior||XS": 31.5,
+"268|420|exterior||XXS": 30.5,
+"268|437|exterior||L": 56.0,
+"268|437|exterior||M": 55.0,
+"268|437|exterior||S": 54.0,
+"268|437|exterior||XS": 53.0,
+"268|437|exterior||XXS": 52.0,
+"268|438|exterior||L": 53.0,
+"268|438|exterior||M": 52.0,
+"268|438|exterior||S": 51.0,
+"268|438|exterior||XS": 50.0,
+"268|438|exterior||XXS": 49.0,
+"268|455|exterior||L": 1.5,
+"268|455|exterior||M": 1.5,
+"268|455|exterior||S": 1.5,
+"268|455|exterior||XS": 1.5,
+"268|455|exterior||XXS": 1.5,
+"268|457|exterior||L": 25.0,
+"268|457|exterior||M": 24.0,
+"268|457|exterior||S": 23.0,
+"268|457|exterior||XS": 22.0,
+"268|457|exterior||XXS": 21.3,
+"268|458|exterior||L": 26.0,
+"268|458|exterior||M": 25.0,
+"268|458|exterior||S": 24.0,
+"268|458|exterior||XS": 23.0,
+"268|458|exterior||XXS": 22.3,
+"268|459|exterior||L": 18.1,
+"268|459|exterior||M": 17.3,
+"268|459|exterior||S": 16.5,
+"268|459|exterior||XS": 15.7,
+"268|459|exterior||XXS": 15.1,
+"268|463|exterior||L": 8.8,
+"268|463|exterior||M": 8.4,
+"268|463|exterior||S": 8.0,
+"268|463|exterior||XS": 7.6,
+"268|463|exterior||XXS": 7.35,
+"268|464|exterior||L": 2.5,
+"268|464|exterior||M": 2.5,
+"268|464|exterior||S": 2.5,
+"268|464|exterior||XS": 2.5,
+"268|464|exterior||XXS": 2.5,
+"268|465|exterior||L": 36.0,
+"268|465|exterior||M": 34.5,
+"268|465|exterior||S": 33.0,
+"268|465|exterior||XS": 31.5,
+"268|465|exterior||XXS": 30.5,
+"269|273|exterior||L": 52.0,
+"269|273|exterior||M": 49.0,
+"269|273|exterior||S": 46.0,
+"269|273|exterior||XS": 43.0,
+"269|273|exterior||XXS": 41.0,
+"269|277|exterior||L": 9.8,
+"269|277|exterior||M": 9.4,
+"269|277|exterior||S": 9.0,
+"269|277|exterior||XS": 8.6,
+"269|277|exterior||XXS": 8.35,
+"269|278|exterior||L": 38.0,
+"269|278|exterior||M": 36.5,
+"269|278|exterior||S": 35.0,
+"269|278|exterior||XS": 33.5,
+"269|278|exterior||XXS": 32.5,
+"269|284|exterior||L": 23.5,
+"269|284|exterior||M": 22.5,
+"269|284|exterior||S": 21.5,
+"269|284|exterior||XS": 20.5,
+"269|284|exterior||XXS": 19.8,
+"269|286|exterior||L": 2.0,
+"269|286|exterior||M": 2.0,
+"269|286|exterior||S": 2.0,
+"269|286|exterior||XS": 2.0,
+"269|286|exterior||XXS": 2.0,
+"269|295|exterior||L": 18.1,
+"269|295|exterior||M": 17.3,
+"269|295|exterior||S": 16.5,
+"269|295|exterior||XS": 15.7,
+"269|295|exterior||XXS": 15.1,
+"269|297|exterior||L": 10.0,
+"269|297|exterior||M": 9.5,
+"269|297|exterior||S": 9.0,
+"269|297|exterior||XS": 8.5,
+"269|297|exterior||XXS": 8.2,
+"269|299|exterior||L": 0.7,
+"269|299|exterior||M": 0.7,
+"269|299|exterior||S": 0.7,
+"269|299|exterior||XS": 0.7,
+"269|299|exterior||XXS": 0.7,
+"269|301|exterior||L": 18.5,
+"269|301|exterior||M": 17.75,
+"269|301|exterior||S": 17.0,
+"269|301|exterior||XS": 16.25,
+"269|301|exterior||XXS": 15.75,
+"269|326|exterior||L": 60.0,
+"269|326|exterior||M": 57.0,
+"269|326|exterior||S": 54.0,
+"269|326|exterior||XS": 51.0,
+"269|326|exterior||XXS": 49.0,
+"269|420|exterior||L": 36.0,
+"269|420|exterior||M": 34.5,
+"269|420|exterior||S": 33.0,
+"269|420|exterior||XS": 31.5,
+"269|420|exterior||XXS": 30.5,
+"269|437|exterior||L": 5.0,
+"269|437|exterior||M": 4.0,
+"269|437|exterior||S": 3.0,
+"269|437|exterior||XS": 2.0,
+"269|437|exterior||XXS": 1.0,
+"269|438|exterior||L": 53.0,
+"269|438|exterior||M": 52.0,
+"269|438|exterior||S": 51.0,
+"269|438|exterior||XS": 50.0,
+"269|438|exterior||XXS": 49.0,
+"269|455|exterior||L": 1.5,
+"269|455|exterior||M": 1.5,
+"269|455|exterior||S": 1.5,
+"269|455|exterior||XS": 1.5,
+"269|455|exterior||XXS": 1.5,
+"269|457|exterior||L": 25.0,
+"269|457|exterior||M": 24.0,
+"269|457|exterior||S": 23.0,
+"269|457|exterior||XS": 22.0,
+"269|457|exterior||XXS": 21.3,
+"269|458|exterior||L": 26.0,
+"269|458|exterior||M": 25.0,
+"269|458|exterior||S": 24.0,
+"269|458|exterior||XS": 23.0,
+"269|458|exterior||XXS": 22.3,
+"269|459|exterior||L": 18.1,
+"269|459|exterior||M": 17.3,
+"269|459|exterior||S": 16.5,
+"269|459|exterior||XS": 15.7,
+"269|459|exterior||XXS": 15.1,
+"269|461|exterior||L": 8.0,
+"269|461|exterior||M": 8.0,
+"269|461|exterior||S": 8.0,
+"269|461|exterior||XS": 8.0,
+"269|461|exterior||XXS": 8.0,
+"269|463|exterior||L": 8.8,
+"269|463|exterior||M": 8.4,
+"269|463|exterior||S": 8.0,
+"269|463|exterior||XS": 7.6,
+"269|463|exterior||XXS": 7.35,
+"269|464|exterior||L": 2.5,
+"269|464|exterior||M": 2.5,
+"269|464|exterior||S": 2.5,
+"269|464|exterior||XS": 2.5,
+"269|464|exterior||XXS": 2.5,
+"269|465|exterior||L": 36.0,
+"269|465|exterior||M": 34.5,
+"269|465|exterior||S": 33.0,
+"269|465|exterior||XS": 31.5,
+"269|465|exterior||XXS": 30.5,
+"269|501|exterior||L": 16.0,
+"269|501|exterior||M": 15.0,
+"269|501|exterior||S": 14.0,
+"269|501|exterior||XS": 13.0,
+"269|501|exterior||XXS": 12.3,
+"269|502|exterior||L": 22.5,
+"269|502|exterior||M": 21.5,
+"269|502|exterior||S": 20.5,
+"269|502|exterior||XS": 19.5,
+"269|502|exterior||XXS": 18.8,
+"269|503|exterior||L": 63.5,
+"269|503|exterior||M": 62.5,
+"269|503|exterior||S": 61.5,
+"269|503|exterior||XS": 60.5,
+"269|503|exterior||XXS": 59.5,
+"269|504|exterior||L": 81.5,
+"269|504|exterior||M": 79.75,
+"269|504|exterior||S": 78.0,
+"269|504|exterior||XS": 76.25,
+"269|504|exterior||XXS": 74.75
+},
+"models": [
+162,
+163,
+174,
+182,
+186,
+268,
+269
+],
+"n_celles_generador": 382,
+"n_celles_preview": 499,
+"per_model": {
+"162": {
+"base_size": "S",
+"codi": "BRW-SS26-0001",
+"existeix": true,
+"motiu_sense_generador": null,
+"n_celles_generador": 21,
+"n_celles_preview": 21,
+"n_files_base": 14,
+"n_poms_preview": 7,
+"poms_amb_germanes": [],
+"size_run": "XS\u00b7S\u00b7M"
+},
+"163": {
+"base_size": "S",
+"codi": "BRW-FW26-0001",
+"existeix": true,
+"motiu_sense_generador": "versi\u00f3 segellada",
+"n_celles_generador": null,
+"n_celles_preview": 96,
+"n_files_base": 25,
+"n_poms_preview": 24,
+"poms_amb_germanes": [],
+"size_run": "XS\u00b7S\u00b7M\u00b7L"
+},
+"174": {
+"base_size": "S",
+"codi": "BRW-FW26-0012",
+"existeix": true,
+"motiu_sense_generador": null,
+"n_celles_generador": 36,
+"n_celles_preview": 36,
+"n_files_base": 21,
+"n_poms_preview": 9,
+"poms_amb_germanes": [],
+"size_run": "XS\u00b7S\u00b7M\u00b7L"
+},
+"182": {
+"base_size": "S",
+"codi": "BRW-26-SS-0002",
+"existeix": true,
+"motiu_sense_generador": "versi\u00f3 segellada",
+"n_celles_generador": null,
+"n_celles_preview": 21,
+"n_files_base": 14,
+"n_poms_preview": 7,
+"poms_amb_germanes": [],
+"size_run": "XS\u00b7S\u00b7M"
+},
+"186": {
+"base_size": "S",
+"codi": "FTT-CO27-0001",
+"existeix": true,
+"motiu_sense_generador": null,
+"n_celles_generador": 100,
+"n_celles_preview": 100,
+"n_files_base": 20,
+"n_poms_preview": 20,
+"poms_amb_germanes": [],
+"size_run": "S\u00b7M\u00b7L\u00b7XL\u00b7XXL"
+},
+"268": {
+"base_size": "S",
+"codi": "BRW-FW27-0001",
+"existeix": true,
+"motiu_sense_generador": null,
+"n_celles_generador": 100,
+"n_celles_preview": 100,
+"n_files_base": 20,
+"n_poms_preview": 20,
+"poms_amb_germanes": [],
+"size_run": "XXS\u00b7XS\u00b7S\u00b7M\u00b7L"
+},
+"269": {
+"base_size": "S",
+"codi": "BRW-FW27-0002",
+"existeix": true,
+"motiu_sense_generador": null,
+"n_celles_generador": 125,
+"n_celles_preview": 125,
+"n_files_base": 25,
+"n_poms_preview": 25,
+"poms_amb_germanes": [],
+"size_run": "XXS\u00b7XS\u00b7S\u00b7M\u00b7L"
+}
+},
+"preview": {
+"162|275|exterior||M": {
+"n_germanes": 1,
+"v": 37.0
+},
+"162|275|exterior||S": {
+"n_germanes": 1,
+"v": 35.5
+},
+"162|275|exterior||XS": {
+"n_germanes": 1,
+"v": 34.0
+},
+"162|276|exterior||M": {
+"n_germanes": 1,
+"v": 49.0
+},
+"162|276|exterior||S": {
+"n_germanes": 1,
+"v": 47.0
+},
+"162|276|exterior||XS": {
+"n_germanes": 1,
+"v": 45.0
+},
+"162|283|exterior||M": {
+"n_germanes": 1,
+"v": 105.75
+},
+"162|283|exterior||S": {
+"n_germanes": 1,
+"v": 105.0
+},
+"162|283|exterior||XS": {
+"n_germanes": 1,
+"v": 104.25
+},
+"162|284|exterior||M": {
+"n_germanes": 1,
+"v": 45.0
+},
+"162|284|exterior||S": {
+"n_germanes": 1,
+"v": 44.5
+},
+"162|284|exterior||XS": {
+"n_germanes": 1,
+"v": 44.0
+},
+"162|301|exterior||M": {
+"n_germanes": 1,
+"v": 12.3
+},
+"162|301|exterior||S": {
+"n_germanes": 1,
+"v": 12.0
+},
+"162|301|exterior||XS": {
+"n_germanes": 1,
+"v": 11.7
+},
+"162|305|exterior||M": {
+"n_germanes": 1,
+"v": 15.0
+},
+"162|305|exterior||S": {
+"n_germanes": 1,
+"v": 15.0
+},
+"162|305|exterior||XS": {
+"n_germanes": 1,
+"v": 15.0
+},
+"162|326|exterior||M": {
+"n_germanes": 1,
+"v": 302.0
+},
+"162|326|exterior||S": {
+"n_germanes": 1,
+"v": 300.0
+},
+"162|326|exterior||XS": {
+"n_germanes": 1,
+"v": 298.0
+},
+"163|273|exterior||L": {
+"n_germanes": 1,
+"v": 51.0
+},
+"163|273|exterior||M": {
+"n_germanes": 1,
+"v": 48.0
+},
+"163|273|exterior||S": {
+"n_germanes": 1,
+"v": 45.0
+},
+"163|273|exterior||XS": {
+"n_germanes": 1,
+"v": 42.0
+},
+"163|277|exterior||L": {
+"n_germanes": 1,
+"v": 11.3
+},
+"163|277|exterior||M": {
+"n_germanes": 1,
+"v": 10.9
+},
+"163|277|exterior||S": {
+"n_germanes": 1,
+"v": 10.5
+},
+"163|277|exterior||XS": {
+"n_germanes": 1,
+"v": 10.1
+},
+"163|284|exterior||L": {
+"n_germanes": 1,
+"v": 26.0
+},
+"163|284|exterior||M": {
+"n_germanes": 1,
+"v": 25.0
+},
+"163|284|exterior||S": {
+"n_germanes": 1,
+"v": 24.0
+},
+"163|284|exterior||XS": {
+"n_germanes": 1,
+"v": 23.0
+},
+"163|286|exterior||L": {
+"n_germanes": 1,
+"v": 4.0
+},
+"163|286|exterior||M": {
+"n_germanes": 1,
+"v": 4.0
+},
+"163|286|exterior||S": {
+"n_germanes": 1,
+"v": 4.0
+},
+"163|286|exterior||XS": {
+"n_germanes": 1,
+"v": 4.0
+},
+"163|292|exterior||L": {
+"n_germanes": 1,
+"v": 63.5
+},
+"163|292|exterior||M": {
+"n_germanes": 1,
+"v": 62.5
+},
+"163|292|exterior||S": {
+"n_germanes": 1,
+"v": 61.5
+},
+"163|292|exterior||XS": {
+"n_germanes": 1,
+"v": 60.5
+},
+"163|295|exterior||L": {
+"n_germanes": 1,
+"v": 19.35
+},
+"163|295|exterior||M": {
+"n_germanes": 1,
+"v": 18.55
+},
+"163|295|exterior||S": {
+"n_germanes": 1,
+"v": 17.75
+},
+"163|295|exterior||XS": {
+"n_germanes": 1,
+"v": 16.95
+},
+"163|297|exterior||L": {
+"n_germanes": 1,
+"v": 13.5
+},
+"163|297|exterior||M": {
+"n_germanes": 1,
+"v": 13.0
+},
+"163|297|exterior||S": {
+"n_germanes": 1,
+"v": 12.5
+},
+"163|297|exterior||XS": {
+"n_germanes": 1,
+"v": 12.0
+},
+"163|299|exterior||L": {
+"n_germanes": 1,
+"v": 2.0
+},
+"163|299|exterior||M": {
+"n_germanes": 1,
+"v": 2.0
+},
+"163|299|exterior||S": {
+"n_germanes": 1,
+"v": 2.0
+},
+"163|299|exterior||XS": {
+"n_germanes": 1,
+"v": 2.0
+},
+"163|301|exterior||L": {
+"n_germanes": 1,
+"v": 17.5
+},
+"163|301|exterior||M": {
+"n_germanes": 1,
+"v": 16.75
+},
+"163|301|exterior||S": {
+"n_germanes": 1,
+"v": 16.0
+},
+"163|301|exterior||XS": {
+"n_germanes": 1,
+"v": 15.25
+},
+"163|326|exterior||L": {
+"n_germanes": 1,
+"v": 54.0
+},
+"163|326|exterior||M": {
+"n_germanes": 1,
+"v": 51.0
+},
+"163|326|exterior||S": {
+"n_germanes": 1,
+"v": 48.0
+},
+"163|326|exterior||XS": {
+"n_germanes": 1,
+"v": 45.0
+},
+"163|420|exterior||L": {
+"n_germanes": 1,
+"v": 37.0
+},
+"163|420|exterior||M": {
+"n_germanes": 1,
+"v": 35.5
+},
+"163|420|exterior||S": {
+"n_germanes": 1,
+"v": 34.0
+},
+"163|420|exterior||XS": {
+"n_germanes": 1,
+"v": 32.5
+},
+"163|437|exterior||L": {
+"n_germanes": 1,
+"v": 54.5
+},
+"163|437|exterior||M": {
+"n_germanes": 1,
+"v": 53.5
+},
+"163|437|exterior||S": {
+"n_germanes": 1,
+"v": 52.5
+},
+"163|437|exterior||XS": {
+"n_germanes": 1,
+"v": 51.5
+},
+"163|438|exterior||L": {
+"n_germanes": 1,
+"v": 55.5
+},
+"163|438|exterior||M": {
+"n_germanes": 1,
+"v": 54.5
+},
+"163|438|exterior||S": {
+"n_germanes": 1,
+"v": 53.5
+},
+"163|438|exterior||XS": {
+"n_germanes": 1,
+"v": 52.5
+},
+"163|453|exterior||L": {
+"n_germanes": 1,
+"v": 3.0
+},
+"163|453|exterior||M": {
+"n_germanes": 1,
+"v": 3.0
+},
+"163|453|exterior||S": {
+"n_germanes": 1,
+"v": 3.0
+},
+"163|453|exterior||XS": {
+"n_germanes": 1,
+"v": 3.0
+},
+"163|455|exterior||L": {
+"n_germanes": 1,
+"v": 1.5
+},
+"163|455|exterior||M": {
+"n_germanes": 1,
+"v": 1.5
+},
+"163|455|exterior||S": {
+"n_germanes": 1,
+"v": 1.5
+},
+"163|455|exterior||XS": {
+"n_germanes": 1,
+"v": 1.5
+},
+"163|456|exterior||L": {
+"n_germanes": 1,
+"v": 2.5
+},
+"163|456|exterior||M": {
+"n_germanes": 1,
+"v": 2.5
+},
+"163|456|exterior||S": {
+"n_germanes": 1,
+"v": 2.5
+},
+"163|456|exterior||XS": {
+"n_germanes": 1,
+"v": 2.5
+},
+"163|457|exterior||L": {
+"n_germanes": 1,
+"v": 23.5
+},
+"163|457|exterior||M": {
+"n_germanes": 1,
+"v": 22.5
+},
+"163|457|exterior||S": {
+"n_germanes": 1,
+"v": 21.5
+},
+"163|457|exterior||XS": {
+"n_germanes": 1,
+"v": 20.5
+},
+"163|458|exterior||L": {
+"n_germanes": 1,
+"v": 26.0
+},
+"163|458|exterior||M": {
+"n_germanes": 1,
+"v": 25.0
+},
+"163|458|exterior||S": {
+"n_germanes": 1,
+"v": 24.0
+},
+"163|458|exterior||XS": {
+"n_germanes": 1,
+"v": 23.0
+},
+"163|461|exterior||L": {
+"n_germanes": 1,
+"v": 7.5
+},
+"163|461|exterior||M": {
+"n_germanes": 1,
+"v": 7.5
+},
+"163|461|exterior||S": {
+"n_germanes": 1,
+"v": 7.5
+},
+"163|461|exterior||XS": {
+"n_germanes": 1,
+"v": 7.5
+},
+"163|463|exterior||L": {
+"n_germanes": 1,
+"v": 7.8
+},
+"163|463|exterior||M": {
+"n_germanes": 1,
+"v": 7.4
+},
+"163|463|exterior||S": {
+"n_germanes": 1,
+"v": 7.0
+},
+"163|463|exterior||XS": {
+"n_germanes": 1,
+"v": 6.6
+},
+"163|464|exterior||L": {
+"n_germanes": 1,
+"v": 2.0
+},
+"163|464|exterior||M": {
+"n_germanes": 1,
+"v": 2.0
+},
+"163|464|exterior||S": {
+"n_germanes": 1,
+"v": 2.0
+},
+"163|464|exterior||XS": {
+"n_germanes": 1,
+"v": 2.0
+},
+"163|465|exterior||L": {
+"n_germanes": 1,
+"v": 35.5
+},
+"163|465|exterior||M": {
+"n_germanes": 1,
+"v": 34.0
+},
+"163|465|exterior||S": {
+"n_germanes": 1,
+"v": 32.5
+},
+"163|465|exterior||XS": {
+"n_germanes": 1,
+"v": 31.0
+},
+"163|498|exterior||L": {
+"n_germanes": 1,
+"v": 6.0
+},
+"163|498|exterior||M": {
+"n_germanes": 1,
+"v": 5.75
+},
+"163|498|exterior||S": {
+"n_germanes": 1,
+"v": 5.5
+},
+"163|498|exterior||XS": {
+"n_germanes": 1,
+"v": 5.25
+},
+"163|499|exterior||L": {
+"n_germanes": 1,
+"v": 5.5
+},
+"163|499|exterior||M": {
+"n_germanes": 1,
+"v": 5.25
+},
+"163|499|exterior||S": {
+"n_germanes": 1,
+"v": 5.0
+},
+"163|499|exterior||XS": {
+"n_germanes": 1,
+"v": 4.75
+},
+"174|273|exterior||L": {
+"n_germanes": 1,
+"v": 52.0
+},
+"174|273|exterior||M": {
+"n_germanes": 1,
+"v": 49.0
+},
+"174|273|exterior||S": {
+"n_germanes": 1,
+"v": 46.0
+},
+"174|273|exterior||XS": {
+"n_germanes": 1,
+"v": 43.0
+},
+"174|277|exterior||L": {
+"n_germanes": 1,
+"v": 10.6
+},
+"174|277|exterior||M": {
+"n_germanes": 1,
+"v": 9.8
+},
+"174|277|exterior||S": {
+"n_germanes": 1,
+"v": 9.0
+},
+"174|277|exterior||XS": {
+"n_germanes": 1,
+"v": 8.2
+},
+"174|278|exterior||L": {
+"n_germanes": 1,
+"v": 39.0
+},
+"174|278|exterior||M": {
+"n_germanes": 1,
+"v": 37.0
+},
+"174|278|exterior||S": {
+"n_germanes": 1,
+"v": 35.0
+},
+"174|278|exterior||XS": {
+"n_germanes": 1,
+"v": 33.0
+},
+"174|284|exterior||L": {
+"n_germanes": 1,
+"v": 23.5
+},
+"174|284|exterior||M": {
+"n_germanes": 1,
+"v": 22.5
+},
+"174|284|exterior||S": {
+"n_germanes": 1,
+"v": 21.5
+},
+"174|284|exterior||XS": {
+"n_germanes": 1,
+"v": 20.5
+},
+"174|286|exterior||L": {
+"n_germanes": 1,
+"v": 2.6
+},
+"174|286|exterior||M": {
+"n_germanes": 1,
+"v": 2.3
+},
+"174|286|exterior||S": {
+"n_germanes": 1,
+"v": 2.0
+},
+"174|286|exterior||XS": {
+"n_germanes": 1,
+"v": 1.7
+},
+"174|295|exterior||L": {
+"n_germanes": 1,
+"v": 18.5
+},
+"174|295|exterior||M": {
+"n_germanes": 1,
+"v": 17.5
+},
+"174|295|exterior||S": {
+"n_germanes": 1,
+"v": 16.5
+},
+"174|295|exterior||XS": {
+"n_germanes": 1,
+"v": 15.5
+},
+"174|297|exterior||L": {
+"n_germanes": 1,
+"v": 10.0
+},
+"174|297|exterior||M": {
+"n_germanes": 1,
+"v": 9.5
+},
+"174|297|exterior||S": {
+"n_germanes": 1,
+"v": 9.0
+},
+"174|297|exterior||XS": {
+"n_germanes": 1,
+"v": 8.5
+},
+"174|301|exterior||L": {
+"n_germanes": 1,
+"v": 18.0
+},
+"174|301|exterior||M": {
+"n_germanes": 1,
+"v": 17.5
+},
+"174|301|exterior||S": {
+"n_germanes": 1,
+"v": 17.0
+},
+"174|301|exterior||XS": {
+"n_germanes": 1,
+"v": 16.5
+},
+"174|326|exterior||L": {
+"n_germanes": 1,
+"v": 60.0
+},
+"174|326|exterior||M": {
+"n_germanes": 1,
+"v": 57.0
+},
+"174|326|exterior||S": {
+"n_germanes": 1,
+"v": 54.0
+},
+"174|326|exterior||XS": {
+"n_germanes": 1,
+"v": 51.0
+},
+"182|275|exterior||M": {
+"n_germanes": 1,
+"v": 37.5
+},
+"182|275|exterior||S": {
+"n_germanes": 1,
+"v": 36.0
+},
+"182|275|exterior||XS": {
+"n_germanes": 1,
+"v": 34.5
+},
+"182|276|exterior||M": {
+"n_germanes": 1,
+"v": 49.0
+},
+"182|276|exterior||S": {
+"n_germanes": 1,
+"v": 47.0
+},
+"182|276|exterior||XS": {
+"n_germanes": 1,
+"v": 45.0
+},
+"182|283|exterior||M": {
+"n_germanes": 1,
+"v": 107.25
+},
+"182|283|exterior||S": {
+"n_germanes": 1,
+"v": 106.5
+},
+"182|283|exterior||XS": {
+"n_germanes": 1,
+"v": 105.75
+},
+"182|284|exterior||M": {
+"n_germanes": 1,
+"v": 45.0
+},
+"182|284|exterior||S": {
+"n_germanes": 1,
+"v": 44.5
+},
+"182|284|exterior||XS": {
+"n_germanes": 1,
+"v": 44.0
+},
+"182|301|exterior||M": {
+"n_germanes": 1,
+"v": 12.3
+},
+"182|301|exterior||S": {
+"n_germanes": 1,
+"v": 12.0
+},
+"182|301|exterior||XS": {
+"n_germanes": 1,
+"v": 11.7
+},
+"182|305|exterior||M": {
+"n_germanes": 1,
+"v": 15.0
+},
+"182|305|exterior||S": {
+"n_germanes": 1,
+"v": 15.0
+},
+"182|305|exterior||XS": {
+"n_germanes": 1,
+"v": 15.0
+},
+"182|326|exterior||M": {
+"n_germanes": 1,
+"v": 302.0
+},
+"182|326|exterior||S": {
+"n_germanes": 1,
+"v": 300.0
+},
+"182|326|exterior||XS": {
+"n_germanes": 1,
+"v": 298.0
+},
+"186|275|exterior||L": {
+"n_germanes": 1,
+"v": 50.0
+},
+"186|275|exterior||M": {
+"n_germanes": 1,
+"v": 47.0
+},
+"186|275|exterior||S": {
+"n_germanes": 1,
+"v": 44.0
+},
+"186|275|exterior||XL": {
+"n_germanes": 1,
+"v": 53.0
+},
+"186|275|exterior||XXL": {
+"n_germanes": 1,
+"v": 57.0
+},
+"186|276|exterior||L": {
+"n_germanes": 1,
+"v": 57.0
+},
+"186|276|exterior||M": {
+"n_germanes": 1,
+"v": 54.0
+},
+"186|276|exterior||S": {
+"n_germanes": 1,
+"v": 51.0
+},
+"186|276|exterior||XL": {
+"n_germanes": 1,
+"v": 60.0
+},
+"186|276|exterior||XXL": {
+"n_germanes": 1,
+"v": 63.0
+},
+"186|309|exterior||L": {
+"n_germanes": 1,
+"v": 33.9
+},
+"186|309|exterior||M": {
+"n_germanes": 1,
+"v": 32.2
+},
+"186|309|exterior||S": {
+"n_germanes": 1,
+"v": 30.5
+},
+"186|309|exterior||XL": {
+"n_germanes": 1,
+"v": 35.6
+},
+"186|309|exterior||XXL": {
+"n_germanes": 1,
+"v": 37.3
+},
+"186|311|exterior||L": {
+"n_germanes": 1,
+"v": 18.4
+},
+"186|311|exterior||M": {
+"n_germanes": 1,
+"v": 17.7
+},
+"186|311|exterior||S": {
+"n_germanes": 1,
+"v": 17.0
+},
+"186|311|exterior||XL": {
+"n_germanes": 1,
+"v": 19.1
+},
+"186|311|exterior||XXL": {
+"n_germanes": 1,
+"v": 19.8
+},
+"186|320|exterior||L": {
+"n_germanes": 1,
+"v": 4.0
+},
+"186|320|exterior||M": {
+"n_germanes": 1,
+"v": 4.0
+},
+"186|320|exterior||S": {
+"n_germanes": 1,
+"v": 4.0
+},
+"186|320|exterior||XL": {
+"n_germanes": 1,
+"v": 4.0
+},
+"186|320|exterior||XXL": {
+"n_germanes": 1,
+"v": 4.0
+},
+"186|321|exterior||L": {
+"n_germanes": 1,
+"v": 32.0
+},
+"186|321|exterior||M": {
+"n_germanes": 1,
+"v": 31.0
+},
+"186|321|exterior||S": {
+"n_germanes": 1,
+"v": 30.0
+},
+"186|321|exterior||XL": {
+"n_germanes": 1,
+"v": 33.0
+},
+"186|321|exterior||XXL": {
+"n_germanes": 1,
+"v": 34.0
+},
+"186|322|exterior||L": {
+"n_germanes": 1,
+"v": 43.0
+},
+"186|322|exterior||M": {
+"n_germanes": 1,
+"v": 41.5
+},
+"186|322|exterior||S": {
+"n_germanes": 1,
+"v": 40.0
+},
+"186|322|exterior||XL": {
+"n_germanes": 1,
+"v": 44.5
+},
+"186|322|exterior||XXL": {
+"n_germanes": 1,
+"v": 46.0
+},
+"186|345|exterior||L": {
+"n_germanes": 1,
+"v": 4.0
+},
+"186|345|exterior||M": {
+"n_germanes": 1,
+"v": 4.0
+},
+"186|345|exterior||S": {
+"n_germanes": 1,
+"v": 4.0
+},
+"186|345|exterior||XL": {
+"n_germanes": 1,
+"v": 4.0
+},
+"186|345|exterior||XXL": {
+"n_germanes": 1,
+"v": 4.0
+},
+"186|349|exterior||L": {
+"n_germanes": 1,
+"v": 5.9
+},
+"186|349|exterior||M": {
+"n_germanes": 1,
+"v": 5.7
+},
+"186|349|exterior||S": {
+"n_germanes": 1,
+"v": 5.5
+},
+"186|349|exterior||XL": {
+"n_germanes": 1,
+"v": 6.1
+},
+"186|349|exterior||XXL": {
+"n_germanes": 1,
+"v": 6.3
+},
+"186|385|exterior||L": {
+"n_germanes": 1,
+"v": 5.0
+},
+"186|385|exterior||M": {
+"n_germanes": 1,
+"v": 5.0
+},
+"186|385|exterior||S": {
+"n_germanes": 1,
+"v": 5.0
+},
+"186|385|exterior||XL": {
+"n_germanes": 1,
+"v": 5.0
+},
+"186|385|exterior||XXL": {
+"n_germanes": 1,
+"v": 5.0
+},
+"186|386|exterior||L": {
+"n_germanes": 1,
+"v": 21.5
+},
+"186|386|exterior||M": {
+"n_germanes": 1,
+"v": 21.0
+},
+"186|386|exterior||S": {
+"n_germanes": 1,
+"v": 20.5
+},
+"186|386|exterior||XL": {
+"n_germanes": 1,
+"v": 22.0
+},
+"186|386|exterior||XXL": {
+"n_germanes": 1,
+"v": 22.5
+},
+"186|389|exterior||L": {
+"n_germanes": 1,
+"v": 102.0
+},
+"186|389|exterior||M": {
+"n_germanes": 1,
+"v": 101.0
+},
+"186|389|exterior||S": {
+"n_germanes": 1,
+"v": 100.0
+},
+"186|389|exterior||XL": {
+"n_germanes": 1,
+"v": 103.0
+},
+"186|389|exterior||XXL": {
+"n_germanes": 1,
+"v": 104.0
+},
+"186|390|exterior||L": {
+"n_germanes": 1,
+"v": 15.0
+},
+"186|390|exterior||M": {
+"n_germanes": 1,
+"v": 14.5
+},
+"186|390|exterior||S": {
+"n_germanes": 1,
+"v": 14.0
+},
+"186|390|exterior||XL": {
+"n_germanes": 1,
+"v": 15.5
+},
+"186|390|exterior||XXL": {
+"n_germanes": 1,
+"v": 16.0
+},
+"186|391|exterior||L": {
+"n_germanes": 1,
+"v": 23.0
+},
+"186|391|exterior||M": {
+"n_germanes": 1,
+"v": 22.5
+},
+"186|391|exterior||S": {
+"n_germanes": 1,
+"v": 22.0
+},
+"186|391|exterior||XL": {
+"n_germanes": 1,
+"v": 23.5
+},
+"186|391|exterior||XXL": {
+"n_germanes": 1,
+"v": 24.0
+},
+"186|392|exterior||L": {
+"n_germanes": 1,
+"v": 25.0
+},
+"186|392|exterior||M": {
+"n_germanes": 1,
+"v": 25.0
+},
+"186|392|exterior||S": {
+"n_germanes": 1,
+"v": 25.0
+},
+"186|392|exterior||XL": {
+"n_germanes": 1,
+"v": 25.0
+},
+"186|392|exterior||XXL": {
+"n_germanes": 1,
+"v": 25.0
+},
+"186|393|exterior||L": {
+"n_germanes": 1,
+"v": 12.6
+},
+"186|393|exterior||M": {
+"n_germanes": 1,
+"v": 12.3
+},
+"186|393|exterior||S": {
+"n_germanes": 1,
+"v": 12.0
+},
+"186|393|exterior||XL": {
+"n_germanes": 1,
+"v": 12.9
+},
+"186|393|exterior||XXL": {
+"n_germanes": 1,
+"v": 13.2
+},
+"186|394|exterior||L": {
+"n_germanes": 1,
+"v": 1.5
+},
+"186|394|exterior||M": {
+"n_germanes": 1,
+"v": 1.5
+},
+"186|394|exterior||S": {
+"n_germanes": 1,
+"v": 1.5
+},
+"186|394|exterior||XL": {
+"n_germanes": 1,
+"v": 1.5
+},
+"186|394|exterior||XXL": {
+"n_germanes": 1,
+"v": 1.5
+},
+"186|395|exterior||L": {
+"n_germanes": 1,
+"v": 10.4
+},
+"186|395|exterior||M": {
+"n_germanes": 1,
+"v": 10.2
+},
+"186|395|exterior||S": {
+"n_germanes": 1,
+"v": 10.0
+},
+"186|395|exterior||XL": {
+"n_germanes": 1,
+"v": 10.6
+},
+"186|395|exterior||XXL": {
+"n_germanes": 1,
+"v": 10.8
+},
+"186|396|exterior||L": {
+"n_germanes": 1,
+"v": 11.5
+},
+"186|396|exterior||M": {
+"n_germanes": 1,
+"v": 11.0
+},
+"186|396|exterior||S": {
+"n_germanes": 1,
+"v": 10.5
+},
+"186|396|exterior||XL": {
+"n_germanes": 1,
+"v": 12.0
+},
+"186|396|exterior||XXL": {
+"n_germanes": 1,
+"v": 12.5
+},
+"186|397|exterior||L": {
+"n_germanes": 1,
+"v": 7.0
+},
+"186|397|exterior||M": {
+"n_germanes": 1,
+"v": 6.5
+},
+"186|397|exterior||S": {
+"n_germanes": 1,
+"v": 6.0
+},
+"186|397|exterior||XL": {
+"n_germanes": 1,
+"v": 7.5
+},
+"186|397|exterior||XXL": {
+"n_germanes": 1,
+"v": 8.0
+},
+"268|273|exterior||L": {
+"n_germanes": 1,
+"v": 52.0
+},
+"268|273|exterior||M": {
+"n_germanes": 1,
+"v": 49.0
+},
+"268|273|exterior||S": {
+"n_germanes": 1,
+"v": 46.0
+},
+"268|273|exterior||XS": {
+"n_germanes": 1,
+"v": 43.0
+},
+"268|273|exterior||XXS": {
+"n_germanes": 1,
+"v": 41.0
+},
+"268|277|exterior||L": {
+"n_germanes": 1,
+"v": 9.8
+},
+"268|277|exterior||M": {
+"n_germanes": 1,
+"v": 9.4
+},
+"268|277|exterior||S": {
+"n_germanes": 1,
+"v": 9.0
+},
+"268|277|exterior||XS": {
+"n_germanes": 1,
+"v": 8.6
+},
+"268|277|exterior||XXS": {
+"n_germanes": 1,
+"v": 8.35
+},
+"268|284|exterior||L": {
+"n_germanes": 1,
+"v": 23.5
+},
+"268|284|exterior||M": {
+"n_germanes": 1,
+"v": 22.5
+},
+"268|284|exterior||S": {
+"n_germanes": 1,
+"v": 21.5
+},
+"268|284|exterior||XS": {
+"n_germanes": 1,
+"v": 20.5
+},
+"268|284|exterior||XXS": {
+"n_germanes": 1,
+"v": 19.8
+},
+"268|286|exterior||L": {
+"n_germanes": 1,
+"v": 2.0
+},
+"268|286|exterior||M": {
+"n_germanes": 1,
+"v": 2.0
+},
+"268|286|exterior||S": {
+"n_germanes": 1,
+"v": 2.0
+},
+"268|286|exterior||XS": {
+"n_germanes": 1,
+"v": 2.0
+},
+"268|286|exterior||XXS": {
+"n_germanes": 1,
+"v": 2.0
+},
+"268|292|exterior||L": {
+"n_germanes": 1,
+"v": 63.5
+},
+"268|292|exterior||M": {
+"n_germanes": 1,
+"v": 62.5
+},
+"268|292|exterior||S": {
+"n_germanes": 1,
+"v": 61.5
+},
+"268|292|exterior||XS": {
+"n_germanes": 1,
+"v": 60.5
+},
+"268|292|exterior||XXS": {
+"n_germanes": 1,
+"v": 59.5
+},
+"268|295|exterior||L": {
+"n_germanes": 1,
+"v": 18.1
+},
+"268|295|exterior||M": {
+"n_germanes": 1,
+"v": 17.3
+},
+"268|295|exterior||S": {
+"n_germanes": 1,
+"v": 16.5
+},
+"268|295|exterior||XS": {
+"n_germanes": 1,
+"v": 15.7
+},
+"268|295|exterior||XXS": {
+"n_germanes": 1,
+"v": 15.1
+},
+"268|297|exterior||L": {
+"n_germanes": 1,
+"v": 10.0
+},
+"268|297|exterior||M": {
+"n_germanes": 1,
+"v": 9.5
+},
+"268|297|exterior||S": {
+"n_germanes": 1,
+"v": 9.0
+},
+"268|297|exterior||XS": {
+"n_germanes": 1,
+"v": 8.5
+},
+"268|297|exterior||XXS": {
+"n_germanes": 1,
+"v": 8.2
+},
+"268|299|exterior||L": {
+"n_germanes": 1,
+"v": 0.7
+},
+"268|299|exterior||M": {
+"n_germanes": 1,
+"v": 0.7
+},
+"268|299|exterior||S": {
+"n_germanes": 1,
+"v": 0.7
+},
+"268|299|exterior||XS": {
+"n_germanes": 1,
+"v": 0.7
+},
+"268|299|exterior||XXS": {
+"n_germanes": 1,
+"v": 0.7
+},
+"268|301|exterior||L": {
+"n_germanes": 1,
+"v": 18.5
+},
+"268|301|exterior||M": {
+"n_germanes": 1,
+"v": 17.75
+},
+"268|301|exterior||S": {
+"n_germanes": 1,
+"v": 17.0
+},
+"268|301|exterior||XS": {
+"n_germanes": 1,
+"v": 16.25
+},
+"268|301|exterior||XXS": {
+"n_germanes": 1,
+"v": 15.75
+},
+"268|326|exterior||L": {
+"n_germanes": 1,
+"v": 60.0
+},
+"268|326|exterior||M": {
+"n_germanes": 1,
+"v": 57.0
+},
+"268|326|exterior||S": {
+"n_germanes": 1,
+"v": 54.0
+},
+"268|326|exterior||XS": {
+"n_germanes": 1,
+"v": 51.0
+},
+"268|326|exterior||XXS": {
+"n_germanes": 1,
+"v": 49.0
+},
+"268|420|exterior||L": {
+"n_germanes": 1,
+"v": 36.0
+},
+"268|420|exterior||M": {
+"n_germanes": 1,
+"v": 34.5
+},
+"268|420|exterior||S": {
+"n_germanes": 1,
+"v": 33.0
+},
+"268|420|exterior||XS": {
+"n_germanes": 1,
+"v": 31.5
+},
+"268|420|exterior||XXS": {
+"n_germanes": 1,
+"v": 30.5
+},
+"268|437|exterior||L": {
+"n_germanes": 1,
+"v": 56.0
+},
+"268|437|exterior||M": {
+"n_germanes": 1,
+"v": 55.0
+},
+"268|437|exterior||S": {
+"n_germanes": 1,
+"v": 54.0
+},
+"268|437|exterior||XS": {
+"n_germanes": 1,
+"v": 53.0
+},
+"268|437|exterior||XXS": {
+"n_germanes": 1,
+"v": 52.0
+},
+"268|438|exterior||L": {
+"n_germanes": 1,
+"v": 53.0
+},
+"268|438|exterior||M": {
+"n_germanes": 1,
+"v": 52.0
+},
+"268|438|exterior||S": {
+"n_germanes": 1,
+"v": 51.0
+},
+"268|438|exterior||XS": {
+"n_germanes": 1,
+"v": 50.0
+},
+"268|438|exterior||XXS": {
+"n_germanes": 1,
+"v": 49.0
+},
+"268|455|exterior||L": {
+"n_germanes": 1,
+"v": 1.5
+},
+"268|455|exterior||M": {
+"n_germanes": 1,
+"v": 1.5
+},
+"268|455|exterior||S": {
+"n_germanes": 1,
+"v": 1.5
+},
+"268|455|exterior||XS": {
+"n_germanes": 1,
+"v": 1.5
+},
+"268|455|exterior||XXS": {
+"n_germanes": 1,
+"v": 1.5
+},
+"268|457|exterior||L": {
+"n_germanes": 1,
+"v": 25.0
+},
+"268|457|exterior||M": {
+"n_germanes": 1,
+"v": 24.0
+},
+"268|457|exterior||S": {
+"n_germanes": 1,
+"v": 23.0
+},
+"268|457|exterior||XS": {
+"n_germanes": 1,
+"v": 22.0
+},
+"268|457|exterior||XXS": {
+"n_germanes": 1,
+"v": 21.3
+},
+"268|458|exterior||L": {
+"n_germanes": 1,
+"v": 26.0
+},
+"268|458|exterior||M": {
+"n_germanes": 1,
+"v": 25.0
+},
+"268|458|exterior||S": {
+"n_germanes": 1,
+"v": 24.0
+},
+"268|458|exterior||XS": {
+"n_germanes": 1,
+"v": 23.0
+},
+"268|458|exterior||XXS": {
+"n_germanes": 1,
+"v": 22.3
+},
+"268|459|exterior||L": {
+"n_germanes": 1,
+"v": 18.1
+},
+"268|459|exterior||M": {
+"n_germanes": 1,
+"v": 17.3
+},
+"268|459|exterior||S": {
+"n_germanes": 1,
+"v": 16.5
+},
+"268|459|exterior||XS": {
+"n_germanes": 1,
+"v": 15.7
+},
+"268|459|exterior||XXS": {
+"n_germanes": 1,
+"v": 15.1
+},
+"268|463|exterior||L": {
+"n_germanes": 1,
+"v": 8.8
+},
+"268|463|exterior||M": {
+"n_germanes": 1,
+"v": 8.4
+},
+"268|463|exterior||S": {
+"n_germanes": 1,
+"v": 8.0
+},
+"268|463|exterior||XS": {
+"n_germanes": 1,
+"v": 7.6
+},
+"268|463|exterior||XXS": {
+"n_germanes": 1,
+"v": 7.35
+},
+"268|464|exterior||L": {
+"n_germanes": 1,
+"v": 2.5
+},
+"268|464|exterior||M": {
+"n_germanes": 1,
+"v": 2.5
+},
+"268|464|exterior||S": {
+"n_germanes": 1,
+"v": 2.5
+},
+"268|464|exterior||XS": {
+"n_germanes": 1,
+"v": 2.5
+},
+"268|464|exterior||XXS": {
+"n_germanes": 1,
+"v": 2.5
+},
+"268|465|exterior||L": {
+"n_germanes": 1,
+"v": 36.0
+},
+"268|465|exterior||M": {
+"n_germanes": 1,
+"v": 34.5
+},
+"268|465|exterior||S": {
+"n_germanes": 1,
+"v": 33.0
+},
+"268|465|exterior||XS": {
+"n_germanes": 1,
+"v": 31.5
+},
+"268|465|exterior||XXS": {
+"n_germanes": 1,
+"v": 30.5
+},
+"269|273|exterior||L": {
+"n_germanes": 1,
+"v": 52.0
+},
+"269|273|exterior||M": {
+"n_germanes": 1,
+"v": 49.0
+},
+"269|273|exterior||S": {
+"n_germanes": 1,
+"v": 46.0
+},
+"269|273|exterior||XS": {
+"n_germanes": 1,
+"v": 43.0
+},
+"269|273|exterior||XXS": {
+"n_germanes": 1,
+"v": 41.0
+},
+"269|277|exterior||L": {
+"n_germanes": 1,
+"v": 9.8
+},
+"269|277|exterior||M": {
+"n_germanes": 1,
+"v": 9.4
+},
+"269|277|exterior||S": {
+"n_germanes": 1,
+"v": 9.0
+},
+"269|277|exterior||XS": {
+"n_germanes": 1,
+"v": 8.6
+},
+"269|277|exterior||XXS": {
+"n_germanes": 1,
+"v": 8.35
+},
+"269|278|exterior||L": {
+"n_germanes": 1,
+"v": 38.0
+},
+"269|278|exterior||M": {
+"n_germanes": 1,
+"v": 36.5
+},
+"269|278|exterior||S": {
+"n_germanes": 1,
+"v": 35.0
+},
+"269|278|exterior||XS": {
+"n_germanes": 1,
+"v": 33.5
+},
+"269|278|exterior||XXS": {
+"n_germanes": 1,
+"v": 32.5
+},
+"269|284|exterior||L": {
+"n_germanes": 1,
+"v": 23.5
+},
+"269|284|exterior||M": {
+"n_germanes": 1,
+"v": 22.5
+},
+"269|284|exterior||S": {
+"n_germanes": 1,
+"v": 21.5
+},
+"269|284|exterior||XS": {
+"n_germanes": 1,
+"v": 20.5
+},
+"269|284|exterior||XXS": {
+"n_germanes": 1,
+"v": 19.8
+},
+"269|286|exterior||L": {
+"n_germanes": 1,
+"v": 2.0
+},
+"269|286|exterior||M": {
+"n_germanes": 1,
+"v": 2.0
+},
+"269|286|exterior||S": {
+"n_germanes": 1,
+"v": 2.0
+},
+"269|286|exterior||XS": {
+"n_germanes": 1,
+"v": 2.0
+},
+"269|286|exterior||XXS": {
+"n_germanes": 1,
+"v": 2.0
+},
+"269|295|exterior||L": {
+"n_germanes": 1,
+"v": 18.1
+},
+"269|295|exterior||M": {
+"n_germanes": 1,
+"v": 17.3
+},
+"269|295|exterior||S": {
+"n_germanes": 1,
+"v": 16.5
+},
+"269|295|exterior||XS": {
+"n_germanes": 1,
+"v": 15.7
+},
+"269|295|exterior||XXS": {
+"n_germanes": 1,
+"v": 15.1
+},
+"269|297|exterior||L": {
+"n_germanes": 1,
+"v": 10.0
+},
+"269|297|exterior||M": {
+"n_germanes": 1,
+"v": 9.5
+},
+"269|297|exterior||S": {
+"n_germanes": 1,
+"v": 9.0
+},
+"269|297|exterior||XS": {
+"n_germanes": 1,
+"v": 8.5
+},
+"269|297|exterior||XXS": {
+"n_germanes": 1,
+"v": 8.2
+},
+"269|299|exterior||L": {
+"n_germanes": 1,
+"v": 0.7
+},
+"269|299|exterior||M": {
+"n_germanes": 1,
+"v": 0.7
+},
+"269|299|exterior||S": {
+"n_germanes": 1,
+"v": 0.7
+},
+"269|299|exterior||XS": {
+"n_germanes": 1,
+"v": 0.7
+},
+"269|299|exterior||XXS": {
+"n_germanes": 1,
+"v": 0.7
+},
+"269|301|exterior||L": {
+"n_germanes": 1,
+"v": 18.5
+},
+"269|301|exterior||M": {
+"n_germanes": 1,
+"v": 17.75
+},
+"269|301|exterior||S": {
+"n_germanes": 1,
+"v": 17.0
+},
+"269|301|exterior||XS": {
+"n_germanes": 1,
+"v": 16.25
+},
+"269|301|exterior||XXS": {
+"n_germanes": 1,
+"v": 15.75
+},
+"269|326|exterior||L": {
+"n_germanes": 1,
+"v": 60.0
+},
+"269|326|exterior||M": {
+"n_germanes": 1,
+"v": 57.0
+},
+"269|326|exterior||S": {
+"n_germanes": 1,
+"v": 54.0
+},
+"269|326|exterior||XS": {
+"n_germanes": 1,
+"v": 51.0
+},
+"269|326|exterior||XXS": {
+"n_germanes": 1,
+"v": 49.0
+},
+"269|420|exterior||L": {
+"n_germanes": 1,
+"v": 36.0
+},
+"269|420|exterior||M": {
+"n_germanes": 1,
+"v": 34.5
+},
+"269|420|exterior||S": {
+"n_germanes": 1,
+"v": 33.0
+},
+"269|420|exterior||XS": {
+"n_germanes": 1,
+"v": 31.5
+},
+"269|420|exterior||XXS": {
+"n_germanes": 1,
+"v": 30.5
+},
+"269|437|exterior||L": {
+"n_germanes": 1,
+"v": 5.0
+},
+"269|437|exterior||M": {
+"n_germanes": 1,
+"v": 4.0
+},
+"269|437|exterior||S": {
+"n_germanes": 1,
+"v": 3.0
+},
+"269|437|exterior||XS": {
+"n_germanes": 1,
+"v": 2.0
+},
+"269|437|exterior||XXS": {
+"n_germanes": 1,
+"v": 1.0
+},
+"269|438|exterior||L": {
+"n_germanes": 1,
+"v": 53.0
+},
+"269|438|exterior||M": {
+"n_germanes": 1,
+"v": 52.0
+},
+"269|438|exterior||S": {
+"n_germanes": 1,
+"v": 51.0
+},
+"269|438|exterior||XS": {
+"n_germanes": 1,
+"v": 50.0
+},
+"269|438|exterior||XXS": {
+"n_germanes": 1,
+"v": 49.0
+},
+"269|455|exterior||L": {
+"n_germanes": 1,
+"v": 1.5
+},
+"269|455|exterior||M": {
+"n_germanes": 1,
+"v": 1.5
+},
+"269|455|exterior||S": {
+"n_germanes": 1,
+"v": 1.5
+},
+"269|455|exterior||XS": {
+"n_germanes": 1,
+"v": 1.5
+},
+"269|455|exterior||XXS": {
+"n_germanes": 1,
+"v": 1.5
+},
+"269|457|exterior||L": {
+"n_germanes": 1,
+"v": 25.0
+},
+"269|457|exterior||M": {
+"n_germanes": 1,
+"v": 24.0
+},
+"269|457|exterior||S": {
+"n_germanes": 1,
+"v": 23.0
+},
+"269|457|exterior||XS": {
+"n_germanes": 1,
+"v": 22.0
+},
+"269|457|exterior||XXS": {
+"n_germanes": 1,
+"v": 21.3
+},
+"269|458|exterior||L": {
+"n_germanes": 1,
+"v": 26.0
+},
+"269|458|exterior||M": {
+"n_germanes": 1,
+"v": 25.0
+},
+"269|458|exterior||S": {
+"n_germanes": 1,
+"v": 24.0
+},
+"269|458|exterior||XS": {
+"n_germanes": 1,
+"v": 23.0
+},
+"269|458|exterior||XXS": {
+"n_germanes": 1,
+"v": 22.3
+},
+"269|459|exterior||L": {
+"n_germanes": 1,
+"v": 18.1
+},
+"269|459|exterior||M": {
+"n_germanes": 1,
+"v": 17.3
+},
+"269|459|exterior||S": {
+"n_germanes": 1,
+"v": 16.5
+},
+"269|459|exterior||XS": {
+"n_germanes": 1,
+"v": 15.7
+},
+"269|459|exterior||XXS": {
+"n_germanes": 1,
+"v": 15.1
+},
+"269|461|exterior||L": {
+"n_germanes": 1,
+"v": 8.0
+},
+"269|461|exterior||M": {
+"n_germanes": 1,
+"v": 8.0
+},
+"269|461|exterior||S": {
+"n_germanes": 1,
+"v": 8.0
+},
+"269|461|exterior||XS": {
+"n_germanes": 1,
+"v": 8.0
+},
+"269|461|exterior||XXS": {
+"n_germanes": 1,
+"v": 8.0
+},
+"269|463|exterior||L": {
+"n_germanes": 1,
+"v": 8.8
+},
+"269|463|exterior||M": {
+"n_germanes": 1,
+"v": 8.4
+},
+"269|463|exterior||S": {
+"n_germanes": 1,
+"v": 8.0
+},
+"269|463|exterior||XS": {
+"n_germanes": 1,
+"v": 7.6
+},
+"269|463|exterior||XXS": {
+"n_germanes": 1,
+"v": 7.35
+},
+"269|464|exterior||L": {
+"n_germanes": 1,
+"v": 2.5
+},
+"269|464|exterior||M": {
+"n_germanes": 1,
+"v": 2.5
+},
+"269|464|exterior||S": {
+"n_germanes": 1,
+"v": 2.5
+},
+"269|464|exterior||XS": {
+"n_germanes": 1,
+"v": 2.5
+},
+"269|464|exterior||XXS": {
+"n_germanes": 1,
+"v": 2.5
+},
+"269|465|exterior||L": {
+"n_germanes": 1,
+"v": 36.0
+},
+"269|465|exterior||M": {
+"n_germanes": 1,
+"v": 34.5
+},
+"269|465|exterior||S": {
+"n_germanes": 1,
+"v": 33.0
+},
+"269|465|exterior||XS": {
+"n_germanes": 1,
+"v": 31.5
+},
+"269|465|exterior||XXS": {
+"n_germanes": 1,
+"v": 30.5
+},
+"269|501|exterior||L": {
+"n_germanes": 1,
+"v": 16.0
+},
+"269|501|exterior||M": {
+"n_germanes": 1,
+"v": 15.0
+},
+"269|501|exterior||S": {
+"n_germanes": 1,
+"v": 14.0
+},
+"269|501|exterior||XS": {
+"n_germanes": 1,
+"v": 13.0
+},
+"269|501|exterior||XXS": {
+"n_germanes": 1,
+"v": 12.3
+},
+"269|502|exterior||L": {
+"n_germanes": 1,
+"v": 22.5
+},
+"269|502|exterior||M": {
+"n_germanes": 1,
+"v": 21.5
+},
+"269|502|exterior||S": {
+"n_germanes": 1,
+"v": 20.5
+},
+"269|502|exterior||XS": {
+"n_germanes": 1,
+"v": 19.5
+},
+"269|502|exterior||XXS": {
+"n_germanes": 1,
+"v": 18.8
+},
+"269|503|exterior||L": {
+"n_germanes": 1,
+"v": 63.5
+},
+"269|503|exterior||M": {
+"n_germanes": 1,
+"v": 62.5
+},
+"269|503|exterior||S": {
+"n_germanes": 1,
+"v": 61.5
+},
+"269|503|exterior||XS": {
+"n_germanes": 1,
+"v": 60.5
+},
+"269|503|exterior||XXS": {
+"n_germanes": 1,
+"v": 59.5
+},
+"269|504|exterior||L": {
+"n_germanes": 1,
+"v": 81.5
+},
+"269|504|exterior||M": {
+"n_germanes": 1,
+"v": 79.75
+},
+"269|504|exterior||S": {
+"n_germanes": 1,
+"v": 78.0
+},
+"269|504|exterior||XS": {
+"n_germanes": 1,
+"v": 76.25
+},
+"269|504|exterior||XXS": {
+"n_germanes": 1,
+"v": 74.75
+}
+},
+"segellats_sense_generador": [
+163,
+182
+],
+"versio_golden": "c3-identitat-completa-v1"
+}
