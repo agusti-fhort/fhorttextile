@@ -105,9 +105,27 @@ class OrdreTaulaMesuresTest(TenantTestCase):
 
     def test_les_celles_segueixen_l_ordre_dels_poms(self):
         """`cells` és un objecte JSON i el seu ordre de claus és el d'inserció: si no se
-        l'ordena amb els POMs, la taula i les seves cel·les van per camins diferents."""
+        l'ordena amb els POMs, la taula i les seves cel·les van per camins diferents.
+
+        C4 — LA CLAU DE `cells` HA CRESCUT; l'invariant que aquest test defensa, NO. Fins a C4
+        la clau era `str(pom_id)` i aquest assert la comparava amb `p['id']`; ara és la
+        identitat sencera de la mesura (`pom.identitat.clau_mesura`), i qui la porta a
+        `poms` és el camp NOU `clau`. El que es comprova segueix sent exactament el mateix —
+        que les dues llistes van en el mateix ordre— i de fet es comprova MILLOR: amb la clau
+        antiga, dues germanes del mateix POM haurien donat la mateixa entrada a `cells` i
+        l'assert hauria passat amb una cel·la de menys sense adonar-se'n.
+        """
         resp = self._taula(self._sf(amb_graduacio=True))
 
         self.assertEqual(
             list(resp.data['cells']),
-            [str(p['id']) for p in resp.data['poms']])
+            [p['clau'] for p in resp.data['poms']])
+
+    def test_cada_pom_porta_la_clau_que_enllaça_amb_les_seves_celles(self):
+        """C4 — el camp que fa navegable el payload: sense ell, el front té dues llistes i cap
+        manera de creuar-les quan `pom_id` deixa de ser únic."""
+        resp = self._taula(self._sf(amb_graduacio=True))
+
+        for p in resp.data['poms']:
+            self.assertEqual(p['clau'], f"{p['id']}|{p['capa']}|{p['instancia']}")
+            self.assertIn(p['clau'], resp.data['cells'])
