@@ -10,7 +10,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 
 import { formatDelta } from '../../utils/format'
-import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
+import { etiquetaCapa, etiquetaInstancia, CAPES, INSTANCIES } from '../../utils/capaInstancia'
 
 // El bloc de REGLA es distingeix per FONS (crema de la casa) i per un SEPARADOR gruixut
 // respecte de la mesura: el color agrupa, el filet talla. Dos senyals, no un — la lliçó del
@@ -179,6 +179,48 @@ export default function EditableTable({
       ordre: localRows.length,
     }
     setLocalRows(prev => [...prev, newRow])
+    setDirty(true)
+  }
+
+  // ── F4 · EL GEST DE CREAR UNA GERMANA ───────────────────────────────────────
+  // Tot C4 és a sota des de fa dies —l'escriptura porta els dos eixos, la poda també, la clau
+  // única de la BD és `(model, pom, capa, instancia)`— i no hi havia CAP porta d'usuari: les
+  // germanes que hi ha a staging es van sembrar per script. Aquesta és la porta.
+  //
+  // NEIX AL COSTAT DE LA MARE, no al final de la taula: una germana és una cara MÉS de la
+  // mateixa mesura i llegir-la a catorze files de distància no diria això. Neix BUIDA, i el
+  // carril de valors hi entra com a qualsevol altra fila (l'ordre de tabulació és la posició).
+  //
+  // ⚠️ NO ES DESA SOLA, i és correcte: `buildPayload` només envia les files amb valor, com ha
+  // fet sempre amb les files noves. Una germana sense mesura encara no és una mesura.
+  const [germanaDe, setGermanaDe] = useState(null)   // fila mare del diàleg obert
+
+  const creaGermana = ({ capa, instancia, nom_fitxa }) => {
+    const mare = germanaDe
+    setGermanaDe(null)
+    if (!mare) return
+    const nova = {
+      ...mare,
+      id: `tmp-${Date.now()}`,
+      capa: capa || mare.capa || 'exterior',
+      instancia: instancia || '',
+      nom_fitxa,
+      // El VALOR no s'hereta. Una germana de folre que naixés amb la mida de l'exterior seria
+      // una xifra que ningú no ha mesurat, indistingible d'una de presa: el pitjor defecte
+      // possible en una taula de mesures. Neix buida i el tècnic la mesura.
+      base_value_cm: null,
+      graded: {},
+      // El BATEIG tampoc: el nom canònic del model és de la mesura, no del POM.
+      nom_canonic_model: '', nom_traduit_model: '',
+      // `clau` és la que serveix el backend per indexar els deltes; una fila que encara no
+      // existeix no en té cap, i heretar la de la mare li ensenyaria el Δ de l'altra.
+      clau: undefined,
+    }
+    setLocalRows(prev => {
+      const i = prev.findIndex(r => r.id === mare.id)
+      const fins = i < 0 ? prev.length : i + 1
+      return [...prev.slice(0, fins), nova, ...prev.slice(fins)]
+    })
     setDirty(true)
   }
 
@@ -408,6 +450,7 @@ export default function EditableTable({
                     readOnly={readOnly}
                     onCellChange={handleCellChange}
                     onDelete={handleDeleteRow}
+                    onGermana={() => setGermanaDe(row)}
                     delta={calcDelta(row)}
                     onBateig={handleBateig}
                     onRegla={handleRegla}
@@ -431,6 +474,16 @@ export default function EditableTable({
         </DndContext>
       </div>
 
+      {germanaDe && (
+        <GermanaDialog
+          mare={germanaDe}
+          // Les cares que aquest POM JA té a la taula: la clau de la BD és
+          // `(model, pom, capa, instancia)` i oferir-ne una de repetida acabaria escrivint
+          // damunt d'una fila existent en silenci. El diàleg les treu de la llista.
+          existents={localRows.filter(r => r.pom_id === germanaDe.pom_id)}
+          onCancel={() => setGermanaDe(null)}
+          onCrear={creaGermana} />
+      )}
 
       {!readOnly && (
         <div style={{ display: 'flex', gap: 18, marginTop: 10, fontSize: 'var(--fs-label)',
@@ -458,7 +511,7 @@ export default function EditableTable({
   )
 }
 
-function SortableRow({ row, n, displaySize, readOnly, onCellChange, onDelete, delta, onBateig, onRegla,
+function SortableRow({ row, n, displaySize, readOnly, onCellChange, onDelete, onGermana, delta, onBateig, onRegla,
                        widths, registerVal, onNav }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -608,7 +661,18 @@ function SortableRow({ row, n, displaySize, readOnly, onCellChange, onDelete, de
         </>
       )}
       {!readOnly && (
-        <td style={tdS}>
+        <td style={{ ...tdS, whiteSpace: 'nowrap' }}>
+          {/* F4 — AFEGIR GERMANA. Va a la fila, no a un menú global, perquè una germana no és
+              «una mesura nova»: és una cara MÉS d'AQUESTA mesura, i el gest ha de sortir d'ella.
+              Només amb `pom_id`: una fila que encara no s'ha desat no té POM a què agermanar-se. */}
+          {row.pom_id != null && (
+            <button type="button" onClick={onGermana}
+              style={{ background: 'none', border: 'none', cursor: 'pointer',
+                       color: 'var(--gold)', fontSize: 'var(--fs-h3)', padding: '2px 4px' }}
+              title={t('germana.afegir')}>
+              <i className="ti ti-layers-subtract" />
+            </button>
+          )}
           <button type="button" onClick={() => onDelete(row.id)}
             style={{ background: 'none', border: 'none', cursor: 'pointer',
                      color: 'var(--text-muted)', fontSize: 'var(--fs-h3)', padding: '2px 4px' }}
@@ -618,6 +682,123 @@ function SortableRow({ row, n, displaySize, readOnly, onCellChange, onDelete, de
         </td>
       )}
     </tr>
+  )
+}
+
+// ── F4 · EL DIÀLEG DE LA GERMANA ────────────────────────────────────────────────────────────
+//
+// Dues menes de germana, i NO són el mateix acte:
+//
+//  · DE CAPA — la mateixa mesura en una altra matèria de la peça (l'ample de pit al folre). El
+//    nom no cal: la capa ja la distingeix, i la BD no l'exigeix.
+//  · D'INSTÀNCIA — la mateixa mesura en una altra cara/posició (la sisa esquerra i la dreta).
+//    Aquí el NOM ÉS OBLIGATORI, i no és una tria d'UX: la invariant
+//    `models_app_basemeasurement_instancia_exigeix_nom` ho imposa a la base de dades
+//    (`CHECK NOT (instancia > '' AND nom_fitxa = '')`). Sense el camp, desar petaria amb un
+//    IntegrityError que arribaria com un 500 mut. Es demana aquí, que és on es pot explicar.
+//
+// LES CARES QUE JA HI SÓN NO S'OFEREIXEN. La clau única és `(model, pom, capa, instancia)`:
+// tornar a triar una combinació existent no crearia res, escriuria damunt de la fila que ja hi
+// ha i el tècnic veuria desaparèixer una mesura sense saber per què.
+//
+// Les instàncies són les quatre amb literal propi (`INSTANCIES`). Un slug compost com
+// `left-relaxed` és legítim al domini i el diccionari sencer arriba amb C4-ins; oferir aquí un
+// camp lliure de slug seria demanar-li a la Montse que escrigui vocabulari canònic a mà.
+function GermanaDialog({ mare, existents, onCancel, onCrear }) {
+  const { t } = useTranslation()
+  const [mena, setMena] = useState('capa')
+  const [capa, setCapa] = useState('')
+  const [instancia, setInstancia] = useState('')
+  const [nom, setNom] = useState('')
+
+  const capaMare = mare.capa || 'exterior'
+  const preses = new Set(existents.map(r => `${r.capa || 'exterior'}|${r.instancia || ''}`))
+  // Capes lliures: qualsevol de les sis que no tingui ja una fila amb la instància de la mare.
+  const capesLliures = CAPES.filter(c => !preses.has(`${c}|${mare.instancia || ''}`))
+  // Instàncies lliures: dins la capa de la mare. Una fila amb instància única (`''`) i una amb
+  // `left` conviuen — no és cap conflicte, i el domini les admet totes dues.
+  const instLliures = INSTANCIES.filter(i => !preses.has(`${capaMare}|${i}`))
+
+  const nomCal = mena === 'instancia'
+  const tria = mena === 'capa' ? capa : instancia
+  const potCrear = !!tria && (!nomCal || nom.trim() !== '')
+
+  const crea = () => {
+    if (!potCrear) return
+    onCrear(mena === 'capa'
+      ? { capa, instancia: mare.instancia || '', nom_fitxa: nom.trim() || mare.nom_fitxa || '' }
+      : { capa: capaMare, instancia, nom_fitxa: nom.trim() })
+  }
+
+  const opcio = (actiu, onClick, clau, text) => (
+    <button key={clau} type="button" onClick={onClick}
+      style={{
+        padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 'var(--fs-body)',
+        border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
+        background: actiu ? 'var(--gold-pale)' : 'var(--white)',
+        color: actiu ? 'var(--gold)' : 'var(--text-main)', fontWeight: actiu ? 500 : 400,
+      }}>{text}</button>
+  )
+
+  return (
+    <div onClick={onCancel}
+      style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.28)',
+               display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: 'var(--white)', borderRadius: 10, padding: '1.25rem 1.4rem',
+                 width: 'min(520px, 92vw)', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 'var(--fs-h3)', fontWeight: 500 }}>
+          {t('germana.titol')}
+        </h3>
+        <p style={{ margin: '0 0 14px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+          {t('germana.subtitol', {
+            nom: mare.nom_canonic_model || mare.nom_en || mare.nom_ca || mare.pom_code || '',
+            capa: etiquetaCapa(capaMare, t),
+          })}
+        </p>
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          {opcio(mena === 'capa', () => setMena('capa'), 'm-capa', t('germana.mena_capa'))}
+          {opcio(mena === 'instancia', () => setMena('instancia'), 'm-inst', t('germana.mena_instancia'))}
+        </div>
+
+        <p style={{ margin: '0 0 6px', fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
+                    textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          {t(mena === 'capa' ? 'germana.tria_capa' : 'germana.tria_instancia')}
+        </p>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+          {mena === 'capa'
+            ? (capesLliures.length
+              ? capesLliures.map(c => opcio(capa === c, () => setCapa(c), c, etiquetaCapa(c, t)))
+              : <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('germana.cap_capa')}</span>)
+            : (instLliures.length
+              ? instLliures.map(i => opcio(instancia === i, () => setInstancia(i), i, etiquetaInstancia(i, t)))
+              : <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('germana.cap_instancia')}</span>)}
+        </div>
+
+        <label style={{ display: 'block', marginBottom: 14 }}>
+          <span style={{ display: 'block', fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
+                         textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+            {t('germana.nom')}{nomCal && ' *'}
+          </span>
+          <input value={nom} onChange={e => setNom(e.target.value)}
+            placeholder={nomCal ? t('germana.nom_ph_obligatori', { base: mare.nom_fitxa || '' })
+              : (mare.nom_fitxa || '')}
+            style={{ width: '100%', padding: '6px 10px', borderRadius: 6, fontSize: 'var(--fs-body)',
+                     border: '1px solid var(--border)', boxSizing: 'border-box' }} />
+          <span style={{ display: 'block', marginTop: 4, fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+            {t(nomCal ? 'germana.nom_ajuda_obligatori' : 'germana.nom_ajuda')}
+          </span>
+        </label>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button type="button" onClick={onCancel} style={btnSecondary}>{t('app.cancel')}</button>
+          <button type="button" onClick={crea} disabled={!potCrear} style={btnPrimary(!potCrear)}>
+            {t('germana.crear')}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
