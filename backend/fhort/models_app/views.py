@@ -565,7 +565,24 @@ def next_model_ref(request):
     return Response({'codi_intern': codi, 'next_number': next_num})
 
 
-def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, confirmat=False):
+def comptar_regles_residents(model):
+    """D-31.4 — quantes regles residents cauran si s'assigna un ruleset, i de quin origen.
+
+    → `(total, {origen: n})`. Un dict buit vol dir que no hi ha res a perdre.
+
+    L'origen no és decoratiu: una `IMPORTED` ve del document del client i es pot tornar a
+    importar; una `MANUAL` només existeix al cap de qui la va escriure. Qui confirma
+    l'esborrat ha de poder distingir-les abans de dir que sí, no després.
+    """
+    from django.db.models import Count
+    files = (model.grading_rules.values('origen')
+             .annotate(n=Count('id')).order_by('origen'))
+    per_origen = {f['origen']: f['n'] for f in files}
+    return sum(per_origen.values()), per_origen
+
+
+def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, confirmat=False,
+                                model=None, confirmat_residents=False):
     """D1 — porta d'entrada de l'assignació d'un GradingRuleSet a un model.
 
     Assignar un ruleset dispara un wipe-and-recreate de les regles residents
@@ -581,6 +598,18 @@ def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, co
       - customer divergent        → AVÍS CONSCIENT (409) fins que arribi `confirmat`.
                                     MAI bloqueig: aplicar la forma d'un altre client és
                                     un flux de taller legítim.
+      - regles residents          → AVÍS CONSCIENT (409) fins que arribi `confirmat_residents`
+                                    (D-31.4). Tampoc bloqueig: migrar un model al catàleg és
+                                    legítim; el que no és legítim és fer-ho sense saber-ho.
+
+    ⚠️ `model` és opcional PERQUÈ EL CAMÍ DE CREACIÓ NO EN TÉ: un model que encara no existeix
+    no pot tenir regles residents, i el cas D-31.4 no s'hi ha d'activar mai.
+
+    ⚠️ ELS DOS FLAGS SÓN SEPARATS I NO ES REUTILITZEN L'UN PER L'ALTRE. Acceptar el grading
+    d'un altre client no és acceptar que s'esborrin 88 regles pròpies. Amb un sol flag, un
+    consentiment n'arrossegaria l'altre en silenci — i el silenci és exactament el defecte que
+    D-31.4 tanca. Si els dos casos concorren, es retornen d'un en un: el client confirma, torna
+    a demanar, i troba el segon. Cap consentiment implícit.
     """
     from fhort.pom.models import GradingRule
 
@@ -618,6 +647,37 @@ def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, co
             'message': (f"El grading «{rs.nom}» és d'un altre client. Es pot fer servir "
                         f"igualment, però és una decisió conscient: confirma-ho per continuar."),
         }, 409)
+
+    # D-31.4 — LES REGLES RESIDENTS QUE CAURAN. Va l'ÚLTIM dels quatre a posta: si el ruleset
+    # no és assignable (buit, run divergent) no té sentit avisar del que s'hi perdria, perquè
+    # no s'arribarà a assignar mai.
+    if model is not None and not confirmat_residents:
+        total, per_origen = comptar_regles_residents(model)
+        if total:
+            n_imported = per_origen.get('IMPORTED', 0)
+            detall = ' · '.join(f'{n} {o}' for o, n in sorted(per_origen.items()))
+            frase_imported = (
+                f" {n_imported} d'elles vénen del document del client (IMPORTED)."
+                if n_imported else '')
+            return ({
+                'conflict': True,
+                'tipus': 'esborrat_residents',
+                'codi': 'GRADING_RESIDENTS_WIPE',
+                'grading_rule_set_id': rs.id,
+                'grading_rule_set_nom': rs.nom,
+                'model_id': model.id,
+                'residents': total,
+                'per_origen': per_origen,
+                # Redundant amb `per_origen` I A POSTA: la llei diu que IMPORTED s'ha de poder
+                # distingir, i una clau de primer nivell no es pot passar per alt llegint el
+                # payload de pressa. Perdre una regla escrita a mà no és el mateix que perdre'n
+                # una que es pot tornar a importar.
+                'imported': n_imported,
+                'message': (
+                    f"Aquest model té {total} regles de graduació pròpies ({detall}). "
+                    f"Assignar-li «{rs.nom}» les esborrarà i el model passarà a graduar "
+                    f"amb les del joc.{frase_imported} Confirma-ho per continuar."),
+            }, 409)
 
     return None
 
@@ -977,12 +1037,19 @@ def update_model_step2(request, model_id):
     # D1 — valida ABANS de desar i abans del wipe-and-recreate. Es valida contra els valors
     # POSTERIORS a l'assignació (el mateix PATCH pot canviar size_system), i només quan el
     # ruleset ve al payload: re-desar un model sense tocar la graduació no ha de rebotar.
+    residents_abans = (0, {})
     if d.get('grading_rule_set_id') and model.grading_rule_set_id:
+        # D-31.4 — el recompte es pren AQUÍ, abans de validar i abans de desar: a partir de
+        # `model.save()` el wipe-and-recreate de :1001 ja les haurà esborrades i el rastre no
+        # podria dir quantes n'hi havia.
+        residents_abans = comptar_regles_residents(model)
         _err = _validar_ruleset_assignable(
             model.grading_rule_set,
             size_system_id=model.size_system_id,
             customer_id=model.customer_id,
             confirmat=bool(d.get('confirmar_altre_client')),
+            model=model,
+            confirmat_residents=bool(d.get('confirmar_esborrat_residents')),
         )
         if _err is not None:
             payload, status_code = _err
@@ -1012,10 +1079,39 @@ def update_model_step2(request, model_id):
                 f"materialitzat 0 regles des del GradingRuleSet {model.grading_rule_set_id} "
                 f"— el model queda SENSE regles residents."
             )
+    # D-31.4 · EL RASTRE. La confirmació és una decisió, i una decisió que destrueix feina ha de
+    # deixar constància que sobrevisqui a la sessió del navegador. Watchpoint i no un log: el log
+    # el llegeix qui el va a buscar, i el Watchpoint viatja AMB EL MODEL a través dels gates, que
+    # és on el trobarà el tècnic que d'aquí a un mes es pregunti on han anat les seves regles.
+    # Neix `open` (default del model) i el tanca qui hagi comprovat que la graduació nova és bona.
+    n_residents, per_origen = residents_abans
+    if n_residents:
+        from fhort.models_app.models import Watchpoint
+        _perfil = getattr(request.user, 'profile', None)
+        _detall = ' · '.join(f'{n} {o}' for o, n in sorted(per_origen.items()))
+        Watchpoint.objects.create(
+            model=model, task=None, created_by=_perfil,
+            text=(f"Assignat el joc de regles «{model.grading_rule_set.nom}» "
+                  f"(#{model.grading_rule_set_id}) esborrant {n_residents} regles pròpies "
+                  f"del model ({_detall}). Verifica la graduació abans d'entregar."),
+            dades={
+                'tipus': 'esborrat_residents',
+                'grading_rule_set_id': model.grading_rule_set_id,
+                'grading_rule_set_nom': model.grading_rule_set.nom,
+                'residents': n_residents,
+                'per_origen': per_origen,
+                'imported': per_origen.get('IMPORTED', 0),
+                'regles_materialitzades': n_regles,
+            },
+        )
+
     return Response({
         'id': model.id,
         'codi_intern': model.codi_intern,
         'regles_materialitzades': n_regles,
+        # Que la resposta ho digui: qui ha confirmat ha de veure què ha passat de debò, no
+        # només que la crida ha anat bé.
+        'residents_esborrades': n_residents,
     })
 
 

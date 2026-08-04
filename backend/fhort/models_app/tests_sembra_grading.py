@@ -1235,3 +1235,150 @@ class ItemBaseMeasurementBasicsTest(_BaseSembraTest):
         ibm = ItemBaseMeasurement.objects.get(garment_type_item=self.item, pom=self.pom)
         self.assertEqual(ibm.origen, ItemBaseMeasurement.ORIGEN_MANUAL)
         self.assertEqual(ibm.updated_by_id, self.user_amb.id)
+
+
+class EsborratResidentsD314Test(_BaseSembraTest):
+    """D-31.4 — assignar un ruleset esborra les regles residents del model, i fins avui ho feia
+    SENSE MIRAR L'ORIGEN I SENSE AVISAR.
+
+    El radi no és teòric: mesurat contra el dump de PROD del 04/08 hi ha **35 models amb 1.444
+    regles residents** (660 MANUAL en 25 models · 523 CLIENT_RUN · 241 CANONICAL · 20 IMPORTED).
+    El camí és `update_model_step2` → `materialize_model_grading_rules`, que fa
+    wipe-and-recreate (`services.py:266`).
+
+    Per què AVÍS i no bloqueig: migrar un model al catàleg del client és un flux legítim i
+    volgut (és el que farà la migració a BRW-CATALEG-v2). El que no és legítim és fer-ho sense
+    saber què es perd.
+    """
+
+    PREFIX = 'RES'
+
+    def setUp(self):
+        super().setUp()
+        self.item = self._item()
+        self.pom = self._pom('A')
+        GarmentPOMMap.objects.create(garment_type_item=self.item, pom=self.pom, ordre=0)
+        self.ss = self._size_system('SS_RES')
+        self.client_a = Customer.objects.create(codi=f'{self.PREFIX[:2]}A', nom='Client A')
+        self.model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
+                                 size_system=self.ss, size_run_model='S·M·L',
+                                 base_size_label='M', customer=self.client_a)
+        self.rs = GradingRuleSet.objects.create(nom=self._codi('CATALEG'), size_system=self.ss,
+                                                customer=self.client_a)
+        GradingRule.objects.create(
+            rule_set=self.rs, pom=self.pom, talla_base=self.ss.talles.get(etiqueta='M'),
+            logica=GradingRule.LOGICA_LINEAR, increment='1.00', actiu=True)
+
+    def _resident(self, origen, pom=None):
+        return ModelGradingRule.objects.create(
+            model=self.model, pom=(pom or self._pom(f'R{origen[:3]}')),
+            logica=GradingRule.LOGICA_LINEAR, increment='2.00', origen=origen, actiu=True)
+
+    def _watchpoints(self):
+        from fhort.models_app.models import Watchpoint
+        return Watchpoint.objects.filter(model=self.model)
+
+    # ── B1 · l'avís ───────────────────────────────────────────────────────────
+
+    def test_amb_residents_i_sense_flag_avisa_i_no_esborra_res(self):
+        self._resident('MANUAL')
+        self._resident('IMPORTED')
+
+        resp = self._step2(self.model, {'grading_rule_set_id': self.rs.id})
+
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data['tipus'], 'esborrat_residents')
+        self.assertEqual(resp.data['codi'], 'GRADING_RESIDENTS_WIPE')
+        self.assertEqual(resp.data['residents'], 2)
+        self.assertEqual(resp.data['per_origen'], {'MANUAL': 1, 'IMPORTED': 1})
+        # RES ESBORRAT, i el ruleset TAMPOC assignat: un avís que ja hagués desat a mitges
+        # seria pitjor que no avisar.
+        self.assertEqual(ModelGradingRule.objects.filter(model=self.model).count(), 2)
+        self.model.refresh_from_db()
+        self.assertIsNone(self.model.grading_rule_set_id)
+        self.assertFalse(self._watchpoints().exists())
+
+    def test_l_avis_distingeix_les_IMPORTED_a_primer_nivell(self):
+        """🔴 La llei del brief: perdre una regla escrita a mà no és el mateix que perdre'n una
+        que ve del document del client i es pot tornar a importar. Va a una clau pròpia i no
+        només dins de `per_origen` perquè no es pugui passar per alt llegint de pressa."""
+        self._resident('MANUAL')
+        self._resident('IMPORTED')
+        self._resident('IMPORTED', pom=self._pom('RIMP2'))
+
+        resp = self._step2(self.model, {'grading_rule_set_id': self.rs.id})
+
+        self.assertEqual(resp.data['imported'], 2)
+        self.assertIn('IMPORTED', resp.data['message'])
+        self.assertIn('3', resp.data['message'])
+
+    def test_els_dos_flags_no_es_presten_el_consentiment(self):
+        """El motiu de tenir-ne dos i no un: confirmar que fas servir el grading d'un altre
+        client no pot autoritzar que se t'esborrin les regles pròpies. Amb un sol flag, un
+        consentiment n'arrossegaria l'altre EN SILENCI — el defecte que D-31.4 tanca."""
+        self._resident('MANUAL')
+
+        resp = self._step2(self.model, {'grading_rule_set_id': self.rs.id,
+                                        'confirmar_altre_client': True})
+
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data['tipus'], 'esborrat_residents')
+        self.assertEqual(ModelGradingRule.objects.filter(model=self.model).count(), 1)
+
+    # ── B2 · el rastre ────────────────────────────────────────────────────────
+
+    def test_amb_flag_esborra_i_deixa_watchpoint_obert(self):
+        self._resident('MANUAL')
+        self._resident('IMPORTED')
+
+        resp = self._step2(self.model, {'grading_rule_set_id': self.rs.id,
+                                        'confirmar_esborrat_residents': True})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['residents_esborrades'], 2)
+        self.model.refresh_from_db()
+        self.assertEqual(self.model.grading_rule_set_id, self.rs.id)
+        # Wipe-and-recreate: les dues residents han caigut i hi ha la del ruleset.
+        residents = ModelGradingRule.objects.filter(model=self.model)
+        self.assertEqual([r.pom_id for r in residents], [self.pom.id])
+
+        wp = self._watchpoints().get()
+        self.assertEqual(wp.estat, 'open')
+        self.assertEqual(wp.created_by_id, self.user.profile.id)
+        self.assertEqual(wp.dades['residents'], 2)
+        self.assertEqual(wp.dades['imported'], 1)
+        self.assertEqual(wp.dades['per_origen'], {'MANUAL': 1, 'IMPORTED': 1})
+        self.assertEqual(wp.dades['grading_rule_set_id'], self.rs.id)
+        self.assertIn('2 regles pròpies', wp.text)
+
+    def test_el_rastre_conta_les_d_ABANS_no_les_de_despres(self):
+        """El recompte es pren abans del `save()`: si es prengués després, el wipe ja hauria
+        passat i el watchpoint diria «0 regles esborrades» — un rastre que menteix és pitjor
+        que cap rastre."""
+        for o in ('MANUAL', 'MANUAL', 'CANONICAL'):
+            self._resident(o, pom=self._pom(f'RX{o}{self._seq}'))
+
+        self._step2(self.model, {'grading_rule_set_id': self.rs.id,
+                                 'confirmar_esborrat_residents': True})
+
+        self.assertEqual(self._watchpoints().get().dades['residents'], 3)
+
+    # ── B3 · cap fricció on no toca ───────────────────────────────────────────
+
+    def test_sense_residents_no_hi_ha_cap_friccio(self):
+        """Un model que no perd res no ha de veure cap diàleg: l'avís ha d'aparèixer quan hi
+        ha alguna cosa a perdre, o s'acabarà clicant sense llegir."""
+        resp = self._step2(self.model, {'grading_rule_set_id': self.rs.id})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['residents_esborrades'], 0)
+        self.assertFalse(self._watchpoints().exists())
+
+    def test_el_cami_de_creacio_no_activa_mai_l_avis(self):
+        """`create_model_wizard` crida el mateix validador sense `model`: un model que encara
+        no existeix no pot tenir regles residents, i el cas no s'hi ha d'activar mai."""
+        from fhort.models_app.views import _validar_ruleset_assignable
+        self._resident('MANUAL')   # residents d'UN ALTRE model, que no hi pinten res
+
+        self.assertIsNone(_validar_ruleset_assignable(
+            self.rs, size_system_id=self.ss.id, customer_id=self.client_a.id))
