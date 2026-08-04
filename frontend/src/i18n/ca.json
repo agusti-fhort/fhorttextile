@@ -2197,6 +2197,11 @@
       "hist_next": "Preses següents",
       "hist_range": "{{de}}-{{a}} de {{total}}",
       "col_verdict": "Veredicte",
+      "verdicte": {
+        "accepted": "Acceptada — la mesura real es dona per bona",
+        "adjusted": "Ajustada — s'ha rectificat i val el valor rectificat",
+        "rejected": "Rebutjada — la presa no val: no sembra res"
+      },
       "col_note": "Nota",
       "note_ph": "nota…",
       "note_err": "No s'ha pogut desar la nota."

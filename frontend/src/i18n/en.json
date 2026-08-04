@@ -2197,6 +2197,11 @@
       "hist_next": "Next takes",
       "hist_range": "{{de}}-{{a}} of {{total}}",
       "col_verdict": "Verdict",
+      "verdicte": {
+        "accepted": "Accepted — the measured value stands",
+        "adjusted": "Adjusted — rectified; the rectified value stands",
+        "rejected": "Rejected — the reading does not stand: it seeds nothing"
+      },
       "col_note": "Note",
       "note_ph": "note…",
       "note_err": "Could not save the note."

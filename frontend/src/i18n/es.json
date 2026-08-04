@@ -2197,6 +2197,11 @@
       "hist_next": "Tomas siguientes",
       "hist_range": "{{de}}-{{a}} de {{total}}",
       "col_verdict": "Veredicto",
+      "verdicte": {
+        "accepted": "Aceptada — la medida real se da por buena",
+        "adjusted": "Ajustada — se ha rectificado y vale el valor rectificado",
+        "rejected": "Rechazada — la toma no vale: no siembra nada"
+      },
       "col_note": "Nota",
       "note_ph": "nota…",
       "note_err": "No se ha podido guardar la nota."

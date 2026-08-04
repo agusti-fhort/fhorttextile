@@ -162,6 +162,10 @@ const VERDICTE_TO = {
 }
 
 export function VerdicteCell({ valor, onTria }) {
+  // El CODI no es tradueix (v. la nota de sobre) però el seu SIGNIFICAT sí: qui no sap què
+  // vol dir ADJUSTED ho ha de poder llegir en la seva llengua sense sortir de la graella.
+  // Va a `title` i a `aria-label`, o sigui que el que viatja al paper segueix sent el codi.
+  const { t } = useTranslation()
   return (
     <span style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 6,
                    overflow: 'hidden', background: 'var(--white)' }}>
@@ -173,6 +177,9 @@ export function VerdicteCell({ valor, onTria }) {
             // Tornar a clicar el veredicte actiu el TREU: decidir i desdir-se han de costar el
             // mateix, i no hi ha cap altre gest per tornar a «sense decidir».
             onClick={() => onTria(on ? null : v)}
+            title={t(`fitting.grid.verdicte.${v.toLowerCase()}`)}
+            aria-label={t(`fitting.grid.verdicte.${v.toLowerCase()}`)}
+            aria-pressed={on}
             style={{
               border: 'none', borderRight: i < VERDICTES.length - 1 ? '1px solid var(--border)' : 'none',
               background: on ? to.bg : 'transparent', color: on ? to.col : 'var(--text-muted)',

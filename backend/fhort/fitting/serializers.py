@@ -205,11 +205,15 @@ class FittingSessionUpdateSerializer(serializers.ModelSerializer):
 
 
 class PieceFittingLineSerializer(serializers.ModelSerializer):
-    """Autosave for a grid cell: valor_real and nota editable; rest frozen."""
+    """Autosave for a grid cell: valor_real, nota i decisio editables; rest frozen."""
 
     class Meta:
         model = PieceFittingLine
-        fields = ['id', 'piece_fitting', 'pom', 'size_label', 'valor_teoric', 'valor_real', 'nota']
+        # D-31.21 — `decisio` va pel MATEIX camí que la nota (PATCH per línia, autosave), i no
+        # per un endpoint propi: el veredicte i el comentari són el mateix gest de la modista
+        # sobre la mateixa cel·la, i separar-los voldria dir dos desats per a una sola decisió.
+        fields = ['id', 'piece_fitting', 'pom', 'size_label', 'valor_teoric', 'valor_real',
+                  'nota', 'decisio']
         read_only_fields = ['id', 'piece_fitting', 'pom', 'size_label', 'valor_teoric']
 
 
@@ -275,11 +279,18 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
         # s'ancorés i un altre no, una fila portaria l'ordre d'una instància i el nom d'una
         # altra.
         from fhort.models_app.models import BaseMeasurement
+        # F2 — `origen` entra a la MATEIXA query que ja hi era (cap consulta nova): és el que
+        # C3 va construir per dir que un valor no l'ha mesurat ningú (`origen='DERIVAT'`,
+        # `services_derivacio.ORIGEN_DERIVAT`), i sense ell la pantalla no pot distingir la
+        # germana que el sistema ha mogut de la que ningú no ha tocat. No s'hi afegeix cap
+        # camp nou: la derivació ja té identificador i és aquest.
         bm_data = list(BaseMeasurement.objects.filter(model_id=obj.model_id)
-                       .values_list('pom_id', 'capa', 'instancia', 'ordre', 'nom_fitxa', 'id'))
-        ordre_map = {(p, c, i): o for p, c, i, o, _, _ in bm_data}
-        nom_fitxa_map = {(p, c, i): nf for p, c, i, _, nf, _ in bm_data}
-        bm_id_map = {(p, c, i): bid for p, c, i, _, _, bid in bm_data}   # P4 — autoria de nom a nivell MODEL
+                       .values_list('pom_id', 'capa', 'instancia', 'ordre', 'nom_fitxa', 'id',
+                                    'origen'))
+        ordre_map = {(p, c, i): o for p, c, i, o, _, _, _ in bm_data}
+        nom_fitxa_map = {(p, c, i): nf for p, c, i, _, nf, _, _ in bm_data}
+        bm_id_map = {(p, c, i): bid for p, c, i, _, _, bid, _ in bm_data}  # P4 — autoria de nom a nivell MODEL
+        origen_map = {(p, c, i): og for p, c, i, _, _, _, og in bm_data}
 
         out = []
         # Ordre de fitxa, paral·lel a `out`. C4/BLOC 1-BIS: la fila del payload SÍ que porta
@@ -336,6 +347,14 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 'valor_teoric': line.valor_teoric,
                 'valor_real': line.valor_real,
                 'nota': line.nota,
+                # D-31.21 — el veredicte, que la graella ha de poder tornar a pintar en obrir.
+                'decisio': line.decisio,
+                # F2 — l'origen de la mesura base d'AQUESTA germana (`clau_bm` ja porta els dos
+                # eixos). 'DERIVAT' = el sistema l'ha moguda perquè s'ha corregit la seva
+                # germana; qualsevol altre valor amb una germana FITTED al costat vol dir que
+                # aquesta NO s'ha actualitzat. La pantalla ja té tot el que cal per etiquetar-ho
+                # sense demanar res més: origen + capa + instancia + decisio, línia per línia.
+                'origen': origen_map.get(clau_bm),
                 'evolucio': evolucio,
                 # Règim per POM (mateix valor a cada talla; el front el llegeix per pom_id).
                 'logica': getattr(r, 'logica', None) if r else None,

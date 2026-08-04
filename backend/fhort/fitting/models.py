@@ -413,6 +413,30 @@ class PieceFittingLine(models.Model):
     valor_teoric = models.FloatField()
     valor_real = models.FloatField(null=True, blank=True)
     nota = models.CharField(max_length=200, blank=True, default='')
+    # D-31.21 — EL VEREDICTE DE LA MODISTA sobre aquesta cel·la.
+    #
+    # Els tres valors són DADA DE DOMINI i no es tradueixen, com LINEAR/STEP: són el que el
+    # full imprès porta cap al fabricant (AC/AD/RJ, `FittingPrintSheet.jsx:30`) i el que es
+    # diu en veu alta a la sala. Traduir-los a pantalla i no al paper faria que les dues
+    # superfícies parlessin diferent.
+    #
+    # ⚠️ EL BUIT NO ÉS 'ACCEPTED'. Una cel·la sense decidir és una cel·la que ningú no ha
+    # mirat; una acceptada és una que algú ha mirat i ha donat per bona. Per això el default
+    # és '' i no el primer choice: si no es distingissin, obrir un fitting i tancar-lo sense
+    # tocar res deixaria tota la graella «acceptada» sense que ningú hi hagués dit res.
+    DECISIO_ACCEPTED = 'ACCEPTED'
+    DECISIO_ADJUSTED = 'ADJUSTED'
+    DECISIO_REJECTED = 'REJECTED'
+    DECISIO_CHOICES = [
+        (DECISIO_ACCEPTED, 'Acceptada — la mesura real es dona per bona'),
+        (DECISIO_ADJUSTED, "Ajustada — s'ha rectificat i el valor rectificat val"),
+        (DECISIO_REJECTED, 'Rebutjada — la presa no val; NO sembra res'),
+    ]
+    decisio = models.CharField(
+        max_length=10, choices=DECISIO_CHOICES, blank=True, default='', db_index=True,
+        help_text="Veredicte de la cel·la (D-31.21). '' = sense decidir, que NO és ACCEPTED. "
+                  "Una línia REJECTED es desa i es veu, però cap camí de sembra la llegeix.",
+    )
     # C1 — la capa (declaració canònica a `models_app.BaseMeasurement.capa`).
     capa = models.CharField(
         max_length=20, default='exterior', db_index=True,

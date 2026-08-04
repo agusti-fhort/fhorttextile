@@ -637,6 +637,14 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
         if anchor_val is None:                       # treure ancoratge → no propaga
             return _resp(False, 'sense_ancoratge')
 
+        # D-31.21 — el segon camí que propaga mesures des d'una línia, i per tant el segon que
+        # ha de respectar el rebuig. La cel·la ancorada ES DESA igual (just aquí sobre: desar i
+        # decidir són gestos separats i el rebuig no pot fer desaparèixer el que s'ha mesurat),
+        # però el seu delta no viatja a les germanes de talla: escampar-lo voldria dir derivar
+        # tota una fila d'una presa que la modista acaba de declarar dolenta.
+        if line.decisio == PieceFittingLine.DECISIO_REJECTED:
+            return _resp(False, 'linia_rebutjada')
+
         # 3. Regla resident → fallback (cadena de _load_grading_rules).
         rule = _load_grading_rules(pf.model).get(line.pom_id)
         if rule is None:

@@ -369,7 +369,18 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
     sf = pf.grading_version.size_fitting
     base_size = (model.base_size_label or '').strip()
     consolidated = []
-    for line in PieceFittingLine.objects.filter(piece_fitting=pf).select_related('pom'):
+    # D-31.21 — «la darrera mesura VÀLIDA escrita». Una línia REJECTED es desa i es veu, però
+    # NO sembra: el rebuig diu que la PRESA no val, i consolidar-la escriuria a la mesura base
+    # un número que la modista acaba de declarar dolent. L'exclusió va al queryset i no a un
+    # `continue` del cos perquè d'aquest helper en pengen TRES coses —la consolidació a
+    # `BaseMeasurement`, la derivació a les germanes i el Welford del cridador, que menja
+    # `consolidated`—: filtrant a la font cap de les tres no la pot veure, i cap refosa futura
+    # del cos no la pot perdre.
+    linies = (PieceFittingLine.objects
+              .filter(piece_fitting=pf)
+              .exclude(decisio=PieceFittingLine.DECISIO_REJECTED)
+              .select_related('pom'))
+    for line in linies:
         if line.valor_real is None:
             continue
         if abs(line.valor_real - line.valor_teoric) < 1e-6:
