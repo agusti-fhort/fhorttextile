@@ -114,13 +114,24 @@ export function buildRepasRows(rows, sessions) {
       history[String(s.id)] = v ? { value: v.valor_real, nota: v.nota } : null
     }
     const v = row.valors?.[String(ultima.id)]
+    // C4/BLOC 3 — l'identificador de línia porta els dos eixos. El repàs ja agrupa per
+    // `(pom_id, capa, instancia)` al backend (`repas_views._fila`), o sigui que dues germanes
+    // arriben com a dues files; amb `repas:${pom_id}` les dues compartien lineId i el buffer
+    // per lineId de MeasureGrid els donava el mateix valor a la columna activa.
+    //
+    // Aquí NO s'hi posa la clau de payload (`{pom}|{capa}|{inst}`) sinó els camps tal com
+    // vénen: aquest identificador és sintètic i intern del front —la columna és read-only i
+    // no es desa enlloc—, i fer-lo passar per la clau del contracte seria un segon lloc que
+    // decideix com s'aplana una identitat que decideix `pom/identitat.py`.
+    const ident = `repas:${row.pom_id}:${row.capa || ''}:${row.instancia || ''}`
     return {
       pom_id: row.pom_id, codi: row.codi, pom_code: row.pom_code, is_key: row.is_key,
+      capa: row.capa, instancia: row.instancia,
       nom_en: row.nom_en, nom_local: row.nom_local, nom_fitxa: row.nom_fitxa, bm_id: row.bm_id,
       cells: {
         repas: {
           history,
-          active: v ? { lineId: `repas:${row.pom_id}`, value: v.valor_real ?? '', baseValue: null, nota: v.nota, readonly: true } : null,
+          active: v ? { lineId: ident, value: v.valor_real ?? '', baseValue: null, nota: v.nota, readonly: true } : null,
           trail: { coment: <UltimComentari ultim={row.ultim_comentari} /> },
         },
       },
