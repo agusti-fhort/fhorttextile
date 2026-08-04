@@ -90,11 +90,38 @@
     "confirm_supersede": "Confirm propagation",
     "warn_sealed_stale": "Version v{{version}} is SEALED for production — and has already fallen behind: the base has changed {{n}} time(s) since the seal. Propagating will supersede it."
   },
+  "germana": {
+    "afegir": "Add sibling",
+    "titol": "Add a sibling",
+    "subtitol": "Another face of “{{nom}}” ({{capa}}). It starts empty, right below.",
+    "mena_capa": "Another layer",
+    "mena_instancia": "Another instance",
+    "tria_capa": "Sibling layer",
+    "tria_instancia": "Sibling instance",
+    "cap_capa": "This POM already has a row on every layer.",
+    "cap_instancia": "This POM already has a row for every instance.",
+    "nom": "Nomenclature",
+    "nom_ph_obligatori": "e.g. {{base}}-L",
+    "nom_ajuda": "Optional: left blank, it inherits the parent row's.",
+    "nom_ajuda_obligatori": "Required: two instances of the same POM cannot share a nomenclature.",
+    "crear": "Add the row"
+  },
   "graduacio": {
     "button": "Grading",
     "usar_err": "Could not apply the rule set.",
     "cua_propagar": "Set the grading and the propagation will carry on by itself.",
-    "editar_model": "Edit the model"
+    "editar_model": "Edit the model",
+    "confirma": {
+      "ruleset_altre_client": {
+        "titol": "Rule set from another customer"
+      },
+      "esborrat_residents": {
+        "titol": "This model has its own rules"
+      },
+      "continuar": "Continue",
+      "residents_total": "Own rules that will be deleted",
+      "imported_avis": "{{n}} come from the customer document (IMPORTED): they can be imported again, but they will be lost now."
+    }
   },
   "size_map_title": "Size systems",
   "size_map_subtitle": "Derived customer runs and canonical systems",

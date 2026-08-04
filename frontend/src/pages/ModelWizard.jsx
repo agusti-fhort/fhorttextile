@@ -9,6 +9,7 @@ import { matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS, FITS } from '../compone
 import GraduacioPanel from '../components/grading/GraduacioPanel'
 import { Chip, Field, labelStyle, MONO } from '../components/grading/wizardUI'
 import TargetLabel from '../components/grading/TargetLabel'
+import useConfirmacioRuleset from '../components/model/useConfirmacioRuleset'
 import useAuthStore from '../store/auth'
 import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, garmentTypeItems, itemBaseMeasurements, sizingProfiles } from '../api/endpoints'
 
@@ -388,13 +389,10 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
     return d?.message || d?.error || (d ? JSON.stringify(d) : t('model_wizard.conn_error'))
   }
 
-  // D1 — grading d'un ALTRE client: 409 que NO bloqueja. És un flux de taller legítim (aplicar
-  // la forma d'un altre client), però ha de ser un acte conscient → es confirma i es reintenta.
-  const confirmaAltreClient = (e) => {
-    const d = e.response?.data
-    if (e.response?.status !== 409 || d?.tipus !== 'ruleset_altre_client') return false
-    return window.confirm(`${d.message}\n\n${t('model_wizard.grading_other_customer_confirm')}`)
-  }
+  // D1 + D-31.4 — els avisos conscients d'assignar un joc de regles. Eren un `window.confirm`
+  // calcat aquí i a `ModelSheet`; ara els porta un sol component, que és l'únic que pot ensenyar
+  // el que el segon avís necessita (quantes regles pròpies cauen i quantes són IMPORTED).
+  const { executa: executaAmbConfirmacio, dialeg: dialegRuleset } = useConfirmacioRuleset()
 
   const handleCreate = async () => {
     if (!season) { setError(t('model_wizard.season_required')); setBlock(1); return }
@@ -414,13 +412,8 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
           Object.entries(setNoms).filter(([, v]) => (v || '').trim())) } : {}),
         ...skeletonPayload(),
       }
-      let r
-      try {
-        r = await models.createWizard(payload)
-      } catch (e) {
-        if (!confirmaAltreClient(e)) throw e
-        r = await models.createWizard({ ...payload, confirmar_altre_client: true })
-      }
+      const r = await executaAmbConfirmacio(
+        flags => models.createWizard({ ...payload, ...flags }))
       // SET-1 · A4 (forat #5 del dimensionat) — la resposta d'un CONJUNT no porta `id` sinó
       // {garment_set_id, codi_base, num_pieces, pieces[]}. Fins ara `navigate('/models/' +
       // r.data.id)` hauria anat a `/models/undefined` el dia que s'hi creés un conjunt.
@@ -442,12 +435,8 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
       // Edit: el camp FK del serializer és `customer` (rep l'id); codi_client = el camp de text.
       await models.update(id, { customer: customerId, codi_client: refClient, nom_prenda: nomPrenda, descripcio, collection, data_objectiu: dataObjectiu || null })
       const payload = skeletonPayload()
-      try {
-        await models.updateStep2(id, payload)
-      } catch (e) {
-        if (!confirmaAltreClient(e)) throw e
-        await models.updateStep2(id, { ...payload, confirmar_altre_client: true })
-      }
+      await executaAmbConfirmacio(
+        flags => models.updateStep2(id, { ...payload, ...flags }))
       if (encastat) { onSaved?.(); return }
       navigate(`/models/${id}`)
     } catch (e) {
@@ -824,6 +813,7 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
         )}
       </div>
 
+      {dialegRuleset}
     </div>
   )
 }

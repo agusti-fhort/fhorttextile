@@ -90,11 +90,38 @@
     "confirm_supersede": "Confirma propagació",
     "warn_sealed_stale": "La versió v{{version}} està SEGELLADA a producció — i ja ha quedat enrere: la base ha canviat {{n}} vegada/es des del segell. Propagar la superarà."
   },
+  "germana": {
+    "afegir": "Afegir germana",
+    "titol": "Afegir una germana",
+    "subtitol": "Una cara més de «{{nom}}» ({{capa}}). Neix buida, al costat.",
+    "mena_capa": "Una altra capa",
+    "mena_instancia": "Una altra instància",
+    "tria_capa": "Capa de la germana",
+    "tria_instancia": "Instància de la germana",
+    "cap_capa": "Aquest POM ja té una fila a cada capa.",
+    "cap_instancia": "Aquest POM ja té una fila a cada instància.",
+    "nom": "Nomenclatura",
+    "nom_ph_obligatori": "p. ex. {{base}}-L",
+    "nom_ajuda": "Opcional: sense res, hereta la de la fila mare.",
+    "nom_ajuda_obligatori": "Obligatòria: dues instàncies del mateix POM no poden compartir nomenclatura.",
+    "crear": "Afegir la fila"
+  },
   "graduacio": {
     "button": "Graduació",
     "usar_err": "No s'ha pogut aplicar el joc de regles.",
     "cua_propagar": "Informa la graduació i la propagació continuarà tota sola.",
-    "editar_model": "Editar el model"
+    "editar_model": "Editar el model",
+    "confirma": {
+      "ruleset_altre_client": {
+        "titol": "Joc de regles d'un altre client"
+      },
+      "esborrat_residents": {
+        "titol": "Aquest model té regles pròpies"
+      },
+      "continuar": "Continuar",
+      "residents_total": "Regles pròpies que s’esborraran",
+      "imported_avis": "{{n}} vénen del document del client (IMPORTED): es poden tornar a importar, però es perdran ara."
+    }
   },
   "size_map_title": "Sistemes de talles",
   "size_map_subtitle": "Runs de client derivats i sistemes canònics",

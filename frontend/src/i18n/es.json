@@ -90,11 +90,38 @@
     "confirm_supersede": "Confirmar propagación",
     "warn_sealed_stale": "La versión v{{version}} está SELLADA en producción — y ya se ha quedado atrás: la base ha cambiado {{n}} vez/veces desde el sellado. Propagar la superará."
   },
+  "germana": {
+    "afegir": "Añadir hermana",
+    "titol": "Añadir una hermana",
+    "subtitol": "Una cara más de «{{nom}}» ({{capa}}). Nace vacía, al lado.",
+    "mena_capa": "Otra capa",
+    "mena_instancia": "Otra instancia",
+    "tria_capa": "Capa de la hermana",
+    "tria_instancia": "Instancia de la hermana",
+    "cap_capa": "Este POM ya tiene una fila en cada capa.",
+    "cap_instancia": "Este POM ya tiene una fila en cada instancia.",
+    "nom": "Nomenclatura",
+    "nom_ph_obligatori": "p. ej. {{base}}-L",
+    "nom_ajuda": "Opcional: si se deja vacía, hereda la de la fila madre.",
+    "nom_ajuda_obligatori": "Obligatoria: dos instancias del mismo POM no pueden compartir nomenclatura.",
+    "crear": "Añadir la fila"
+  },
   "graduacio": {
     "button": "Graduación",
     "usar_err": "No se ha podido aplicar el juego de reglas.",
     "cua_propagar": "Informa la graduación y la propagación continuará sola.",
-    "editar_model": "Editar el modelo"
+    "editar_model": "Editar el modelo",
+    "confirma": {
+      "ruleset_altre_client": {
+        "titol": "Juego de reglas de otro cliente"
+      },
+      "esborrat_residents": {
+        "titol": "Este modelo tiene reglas propias"
+      },
+      "continuar": "Continuar",
+      "residents_total": "Reglas propias que se borrarán",
+      "imported_avis": "{{n}} vienen del documento del cliente (IMPORTED): se pueden volver a importar, pero se perderán ahora."
+    }
   },
   "size_map_title": "Sistemas de tallas",
   "size_map_subtitle": "Runs de cliente derivados y sistemas canónicos",

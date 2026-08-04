@@ -22,6 +22,7 @@ import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
 import TasksTab from '../components/model/TasksTab'
 import PatternTab from '../components/pattern/PatternTab'
+import useConfirmacioRuleset from '../components/model/useConfirmacioRuleset'
 
 const API = import.meta.env.VITE_API_URL || ''
 // Menú net (PEÇA 5): Size Check absorbit a Mesures (taula base amb estadis), Producció retirat;
@@ -383,6 +384,8 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [graduacioObert, setGraduacioObert] = useState(false)
   const [propagarEnCua, setPropagarEnCua] = useState(false)
   const [usantJoc, setUsantJoc] = useState(false)
+  // D1 + D-31.4 — el mateix component de confirmació que fa servir el wizard (v. `onUsarJoc`).
+  const { executa: executaAmbConfirmacio, dialeg: dialegRuleset } = useConfirmacioRuleset()
   // P11 — l'estat que el pas de Graduació necessita i que abans posava el wizard.
   // `fitTriat` és el fit que s'està mirant (null = encara cap tria explícita, i llavors mana el
   // del model); `jocVist` és el joc seleccionat en aquesta obertura, perquè el picker el marqui
@@ -442,23 +445,16 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // passant altre cop per `onPropagarClick`, no per `execPropagar`, perquè el model pot tenir
   // propagació prèvia i saltar-se l'avís de 2 passos seria colar una substitució.
   //
-  // El 409 «ruleset d'un altre client» és un AVÍS CONSCIENT, no un error: aplicar la forma
-  // d'un altre client és un flux de taller legítim. Es demana i es reintenta amb el consentiment,
-  // exactament com fa el wizard al seu propi desat (`confirmaAltreClient`). Sense això, triar un
-  // joc del catàleg d'un altre client moria en silenci amb el calaix obert.
+  // Els 409 d'assignació són AVISOS CONSCIENTS, no errors: aplicar la forma d'un altre client
+  // (D1) i migrar un model al catàleg esborrant-ne les regles pròpies (D-31.4) són tots dos
+  // fluxos de taller legítims. Es demanen i es reintenten amb el consentiment, pel MATEIX
+  // component que fa servir el wizard: `useConfirmacioRuleset` porta el diàleg i el reintent amb
+  // el flag que toca —un per cas, mai els dos alhora.
   const onUsarJoc = useCallback((rs) => {
     if (usantJoc) return
     setUsantJoc(true)
-    const desa = (extra) => models.updateStep2(parseInt(id), { grading_rule_set_id: rs.id, ...extra })
-    desa({})
-      .catch(e => {
-        const d = e?.response?.data
-        if (e?.response?.status === 409 && d?.tipus === 'ruleset_altre_client'
-            && window.confirm(`${d.message}\n\n${t('model_wizard.grading_other_customer_confirm')}`)) {
-          return desa({ confirmar_altre_client: true })
-        }
-        throw e
-      })
+    executaAmbConfirmacio(
+      flags => models.updateStep2(parseInt(id), { grading_rule_set_id: rs.id, ...flags }))
       .then(() => {
         setGraduacioObert(false)
         reloadModel(); reloadTaula()
@@ -2205,6 +2201,8 @@ function TabAIAnalysis({ modelId }) {
           )}
         </div>
       )}
+
+      {dialegRuleset}
     </div>
   )
 }
