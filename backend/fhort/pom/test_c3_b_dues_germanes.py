@@ -17,7 +17,7 @@ S'alcen TRES taules i no una, i cadascuna per un motiu propi:
   · `fitting_gradedspec`              — és ON HA D'ATERRAR el resultat: sense alçar-la, el
                                         motor calcularia bé i Postgres refusaria l'escriptura.
 
-Quan C4/C4-ins retirin les comportes, el `with comportes_alcades(...)` sobra i els asserts es
+C4/G1-G4 (04/08) JA les ha retirades: el `with comportes_alcades(...)` és un no-op i els asserts es
 queden tal com estan.
 
 Convenció del repo: `python manage.py test fhort.pom` (el projecte NO fa servir pytest).
@@ -218,14 +218,25 @@ class DuesGermanesC3BTest(TenantTestCase):
             (EXTERIOR, '', 'L'): 101.0,
         })
 
-    def test_les_comportes_tornen_a_estar_vives(self):
-        with connection.cursor() as cur:
-            cur.execute(
-                "SELECT count(*) FROM pg_constraint c "
-                "JOIN pg_class t ON t.oid = c.conrelid "
-                "JOIN pg_namespace n ON n.oid = t.relnamespace "
-                "WHERE n.nspname = %s AND c.conname LIKE ANY (ARRAY["
-                "  '%%_capa_gate_c1', '%%_instancia_gate_cins'])",
-                [connection.schema_name])
-            # 9 taules × 2 eixos = 18 comportes a la cadena de mesura.
-            self.assertEqual(cur.fetchone()[0], 18)
+    def test_el_harness_no_deixa_rastre(self):
+        """Deia «18 comportes a la cadena de mesura» (9 taules × 2 eixos). C4/G1-G4 les han
+        retirades i el 18 va quedar ranci — és una de les dues xifres fixes que han mossegat
+        avui. El que segueix sent cert i es vigila: el harness deixa l'esquema EXACTAMENT com
+        el va trobar, i cap comporta no ha sobreviscut."""
+        def noms_de_check():
+            with connection.cursor() as cur:
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND c.contype = 'c'",
+                    [connection.schema_name])
+                return {row[0] for row in cur.fetchall()}
+
+        abans = noms_de_check()
+        with comportes_alcades(*TAULES_DEL_CAMI):
+            pass
+
+        self.assertEqual(noms_de_check(), abans, 'el harness ha canviat l\'esquema')
+        self.assertEqual(
+            {c for c in abans if c.endswith(('_capa_gate_c1', '_instancia_gate_cins'))},
+            set(), 'una comporta ha sobreviscut a C4')

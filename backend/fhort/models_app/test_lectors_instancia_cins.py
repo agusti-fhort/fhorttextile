@@ -15,7 +15,7 @@ Alça LES DUES comportes de cada taula, dins d'un savepoint que sempre es desfà
 transaccional: a Postgres un `ALTER TABLE … DROP CONSTRAINT` es desfà amb el savepoint igual
 que un INSERT — el test no deixa rastre, i l'últim cas ho verifica llegint el catàleg.
 
-Quan C4-ins retiri les comportes, el `with comportes_alcades(...)` sobra i els asserts es
+C4/G1-G4 (04/08) JA les ha retirades: el `with comportes_alcades(...)` és un no-op i els asserts es
 queden.
 
 Convenció del repo: `python manage.py test fhort.models_app` (el projecte NO fa servir pytest).
@@ -329,19 +329,26 @@ class LectorsInstanciaCinsTest(TenantTestCase):
 
     # ── El rastre: cap ───────────────────────────────────────────────────────────────
 
-    def test_les_dues_comportes_tornen_a_estar_vives(self):
-        """El harness alça DUES famílies: si el savepoint no les tornés totes, la BD de test
-        quedaria sense guard i la resta de tests del tram passarien per una raó falsa."""
+    def test_el_harness_no_deixa_rastre(self):
+        """Deia «les dues comportes tornen a estar vives» i en comptava nou de cada família.
+        C4/G1-G4 les han retirades totes; el que segueix fent falta és que el harness deixi
+        l'esquema EXACTAMENT com el va trobar, o la resta del fitxer passaria per una raó
+        falsa. Pel NOM i no per recompte: els dos nous són la xifra que va quedar ranci."""
+        def noms_de_check():
+            with connection.cursor() as cur:
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND c.contype = 'c'",
+                    [connection.schema_name])
+                return {row[0] for row in cur.fetchall()}
+
+        abans = noms_de_check()
         with comportes_alcades('models_app_basemeasurement',
                                'models_app_measurementchangelog'):
             pass
 
-        with connection.cursor() as cur:
-            for patro, esperades in (('%_capa_gate_c1', 9), ('%_instancia_gate_cins', 9)):
-                cur.execute(
-                    "SELECT conname FROM pg_constraint c "
-                    "JOIN pg_namespace n ON n.oid = c.connamespace "
-                    "WHERE n.nspname = %s AND c.contype = 'c' AND c.conname LIKE %s",
-                    [connection.schema_name, patro])
-                self.assertEqual(len(cur.fetchall()), esperades,
-                                 f'el harness ha deixat una comporta per terra ({patro})')
+        self.assertEqual(noms_de_check(), abans, 'el harness ha canviat l\'esquema')
+        self.assertEqual(
+            {c for c in abans if c.endswith(('_capa_gate_c1', '_instancia_gate_cins'))},
+            set(), 'una comporta ha sobreviscut a C4')

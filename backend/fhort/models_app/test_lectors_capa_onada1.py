@@ -14,7 +14,9 @@ DDL transaccional: a Postgres un `ALTER TABLE … DROP CONSTRAINT` es desfà amb
 igual que un INSERT. El test no deixa rastre, i `test_la_comporta_torna_a_estar_viva` ho
 verifica al final llegint el catàleg de Postgres.
 
-Quan C4 retiri les comportes, el `with comporta_alcada(...)` sobra i els asserts es queden.
+C4/G1-G4 (04/08) JA les ha retirades: el `with comporta_alcada(...)` és un no-op i els asserts
+del cos s'han quedat tal com estaven, que és el que aquest fitxer havia previst. L'únic que ha
+canviat de sentit és l'últim test, el d'higiene del harness.
 
 Convenció del repo: `python manage.py test fhort.models_app` (el projecte NO fa servir pytest).
 """
@@ -319,17 +321,26 @@ class LectorsCapaOnada1Test(TenantTestCase):
 
     # ── El rastre: cap ───────────────────────────────────────────────────────────────
 
-    def test_la_comporta_torna_a_estar_viva(self):
-        """El harness alça comportes: si el savepoint no les tornés, aquest fitxer deixaria
-        la BD de test sense guard i els altres tests de capa passarien per una raó falsa."""
+    def test_el_harness_no_deixa_rastre(self):
+        """Deia «la comporta torna a estar viva» i comptava que n'hi hagués nou. C4/G1-G4 les
+        han retirades totes i ja no n'hi ha cap per tornar, però el que aquell assert defensava
+        segueix fent falta: que el harness deixi l'esquema EXACTAMENT com el va trobar — si no,
+        la resta de tests d'aquest fitxer passarien per una raó falsa.
+
+        Pel NOM i no per recompte: el 9 d'abans és justament la xifra que va quedar ranci."""
+        def noms_de_check():
+            with connection.cursor() as cur:
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND c.contype = 'c'",
+                    [connection.schema_name])
+                return {row[0] for row in cur.fetchall()}
+
+        abans = noms_de_check()
         with comporta_alcada('models_app_basemeasurement'):
             pass
 
-        with connection.cursor() as cur:
-            cur.execute(
-                "SELECT conname FROM pg_constraint c "
-                "JOIN pg_namespace n ON n.oid = c.connamespace "
-                "WHERE n.nspname = %s AND c.contype = 'c' AND c.conname LIKE %s",
-                [connection.schema_name, '%_capa_gate_c1'])
-            self.assertEqual(len(cur.fetchall()), 9,
-                             'el harness ha deixat una comporta per terra')
+        self.assertEqual(noms_de_check(), abans, 'el harness ha canviat l\'esquema')
+        self.assertEqual({c for c in abans if c.endswith('_capa_gate_c1')}, set(),
+                         'una comporta de capa ha sobreviscut a C4')

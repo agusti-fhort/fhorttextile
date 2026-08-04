@@ -268,13 +268,25 @@ class EscriptorsInstanciaCinsTest(TenantTestCase):
 
     # ── El rastre: cap ───────────────────────────────────────────────────────────────
 
-    def test_les_comportes_tornen_a_estar_vives(self):
-        with connection.cursor() as cur:
-            for patro, esperades in (('%_capa_gate_c1', 9), ('%_instancia_gate_cins', 9)):
+    def test_el_harness_no_deixa_rastre(self):
+        """Deia «les comportes tornen a estar vives» i en comptava nou de cada família. C4/G1-G4
+        les han retirades totes; el que segueix fent falta és que el harness deixi l'esquema
+        EXACTAMENT com el va trobar. Pel NOM i no per recompte."""
+        def noms_de_check():
+            with connection.cursor() as cur:
                 cur.execute(
                     "SELECT conname FROM pg_constraint c "
                     "JOIN pg_namespace n ON n.oid = c.connamespace "
-                    "WHERE n.nspname = %s AND c.contype = 'c' AND c.conname LIKE %s",
-                    [connection.schema_name, patro])
-                self.assertEqual(len(cur.fetchall()), esperades,
-                                 f'el harness ha deixat una comporta per terra ({patro})')
+                    "WHERE n.nspname = %s AND c.contype = 'c'",
+                    [connection.schema_name])
+                return {row[0] for row in cur.fetchall()}
+
+        abans = noms_de_check()
+        with comportes_alcades('models_app_basemeasurement',
+                               'models_app_measurementchangelog'):
+            pass
+
+        self.assertEqual(noms_de_check(), abans, 'el harness ha canviat l\'esquema')
+        self.assertEqual(
+            {c for c in abans if c.endswith(('_capa_gate_c1', '_instancia_gate_cins'))},
+            set(), 'una comporta ha sobreviscut a C4')

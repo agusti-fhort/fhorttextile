@@ -10,22 +10,23 @@ llistes com la primera i corrompria en silenci mesures que són el producte.
 El guard viu a la BD i no a l'aplicació pel mateix motiu que el de capa: és l'únic lloc que un
 `bulk_create`, un `update()`, un loader de paquet o un `psql` a mà no poden esquivar.
 
-Aquest fitxer verifica TRES coses que no es proven soles:
-  1. que la comporta barra, pel camí que de debò importa (l'`IntegrityError` de Postgres);
-  2. que les NOU comportes hi són totes —una que faltés seria un forat silenciós—, i que
-     `ModelGradingRule` segueix sense la columna (decisió Montse: «gradúen igual»);
-  3. que el CHECK «instància ⇒ nom de fitxa» (decisió D1) rebutja de debò. Aquest tercer no
-     es pot provar amb la comporta tancada —la comporta ja barra qualsevol instància abans
-     que el CHECK hi arribi—, o sigui que s'alça la comporta DINS D'UN SAVEPOINT que sempre
-     es desfà, calcant `comporta_alcada()` de `test_lectors_capa_onada1`.
+**C4/G1-G4 (04/08) han retirat les nou comportes d'instància, i les nou de capa amb elles.**
+Aquest fitxer GIRA L'AFIRMACIÓ i verifica TRES coses que no es proven soles:
+  1. que la germana amb instància ENTRA i es desa a la SEVA fila, sense tapar la que ja hi
+     era (on abans deia «no entra», amb l'`IntegrityError` de Postgres);
+  2. que cap comporta de cap de les dues famílies no ha sobreviscut —una que quedés dreta
+     barraria la sisa esquerra en un sistema que ja la sap llegir— i que `ModelGradingRule`
+     segueix sense la columna (decisió Montse: «gradúen igual»);
+  3. que el CHECK «instància ⇒ nom de fitxa» (decisió D1) SEGUEIX rebutjant. És l'única cosa
+     del tram que no era bastida, i la retirada no se l'havia d'endur.
 
-⚠️ NO toca `test_capa_comporta_c1`: el seu pin de nou noms segueix vàlid tal qual, perquè
-censa amb `LIKE '%_capa_gate_c1'` i les comportes noves tenen nom propi
-(`*_instancia_gate_cins`). Les dues famílies conviuen sense trepitjar-se.
+🔑 EL QUE ARA ÉS CERT, i és el que aquest fitxer vigila: **0 comportes de capa i d'instància ·
+la invariant `instancia_exigeix_nom` viva.** Sempre PEL NOM, mai per recompte: una xifra fixa
+ja ha mossegat dues vegades (el 18 dels harnesses, el 42 del brief de retirada).
 
-C4-ins retira les nou comportes per migració. El CHECK «instància ⇒ nom», en canvi, NO és
-bastida: és llei de domini i sobreviu — quan aquell sprint passi, d'aquest fitxer se'n va
-tot menys `ComportaInstanciaExigeixNomTest`.
+El `comporta_instancia_alcada()` es queda tot i ser un no-op: alçar una comporta que ja no hi
+és és el mateix estat, i el dia que el CHECK s'hagi de provar amb una comporta nova al davant
+el harness ja hi serà.
 
 Convenció del repo: `python manage.py test fhort.models_app` (el projecte NO fa servir pytest).
 """
@@ -39,23 +40,26 @@ from fhort.models_app.models import (BaseMeasurement, Model, SizeCheck,
                                      SizeCheckLine)
 from fhort.pom.models import POMMaster
 
-#: Les nou comportes de C1-ins, una per taula de `0073`/`0020`/`0056`.
-#: `models_app_modelgradingrule` i `pom_gradingrule` NO hi són: la regla de graduació no
-#: travessa cap dels dos eixos (decisió Montse, «la sisa dreta i l'esquerra gradúen igual»).
-COMPORTES = [
-    'models_app_basemeasurement_instancia_gate_cins',
-    'models_app_measurementchangelog_instancia_gate_cins',
-    'models_app_modelgradingoverride_instancia_gate_cins',
-    'models_app_pomplacement_instancia_gate_cins',
-    'models_app_sizecheckline_instancia_gate_cins',
-    'fitting_gradedspec_instancia_gate_cins',
-    'fitting_piecefittingline_instancia_gate_cins',
-    'pom_garmentpommap_instancia_gate_cins',
-    'pom_itembasemeasurement_instancia_gate_cins',
-]
+#: Els dos patrons de nom de les 40 comportes que C4/G1-G4 han retirat. Es censa pel PATRÓ i
+#: no per una llista de noms: així també cau una comporta nova que es bategés igual.
+PATRONS_DE_COMPORTA = ('%_capa_gate_c1', '%_instancia_gate_cins')
+
+#: La invariant que NO era bastida i havia de sobreviure la retirada (decisió D1).
+INVARIANT = 'models_app_basemeasurement_instancia_exigeix_nom'
 
 #: L'instància de prova. Slug compost, com el que la UI compondrà a C4-ins.
 LEFT = 'left-relaxed'
+
+
+def noms_de_check(patro):
+    """Els noms dels CHECK del schema del tenant que casen amb `patro`."""
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT conname FROM pg_constraint c "
+            "JOIN pg_namespace n ON n.oid = c.connamespace "
+            "WHERE n.nspname = %s AND c.contype = 'c' AND c.conname LIKE %s",
+            [connection.schema_name, patro])
+        return {row[0] for row in cur.fetchall()}
 
 
 @contextlib.contextmanager
@@ -105,29 +109,50 @@ class _BaseInstanciaTest(TenantTestCase):
 
 class ComportaInstanciaCinsTest(_BaseInstanciaTest):
 
-    # ── La comporta barra ────────────────────────────────────────────────────────────
+    # ── La germana entra, i es desa a la SEVA fila ───────────────────────────────────
 
-    def test_una_mesura_base_amb_instancia_no_entra(self):
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            BaseMeasurement.objects.create(
-                model=self.model, pom=self.pom, base_value_cm=100.0,
-                nom_fitxa='A', instancia=LEFT)
+    def test_una_mesura_base_amb_instancia_entra_a_la_seva_fila(self):
+        """Deia «no entra». Ara entra, i el que es vigila és que la sisa esquerra no tapi la
+        mesura que ja hi era: dues files amb la mateixa (model, POM) i instàncies diferents."""
+        BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom, base_value_cm=100.0)
+        BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom, base_value_cm=97.0,
+            nom_fitxa='A-ESQ', instancia=LEFT)
 
-    def test_una_linia_de_size_check_amb_instancia_no_entra(self):
+        files = {(bm.instancia, float(bm.base_value_cm))
+                 for bm in BaseMeasurement.objects.filter(model=self.model, pom=self.pom)}
+        self.assertEqual(files, {('', 100.0), (LEFT, 97.0)})
+
+    def test_una_linia_de_size_check_amb_instancia_entra_a_la_seva_fila(self):
         check = SizeCheck.objects.create(model=self.model, talla_base_label='M')
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            SizeCheckLine.objects.create(
-                size_check=check, pom=self.pom, valor_teoric=100.0, instancia=LEFT)
+        SizeCheckLine.objects.create(
+            size_check=check, pom=self.pom, valor_teoric=100.0)
+        SizeCheckLine.objects.create(
+            size_check=check, pom=self.pom, valor_teoric=97.0, instancia=LEFT)
 
-    def test_tampoc_hi_entra_per_update_massiu(self):
-        """El camí que cap guard d'aplicació no cobriria: `queryset.update()` no passa per
-        `save()`, ni pels signals, ni per cap serializer. La comporta sí que l'atura."""
-        bm = BaseMeasurement.objects.create(
+        files = {(linia.instancia, float(linia.valor_teoric))
+                 for linia in SizeCheckLine.objects.filter(size_check=check, pom=self.pom)}
+        self.assertEqual(files, {('', 100.0), (LEFT, 97.0)})
+
+    def test_l_update_massiu_mou_la_fila_filtrada_i_prou(self):
+        """El camí que cap guard d'aplicació no cobriria —`queryset.update()` no passa per
+        `save()`, ni pels signals, ni per cap serializer— ja no el barra ningú. El que ara
+        s'ha de vigilar és que sigui QUIRÚRGIC: bateja la fila filtrada i deixa estar l'altra."""
+        altre_pom = POMMaster.objects.create(codi_client='WA', nom_client='Cintura')
+        mou = BaseMeasurement.objects.create(
             model=self.model, pom=self.pom, base_value_cm=100.0, nom_fitxa='A')
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            BaseMeasurement.objects.filter(pk=bm.pk).update(instancia=LEFT)
+        queda = BaseMeasurement.objects.create(
+            model=self.model, pom=altre_pom, base_value_cm=80.0, nom_fitxa='B')
 
-    # ── La comporta deixa passar el que ha de passar ─────────────────────────────────
+        BaseMeasurement.objects.filter(pk=mou.pk).update(instancia=LEFT)
+
+        mou.refresh_from_db()
+        queda.refresh_from_db()
+        self.assertEqual(mou.instancia, LEFT)
+        self.assertEqual(queda.instancia, '')
+
+    # ── El camí normal, intacte ──────────────────────────────────────────────────────
 
     def test_la_instancia_unica_entra_i_es_el_default(self):
         """La comporta no pot haver trencat el camí normal: qui no diu res escriu la
@@ -138,46 +163,42 @@ class ComportaInstanciaCinsTest(_BaseInstanciaTest):
         self.assertEqual(bm.instancia, '')
 
     def test_els_dos_eixos_son_independents(self):
-        """La instància no ha tapat la capa: el default de C1 segueix vigent i la seva
-        comporta segueix barrant. Dos eixos, dues comportes, cap d'elles absorbida per
-        l'altra."""
+        """La instància no ha tapat la capa: cada eix es mou pel seu compte i una fila pot
+        creuar-los tots dos sense que l'altre se n'assabenti. Deia que la comporta de capa
+        seguia barrant; ara les dues han caigut i el que es prova és que segueixen sent DOS
+        eixos i no un de sol."""
         bm = BaseMeasurement.objects.create(
             model=self.model, pom=self.pom, base_value_cm=100.0)
         bm.refresh_from_db()
         self.assertEqual((bm.capa, bm.instancia), ('exterior', ''))
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            BaseMeasurement.objects.filter(pk=bm.pk).update(capa='folre')
 
-    # ── El cens: cap forat ───────────────────────────────────────────────────────────
+        creuada = BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom, base_value_cm=96.0,
+            capa='folre', nom_fitxa='A-ESQ-FOL', instancia=LEFT)
+        creuada.refresh_from_db()
+        self.assertEqual((creuada.capa, creuada.instancia), ('folre', LEFT))
 
-    def test_les_nou_comportes_existeixen_a_la_bd(self):
-        """Una comporta que faltés seria un forat silenciós: la taula sense guard acceptaria
-        la segona instància i ningú no se n'adonaria fins que les mesures ja fossin dolentes."""
-        with connection.cursor() as cur:
-            cur.execute(
-                "SELECT conname FROM pg_constraint c "
-                "JOIN pg_namespace n ON n.oid = c.connamespace "
-                "WHERE n.nspname = %s AND c.contype = 'c' AND c.conname LIKE %s",
-                [connection.schema_name, '%_instancia_gate_cins'])
-            trobades = {row[0] for row in cur.fetchall()}
+        bm.refresh_from_db()
+        self.assertEqual((bm.capa, bm.instancia), ('exterior', ''))
 
-        self.assertEqual(trobades, set(COMPORTES),
-                         'falta (o sobra) alguna comporta d\'instància a la BD')
+    # ── El cens, girat: cap comporta viva, la invariant sí ───────────────────────────
 
-    def test_les_dues_families_de_comporta_conviuen(self):
-        """El pin de `test_capa_comporta_c1` compta nou noms amb `LIKE '%_capa_gate_c1'`.
-        Aquest test fixa que la família nova no l'ha contaminat: si algú bategés una comporta
-        d'instància amb el sufix de capa, allà petaria un cens i aquí un altre."""
-        with connection.cursor() as cur:
-            cur.execute(
-                "SELECT conname FROM pg_constraint c "
-                "JOIN pg_namespace n ON n.oid = c.connamespace "
-                "WHERE n.nspname = %s AND c.contype = 'c' AND c.conname LIKE %s",
-                [connection.schema_name, '%_capa_gate_c1'])
-            capa = {row[0] for row in cur.fetchall()}
+    def test_cap_comporta_de_cap_de_les_dues_families_no_ha_sobreviscut(self):
+        """Deia «les nou comportes hi són totes» i el forat silenciós era que en faltés una.
+        Ara és al revés: una comporta dreta barraria la germana en un sistema que ja la sap
+        llegir i escriure. Es censen les DUES famílies alhora perquè cauen juntes i el que
+        importa és que no en quedi cap, no de quina era."""
+        for patro in PATRONS_DE_COMPORTA:
+            trobades = noms_de_check(patro)
+            self.assertEqual(trobades, set(),
+                             f'comportes vives després de C4 ({patro}): {sorted(trobades)}')
 
-        self.assertEqual(len(capa), 9, 'el cens de comportes de capa ha canviat de mida')
-        self.assertFalse(capa & set(COMPORTES), 'les dues famílies s\'han barrejat de nom')
+    def test_la_invariant_de_domini_no_se_n_ha_anat_amb_les_comportes(self):
+        """L'altra cara, i la que de debò fa mal si falla: `instancia_exigeix_nom` NO era
+        bastida sinó llei —una instància sense nom de fitxa és il·legal— i havia de sobreviure
+        les quatre retirades. Pel nom, perquè és una i té nom propi."""
+        self.assertEqual(noms_de_check('%_exigeix_nom'), {INVARIANT},
+                         'la invariant de domini ha caigut amb les comportes')
 
     def test_la_regla_de_grading_no_te_ni_instancia_ni_comporta(self):
         """Decisió Montse: la sisa dreta i l'esquerra GRADÚEN IGUAL. Una regla és una llei
@@ -241,13 +262,15 @@ class ComportaInstanciaExigeixNomTest(_BaseInstanciaTest):
         bm.refresh_from_db()
         self.assertEqual((bm.instancia, bm.nom_fitxa), ('', ''))
 
-    def test_la_comporta_torna_a_estar_viva(self):
-        """El savepoint ha de deixar la BD com estava. Si aquest test peta, els anteriors han
-        deixat una taula sense guard — i el següent sprint construiria sobre un forat."""
-        with connection.cursor() as cur:
-            cur.execute(
-                "SELECT 1 FROM pg_constraint c "
-                "JOIN pg_namespace n ON n.oid = c.connamespace "
-                "WHERE n.nspname = %s AND c.conname = %s",
-                [connection.schema_name, f'{self.TAULA}_instancia_gate_cins'])
-            self.assertIsNotNone(cur.fetchone(), 'la comporta no ha tornat del savepoint')
+    def test_el_harness_no_deixa_rastre_i_la_invariant_segueix_viva(self):
+        """Successor de `test_la_comporta_torna_a_estar_viva`, que mirava si la comporta havia
+        tornat del savepoint. Ja no n'hi ha cap per tornar, però el que aquell test defensava
+        segueix sent necessari: que el harness deixi l'esquema EXACTAMENT com el va trobar —si
+        no, els tests d'aquest fitxer passarien per una raó falsa— i que la invariant, que és
+        l'única cosa que queda dreta del tram, no marxi per una porta del davant."""
+        abans = noms_de_check('%')
+        with comporta_instancia_alcada(self.TAULA, 'models_app_measurementchangelog'):
+            pass
+
+        self.assertEqual(noms_de_check('%'), abans, 'el harness ha canviat l\'esquema')
+        self.assertIn(INVARIANT, abans, 'la invariant de domini no és viva')

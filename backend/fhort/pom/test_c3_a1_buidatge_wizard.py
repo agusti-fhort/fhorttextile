@@ -14,7 +14,7 @@ i per la mateixa raó: provar el que el fumeig no pot provar.
 DDL transaccional: a Postgres un `ALTER TABLE … DROP CONSTRAINT` es desfà amb el savepoint
 igual que un INSERT. El test no deixa rastre, i l'últim mètode ho verifica llegint el catàleg.
 
-Quan C4/C4-ins retirin les comportes, el `with comportes_alcades(...)` sobra i els asserts es
+C4/G1-G4 (04/08) JA les ha retirades: el `with comportes_alcades(...)` és un no-op i els asserts es
 queden tal com estan.
 
 Convenció del repo: `python manage.py test fhort.pom` (el projecte NO fa servir pytest).
@@ -212,15 +212,24 @@ class BuidatgeWizardC3A1Test(TenantTestCase):
         self.assertEqual(MeasurementChangeLog.objects.filter(model=self.model).count(), n_abans,
                          'però no hi havia cap valor a perdre: cap entrada nova')
 
-    def test_les_comportes_tornen_a_estar_vives(self):
-        """El DDL del harness s'ha desfet: la comporta torna a barrar la segona capa."""
-        with connection.cursor() as cur:
-            cur.execute(
-                "SELECT count(*) FROM pg_constraint c "
-                "JOIN pg_class t ON t.oid = c.conrelid "
-                "JOIN pg_namespace n ON n.oid = t.relnamespace "
-                "WHERE n.nspname = %s AND t.relname = 'models_app_basemeasurement' "
-                "AND c.conname IN ('models_app_basemeasurement_capa_gate_c1', "
-                "                  'models_app_basemeasurement_instancia_gate_cins')",
-                [connection.schema_name])
-            self.assertEqual(cur.fetchone()[0], 2)
+    def test_el_harness_no_deixa_rastre(self):
+        """Deia que el DDL del harness s'havia desfet i que la comporta tornava a barrar la
+        segona capa. C4/G1-G4 les han retirades: ja no n'hi ha cap per tornar, i el que es
+        vigila és que el harness deixi l'esquema EXACTAMENT com el va trobar."""
+        def noms_de_check():
+            with connection.cursor() as cur:
+                cur.execute(
+                    "SELECT conname FROM pg_constraint c "
+                    "JOIN pg_namespace n ON n.oid = c.connamespace "
+                    "WHERE n.nspname = %s AND c.contype = 'c'",
+                    [connection.schema_name])
+                return {row[0] for row in cur.fetchall()}
+
+        abans = noms_de_check()
+        with comportes_alcades(*TAULES_DEL_CAMI):
+            pass
+
+        self.assertEqual(noms_de_check(), abans, 'el harness ha canviat l\'esquema')
+        self.assertEqual(
+            {c for c in abans if c.endswith(('_capa_gate_c1', '_instancia_gate_cins'))},
+            set(), 'una comporta ha sobreviscut a C4')
