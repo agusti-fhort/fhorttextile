@@ -1,9 +1,17 @@
 """C4 · EL CAS POSITIU D'ACCEPTACIÓ — dues germanes vives han de sortir a CADA superfície.
 
-🔴 **VERMELL A POSTA fins que C4 desancori els lectors — no el facis verd ancorant el test.**
+✅ **VERD DES DEL BLOC 1 DE C4 (04/08).** Aquest fitxer va néixer saltat sencer i vermell a
+posta: mesurava un forat obert. El bloc 1 el va tancar desancorant els lectors, i ara corre a
+cada execució de `fhort.models_app` — de mesura del forat ha passat a guàrdia perquè no torni.
+Queda UN mètode saltat, `test_10` (model-poms del taller), i el motiu **no és tècnic**: hi ha
+una contradicció de scope que ha de resoldre l'Agus. V. el seu docstring.
 
-PER QUÈ AQUEST FITXER EXISTEIX, I PER QUÈ NEIX VERMELL
-------------------------------------------------------
+⚠️ **Segueix sent PROHIBIT fer-lo verd tocant-lo.** Si un assert d'aquí falla, el que s'ha
+trencat és un lector, no l'assert: comparar només la germana d'exterior o acceptar 1 fila on
+n'hi ha d'haver 4 destruiria l'única eina que mesura si els lectors segueixen sencers.
+
+PER QUÈ AQUEST FITXER EXISTEIX
+------------------------------
 La diagnosi de C4 (`docs/diagnosis/DIAGNOSI_C4_ONA_REAL.md` §0.2) va trobar que els lectors de
 payload **no s'han resolt i no s'han quedat igual: s'han ANCORAT**. Avui filtren explícitament
 `capa='exterior', instancia=''`, amb acta escrita al codi que difereix el canvi de contracte a
@@ -19,46 +27,31 @@ sencer són EL MATEIX conjunt: qualsevol test de no-regressió passa igual amb �
 Per tant el green flag de C4 **no pot ser la no-regressió** —no trencarà res—: ha de ser un
 test que AFIRMI que dues germanes vives surten a cada superfície. Això és aquest fitxer.
 
-Neix vermell perquè **mesura el forat**, no perquè estigui mal escrit. El dia que C4 faci
-créixer els contractes, els asserts es queden tal com són i el `skipUnless` se'n va. Fer-lo
-verd ancorant els asserts (comparar només la germana d'exterior, acceptar 1 fila on n'hi ha
-d'haver 2) seria destruir l'única eina que mesura la feina que queda.
+EL QUE VA MESURAR (03/08, HEAD `923c4c16`) I EL QUE VA TANCAR (04/08, bloc 1)
+-----------------------------------------------------------------------------
+De les **10 superfícies**, 6 amagaven la germana. El bloc 1 n'ha desancorat 5:
 
-COM ES CORRE (i com es mesura el forat)
----------------------------------------
-Per defecte està SALTAT, perquè un vermell permanent embrutaria la línia base i el green flag
-del tram és «cap error, cap fallada». Per veure'l córrer i FALLAR:
+    ✅ base_stages                (models_app/views.py:3046)   ja hi era
+    ✅ size-check                 (serializers_size_check)     ja hi era
+    ✅ CSV de fitting             (pom/s8_views)               ja hi era
+    ✅ fitting vs spec            (pom/s10_views)              ja hi era
+    ✅ payload de fitxa           (fitting/graded_spec_views)  C4/1 · era 1 de 4
+    ✅ repàs                      (fitting/repas_views)        C4/2 · eren 2 files per 4,
+                                                               i una SENSE NOM
+    ✅ s6 · mesures base          (pom/s6_views)               C4/3 · era 1 de 4
+    ✅ s6 · specs graduats        (pom/s6_views)               C4/3 · era 1 de 4
+    ✅ cells de grading           (pom/grading_views)          C4/4 · era 1 de 4
+    ✅ deltes de taula de mesures (models_app/views.py:1771)   C4/5 · 4 files i 2 deltes
+    🚩 model-poms del taller      (patterns/views.py:605)      OBERT — contradicció de scope
 
-    C4_MESURA=1 venv/bin/python manage.py test fhort.models_app.test_c4_germanes_a_les_superficies
+**Hi havia DOS modes de fallada, i el segon era el pitjor de veure.** Cinc superfícies
+AMAGAVEN (la germana no sortia del `filter`: faltava una fila i la pantalla es veia coherent).
+La dels deltes NO amagava: pintava les quatre files i en resumia els deltes a un dict per
+`pom_id` sol, o sigui que dues files ensenyaven el delta de la seva germana com si fos seu.
 
-El nombre de mètodes que fallen és **la mida real de C4 mesurada, superfície a superfície** —
-no censada.
-
-LA MESURA DEL 03/08 (HEAD `923c4c16`) — **15 tests · 7 fallades · 0 errors**
----------------------------------------------------------------------------
-De les **10 superfícies** de la llista de C4, **6 amaguen la germana i 4 la treuen**:
-
-    ✅ base_stages                (models_app/views.py:3046)  4 de 4 files
-    ❌ payload de fitxa           (fitting/graded_spec_views) 1 de 4 — n'amaga 3
-    ❌ repàs                      (fitting/repas_views)       2 files per 4 germanes, i una
-                                                              d'elles SENSE NOM (amaga i col·lapsa)
-    ✅ size-check                 (serializers_size_check)    4 de 4, cadascuna amb la seva vara
-    ❌ s6 · mesures base          (pom/s6_views)              1 de 4
-    ❌ s6 · specs graduats        (pom/s6_views)              1 de 4
-    ✅ CSV de fitting             (pom/s8_views)              4 de 4, 2 PASS + 2 FAIL correctes
-    ✅ fitting vs spec            (pom/s10_views)             4 de 4
-    ❌ cells de grading           (pom/grading_views)         1 de 4
-    ❌ deltes de taula de mesures (models_app/views.py:1771)  4 files, **2 deltes**: COL·LAPSA
-    ❌ model-poms del taller      (patterns/views.py:605)     1 de 4
-
-**Els dos modes de fallada conviuen, i el segon és el pitjor de veure.** Cinc superfícies
-AMAGUEN (la germana no surt del `filter`: falta una fila i la pantalla es veu coherent). La dels
-deltes NO amaga: pinta les quatre files i després en resumeix els deltes a un dict per `pom_id`
-sol, o sigui que dues files ensenyen el delta de la seva germana com si fos seu.
-
-Les quatre que passen ho fan perquè el seu queryset no filtra I la seva clau de sortida porta
-prou identitat (línia per línia, no dict per POM). Són el motlle del que han de fer les altres
-sis: no cal inventar-ne cap forma nova.
+Les quatre que ja passaven ho feien perquè el seu queryset no filtrava I la seva clau de
+sortida portava prou identitat (línia per línia, no dict per POM). Van ser el motlle de les
+altres: no va caldre inventar cap forma nova.
 
 EL BANC
 -------
@@ -87,7 +80,6 @@ import contextlib
 import csv
 import datetime
 import io
-import os
 import unittest
 
 from django.contrib.auth import get_user_model
@@ -130,8 +122,6 @@ GERMANES = (
 NOMS = {n for n, _c, _i, _v in GERMANES}
 BASES = {v for _n, _c, _i, v in GERMANES}
 
-MOTIU = ('VERMELL A POSTA fins que C4 desancori els lectors — no el facis verd ancorant el '
-         'test. Corre-hi amb C4_MESURA=1 per mesurar el forat.')
 
 
 @contextlib.contextmanager
@@ -156,9 +146,16 @@ def comportes_alcades(*taules, eixos=EIXOS):
         transaction.savepoint_rollback(sid)
 
 
-@unittest.skipUnless(os.environ.get('C4_MESURA') == '1', MOTIU)
 class GermanesALesSuperficiesC4Test(TenantTestCase):
-    """Cada mètode és UNA superfície de la llista de C4. El que falla, amaga la germana."""
+    """Cada mètode és UNA superfície de la llista de C4. El que falla, amaga la germana.
+
+    ✅ C4/BLOC 1 — EL SKIP DE CLASSE SE'N VA. Aquest fitxer va néixer saltat sencer perquè
+    mesurava un forat obert: 6 de les 10 superfícies amagaven la germana i un vermell permanent
+    hauria embrutat la línia base. El bloc 1 les ha desancorades i el contracte ja corre a cada
+    execució de `fhort.models_app`, que és on ha d'estar: vigilant que no torni a passar.
+
+    Queda UN sol mètode saltat, `test_10`, i el motiu no és tècnic — v. el seu docstring.
+    """
 
     @classmethod
     def setup_tenant(cls, tenant):
@@ -453,7 +450,37 @@ class GermanesALesSuperficiesC4Test(TenantTestCase):
 
     # ── 10 · patterns/views model-poms (:605) ────────────────────────────────────────
 
+    @unittest.skip(
+        'C4/BLOC 1 — SALTAT PER CONTRADICCIÓ DE SCOPE, NO PER DEFECTE TÈCNIC. '
+        'Decisió pendent de l\'Agus: v. el docstring.')
     def test_10_la_llista_del_taller_treu_les_quatre_germanes(self):
+        """🚩 L'ÚNIC MÈTODE SALTAT, I NO ÉS PERQUÈ NO ES PUGUI ARREGLAR.
+
+        Es va provar i FUNCIONA: treure l'àncora del queryset de `BaseMeasurement` a
+        `patterns/views.model_poms` fa passar aquest test, sense tocar `PatternPOM`. Es va
+        revertir a posta, per dues raons que xoquen entre elles i que no són meves de resoldre:
+
+        ① **El brief del bloc 1 exclou patrons explícitament** («NO: … tocar `PatternPOM`
+           (patrons queden fora de C4)»), i alhora llista `model-poms` entre les 10
+           superfícies. Les dues coses no poden ser certes alhora.
+
+        ② **Un test committat fixa el comportament CONTRARI a aquest**:
+           `test_lectors_instancia_cins::test_la_llista_del_taller_no_repeteix_la_fila_per_germana`
+           exigeix que el taller vegi UNA sola fila. Fer passar aquest test fa caure aquell.
+           No es pot satisfer els dos, i triar és una decisió de PRODUCTE sobre la llista de
+           treball del taller, no una de mecànica.
+
+        EL QUE SÍ ÉS MESURABLE I QUEDA DIT: amb l'àncora viva i les comportes fora, un POM
+        mesurat NOMÉS per instància (la sisa esquerra i la dreta, sense «la sisa») desapareix
+        SENCER de la llista del taller — el patronista no veu que hi hagi res a mesurar-hi.
+
+        La meitat del dany que l'àncora evitava ja no existeix: el seu motiu escrit era que el
+        taller veuria N files «sense res que digués quina fila és quina», i amb els eixos al
+        payload sí que hi hauria alguna cosa que ho digués. La meitat que queda —dues germanes
+        comparteixen els MATEIXOS ancoratges, perquè `PatternPOM` és `(pattern_piece,
+        pom_master)` i no té els eixos— és real i és el sostre dur de F2-patrons (§II.10: el
+        DXF no sobreviu un roundtrip amb instància). Tancar-la és decisió humana + migració.
+        """
         from fhort.patterns.models import PatternFile
         from fhort.patterns.views import PatternFileViewSet
 

@@ -224,9 +224,22 @@ class LectorsCapaOnada1Test(TenantTestCase):
     def test_c7_la_taula_de_mesures_no_barreja_les_capes_per_cap_de_les_dues_portes(self):
         """`cells` i `poms_seen` s'omplen per dos camins excloents —specs graduats si el
         model té graduació, mesures base si no— i tots dos escriuen als MATEIXOS
-        diccionaris, indexats per POM sol. Amb dues capes, la cel·la se la quedava la
-        darrera fila llegida: una taula mig d'una capa i mig de l'altra segons la porta."""
+        diccionaris. Amb dues capes, la cel·la se la quedava la darrera fila llegida: una
+        taula mig d'una capa i mig de l'altra segons la porta.
+
+        C4 — LA CLAU DE `cells` HA CRESCUT i el que aquest test defensa NO ha canviat.
+        Fins a C4 la clau era `str(pom_id)` i, amb dues capes vives, la manera de comprovar
+        que no es barrejaven era exigir que la cel·la del POM digués el valor de l'exterior
+        —perquè només n'hi cabia UNA i calia saber quina hi quedava—. Ara n'hi caben dues,
+        cadascuna amb la seva clau, i la comprovació es fa millor: **s'exigeixen totes dues,
+        cadascuna amb el seu valor**. Si el lector tornés a barrejar-les, o una perdés
+        l'altra, aquest assert cau igual que abans.
+        """
         from fhort.fitting.models import GradedSpec
+        from fhort.pom.identitat import clau_mesura
+
+        ext = clau_mesura(self.pom.id, EXTERIOR, '')
+        fol = clau_mesura(self.pom.id, FOLRE, '')
 
         # Porta 1 · mesures base, sense graduació.
         with comporta_alcada('models_app_basemeasurement',
@@ -237,9 +250,10 @@ class LectorsCapaOnada1Test(TenantTestCase):
             resp = self._taula(sf)
 
             self.assertEqual(resp.status_code, 200)
-            cella = resp.data['cells'][str(self.pom.id)]['M']
-            self.assertEqual(cella['value'], 100.0,
-                             "la taula ha de dir el valor de l'exterior, no el del folre")
+            self.assertEqual(resp.data['cells'][ext]['M']['value'], 100.0,
+                             "la cel·la de l'exterior ha de dir el valor de l'exterior")
+            self.assertEqual(resp.data['cells'][fol]['M']['value'], 98.0,
+                             'la cel·la del folre ha de dir el seu, i ha d\'existir')
 
         # Porta 2 · specs graduats.
         with comporta_alcada('fitting_gradedspec'):
@@ -253,8 +267,10 @@ class LectorsCapaOnada1Test(TenantTestCase):
             resp = self._taula(sf2)
 
             self.assertEqual(resp.status_code, 200)
-            self.assertEqual(resp.data['cells'][str(self.pom.id)]['M']['value'], 100.0,
-                             'un valor graduat de folre s\'ha colat a la taula')
+            self.assertEqual(resp.data['cells'][ext]['M']['value'], 100.0,
+                             'un valor graduat de folre s\'ha colat a la cel·la de l\'exterior')
+            self.assertEqual(resp.data['cells'][fol]['M']['value'], 7.0,
+                             'el graduat del folre ha de tenir cel·la pròpia')
 
     # ── C9 · el node del pin: el carry-forward dels estadis ──────────────────────────
 

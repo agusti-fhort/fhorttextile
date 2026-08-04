@@ -204,14 +204,29 @@ class LectorsInstanciaCinsTest(TenantTestCase):
             self.assertEqual(vals_ext, {100.0},
                              'la fila d\'exterior ha de veure NOMÉS la seva presa')
 
-    # ── Els lectors ancorats (FORMA B): la instància NO s'hi cola ────────────────────
+    # ── Els lectors DESANCORATS (C4): les tres germanes, cadascuna amb la seva ───────
 
-    def test_els_lectors_ancorats_serveixen_nomes_la_instancia_unica(self):
-        """La cara B del contracte de FASE_2. Els lectors que no poden portar la clau
-        completa —el seu payload s'indexa per `pom_id` i és contracte fins a C4-ins—
-        s'ancoren als DOS eixos. Amb tres germanes vives, han de servir-ne UNA: l'exterior de
-        la instància única. Si l'àncora només tapés la capa, en servirien dues amb el mateix
-        `pom_id` i el consumidor en perdria una en silenci."""
+    def test_els_lectors_serveixen_les_tres_germanes_amb_els_seus_eixos(self):
+        """C4 — LA CARA B DE FASE_2 CAU, I CAU PERQUÈ TOCA.
+
+        Aquest test es deia `test_els_lectors_ancorats_serveixen_nomes_la_instancia_unica` i
+        exigia el contrari del que exigeix ara: amb tres germanes vives, que el lector en
+        servís UNA. El seu propi docstring deia per què i fins quan — «els lectors que no
+        poden portar la clau completa —el seu payload s'indexa per `pom_id` i **és contracte
+        fins a C4-ins**— s'ancoren als DOS eixos».
+
+        Això és C4. El payload de `base_measurements_with_units_view` ja porta `capa` i
+        `instancia` a cada element, o sigui que la premissa d'aquell test —«no poden portar la
+        clau completa»— ja no és certa, i l'àncora que en sortia hauria passat de contenció a
+        pèrdua: tres mesures reals de la fitxa, dues de les quals no arribarien mai a la
+        pantalla.
+
+        El que NO s'afluixa és el motiu pel qual l'àncora existia: que el consumidor no en
+        perdi cap en silenci. Abans es garantia servint-ne una de sola; ara es garanteix
+        servint-les totes tres i exigint que **cada element digui quina és** — que és
+        estrictament més fort, perquè un col·lapse tornaria a donar `count` < 3 i aquest
+        assert cauria.
+        """
         from rest_framework.test import APIRequestFactory, force_authenticate
 
         from fhort.pom.s6_views import base_measurements_with_units_view
@@ -227,9 +242,15 @@ class LectorsInstanciaCinsTest(TenantTestCase):
             resp.render() if hasattr(resp, 'render') else None
 
             self.assertEqual(resp.status_code, 200)
-            self.assertEqual(resp.data['count'], 1,
-                             'l\'àncora ha de tapar els DOS eixos, no només la capa')
-            self.assertEqual(resp.data['results'][0]['base_value_cm'], 100.0)
+            self.assertEqual(resp.data['count'], 3,
+                             'les tres germanes són mesures reals de la fitxa: hi han de ser')
+            per_eixos = {(r['capa'], r['instancia']): r['base_value_cm']
+                         for r in resp.data['results']}
+            self.assertEqual(per_eixos, {
+                (EXTERIOR, ''): 100.0,
+                (FOLRE, ''): 98.0,
+                (EXTERIOR, LEFT): 40.0,
+            }, 'cada element ha de portar el valor de LA SEVA germana i dir quina és')
 
     def test_la_llista_del_taller_no_repeteix_la_fila_per_germana(self):
         """El forat #1 dels dos d'Onada 1. `model-poms` creua les mesures amb els ancoratges
