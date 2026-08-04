@@ -304,6 +304,20 @@ function flattenObjects(objects = []) {
 // segon criteri i és el que feia sortir "POM-020" com si fos nomenclatura.
 export const cotaLabelDe = (bm) => (bm && (bm.nom_fitxa || bm.codi_client || bm.pom_code_global)) || ''
 
+// LA IDENTITAT D'UNA COTA — el que la lliga a UNA mesura i no a un POM.
+//
+// F3/A3. Tot el panell de cotes s'indexava per `pomId`, i des que un POM pot tenir dues cares
+// això no era una clau: posar la cota d'`A` deixava `A-FOL` amb el ✓ verd i sense casella, i el
+// folre no es podia acotar MAI. La identitat és la mateixa de C4: `{pom}|{capa}|{instància}`.
+//
+// ⚠️ ELS `.ftt` VIUS NO ES MIGREN. Els documents desats porten `pomId` pelat i cap eix; es
+// llegeixen com a `(pom, exterior, '')`, que és el que eren quan es van escriure —C4 garanteix
+// que tota mesura sense eixos declarats és l'exterior únic—. Per això el `|| 'exterior'`: no és
+// una tolerància, és la LECTURA correcta del format vell. El format nou desa els dos eixos al
+// costat del `pomId`, i un document de cada mena conviu amb l'altre sense tocar res.
+const identitatDeCota = (o) => `${o.pomId}|${o.capa || 'exterior'}|${o.instancia || ''}`
+const identitatDeFila = (bm) => `${bm.pom_id}|${bm.capa || 'exterior'}|${bm.instancia || ''}`
+
 // EL NOM D'UNA MESURA A UNA TAULA DE PAPER — punt únic de les QUATRE taules de la fitxa.
 //
 // Fins avui cada taula portava la seva pròpia cadena en línia (`nom_en || nom_client ||
@@ -369,7 +383,8 @@ export function cotaLabelOffset(dx, dy, halfW, halfH) {
 // F2 — construeix una cota VIVA (mateixa forma que l'eina cota_pom de F1: grup amb path de
 // doble punta + etiqueta de TEXT VERMELL sense requadre) a partir dels extrems en mm. Un precedent
 // de peça GERMANA es marca amb traç discontinu (`derivat`).
-export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, canonical, viewSlot, derivat }) {
+export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, capa, instancia,
+  canonical, viewSlot, derivat }) {
   const col = KONVA_COL.pom
   const dash = derivat ? [3, 2] : undefined
   const TW = measureTextWidthMm({ text: label, fontSize: 9, fontFamily: FONT, fontStyle: 'bold' })
@@ -393,7 +408,17 @@ export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, canonical, v
   }
   return {
     id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0,
-    pomId, bmId, pomCanonical: canonical || '', viewSlot, precedentGermana: !!derivat,
+    // A3 — LA IDENTITAT SENCERA VIATJA AMB LA COTA i es desa al `.ftt`. El `pomId` es queda
+    // (l'usen el render i tot el que ja el llegia); els dos eixos hi són al costat, i és el que
+    // permet que dues germanes tinguin dues cotes distingibles al MATEIX document.
+    //
+    // S'ometen quan són el valor per defecte: una cota d'exterior únic es desa exactament com
+    // abans, i els `.ftt` que ja hi ha —que no en porten cap— es llegeixen igual (v.
+    // `identitatDeCota`). Així el format no es parteix en dos, només creix quan cal.
+    pomId, bmId,
+    ...(capa && capa !== 'exterior' ? { capa } : {}),
+    ...(instancia ? { instancia } : {}),
+    pomCanonical: canonical || '', viewSlot, precedentGermana: !!derivat,
     children: [linia, text],
   }
 }
@@ -3528,30 +3553,22 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pages])
 
-  // ── LA MESURA D'UN POM, QUAN NO N'HI HA MÉS D'UNA ─────────────────────────────
-  // C4 — TOT L'EDITOR DE FITXA IDENTIFICA UNA COTA PER `pomId`, i des que una mesura pot
-  // tenir dues cares això ha deixat de ser una clau. Els quatre punts que resolien
-  // `pom_id → mesura` ho feien amb `new Map(pomRows.map(bm => [bm.pom_id, bm]))`, que es
-  // queda l'ÚLTIMA entrada de cada clau: la germana que sortís després a la consulta
-  // guanyava, i el desempat el feia l'ordenació del backend, no el document.
+  // ── LA MESURA D'UNA IDENTITAT ────────────────────────────────────────────────
+  // A3 · LA DECISIÓ D-31.25 ESTÀ PRESA: UNA COTA PER GERMANA.
   //
-  // El que se n'escrivia no era només un rètol: `bmId` lliga la cota a UNA mesura concreta i
-  // es DESA al `.ftt`. Una cota lligada a la germana equivocada, persistida, i sense res que
-  // ho digués.
+  // Aquí hi havia `bmUnicPerPom`, un mapa que NOMÉS contenia els POMs amb una sola mesura.
+  // Era un guard conscient: tot l'editor identificava una cota per `pomId`, i com que `bmId`
+  // es DESA al `.ftt`, resoldre `pom_id → mesura` amb dues germanes hauria lligat la cota a la
+  // que sortís l'última de la consulta —i persistit l'error sense dir-ho. Va preferir no
+  // respondre («escollir és el que fa mal; no escollir, no») i deixar la pregunta oberta a
+  // l'Agus.
   //
-  // Aquest mapa, doncs, només conté els POMs amb UNA sola mesura. Amb germanes no hi ha
-  // resposta i no se n'inventa cap: qui hi consulti rep `undefined` i cau a la degradació
-  // que ja tenia. Escollir és el que fa mal; no escollir, no.
-  //
-  // 🚩 PENDENT, I NO ÉS MECÀNIC: què ha de fer la col·locació automàtica de cotes amb un POM
-  // de dues germanes —una cota o dues, i com s'anomenen— és una decisió de producte sobre el
-  // croquis, no una tria d'implementació. Fins que es prengui, aquests punts no col·loquen
-  // res lligat a una germana triada a l'atzar, que és l'únic que aquest bloc havia de tancar.
-  const bmUnicPerPom = useMemo(() => {
-    const compte = new Map()
-    for (const bm of pomRows) compte.set(bm.pom_id, (compte.get(bm.pom_id) || 0) + 1)
-    return new Map(pomRows.filter(bm => compte.get(bm.pom_id) === 1).map(bm => [bm.pom_id, bm]))
-  }, [pomRows])
+  // Amb la decisió presa, ja no cal no respondre: la clau és la identitat sencera i cada
+  // germana té la seva entrada. El mapa passa a ser total —cap fila del model en queda fora—
+  // i els quatre punts que hi consultaven reben la mesura EXACTA, no una de plausible.
+  const bmPerIdentitat = useMemo(
+    () => new Map(pomRows.filter(bm => bm.pom_id != null).map(bm => [identitatDeFila(bm), bm])),
+    [pomRows])
 
   // ── F1 (cota viva) — re-deriva l'etiqueta de cada cota vinculada des del POM viu ──
   // En carregar el document (o si canvia l'àlies del client) refresquem el text visible
@@ -3567,7 +3584,9 @@ export default function TechSheetEditor() {
     const nextPages = pages.map(p => {
       const objects = (p.objects || []).map(o => {
         if (o.type !== 'group' || o.pomId == null) return o
-        const bm = bmById.get(o.bmId) || bmUnicPerPom.get(o.pomId)
+        // `bmId` mana quan hi és (és el vincle fort). El pla B ja no és «el POM si no té
+        // germanes» sinó la IDENTITAT de la cota, que per a un `.ftt` vell resol a l'exterior.
+        const bm = bmById.get(o.bmId) || bmPerIdentitat.get(identitatDeCota(o))
         if (!bm) return o   // degradació elegant: el POM/BM ja no hi és
         const nouText = cotaLabelDe(bm)
         if (!nouText) return o
@@ -4250,7 +4269,13 @@ export default function TechSheetEditor() {
     addObject({
       id: uid(), type: 'group', layer: 'free', x: ax, y: ay, rotation: 0,
       // F1: vincle de només-lectura al POM viu (escalars → round-trip .ftt lliure, no host-ref).
-      ...(pom?.pomId != null ? { pomId: pom.pomId, bmId: pom.bmId, pomCanonical: pom.canonical || '' } : {}),
+      // A3: i els dos eixos, amb el mateix criteri que `buildLiveCota` — només quan no són el
+      // valor per defecte, perquè una cota d'exterior únic es desi exactament com abans.
+      ...(pom?.pomId != null ? {
+        pomId: pom.pomId, bmId: pom.bmId, pomCanonical: pom.canonical || '',
+        ...(pom.capa && pom.capa !== 'exterior' ? { capa: pom.capa } : {}),
+        ...(pom.instancia ? { instancia: pom.instancia } : {}),
+      } : {}),
       children: [linia, text],
     })
     setCotaPreset(null)
@@ -5523,23 +5548,24 @@ export default function TechSheetEditor() {
     return vist
   }, [pages])
 
-  // F1 (cota viva): una cota compta com a col·locada pel seu pomId (vincle viu), no pel
+  // F1 (cota viva): una cota compta com a col·locada per la seva MESURA (vincle viu), no pel
   // text. Les cotes antigues sense pomId (pre-F1) no hi compten — degradació acceptada.
+  // A3: la clau és la identitat sencera, no el `pomId` (v. `identitatDeCota`).
   const cotesColocades = useMemo(() => {
     const ids = new Set()
     for (const p of pages) {
       for (const o of flattenObjects(p.objects || [])) {
         // F3: una proposta IA pendent NO compta com a col·locada — encara ha de passar revisió.
-        if (o.pomId != null && !o.iaProposada) ids.add(o.pomId)
+        if (o.pomId != null && !o.iaProposada) ids.add(identitatDeCota(o))
       }
     }
     return ids
   }, [pages])
-  // F3: pomIds amb una cota PROPOSADA-IA viva a la pàgina actual (pendent d'acceptar/descartar).
-  const iaCotesByPom = useMemo(() => {
+  // F3: mesures amb una cota PROPOSADA-IA viva a la pàgina actual (pendent d'acceptar/descartar).
+  const iaCotesPerMesura = useMemo(() => {
     const ids = new Set()
     for (const o of (pages[currentPage]?.objects || [])) {
-      if (o.type === 'group' && o.pomId != null && o.iaProposada) ids.add(o.pomId)
+      if (o.type === 'group' && o.pomId != null && o.iaProposada) ids.add(identitatDeCota(o))
     }
     return ids
   }, [pages, currentPage])
@@ -5600,82 +5626,106 @@ export default function TechSheetEditor() {
   // Construeix la cota VIVA de F1 d'una proposta, desnormalitzant sobre la bbox ACTUAL del seu
   // objecte-sketch host (si s'ha mogut/redimensionat, la cota hi cau bé igualment). null si el
   // host ja no hi és. La vista es resol SOLA: la del host, mai demanada per endavant.
-  const buildCotaDeProposta = useCallback((pomId, prop) => {
+  // A3 — rep la MESURA, no el `pomId`. El precedent segueix sent del POM (una col·locació de
+  // catàleg no sap res de capes: és on va la cota d'aquest POM sobre aquest croquis), però el
+  // que se'n construeix és la cota d'UNA germana concreta, amb el seu `bmId` i els seus eixos.
+  // Per això el `bmId` surt del `bm` i no de `p.bm_id`: el precedent en porta un, però és el de
+  // la mesura amb què es va DESAR el precedent, que pot ser d'un altre model.
+  const buildCotaDeProposta = useCallback((bm, prop) => {
     const host = curObjs.find(o => o.id === prop.hostId)
     if (!host) return null
     const bb = objectBounds(host)
     const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
-    const bm = bmUnicPerPom.get(pomId)
     const p = prop.p
     const ax = bb.minX + p.x1 * bw, ay = bb.minY + p.y1 * bh
     const bx = bb.minX + p.x2 * bw, by = bb.minY + p.y2 * bh
     return buildLiveCota({
       ax, ay, dx: bx - ax, dy: by - ay,
-      label: cotaLabelDe(bm) || p.codi, pomId, bmId: p.bm_id,
+      label: cotaLabelDe(bm) || p.codi, pomId: bm.pom_id, bmId: bm.id,
+      capa: bm.capa, instancia: bm.instancia,
       canonical: p.codi, viewSlot: host.viewSlot, derivat: prop.derivat,
       // C1-fix: l'etiqueta es col·loca amb l'offset perpendicular automàtic (buildLiveCota), no
       // amb la posició normalitzada del precedent → mai sobre el traç.
     })
-  }, [curObjs, bmUnicPerPom])
+  }, [curObjs])
 
-  // «Posar» LA cota d'un POM proposable (mecànica de colocarDesPrecedent, però per POM). La cota
-  // neix VIVA de F1: arrossegable, editable; el panell la veurà tot seguit com a COL·LOCAT.
-  const posarProposta = useCallback((pomId) => {
-    const prop = propostes.get(pomId)
+  // «Posar» LA cota d'una mesura proposable (mecànica de colocarDesPrecedent, però per fila). La
+  // cota neix VIVA de F1: arrossegable, editable; el panell la veurà tot seguit com a COL·LOCAT.
+  const posarProposta = useCallback((bm) => {
+    const prop = propostes.get(bm.pom_id)
     if (!prop) return
-    const cota = buildCotaDeProposta(pomId, prop)
+    const cota = buildCotaDeProposta(bm, prop)
     if (cota) updatePageObjects(currentPage, objs => [...objs, cota])
   }, [propostes, buildCotaDeProposta, currentPage, updatePageObjects])
 
   // ── ASSIGNACIÓ AUTOMÀTICA DE COTES ─────────────────────────────────────────
-  // POMs del model que encara no tenen cota al document: el domini del botó automàtic. No hi
+  // MESURES del model que encara no tenen cota al document: el domini del botó automàtic. No hi
   // entra cap noció de "proposable": si un POM té precedent, la cota hi caurà a sobre; si no,
   // es reparteix sobre la superfície. Tenir-ne o no NO decideix si es pot col·locar.
-  const pomsSenseCota = useMemo(() => pomRows
-    .filter(bm => bm.pom_id != null && !cotesColocades.has(bm.pom_id))
-    .map(bm => bm.pom_id), [pomRows, cotesColocades])
+  //
+  // A3 — la llista porta les FILES, no els `pom_id`. Amb `.map(bm => bm.pom_id)` dues germanes
+  // sense cota hi entraven com dues entrades del mateix número: el botó deia «col·loca'n 2» quan
+  // n'hi havia una de sola a col·locar, i el repartidor rebia el mateix POM dues vegades.
+  const mesuresSenseCota = useMemo(() => pomRows
+    .filter(bm => bm.pom_id != null && !cotesColocades.has(identitatDeFila(bm))),
+  [pomRows, cotesColocades])
   // La superfície de la pàgina on cauen les cotes sense precedent: el croquis/foto més gran.
   // Sense cap objecte on col·locar, el botó es deshabilita DIENT-HO (mai desapareix).
   const superficieCotes = useMemo(
     () => superficieDeCotes(sketchObjs, objectBounds), [sketchObjs])
   // Selecció: la fa el tècnic sobre QUALSEVOL fila sense cota. Cap marca = totes.
-  const triats = useMemo(() => pomsSenseCota.filter(pid => propSel.has(pid)), [pomsSenseCota, propSel])
-  const totsTriats = pomsSenseCota.length > 0 && triats.length === pomsSenseCota.length
-  const alternaTriat = useCallback((pomId) => setPropSel(s => {
+  // `propSel` desa IDENTITATS: marcar l'exterior no pot marcar el folre.
+  const triats = useMemo(() => mesuresSenseCota.filter(bm => propSel.has(identitatDeFila(bm))),
+    [mesuresSenseCota, propSel])
+  const totsTriats = mesuresSenseCota.length > 0 && triats.length === mesuresSenseCota.length
+  const alternaTriat = useCallback((ident) => setPropSel(s => {
     const n = new Set(s)
-    if (n.has(pomId)) n.delete(pomId); else n.add(pomId)
+    if (n.has(ident)) n.delete(ident); else n.add(ident)
     return n
   }), [])
   const alternaTotsTriats = useCallback(() => setPropSel(s => (
-    pomsSenseCota.every(pid => s.has(pid)) ? new Set() : new Set(pomsSenseCota)
-  )), [pomsSenseCota])
+    mesuresSenseCota.every(bm => s.has(identitatDeFila(bm)))
+      ? new Set()
+      : new Set(mesuresSenseCota.map(identitatDeFila))
+  )), [mesuresSenseCota])
 
-  // El botó: col·loca les cotes dels POMs demanats. PRECEDENT primer (la col·locació que ja
+  // El botó: col·loca les cotes de les MESURES demanades. PRECEDENT primer (la col·locació que ja
   // sabem bona); la resta, repartides sobre la superfície, vives i arrossegables des del primer
   // moment — igual que si el tècnic les hagués dibuixat a mà.
-  const colocarCotes = useCallback((pomIds) => {
+  const colocarCotes = useCallback((mesures) => {
     const sensePrecedent = []
     const nous = []
-    for (const pomId of pomIds) {
-      if (cotesColocades.has(pomId)) continue
-      const prop = propostes.get(pomId)
-      const cota = prop ? buildCotaDeProposta(pomId, prop) : null
+    // Les cotes es creen en bloc i `cotesColocades` no es refresca fins al re-render: el que
+    // s'ha col·locat en aquesta mateixa passada s'ha de recordar aquí, o dues entrades de la
+    // mateixa mesura en produirien dues de cotes.
+    const jaFetes = new Set()
+    for (const bm of mesures) {
+      const ident = identitatDeFila(bm)
+      if (cotesColocades.has(ident) || jaFetes.has(ident)) continue
+      jaFetes.add(ident)
+      const prop = propostes.get(bm.pom_id)
+      const cota = prop ? buildCotaDeProposta(bm, prop) : null
       if (cota) nous.push(cota)
-      else sensePrecedent.push(pomId)
+      else sensePrecedent.push(bm)
     }
     if (sensePrecedent.length && superficieCotes) {
       reparteixCotes(superficieCotes, sensePrecedent.length).forEach((geo, i) => {
-        const pomId = sensePrecedent[i]
-        const bm = bmUnicPerPom.get(pomId)
+        const bm = sensePrecedent[i]
+        // L'ETIQUETA JA NO POT SER UN NÚMERO. El pla B era `String(pomId)` perquè
+        // `bmUnicPerPom` tornava `undefined` per a un POM amb germanes: el croquis rebia una
+        // cota que deia «273». Ara la mesura és exacta i `cotaLabelDe` sempre en treu la
+        // nomenclatura; el `pom_code_global` queda d'últim recurs, que ja és un codi de debò.
         nous.push(buildLiveCota({
-          ...geo, label: cotaLabelDe(bm) || String(pomId),
-          pomId, bmId: bm?.id, canonical: bm?.pom_code_global || '',
+          ...geo, label: cotaLabelDe(bm) || bm.pom_code_global || '',
+          pomId: bm.pom_id, bmId: bm.id,
+          capa: bm.capa, instancia: bm.instancia,
+          canonical: bm.pom_code_global || '',
         }))
       })
     }
     if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
     setF2Msg(t('tech_sheet.pom_posades', { n: nous.length }))
-  }, [cotesColocades, propostes, buildCotaDeProposta, superficieCotes, bmUnicPerPom, currentPage, updatePageObjects, t])
+  }, [cotesColocades, propostes, buildCotaDeProposta, superficieCotes, currentPage, updatePageObjects, t])
 
   // Desar UNA cota com a precedent del catàleg (acte CONSCIENT, D1) — des de Propietats de la
   // cota. Resol el host sketch pel punt mig de la cota; la vista es pren del host. Substitueix
@@ -5731,7 +5781,7 @@ export default function TechSheetEditor() {
   // com a cotes VIVES en estat PROPOSAT (iaProposada): atenuades, NOMÉS pantalla, manipulables.
   const proposarCotesIA = useCallback(async () => {
     const pendents = pomRows.filter(bm => bm.pom_id != null
-      && !cotesColocades.has(bm.pom_id) && !iaCotesByPom.has(bm.pom_id))
+      && !cotesColocades.has(identitatDeFila(bm)) && !iaCotesPerMesura.has(identitatDeFila(bm)))
     if (!pendents.length) { setF2Msg(t('tech_sheet.ia_cap_pendent')); return }
     const hosts = sketchObjs
     if (!hosts.length) { setF2Msg(t('tech_sheet.ia_cap_sketch')); return }
@@ -5750,7 +5800,15 @@ export default function TechSheetEditor() {
             w: (bb.maxX - bb.minX) / fmt.w, h: (bb.maxY - bb.minY) / fmt.h },
         }
       })
-      const poms = pendents.map(bm => ({
+      // 🚩 SOSTRE DEL BACKEND, ANOTAT: `proposar-cotes/` parla per `pom_id` (l'envia i el torna),
+      // o sigui que la visió no pot proposar dues cotes per al mateix POM. Amb germanes, la
+      // proposta arriba UNA vegada i s'aplica a la primera mesura pendent d'aquell POM; la
+      // segona queda per col·locar a mà o pel botó automàtic. Ampliar el contracte de la IA
+      // perquè parli per mesura és feina de backend i NO entra aquí. Es dedupliquen els POMs
+      // abans d'enviar perquè el model de visió no rebi la mateixa fila dues vegades.
+      const primeraPerPom = new Map()
+      for (const bm of pendents) if (!primeraPerPom.has(bm.pom_id)) primeraPerPom.set(bm.pom_id, bm)
+      const poms = [...primeraPerPom.values()].map(bm => ({
         pom_id: bm.pom_id, code: bm.codi_client,
         canonical_name: bm.nom_en || bm.pom_code_global || '',
         client_alias: bm.client_alias || null, definition: bm.definicio || null,
@@ -5767,16 +5825,22 @@ export default function TechSheetEditor() {
       const nous = []
       for (const p of (data.placements || [])) {
         const host = hostById.get(p.object_id)
-        if (!host || cotesColocades.has(p.pom_id) || iaCotesByPom.has(p.pom_id)) continue
+        // La proposta torna per `pom_id`: es reancora a la MESURA que se li va enviar (la
+        // primera pendent d'aquell POM). Sense mesura, la proposta es descarta —abans es
+        // materialitzava igual, amb el número del POM per etiqueta.
+        const bm = primeraPerPom.get(p.pom_id)
+        if (!host || !bm) continue
+        const ident = identitatDeFila(bm)
+        if (cotesColocades.has(ident) || iaCotesPerMesura.has(ident)) continue
         const bb = objectBounds(host)
         const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
-        const bm = bmUnicPerPom.get(p.pom_id)
         const ax = bb.minX + (p.x1 || 0) * bw, ay = bb.minY + (p.y1 || 0) * bh
         const bx = bb.minX + (p.x2 || 0) * bw, by = bb.minY + (p.y2 || 0) * bh
         const cota = buildLiveCota({
           ax, ay, dx: bx - ax, dy: by - ay,
-          label: cotaLabelDe(bm) || String(p.pom_id), pomId: p.pom_id, bmId: bm?.id,
-          canonical: bm?.pom_code_global || '', viewSlot: host.viewSlot,
+          label: cotaLabelDe(bm) || bm.pom_code_global || '', pomId: bm.pom_id, bmId: bm.id,
+          capa: bm.capa, instancia: bm.instancia,
+          canonical: bm.pom_code_global || '', viewSlot: host.viewSlot,
           // C1-fix: offset perpendicular automàtic (buildLiveCota), no la posició proposada per la IA.
         })
         nous.push({ ...cota, iaProposada: true, iaConfidence: p.confidence || 'mitjana' })
@@ -5789,7 +5853,7 @@ export default function TechSheetEditor() {
     } finally {
       setProposantIA(false)
     }
-  }, [pomRows, bmUnicPerPom, cotesColocades, iaCotesByPom, sketchObjs, curObjs, pages, currentPage,
+  }, [pomRows, cotesColocades, iaCotesPerMesura, sketchObjs, curObjs, pages, currentPage,
       tableData, model, sheet, pageW, pageH, customerLogoUrl, fmt, id, authHeaders, updatePageObjects, t])
 
   // Acceptar UNA proposta: la cota esdevé cota viva normal (F1) I, si el seu croquis ve del
@@ -6733,23 +6797,23 @@ export default function TechSheetEditor() {
                   només aquelles. Si no hi ha cap superfície a la pàgina, es queda deshabilitat
                   però DIENT per què: un botó que desapareix no s'aprèn (i és el que va passar
                   quan la col·locació en bloc va quedar lligada a tenir precedent de catàleg). */}
-              {pomsSenseCota.length > 0 && (
+              {mesuresSenseCota.length > 0 && (
                 <div style={{ marginBottom: 6 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, cursor: 'pointer', fontSize: 'var(--fs-label)', color: COL.textMain, fontFamily: FONT }}>
                     <input type="checkbox" checked={totsTriats} onChange={alternaTotsTriats} style={{ cursor: 'pointer' }} />
-                    {t('tech_sheet.pom_sel_totes', { n: pomsSenseCota.length })}
+                    {t('tech_sheet.pom_sel_totes', { n: mesuresSenseCota.length })}
                   </label>
                   <button type="button"
-                    onClick={() => colocarCotes(triats.length ? triats : pomsSenseCota)}
+                    onClick={() => colocarCotes(triats.length ? triats : mesuresSenseCota)}
                     disabled={!superficieCotes}
                     title={superficieCotes
-                      ? (triats.length ? t('tech_sheet.pom_colocar_n', { n: triats.length }) : t('tech_sheet.pom_colocar_totes', { n: pomsSenseCota.length }))
+                      ? (triats.length ? t('tech_sheet.pom_colocar_n', { n: triats.length }) : t('tech_sheet.pom_colocar_totes', { n: mesuresSenseCota.length }))
                       : t('tech_sheet.pom_colocar_sense_superficie')}
                     style={{ width: '100%', cursor: superficieCotes ? 'pointer' : 'default', opacity: superficieCotes ? 1 : 0.5, padding: '0.35rem 0.5rem', background: COL.goldPale, border: `1px solid ${COL.gold}`, borderRadius: 4, color: COL.gold, fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                     <i className="ti ti-wand" />
                     {triats.length
                       ? t('tech_sheet.pom_colocar_n', { n: triats.length })
-                      : t('tech_sheet.pom_colocar_totes', { n: pomsSenseCota.length })}
+                      : t('tech_sheet.pom_colocar_totes', { n: mesuresSenseCota.length })}
                   </button>
                   {!superficieCotes && (
                     <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '4px 0 0' }}>
@@ -6800,10 +6864,15 @@ export default function TechSheetEditor() {
                   const nomLocal = bm.nom_traduit_model || bm.nom_ca || bm.nom_client || ''
                   const nomCanonic = bm.nom_canonic_model || bm.nom_en || nomLocal
                   const nomSota = nomCanonic && nomLocal !== nomCanonic ? nomLocal : ''
-                  const colocat = bm.pom_id != null && cotesColocades.has(bm.pom_id)
+                  // A3 — LA IDENTITAT SENCERA, i tots els estats indexats per ella. Amb `pom_id`
+                  // pelat, col·locar la cota d'`A` deixava `A-FOL` en verd i sense casella: el
+                  // folre no es podia acotar mai, i res no ho deia.
+                  const ident = identitatDeFila(bm)
+                  const sufix = sufixIdentitat(bm, t)
+                  const colocat = bm.pom_id != null && cotesColocades.has(ident)
                   const armat = cotaPreset?.bmId === bm.id && tool === 'cota_pom'
-                  // PROPOSADA-IA: hi ha una cota de visió pendent de revisió per aquest POM.
-                  const iaProp = !colocat && bm.pom_id != null && iaCotesByPom.has(bm.pom_id)
+                  // PROPOSADA-IA: hi ha una cota de visió pendent de revisió per aquesta mesura.
+                  const iaProp = !colocat && bm.pom_id != null && iaCotesPerMesura.has(ident)
                   // PROPOSABLE (precedent): la cascada en té col·locació i la cota encara no hi és.
                   // Fiabilitat: exacte (precedent del mateix item) > germana (transposat).
                   const prop = !colocat && !iaProp && bm.pom_id != null ? propostes.get(bm.pom_id) : null
@@ -6821,8 +6890,8 @@ export default function TechSheetEditor() {
                       {!colocat && bm.pom_id != null && (
                         <label title={t('tech_sheet.pom_sel_una')}
                           style={{ display: 'flex', alignItems: 'center', flexShrink: 0, cursor: 'pointer' }}>
-                          <input type="checkbox" checked={propSel.has(bm.pom_id)}
-                            onChange={() => alternaTriat(bm.pom_id)} style={{ cursor: 'pointer' }} />
+                          <input type="checkbox" checked={propSel.has(ident)}
+                            onChange={() => alternaTriat(ident)} style={{ cursor: 'pointer' }} />
                         </label>
                       )}
                       <button type="button"
@@ -6831,7 +6900,7 @@ export default function TechSheetEditor() {
                         // Cota POM l'exclou); esborrar la cota el torna PENDENT/PROPOSABLE. No es fa
                         // servir `disabled` per no perdre el tooltip explicatiu (Chrome l'amaga en
                         // botons disabled): click a buit + cursor per defecte.
-                        onClick={colocat ? undefined : () => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, canonical: canonic }); setTool('cota_pom') }}
+                        onClick={colocat ? undefined : () => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, capa: bm.capa, instancia: bm.instancia, canonical: canonic }); setTool('cota_pom') }}
                         aria-pressed={armat}
                         title={colocat
                           ? t('tech_sheet.pom_cota_ja_colocat')
@@ -6854,10 +6923,21 @@ export default function TechSheetEditor() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
                             <span style={{ flexShrink: 0 }}>{etiqueta}</span>
-                            {/* El nom pot no cabre-hi: es retalla amb ellipsis i el tooltip el diu sencer. */}
-                            <span title={nomCanonic} style={{ fontWeight: 500, color: COL.textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {nomCanonic}
+                            {/* El nom pot no cabre-hi: es retalla amb ellipsis i el tooltip el diu sencer.
+                                A3 — el SUFIX D'IDENTITAT («· Esquerra», «· Folre») va enganxat al nom i
+                                en pes fort: no és una etiqueta al costat, és que aquesta mesura ES DIU
+                                així (mateixa llei que `NomCanonic` a la taula de Mesures). Sense ell,
+                                dues files del panell es llegien exactament igual. */}
+                            <span title={`${nomCanonic}${sufix}`} style={{ fontWeight: 500, color: COL.textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {nomCanonic}{sufix && <span style={{ fontWeight: 600 }}>{sufix}</span>}
                             </span>
+                            {/* La ⓘ: el nom en la llengua de qui llegeix, a demanda. La segona línia
+                                permanent es queda per als casos on hi cap; això és el que la maqueta
+                                v8.1 va decidir per a la taula, i aquí val el mateix criteri. */}
+                            {nomSota && (
+                              <i className="ti ti-info-circle" title={nomSota} aria-label={nomSota}
+                                style={{ fontSize: 12, color: COL.textMuted, flexShrink: 0, cursor: 'help' }} />
+                            )}
                             {/* Badge PROPOSADA-IA (pendent de revisió): distint d'exacte/germana. */}
                             {iaProp && (
                               <span title={t('tech_sheet.ia_badge_tip')}
@@ -6893,7 +6973,7 @@ export default function TechSheetEditor() {
                       </button>
                       {/* «Posar»: col·loca LA cota des del precedent (queda viva F1, arrossegable). */}
                       {prop && (
-                        <button type="button" onClick={() => posarProposta(bm.pom_id)}
+                        <button type="button" onClick={() => posarProposta(bm)}
                           title={t('tech_sheet.pom_posar')}
                           style={{ flexShrink: 0, width: 32, cursor: 'pointer', border: `1px solid ${COL.gold}`, borderRadius: 4, background: COL.goldPale, color: COL.gold, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <i className="ti ti-copy" style={{ fontSize: 15 }} />
