@@ -176,6 +176,22 @@ export default function EditableTable({
       .filter(r => r.base_value_cm != null && r.base_value_cm !== '')
       .map(r => ({
         pom_id: r.pom_id,
+        // C4/BLOC 1-BIS — ELS EIXOS ENTREN AL PAYLOAD D'ESCRIPTURA. Amb `pom_id` pelat,
+        // l'upsert del backend resolia la fila amb el literal `(exterior, '')` i dues
+        // germanes hi queien a sobre: la segona escrivia el seu valor a la fila de la
+        // primera i la primera es quedava sense tocar. Pèrdua de dades en DESAR, no una
+        // columna buida. Avui no fa mal perquè no hi ha cap germana viva; el dia que en
+        // neixi una, ja seria tard.
+        //
+        // Viatgen com a DOS CAMPS i no com la cadena aplanada `{pom}|{capa}|{inst}`: ho mana
+        // `pom/identitat.py` —«qui hagi de consultar, filtrar o escriure, que faci servir els
+        // tres camps per separat»—. La cadena existeix només per a la vora del payload on la
+        // mesura és clau d'un objecte JSON (`deltes`, `cells`), que no és aquest cas.
+        //
+        // Les files encara no desades (les de `poms-suggerits`) no en porten: el backend hi
+        // aplica el literal de sempre, i ho fa dient-ho.
+        capa: r.capa,
+        instancia: r.instancia,
         base_value_cm: r.base_value_cm,
         notes: r.notes || '',
         nom_fitxa: r.nom_fitxa || '',
