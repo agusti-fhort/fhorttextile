@@ -3444,6 +3444,31 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pages])
 
+  // ── LA MESURA D'UN POM, QUAN NO N'HI HA MÉS D'UNA ─────────────────────────────
+  // C4 — TOT L'EDITOR DE FITXA IDENTIFICA UNA COTA PER `pomId`, i des que una mesura pot
+  // tenir dues cares això ha deixat de ser una clau. Els quatre punts que resolien
+  // `pom_id → mesura` ho feien amb `new Map(pomRows.map(bm => [bm.pom_id, bm]))`, que es
+  // queda l'ÚLTIMA entrada de cada clau: la germana que sortís després a la consulta
+  // guanyava, i el desempat el feia l'ordenació del backend, no el document.
+  //
+  // El que se n'escrivia no era només un rètol: `bmId` lliga la cota a UNA mesura concreta i
+  // es DESA al `.ftt`. Una cota lligada a la germana equivocada, persistida, i sense res que
+  // ho digués.
+  //
+  // Aquest mapa, doncs, només conté els POMs amb UNA sola mesura. Amb germanes no hi ha
+  // resposta i no se n'inventa cap: qui hi consulti rep `undefined` i cau a la degradació
+  // que ja tenia. Escollir és el que fa mal; no escollir, no.
+  //
+  // 🚩 PENDENT, I NO ÉS MECÀNIC: què ha de fer la col·locació automàtica de cotes amb un POM
+  // de dues germanes —una cota o dues, i com s'anomenen— és una decisió de producte sobre el
+  // croquis, no una tria d'implementació. Fins que es prengui, aquests punts no col·loquen
+  // res lligat a una germana triada a l'atzar, que és l'únic que aquest bloc havia de tancar.
+  const bmUnicPerPom = useMemo(() => {
+    const compte = new Map()
+    for (const bm of pomRows) compte.set(bm.pom_id, (compte.get(bm.pom_id) || 0) + 1)
+    return new Map(pomRows.filter(bm => compte.get(bm.pom_id) === 1).map(bm => [bm.pom_id, bm]))
+  }, [pomRows])
+
   // ── F1 (cota viva) — re-deriva l'etiqueta de cada cota vinculada des del POM viu ──
   // En carregar el document (o si canvia l'àlies del client) refresquem el text visible
   // de la cota des de pomRows. Si el POM/BM ja no existeix, la cota DEGRADA a dibuix mort
@@ -3454,30 +3479,11 @@ export default function TechSheetEditor() {
   useEffect(() => {
     if (!pomRows.length) return
     const bmById = new Map(pomRows.map(bm => [bm.id, bm]))
-    // C4/BLOC 3 — el pla B per `pom_id` NO TRIA ENTRE GERMANES. `new Map(...)` es queda
-    // l'ÚLTIMA entrada de cada clau: amb la sisa esquerra i la dreta vives, una cota sense
-    // `bmId` es rellegia amb el nom de la que la consulta hagués retornat després, i quina
-    // ho decidia l'ordenació del backend. I el text re-derivat no es queda a la pantalla: el
-    // primer desat de debò del document l'hi escriu. Una cota rebatejada amb el nom de la
-    // seva germana, persistida, i sense res que ho digués.
-    //
-    // Quan el POM té més d'una mesura, doncs, no hi ha pla B: la cota cau a la degradació
-    // que aquest efecte ja té documentada (es queda amb l'últim text conegut). Escollir-ne
-    // una és el que fa mal; no escollir, no.
-    //
-    // 🚩 NO es pot fer millor des d'aquí: `base-measurements/` (`pom/wizard_views.py:356`,
-    // l'endpoint que alimenta `pomRows`) NO emet `capa` ni `instancia` ni `clau` — serveix
-    // les germanes però sense dir quina és quina. Amb els eixos al payload, aquest pla B
-    // podria creuar per la identitat sencera en comptes de renunciar-hi.
-    const comptePerPom = new Map()
-    for (const bm of pomRows) comptePerPom.set(bm.pom_id, (comptePerPom.get(bm.pom_id) || 0) + 1)
-    const bmByPom = new Map(pomRows.filter(bm => comptePerPom.get(bm.pom_id) === 1)
-                                   .map(bm => [bm.pom_id, bm]))
     let canvis = false
     const nextPages = pages.map(p => {
       const objects = (p.objects || []).map(o => {
         if (o.type !== 'group' || o.pomId == null) return o
-        const bm = bmById.get(o.bmId) || bmByPom.get(o.pomId)
+        const bm = bmById.get(o.bmId) || bmUnicPerPom.get(o.pomId)
         if (!bm) return o   // degradació elegant: el POM/BM ja no hi és
         const nouText = cotaLabelDe(bm)
         if (!nouText) return o
@@ -5521,7 +5527,7 @@ export default function TechSheetEditor() {
     if (!host) return null
     const bb = objectBounds(host)
     const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
-    const bm = pomRows.find(r => r.pom_id === pomId)
+    const bm = bmUnicPerPom.get(pomId)
     const p = prop.p
     const ax = bb.minX + p.x1 * bw, ay = bb.minY + p.y1 * bh
     const bx = bb.minX + p.x2 * bw, by = bb.minY + p.y2 * bh
@@ -5532,7 +5538,7 @@ export default function TechSheetEditor() {
       // C1-fix: l'etiqueta es col·loca amb l'offset perpendicular automàtic (buildLiveCota), no
       // amb la posició normalitzada del precedent → mai sobre el traç.
     })
-  }, [curObjs, pomRows])
+  }, [curObjs, bmUnicPerPom])
 
   // «Posar» LA cota d'un POM proposable (mecànica de colocarDesPrecedent, però per POM). La cota
   // neix VIVA de F1: arrossegable, editable; el panell la veurà tot seguit com a COL·LOCAT.
@@ -5580,10 +5586,9 @@ export default function TechSheetEditor() {
       else sensePrecedent.push(pomId)
     }
     if (sensePrecedent.length && superficieCotes) {
-      const bmByPom = new Map(pomRows.map(bm => [bm.pom_id, bm]))
       reparteixCotes(superficieCotes, sensePrecedent.length).forEach((geo, i) => {
         const pomId = sensePrecedent[i]
-        const bm = bmByPom.get(pomId)
+        const bm = bmUnicPerPom.get(pomId)
         nous.push(buildLiveCota({
           ...geo, label: cotaLabelDe(bm) || String(pomId),
           pomId, bmId: bm?.id, canonical: bm?.pom_code_global || '',
@@ -5592,7 +5597,7 @@ export default function TechSheetEditor() {
     }
     if (nous.length) updatePageObjects(currentPage, objs => [...objs, ...nous])
     setF2Msg(t('tech_sheet.pom_posades', { n: nous.length }))
-  }, [cotesColocades, propostes, buildCotaDeProposta, superficieCotes, pomRows, currentPage, updatePageObjects, t])
+  }, [cotesColocades, propostes, buildCotaDeProposta, superficieCotes, bmUnicPerPom, currentPage, updatePageObjects, t])
 
   // Desar UNA cota com a precedent del catàleg (acte CONSCIENT, D1) — des de Propietats de la
   // cota. Resol el host sketch pel punt mig de la cota; la vista es pren del host. Substitueix
@@ -5681,14 +5686,13 @@ export default function TechSheetEditor() {
       }
       const data = await r.json()
       const hostById = new Map(hosts.map(o => [o.id, o]))
-      const bmByPom = new Map(pomRows.map(bm => [bm.pom_id, bm]))
       const nous = []
       for (const p of (data.placements || [])) {
         const host = hostById.get(p.object_id)
         if (!host || cotesColocades.has(p.pom_id) || iaCotesByPom.has(p.pom_id)) continue
         const bb = objectBounds(host)
         const bw = (bb.maxX - bb.minX) || 1, bh = (bb.maxY - bb.minY) || 1
-        const bm = bmByPom.get(p.pom_id)
+        const bm = bmUnicPerPom.get(p.pom_id)
         const ax = bb.minX + (p.x1 || 0) * bw, ay = bb.minY + (p.y1 || 0) * bh
         const bx = bb.minX + (p.x2 || 0) * bw, by = bb.minY + (p.y2 || 0) * bh
         const cota = buildLiveCota({
@@ -5707,7 +5711,7 @@ export default function TechSheetEditor() {
     } finally {
       setProposantIA(false)
     }
-  }, [pomRows, cotesColocades, iaCotesByPom, sketchObjs, curObjs, pages, currentPage,
+  }, [pomRows, bmUnicPerPom, cotesColocades, iaCotesByPom, sketchObjs, curObjs, pages, currentPage,
       tableData, model, sheet, pageW, pageH, customerLogoUrl, fmt, id, authHeaders, updatePageObjects, t])
 
   // Acceptar UNA proposta: la cota esdevé cota viva normal (F1) I, si el seu croquis ve del
