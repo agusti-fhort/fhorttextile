@@ -120,7 +120,18 @@ export function regimeLeadCol(t, onRegimChange, readOnly = false, { compacte = f
 // LLEI: propagar = llenç net, NO eix de versions per comparar. Per talla: 1 columna read-only "Base"
 // (valor vigent propagat) + columna activa "Fit actual" EDITABLE per a TOTES les talles, BASE inclosa
 // (el fitting no la bloqueja). Editar una talla propaga per regla (onSave → escalat/ajustar-talla).
-// Reusa regimeLeadCol. lineId = `${pom_id}:${size}`. S'alimenta de taula-mesures (versió vigent).
+// Reusa regimeLeadCol. lineId = `${clau}:${size}`. S'alimenta de taula-mesures (versió vigent).
+//
+// C4/BLOC 3 — la primera meitat del lineId és la CLAU DE LA MESURA, no el `pom_id`. Era
+// `${pom_id}:${size}` i, com que `taula-mesures` pinta una fila per germana, l'exterior i el
+// folre del mateix pit a la talla M generaven el MATEIX lineId: una sola entrada al `perLinia`
+// de `PropagatedEditor` (la guarda de plausibilitat llegia la base de l'altra germana) i una
+// sola entrada al buffer de teclejat de `MeasureGrid` (escriure a una cel·la n'omplia dues).
+// La fila ja porta la clau sencera des del bloc 1; aquí només s'hi endolla.
+//
+// El separador segueix sent `:` i el desmuntatge segueix sent per l'ÚLTIM `:`, que és el que
+// separa la talla: la clau de mesura fa servir `|` i no n'hi posa cap (v. la capçalera de
+// `pom/identitat.py`, que tria el separador precisament per no col·lidir amb aquest).
 export function buildEscalatGroups(sizeLabels, baseLabel, t) {
   return sizeLabels.map(s => ({
     key: s,
@@ -141,13 +152,17 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel) {
       cells[s] = {
         history: { vigent: v },
         // TOTES editables (base inclosa, sense readonly); baseValue per al marcatge difereix-de-base.
-        active: { lineId: `${row.pom_id}:${s}`, value: v == null ? '' : v, baseValue: v },
+        active: { lineId: `${row.clau || row.pom_id}:${s}`, value: v == null ? '' : v, baseValue: v },
       }
     }
     return {
       // Nomenclatura client COHERENT amb Mesures: prevaler nom_fitxa (nom de model editable) sobre
       // pom_code (codi_client). taula-mesures ja retorna nom_fitxa.
       pom_id: row.pom_id, codi: row.nom_fitxa || row.pom_code, is_key: row.is_key,
+      // C4/BLOC 3 — els eixos viatgen amb la fila perquè qui hi escrigui no hagi de desmuntar
+      // el lineId per saber de quina germana parla. L'escriptura (`escalat/ajustar-talla`)
+      // encara és per `pom_id` sol: desancorar-la és feina del bloc 2.
+      clau: row.clau, capa: row.capa, instancia: row.instancia,
       nom_en: row.nom_en, nom_local: row.nom_ca,
       logica: row.logica, increment_base: row.increment_base,
       increment_break: row.increment_break, talla_break_label: row.talla_break_label,

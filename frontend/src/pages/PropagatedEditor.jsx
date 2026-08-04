@@ -54,7 +54,10 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
     for (const r of gridRows) {
       for (const s of sizes) {
         const a = r.cells?.[s]?.active
-        if (a) m.set(a.lineId, { vigent: a.value, base: r.base_value_cm, codi: r.codi, talla: s })
+        // C4/BLOC 3 — hi entra el `pom_id` (i els eixos) perquè l'escriptura no hagi de
+        // desmuntar el lineId: la fila ja sap qui és, i el mapa ja la té localitzada.
+        if (a) m.set(a.lineId, { vigent: a.value, base: r.base_value_cm, codi: r.codi, talla: s,
+                                 pom_id: r.pom_id, capa: r.capa, instancia: r.instancia })
       }
     }
     return m
@@ -66,10 +69,15 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
 
   // L'escriptura de debò, un cop passades les guardes.
   const desa = useCallback((lineId, value) => {
-    const i = lineId.lastIndexOf(':')
-    const pomId = Number(lineId.slice(0, i))
-    const talla = lineId.slice(i + 1)
-    return models.escalatAjustarTalla(modelId, pomId, talla, value)
+    // C4/BLOC 3 — el POM i la talla surten del `perLinia`, NO de trossejar el lineId. La
+    // primera meitat del lineId ha passat a ser la clau sencera de la mesura
+    // (`{pom}|{capa}|{inst}`), i el `Number(...)` que hi havia n'hauria tret `NaN`: la crida
+    // se n'aniria a `/escalat/NaN/ajustar-talla/` i cada cel·la de l'Escalat deixaria de desar.
+    // Llegir-ho del mapa, a més, treu del mig la pregunta de com es desmunta una clau: la fila
+    // ja porta els camps per separat, que és el que `pom/identitat.py` demana que es faci.
+    const info = perLinia.get(lineId)
+    if (!info) return Promise.resolve()
+    return models.escalatAjustarTalla(modelId, info.pom_id, info.talla, value)
       .catch(e => {
         // G6-B/T3 — la versió vigent està SEGELLADA: el backend refusa l'escriptura (409). Sense
         // això, el rebuig arribaria com un error mut i el tècnic no sabria ni per què no es desa
@@ -79,7 +87,7 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
         }
         throw e   // MeasureGrid ha de saber igualment que la cel·la NO s'ha desat.
       })
-  }, [modelId])
+  }, [modelId, perLinia])
 
   // Escriptura per talla (convergit amb el fitting): ancora la talla i PROPAGA per regla a les germanes.
   // Retorna l'axios promise; MeasureGrid llegeix res.data.linies i refresca la fila (germanes + base).
