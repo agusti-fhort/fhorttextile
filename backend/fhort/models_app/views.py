@@ -3287,6 +3287,15 @@ def base_stages_view(request, model_id):
             'tol_plus': tp,
             'base_value_cm': float(bm.base_value_cm) if bm.base_value_cm is not None else None,
             'base_measurement_id': bm.id,
+            # C4/BLOC 2 — ELS DOS EIXOS AL CONTRACTE. El quart lector de la mateixa espècie que
+            # A1/A2/A3: resol la identitat sencera aquí dins (`clau_bm`, i `displayed` per
+            # `(pom, capa, instancia)`) i després no la deia.
+            #
+            # Aquí no és només llegir. Aquesta vista alimenta la graella de MESURES, que és
+            # l'única superfície amb poda (`measureSources.supportsPoda`): sense els eixos, el
+            # front no pot dir QUINA germana treu, i `desactivar_pom` no té com saber-ho.
+            'capa': bm.capa,
+            'instancia': bm.instancia,
             'takes': takes,
         })
 
