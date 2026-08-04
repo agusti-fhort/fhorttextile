@@ -855,6 +855,7 @@
     "edit_pom": "Editar POM",
     "edit_grading": "Editar escalat",
     "open_task_err": "No s'ha pogut obrir la tasca.",
+    "open_task_err_albaranada": "No es pot obrir: la tasca ja està albaranada (albarà emès). Per rectificar-la, cal un extra nou.",
     "use_ruleset": "Usar aquest joc",
     "ruleset_changed": "Joc de regles actualitzat.",
     "ruleset_err": "No s'ha pogut canviar el joc de regles.",

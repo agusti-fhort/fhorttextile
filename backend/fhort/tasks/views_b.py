@@ -458,7 +458,10 @@ def transition_task_view(request, pk):
     try:
         result = transition_task(task, to_status, profile, auto=auto)
     except TransitionError as e:
-        return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
+        cos = {'error': str(e)}
+        if getattr(e, 'code', None):
+            cos['code'] = e.code
+        return Response(cos, status=http_status.HTTP_400_BAD_REQUEST)
     return Response(result, status=http_status.HTTP_200_OK)
 
 
@@ -570,7 +573,12 @@ def open_model_task_view(request, model_id):
             transition_task(task, 'InProgress', profile)
             started = True
         except TransitionError as e:
-            return Response({'error': str(e)}, status=http_status.HTTP_409_CONFLICT)
+            # El `code` viatja quan n'hi ha: és l'única manera que el client pugui dir el motiu
+            # en comptes del toast genèric. Sense codi, la resposta és exactament la d'abans.
+            cos = {'error': str(e)}
+            if getattr(e, 'code', None):
+                cos['code'] = e.code
+            return Response(cos, status=http_status.HTTP_409_CONFLICT)
     elif task.assignee_id != profile.id:
         old_assignee_id = task.assignee_id
         task.assignee = profile

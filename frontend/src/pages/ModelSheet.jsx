@@ -94,6 +94,21 @@ const btnSecondary = {
 
 const taskListFromResponse = (data) => data?.results || (Array.isArray(data) ? data : [])
 
+// EL MOTIU D'UN `open-task` REBUTJAT, en paraules.
+//
+// `transition_task` té una paret que no és un error tècnic sinó una regla de negoci: una tasca
+// amb línia en un albarà EMÈS no es pot reobrir, perquè rectificar-la vol dir una línia nova al
+// pròxim albarà, no tornar a obrir la vella. Arribava com un 409 sense codi i el tècnic només
+// veia «no s'ha pogut obrir la tasca»: la porta quedava tapiada i muda.
+//
+// El servidor ja envia `code` (`tasks/services_c.py`); aquí només es tria la frase. Un codi que
+// aquest front encara no conegui cau al missatge genèric — mai a una clau i18n inventada.
+const MOTIUS_OPEN_TASK = { tasca_albaranada: 'model_sheet.open_task_err_albaranada' }
+function motiuOpenTask(e, t) {
+  const clau = MOTIUS_OPEN_TASK[e?.response?.data?.code]
+  return clau ? t(clau) : t('model_sheet.open_task_err')
+}
+
 export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }) {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -235,7 +250,11 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         if (tab === 'Mesures' && code === 'pom') setMesuresEntry(true)
         else setEditing(tab)
       })
-      .catch(() => setFeedback({ type: 'err', text: t('model_sheet.open_task_err') }))
+      // EL TOAST DIU LA PARET, no «no s'ha pogut». Un 409 amb `code` porta el motiu del servidor
+      // (avui només `tasca_albaranada`: la tasca ja té línia en un albarà EMÈS i reobrir-la seria
+      // refacturar). Sense codi, el missatge genèric de sempre. Al model 188 això eren 7 intents
+      // en dues hores amb el mateix toast mut (v. DIAGNOSI_CICLE_TASCA_COMPLET §M-2).
+      .catch(e => setFeedback({ type: 'err', text: motiuOpenTask(e, t) }))
       .finally(() => setOpeningTask(false))
   }
   const exitEdit = useCallback(() => {
@@ -326,7 +345,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           activeTaskRef.current = tid
           setEditing('Mesures')
         })
-        .catch(() => setFeedback({ type: 'err', text: t('model_sheet.open_task_err') }))
+        .catch(e => setFeedback({ type: 'err', text: motiuOpenTask(e, t) }))
     }
   }, [loading, activeTab, fittingSessionParam, taskParam, id, t])
 

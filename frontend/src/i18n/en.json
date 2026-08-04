@@ -855,6 +855,7 @@
     "edit_pom": "Edit POM",
     "edit_grading": "Edit grading",
     "open_task_err": "Could not open the task.",
+    "open_task_err_albaranada": "Cannot open: this task is already on an issued delivery note. To correct it, add a new extra.",
     "use_ruleset": "Use this set",
     "ruleset_changed": "Rule set updated.",
     "ruleset_err": "Could not change the rule set.",

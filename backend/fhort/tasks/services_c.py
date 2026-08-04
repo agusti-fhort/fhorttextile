@@ -42,7 +42,16 @@ def _log(task, frm, to, profile, auto=None):
 
 
 class TransitionError(Exception):
-    pass
+    """Rebuig d'una transició de tasca.
+
+    Porta un `code` opcional perquè la porta HTTP el pugui reenviar i el client sàpiga QUINA
+    paret ha tocat. Sense `code` el rebuig és genèric i el client cau al missatge de sempre:
+    afegir-ne un no obliga ningú a canviar res.
+    """
+
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
 
 
 def _is_off_recipe(task, work_order):
@@ -196,7 +205,12 @@ def transition_task(task, to_status, profile, force=False, auto=None):
     if not force and frm == 'Done' and to_status == 'InProgress':
         if task.delivery_note_lines.filter(
                 delivery_note__status__in=['ISSUED', 'INVOICED']).exists():
-            raise TransitionError('No es pot reobrir una tasca ja albaranada (albarà emès).')
+            # El `code` és el que fa que el client pugui dir el MOTIU. Sense ell, aquest rebuig
+            # arribava com un 409 mut i el tècnic veia «no s'ha pogut obrir la tasca» sense saber
+            # que la paret és l'albarà: 7 intents en dues hores sobre el mateix model (188), tots
+            # amb el mateix toast (v. DIAGNOSI_CICLE_TASCA_COMPLET §M-2).
+            raise TransitionError('No es pot reobrir una tasca ja albaranada (albarà emès).',
+                                  code='tasca_albaranada')
 
     paused_task_id = None
     now = timezone.now()

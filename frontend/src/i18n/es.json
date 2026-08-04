@@ -855,6 +855,7 @@
     "edit_pom": "Editar POM",
     "edit_grading": "Editar escalado",
     "open_task_err": "No se ha podido abrir la tarea.",
+    "open_task_err_albaranada": "No se puede abrir: la tarea ya está albaranada (albarán emitido). Para rectificarla, hace falta un extra nuevo.",
     "use_ruleset": "Usar este conjunto",
     "ruleset_changed": "Conjunto de reglas actualizado.",
     "ruleset_err": "No se ha podido cambiar el conjunto de reglas.",
