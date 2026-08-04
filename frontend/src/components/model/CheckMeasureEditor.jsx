@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { models, sizeChecks, sizeCheckLines, baseMeasurements } from '../../api/endpoints'
+import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines } from '../../api/endpoints'
 import { effectiveRegime } from '../../utils/gradingRegime'
+import { finestraHistoric } from './fittingGridAdapter'
 import MeasureGrid from './MeasureGrid'
 import EditorHeader from './EditorHeader'
 import DependencyPanel from './DependencyPanel'
@@ -318,7 +319,32 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
 
   // Run de talles del model (per al desplegable "a partir de" del break de la regla).
   const sizeRun = (model?.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean)
-  const ctx = { t, model, readOnly, lockRules, onFeedback, sizeRun, fittingSession: sourceCtx?.fittingSession }
+
+  // C5-UI/P4 — EL VEREDICTE i la finestra d'HISTÒRIC són estat d'aquesta pantalla, no de la font.
+  //
+  // `veredictes` és local perquè avui no té on desar-se (`PieceFittingLine` no té camp `decisio`;
+  // v. el PENDENT anotat a `measureSources.fittingSource`). Quan el camp existeixi, això passa a
+  // sembrar-se de la línia i `onVeredicte` a fer PATCH: cap altre canvi a la graella.
+  //
+  // `histFrom` a `null` vol dir «les dues últimes preses», que és el que es mira en obrir. Es
+  // recalcula contra el total real a `finestraHistoric`, o sigui que una versió nova no deixa mai
+  // la finestra fora de rang.
+  const [veredictes, setVeredictes] = useState({})
+  const [histFrom, setHistFrom] = useState(null)
+  const totalPreses = raw?.versionNumbers?.length ?? 0
+  const decisio = src.kind === 'fitting' && !readOnly ? {
+    valors: veredictes,
+    onVeredicte: (lineId, v) => setVeredictes(prev => ({ ...prev, [lineId]: v })),
+    onNota: (lineId, nota) => pieceFittingLines.update(lineId, { nota: nota || '' })
+      .catch(() => onFeedback?.({ type: 'err', text: t('fitting.grid.note_err') })),
+  } : null
+  const hist = src.kind === 'fitting' ? {
+    from: histFrom,
+    onMove: (dir) => setHistFrom(f => finestraHistoric(totalPreses, (f ?? Math.max(0, totalPreses - 2)) + dir)),
+  } : null
+
+  const ctx = { t, model, readOnly, lockRules, onFeedback, sizeRun,
+                fittingSession: sourceCtx?.fittingSession, decisio, hist }
 
   const load = useCallback(() => {
     setLoading(true)

@@ -7,6 +7,9 @@
 // multi-talla viu a Escalat (vegeu `buildEscalatGroups`, més avall, que sí és per talla).
 // Mateix patró d'un sol group que CheckMeasureEditor.
 
+import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { pieceFittingLines } from '../../api/endpoints'
 import { effectiveRegime } from '../../utils/gradingRegime'
 import { formatDelta } from '../../utils/format'
@@ -15,16 +18,71 @@ import { formatDelta } from '../../utils/format'
 const versionLabel = (vn, idx, t) =>
   idx === 0 ? t('fitting.grid.base') : t('fitting.grid.fit', { n: vn - 1 })
 
-// Un sol group: la talla base, marcada amb ★ outline. `historyCols` = versions.
+// L'HISTÒRIC ES PAGINA (fitting_v3). Una peça amb sis preses eixamplava la taula fins a obligar a
+// scroll lateral, i el preu no era l'amplada: era que LA COLUMNA DE TREBALL ES MOVIA DE LLOC cada
+// vegada que naixia una versió. Amb el paginador, la columna activa és sempre l'última i sempre al
+// mateix lloc; el que es mou és la finestra d'històric, de dues en dues.
+const HIST_FINESTRA = 2
+
+function PaginadorHistoric({ from, total, onMove, t }) {
+  const potEnrere = from > 0
+  const potEndavant = from + HIST_FINESTRA < total
+  const btn = (actiu) => ({
+    border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 4,
+    width: 19, height: 19, font: 'inherit', fontSize: 11, lineHeight: 1, padding: 0,
+    color: actiu ? 'var(--gold)' : 'var(--text-muted)', cursor: actiu ? 'pointer' : 'default',
+  })
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textTransform: 'none',
+                   letterSpacing: 0, fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+      <button type="button" disabled={!potEnrere} onClick={() => onMove(-1)} style={btn(potEnrere)}
+        title={t('fitting.grid.hist_prev')} aria-label={t('fitting.grid.hist_prev')}>‹</button>
+      <span>{t('fitting.grid.hist_range', {
+        de: Math.min(from + 1, total), a: Math.min(from + HIST_FINESTRA, total), total })}</span>
+      <button type="button" disabled={!potEndavant} onClick={() => onMove(1)} style={btn(potEndavant)}
+        title={t('fitting.grid.hist_next')} aria-label={t('fitting.grid.hist_next')}>›</button>
+    </span>
+  )
+}
+
+/** Finestra vàlida d'històric: les DUES ÚLTIMES preses per defecte, i mai fora de rang. */
+export function finestraHistoric(total, from) {
+  const max = Math.max(0, total - HIST_FINESTRA)
+  return from == null ? max : Math.min(Math.max(0, from), max)
+}
+
+// Un sol group: la talla base, marcada amb ★ outline. `historyCols` = versions (finestra paginada).
 // Sense `baseLabel` (model sense base_size_label; avui: cap) no hi ha eix → cap group.
-export function buildFittingGroups(baseLabel, versionNumbers, t) {
+//
+// `opts.hist` engega el paginador (fitting) i `opts.decisio`, el bloc de Decisió (Veredicte · Nota).
+// Tots dos són OPT-IN: sense ells la graella és exactament la d'abans, que és com la fan servir
+// FittingDetail en revisió i el repàs.
+export function buildFittingGroups(baseLabel, versionNumbers, t, opts = {}) {
   if (!baseLabel) return []
+  const { hist = null, decisio = false } = opts
+  const total = versionNumbers.length
+  const from = hist ? finestraHistoric(total, hist.from) : 0
+  const visibles = hist ? versionNumbers.slice(from, from + HIST_FINESTRA) : versionNumbers
   return [{
     key: baseLabel,
-    label: <span>{baseLabel}<i className="ti ti-star" style={{ fontSize: 10, marginLeft: 4, color: 'var(--gold)' }} /></span>,
-    historyCols: versionNumbers.map((vn, idx) => ({ key: `v${vn}`, label: versionLabel(vn, idx, t) })),
+    label: (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+        <span>{baseLabel}<i className="ti ti-star" style={{ fontSize: 10, marginLeft: 4, color: 'var(--gold)' }} /></span>
+        {hist && total > HIST_FINESTRA && (
+          <PaginadorHistoric from={from} total={total} onMove={hist.onMove} t={t} />
+        )}
+      </span>
+    ),
+    // L'etiqueta de la versió és la seva POSICIÓ REAL a la sèrie (v1 = Base), no la posició dins
+    // de la finestra: paginar no pot rebatejar les preses.
+    historyCols: visibles.map(vn => ({
+      key: `v${vn}`, label: versionLabel(vn, versionNumbers.indexOf(vn), t),
+    })),
     activeLabel: t('fitting.grid.fit_current'),
-    trailCols: [],
+    trailCols: decisio
+      ? [{ key: 'veredicte', label: t('fitting.grid.col_verdict') },
+         { key: 'nota', label: t('fitting.grid.col_note') }]
+      : [],
   }]
 }
 
@@ -33,7 +91,11 @@ export function buildFittingGroups(baseLabel, versionNumbers, t) {
 // (lineId + valor_real + baseValue = Base, per al marcatge vermell difereix-de-base).
 // Sense pomRows (font no carregada / resposta incompleta) → cap fila, no una excepció: la graella
 // té un estat buit i és el que ha de sortir. Mirall de buildEscalatRows, que ja ho fa des de sempre.
-export function buildFittingRows(pomRows, baseLabel, versionNumbers) {
+export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) {
+  // `decisio` (opt-in) porta l'estat del veredicte i les dues portes que l'escriuen. El veredicte
+  // NO es desa: `PieceFittingLine` no té camp on posar-lo (v. la nota de PENDENT a `measureSources`).
+  // La NOTA sí —el camp existeix i el ViewSet l'accepta—, o sigui que va per la seva porta real.
+  const { decisio = null } = opts
   return (pomRows || []).map(row => {
     const cells = {}
     if (baseLabel) {
@@ -42,17 +104,42 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers) {
       const history = {}
       for (const vn of versionNumbers) history[`v${vn}`] = evoMap.has(vn) ? evoMap.get(vn) : null
       const baseValue = line?.evolucio?.[0]?.valor_cm ?? null
+      const veredicte = line && decisio ? (decisio.valors[line.id] || null) : null
       cells[baseLabel] = {
         history,
-        active: line ? { lineId: line.id, value: line.valor_real ?? '', baseValue } : null,
+        active: line ? {
+          lineId: line.id, value: line.valor_real ?? '', baseValue,
+          ...(decisio ? {
+            veredicte,
+            onVeredicte: (v) => decisio.onVeredicte(line.id, v),
+          } : {}),
+        } : null,
+        ...(decisio ? {
+          trail: {
+            veredicte: line
+              ? <VerdicteCell valor={veredicte} onTria={(v) => decisio.onVeredicte(line.id, v)} />
+              : null,
+            nota: line
+              ? <NotaFittingCell lineId={line.id} valor={line.nota || ''} onDesa={decisio.onNota} />
+              : null,
+          },
+        } : {}),
       }
     }
     return {
-      pom_id: row.pom_id, codi: row.codi, is_key: row.is_key,
-      // C4/BLOC 3 — clau de fila per a MeasureGrid. Aquí la més forta disponible és el
-      // `bm_id`; 🚩 les germanes ja s'han perdut abans (`deriveFitting`/`FittingDetail`
-      // agrupen per `pom_id` perquè el payload de línies de fitting no porta els eixos).
-      rowKey: row.bm_id || row.pom_id,
+      pom_id: row.pom_id, is_key: row.is_key, pom_code: row.pom_code,
+      // La NOMENCLATURA CURTA del model mana sobre el codi del catàleg, com a Mesures i a
+      // Comprovació (llei de `nomenclaturaPom.js`: `nom_fitxa` primer). Aquí sortia el codi del
+      // catàleg i les dues germanes del pit ensenyaven totes dues «CH», quan el tècnic les ha
+      // batejades A i A-FOL: la mateixa mesura es deia diferent segons la pantalla.
+      codi: row.nom_fitxa || row.codi,
+      // C4 — ELS EIXOS VIATGEN AMB LA FILA. El 🚩 que hi havia aquí («les germanes ja s'han
+      // perdut abans») ja no és cert: `fitting/serializers.py` emet `capa` i `instancia` a cada
+      // línia des de C4/G2, i `deriveFitting` agrupa per la identitat sencera. El que faltava era
+      // que la fila ho DIGUÉS: sense aquests dos camps, la graella pintava dues «Chest width»
+      // seguides i el nom no deia quina era el folre.
+      capa: row.capa, instancia: row.instancia,
+      rowKey: row.bm_id || `${row.pom_id}|${row.capa || ''}|${row.instancia || ''}`,
       nom_en: row.nom_en, nom_local: row.nom_local,
       nom_fitxa: row.nom_fitxa, bm_id: row.bm_id,   // P4 — autoria de nom a nivell model
       logica: row.logica, increment_base: row.increment_base,
@@ -60,6 +147,66 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers) {
       cells,
     }
   })
+}
+
+// EL BLOC DE DECISIÓ (fitting_v3) — tres botons i una nota sempre oberta.
+//
+// Els tres veredictes són DADA de domini i van en anglès a totes les llengües, com LINEAR/STEP:
+// és el que el full imprès porta cap al fabricant (AC/AD/RJ) i el que la Montse diu en veu alta.
+// Traduir-los aquí i no al paper faria que la pantalla i el full parlessin diferent.
+const VERDICTES = ['ACCEPTED', 'ADJUSTED', 'REJECTED']
+const VERDICTE_TO = {
+  ACCEPTED: { col: 'var(--ok)', bg: 'var(--ok-bg)' },
+  ADJUSTED: { col: 'var(--warn)', bg: 'var(--warn-bg)' },
+  REJECTED: { col: 'var(--err)', bg: 'var(--err-bg)' },
+}
+
+export function VerdicteCell({ valor, onTria }) {
+  return (
+    <span style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 6,
+                   overflow: 'hidden', background: 'var(--white)' }}>
+      {VERDICTES.map((v, i) => {
+        const on = valor === v
+        const to = VERDICTE_TO[v]
+        return (
+          <button key={v} type="button"
+            // Tornar a clicar el veredicte actiu el TREU: decidir i desdir-se han de costar el
+            // mateix, i no hi ha cap altre gest per tornar a «sense decidir».
+            onClick={() => onTria(on ? null : v)}
+            style={{
+              border: 'none', borderRight: i < VERDICTES.length - 1 ? '1px solid var(--border)' : 'none',
+              background: on ? to.bg : 'transparent', color: on ? to.col : 'var(--text-muted)',
+              fontWeight: on ? 600 : 400, font: 'inherit', fontSize: 'var(--fs-label)',
+              letterSpacing: '0.04em', padding: '2px 7px', cursor: 'pointer',
+            }}>{v}</button>
+        )
+      })}
+    </span>
+  )
+}
+
+// LA NOTA, SEMPRE OBERTA. No és un desplegable ni un icona que s'ha de trobar: en un fitting es
+// dicta en veu alta mentre es mesura, i el camp ha de ser-hi abans que ningú el busqui. Desa on
+// blur i només si ha canviat (mateix criteri que el bateig).
+export function NotaFittingCell({ lineId, valor, onDesa }) {
+  const [txt, setTxt] = useState(valor ?? '')
+  const [focused, setFocused] = useState(false)
+  useEffect(() => { if (!focused) setTxt(valor ?? '') }, [valor, focused])
+  const { t } = useTranslation()
+  return (
+    <input
+      value={txt} placeholder={t('fitting.grid.note_ph')}
+      onChange={e => setTxt(e.target.value)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => { setFocused(false); if ((txt ?? '') !== (valor ?? '')) onDesa(lineId, txt) }}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      style={{
+        width: '100%', minWidth: 150, font: 'inherit', fontSize: 'var(--fs-body)',
+        color: 'var(--text-main)', border: '1px solid var(--border)', borderRadius: 5,
+        padding: '3px 8px', background: 'var(--white)', boxSizing: 'border-box',
+      }}
+    />
+  )
 }
 
 // Etiqueta compacta de regla (delta · trencament). Còpia local (igual a MeasureTable/CheckMeasureEditor;

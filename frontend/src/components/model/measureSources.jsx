@@ -68,12 +68,25 @@ export const fittingSource = {
     return { pieceFittingId, grid: res.data, ...deriveFitting(res.data) }
   },
 
+  // C5-UI/P4 — EL BLOC DE DECISIÓ I L'HISTÒRIC PAGINAT viuen NOMÉS en aquesta font: el fitting és
+  // on es pren la mesura i es decideix què se'n fa. El check té la seva pròpia cel·la de
+  // decisió·nota (una altra semàntica: acceptar o descartar una PRESA), i Escalat no decideix res.
+  //
+  // 🚨 PENDENT DE BACKEND — EL VEREDICTE NO ES DESA. `PieceFittingLine` té `valor_real` i `nota`
+  // però NO té camp `decisio`: el veredicte viu en estat local i es perd en recarregar. Cal una
+  // migració (camp `decisio` amb choices ACCEPTED/ADJUSTED/REJECTED + null), exposar-lo al
+  // serializer i acceptar-lo al PATCH del ViewSet, que ja admet `nota`. La interacció sencera
+  // —color al número, tecles A/J/R, botons— ja és aquí i s'hi endollarà sense tocar la UI.
+  // La NOTA sí que es desa de debò: el camp existeix i la porta és la mateixa d'ara.
   buildGroups(raw, ctx) {
-    return buildFittingGroups(raw.baseLabel, raw.versionNumbers, ctx.t)
+    return buildFittingGroups(raw.baseLabel, raw.versionNumbers, ctx.t, {
+      hist: ctx.hist || null,
+      decisio: !!ctx.decisio,
+    })
   },
 
   buildRows(raw, ctx) {
-    return buildFittingRows(raw.pomRows, raw.baseLabel, raw.versionNumbers)
+    return buildFittingRows(raw.pomRows, raw.baseLabel, raw.versionNumbers, { decisio: ctx.decisio })
   },
 
   // onSave despatxa per règim (STEP desa; LINEAR propaga), com el fitting històric. Només les línies

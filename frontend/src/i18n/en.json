@@ -2182,7 +2182,14 @@
       "rule_free": "free",
       "break": "break",
       "note": "Note",
-      "no_value": "—"
+      "no_value": "—",
+      "hist_prev": "Previous takes",
+      "hist_next": "Next takes",
+      "hist_range": "{{de}}-{{a}} of {{total}}",
+      "col_verdict": "Verdict",
+      "col_note": "Note",
+      "note_ph": "note…",
+      "note_err": "Could not save the note."
     },
     "gate": {
       "title": "Piece gate",

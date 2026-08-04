@@ -2182,7 +2182,14 @@
       "rule_free": "lliure",
       "break": "trencament",
       "note": "Nota",
-      "no_value": "—"
+      "no_value": "—",
+      "hist_prev": "Preses anteriors",
+      "hist_next": "Preses següents",
+      "hist_range": "{{de}}-{{a}} de {{total}}",
+      "col_verdict": "Veredicte",
+      "col_note": "Nota",
+      "note_ph": "nota…",
+      "note_err": "No s'ha pogut desar la nota."
     },
     "gate": {
       "title": "Gate de la peça",

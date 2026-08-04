@@ -100,7 +100,18 @@ const stepBtnStyle = {
   color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1, fontSize: 9,
 }
 
-function ActiveCell({ active, editable, value, edited, onChange, onCommit, focusRef, unit }) {
+// EL VEREDICTE PINTA EL NÚMERO (fitting_v3). L'etiqueta sola no bastava: el que es llegeix quan
+// s'escombra la columna de dalt a baix és la XIFRA, i una xifra negra sota una etiqueta verda es
+// llegeix com una mesura sense decidir. El color va al número, en negreta, i el rebuig el ratlla —
+// que és el que vol dir «aquest valor no substitueix res».
+const VERDICTE_COL = { ACCEPTED: 'var(--ok)', ADJUSTED: 'var(--warn)', REJECTED: 'var(--err)' }
+// Les tecles del veredicte, en l'ordre del brief: A accepta · J ajusta · R rebutja. Viuen aquí i no
+// a l'adaptador perquè el que les ha de sentir és el camp del número —la mà no en surt— i és
+// aquest component qui el té. Sense `onVeredicte` (check, escalat, repàs) no s'escolta cap lletra.
+const TECLA_VERDICTE = { a: 'ACCEPTED', j: 'ADJUSTED', r: 'REJECTED' }
+
+function ActiveCell({ active, editable, value, edited, onChange, onCommit, focusRef, unit,
+                      registerInput, onNav }) {
   const { t } = useTranslation()
   const [state, schedule] = useDebouncedSave(onCommit)
   const [focused, setFocused] = useState(false)
@@ -115,12 +126,18 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     )
   }
   const modified = activeRed(value, active)
+  const verdicte = active.veredicte || null
+  const colVerdicte = verdicte ? VERDICTE_COL[verdicte] : null
   // `active.readonly` força lectura en una cel·la concreta encara que la graella sigui editable
   // (p.ex. la talla base de l'Escalat, que no s'edita com a override).
   if (!editable || active.readonly) {
-    // Lectura: format de presentació (1 decimal cm · 2 inch).
+    // Lectura: format de presentació (1 decimal cm · 2 inch). El veredicte també hi pinta: una
+    // sessió segellada s'ha de poder rellegir amb els mateixos colors amb què es va decidir.
     return (
-      <td style={{ ...cellTd(true, false, false), color: modified ? 'var(--err)' : 'var(--text-main)' }}>
+      <td style={{ ...cellTd(true, false, false),
+                   color: colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)'),
+                   fontWeight: verdicte ? 600 : undefined,
+                   textDecoration: verdicte === 'REJECTED' ? 'line-through' : undefined }}>
         {fmtMeasure(value, unit) ?? '—'}
         <NotaDot nota={active.nota} />
       </td>
@@ -144,15 +161,28 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     <td style={{ ...cellTd(true, false, false), position: 'relative' }}>
       <span style={{ display: 'inline-flex', alignItems: 'stretch', gap: 2 }}>
         <input
+          ref={el => registerInput?.(active.lineId, el)}
           type="text" inputMode="decimal" value={shown}
-          onFocus={() => { setFocused(true); focusRef.current = active.lineId }}
+          onFocus={e => { setFocused(true); focusRef.current = active.lineId; e.target.select() }}
           onBlur={() => { setFocused(false); if (focusRef.current === active.lineId) focusRef.current = null }}
           onChange={e => { onChange(active.lineId, e.target.value); schedule(e.target.value) }}
+          onKeyDown={e => {
+            // EL VEREDICTE DES DEL TECLAT, sense sortir del número (fitting_v3). Només on n'hi ha:
+            // en una graella sense veredicte una `a` no ha de fer res que l'usuari no esperi.
+            const k = e.key.toLowerCase()
+            if (active.onVeredicte && TECLA_VERDICTE[k] && !e.ctrlKey && !e.metaKey && !e.altKey) {
+              e.preventDefault(); active.onVeredicte(TECLA_VERDICTE[k]); return
+            }
+            if (!onNav) return
+            if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); onNav(active.lineId, 1) }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); onNav(active.lineId, -1) }
+          }}
           style={{
             font: 'inherit', width: 70, padding: '2px 4px', textAlign: 'right',
-            border: '1px solid var(--border)', borderRadius: 4, background: 'var(--white)',
-            color: modified ? 'var(--err)' : 'var(--text-main)',
-            fontWeight: modified && edited ? 700 : 400,
+            border: `1px solid ${colVerdicte || 'var(--border)'}`, borderRadius: 4, background: 'var(--white)',
+            color: colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)'),
+            fontWeight: verdicte || (modified && edited) ? 700 : 400,
+            textDecoration: verdicte === 'REJECTED' ? 'line-through' : undefined,
             fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
           }}
         />
@@ -393,6 +423,30 @@ export default function MeasureGrid({
     setEdited(prev => { const n = new Set(prev); n.add(lineId); return n })
   }, [])
 
+  // EL CARRIL DINS DE LA COLUMNA (fitting_v3 · v8.1): ↓/Enter baixa i ↑ puja, SENSE canviar de
+  // columna. Es navega dins del MATEIX grup a posta —una graella d'Escalat té una columna per
+  // talla i saltar de talla a mig recorregut seria perdre el fil de la mesura que s'està prenent.
+  // Els inputs es registren per `lineId`, que és la identitat que ja fa servir tot el buffer.
+  const inputRefs = useRef({})
+  const registerInput = useCallback((lineId, el) => {
+    if (el) inputRefs.current[lineId] = el
+    else delete inputRefs.current[lineId]
+  }, [])
+  const gridRef = useRef({ rows, groups })
+  useEffect(() => { gridRef.current = { rows, groups } }, [rows, groups])
+  const onNav = useCallback((lineId, dir) => {
+    const { rows: rr, groups: gg } = gridRef.current
+    for (const g of gg) {
+      const carril = rr.map(r => r.cells?.[g.key]?.active)
+        .filter(a => a && !a.readonly).map(a => a.lineId)
+      const i = carril.indexOf(lineId)
+      if (i < 0) continue
+      const seguent = carril[i + dir]
+      if (seguent != null) inputRefs.current[seguent]?.focus()
+      return
+    }
+  }, [])
+
   const commitFor = useCallback((lineId) => (raw) => {
     if (!onSave) return Promise.resolve()
     const num = toNum(raw)
@@ -562,7 +616,8 @@ export default function MeasureGrid({
                   out.push(
                     <ActiveCell key={`${g.key}-active`} active={a} editable={editable} unit={unit}
                       value={a ? (vals[a.lineId] ?? '') : ''} edited={a ? edited.has(a.lineId) : false}
-                      onChange={onChange} onCommit={a ? commitFor(a.lineId) : (() => Promise.resolve())} focusRef={focusRef} />
+                      onChange={onChange} onCommit={a ? commitFor(a.lineId) : (() => Promise.resolve())} focusRef={focusRef}
+                      registerInput={registerInput} onNav={onNav} />
                   )
                   for (const tcol of (g.trailCols || [])) {
                     out.push(<td key={`${g.key}-t-${tcol.key}`} style={{ padding: '5px 8px', borderBottom: '0.5px solid var(--border)', verticalAlign: 'middle' }}>{cell.trail?.[tcol.key] ?? null}</td>)
