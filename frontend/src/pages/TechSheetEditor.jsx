@@ -1751,6 +1751,10 @@ function bakePathEntries(entries, sx, sy, deg) {
 }
 
 // Un text amb fons: es pinta com a Group (Rect + Text), però és un `text` a la dada.
+// Un text_box pot portar bgFill:'transparent' i segueix sent un text_box: la condició és que
+// bgFill HI SIGUI, no que es vegi. És DELIBERAT (PAL-2 72dcdf32 + Agus 04/08): l'eina neix sense
+// fons visible i el color es tria a la barra. NO passar-lo a null: null el convertiria en text
+// pla i deixaria dues eines de la barra creant el mateix objecte.
 const esTextBox = (obj) => !!(obj && obj.type === 'text' && obj.bgFill)
 
 function blocksTransform(obj) {
@@ -4277,6 +4281,9 @@ export default function TechSheetEditor() {
         fontFamily: FONT, fill: KONVA_COL.textMain,
         // PAL-2: el text_box neix TRANSPARENT (com el rect), no blanc opac. Segueix sent un
         // text_box (bgFill present → caixa amb Rect darrere) i el color és editable a la barra.
+        // bgFill:'transparent' és DELIBERAT (PAL-2 72dcdf32 + Agus 04/08), no un descuit: ja ha
+        // fet ensopegar dues diagnosis. NO canviar a null — null el converteix en text pla i
+        // deixaria «Text» i «Text amb fons» creant el mateix objecte. Tampoc a blanc opac.
         ...(tool === 'text_box' ? { bgFill: 'transparent', bgPadding: 4 } : {}),
       }
       addObject(obj); setTool('select'); return
