@@ -282,7 +282,11 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
         bm_id_map = {(p, c, i): bid for p, c, i, _, _, bid in bm_data}   # P4 — autoria de nom a nivell MODEL
 
         out = []
-        ordres = []   # ordre de fitxa, paral·lel a `out`: la fila del payload no porta capa
+        # Ordre de fitxa, paral·lel a `out`. C4/BLOC 1-BIS: la fila del payload SÍ que porta
+        # ara els eixos, o sigui que el motiu original d'aquesta llista paral·lela ha caigut.
+        # El mecanisme es queda: substituir-lo per una ordenació sobre `out` és un canvi de
+        # forma que no arregla res i que aquest commit no ha de portar.
+        ordres = []
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
             clau_bm = (line.pom_id, line.capa, line.instancia)
             evolucio = []
@@ -304,6 +308,23 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
             out.append({
                 'id': line.id,
                 'pom_id': line.pom_id,
+                # C4/BLOC 1-BIS — ELS DOS EIXOS AL CONTRACTE. Aquest serializer resolia la
+                # identitat sencera de la mesura (`clau_bm`, aquí sobre) per anar a buscar el
+                # nom, l'ordre i el `bm_id`… i després NO la deia. El comentari de sota, ara
+                # esmenat, ho declarava: «la fila del payload no porta capa».
+                #
+                # El preu el pagava el frontend, i no s'hi podia fer res des d'allà: el
+                # consumidor rep una llista de línies i les agrupa per POM per fer-ne files
+                # (`measureSources.deriveFitting`, `FittingDetail`, `SessionPanel`). Amb dues
+                # germanes vives, dues línies portaven el mateix `pom_id` i el `Map` en
+                # descartava una en silenci — el mode de fallada que C4 existeix per matar,
+                # però a la banda del client, on cap test de backend el podia veure.
+                #
+                # No s'hi afegeix cap identificador de fila: `bm_id` (unes línies més avall)
+                # ja hi és i ja es resol per `clau_bm`. Un segon camp amb el mateix valor i un
+                # altre nom seria fabricar la divergència que aquest fitxer combat.
+                'capa': line.capa,
+                'instancia': line.instancia,
                 'codi': pom.pom_code if pom else '',
                 'nom': (nom_fitxa_map.get(clau_bm) or (pom.pom_code if pom else '')),  # nom_fitxa (croquis)
                 'nom_en': pom.name_en if pom else '',        # nom canònic EN (línia superior, nomenclatura 2 línies)
@@ -324,8 +345,10 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
             })
         # FIX 4B — ordena les files per l'ordre de la fitxa (BaseMeasurement.ordre del model;
         # POMMaster no té 'ordre'). ordre_map ja s'ha construït a dalt amb la mateixa query.
-        # C2/Onada 1 — l'ordre viatja a `ordres`, paral·lel a `out`, perquè la clau ara porta
-        # capa i la fila del payload no en té. `sorted` és estable i la clau és només el
-        # número: els empats conserven l'ordre d'inserció, igual que el `list.sort` d'abans.
+        # C2/Onada 1 — l'ordre viatja a `ordres`, paral·lel a `out`, perquè la clau porta capa
+        # i la fila del payload no en tenia. `sorted` és estable i la clau és només el número:
+        # els empats conserven l'ordre d'inserció, igual que el `list.sort` d'abans.
+        # C4/BLOC 1-BIS: la fila ja porta els eixos i això es podria fer sobre `out`; no es
+        # canvia aquí perquè seria una refosa sense defecte que la justifiqui.
         out = [fila for _ordre, fila in sorted(zip(ordres, out), key=lambda t: t[0])]
         return out
