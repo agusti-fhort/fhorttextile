@@ -197,6 +197,24 @@ export default function EditableTable({
         nom_fitxa: r.nom_fitxa || '',
       }))
     const keep_pom_ids = localRows.map(r => r.pom_id).filter(Boolean)
+    // C4/BLOC 1-TER — LA LLISTA DE «QUÈ ES CONSERVA» PORTA LA IDENTITAT DE CADA FILA.
+    //
+    // `keep_pom_ids` és una llista d'enters, i un `pom_id` pelat no pot dir «conserva el
+    // folre i treu l'exterior». Amb dues germanes a la taula, treure'n una i desar no feia
+    // res: el backend només mirava la fila d'exterior. L'usuari clicava la paperera, la fila
+    // desapareixia de la pantalla, i en tornar a carregar hi era una altra vegada.
+    //
+    // Es construeix sobre `localRows` i NO sobre `measurements`, igual que el camp antic:
+    // `measurements` només porta les files amb valor, i una fila buida que en quedés fora
+    // deixaria de ser «conservada» — el backend l'esborraria. Seria fabricar un esborrat
+    // silenciós dins del canvi que els ha de tancar.
+    //
+    // Els dos camps viatgen junts: el backend fa servir el nou i ignora el vell, i un desplegament
+    // a mitges (bundle nou amb backend antic) segueix podant com abans en comptes de deixar
+    // de podar.
+    const keep_mesures = localRows
+      .filter(r => r.pom_id)
+      .map(r => ({ pom_id: r.pom_id, capa: r.capa, instancia: r.instancia }))
     // CAP `rules` (31/07). Aquesta taula ja no ensenya la regla, o sigui que tampoc no la pot
     // desar: enviava una entrada per CADA fila amb `logica: r.logica || 'LINEAR'`, i
     // `set_measurements_view` en fa upsert de ModelGradingRule. Efecte: desar mesures d'un
@@ -204,7 +222,7 @@ export default function EditableTable({
     // que ningú n'hagués informat cap. Amb la proposta del catàleg pintada a sobre, a més, el
     // que es materialitzava era la regla d'un altre. El backend segueix acceptant `rules`
     // (l'usen altres camins); el que desapareix és que aquesta pantalla n'enviï.
-    return { measurements, keep_pom_ids }
+    return { measurements, keep_pom_ids, keep_mesures }
   }
 
   // La GUARDA DE PLAUSIBILITAT del Δ (FIX-4) se'n va amb el bloc de regla: sense camp Δ en
