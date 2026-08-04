@@ -105,7 +105,11 @@ export const models = {
   setPomRule: (modelId, pomId, payload) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, payload),
   // C1 (principi del soroll) — PODA d'un POM del model: SOFT (is_active=False) + registre al
   // log de mesures. Mai DELETE dur: la mesura va existir i el model n'ha de guardar memòria.
-  desactivarPom: (modelId, pomId, motiu) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/desactivar/`, { motiu }),
+  // C4/BLOC 2 — la poda diu QUINA germana treu. Els eixos van al COS i no al camí: una
+  // `instancia` buida (el cas normal) no té representació honesta dins d'una URL.
+  desactivarPom: (modelId, pomId, motiu, eixos = {}) =>
+    client.post(`/api/v1/models/${modelId}/pom/${pomId}/desactivar/`,
+                { motiu, capa: eixos.capa, instancia: eixos.instancia }),
   // P0+P2+P3 — PROMOCIÓ model→item. Dues fases: confirm=false retorna el diff sense escriure
   // res; confirm=true aplica dins d'una transacció. Gate CONFIGURE al backend.
   promoureAItem: (modelId, confirm = false) => client.post(`/api/v1/models/${modelId}/promoure-a-item/`, { confirm }),

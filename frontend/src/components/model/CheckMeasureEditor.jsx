@@ -234,6 +234,9 @@ const checkSource = {
         pom_id: r.pom_id,
         // Clau de fila per a MeasureGrid: la PK de la mesura, que `base_stages` ja serveix.
         rowKey: r.base_measurement_id ?? r.pom_id,
+        // C4/BLOC 2 — els eixos viatgen amb la fila perquè la PODA pugui dir quina germana
+        // treu (`onPodar`, més avall). `base_stages` els serveix des de `6e259c8b`.
+        capa: r.capa, instancia: r.instancia,
         codi: r.nom_fitxa || r.pom_code,
         pom_code: r.pom_code,
         nom_en: r.nom_en, nom_local: r.nom_ca,
@@ -400,7 +403,11 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   // C1 (PRINCIPI DEL SOROLL) — poda d'un POM del model des de la graella: SOFT (is_active=False)
   // + registre al log de mesures. La UI diu «treure»; la BD guarda memòria. Mai DELETE dur.
   const onPodar = useCallback((row) =>
-    models.desactivarPom(model.id, row.pom_id)
+    // C4/BLOC 2 — es poda LA FILA, no el POM. Sense els eixos, treure la sisa dreta
+    // desactivava l'esquerra o l'exterior, i quina ho decidia l'ordenació de la consulta.
+    // `base_stages` els serveix des de `6e259c8b`.
+    models.desactivarPom(model.id, row.pom_id, undefined,
+                         { capa: row.capa, instancia: row.instancia })
       .then(() => load())
       .then(() => onFeedback?.({ type: 'ok', text: t('measuregrid.poda_ok', { codi: row.codi || row.pom_code || '' }) }))
       .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.poda_err') })),

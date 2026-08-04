@@ -265,6 +265,41 @@ class EscripturaGermanesTest(TenantTestCase):
             self.assertNotIn((EXTERIOR, ''), vius,
                              'l\'exterior sí que cau: és la fila que el client vell SÍ que mira')
 
+    # ── PODA des de la graella (C4/BLOC 2 · `desactivar_pom`) ───────────────────────
+
+    def test_desactivar_pom_treu_la_germana_que_el_client_diu(self):
+        """La poda d'UNA fila des de MeasureGrid. Abans la ruta només portava `pom_id` i la
+        vista s'ancorava a `(exterior, '')`: treure la sisa dreta en donava de baixa una
+        altra, i el `MeasurementChangeLog` —append-only— en guardava l'atribució falsa."""
+        from fhort.models_app.views import desactivar_pom_view
+
+        with comportes_alcades(*TAULES):
+            self._germanes()
+            req = APIRequestFactory().post('/x/', {'capa': FOLRE, 'instancia': ''},
+                                           format='json')
+            force_authenticate(req, user=self.user)
+            resp = desactivar_pom_view(req, self.model.id, self.pom.id)
+
+            self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+            self.assertEqual(resp.data['capa'], FOLRE,
+                             'la resposta ha de dir QUINA fila ha caigut')
+            self.assertEqual(self._valors(), {(EXTERIOR, ''): 100.0},
+                             'havia de caure el folre i havia de viure l\'exterior')
+
+    def test_desactivar_pom_sense_eixos_treu_lexterior_com_sempre(self):
+        """El client que no diu els eixos rep el literal de sempre. No es mira mai quines
+        files hi ha per triar-ne una: aquell desempat el feia el planner."""
+        from fhort.models_app.views import desactivar_pom_view
+
+        with comportes_alcades(*TAULES):
+            self._germanes()
+            req = APIRequestFactory().post('/x/', {}, format='json')
+            force_authenticate(req, user=self.user)
+            resp = desactivar_pom_view(req, self.model.id, self.pom.id)
+
+            self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+            self.assertEqual(self._valors(), {(FOLRE, ''): 40.0})
+
     # ── El client antic segueix escrivint on escrivia ───────────────────────────────
 
     def test_una_fila_sense_eixos_va_a_lexterior_de_la_instancia_unica(self):

@@ -4219,28 +4219,32 @@ def desactivar_pom_view(request, model_id, pom_id):
 
     Body opcional: {motiu: str}.
 
-    ⚠️ C3/E5 — ANCORAT A LA MESURA ÚNICA, I ÉS DEUTE DECLARAT DE C4.
-    El filtre era `(model_id, pom_id, is_active)` seguit d'un `.first()`: amb germanes vives en
-    desactivava UNA, i quina ho decidia l'ordenació — el `Meta.ordering` de `BaseMeasurement`
-    no inclou `instancia` (models.py:759), o sigui que entre dues germanes de la mateixa capa
-    el desempat el feia el planner de Postgres. I l'escriptura SÍ deixa entrada al
-    `MeasurementChangeLog` (via `_desactivat`): una fila MAL ATRIBUÏDA en una taula
-    append-only, que no es podrà corregir mai.
+    ✅ C4/BLOC 2 — EL DEUTE PAGAT: LA RUTA JA DIU DE QUINA GERMANA PARLA.
+    El que hi havia deia: «quan la ruta sàpiga dir la capa i la instància, aquest ancoratge
+    se'n va». Ara ho sap, i se n'ha anat.
 
-    No es pot arreglar del tot aquesta nit: **el contracte de la ruta només porta `pom_id`**
-    (`models_app/urls.py:233`), i fer-hi entrar els eixos és tocar la interfície, que és C4 amb
-    maqueta (llei 3c.5). El que sí es pot fer, i es fa, és deixar de triar a l'atzar: s'ancora
-    explícitament a la mesura única ('exterior', ''), com ja fan altres lectors de la cadena.
-    Amb les comportes vives és exactament la mateixa fila que abans; la diferència és que ara
-    ho diu, en comptes de deixar-ho al planner.
-    DEUTE C4: quan la ruta sàpiga dir la capa i la instància, aquest ancoratge se'n va.
+    Els eixos entren pel COS, no pel camí. El camí segueix sent
+    `/models/<model_id>/pom/<pom_id>/desactivar/` perquè aquesta petició ja és un POST amb cos
+    (`{motiu}`) i perquè una `instancia` buida —el cas normal— no té representació honesta dins
+    d'una URL: `.../pom/12//desactivar/` i `.../pom/12/-/desactivar/` són dues maneres
+    d'escriure el mateix i totes dues conviden a equivocar-se. La resolució passa per
+    `_identitat_de_mesura`, el mateix punt únic que fan servir els dos upserts i les dues podes.
+
+    QUI NO ELS DIU rep el literal de sempre —l'exterior de la instància única—, exactament com
+    abans d'aquest canvi. No es mira mai quines files hi ha per triar-ne una: aquell desempat
+    a l'atzar (el `Meta.ordering` de `BaseMeasurement` no inclou `instancia`, models.py:759) és
+    el que aquest tram existeix per matar, i aquí el preu era especialment alt perquè
+    l'escriptura deixa entrada al `MeasurementChangeLog` via `_desactivat`: una fila MAL
+    ATRIBUÏDA en una taula append-only, que no es podrà corregir mai.
+
+    Body: `{motiu?: str, capa?: str, instancia?: str}`.
     """
     from fhort.models_app.models import BaseMeasurement
-    from fhort.pom.models import MeasurementLayer
 
+    capa, instancia = _identitat_de_mesura(request.data)
     bm = (BaseMeasurement.objects
           .filter(model_id=model_id, pom_id=pom_id, is_active=True,
-                  capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+                  capa=capa, instancia=instancia)
           .select_related('pom').first())
     if bm is None:
         return Response({'detail': 'Mesura no trobada (o ja inactiva) per a aquest model.'},
@@ -4255,6 +4259,11 @@ def desactivar_pom_view(request, model_id, pom_id):
     return Response({
         'model': int(model_id),
         'pom': int(pom_id),
+        # C4/BLOC 2 — la resposta diu QUINA fila ha caigut. Amb germanes vives, «s'ha podat el
+        # POM 12» no és una resposta: n'hi ha dues i el client ha de poder confirmar que la que
+        # ha marxat és la que ell mirava.
+        'capa': bm.capa,
+        'instancia': bm.instancia,
         'base_measurement': bm.id,
         'is_active': False,
         'codi': bm.nom_fitxa or bm.pom.codi_client or '',
