@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import BateigInput from './BateigInput'
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from '../../pages/fittingShared'
+import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 
 // MeasureGrid — editor únic de mesures (un component, dos modes treball/consulta) que serveix els
 // DOS eixos via SLOTS, reusant l'esquelet del fitting editor (MeasureTable):
@@ -15,6 +16,14 @@ import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from '../.
 // Controlat: els valors arriben per `rows`; en desar es crida onSave(lineId, value) i, si retorna línies
 // propagades (fitting), s'actualitzen les germanes (excepte la cel·la amb focus). Motors INTACTES.
 
+// C5-UI — LA IDENTITAT DE LA FILA ÉS LA MATEIXA A TOTES LES SUPERFÍCIES. Aquesta graella la
+// comparteixen Escalat, Comprovació, Fitting i Repàs, i les quatre poden servir dues germanes del
+// mateix POM. Fins ara les dues files hi sortien amb el mateix nom i la diferència només es podia
+// endevinar per la nomenclatura del client (A / A-FOL): la capa passa a tenir columna pròpia i la
+// instància viu dins del nom, exactament com a la taula d'entrada de Mesures (P1). Una identitat
+// que canviés de forma segons la pantalla seria la mateixa trampa que la nomenclatura tenia abans
+// de `nomenclaturaPom.js`.
+const COL_CAPA_W = 92
 const COL_POM_W = 78
 const COL_NOM_W = 160
 
@@ -176,8 +185,13 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
 // `editCodi` és fals (fitting), la 2a línia mostra nom_fitxa amb precedència i és EDITABLE via
 // `onNomSave(bmId, value)` (P4: NO toca el POM tenant compartit).
 function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitModel = '',
-                   bmId, editable, onNomSave, onNomsSave = null, editCodi = false, style }) {
+                   instancia = '', bmId, editable, onNomSave, onNomsSave = null, editCodi = false, style }) {
   const { t } = useTranslation()
+  // La INSTÀNCIA s'enganxa al nom en TOTES les branques: és el nom d'aquesta mesura el que
+  // s'allarga («Profunditat de sisa · Esquerra»), i el que no pot passar és que la germana
+  // esquerra i la dreta es llegeixin igual segons per quina branca hi entri la cel·la.
+  const inst = etiquetaInstancia(instancia, t)
+  const Inst = () => (inst ? <span style={{ fontWeight: 500 }}>{` · ${inst}`}</span> : null)
   const catCanonic = nomEn || nomLocal || ''
   const canon = nomEn && nomLocal && nomLocal !== nomEn ? nomLocal : (nomLocal || '')
   // editCodi → la 2a línia és el nom LOCAL (la nomenclatura curta viu a la columna POM, no aquí).
@@ -203,12 +217,19 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
   // Les DUES línies del nom, editables i amb el catàleg de fons (Mesures). Cada input desa el
   // seu camp per separat: rebatejar el canònic no ha d'arrossegar la traducció, ni al revés.
   if (bateig) {
+    // Les DUES línies segueixen sent camps: aquí la segona no és un subtítol, és la superfície on
+    // es bateja la traducció (P3 demana la identitat de fila, no que desaparegui un editor).
     return (
       <td style={style}>
-        <BateigInput value={nomCanonicModel} placeholder={catCanonic || ''}
-          title={t('measuregrid.nom_canonic_tip')}
-          onSave={(v) => onNomsSave(bmId, { nom_canonic_model: v })}
-          style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }} />
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <BateigInput value={nomCanonicModel} placeholder={catCanonic || ''}
+              title={t('measuregrid.nom_canonic_tip')}
+              onSave={(v) => onNomsSave(bmId, { nom_canonic_model: v })}
+              style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }} />
+          </span>
+          <span style={{ flex: 'none', fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}><Inst /></span>
+        </div>
         <BateigInput value={nomTraduitModel} placeholder={catLocal || ''}
           title={t('measuregrid.nom_traduit_tip')}
           onSave={(v) => onNomsSave(bmId, { nom_traduit_model: v })}
@@ -216,28 +237,42 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
       </td>
     )
   }
+  // LECTURA PURA (Escalat, Repàs): el nom local deixa de ser una segona línia permanent i passa a
+  // la ⓘ, com a P1. Aquí no s'hi edita res, o sigui que la línia només ocupava alçada; el que ha
+  // de saltar a la vista en una taula amb germanes és QUINA mesura és cada fila.
+  if (!canEdit) {
+    const local = modelName && modelName !== top ? modelName : ''
+    return (
+      <td style={style}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>
+          {top || '—'}<Inst />
+          {local && (
+            <i className="ti ti-info-circle" title={local} aria-label={local}
+              style={{ fontSize: 12, marginLeft: 6, color: 'var(--text-muted)', cursor: 'help' }} />
+          )}
+        </div>
+      </td>
+    )
+  }
+  // LLEGAT (fitting): la 2a línia ÉS la nomenclatura curta del model i s'hi escriu. No es toca.
   return (
     <td style={style}>
-      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>{top || '—'}</div>
-      {canEdit ? (
-        <input
-          value={val ?? ''} onChange={e => setVal(e.target.value)}
-          onFocus={() => setFocused(true)} onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-          placeholder={canon || ''}
-          style={{
-            font: 'inherit', fontSize: 'var(--fs-caption)', fontStyle: 'italic',
-            color: 'var(--text-muted)', width: '100%', padding: '0 2px', boxSizing: 'border-box',
-            borderRadius: 3, background: focused ? 'var(--white)' : 'transparent',
-            // Affordance: subratllat tènue en repòs (pista d'editabilitat) → vora completa en focus.
-            border: '1px solid transparent',
-            borderBottom: focused ? '1px solid var(--border)' : '1px dashed var(--border)',
-            ...(focused && { borderColor: 'var(--border)' }),
-          }}
-        />
-      ) : (modelName && (
-        <div style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }}>{modelName}</div>
-      ))}
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>{top || '—'}<Inst /></div>
+      <input
+        value={val ?? ''} onChange={e => setVal(e.target.value)}
+        onFocus={() => setFocused(true)} onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        placeholder={canon || ''}
+        style={{
+          font: 'inherit', fontSize: 'var(--fs-caption)', fontStyle: 'italic',
+          color: 'var(--text-muted)', width: '100%', padding: '0 2px', boxSizing: 'border-box',
+          borderRadius: 3, background: focused ? 'var(--white)' : 'transparent',
+          // Affordance: subratllat tènue en repòs (pista d'editabilitat) → vora completa en focus.
+          border: '1px solid transparent',
+          borderBottom: focused ? '1px solid var(--border)' : '1px dashed var(--border)',
+          ...(focused && { borderColor: 'var(--border)' }),
+        }}
+      />
     </td>
   )
 }
@@ -379,8 +414,8 @@ export default function MeasureGrid({
 
   if (!rows.length) return empty
 
-  // Offsets sticky acumulats: POM(0) · Nom · leadCols… (sense mutació, per al react-compiler).
-  const baseLeft = COL_POM_W + COL_NOM_W
+  // Offsets sticky acumulats: Capa(0) · POM · Nom · leadCols… (sense mutació, per al react-compiler).
+  const baseLeft = COL_CAPA_W + COL_POM_W + COL_NOM_W
   const leadLefts = leadCols.map((_, i) => baseLeft + leadCols.slice(0, i).reduce((s, c) => s + c.width, 0))
 
   // FIX-4 — el bloc de REGLA es distingeix per FONS (crema de la casa) i per un SEPARADOR gruixut
@@ -412,8 +447,9 @@ export default function MeasureGrid({
         <thead>
           {agrupat && (
             <tr>
-              <th rowSpan={3} style={identitatHd(0, COL_POM_W)}>{t('measuregrid.col_pom')}</th>
-              <th rowSpan={3} style={identitatHd(COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>
+              <th rowSpan={3} style={identitatHd(0, COL_CAPA_W)}>{t('capa.col')}</th>
+              <th rowSpan={3} style={identitatHd(COL_CAPA_W, COL_POM_W)}>{t('measuregrid.col_pom')}</th>
+              <th rowSpan={3} style={identitatHd(COL_CAPA_W + COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>
               {leadCols.length > 0 && (
                 <th colSpan={leadCols.length} style={{
                   ...thStyle, textAlign: 'center', background: REGLA_BG, borderRight: SEP,
@@ -433,8 +469,9 @@ export default function MeasureGrid({
             </tr>
           )}
           <tr>
-            {!agrupat && <th rowSpan={2} style={identitatHd(0, COL_POM_W)}>{t('measuregrid.col_pom')}</th>}
-            {!agrupat && <th rowSpan={2} style={identitatHd(COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>}
+            {!agrupat && <th rowSpan={2} style={identitatHd(0, COL_CAPA_W)}>{t('capa.col')}</th>}
+            {!agrupat && <th rowSpan={2} style={identitatHd(COL_CAPA_W, COL_POM_W)}>{t('measuregrid.col_pom')}</th>}
+            {!agrupat && <th rowSpan={2} style={identitatHd(COL_CAPA_W + COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>}
             {leadCols.map((c, i) => (
               <th key={c.key} rowSpan={2} style={stickyHd(leadLefts[i], c.width, i)}>{c.label}</th>
             ))}
@@ -486,17 +523,25 @@ export default function MeasureGrid({
                 onDragStart={reorderable ? (() => { dragFrom.current = i }) : undefined}
                 onDragOver={reorderable ? (e => e.preventDefault()) : undefined}
                 onDrop={reorderable ? (() => onRowDrop(i)) : undefined}>
+                {/* LA CAPA (D-31.22), en lectura i sempre present. Una fila sense `capa` al
+                    payload és l'exterior de sempre: `etiquetaCapa` ho resol, i així cap
+                    adaptador que encara no la serveixi deixa la columna muda. */}
+                <td style={{ ...stickyTd(0, COL_CAPA_W, rowBg), whiteSpace: 'normal',
+                             color: 'var(--text-main)' }}>
+                  {etiquetaCapa(r.capa, t)}
+                </td>
                 <CodiCell codi={r.codi} nomFitxa={r.nom_fitxa} pomCode={r.pom_code} bmId={r.bm_id}
                   isKey={r.is_key} editable={editable} editCodi={editCodi} onNomSave={onNomSave}
                   reorderable={reorderable}
                   style={soroll
-                    ? { ...stickyTd(0, COL_POM_W, rowBg), boxShadow: 'inset 3px 0 0 var(--border)' }
-                    : stickyTd(0, COL_POM_W, rowBg)}
+                    ? { ...stickyTd(COL_CAPA_W, COL_POM_W, rowBg), boxShadow: 'inset 3px 0 0 var(--border)' }
+                    : stickyTd(COL_CAPA_W, COL_POM_W, rowBg)}
                   title={soroll ? t('measuregrid.poda_candidata') : undefined} />
                 <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} nomFitxa={r.nom_fitxa} bmId={r.bm_id}
                   nomCanonicModel={r.nom_canonic_model} nomTraduitModel={r.nom_traduit_model}
+                  instancia={r.instancia}
                   editable={editable} onNomSave={onNomSave} onNomsSave={onNomsSave}
-                  editCodi={editCodi} style={stickyTd(COL_POM_W, COL_NOM_W, rowBg)} />
+                  editCodi={editCodi} style={stickyTd(COL_CAPA_W + COL_POM_W, COL_NOM_W, rowBg)} />
                 {leadCols.map((c, idx) => (
                   <td key={c.key} style={stickyTd(leadLefts[idx], c.width, rowBg, idx)}>{c.render(r)}</td>
                 ))}
