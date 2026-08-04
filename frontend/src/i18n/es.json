@@ -1019,7 +1019,17 @@
     "run_lost_sizes": "Atención: el run guardado del modelo contiene tallas que ya no están en su sistema de tallas ({{talles}}). No se han podido recuperar; si guardas ahora, el run se quedará sin ellas.",
     "set_title": "Este ítem es un CONJUNTO de {{total}} piezas",
     "set_hint": "La composición la declara el catálogo. Se creará un código comercial y una pieza por cada parte; puedes darles un nombre propio para este modelo.",
-    "set_piece_name_ph": "Nombre de la pieza (opcional)"
+    "set_piece_name_ph": "Nombre de la pieza (opcional)",
+    "axes_filter": "Filtros — acercan, no bloquean",
+    "axes_filter_hint": "Ninguna prenda queda fuera: lo que no encaja se atenúa y sigue siendo elegible. Clica un filtro activo para quitarlo.",
+    "seed_poms": "POMs",
+    "seed_with_value": "Con valor base",
+    "seed_base_size": "Talla base",
+    "seed_ruleset": "Graduación sugerida",
+    "seed_none": "ninguna",
+    "seed_empty": "Esta prenda todavía no siembra valores: el modelo nacería con {{poms}} POMs vacíos.",
+    "seed_ok": "El modelo nacerá con {{poms}} POMs, {{amb}} con valor base en la talla {{talla}}.",
+    "seed_no_grading": "La graduación NO sube con la siembra: el modelo nace limpio y se incorpora por su gesto."
   },
   "models_list": {
     "title": "Modelos",

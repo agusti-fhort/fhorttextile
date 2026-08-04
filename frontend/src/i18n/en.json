@@ -1019,7 +1019,17 @@
     "run_lost_sizes": "Warning: the model’s saved run contains sizes that are no longer in its size system ({{talles}}). They could not be restored; if you save now, the run will lose them.",
     "set_title": "This item is a SET of {{total}} pieces",
     "set_hint": "The composition is declared by the catalogue. One commercial code and one model per part will be created; you can give them their own name for this model.",
-    "set_piece_name_ph": "Piece name (optional)"
+    "set_piece_name_ph": "Piece name (optional)",
+    "axes_filter": "Filters — they narrow, they never block",
+    "axes_filter_hint": "No garment is left out: what does not match fades but stays selectable. Click an active filter to clear it.",
+    "seed_poms": "POMs",
+    "seed_with_value": "With base value",
+    "seed_base_size": "Base size",
+    "seed_ruleset": "Suggested grading",
+    "seed_none": "none",
+    "seed_empty": "This garment does not seed any values yet: the model would be born with {{poms}} empty POMs.",
+    "seed_ok": "The model will be born with {{poms}} POMs, {{amb}} with a base value at size {{talla}}.",
+    "seed_no_grading": "Grading does NOT come with the seed: the model is born clean and grading is added by its own gesture."
   },
   "models_list": {
     "title": "Models",

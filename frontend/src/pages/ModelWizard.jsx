@@ -10,7 +10,7 @@ import GraduacioPanel from '../components/grading/GraduacioPanel'
 import { Chip, Field, labelStyle, MONO } from '../components/grading/wizardUI'
 import TargetLabel from '../components/grading/TargetLabel'
 import useAuthStore from '../store/auth'
-import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes } from '../api/endpoints'
+import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, garmentTypeItems, itemBaseMeasurements, sizingProfiles } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles + GRADUACIÓ.
@@ -146,6 +146,10 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
   // (garment-types/?target=) i NOMÉS en acció d'usuari — el prefill d'edició no passa per aquí.
   const onPickTarget = (codi) => {
     if (codi === target) return
+    // El target ara és un FILTRE i es pot DESMARCAR (P6): sense target, el catàleg surt sencer.
+    // Desmarcar no pot invalidar la peça ja triada —no s'ha estret res—, o sigui que no es
+    // consulta la compatibilitat ni es neteja res.
+    if (!codi) { setTarget(null); return }
     setTarget(codi)
     if (!family) return
     garmentTypes.list({ target: codi, actiu: 'true', page_size: 500 })
@@ -451,7 +455,16 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
     } finally { setSaving(false) }
   }
 
-  const BLOCKS = [t('model_wizard.block1'), t('model_wizard.block2'), t('model_wizard.block3'), t('model_wizard.block4')]
+  // C5-UI/P6 — EL PAS DE GRADUACIÓ DESAPAREIX DEL WIZARD (decisió 31/07): el model neix NET i la
+  // graduació s'incorpora pel seu gest, amb acceptació explícita al davant. Un pas dins del wizard
+  // convidava a assignar-la de passada, sense mirar-se la regla.
+  //
+  // Sobreviu UNA porta, i és una porta EXPLÍCITA: «Canviar graduació» des de la fitxa obre el
+  // wizard directament aquí (`?block=4`). Aquell gest no és néixer, és canviar el que ja hi ha, i
+  // treure'l deixaria l'enllaç apuntant al buit.
+  const mostraGrading = initialBlock === 4
+  const BLOCKS = [t('model_wizard.block1'), t('model_wizard.block2'), t('model_wizard.block3'),
+    ...(mostraGrading ? [t('model_wizard.block4')] : [])]
 
   // GATE entre contenidors: el client mana el prefix del codi i l'abast de la seqüència, així que
   // els passos 2 (Peça) i 3 (Talles) queden bloquejats fins que el pas 1 estigui resolt
@@ -540,10 +553,25 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
 
         {block === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <Field label={t('model_wizard.target')}>
+            {/* C5-UI/P6 — EL PAS 2 COL·LAPSA A UNA SOLA TRIA: L'ITEM.
+                Target, construcció i fit eren PORTES: sense target no hi havia construcció, sense
+                construcció no hi havia fit, i sense els tres no es veia el catàleg. Es preguntaven
+                dues vegades (aquí i al pas de graduació) i permetien contradir-se. Ara són
+                FILTRES: acosten, no delimiten (D-31.3), i el navegador de peces hi és des del
+                primer moment. Es deriven de la peça i queden editables si aquest model se'n desvia.
+
+                🔑 LLEI RELAXADA (Agus, 04/08): els eixos filtren NOMÉS si la peça els té
+                informats. Brownie no separa punt de plana i el sistema no li ho ha d'exigir. Avui
+                el veredicte de compatibilitat el calcula el backend per FAMÍLIA (SizingProfile) i
+                «sense perfil» hi compta com a incompatible → v. el PENDENT anotat al commit. El
+                que sí que es compleix ja: res queda BLOQUEJAT, tot segueix sent triable. */}
+            <div style={{ ...summaryBox, alignItems: 'flex-start', flexDirection: 'column',
+                          gap: 12, background: 'var(--white)' }}>
+              <div style={{ ...labelStyle, marginBottom: 0 }}>{t('model_wizard.axes_filter')}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {TARGETS.map(tg => (
-                  <Chip key={tg.codi} active={target === tg.codi} onClick={() => onPickTarget(tg.codi)}>
+                  <Chip key={tg.codi} active={target === tg.codi}
+                    onClick={() => onPickTarget(target === tg.codi ? '' : tg.codi)}>
                     <TargetLabel
                       codi={tg.codi}
                       nomFallback={tg.nom_en}
@@ -552,36 +580,34 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
                   </Chip>
                 ))}
               </div>
-            </Field>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {CONSTRUCTIONS.map(c => (
+                  <Chip key={c.codi} active={construction === c.codi}
+                    onClick={() => {
+                      const nou = construction === c.codi ? '' : c.codi
+                      if (construction !== nou) { resetSizing(); resetGradingIFit() }
+                      setConstruction(nou)
+                    }}>{t(`model_wizard.construction_${c.codi}`)}</Chip>
+                ))}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {FITS.map(f => (
+                  <Chip key={f.codi} active={fit === f.codi}
+                    onClick={() => {
+                      const nou = fit === f.codi ? '' : f.codi
+                      if (fit !== nou) setGradingRuleSetId(null)
+                      setFit(nou)
+                    }}>
+                    {t(`model_wizard.fit_${f.codi}`, f.nom_en)}
+                  </Chip>
+                ))}
+              </div>
+              <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                {t('model_wizard.axes_filter_hint')}
+              </div>
+            </div>
 
-            {/* Construcció i FIT ABANS de la peça: són els eixos que decideixen si el catàleg té
-                perfil de talles per a la combinació, i per tant el que el pas Peça pot dir-te
-                (C5). El fit era una pregunta del pas 4; aquí és la mateixa variable, preguntada
-                una sola vegada i al lloc on serveix. */}
-            {target && (
-              <Field label={t('model_wizard.construction')}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {CONSTRUCTIONS.map(c => (
-                    <Chip key={c.codi} active={construction === c.codi} onClick={() => { if (construction !== c.codi) { resetSizing(); resetGradingIFit() } setConstruction(c.codi) }}>{t(`model_wizard.construction_${c.codi}`)}</Chip>
-                  ))}
-                </div>
-              </Field>
-            )}
-
-            {target && construction && (
-              <Field label={t('model_wizard.pick_fit')}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {FITS.map(f => (
-                    <Chip key={f.codi} active={fit === f.codi}
-                      onClick={() => { if (fit !== f.codi) setGradingRuleSetId(null); setFit(f.codi) }}>
-                      {t(`model_wizard.fit_${f.codi}`, f.nom_en)}
-                    </Chip>
-                  ))}
-                </div>
-              </Field>
-            )}
-
-            {target && (
+            {(
               <Field label={t('model_wizard.garment')}>
                 {item && !picking ? (
                   <div style={summaryBox}>
@@ -646,6 +672,19 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
                 )}
               </Field>
             )}
+
+            {/* LA TARGETA DE SEMBRA — què rebrà el model d'aquesta peça, abans de triar-la. Un
+                desplegable no ho pot dir: «Blusa» no diu si el model naixerà amb 47 POMs buits o
+                amb 47 mesurats. I diu també què NO rebrà: la graduació. */}
+            {item?.id && !picking && <TargetaDeSembra itemId={item.id} t={t} />}
+
+            {/* EL TARGET ES DERIVA DE LA PEÇA quan no s'ha filtrat per ell. Amb el target
+                convertit en filtre opcional, es podia arribar al pas de Talles sense cap —i
+                allà el target NO és opcional: és qui tria el sistema—. La peça el sap: els
+                seus SizingProfile el diuen. Es deriva NOMÉS si no n'hi ha cap de triat, i queda
+                editable: derivar no és decidir per l'usuari, és no fer-li repetir el que la
+                peça ja declara. */}
+            {family?.id && !target && <DerivaTarget familyId={family.id} onDeriva={setTarget} />}
           </div>
         )}
 
@@ -734,7 +773,7 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
           </div>
         )}
 
-        {block === 4 && (
+        {block === 4 && mostraGrading && (
           /* EL PAS DE GRADUACIÓ — el mateix component que el botó «Graduació» de Mesures obre
              com a overlay. Aquí el wizard només hi porta el seu estat; qui decideix segueix
              sent ell (el `grading_rule_set_id` viatja al seu payload i s'escriu en desar). */
@@ -769,7 +808,11 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 18 }}>
         <button type="button" disabled={block === 1} onClick={() => setBlock(b => Math.max(1, b - 1))}
           style={{ ...ghostBtn, opacity: block === 1 ? 0.4 : 1 }}>← {t('model_wizard.back')}</button>
-        {block < 4 ? (
+        {/* «Següent» fins a l'ÚLTIM pas, i allà «Crear model». Deia `block < 4` amb el 4 escrit a
+            mà: en retirar el pas de graduació, el pas 3 va passar a ser l'últim i el botó seguia
+            dient «Següent» sense portar enlloc — el model no es podia crear. El límit el mana la
+            llista de passos, que és qui sap quants n'hi ha. */}
+        {block < BLOCKS.length ? (
           <button type="button" disabled={block === 1 && !block1Resolved}
             onClick={() => { if (!(block === 1 && !block1Resolved)) setBlock(b => Math.min(BLOCKS.length, b + 1)) }}
             style={primaryBtn(block === 1 && !block1Resolved)}>{t('model_wizard.next')} →</button>
@@ -793,6 +836,96 @@ const summaryBox = { display: 'flex', alignItems: 'center', justifyContent: 'spa
 const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
 const ghostBtn = { background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)', borderRadius: 6, padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
 const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : 'var(--warn)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-h3)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
+
+// LA TARGETA DE SEMBRA (C5-UI/P6) — el contracte de la peça, dit abans de triar-la.
+//
+// Diu QUÈ PUJA al model: els POMs de l'item, quants en porten valor base, a quina talla base i
+// —sobretot— que la GRADUACIÓ NO hi puja. Aquesta última línia no és decorativa: fins al 31/07
+// el wizard assignava el ruleset de l'item sol, i un model podia néixer graduat sense que ningú
+// hagués vist la regla. El model neix NET i la graduació s'incorpora pel seu gest; la regla de
+// l'item es mostra aquí com a INFORMACIÓ, i prou.
+//
+// Un item BUIT ho diu clar en comptes de deixar-ho endevinar pel número: néixer amb 47 POMs sense
+// cap valor és una decisió legítima, però ha de ser conscient.
+function TargetaDeSembra({ itemId, t }) {
+  const [dades, setDades] = useState(null)
+
+  useEffect(() => {
+    let viu = true
+    setDades(null)
+    Promise.all([
+      garmentTypeItems.get(itemId).then(r => r.data).catch(() => null),
+      // Quants POMs porten VALOR: el recompte de l'item (`poms_count`) diu quantes mesures
+      // declara, no quantes en sap el número. Són dues coses diferents i la targeta les separa.
+      itemBaseMeasurements.list({ garment_type_item: itemId, page_size: 500 })
+        .then(r => (r.data?.results ?? r.data ?? [])).catch(() => []),
+    ]).then(([it, bases]) => {
+      if (!viu) return
+      const ambValor = bases.filter(b => b.base_value_cm != null).length
+      setDades({ it, ambValor })
+    })
+    return () => { viu = false }
+  }, [itemId])
+
+  if (!dades?.it) return null
+  const { it, ambValor } = dades
+  const buit = ambValor === 0
+  const kv = (k, v, atenuat) => (
+    <div key={k} style={{ minWidth: 120 }}>
+      <div style={{ ...labelStyle, marginBottom: 2 }}>{k}</div>
+      <div style={{ fontFamily: MONO, fontSize: 'var(--fs-h3)', fontWeight: 500,
+                    color: atenuat ? 'var(--text-muted)' : 'var(--text-main)' }}>{v}</div>
+    </div>
+  )
+
+  return (
+    <div style={{ border: `0.5px solid ${buit ? 'var(--warn)' : 'var(--gray-l)'}`, borderRadius: 8,
+                  background: buit ? 'var(--warn-bg)' : 'var(--white)', padding: 16,
+                  display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+        <b style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{it.name}</b>
+        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>{it.code}</span>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
+        {kv(t('model_wizard.seed_poms'), it.poms_count ?? '—')}
+        {kv(t('model_wizard.seed_with_value'), buit ? t('model_wizard.seed_none') : ambValor, buit)}
+        {kv(t('model_wizard.seed_base_size'), it.base_size_label || '—', !it.base_size_label)}
+        {kv(t('model_wizard.seed_ruleset'), it.grading_rule_set_nom || t('model_wizard.seed_none'), true)}
+      </div>
+      <div style={{ fontSize: 'var(--fs-body)', color: buit ? 'var(--warn)' : 'var(--text-muted)' }}>
+        {buit
+          ? t('model_wizard.seed_empty', { poms: it.poms_count ?? 0 })
+          : t('model_wizard.seed_ok', { poms: it.poms_count ?? 0, amb: ambValor, talla: it.base_size_label || '—' })}
+      </div>
+      {/* LA REGLA NO PUJA. Es diu sempre, també quan l'item no en té: el silenci en aquest punt
+          és el que va deixar néixer models graduats sense que ningú ho hagués demanat. */}
+      <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+        {t('model_wizard.seed_no_grading')}
+      </div>
+    </div>
+  )
+}
+
+// Deriva el TARGET de la peça triada (SizingProfile de la família) quan l'usuari no n'ha filtrat
+// cap. No pinta res: només omple el buit que el filtre ha deixat d'omplir per força. Si la família
+// en té més d'un, mana el primer que el catàleg declara — i l'usuari el pot canviar als filtres,
+// que és on viu la decisió.
+function DerivaTarget({ familyId, onDeriva }) {
+  useEffect(() => {
+    let viu = true
+    sizingProfiles.list({ garment_type: familyId, page_size: 50 })
+      .then(r => {
+        if (!viu) return
+        const perfils = r.data?.results ?? r.data ?? []
+        const codi = perfils.map(p => p.target?.codi).find(Boolean)
+        if (codi) onDeriva(codi)
+      })
+      .catch(() => {})
+    return () => { viu = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [familyId])
+  return null
+}
 
 function TextInput({ label, value, onChange, placeholder }) {
   return (

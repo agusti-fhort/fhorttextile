@@ -1019,7 +1019,17 @@
     "run_lost_sizes": "Atenció: el run desat del model conté talles que ja no són al seu sistema de talles ({{talles}}). No s'han pogut recuperar; si deses ara, el run quedarà sense elles.",
     "set_title": "Aquest ítem és un CONJUNT de {{total}} peces",
     "set_hint": "La composició la declara el catàleg. Es crearà un codi comercial i una peça per cada part; pots posar-los un nom propi per a aquest model.",
-    "set_piece_name_ph": "Nom de la peça (opcional)"
+    "set_piece_name_ph": "Nom de la peça (opcional)",
+    "axes_filter": "Filtres — acosten, no bloquegen",
+    "axes_filter_hint": "Cap peça queda fora: el que no encaixa s'esvaeix i segueix sent triable. Clica un filtre actiu per treure'l.",
+    "seed_poms": "POMs",
+    "seed_with_value": "Amb valor base",
+    "seed_base_size": "Talla base",
+    "seed_ruleset": "Graduació suggerida",
+    "seed_none": "cap",
+    "seed_empty": "Aquesta peça encara no sembra valors: el model naixeria amb {{poms}} POMs buits.",
+    "seed_ok": "El model neixerà amb {{poms}} POMs, {{amb}} amb valor base a la talla {{talla}}.",
+    "seed_no_grading": "La graduació NO puja amb la sembra: el model neix net i s'hi incorpora pel seu gest."
   },
   "models_list": {
     "title": "Models",
