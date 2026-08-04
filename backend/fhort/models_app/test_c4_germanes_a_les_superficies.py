@@ -139,9 +139,16 @@ def comportes_alcades(*taules, eixos=EIXOS):
         with connection.cursor() as cur:
             for taula in taules:
                 for sufix in eixos:
+                    # `IF EXISTS` — C4/G1 (04/08): les comportes es RETIREN per grups, i a
+                    # partir del primer aquest harness demana de treure'n algunes que ja no
+                    # hi són. Sense això, cada grup retirat deixaria vermell tot el fitxer
+                    # que precisament ha de demostrar que la retirada és segura.
+                    # No afluixa res: alçar una comporta que no existeix és exactament el
+                    # mateix estat que alçar-la, i el `finally` segueix retornant el
+                    # savepoint tant si hi havia constraint com si no.
                     cur.execute(
                         f'ALTER TABLE "{connection.schema_name}"."{taula}" '
-                        f'DROP CONSTRAINT "{taula}_{sufix}"'
+                        f'DROP CONSTRAINT IF EXISTS "{taula}_{sufix}"'
                     )
         yield
     finally:
@@ -497,12 +504,7 @@ class GermanesALesSuperficiesC4Test(TenantTestCase):
 
     # ── El rastre: cap ───────────────────────────────────────────────────────────────
 
-    def test_11_les_comportes_tornen_a_estar_vives(self):
-        """Si el savepoint no les tornés, aquest fitxer deixaria la BD de test sense guard i
-        la resta de tests de capa passarien per una raó falsa."""
-        with comportes_alcades(*TAULES):
-            pass
-
+    def _comportes_vives(self):
         with connection.cursor() as cur:
             cur.execute(
                 "SELECT count(*) FROM pg_constraint c "
@@ -511,8 +513,26 @@ class GermanesALesSuperficiesC4Test(TenantTestCase):
                 "WHERE n.nspname = %s AND c.conname LIKE ANY (ARRAY["
                 "  '%%_capa_gate_c1', '%%_instancia_gate_cins'])",
                 [connection.schema_name])
-            self.assertEqual(cur.fetchone()[0], 18,
-                             'el harness ha deixat una comporta per terra')
+            return cur.fetchone()[0]
+
+    def test_11_les_comportes_tornen_a_estar_vives(self):
+        """Si el savepoint no les tornés, aquest fitxer deixaria la BD de test sense guard i
+        la resta de tests de capa passarien per una raó falsa.
+
+        C4/G1 (04/08) — l'assert comptava 18, el nombre de comportes que hi havia abans de
+        començar a retirar-les. Comparar amb una xifra fixa vol dir que cada grup retirat
+        trenca aquest test i que algú l'ha de tornar a escriure amb el número nou: una xifra
+        que s'ha d'anar corregint no vigila res, només fa soroll. El que ha de ser cert és
+        que el harness DEIXA L'ESQUEMA COM EL VA TROBAR, i això es diu comptant abans i
+        després — val igual amb 18 comportes que amb 12 o amb cap."""
+        abans = self._comportes_vives()
+
+        with comportes_alcades(*TAULES):
+            self.assertLessEqual(self._comportes_vives(), abans,
+                                 'el harness ha d\'haver ALÇAT les que hi hagués')
+
+        self.assertEqual(self._comportes_vives(), abans,
+                         'el harness ha deixat una comporta per terra')
 
     def test_12_la_invariant_del_nom_sobreviu(self):
         """`instancia_exigeix_nom` NO és una comporta del tram: és la regla que fa

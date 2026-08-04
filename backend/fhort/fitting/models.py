@@ -248,20 +248,13 @@ class GradedSpec(models.Model):
         # (v. `models_app.BaseMeasurement.Meta`).
         unique_together = [('grading_version', 'pom', 'size_label', 'capa', 'instancia')]
         ordering = ['grading_version', 'pom', 'size_label']
-        constraints = [
-            # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`, on hi ha
-            # l'argument sencer). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='fitting_gradedspec_capa_gate_c1',
-            ),
-            # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
-            # C4-ins la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='fitting_gradedspec_instancia_gate_cins',
-            ),
-        ]
+        # ✅ C4/G1 (04/08) — LES DUES COMPORTES S'HAN RETIRAT (migració fitting/0022).
+        # Aquesta taula va al MATEIX grup que `BaseMeasurement` i no a un de posterior, i el
+        # motiu es va MESURAR: escriure una base de germana encadena cap al motor
+        # (`generate_graded_specs`), que hi escriu els specs dins de la mateixa crida. Amb la
+        # comporta d'aquí viva i la de la mesura retirada, `escalat/ajustar-talla` petava amb
+        # `CheckViolation` — v. el commit `959147a5`, on va sortir de cara.
+        constraints = []
 
     def __str__(self):
         return f'v{self.grading_version_id} · {self.pom.codi_client} @ {self.size_label} = {self.graded_value_cm}cm'

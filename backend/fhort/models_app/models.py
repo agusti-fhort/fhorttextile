@@ -793,10 +793,11 @@ class BaseMeasurement(models.Model):
             # **C4 EL RETIRA PER MIGRACIÓ.** És bastida, no arquitectura: el dia que la
             # cadena sap llegir capes, aquest constraint és justament el que ho impedeix.
             # Si el trobes vigent i C4 ja ha passat, és un deute, no una llei.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_basemeasurement_capa_gate_c1',
-            ),
+            # ✅ C4/G1 (04/08) — LA COMPORTA DE CAPA S'HA RETIRAT (migració 0076). Era
+            # bastida i no arquitectura, i el seu propi comentari ho deia: «el dia que la
+            # cadena sap llegir capes, aquest constraint és justament el que ho impedeix».
+            # La cadena ja les sap llegir i escriure: v. `test_c4_germanes_a_les_superficies`
+            # (les 10 superfícies) i `test_c4_escriptura_germanes` (els sis escriptors).
             # ── C1-ins — LA SEGONA COMPORTA. Declaració canònica; les altres vuit taules de
             # la cadena en porten una d'igual i apunten aquí.
             #
@@ -811,10 +812,8 @@ class BaseMeasurement(models.Model):
             # poden esquivar.
             #
             # **C4-ins LA RETIRA PER MIGRACIÓ**, al costat de la seva germana de capa.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='models_app_basemeasurement_instancia_gate_cins',
-            ),
+            # ✅ C4/G1 (04/08) — LA COMPORTA D'INSTÀNCIA S'HA RETIRAT (migració 0076), al
+            # costat de la seva germana de capa, tal com el seu comentari deia.
             # ── C1-ins · DECISIÓ D1 — UNA INSTÀNCIA SENSE NOM DE FITXA ÉS IL·LEGAL.
             #
             # Aquesta no és bastida: és una llei de domini, i sobreviu a C4-ins. Si una
@@ -900,15 +899,15 @@ class MeasurementChangeLog(models.Model):
         ordering = ['model', 'pom', 'created_at']
         constraints = [
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_measurementchangelog_capa_gate_c1',
-            ),
+            # ✅ C4/G1 (04/08) — retirada per la migració 0076 (v. la declaració canònica
+            # a `BaseMeasurement`). Aquesta taula va al MATEIX grup que la mesura perquè el
+            # signal F1 hi escriu dins de la mateixa transacció: separar-les deixaria una
+            # alta de germana escrivint un apunt que la comporta del log rebutjaria.
             # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='models_app_measurementchangelog_instancia_gate_cins',
-            ),
+            # ✅ C4/G1 (04/08) — retirada per la migració 0076 (v. la declaració canònica
+            # a `BaseMeasurement`). Aquesta taula va al MATEIX grup que la mesura perquè el
+            # signal F1 hi escriu dins de la mateixa transacció: separar-les deixaria una
+            # alta de germana escrivint un apunt que la comporta del log rebutjaria.
         ]
 
     def __str__(self):
