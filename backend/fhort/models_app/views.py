@@ -2620,13 +2620,28 @@ def generate_grading_view(request, model_id):
         pg = getattr(pom, 'pom_global', None)
         graded = {}
         if gv:
-            for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom):
+            # C4/BLOC 2 — LA CORBA ÉS DE LA MESURA, NO DEL POM. Aquesta consulta filtrava per
+            # `(grading_version, pom)` i les germanes hi queien totes al mateix
+            # `graded[size_label]`: guanyava l'última llegida, i la fila d'exterior ensenyava
+            # la corba del folre.
+            #
+            # MESURAT A ROSALIA (model 188), amb les germanes vives i G1 retirat:
+            #     A     base 37.0 → graded S 35.5   ← la corba d'A-FOL
+            #     AH-L  base 23.2 → graded S 23.0   ← la corba d'AH-R
+            # La BD era correcta i `taula-mesures` també: només mentia aquest payload. És
+            # l'onzena superfície, i el cens de C4 en tenia deu.
+            for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom,
+                                                  capa=bm.capa, instancia=bm.instancia):
                 graded[spec.size_label] = (
                     float(spec.graded_value_cm) if spec.graded_value_cm is not None else None
                 )
         rows.append({
             'id': bm.id,
             'pom_id': pom.id,
+            # Els dos eixos al contracte: `pom_id` no és únic dins de `rows`, i `id` (la PK de
+            # la mesura) és l'àncora forta de cada element.
+            'capa': bm.capa,
+            'instancia': bm.instancia,
             'pom_code': pom.codi_client,
             'nom_fitxa': bm.nom_fitxa or '',
             'nom_ca': pg.nom_ca if pg else pom.nom_client,

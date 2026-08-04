@@ -403,6 +403,29 @@ class EscripturaGermanesTest(TenantTestCase):
             self.assertTrue(all(i.startswith(f'{self.pom.id}|{FOLRE}|:') for i in ids),
                             f'l\'id ha de ser `{{clau}}:{{talla}}` de LA germana ajustada: {ids}')
 
+    # ── L'ONZENA SUPERFÍCIE (C4/BLOC 2 · `generar-grading`) ─────────────────────────
+
+    def test_generar_grading_torna_la_corba_de_cada_germana(self):
+        """El payload de `generar-grading` llegia els specs per `(grading_version, pom)` i les
+        germanes hi queien totes al mateix `graded[size_label]`: guanyava l'última llegida.
+        Mesurat a ROSALIA (model 188) amb G1 retirat: la fila d'exterior (base 37,0) ensenyava
+        la corba del folre (S=35,5). La BD era correcta; només mentia el payload. El cens de
+        C4 tenia deu superfícies i aquesta era l'onzena."""
+        from fhort.models_app.views import generate_grading_view
+
+        with comportes_alcades(*TAULES, 'fitting_gradedspec'):
+            self._germanes()
+            self._sf()
+            resp = generate_grading_view(self._req({}), self.model.id)
+            self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+
+            per_eixos = {(r['capa'], r['instancia']): r for r in resp.data['rows']
+                         if r['pom_id'] == self.pom.id}
+            self.assertEqual(set(per_eixos), {(EXTERIOR, ''), (FOLRE, '')},
+                             'cada germana ha de tenir la seva fila, i dir quina és')
+            self.assertEqual(per_eixos[(EXTERIOR, '')]['graded'].get('S'), 100.0)
+            self.assertEqual(per_eixos[(FOLRE, '')]['graded'].get('S'), 40.0)
+
     # ── El client antic segueix escrivint on escrivia ───────────────────────────────
 
     def test_una_fila_sense_eixos_va_a_lexterior_de_la_instancia_unica(self):
