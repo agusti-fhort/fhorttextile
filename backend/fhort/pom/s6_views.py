@@ -83,8 +83,17 @@ def base_measurements_with_units_view(request, model_id):
     try:
         from fhort.models_app.models import BaseMeasurement
 
+        # C2/Onada 1 — àncora EXTERIOR explícita: la resposta és una llista plana on cada
+        # element s'identifica per `pom_id`, i qui la consumeix hi indexa. Amb dues capes
+        # servides alhora, dos elements portarien el mateix `pom_id` i el consumidor en
+        # perdria un en silenci. La capa entra al contracte a C4, no aquí.
+        # FASE_2/C1-ins — i la INSTÀNCIA ÚNICA, pel mateix argument exacte: l'àncora de capa
+        # tapava la capa i NO la instància, o sigui que la sisa dreta i l'esquerra tornarien
+        # a xocar sobre el mateix `pom_id`. Els dos eixos entren al contracte junts, a C4-ins.
+        from fhort.pom.models import MeasurementLayer
         bms = BaseMeasurement.objects.filter(
-            model_id=model_id, is_active=True
+            model_id=model_id, is_active=True,
+            capa=MeasurementLayer.SLUG_DEFECTE, instancia=''
         ).select_related('pom', 'pom__pom_global', 'pom__categoria').order_by(
             'pom__categoria__display_order', 'pom__codi_client'
         )
@@ -132,6 +141,7 @@ def graded_specs_with_units_view(request, sf_id):
         from fhort.fitting.models import SizeFitting
         from fhort.fitting.models import GradedSpec
         from fhort.fitting.services import vigent_grading_version
+        from fhort.pom.models import MeasurementLayer
 
         sf = SizeFitting.objects.get(pk=sf_id)
 
@@ -155,8 +165,15 @@ def graded_specs_with_units_view(request, sf_id):
                 'results': [],
             })
 
+        # FASE_2/C1-ins — àncora EXTERIOR + INSTÀNCIA ÚNICA, i aquí les DUES arriben alhora
+        # perquè aquest lector no havia crescut ni a `(pom, capa)`. El `pom_dict` de sota
+        # s'indexa per `spec.pom_id` pelat i ÉS el contracte de la resposta: dos specs del
+        # mateix POM —altra capa o altra instància— es fondrien a la mateixa entrada i
+        # l'últim llegit guanyaria talla a talla. És el germà de
+        # `base_measurements_with_units_view`, que ja porta l'àncora: van junts o no van.
         specs = GradedSpec.objects.filter(
-            grading_version=gv, is_active=True
+            grading_version=gv, is_active=True,
+            capa=MeasurementLayer.SLUG_DEFECTE, instancia=''
         ).select_related(
             'pom', 'pom__pom_global', 'pom__categoria'
         ).order_by(

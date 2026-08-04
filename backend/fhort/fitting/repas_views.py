@@ -95,6 +95,13 @@ def _notes_de_check(model_id):
     `MeasurementChangeLog.motiu` (models_app/signals.py:295,307). O sigui que la fila del log
     ja DIU de quin check ve, i el pont és exacte. Enganxar-ho per timestamp hauria estat
     fràgil per milisegons; això no falla.
+
+    FASE_2/C1-ins — la clau és `(check, pom, capa, instancia)`. Aquest lector no havia
+    crescut ni a `(check, pom, capa)`, i el `.only()` era part del problema: excloïa `capa`,
+    o sigui que l'eix ni tan sols arribava de la BD. La fila que hi consulta —una
+    `MeasurementChangeLog`— sí que porta els dos eixos, així que la clau pot ser completa
+    sense tocar cap contracte (FORMA A). Amb la clau curta, la nota d'una decisió sobre la
+    sisa esquerra sortiria al costat del valor de la dreta.
     """
     from fhort.models_app.models import SizeCheckLine
 
@@ -102,13 +109,13 @@ def _notes_de_check(model_id):
     fora = {}
     for l in (SizeCheckLine.objects
               .filter(size_check__model_id=model_id)
-              .only('size_check_id', 'pom_id', 'decisio', 'nota')):
+              .only('size_check_id', 'pom_id', 'capa', 'instancia', 'decisio', 'nota')):
         text = ' · '.join(filter(None, [
             etiquetes.get(l.decisio) if l.decisio else None,
             (l.nota or '').strip() or None,
         ]))
         if text:
-            fora[(l.size_check_id, l.pom_id)] = text
+            fora[(l.size_check_id, l.pom_id, l.capa, l.instancia)] = text
     return fora
 
 
@@ -137,9 +144,16 @@ def _etapes_de_fitting(model_id):
     """
     notes = _notes_de_check(model_id)
 
+    # FASE_2/C1-ins — ÀNCORA als dos eixos: `celles[clau]` s'indexa per `c.pom_id` pelat i
+    # ÉS el payload (`_fila`, més avall, hi entra pel mateix `pom_id`). Dues instàncies del
+    # mateix POM mesurades el mateix segon es fondrien a la mateixa cel·la i l'última llegida
+    # guanyaria. El Repàs, fins a C4-ins, és el de l'exterior i de la instància única — igual
+    # que els quatre mapes de nomenclatura d'aquesta mateixa vista.
+    from fhort.pom.models import MeasurementLayer
     logs = (MeasurementChangeLog.objects
             .filter(model_id=model_id,
                     context__in=CONTEXTOS_DE_FITTING,
+                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                     valor_anterior__isnull=False)   # re-mesura, no alta inicial
             .order_by('created_at', 'id'))
 
@@ -155,7 +169,7 @@ def _etapes_de_fitting(model_id):
         check_id = _check_id_del_motiu(c.motiu)
         celles[clau][c.pom_id] = {
             'valor_real': float(c.valor_nou),
-            'nota': notes.get((check_id, c.pom_id), '') if check_id else '',
+            'nota': notes.get((check_id, c.pom_id, c.capa, c.instancia), '') if check_id else '',
         }
     return etapes, celles
 
@@ -250,7 +264,17 @@ class FittingRepasView(APIView):
         # R1 (31/07) — el BATEIG hi viatja també: és del MODEL, com `ordre` i `nom_fitxa`, i
         # sense ell la taula fitting_history de la fitxa imprimia el nom del catàleg d'un POM
         # que el tècnic havia rebatejat.
-        bm_data = list(BaseMeasurement.objects.filter(model_id=model.id)
+        # C2/Onada 1 — ÀNCORA EXTERIOR EXPLÍCITA per als QUATRE mapes, i tots quatre alhora:
+        # ancorar-ne un i deixar-ne un altre per POM sol donaria files amb l'ordre d'una capa
+        # i el nom d'una altra. La fila que els consulta (`_fila`, aquí sota) s'indexa per
+        # `pom_id` i no porta capa; donar-n'hi seria afegir un camp al payload, i el
+        # contracte no es toca fins a C4. El Repàs, fins llavors, és el de l'exterior.
+        # FASE_2/C1-ins — el segon eix entra a la mateixa àncora i pel mateix argument
+        # sencer: la fila no porta instància i donar-n'hi és canvi de contracte (C4-ins).
+        from fhort.pom.models import MeasurementLayer
+        bm_data = list(BaseMeasurement.objects
+                       .filter(model_id=model.id,
+                               capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
                        .values_list('pom_id', 'ordre', 'nom_fitxa', 'id',
                                     'nom_canonic_model', 'nom_traduit_model'))
         ordre_map = {p: o for p, o, _, _, _, _ in bm_data}

@@ -242,31 +242,53 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
             GradingVersion.objects.filter(size_fitting=sf).order_by('version_number')
         )
         # Single query for ALL graded specs of those versions → no N+1.
+        # FASE_2/C1-ins — la clau del `spec_map` creix amb els DOS eixos. La fila que hi
+        # consulta és una `PieceFittingLine`, que els porta tots dos: FORMA A, sense àncora,
+        # perquè aquí hi ha de qui copiar-los. Per `(gv, pom, talla)` l'evolució de la sisa
+        # dreta ensenyaria les xifres de l'esquerra a cada versió conservada — i és
+        # precisament la columna que serveix per veure si una mesura s'ha mogut.
         spec_map = {}
         for s in GradedSpec.objects.filter(grading_version__size_fitting=sf).values(
-            'grading_version_id', 'pom_id', 'size_label', 'graded_value_cm',
+            'grading_version_id', 'pom_id', 'capa', 'instancia', 'size_label',
+            'graded_value_cm',
         ):
-            spec_map[(s['grading_version_id'], s['pom_id'], s['size_label'])] = s['graded_value_cm']
+            spec_map[(s['grading_version_id'], s['pom_id'], s['capa'], s['instancia'],
+                      s['size_label'])] = s['graded_value_cm']
 
         # PG-4b-3a — règim per POM (resident→fallback) per al desplegable + etiqueta de regla.
         from fhort.pom.services import _load_grading_rules
         rules = _load_grading_rules(obj.model)
 
-        # BaseMeasurement del model (unique per (model, pom)): aporta nom_fitxa (nomenclatura
-        # client, autoritativa) i l'ordre de fitxa. Una sola query, reutilitzada per al 'nom' de
-        # cada línia i per a l'ordenació final.
+        # BaseMeasurement del model (unique per (model, pom, capa, instancia)): aporta
+        # nom_fitxa (nomenclatura client, autoritativa) i l'ordre de fitxa. Una sola query,
+        # reutilitzada per al 'nom' de cada línia i per a l'ordenació final.
+        #
+        # C2/Onada 1 — CLAU COMPOSTA (pom, capa): `PieceFittingLine` porta capa des de C1, o
+        # sigui que cada línia pot demanar la SEVA. Per POM sol, el folre i l'exterior d'un
+        # mateix pit es disputarien el `nom_fitxa` i —pitjor— el `bm_id`, que és per on
+        # aquesta superfície desa el bateig: s'escriuria el nom a la mesura de l'altra capa.
+        # FASE_2/C1-ins — i la INSTÀNCIA hi entra amb el mateix argument, agreujat: el
+        # `nom_fitxa` és justament el que distingeix la sisa dreta de l'esquerra al croquis.
+        # Amb la clau curta, batejar una escriuria el nom sobre l'altra i les dues quedarien
+        # amb el mateix rètol — el duplicat amb aparença de dada bona que la comporta i el
+        # CHECK «instància ⇒ nom» existeixen per evitar. Els TRES mapes creixen alhora: si un
+        # s'ancorés i un altre no, una fila portaria l'ordre d'una instància i el nom d'una
+        # altra.
         from fhort.models_app.models import BaseMeasurement
         bm_data = list(BaseMeasurement.objects.filter(model_id=obj.model_id)
-                       .values_list('pom_id', 'ordre', 'nom_fitxa', 'id'))
-        ordre_map = {p: o for p, o, _, _ in bm_data}
-        nom_fitxa_map = {p: nf for p, _, nf, _ in bm_data}
-        bm_id_map = {p: i for p, _, _, i in bm_data}   # P4 — autoria de nom a nivell MODEL (BaseMeasurement)
+                       .values_list('pom_id', 'capa', 'instancia', 'ordre', 'nom_fitxa', 'id'))
+        ordre_map = {(p, c, i): o for p, c, i, o, _, _ in bm_data}
+        nom_fitxa_map = {(p, c, i): nf for p, c, i, _, nf, _ in bm_data}
+        bm_id_map = {(p, c, i): bid for p, c, i, _, _, bid in bm_data}   # P4 — autoria de nom a nivell MODEL
 
         out = []
+        ordres = []   # ordre de fitxa, paral·lel a `out`: la fila del payload no porta capa
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
+            clau_bm = (line.pom_id, line.capa, line.instancia)
             evolucio = []
             for v in versions:
-                val = spec_map.get((v.id, line.pom_id, line.size_label))
+                val = spec_map.get((v.id, line.pom_id, line.capa, line.instancia,
+                                    line.size_label))
                 if val is None:
                     continue
                 evolucio.append({
@@ -278,15 +300,16 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 })
             pom = line.pom
             r = rules.get(line.pom_id)
+            ordres.append(ordre_map.get(clau_bm, 10 ** 9))
             out.append({
                 'id': line.id,
                 'pom_id': line.pom_id,
                 'codi': pom.pom_code if pom else '',
-                'nom': (nom_fitxa_map.get(line.pom_id) or (pom.pom_code if pom else '')),  # nom_fitxa (croquis)
+                'nom': (nom_fitxa_map.get(clau_bm) or (pom.pom_code if pom else '')),  # nom_fitxa (croquis)
                 'nom_en': pom.name_en if pom else '',        # nom canònic EN (línia superior, nomenclatura 2 línies)
                 'nom_local': pom.name_cat if pom else '',    # nom en idioma usuari (línia inferior, canònic = sembra)
-                'nom_fitxa': nom_fitxa_map.get(line.pom_id),  # P4 — override d'autoria a nivell MODEL (precedència)
-                'bm_id': bm_id_map.get(line.pom_id),          # P4 — id de BaseMeasurement per editar el nom del model
+                'nom_fitxa': nom_fitxa_map.get(clau_bm),      # P4 — override d'autoria a nivell MODEL (precedència)
+                'bm_id': bm_id_map.get(clau_bm),              # P4 — id de BaseMeasurement per editar el nom del model
                 'is_key': pom.is_key_measure if pom else False,
                 'size_label': line.size_label,
                 'valor_teoric': line.valor_teoric,
@@ -301,5 +324,8 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
             })
         # FIX 4B — ordena les files per l'ordre de la fitxa (BaseMeasurement.ordre del model;
         # POMMaster no té 'ordre'). ordre_map ja s'ha construït a dalt amb la mateixa query.
-        out.sort(key=lambda r: ordre_map.get(r['pom_id'], 10 ** 9))
+        # C2/Onada 1 — l'ordre viatja a `ordres`, paral·lel a `out`, perquè la clau ara porta
+        # capa i la fila del payload no en té. `sorted` és estable i la clau és només el
+        # número: els empats conserven l'ordre d'inserció, igual que el `list.sort` d'abans.
+        out = [fila for _ordre, fila in sorted(zip(ordres, out), key=lambda t: t[0])]
         return out

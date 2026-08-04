@@ -21,6 +21,8 @@ import os
 
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand, CommandError
+
+from fhort.pom.models import MeasurementLayer
 from django.db import transaction
 from django_tenants.utils import schema_context
 
@@ -360,7 +362,13 @@ class Command(BaseCommand):
                 continue
             d = {'obligatori': m['obligatori'], 'is_key': m['is_key'], 'nivell': m['nivell'],
                  'ordre': m['ordre'], 'pendent_revisio': m['pendent_revisio']}
-            self._upsert(GarmentPOMMap, {'garment_type_item': gti, 'pom': pom}, d, s)
+            # FASE_3/C1-ins — la clau del lookup, alineada amb la unicitat real. El format
+            # del paquet (`06_pom_maps.json`) no porta eixos: fins que en porti, tot el que
+            # se sembra és exterior + instància única, i el literal ho DIU en comptes de
+            # deixar-ho al default implícit.
+            self._upsert(GarmentPOMMap,
+                         {'garment_type_item': gti, 'pom': pom,
+                          'capa': MeasurementLayer.SLUG_DEFECTE, 'instancia': ''}, d, s)
         for ib in data['item_base_measurements']:
             gti = self._resolve_gti(ib['garment_type_item'])
             pom = self._resolve_pom(ib['pom'])
@@ -376,7 +384,9 @@ class Command(BaseCommand):
                 self._warn(f"itembase {ib['garment_type_item']}→{ib['pom']}: l'item no té talla "
                            "base i el paquet no porta BaseSet → saltat")
                 continue
-            self._upsert(ItemBaseMeasurement, {'base_set': base_set, 'pom': pom},
+            self._upsert(ItemBaseMeasurement,
+                         {'base_set': base_set, 'pom': pom,
+                          'capa': MeasurementLayer.SLUG_DEFECTE, 'instancia': ''},
                          {'garment_type_item': gti,
                           'base_value_cm': ib['base_value_cm'], 'nom_fitxa': ib['nom_fitxa']}, s)
         return s

@@ -11,6 +11,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework import status
 
+from fhort.pom.models import MeasurementLayer
 from fhort.pom.size_labels import canonical_size_label
 from fhort.pom.grading_utils import normalitza_cm
 from fhort.models_app.extraction_utils import registra_us_ia
@@ -1978,7 +1979,16 @@ def import_session_grading_preview_view(request, token):
     grading_avisos: list[str] = []
     grading = preview_graded_specs(model, base_values, warnings=grading_avisos)
     # Claus a string per a JSON consistent al frontend.
-    grading = {str(pid): row for pid, row in grading.items()}
+    #
+    # C3/B5 — el motor ja indexa per la identitat sencera `(pom_id, capa, instancia)`, però
+    # AQUEST CONTRACTE NO ES TOCA: el cos que arriba és un objecte JSON `{pom_id: valor}` i un
+    # objecte JSON no pot expressar una clau composta, ni a l'entrada ni a la sortida. El
+    # `base_values` que hi entra és escalar i `preview_graded_specs` el normalitza a la mesura
+    # única del POM ('exterior', ''); aquí es desfà la identitat per tornar al `pom_id` que el
+    # frontend espera. Avui és una equivalència exacta —les comportes de C1/C1-ins garanteixen
+    # una sola germana per POM— i per això el col·lapse no perd res.
+    # Fer créixer aquest payload és INTERFÍCIE i va a C4 amb maqueta (llei 3c.5).
+    grading = {str(pom_id): row for (pom_id, _capa, _instancia), row in grading.items()}
     return Response({'grading': grading, 'base_size': model.base_size_label,
                      'size_run': (model.size_run_model or '').split('·'),
                      'avisos': grading_avisos}, status=200)
@@ -2557,7 +2567,15 @@ def import_session_confirmar_view(request, token):
                 _defaults['tolerancia_minus'] = p['tol_minus']
             if p.get('tol_plus') is not None:
                 _defaults['tolerancia_plus'] = p['tol_plus']
-            BaseMeasurement.objects.update_or_create(model=model, pom=pm, defaults=_defaults)
+            # FASE_3/C1-ins — literals: el document importat encara no diu de quina capa ni
+            # de quina instància parla cada fila. El lèxic multilingüe que ho sabrà llegir
+            # (LINING/FORRO/FOLRE→folre, i el mateix per a les repeticions) és l'Onada 3, que
+            # té UI i maqueta pendent. Fins llavors l'import escriu a l'exterior i a la
+            # instància única, i ho declara aquí en comptes de deixar-ho al default implícit.
+            BaseMeasurement.objects.update_or_create(
+                model=model, pom=pm,
+                capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                defaults=_defaults)
             n_bm += 1
             if base_val is not None:
                 n_bm_valors += 1
@@ -2692,6 +2710,7 @@ def import_session_confirmar_view(request, token):
                                     continue
                                 ModelGradingOverride.objects.update_or_create(
                                     model=model, pom_id=pom_id, size_label=label,
+                                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                                     defaults={'value_cm': float(val), 'created_by': user_profile,
                                               'motiu': ("Import W5 — divergència vs catàleg del "
                                                         "contenidor (INTOCABLE)")})

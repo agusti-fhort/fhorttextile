@@ -29,7 +29,10 @@ def cv(val, unit):
 def pom_alerts_summary_view(request):
     """
     GET /api/v1/alerts/summary/
-    Filtres: ?estat=Obert&model_id=X&dies=30
+    Filtres: ?estat=Pendent&model_id=X&dies=30
+
+    L'exemple deia `?estat=Obert`, un valor que cap disparador escriu ja i que mai va ser
+    a `POMAlert.ESTAT_CHOICES`: filtrar-hi hauria retornat sempre zero alertes.
     """
     try:
         from fhort.fitting.models import POMAlert
@@ -158,9 +161,19 @@ def check_tolerances_view(request, model_id):
         from fhort.fitting.models import POMAlert
 
         model = Model.objects.get(pk=model_id)
+        # C2/Onada 1 — àncora EXTERIOR explícita: el body d'aquest endpoint és
+        # `{pom_id, value_cm}` i no diu de quina capa parla. Mentre el contracte no porti
+        # capa (C4), una mesura presa a mà es compara amb l'exterior, que és el que el
+        # tècnic té al davant. Per POM sol, la base d'una altra capa podria manar aquí.
+        # FASE_2/C1-ins — i tampoc diu de quina INSTÀNCIA parla, o sigui que l'àncora ha de
+        # cobrir els dos eixos: el `base_map` s'indexa per `pom_id` pelat i, sense el segon
+        # filtre, la base de la sisa esquerra podria jutjar una presa de la dreta.
+        from fhort.pom.models import MeasurementLayer
         base_map = {
             bm.pom_id: float(bm.base_value_cm)
-            for bm in BaseMeasurement.objects.filter(model=model, is_active=True)
+            for bm in BaseMeasurement.objects.filter(
+                model=model, is_active=True,
+                capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
             if bm.base_value_cm is not None
         }
 
@@ -190,7 +203,10 @@ def check_tolerances_view(request, model_id):
                         'desviacio_cm': desv,
                         'tolerancia_cm': tol,
                         'missatge': f'{pom.codi_client}: desvia {desv:+.2f}cm (tol ±{tol}cm)',
-                        'estat': 'Obert',
+                        # 'Obert' → 'Pendent': v. la nota bessona a `pom/s10_views.py`.
+                        # Vocabulari declarat (`POMAlert.ESTAT_CHOICES`), i és el `default`
+                        # del camp: sinònim, no estat nou.
+                        'estat': 'Pendent',
                         'origen': 'MANUAL',
                     }
                 )

@@ -35,9 +35,17 @@ class GradedSpecTableView(APIView):
                 status=404,
             )
 
+        # FASE_2/C1-ins — ÀNCORA als DOS eixos, i ha d'anar al MATEIX commit que la dels
+        # quatre mapes de més avall: `rows_by_pom` s'indexa per `pom.id` pelat i ÉS la fila
+        # del payload. Sense àncora aquí i amb àncora allà, hi hauria files sense mapa;
+        # sense àncora enlloc, dues instàncies del mateix POM es fondrien a la mateixa fila i
+        # l'última llegida guanyaria talla a talla. Aquest queryset no havia crescut mai —ni
+        # a `(pom, capa)`—, o sigui que rep els dos filtres de cop.
+        from fhort.pom.models import MeasurementLayer
         specs = (
             GradedSpec.objects
-            .filter(grading_version=gv, is_active=True)
+            .filter(grading_version=gv, is_active=True,
+                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
             .select_related('pom__pom_global')
             .order_by('pom_id', 'id')
         )
@@ -82,7 +90,21 @@ class GradedSpecTableView(APIView):
         # F3 — `seccio` viatja pel MATEIX camí que `ordre`/`nom_fitxa`: surt de la
         # BaseMeasurement del model, no del GradedSpec (la graduació no en sap res, i no li
         # pertoca: la secció és una propietat del document d'origen, no de l'escalat).
-        bms = BaseMeasurement.objects.filter(model_id=sf.model_id).values(
+        #
+        # C2/Onada 1 — ÀNCORA EXTERIOR EXPLÍCITA per als QUATRE mapes de sota, i han
+        # d'anar-hi tots quatre alhora: si un s'ancorés i un altre no, una fila podria
+        # acabar amb l'ordre d'una capa i el nom d'una altra.
+        # La clau es queda per POM perquè la FILA que la consulta (`rows_by_pom`, aquí a
+        # sobre) tampoc no porta capa, i donar-n'hi voldria dir afegir un camp al payload
+        # —canvi de contracte, i el contracte no es toca fins a C4—. Les taules per capa al
+        # paper són C4; fins llavors la fitxa parla de l'exterior i ho diu aquí.
+        # FASE_2/C1-ins — el segon eix entra a la MATEIXA àncora i pel mateix argument sencer:
+        # la fila no porta instància, i donar-n'hi és canvi de contracte (C4-ins). Els quatre
+        # mapes segueixen creixent alhora — amb dos eixos, «l'ordre d'una capa i el nom d'una
+        # altra» es converteix en quatre maneres de barrejar-ho, no dues.
+        bms = BaseMeasurement.objects.filter(
+            model_id=sf.model_id,
+            capa=MeasurementLayer.SLUG_DEFECTE, instancia='').values(
             'pom_id', 'ordre', 'nom_fitxa', 'seccio',
             # R1 (31/07) — el BATEIG viatja pel MATEIX camí que `ordre`/`nom_fitxa`: surt de la
             # BaseMeasurement del model, perquè és del MODEL i no de la graduació. Sense això,

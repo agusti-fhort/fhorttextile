@@ -6,8 +6,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from django.db import transaction
 from django.utils import timezone
 
+from fhort.pom.models import MeasurementLayer
 from fhort.pom.services import SealedGradingVersionError, _te_regles
 
 
@@ -168,7 +170,7 @@ def save_base_size_view(request, model_id):
         return Response({'error': 'Cal proporcionar almenys un POM'}, status=400)
 
     try:
-        from fhort.models_app.models import Model, BaseMeasurement
+        from fhort.models_app.models import Model, BaseMeasurement, MeasurementChangeLog
         from fhort.pom.models import POMMaster
 
         model = Model.objects.get(pk=model_id)
@@ -179,41 +181,78 @@ def save_base_size_view(request, model_id):
 
         created = 0
         removed = 0
-        for item in poms_data:
-            pom_id = item.get('pom_id')
-            value = item.get('valor_cm', 0)
+        # C3-A1 — el desat del wizard és UN acte: o entren tots els POMs del cos o no n'entra
+        # cap. Aquest fitxer no tenia cap `atomic` i `ATOMIC_REQUESTS` no existeix
+        # (settings.py:118-127), o sigui que cada POM del bucle es commitava per separat: una
+        # petada al tercer deixava els dos primers escrits i el client sense saber-ho.
+        with transaction.atomic():
+            for item in poms_data:
+                pom_id = item.get('pom_id')
+                value = item.get('valor_cm', 0)
 
-            if not pom_id:
-                continue
+                if not pom_id:
+                    continue
 
-            if value is None or float(value) == 0:
-                # Materialització família→item: NO esborrar la fila (la pertinença de l'item es manté);
-                # buidar el valor (base_value_cm=None) deixant-la com a materialitzada sense valor.
-                cleared = BaseMeasurement.objects.filter(
-                    model=model, pom_id=pom_id
-                ).update(base_value_cm=None)
-                removed += cleared
-            else:
-                # Sprint 5B.1: tolerance from the payload if present, else the catalogue POM.
-                pom = POMMaster.objects.filter(pk=pom_id).first()
-                tol_minus = item.get('tolerancia_minus')
-                tol_plus = item.get('tolerancia_plus')
-                if tol_minus is None and pom:
-                    tol_minus = pom.tolerancia_default_minus
-                if tol_plus is None and pom:
-                    tol_plus = pom.tolerancia_default_plus
-                BaseMeasurement.objects.update_or_create(
-                    model=model,
-                    pom_id=pom_id,
-                    defaults={
-                        'base_value_cm': float(value),
-                        'is_active': True,
-                        'notes': item.get('notes', ''),
-                        'tolerancia_minus': tol_minus,
-                        'tolerancia_plus': tol_plus,
-                    }
-                )
-                created += 1
+                if value is None or float(value) == 0:
+                    # Materialització família→item: NO esborrar la fila (la pertinença de l'item es manté);
+                    # buidar el valor (base_value_cm=None) deixant-la com a materialitzada sense valor.
+                    #
+                    # C3-A1 · LA CLAU COMPLETA. El filtre era `(model, pom_id)` sol: amb
+                    # germanes vives buidava TOTES les files del POM, de qualsevol capa i
+                    # qualsevol instància. Els eixos es declaren igual que al camí germà de
+                    # sota, que ja ho feia.
+                    bm = BaseMeasurement.objects.filter(
+                        model=model, pom_id=pom_id,
+                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                    ).first()
+                    if bm is None:
+                        continue
+                    prev = bm.base_value_cm
+                    if prev is not None:
+                        bm.base_value_cm = None
+                        bm._changed_by = request.user
+                        bm.save(update_fields=['base_value_cm', 'updated_at'])
+                        # El rastre s'escriu AQUÍ i no pel signal. Amb `base_value_cm=None` el
+                        # receptor surt pel guard de `signals.py:290-291`, i la seva altra porta
+                        # —la poda, gated per `_desactivat`— llegiria `valor_anterior` DESPRÉS
+                        # del canvi: seria `None`, que en aquesta taula vol dir «és una creació»
+                        # (models.py:842). En una taula append-only això és una fila que menteix
+                        # i que ningú no podrà corregir després. S'escriu explícitament, com ja
+                        # fan els dos escriptors d'override de talla no-base
+                        # (models_app/views.py:2646 i :2820).
+                        MeasurementChangeLog.objects.create(
+                            model=model, pom_id=pom_id, base_measurement=bm,
+                            capa=bm.capa, instancia=bm.instancia,
+                            valor_anterior=float(prev), valor_nou=0.0,
+                            context='manual', motiu='Wizard · valor de talla base buidat',
+                            created_by=request.user,
+                        )
+                    removed += 1
+                else:
+                    # Sprint 5B.1: tolerance from the payload if present, else the catalogue POM.
+                    pom = POMMaster.objects.filter(pk=pom_id).first()
+                    tol_minus = item.get('tolerancia_minus')
+                    tol_plus = item.get('tolerancia_plus')
+                    if tol_minus is None and pom:
+                        tol_minus = pom.tolerancia_default_minus
+                    if tol_plus is None and pom:
+                        tol_plus = pom.tolerancia_default_plus
+                    # FASE_3/C1-ins — literals: el wizard encara no demana capa ni instància
+                    # (Onada 3, amb maqueta). Declarats, no implícits.
+                    BaseMeasurement.objects.update_or_create(
+                        model=model,
+                        pom_id=pom_id,
+                        capa=MeasurementLayer.SLUG_DEFECTE,
+                        instancia='',
+                        defaults={
+                            'base_value_cm': float(value),
+                            'is_active': True,
+                            'notes': item.get('notes', ''),
+                            'tolerancia_minus': tol_minus,
+                            'tolerancia_plus': tol_plus,
+                        }
+                    )
+                    created += 1
 
         return Response({
             'creats_o_actualitzats': created,

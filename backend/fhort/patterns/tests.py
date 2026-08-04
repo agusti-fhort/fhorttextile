@@ -3297,9 +3297,9 @@ class LlistaDeTreballAPITest(PatternsAPITestBase):
         return PatternFileViewSet.as_view({'get': 'model_poms'})(
             request, pk=pk or self.fp.id)
 
-    def _ancora(self, pom, a, b):
+    def _ancora(self, pom, a, b, peca=None):
         request = self.factory.post('/api/v1/patterns/pattern-poms/', {
-            'pattern_piece': self.front.id, 'pom_master': pom.id,
+            'pattern_piece': (peca or self.front).id, 'pom_master': pom.id,
             'definicio_mesura': {'mode': 'points', 'a': a.id, 'b': b.id},
             'metode': 'recta',
         }, format='json')
@@ -3374,6 +3374,40 @@ class LlistaDeTreballAPITest(PatternsAPITestBase):
         self.assertIsNotNone(fila['valor_mesurat_cm'])
         self.assertIsNone(fila['delta_cm'])
         self.assertIsNone(fila['dins_tolerancia'])
+
+    def test_un_pom_ancorat_a_dues_peces_no_en_perd_cap(self):
+        """La unicitat és (peça, POM): l'amplada de pit es mesura al davant I a l'esquena.
+        Són dues mesures, no dues versions de la mateixa, i la llista les ha de dir totes."""
+        back = self.fp.pieces.get(nom_block='TATE_BACK')
+        girs_back = list(
+            back.points.filter(mena='vertex', tipus='turn', boundary_index=0).order_by('ordre'))
+
+        anc_front = self._ancora(self.pom_a, self.girs[0], self.girs[3])
+        anc_back = self._ancora(self.pom_a, girs_back[0], girs_back[3], peca=back)
+        self.assertEqual(anc_back.status_code, 201)
+
+        resp = self._llista()
+        fila = next(f for f in resp.data['results'] if f['codi_client'] == 'T.1')
+
+        per_peca = {self.front.id: anc_front.data, back.id: anc_back.data}
+        self.assertEqual([a['pattern_piece'] for a in fila['ancoratges']], sorted(per_peca))
+        self.assertEqual(
+            sorted(a['pattern_pom'] for a in fila['ancoratges']),
+            sorted(d['id'] for d in per_peca.values()))
+
+        # Cada ancoratge porta la SEVA mesura i la SEVA Δ contra la mateixa fitxa.
+        for a in fila['ancoratges']:
+            self.assertEqual(a['valor_mesurat_cm'], per_peca[a['pattern_piece']]['valor_mesurat_cm'])
+            self.assertEqual(a['delta_cm'], round(a['valor_mesurat_cm'] - 50.0, 2))
+
+        # Les caselles planes: el primer ancoratge per ordre de peça, sempre el mateix.
+        primer = per_peca[min(per_peca)]
+        self.assertEqual(fila['pattern_pom'], primer['id'])
+        self.assertEqual(fila['valor_mesurat_cm'], primer['valor_mesurat_cm'])
+
+        # Una FILA de fitxa ancorada, no dues: el compte és de mesures del model.
+        self.assertEqual(resp.data['total'], 2)
+        self.assertEqual(resp.data['ancorats'], 1)
 
     def test_una_mesura_inactiva_no_es_feina(self):
         BaseMeasurement.objects.filter(pk=self.bm_b.pk).update(is_active=False)

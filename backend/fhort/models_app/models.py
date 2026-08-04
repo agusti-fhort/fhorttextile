@@ -608,6 +608,21 @@ class BaseMeasurement(models.Model):
         # pont. La distinció importa el dia que algú pregunti «qui va mesurar això»: la
         # resposta és «l'estudi», i cap dels altres valors ho diu.
         ('FEDERAT', "Arribat de l'altra casa (federació)"),
+        # C3/C (2026-08-02) — DERIVAT D'UNA GERMANA. El valor no l'ha mesurat ningú: el sistema
+        # l'ha mogut perquè s'ha corregit una altra fila del MATEIX POM dins del mateix model
+        # (l'exterior puja de 54 a 56 → el folre puja de 52 a 54). Es mou el VALOR, mai el
+        # grading; la folgança es conserva sola perquè ningú no la toca.
+        #
+        # Cap dels valors anteriors ho pot dir: 'CALCULATED' parla de talla base + delta dins
+        # d'una mateixa fila, i 'COPIED'/'FEDERAT' parlen de valors que vénen de fora del model.
+        # Aquest ve de la fila del costat.
+        #
+        # La distinció no és decorativa: sense ella una auditoria exterior↔folre es compara amb
+        # ella mateixa i sempre dona verd, perquè no pot saber si el folre el va mesurar algú o
+        # el va moure el sistema. I el que ho ha de dir sobretot és L'ENTRADA DEL REGISTRE, no
+        # aquesta columna: l'origen d'una fila el sobreescriu el canvi següent, mentre que el
+        # `MeasurementChangeLog` és append-only i conserva la seqüència.
+        ('DERIVAT', 'Derivat d\'una germana (mateix POM, altra capa o instància)'),
     ]
 
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='base_measurements')
@@ -689,11 +704,133 @@ class BaseMeasurement(models.Model):
                   "Buit: mana el catàleg (POMGlobal.nom_ca / POMMaster.nom_client).",
     )
 
+    # ── C1 (2026-07-30) — LA CAPA. Declaració canònica del camp; les altres set taules
+    # de mesura el porten igual i apunten aquí.
+    #
+    # De quina MATÈRIA de la peça parla aquesta mesura: l'exterior, el folre, l'entretela…
+    # El pit de l'exterior i el pit del folre no són el mateix valor, i fins avui el sistema
+    # no els sabia distingir perquè la clau era `(model, pom)` i prou. Aquest camp és l'eix
+    # que hi faltava; la clau ampliada arriba a C1/T3.
+    #
+    # REFERÈNCIA PER SLUG, MAI PER PK (llei G9). No és un FK a `pom.MeasurementLayer` a
+    # posta: el catàleg viu a `fhort.pom` (SHARED **i** TENANT) i aquestes taules són
+    # tenant-only o creuen schemas — un FK real petaria a `public` pel mateix motiu que ja
+    # obliga `db_constraint=False` a mig arxiu. El slug, a més, és el que viatja entre
+    # tenants i entre versions; una PK no viatja.
+    #
+    # La VALIDACIÓ contra el catàleg NO és aquí: arriba a C2/C4. Fins llavors mana la
+    # COMPORTA de C1/T4 — un CHECK a BD que només deixa passar 'exterior'. Cap escriptor pot
+    # crear una segona capa per accident abans que la cadena de consumidors hi estigui
+    # adaptada; C4 el retirarà per migració.
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
+                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
+    )
+    # ── C1-ins — LA INSTÀNCIA. Declaració canònica del camp; les altres vuit taules de la
+    # cadena en porten una d'igual i apunten aquí.
+    #
+    # SEGON EIX, ORTOGONAL A LA CAPA. La capa diu de quina MATÈRIA parla la mesura
+    # (exterior, folre, entretela…); la instància diu de QUINA DE LES REPETICIONS d'aquest
+    # mateix POM sobre la mateixa matèria parla: la sisa dreta i l'esquerra, el pit RELAXED i
+    # l'EXTENDED. Fins avui la segona d'aquestes files no podia existir: xocava amb la
+    # primera, i el sistema es defensava BLOQUEJANT-LA (els set nodes de §II.13 del dossier).
+    #
+    # SLUG COMPOST CANÒNIC, mai FK i mai `choices` — exactament com `capa`, i pel mateix
+    # motiu (llei G9: per slug, mai per PK; el slug viatja entre tenants i entre versions).
+    # L'ORDRE DE COMPOSICIÓ ('left-relaxed' i no 'relaxed-left') el decidirà la UI a C4-ins:
+    # la BD només en guarda l'string ja compost, i no el sap desmuntar.
+    #
+    # `''` (cadena buida, MAI NULL) és la instància ÚNICA: el que fins avui era «la mesura»,
+    # sense qualificar. NULL voldria dir «no se sap», i aquí sempre se sap.
+    #
+    # La VALIDACIÓ contra un diccionari d'instàncies NO és aquí: arriba amb C4-ins i la
+    # Montse. Fins llavors mana la COMPORTA — un CHECK a BD que només deixa passar ''.
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
+
     class Meta:
         verbose_name = 'Mesura base'
         verbose_name_plural = 'Mesures base'
-        unique_together = [('model', 'pom')]
-        ordering = ['model', 'ordre', 'pom']
+        # C1/T3 — la clau incorpora la CAPA. Fins avui un model no podia tenir el pit de
+        # l'exterior i el pit del folre alhora: la segona fila xocava amb la primera. Amb tot
+        # a 'exterior' la clau nova és estrictament més permissiva que la vella (mateixes
+        # columnes + una), o sigui que no pot rebutjar res que abans passés ni deixar entrar
+        # cap duplicat que abans es barrés. Qui de debò impedeix una segona capa avui és la
+        # comporta CHECK de T4, no aquesta clau.
+        #
+        # C1-ins/T3 — i ara també la INSTÀNCIA, pel mateix argument literal: mateixes
+        # columnes + una, amb `instancia` constant ('') a totes les files → estrictament més
+        # permissiva, 0 duplicats latents possibles. Qui impedeix la segona instància avui és
+        # la comporta `_instancia_gate_cins`, no aquesta clau.
+        unique_together = [('model', 'pom', 'capa', 'instancia')]
+        # `capa` entra a l'ordre entre el model i l'ordre de fitxa: quan hi hagi més d'una
+        # capa, la fitxa les vol AGRUPADES, no barrejades per `ordre`. Avui és un no-op
+        # observable —amb una sola capa el valor és constant i l'ordre relatiu no es mou—,
+        # i el fumeig de base-stages ho verifica byte a byte.
+        ordering = ['model', 'capa', 'ordre', 'pom']
+        constraints = [
+            # ── C1/T4 — LA COMPORTA. Declaració canònica; les altres set taules de mesura
+            # en porten una d'igual i apunten aquí.
+            #
+            # El tancament de seguretat del pla de capes. C1 ensenya l'IDIOMA de la capa al
+            # sistema (catàleg + columna + claus) però NO el deixa parlar-lo encara: la
+            # cadena de consumidors —serializers, motor, UI, import, fitxa— continua
+            # assumint una mesura per (model, POM) i no s'adapta fins a C2/C3. Entre C1 i
+            # C3, doncs, hi ha una finestra en què l'esquema ja admetria una segona capa i
+            # el codi encara no la sabria llegir: una fila 'folre' escrita per accident en
+            # aquesta finestra no petaria enlloc, es fondria dins les llistes com si fos de
+            # l'exterior i corrompria en silenci mesures que són el producte.
+            #
+            # Aquest CHECK tanca la finestra a la BD, que és l'únic lloc on cap camí
+            # d'escriptura no la pot esquivar: ni un `bulk_create`, ni un `update()`, ni un
+            # loader, ni un `psql` a mà. No hi ha guard d'aplicació que ho iguali, i per
+            # això no n'hi escrivim cap.
+            #
+            # **C4 EL RETIRA PER MIGRACIÓ.** És bastida, no arquitectura: el dia que la
+            # cadena sap llegir capes, aquest constraint és justament el que ho impedeix.
+            # Si el trobes vigent i C4 ja ha passat, és un deute, no una llei.
+            models.CheckConstraint(
+                condition=models.Q(capa='exterior'),
+                name='models_app_basemeasurement_capa_gate_c1',
+            ),
+            # ── C1-ins — LA SEGONA COMPORTA. Declaració canònica; les altres vuit taules de
+            # la cadena en porten una d'igual i apunten aquí.
+            #
+            # Mateixa bastida, mateix motiu, eix diferent. L'esquema ja sap dir «sisa
+            # esquerra» i «sisa dreta», però la cadena de lectors encara indexa per
+            # `pom_id` (o, com a molt, per `(pom_id, capa)`): una segona instància escrita
+            # per accident abans de FASE_2/FASE_3 no petaria enlloc —es fondria dins les
+            # llistes com la primera— i corrompria en silenci mesures que són el producte.
+            #
+            # Va a la BD i no a l'aplicació pel mateix motiu que la de capa: és l'únic lloc
+            # que un `bulk_create`, un `update()`, un loader de paquet o un `psql` a mà no
+            # poden esquivar.
+            #
+            # **C4-ins LA RETIRA PER MIGRACIÓ**, al costat de la seva germana de capa.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='models_app_basemeasurement_instancia_gate_cins',
+            ),
+            # ── C1-ins · DECISIÓ D1 — UNA INSTÀNCIA SENSE NOM DE FITXA ÉS IL·LEGAL.
+            #
+            # Aquesta no és bastida: és una llei de domini, i sobreviu a C4-ins. Si una
+            # mesura es desdobla, l'única cosa que fa que les dues files siguin
+            # distingibles per a un humà —al croquis, a la taula, al paper— és el
+            # `nom_fitxa`. Dues files «pit» sense res que les separi visualment no són dues
+            # mesures: són un duplicat amb aparença de dada bona, que és exactament el mode
+            # de fallada que tot aquest tram existeix per evitar.
+            #
+            # Amb la comporta tancada (`instancia` sempre '') la condició és trivialment
+            # certa a totes les files, present i futures: no rebutja res que avui passi.
+            models.CheckConstraint(
+                condition=~models.Q(instancia__gt='', nom_fitxa=''),
+                name='models_app_basemeasurement_instancia_exigeix_nom',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client} = {self.base_value_cm}cm'
@@ -731,11 +868,48 @@ class MeasurementChangeLog(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='measurement_changes',
     )
+    # C1 — la capa (declaració canònica a `BaseMeasurement.capa`).
+    #
+    # AFEGIR AQUESTA COLUMNA NO VIOLA L'APPEND-ONLY. L'append-only d'aquesta taula prohibeix
+    # que una fila ja escrita CANVIÏ de sentit: un `UPDATE` que reescrigui valor_anterior,
+    # valor_nou o el context seria reescriure la història. Un `AddField` amb default de
+    # columna és DDL, no DML: cap fila queda reescrita semànticament. Les 100% de files
+    # històriques parlen, de fet i sense excepció, de la capa exterior —era l'única que el
+    # sistema sabia mesurar—, o sigui que el default no els atribueix res que no diguessin
+    # ja. Les overrides de talla no-base segueixen entrant amb `base_measurement=NULL`; això
+    # no canvia.
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
+                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
+    )
+    # C1-ins — la instància (declaració canònica a `BaseMeasurement.instancia`).
+    #
+    # MATEIX ARGUMENT QUE `capa`: afegir-la NO viola l'append-only. Un `AddField` és DDL, no
+    # DML — cap fila queda reescrita semànticament —, i el 100% de la història d'aquesta
+    # taula parla, de fet, de la instància única: era l'única que el sistema sabia escriure.
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Canvi de mesura'
         verbose_name_plural = 'Canvis de mesura'
         ordering = ['model', 'pom', 'created_at']
+        constraints = [
+            # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
+            models.CheckConstraint(
+                condition=models.Q(capa='exterior'),
+                name='models_app_measurementchangelog_capa_gate_c1',
+            ),
+            # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='models_app_measurementchangelog_instancia_gate_cins',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client}: {self.valor_anterior}→{self.valor_nou}cm'
@@ -779,12 +953,42 @@ class ModelGradingOverride(models.Model):
         'accounts.UserProfile', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='grading_overrides_created',
     )
+    # C1 — la capa (declaració canònica a `BaseMeasurement.capa`). L'override sí que en porta,
+    # a diferència de `ModelGradingRule`: un override és un VALOR mesurat en una talla concreta,
+    # i el valor és de la capa que s'ha mesurat. La REGLA, en canvi, es comparteix entre capes
+    # (§3c: «mateixos deltes») i per això no en té.
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
+                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
+    )
+    # C1-ins — la instància (declaració canònica a `BaseMeasurement.instancia`). Mateix
+    # argument que la capa: l'override és un VALOR mesurat, i la sisa dreta i l'esquerra es
+    # poden corregir per separat en una talla. La REGLA segueix sense cap dels dos eixos.
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Override de grading (model)'
         verbose_name_plural = 'Overrides de grading (model)'
-        unique_together = [('model', 'pom', 'size_label')]
+        # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA (v. `BaseMeasurement.Meta`).
+        unique_together = [('model', 'pom', 'size_label', 'capa', 'instancia')]
         ordering = ['model', 'pom', 'size_label']
+        constraints = [
+            # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
+            models.CheckConstraint(
+                condition=models.Q(capa='exterior'),
+                name='models_app_modelgradingoverride_capa_gate_c1',
+            ),
+            # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='models_app_modelgradingoverride_instancia_gate_cins',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client} @ {self.size_label} = {self.value_cm}cm'
@@ -800,6 +1004,23 @@ class ModelGradingRule(models.Model):
     del model, igual que fa _apply_rule avui.
 
     PG-0 només crea l'entitat — RES la consumeix encara. Cap canvi de comportament.
+
+    ⚠️ **SENSE `capa`, PER DECISIÓ DE DOMINI (C1 · §3c).** Aquesta és l'ÚNICA taula del cicle
+    de mesura que la capa de C1 no travessa, i no és un oblit. Una regla de graduació és una
+    llei d'INCREMENTS, no un valor: el folre d'un pit creix el mateix que l'exterior d'aquell
+    pit —«mateixos deltes»— perquè la peça és la mateixa peça. Donar-li capa voldria dir
+    demanar a algú que declari sis vegades el mateix delta i mantenir-les sincronitzades a mà.
+    Els VALORS sí que en porten (`BaseMeasurement`, `GradedSpec`, `ModelGradingOverride`…):
+    la regla és compartida, el resultat d'aplicar-la és per capa. Qui vulgui revisar-ho: és
+    decisió d'arquitectura (Patró C), no una peça d'sprint.
+
+    ⚠️ **I TAMPOC SENSE `instancia` (C1-ins), pel mateix motiu i amb la mateixa acta.**
+    Decisió Montse: la sisa dreta i l'esquerra **gradúen igual**. Són dues mesures diferents
+    —dos valors, dues fletxes al croquis, dues caselles a la fitxa— però una sola llei
+    d'increments, com ho són l'exterior i el folre. Aquesta taula és, doncs, l'única del
+    cicle que **no** travessa CAP dels dos eixos, i és a posta a les dues bandes. El pin que
+    ho vigila: `test_instancia_comporta_cins.py` (columna absent a `information_schema`),
+    germà del que ja hi ha per a `capa`. El mateix val per a `pom.GradingRule`.
     """
     # R8 (2026-07-21) — 'CLIENT_RUN' hi faltava. El vocabulari de GradingRuleSet.origen
     # (CANONICAL/CLIENT_RUN/IMPORT) i el d'aquí no s'alineaven, i el wizard resolia la
@@ -1041,12 +1262,37 @@ class SizeCheckLine(models.Model):
     ]
     decisio = models.CharField(max_length=24, choices=DECISIO_CHOICES, null=True, blank=True)
     nota = models.CharField(max_length=200, blank=True, default='')
+    # C1 — la capa (declaració canònica a `models_app.BaseMeasurement.capa`).
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
+                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
+    )
+    # C1-ins — la instància (declaració canònica a `models_app.BaseMeasurement.instancia`).
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Línia de validació de talla'
         verbose_name_plural = 'Línies de validació de talla'
         ordering = ['size_check', 'pom']
-        unique_together = [('size_check', 'pom')]
+        # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA (v. `BaseMeasurement.Meta`).
+        unique_together = [('size_check', 'pom', 'capa', 'instancia')]
+        constraints = [
+            # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
+            models.CheckConstraint(
+                condition=models.Q(capa='exterior'),
+                name='models_app_sizecheckline_capa_gate_c1',
+            ),
+            # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='models_app_sizecheckline_instancia_gate_cins',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.size_check_id} · {self.pom.codi_client}'
@@ -1196,14 +1442,46 @@ class POMPlacement(models.Model):
         related_name='pom_placements_creats')
     creat_el = models.DateTimeField(auto_now_add=True)
     actualitzat_el = models.DateTimeField(auto_now=True)
+    # C1 — la capa (declaració canònica a `models_app.BaseMeasurement.capa`). Una cota del
+    # folre i una cota de l'exterior poden voler dos traços diferents sobre el mateix sketch.
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
+                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
+    )
+    # C1-ins — la instància (declaració canònica a `models_app.BaseMeasurement.instancia`).
+    # És l'eix que la cota necessita més literalment de tots: la sisa dreta i l'esquerra
+    # s'assenyalen amb DUES fletxes en llocs diferents del mateix croquis.
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Col·locació de cota POM (precedent)'
         verbose_name_plural = 'Col·locacions de cota POM (precedent)'
         constraints = [
+            # C1/T3 — la clau incorpora la CAPA (v. `BaseMeasurement.Meta`). El nom canvia
+            # amb els camps a posta: un constraint que digui `_item_pom_view` i en guardi
+            # quatre menteix a qui llegeixi l'esquema. Cap consumidor el referencia pel nom.
+            # C1-ins/T3 hi afegeix la INSTÀNCIA, i el nom torna a créixer amb els camps pel
+            # mateix motiu: dues cotes del mateix POM al mateix slot són justament el cas
+            # que aquesta taula ha de saber guardar (la sisa dreta i l'esquerra
+            # s'assenyalen amb dues fletxes al mateix croquis).
             models.UniqueConstraint(
-                fields=['item_fitxer', 'pom', 'view_slot'],
-                name='uniq_pomplacement_item_pom_view'),
+                fields=['item_fitxer', 'pom', 'view_slot', 'capa', 'instancia'],
+                name='uniq_pomplacement_item_pom_view_capa_instancia'),
+            # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
+            models.CheckConstraint(
+                condition=models.Q(capa='exterior'),
+                name='models_app_pomplacement_capa_gate_c1',
+            ),
+            # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='models_app_pomplacement_instancia_gate_cins',
+            ),
         ]
         indexes = [
             models.Index(fields=['item_fitxer', 'view_slot'],

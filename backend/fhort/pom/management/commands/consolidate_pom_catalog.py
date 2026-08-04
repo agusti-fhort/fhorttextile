@@ -20,6 +20,7 @@ from django_tenants.utils import schema_context
 from fhort.pom.models import POMMaster, POMGlobal, CustomerPOMAlias
 from fhort.tasks.models import Customer, GarmentTypeItem
 from fhort.pom.models import GarmentPOMMap
+from fhort.pom.models import MeasurementLayer
 from fhort.pom.seed_data import consolidate_pom_los as CFG
 
 SEED_DIR = Path(__file__).resolve().parents[2] / 'seed_data'
@@ -209,8 +210,12 @@ class Command(BaseCommand):
                 if not it:
                     no_item.append(f'{code}->{itc}')
                     continue
+                # FASE_3/C1-ins — clau alineada amb la unicitat real
+                # `(garment_type_item, pom, capa, instancia)`. Aquest sembrador escriu
+                # catàleg de casa: exterior + instància única, declarat i no implícit.
                 _, c = GarmentPOMMap.objects.get_or_create(
                     garment_type_item=it, pom=pom,
+                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                     defaults={'obligatori': False, 'is_key': False, 'nivell': 'O', 'pendent_revisio': True})
                 created_maps += int(c)
         self.stdout.write(f'  POMs NOUS creats (LOS-local + traducció + àlies): {len(new_poms)} {new_poms}')

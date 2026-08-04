@@ -203,11 +203,46 @@ class GradedSpec(models.Model):
     # to detect stale specs — NOT implemented here, only the link is stored.
     generated_from_version = models.IntegerField(null=True, blank=True)
 
+    # C1 (2026-07-30) — la capa (declaració canònica a `models_app.BaseMeasurement.capa`):
+    # slug de `pom.MeasurementLayer`, per SLUG i mai per PK (llei G9). La validació contra el
+    # catàleg arriba a C2/C4; fins llavors mana la comporta CHECK de C1/T4, que només deixa
+    # passar 'exterior'. El motor de grading NO es toca a C1: escriu el default i prou.
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
+                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
+    )
+    # C1-ins — la instància (declaració canònica a `models_app.BaseMeasurement.instancia`).
+    # L'spec és el RESULTAT d'aplicar la regla a un valor base, i el valor base ja té els dos
+    # eixos: si el pit RELAXED i l'EXTENDED són dues bases, en surten dos specs. La regla, en
+    # canvi, segueix sent una de sola (decisió Montse, «gradúen igual»).
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
+
     class Meta:
         verbose_name = 'Spec generat'
         verbose_name_plural = 'Specs generats'
-        unique_together = [('grading_version', 'pom', 'size_label')]
+        # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA
+        # (v. `models_app.BaseMeasurement.Meta`).
+        unique_together = [('grading_version', 'pom', 'size_label', 'capa', 'instancia')]
         ordering = ['grading_version', 'pom', 'size_label']
+        constraints = [
+            # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`, on hi ha
+            # l'argument sencer). C4 la retira per migració.
+            models.CheckConstraint(
+                condition=models.Q(capa='exterior'),
+                name='fitting_gradedspec_capa_gate_c1',
+            ),
+            # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
+            # C4-ins la retira per migració.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='fitting_gradedspec_instancia_gate_cins',
+            ),
+        ]
 
     def __str__(self):
         return f'v{self.grading_version_id} · {self.pom.codi_client} @ {self.size_label} = {self.graded_value_cm}cm'
@@ -366,12 +401,41 @@ class PieceFittingLine(models.Model):
     valor_teoric = models.FloatField()
     valor_real = models.FloatField(null=True, blank=True)
     nota = models.CharField(max_length=200, blank=True, default='')
+    # C1 — la capa (declaració canònica a `models_app.BaseMeasurement.capa`).
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK). "
+                  "Fins a C4 només s'admet 'exterior' (comporta CHECK a BD).",
+    )
+    # C1-ins — la instància (declaració canònica a `models_app.BaseMeasurement.instancia`).
+    # La línia de fitting és on es MESURA la peça real: si la fitxa demana la sisa dreta i
+    # l'esquerra, la modista pren dues xifres i aquí hi ha d'haver dues línies.
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
+                  "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Línia de fitting de peça'
         verbose_name_plural = 'Línies de fitting de peça'
         ordering = ['piece_fitting', 'pom', 'size_label']
-        unique_together = [('piece_fitting', 'pom', 'size_label')]
+        # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA
+        # (v. `models_app.BaseMeasurement.Meta`).
+        unique_together = [('piece_fitting', 'pom', 'size_label', 'capa', 'instancia')]
+        constraints = [
+            # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`). C4 la retira.
+            models.CheckConstraint(
+                condition=models.Q(capa='exterior'),
+                name='fitting_piecefittingline_capa_gate_c1',
+            ),
+            # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
+            # C4-ins la retira per migració.
+            models.CheckConstraint(
+                condition=models.Q(instancia=''),
+                name='fitting_piecefittingline_instancia_gate_cins',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.piece_fitting_id} · {self.pom.codi_client} @ {self.size_label}'

@@ -329,10 +329,19 @@ def create_piece_fitting(session_id: int, model_id: int, *, created_by_id: int |
     specs = GradedSpec.objects.filter(grading_version=version, is_active=True).select_related('pom')
     n = 0
     for spec in specs:
+        # FASE_3/C1-ins — la línia CLONA l'spec, i per tant n'ha de clonar els DOS EIXOS.
+        # Aquesta és la propagació més literal del tram: si l'spec és del folre, la línia és
+        # del folre; si és de la sisa esquerra, la línia és de la sisa esquerra. Copiant
+        # només `pom`/`size_label`/`valor`, dos specs germans generaven dues línies
+        # indistingibles que xocaven amb la unicitat
+        # `(piece_fitting, pom, size_label, capa, instancia)` — i, mentre la comporta ho
+        # impedia, la modista hauria pres dues vegades la mateixa mesura sense saber quina.
         PieceFittingLine.objects.create(
             piece_fitting=pf,
             pom=spec.pom,
             size_label=spec.size_label,
+            capa=spec.capa,
+            instancia=spec.instancia,
             valor_teoric=spec.graded_value_cm,
             valor_real=spec.graded_value_cm,  # copy, editable before close
         )
@@ -355,6 +364,7 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
     """
     from fhort.fitting.models import PieceFittingLine
     from fhort.models_app.models import BaseMeasurement
+    from fhort.models_app.services_derivacio import aplica as aplica_derivacio
     model = pf.model
     sf = pf.grading_version.size_fitting
     base_size = (model.base_size_label or '').strip()
@@ -366,16 +376,33 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
             continue  # no change on this line
         if line.size_label.strip() != base_size:
             continue  # PEÇA 4: la sessió de fitting toca NOMÉS la talla base
+        # FASE_3/C1-ins — la consolidació torna el valor mesurat a la SEVA mesura base. La
+        # línia sap dir els dos eixos (els va heretar de l'spec, aquí a sobre); el lookup
+        # els ha de dir també, o la rectificació d'una germana aterraria sobre l'altra i el
+        # `get()` intern petaria amb MultipleObjectsReturned el dia que n'hi hagi dues.
         bm, _created = BaseMeasurement.objects.get_or_create(
-            model=model, pom=line.pom,
+            model=model, pom=line.pom, capa=line.capa, instancia=line.instancia,
             defaults={'base_value_cm': line.valor_real, 'origen': 'FITTED'},
         )
+        # C3/E1 — el valor d'ABANS, capturat abans de trepitjar-lo: és el que fa calculable
+        # l'increment que han de rebre les germanes. En una creació és None i no es deriva
+        # (una fila nova no és conseqüència de res).
+        valor_anterior = None if _created else bm.base_value_cm
         bm.base_value_cm = line.valor_real
         bm.origen = 'FITTED'
         bm._changed_by = auth_user
         bm._fitting_ref = sf            # MeasurementChangeLog.fitting_ref (→ SizeFitting)
         bm._motiu = f'Fitting · sessió {pf.session_id} · peça {pf.pk}'
         bm.save()
+        # C3/E1 — LA DERIVACIÓ. Aquest és un dels dos únics punts d'escriptura de mesura de tot
+        # el backend que coneix els seus eixos per CÒPIA i no per literal (els hereta de la
+        # línia), i on el valor anterior, el nou i la fila hi són alhora: l'increment ja és
+        # calculable aquí, sense endevinar res. Es mou el VALOR de les germanes, mai el
+        # grading; la folgança es conserva sola.
+        # Amb les comportes de C1/C1-ins vives no hi ha cap germana i això és un no-op.
+        aplica_derivacio(
+            bm, valor_anterior, line.valor_real, auth_user=auth_user, fitting_ref=sf,
+            motiu_origen=f'fitting sessió {pf.session_id}')
         consolidated.append(line)
     return consolidated
 

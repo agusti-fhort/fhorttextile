@@ -176,11 +176,17 @@ def export_fitting_csv_view(request, pf_id):
             piece_fitting=pf
         ).select_related('pom', 'pom__pom_global').order_by('pom__codi_client', 'size_label')
 
+        # C2/Onada 1 — clau (pom, capa), com el consumidor: cada `PieceFittingLine` es jutja
+        # amb la tolerància de la SEVA capa. Per POM sol, l'última capa llegida manaria sobre
+        # tota la família i el CSV donaria PASS/FAIL amb la vara equivocada.
+        # FASE_2/C1-ins — la clau creix amb la INSTÀNCIA pel mateix motiu: la sisa dreta i
+        # l'esquerra són dues mesures amb tolerància pròpia, i la línia consumidora sap dir
+        # de quina parla. FORMA A: la clau completa, perquè aquí hi ha de qui copiar-la.
         tol_map = {}
         for bm in BaseMeasurement.objects.filter(model=model, is_active=True):
             tm = float(bm.tolerancia_minus) if bm.tolerancia_minus is not None else TOL_FALLBACK
             tp = float(bm.tolerancia_plus) if bm.tolerancia_plus is not None else TOL_FALLBACK
-            tol_map[bm.pom_id] = (tm, tp)
+            tol_map[(bm.pom_id, bm.capa, bm.instancia)] = (tm, tp)
 
         nom_model = str(model) if model else f'piece_{pf_id}'
         response = HttpResponse(content_type='text/csv; charset=utf-8')
@@ -201,7 +207,8 @@ def export_fitting_csv_view(request, pf_id):
             spec = float(line.valor_teoric) if line.valor_teoric is not None else None
             val = float(line.valor_real) if line.valor_real is not None else None
             desv = round(val - spec, 2) if (val is not None and spec is not None) else None
-            tol_minus, tol_plus = tol_map.get(line.pom_id, (TOL_FALLBACK, TOL_FALLBACK))
+            tol_minus, tol_plus = tol_map.get((line.pom_id, line.capa, line.instancia),
+                                              (TOL_FALLBACK, TOL_FALLBACK))
             passa = ((-tol_minus) <= desv <= tol_plus) if desv is not None else None
 
             writer.writerow([

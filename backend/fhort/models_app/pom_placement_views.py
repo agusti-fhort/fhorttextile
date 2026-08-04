@@ -25,6 +25,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from fhort.pom.models import MeasurementLayer
+
 from .models import BaseMeasurement, ItemFitxer, POMPlacement
 
 
@@ -48,32 +50,50 @@ def _cascada(request, item):
     qs = POMPlacement.objects.filter(view_slot=view_slot).select_related(
         'pom', 'pom__pom_global')
 
+    # FASE_2/C1-ins — la CASCADA també indexa per la clau completa. Fins ara col·lapsava
+    # abans d'arribar al `bm_by_pom` de sota: dues cotes del mateix POM en capes o instàncies
+    # diferents es trepitjaven aquí dins, i el precedent que sobrevivia el decidia l'ordre de
+    # la consulta. La sisa dreta i l'esquerra són DUES fletxes al mateix croquis, i la
+    # cascada les ha de saber portar totes dues.
+    def clau(p):
+        return (p.pom_id, p.capa, p.instancia)
+
     # EXACTE: precedents d'aquest ItemFitxer (una veritat de catàleg, D1).
-    exacte = {p.pom_id: p for p in qs.filter(item_fitxer=item)}
+    exacte = {clau(p): p for p in qs.filter(item_fitxer=item)}
     # GERMANA: altres ItemFitxer del mateix GarmentTypeItem (D7). L'exacte hi guanya.
     germana = {}
     if gti_id:
         for p in qs.filter(item_fitxer__garment_type_item_id=gti_id).exclude(
                 item_fitxer=item).order_by('item_fitxer_id', 'id'):
-            germana.setdefault(p.pom_id, p)
+            germana.setdefault(clau(p), p)
 
     merged = {}
-    for pom_id, p in germana.items():
-        merged[pom_id] = (p, True)      # derivat de peça germana
-    for pom_id, p in exacte.items():
-        merged[pom_id] = (p, False)     # precedent exacte d'aquest item
+    for k, p in germana.items():
+        merged[k] = (p, True)      # derivat de peça germana
+    for k, p in exacte.items():
+        merged[k] = (p, False)     # precedent exacte d'aquest item
 
     # bm_id del model destí (opcional) → materialitzar la cota VIVA de F1 (pomId+bmId).
     model_id = request.query_params.get('model_id')
+    # C2/Onada 1 — CLAU COMPOSTA: `POMPlacement` porta capa des de C1 i la cota es
+    # materialitza contra la mesura de la SEVA capa. Per POM sol, una cota col·locada sobre
+    # el folre rebria el `bm_id` de l'exterior i el dibuix quedaria lligat a una altra
+    # mesura —el pitjor cas d'aquesta vista, perquè no peta: pinta.
+    # FASE_2/C1-ins — i la INSTÀNCIA al mateix mapa i pel mateix argument: una cota de la
+    # sisa esquerra rebria el `bm_id` de la dreta i el dibuix quedaria lligat a una altra
+    # mesura. Creixen alhora, perquè és la mateixa clau a les dues bandes.
     bm_by_pom = {}
     if model_id:
-        bm_by_pom = dict(BaseMeasurement.objects.filter(
-            model_id=model_id, is_active=True).values_list('pom_id', 'id'))
+        bm_by_pom = {
+            (p, c, ins): i for p, c, ins, i in BaseMeasurement.objects.filter(
+                model_id=model_id, is_active=True).values_list(
+                    'pom_id', 'capa', 'instancia', 'id')
+        }
 
     placements, no_al_model = [], []
-    for pom_id, (p, derivat) in merged.items():
+    for (pom_id, _capa, _inst), (p, derivat) in merged.items():
         codi = p.pom.pom_global.codi if p.pom.pom_global_id else ''
-        bm_id = bm_by_pom.get(pom_id)
+        bm_id = bm_by_pom.get((pom_id, p.capa, p.instancia))
         if model_id and bm_id is None:
             # El POM del precedent NO existeix al model destí → a llista manual, mai crash.
             no_al_model.append({'pom_id': pom_id, 'codi': codi})
@@ -126,8 +146,17 @@ def _desar_precedent(request, item):
         return Response({'error': 'pom_id no existeix.'}, status=400)
 
     perfil = getattr(request.user, 'profile', None)
+    # FASE_3/C1-ins — la clau del lookup, alineada amb la unicitat real
+    # `(item_fitxer, pom, view_slot, capa, instancia)`. Literals: el body és
+    # `{'pom_id', 'view_slot', coords}` i no porta eixos fins a C4-ins.
+    #
+    # Era un dels vuit germans de l'accident armat, i el més visible de tots: la LECTURA
+    # germana d'aquesta mateixa vista ja indexa per la clau completa des de FASE_2 —serveix
+    # dues fletxes distintes— i l'escriptura se les hauria fusionat en una en desar. Cotes
+    # que es veuen i que en gravar desapareixen és pitjor que no poder-les fer.
     obj, created = POMPlacement.objects.update_or_create(
         item_fitxer=item, pom_id=pom_id, view_slot=view_slot,
+        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
         defaults={**coords, 'label_dx': label_dx, 'label_dy': label_dy,
                   'source_kind': source_kind, 'creat_per': perfil})
 

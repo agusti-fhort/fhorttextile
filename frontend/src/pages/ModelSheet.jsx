@@ -1572,6 +1572,24 @@ function TabFiles({ modelId }) {
   const [orderBy, setOrderBy] = useState('data')
   const [uploading, setUploading] = useState(false)
   const [popup, setPopup] = useState(null)
+  // D-31.9b — obrir un adjunt no donava CAP senyal: entre el clic i el primer píxel hi ha una
+  // URL signada, una petició i el pintat del PDF, i la pantalla es quedava amb un rectangle
+  // blanc. Es reposa a `true` a cada obertura (i no només al muntatge) perquè el segon fitxer
+  // que s'obre sense tancar el modal ha de tornar a avisar.
+  const [previewCarregant, setPreviewCarregant] = useState(false)
+  const obrirPreview = (fitxer) => {
+    setPreviewCarregant(true)
+    setPopup({ url: previewUrl(fitxer), nom: fitxer.nom_fitxer })
+  }
+  // D-31.9c — obrir un arxiu DES DE LA FILA. Què vol dir «obrir» depèn del que és: una fitxa
+  // `.ftt` és un ZIP i la seva vista prèvia no ensenyaria res, o sigui que obre l'editor —
+  // exactament la mateixa bifurcació que ja fa el panell de detall (`FileDetail`, isTechSheet).
+  // Una sola llei d'obertura per a les dues portes.
+  const esFitxaTecnica = (f) => f.tipus === 'TECHSHEET' || fileExt(f.nom_fitxer) === 'ftt'
+  const obrirFitxer = (f) => {
+    if (esFitxaTecnica(f)) navigate(`/models/${modelId}/ftt/${f.id}`)
+    else obrirPreview(f)
+  }
   const [history, setHistory] = useState(null)   // { fitxer, chain[], loading }
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState(null)   // Finder: CAP selecció per defecte
@@ -1668,11 +1686,26 @@ function TabFiles({ modelId }) {
               <button type="button" onClick={() => setPopup(null)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-h2)' }}>✕</button>
             </div>
+            {previewCarregant && (
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '10px 0', fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+              }}>
+                <i className="ti ti-loader-2" aria-hidden="true"
+                   style={{ fontSize: 16, animation: 'spin 0.8s linear infinite' }} />
+                {t('model_sheet.files.loading_preview')}
+              </div>
+            )}
+            {/* `onError` tanca el senyal igual que `onLoad`: si la URL signada ha caducat o el
+                fitxer no es pot pintar, la roda no pot quedar-se girant per sempre. */}
             {PREVIEW_IMG_RE.test(popup.nom || '') ? (
               <img src={popup.url} alt={popup.nom}
+                onLoad={() => setPreviewCarregant(false)}
+                onError={() => setPreviewCarregant(false)}
                 style={{ maxWidth: '80vw', maxHeight: '80vh', objectFit: 'contain' }} />
             ) : (
               <iframe src={popup.url} title={popup.nom}
+                onLoad={() => setPreviewCarregant(false)}
                 style={{ width: '80vw', height: '80vh', border: 'none' }} />
             )}
           </div>
@@ -1716,7 +1749,7 @@ function TabFiles({ modelId }) {
                       </span>
                     )}
                     <button type="button"
-                      onClick={() => setPopup({ url: previewUrl(v), nom: v.nom_fitxer })}
+                      onClick={() => obrirPreview(v)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                       <i className="ti ti-eye" aria-hidden="true" />
                     </button>
@@ -1756,6 +1789,23 @@ function TabFiles({ modelId }) {
         </label>
       </div>
 
+      {/* D-31.9b — LA BARRA DE PUJADA. Fins ara l'únic senyal era que el text del botó canviava
+          a «Pujant…»: 12 píxels de text en un cantó, en una pantalla plena de taules, mentre un
+          fitxer de 20 MB puja sense dir res. La barra és INDETERMINADA a posta — `authFetch`
+          torna una promesa i no exposa `onUploadProgress`, i fabricar un percentatge fals seria
+          pitjor que no donar-ne cap. Diu «està passant alguna cosa», que és el que faltava.
+          El keyframe local segueix el precedent de la casa (SizeMapSetup.jsx:982); el `spin`
+          global d'`index.css:75` no serveix aquí perquè el moviment és de translació. */}
+      {uploading && (
+        <div role="progressbar" aria-busy="true" aria-label={t('model_sheet.uploading')}
+          style={{ height: 3, borderRadius: 2, background: 'var(--bg-muted)',
+                   overflow: 'hidden', marginBottom: 12 }}>
+          <style>{'@keyframes ftt-upload-bar{from{transform:translateX(-100%)}to{transform:translateX(400%)}}'}</style>
+          <div style={{ width: '25%', height: '100%', background: 'var(--gold)',
+                        animation: 'ftt-upload-bar 1.1s ease-in-out infinite' }} />
+        </div>
+      )}
+
       {sorted.length === 0 ? (
         <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
                       padding: '8px 0', fontStyle: 'italic' }}>
@@ -1776,17 +1826,19 @@ function TabFiles({ modelId }) {
               <span style={{ width: 80, flexShrink: 0 }}>{t('model_sheet.files.col_type')}</span>
               <span style={{ width: 96, flexShrink: 0 }}>{t('model_sheet.files.col_date')}</span>
               <span style={{ width: 44, flexShrink: 0, textAlign: 'right' }}>{t('model_sheet.files.col_version')}</span>
+              <span style={{ width: 26, flexShrink: 0 }} />
             </div>
             {sorted.map(f => (
               <FileRow key={f.id} fitxer={f} selected={f.id === selectedId}
-                onSelect={() => setSelectedId(f.id)} />
+                onSelect={() => setSelectedId(f.id)}
+                onOpen={() => obrirFitxer(f)} />
             ))}
           </div>
           {/* DRETA — detall del fitxer seleccionat; buit discret si cap. */}
           <div style={{ width: 340, flexShrink: 0 }}>
             {selected ? (
               <FileDetail key={selected.id} fitxer={selected}
-                onPreview={() => setPopup({ url: previewUrl(selected), nom: selected.nom_fitxer })}
+                onPreview={() => obrirPreview(selected)}
                 onHistory={() => openHistory(selected)}
                 onNewVersion={file => handleUpload(file, selected.id)}
                 onEdit={() => navigate(`/models/${modelId}/ftt/${selected.id}`)}
@@ -1809,14 +1861,22 @@ function TabFiles({ modelId }) {
 }
 
 // Una fila de la llista (esquerra). Columnes: icona · nom · tipus · data · versió.
-function FileRow({ fitxer, selected, onSelect }) {
-  const { i18n } = useTranslation()
+function FileRow({ fitxer, selected, onSelect, onOpen }) {
+  const { t, i18n } = useTranslation()
   const ext = fileExt(fitxer.nom_fitxer)
+  const esFitxa = fitxer.tipus === 'TECHSHEET' || ext === 'ftt'
+  const obrirLabel = esFitxa ? t('model_sheet.files.edit') : t('model_sheet.view')
   const date = fitxer.data_pujada
     ? new Date(fitxer.data_pujada).toLocaleDateString(i18n.language || 'ca', { day: '2-digit', month: '2-digit', year: '2-digit' })
     : '—'
   return (
-    <div onClick={onSelect} title={fitxer.nom_fitxer}
+    // D-31.9c — la fila obre l'arxiu, i ho fa per les DUES vies que un Finder ofereix: doble
+    // clic sobre la fila sencera (convenció del patró que aquest component ja segueix) i un
+    // botó explícit al final. El clic simple segueix SELECCIONANT i no obrint: si obrís,
+    // recórrer la llista amb el teclat o mirar el detall de tres fitxers seguits obriria tres
+    // modals, i el panell de detall —que és la meitat dreta d'aquesta pantalla— perdria l'única
+    // manera d'omplir-se. El botó és el que fa la funció DESCOBRIBLE; el doble clic, ràpida.
+    <div onClick={onSelect} onDoubleClick={onOpen} title={fitxer.nom_fitxer}
       style={{
         display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', cursor: 'pointer',
         borderBottom: '0.5px solid var(--border)',
@@ -1833,6 +1893,14 @@ function FileRow({ fitxer, selected, onSelect }) {
                      color: 'var(--text-muted)' }}>{date}</span>
       <span style={{ width: 44, flexShrink: 0, textAlign: 'right', fontSize: 'var(--fs-label)',
                      fontFamily: FILES_MONO, color: 'var(--text-muted)' }}>v{fitxer.versio}</span>
+      {/* `stopPropagation`: el botó obre, i no ha de tornar a disparar la selecció de la fila. */}
+      <button type="button" onClick={e => { e.stopPropagation(); onOpen() }}
+        title={obrirLabel} aria-label={`${obrirLabel} — ${fitxer.nom_fitxer}`}
+        style={{ width: 26, flexShrink: 0, background: 'none', border: 'none', padding: 0,
+                 cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1 }}>
+        <i className={`ti ${esFitxa ? 'ti-edit' : 'ti-eye'}`} aria-hidden="true"
+           style={{ fontSize: 16 }} />
+      </button>
     </div>
   )
 }

@@ -33,6 +33,7 @@ from rest_framework import status
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from fhort.pom.models import MeasurementLayer
 from rest_framework.views import APIView
 
 from .extraction_prompt import TECH_SHEET_EXTRACTION_PROMPT
@@ -361,9 +362,13 @@ class TechSheetCreateModelView(APIView):
             if base_value is None and values:
                 base_value = next(iter(values.values()))
 
+            # FASE_3/C1-ins — literals (mateix argument que l'import: la fitxa del
+            # proveïdor no diu de quina capa ni de quina instància parla).
             BaseMeasurement.objects.get_or_create(
                 model=model,
                 pom=pom_master,
+                capa=MeasurementLayer.SLUG_DEFECTE,
+                instancia='',
                 defaults={
                     'base_value_cm': float(base_value or 0),
                     'nom_fitxa': client_code or '',

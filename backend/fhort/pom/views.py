@@ -18,6 +18,7 @@ from .models import (
     GradingRuleSet,
     ItemBaseMeasurement,
     ItemBaseSet,
+    MeasurementLayer,
     POMCategory,
     POMMaster,
     SizeDefinition,
@@ -304,6 +305,40 @@ class GradingRuleViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
 
+    def update(self, request, *args, **kwargs):
+        """L'API deixa de dir OK a una escriptura que no tindrà cap efecte.
+
+        `destroy` (aquí a sobre) no esborra: marca `actiu=False`. El motor NOMÉS llegeix
+        regles actives (`_load_grading_rules`, pom/services.py), i aquest viewset NO filtra
+        per `actiu` —a posta: cal poder consultar les inactives i reactivar-les—, de manera
+        que una regla «esborrada» seguia sent editable i responia 200. El tècnic tocava una
+        regla que el motor no llegiria mai i el sistema li deia que sí.
+
+        409 perquè és conflicte d'ESTAT, no de permisos (403) ni de forma (400): mateix
+        idioma que el guard de sessió segellada de `PieceFittingLineViewSet`, i la resposta
+        DIU la sortida en comptes de només negar.
+
+        La REACTIVACIÓ segueix passant: un PATCH que posa `actiu` a cert sí que té efecte
+        sobre el motor, i és l'única via de tornar la regla a la vida. Ni s'hi resucita res
+        sol, ni es toca què llegeix el motor.
+        """
+        instance = self.get_object()
+        vol_actiu = request.data.get('actiu', None)
+        reactiva = vol_actiu is True or str(vol_actiu).strip().lower() in ('true', '1')
+        if not instance.actiu and not reactiva:
+            return Response(
+                {
+                    'error': 'regla_inactiva',
+                    'detail': (
+                        f"La regla {instance.pk} està inactiva: el motor de graduació no la "
+                        f"llegeix, i editar-la no tindria cap efecte."
+                    ),
+                    'sortida': {'accio': 'reactivar', 'body': {'actiu': True}},
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return super().update(request, *args, **kwargs)
+
     def perform_update(self, serializer):
         # Protect rules of system RuleSets: clone before modifying.
         instance = serializer.instance
@@ -505,8 +540,14 @@ class ItemBaseMeasurementViewSet(viewsets.ModelViewSet):
         # el seu propi endpoint i hi posa PROMOTED.
         defaults['origen'] = ItemBaseMeasurement.ORIGEN_MANUAL
         defaults['updated_by'] = request.user
+        # FASE_3/C1-ins — literals: `pom_id` ve del body i el contracte no porta eixos fins
+        # a C4-ins. La clau del lookup s'alinea amb la unicitat real
+        # `(base_set, pom, capa, instancia)`: sense això, l'alta manual d'un valor típic
+        # reescrivia una germana en comptes de crear la fila que el tècnic demanava.
         obj, created = ItemBaseMeasurement.objects.update_or_create(
-            base_set=base_set, pom_id=pom_id, defaults=defaults)
+            base_set=base_set, pom_id=pom_id,
+            capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+            defaults=defaults)
         return Response(self.get_serializer(obj).data,
                         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 

@@ -23,6 +23,8 @@ Run:  python manage.py author_baby_pom_maps               # dry-run
 import argparse
 
 from django.core.management.base import BaseCommand
+
+from fhort.pom.models import MeasurementLayer
 from django.db import transaction
 from django_tenants.utils import schema_context
 
@@ -143,7 +145,15 @@ class Command(BaseCommand):
 
                 desired = cfg['set']
                 desired_ids = [pid for pid, _ in desired]
-                existing = {m.pom_id: m for m in GarmentPOMMap.objects.filter(garment_type_item=item)}
+                # FASE_3/C1-ins — aquest command raona per `pom_id` a tot arreu (el `set`
+                # desitjat és una llista de pom_id) i el seu univers és el catàleg baby de
+                # casa, que és tot exterior + instància única. S'ancora, doncs, en comptes
+                # de créixer la clau: fer-lo parlar de dues repeticions voldria dir canviar
+                # el format del `set` declarat a dalt, i això és autoria de catàleg (Montse),
+                # no feina d'aquesta fase.
+                existing = {m.pom_id: m for m in GarmentPOMMap.objects.filter(
+                    garment_type_item=item,
+                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='')}
 
                 creates, updates, unchanged, deletes = [], [], [], []
 
@@ -207,6 +217,7 @@ class Command(BaseCommand):
             oblig, key = LEVEL[lvl]
             GarmentPOMMap.objects.create(
                 garment_type_item=item, pom_id=pid,
+                capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                 nivell=lvl, obligatori=oblig, is_key=key, ordre=ordre,
             )
         for pid, lvl, ordre, m in updates:

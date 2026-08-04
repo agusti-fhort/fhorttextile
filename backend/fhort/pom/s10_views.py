@@ -41,17 +41,27 @@ TOL_FALLBACK = 0.6
 
 
 def _tolerance_map(model):
-    """Asymmetric tolerance per pom from BaseMeasurement(model, pom).
+    """Asymmetric tolerance per (pom, capa, instancia), from BaseMeasurement.
 
-    Returns {pom_id: (tol_minus, tol_plus)} with TOL_FALLBACK (0.6) when a bound
-    is unset. POMs without a BaseMeasurement fall back to (0.6, 0.6) on lookup.
+    Returns {(pom_id, capa, instancia): (tol_minus, tol_plus)} with TOL_FALLBACK (0.6) when
+    a bound is unset. POMs without a BaseMeasurement fall back to (0.6, 0.6) on lookup.
+
+    C2/Onada 1 — the key carries the layer because `PieceFittingLine` does: the lining of
+    a chest and its shell are two different measurements of the same POM, and each must be
+    judged against its own tolerance. Keyed by pom alone, whichever layer the map met last
+    would silently rule the whole family.
+
+    FASE_2/C1-ins — and it carries the INSTANCE for exactly the same reason: the right
+    armhole and the left one are two measurements, each with its own tolerance, and the
+    consuming line knows which one it is talking about. Whenever the row can name the axis,
+    the key carries it — no anchoring here, because there is nothing to anchor to.
     """
     from fhort.models_app.models import BaseMeasurement
     tol = {}
     for bm in BaseMeasurement.objects.filter(model=model, is_active=True):
         tm = float(bm.tolerancia_minus) if bm.tolerancia_minus is not None else TOL_FALLBACK
         tp = float(bm.tolerancia_plus) if bm.tolerancia_plus is not None else TOL_FALLBACK
-        tol[bm.pom_id] = (tm, tp)
+        tol[(bm.pom_id, bm.capa, bm.instancia)] = (tm, tp)
     return tol
 
 
@@ -86,7 +96,8 @@ def fitting_vs_spec_view(request, pf_id):
         for line in lines:
             spec_cm = float(line.valor_teoric) if line.valor_teoric is not None else None
             val_cm = float(line.valor_real) if line.valor_real is not None else None
-            tol_minus, tol_plus = tol_map.get(line.pom_id, (TOL_FALLBACK, TOL_FALLBACK))
+            tol_minus, tol_plus = tol_map.get((line.pom_id, line.capa, line.instancia),
+                                              (TOL_FALLBACK, TOL_FALLBACK))
 
             desv = None
             passa = None
@@ -140,7 +151,15 @@ def fitting_vs_spec_view(request, pf_id):
                             'missatge': (f"Fitting peça {pf_id}: {r['codi_client']} "
                                          f"talla {r['talla']} desvia {r['desviacio_cm']:+.2f}cm "
                                          f"(tol -{r['tolerancia_minus_cm']}/+{r['tolerancia_plus_cm']}cm)"),
-                            'estat': 'Obert',
+                            # 'Obert' NO és a `POMAlert.ESTAT_CHOICES`
+                            # (Pendent/Acceptat/Corregit): era vocabulari no declarat que
+                            # entrava en silenci —Django no valida choices a BD—, i el lector
+                            # del dashboard ho havia d'anar tolerant (models_app/views.py:3384).
+                            # Mateixa família que el fallback d'origens que C3/C va tancar el
+                            # 02/08: es fa servir el valor que JA hi és. 'Pendent' és, a més,
+                            # el `default` del camp, o sigui que 'Obert' n'era un sinònim, no
+                            # un estat distint: cap decisió de domini, cap migració.
+                            'estat': 'Pendent',
                             'origen': 'FITTING',
                         }
                     )

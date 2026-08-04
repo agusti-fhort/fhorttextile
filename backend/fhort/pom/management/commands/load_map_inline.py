@@ -15,6 +15,8 @@ Resolution:
     GarmentTypeItem via code           (skip whole line + log if missing/ambiguous)
 """
 from django.core.management.base import BaseCommand
+
+from fhort.pom.models import MeasurementLayer
 from django.db import transaction
 from django_tenants.utils import schema_context
 
@@ -138,11 +140,17 @@ class Command(BaseCommand):
                             'obligatori': nivell in ('K', 'M'),
                             'ordre': i,
                         }
+                        # FASE_3/C1-ins — clau completa a les DUES bandes (el predicat i
+                        # l'escriptura): si només creixés una, el comptador diria «update»
+                        # d'una fila que en realitat s'acaba de crear.
                         exists = GarmentPOMMap.objects.filter(
-                            garment_type_item=item, pom=pom).exists()
+                            garment_type_item=item, pom=pom,
+                            capa=MeasurementLayer.SLUG_DEFECTE, instancia='').exists()
                         if commit:
                             GarmentPOMMap.objects.update_or_create(
-                                garment_type_item=item, pom=pom, defaults=defaults)
+                                garment_type_item=item, pom=pom,
+                                capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                                defaults=defaults)
                         if exists:
                             n_update += 1; tot_update += 1
                         else:

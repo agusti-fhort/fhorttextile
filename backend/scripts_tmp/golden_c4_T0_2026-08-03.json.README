@@ -1,0 +1,48 @@
+GOLDEN T0 DE C4 — 03/08/2026, corpus de staging
+================================================
+
+Fitxer: golden_c4_T0_2026-08-03.json
+md5   : 4e34859c3ed574a9a5779354ee9883c3
+sha256: 1da214a67b32cc97bdaadbee7b4ec13130abd1e9cabb28210eb56955e2e436aa
+Clau  : model_id|pom_id|capa|instancia|size_label
+Cotes : 499 cel·les de preview · 382 de generador · 7 models (162 163 174 182 186 268 269)
+        segellats fora de la mètrica de generador: 163, 182
+
+PER QUÈ EXISTEIX AQUEST FITXER
+------------------------------
+Fins avui la referència golden es tornava a calcular cada sessió i el fitxer resultant vivia
+a /tmp: entre C3 (02/08) i C4 (03/08) es va perdre, i la sessió següent es va quedar sense
+res contra què comparar cel·la a cel·la. La única prova de continuïtat que va sobreviure va
+ser un md5 escrit a mà dins d'un missatge de commit. Això s'acaba aquí: la referència es
+COMMITEJA i sobreviu entre sessions.
+
+CONTINUÏTAT DEMOSTRADA AMB C3
+-----------------------------
+El commit `38636277` (C3/B, 02/08) deixa dit al seu verd: «golden byte-idèntic, md5
+4e34859c…, 499 cel·les de preview + 382 de generador». El fitxer d'avui, regenerat sobre el
+corpus del 03/08 amb el mateix script, dona **exactament aquell md5**. O sigui: entre C3 i
+l'inici de C4 NO s'ha mogut ni una cel·la. No és una suposició, és el hash.
+
+REPRODUIR
+---------
+  cd backend
+  venv/bin/python manage.py shell -c "OUT='/tmp/golden.json'
+exec(open('scripts_tmp/golden_c3_snapshot.py').read())"
+  md5sum /tmp/golden.json          # ha de donar el md5 de dalt
+
+VERIFICAR CONTRA AQUESTA REFERÈNCIA (el que farà C4 quan mogui dades)
+---------------------------------------------------------------------
+  venv/bin/python manage.py shell -c "REF='scripts_tmp/golden_c4_T0_2026-08-03.json'
+exec(open('scripts_tmp/golden_c3_prova_identitat.py').read())"
+
+Dona DOS green flags separats:
+  · FORMA    — el golden nou, col·lapsat a la clau vella (`pom|talla`), reprodueix el vell
+               sencer, i els dos eixos són constants ('exterior',''). Si un dia el col·lapse
+               perd informació (dues germanes amb valors diferents a la mateixa clau vella),
+               ho diu explícitament: és el forat que C4 ha de tancar.
+  · CONTINGUT — cel·la a cel·la contra aquest fitxer. Qualsevol cel·la afegida, perduda o
+               moguda = les DADES s'han mogut, i cal saber per què abans de continuar.
+
+⚠️ El script d'escriptura (`golden_c3_snapshot.py`) corre el GENERADOR dins d'un atomic que
+acaba SEMPRE en rollback forçat. És segur contra staging tants cops com calgui, però no és
+inert per construcció: si algú li treu el rollback, escriu.
