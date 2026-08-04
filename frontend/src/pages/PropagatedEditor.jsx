@@ -77,7 +77,8 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
     // ja porta els camps per separat, que és el que `pom/identitat.py` demana que es faci.
     const info = perLinia.get(lineId)
     if (!info) return Promise.resolve()
-    return models.escalatAjustarTalla(modelId, info.pom_id, info.talla, value)
+    return models.escalatAjustarTalla(modelId, info.pom_id, info.talla, value,
+                                      { capa: info.capa, instancia: info.instancia })
       .catch(e => {
         // G6-B/T3 — la versió vigent està SEGELLADA: el backend refusa l'escriptura (409). Sense
         // això, el rebuig arribaria com un error mut i el tècnic no sabria ni per què no es desa

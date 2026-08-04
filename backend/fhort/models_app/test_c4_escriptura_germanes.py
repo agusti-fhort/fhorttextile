@@ -343,6 +343,66 @@ class EscripturaGermanesTest(TenantTestCase):
             self.assertEqual(alertes, {(EXTERIOR, ''): 30.0, (FOLRE, ''): 15.0},
                              'cada germana ha de tenir LA SEVA alerta amb LA SEVA desviació')
 
+    # ── AJUST DE TALLA a l'Escalat (C4/BLOC 2 · `escalat_ajustar_talla_view`) ───────
+
+    def _sf(self):
+        """SizeFitting + regla resident: `generate_graded_specs` refusa un model sense regles."""
+        from fhort.models_app.models import ModelGradingRule
+        ModelGradingRule.objects.get_or_create(
+            model=self.model, pom=self.pom,
+            defaults={'logica': 'LINEAR', 'increment': 1.0, 'actiu': True})
+        from fhort.fitting.models import SizeFitting
+        sf, _ = SizeFitting.objects.get_or_create(
+            model=self.model, numero=1,
+            defaults={'codi': 'SF-W', 'tipus': 'SizeSet', 'estat': 'Pendent',
+                      'creat_per': UserProfile.objects.get(user=self.user)})
+        return sf
+
+    def test_ajustar_talla_mou_la_base_de_la_seva_germana(self):
+        """Aquesta vista escriu a QUATRE taules i totes quatre anaven amb el literal
+        `(exterior, '')`: ajustar la talla base del FOLRE movia la base de l'EXTERIOR."""
+        from fhort.models_app.views import escalat_ajustar_talla_view
+
+        # `fitting_gradedspec` hi entra perquè ajustar una talla encadena cap al motor
+        # (`generate_graded_specs`): la base de folre en fa specs de folre, i la comporta
+        # d'aquella taula les atura. La cadena d'escriptura no s'acaba a `BaseMeasurement`.
+        with comportes_alcades(*TAULES, 'fitting_gradedspec'):
+            self._germanes()
+            self._sf()
+            resp = escalat_ajustar_talla_view(self._req({
+                'pom_id': self.pom.id, 'talla': 'S', 'valor': 44.0,
+                'capa': FOLRE, 'instancia': '',
+            }), self.model.id)
+
+            self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+            self.assertEqual(self._valors(), {(EXTERIOR, ''): 100.0, (FOLRE, ''): 44.0},
+                             'la base que s\'ha de moure és la del folre, no la de l\'exterior')
+
+    def test_les_linies_de_la_resposta_porten_la_clau_de_la_mesura(self):
+        """🔴 REGRESSIÓ INTRODUÏDA AL BLOC 3 I TANCADA AQUÍ. `MeasureGrid` indexa la resposta
+        per `linies[].id` dins del seu buffer de cel·les, que va per `lineId`; el `lineId` de
+        l'Escalat va passar a `{clau}:{talla}` a `a0f588f9` i el backend seguia emetent
+        `{pom_id}:{talla}`. Els dos formats no casaven i el refresc de les talles propagades
+        no arribava a la pantalla: l'escriptura es feia, la corba es re-derivava, i les
+        cel·les germanes es quedaven amb el valor vell fins a recarregar. Sense error."""
+        from fhort.models_app.views import escalat_ajustar_talla_view
+
+        # `fitting_gradedspec` hi entra perquè ajustar una talla encadena cap al motor
+        # (`generate_graded_specs`): la base de folre en fa specs de folre, i la comporta
+        # d'aquella taula les atura. La cadena d'escriptura no s'acaba a `BaseMeasurement`.
+        with comportes_alcades(*TAULES, 'fitting_gradedspec'):
+            self._germanes()
+            self._sf()
+            resp = escalat_ajustar_talla_view(self._req({
+                'pom_id': self.pom.id, 'talla': 'S', 'valor': 44.0,
+                'capa': FOLRE, 'instancia': '',
+            }), self.model.id)
+
+            self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+            ids = [l['id'] for l in resp.data['linies']]
+            self.assertTrue(all(i.startswith(f'{self.pom.id}|{FOLRE}|:') for i in ids),
+                            f'l\'id ha de ser `{{clau}}:{{talla}}` de LA germana ajustada: {ids}')
+
     # ── El client antic segueix escrivint on escrivia ───────────────────────────────
 
     def test_una_fila_sense_eixos_va_a_lexterior_de_la_instancia_unica(self):

@@ -124,8 +124,11 @@ export const models = {
   generarGrading: (modelId, body) => client.post(`/api/v1/models/${modelId}/generar-grading/`, body || {}),
   // Fase 2 — ajust de talla a Escalat: ancora la talla i PROPAGA per regla a les germanes (com el
   // fitting). Retorna {linies:[{id,valor_real}]} per refrescar la fila. Base inclosa.
-  escalatAjustarTalla: (modelId, pomId, talla, valor) =>
-    client.post(`/api/v1/models/${modelId}/escalat/ajustar-talla/`, { pom_id: pomId, talla, valor }),
+  // C4/BLOC 2 — `eixos` diu QUINA germana s'ajusta. Aquesta crida escriu a quatre taules i
+  // totes quatre anaven amb el literal de la mesura única.
+  escalatAjustarTalla: (modelId, pomId, talla, valor, eixos = {}) =>
+    client.post(`/api/v1/models/${modelId}/escalat/ajustar-talla/`,
+                { pom_id: pomId, talla, valor, capa: eixos.capa, instancia: eixos.instancia }),
   // Fase B — estat de propagació perquè el botó Propagar MIRI ABANS (read-only):
   // {te_dades_propagades, segellada, version_number, te_regles}.
   // G2 — `te_regles` és la condició dura: sense regla NO es propaga mai; el gest porta a

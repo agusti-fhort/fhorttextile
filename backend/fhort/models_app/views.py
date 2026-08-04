@@ -2813,6 +2813,13 @@ def escalat_ajustar_talla_view(request, model_id):
 
     data = request.data or {}
     pom_id = data.get('pom_id')
+    # C4/BLOC 2 — QUINA GERMANA S'AJUSTA. Aquesta vista escriu a QUATRE taules
+    # (`BaseMeasurement` via `_write_base`, `ModelGradingOverride` dues vegades i
+    # `MeasurementChangeLog`) i les quatre anaven amb el literal `(exterior, '')`: ajustar la
+    # talla de la sisa dreta movia la base de l'esquerra, li esborrava els overrides i deixava
+    # l'apunt del canvi atribuït a l'altra al registre append-only.
+    # Punt únic compartit amb els dos upserts, les dues podes i `desactivar_pom`.
+    capa, instancia = _identitat_de_mesura(data)
     talla = (data.get('talla') or '').strip()
     valor = data.get('valor')
     if pom_id is None or not talla:
@@ -2880,37 +2887,39 @@ def escalat_ajustar_talla_view(request, model_id):
                 if nova_base is None:
                     return Response({'error': "No s'ha pogut derivar la base des de la talla ancorada."}, status=400)
                 _write_base(model, pom, round(float(nova_base), 2), auth_user,
-                            f'Escalat · ajust talla {talla} (propaga per regla)')
+                            f'Escalat · ajust talla {talla} (propaga per regla)',
+                            capa=capa, instancia=instancia)
                 # La corba de la regla mana: neteja els pins per cel·la del POM (el fitting sobreescriu
                 # els valor_real de les germanes; aquí l'equivalent és treure els overrides residuals).
-                # FASE_3/C1-ins — l'esborrat tampoc no és per POM. Aquest `delete()` neteja
-                # els overrides de la mesura que es torna a propagar; sense els eixos
-                # s'enduria també els de les germanes, que ningú no ha tocat.
+                # L'esborrat tampoc no és per POM: neteja els overrides de LA MESURA que es
+                # torna a propagar. C4/BLOC 2 — els eixos vénen del cos; sense ells s'enduria
+                # els de les germanes, que ningú no ha tocat.
                 ModelGradingOverride.objects.filter(
                     model=model, pom=pom,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='').delete()
+                    capa=capa, instancia=instancia).delete()
                 propagat, motiu = True, (logica or 'CANONIC')
             elif talla == base_size:
                 # Base sense règim LINEAR: desa la base; germanes intactes (mirall del fitting STEP).
-                _write_base(model, pom, valor, auth_user, f'Escalat · base {talla}')
+                _write_base(model, pom, valor, auth_user, f'Escalat · base {talla}',
+                            capa=capa, instancia=instancia)
                 propagat, motiu = False, (logica or 'BASE')
             else:
                 # STEP/FIXED/ZERO o sense regla → override puntual (germanes intactes, com el fitting).
-                # FASE_3/C1-ins — literals als tres punts (v. el bloc germà d'`_editar_talla`).
+                # C4/BLOC 2 — els tres punts van per la identitat de la mesura, no pel POM.
                 prev = (ModelGradingOverride.objects
                         .filter(model=model, pom=pom, size_label=talla,
-                                capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+                                capa=capa, instancia=instancia)
                         .values_list('value_cm', flat=True).first())
                 ModelGradingOverride.objects.update_or_create(
                     model=model, pom=pom, size_label=talla,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                    capa=capa, instancia=instancia,
                     defaults={'value_cm': valor, 'motiu': 'Escalat · ajust talla (sense propagació)',
                               'fitting_ref': None, 'created_by': profile},
                 )
                 if prev is None or abs(float(prev) - valor) > 1e-9:
                     MeasurementChangeLog.objects.create(
                         model=model, pom=pom, base_measurement=None,
-                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                        capa=capa, instancia=instancia,
                         valor_anterior=(float(prev) if prev is not None else None), valor_nou=valor,
                         context='manual', motiu=f'Escalat talla {talla}', created_by=auth_user)
                 propagat, motiu = False, (logica or 'sense_regla')
@@ -2926,14 +2935,31 @@ def escalat_ajustar_talla_view(request, model_id):
                 transaction.set_rollback(True)
                 return Response({'error': str(e)}, status=400)
 
-    # Files actualitzades del POM (mirall de 'linies' de /propagar): {id, valor_real} per talla.
+    # Files actualitzades de LA MESURA (mirall de 'linies' de /propagar): {id, valor_real} per
+    # talla. C4/BLOC 2 — dues coses aquí, i totes dues es veien a la pantalla:
+    #
+    # ① la consulta filtra per la germana. Per `(grading_version, pom)` sol, els specs de les
+    #    dues germanes queien al mateix `graded[size_label]` i la resposta tornava la corba de
+    #    l'última llegida — o sigui que després d'ajustar la sisa dreta, la fila ensenyava les
+    #    xifres de l'esquerra.
+    #
+    # ② l'`id` és la CLAU DE LA MESURA, no `{pom_id}:{talla}`. `MeasureGrid` fa servir aquest
+    #    `id` per indexar el seu buffer de cel·les, que va per `lineId`, i el `lineId` de
+    #    l'Escalat va passar a `{clau}:{talla}` al bloc 3 (`a0f588f9`). Des d'aleshores els dos
+    #    formats no casaven i el refresc de les talles propagades NO ARRIBAVA A LA PANTALLA:
+    #    l'escriptura es feia, la corba es re-derivava, i les cel·les germanes es quedaven amb
+    #    el valor vell fins a recarregar. Sense error i sense avís.
+    #    La forma la decideix `pom/identitat.clau_mesura`, l'únic lloc que sap com s'aplana.
+    from fhort.pom.identitat import clau_mesura
     gv = vigent_grading_version(sf)
     graded = {}
     if gv:
-        for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom):
+        for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom,
+                                              capa=capa, instancia=instancia):
             graded[spec.size_label] = (
                 float(spec.graded_value_cm) if spec.graded_value_cm is not None else None)
-    linies = [{'id': f'{pom.id}:{s}', 'valor_real': graded.get(s)} for s in size_run]
+    clau = clau_mesura(pom.id, capa, instancia)
+    linies = [{'id': f'{clau}:{s}', 'valor_real': graded.get(s)} for s in size_run]
     return Response({'ok': True, 'propagat': propagat, 'motiu': motiu,
                      'grading_version_id': gv.id if gv else None, 'linies': linies}, status=200)
 
@@ -3015,8 +3041,8 @@ def _identitat_de_mesura(m):
     return (m.get('capa') or MeasurementLayer.SLUG_DEFECTE, m.get('instancia') or '')
 
 
-def _write_base(model, pom, valor, auth_user, motiu):
-    """Escriu BaseMeasurement(model, pom, exterior, instància única) i deixa que F1 registri.
+def _write_base(model, pom, valor, auth_user, motiu, capa=None, instancia=''):
+    """Escriu el BaseMeasurement de LA MESURA indicada i deixa que F1 registri.
 
     ── FASE_3/C1-ins · L'EXPLICACIÓ CANÒNICA DELS LITERALS D'AQUEST FITXER ──────────────
     Els escriptors de `models_app/views.py` que reben el POM per HTTP (`{'pom_id': …}`) no
@@ -3031,13 +3057,18 @@ def _write_base(model, pom, valor, auth_user, motiu):
     quina escriu. I quan C4-ins obri el contracte, el lloc on posar el valor real ja hi és:
     només canvia d'on ve.
 
+    ✅ C4/BLOC 2 — ELS EIXOS SÓN PARÀMETRE. El contracte d'entrada ja els porta, o sigui que
+    la crida pot dir de quina germana parla en comptes de declarar-la. Qui no els passi rep el
+    literal de sempre —l'exterior de la instància única—, que és el que feien tots els punts
+    d'aquest fitxer fins ara i el que han de seguir fent mentre la seva porta no els sàpiga dir.
+
     Els altres punts d'aquest fitxer porten una nota d'una línia que apunta aquí.
     """
     from fhort.models_app.models import BaseMeasurement
     from fhort.pom.models import MeasurementLayer
     bm, _created = BaseMeasurement.objects.get_or_create(
         model=model, pom=pom,
-        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+        capa=capa or MeasurementLayer.SLUG_DEFECTE, instancia=instancia or '',
         defaults={'base_value_cm': valor, 'origen': 'STANDARD'})
     bm.base_value_cm = valor
     bm._changed_by = auth_user
