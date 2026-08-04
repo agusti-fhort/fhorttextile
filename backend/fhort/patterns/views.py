@@ -33,8 +33,7 @@ from fhort.fitting.staleness import com_a_dict, estalitud
 from fhort.models_app.models import BaseMeasurement, Model
 from fhort.models_app.services_fitxers import (DOWNLOAD_TTL, UploadRejected,
                                                serve_fitxer, validate_upload)
-from fhort.pom.models import (CustomerPOMAlias, MeasurementLayer,
-                              PatternPieceRole)
+from fhort.pom.models import CustomerPOMAlias, PatternPieceRole
 from fhort.tasks.models import GarmentTypeItem
 
 from .adapters import DjangoGeometryStore
@@ -588,26 +587,32 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             ancorats[p.pom_master_id].append(p)
 
         files = []
-        # 🚨 FASE_2/C1-ins — ÀNCORA que aquesta lectura no havia tingut mai (el forat que
-        # `RECENS_DELTA_ONADA1_2026-07-31` va deixar obert en declarar `patterns/*` fora
-        # d'abast). Peta amb la segona CAPA sense esperar cap instància: la fila d'aquesta
-        # llista es creua amb els ancoratges per `bm.pom_id` (v. `ancorats.get` aquí sota),
-        # o sigui que amb N mesures del mateix POM el taller veuria N files repetint el
-        # MATEIX conjunt d'ancoratges, sense res que digués quina fila és quina.
+        # C4 — L'ÀNCORA SE'N VA: DUES CARES, DUES LÍNIES (decisió d'Agus, 04/08).
         #
-        # Àncora i no clau composta, i el motiu és de DOMINI, no mecànic: la unicitat de
-        # `PatternPOM` és `(pattern_piece, pom_master)` i aquella taula no té cap dels dos
-        # eixos. Creuar-la per clau completa voldria dir decidir com un ancoratge de patró
-        # sap de quina capa i de quina instància parla — decisió humana, i és el sostre dur
-        # de `F2-patrons` (§II.10 del dossier: el format DXF no sobreviu un roundtrip amb
-        # instància). Fins llavors, la llista de treball del taller és la de l'exterior i la
-        # de la instància única, i ho diu aquí.
+        # El que hi havia (FASE_2/C1-ins) filtrava `capa='exterior', instancia=''` amb aquest
+        # argument: la fila es creua amb els ancoratges per `bm.pom_id`, i amb N mesures del
+        # mateix POM el taller veuria N files repetint el MATEIX conjunt d'ancoratges «sense
+        # res que digués quina fila és quina».
+        #
+        # La meitat d'aquell argument ja no és certa: cada fila diu ara de quina capa i de
+        # quina instància és (v. `capa`/`instancia` al dict de sota), o sigui que SÍ que hi ha
+        # què ho digui. I la meitat que queda —que les germanes comparteixen ancoratges— és
+        # més barata que el que l'àncora costava: un POM mesurat NOMÉS per instància (la sisa
+        # esquerra i la dreta, sense «la sisa») desapareixia SENCER d'aquesta llista, i el
+        # patronista no veia que hi hagués res a mesurar-hi. Amagar informació és pitjor que
+        # repetir-la.
+        #
+        # ⚠️ `PatternPOM` NO es toca i queda fora de C4: la seva unicitat és
+        # `(pattern_piece, pom_master)` i aquella taula no té cap dels dos eixos ni a
+        # l'esquema. Que un ancoratge de patró sàpiga de quina capa i de quina instància parla
+        # és decisió humana + migració, i és el sostre dur de `F2-patrons` (§II.10 del
+        # dossier: el DXF no sobreviu un roundtrip amb instància). Mentrestant, dues germanes
+        # del mateix POM ensenyen els mateixos `ancoratges`, i és el que hi ha.
         base = (
             BaseMeasurement.objects
-            .filter(model_id=fp.model_id, is_active=True,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+            .filter(model_id=fp.model_id, is_active=True)
             .select_related('pom', 'pom__pom_global')
-            .order_by('ordre', 'pom__codi_client')
+            .order_by('ordre', 'pom__codi_client', 'capa', 'instancia')
         )
         alies = _alies_unics_del_customer(fp.model_id, [bm.pom_id for bm in base])
         for bm in base:
@@ -624,6 +629,11 @@ class PatternFileViewSet(mixins.CreateModelMixin,
             fila = {
                 'base_measurement': bm.id,
                 'pom_master': bm.pom_id,
+                # C4 — els dos eixos al contracte. `pom_master` ja no és únic dins de
+                # `results`; `base_measurement` (la PK de la fila) segueix sent l'àncora
+                # forta, i és per on el front ja indexa (`ModelPomList`, `key={f.base_measurement}`).
+                'capa': bm.capa,
+                'instancia': bm.instancia,
                 'codi_client': pom.codi_client,
                 'nom_fitxa': bm.nom_fitxa,
                 'nom_client': pom.nom_client,

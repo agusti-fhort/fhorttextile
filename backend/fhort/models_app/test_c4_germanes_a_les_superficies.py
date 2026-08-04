@@ -3,8 +3,9 @@
 ✅ **VERD DES DEL BLOC 1 DE C4 (04/08).** Aquest fitxer va néixer saltat sencer i vermell a
 posta: mesurava un forat obert. El bloc 1 el va tancar desancorant els lectors, i ara corre a
 cada execució de `fhort.models_app` — de mesura del forat ha passat a guàrdia perquè no torni.
-Queda UN mètode saltat, `test_10` (model-poms del taller), i el motiu **no és tècnic**: hi ha
-una contradicció de scope que ha de resoldre l'Agus. V. el seu docstring.
+✅ **SENCER DES DEL BLOC 3 (04/08).** L'últim mètode saltat, `test_10` (model-poms del
+taller), s'ha despertat: la contradicció de scope que el tenia aturat l'ha resolta l'Agus amb
+la llei **dues cares, dues línies**. Cap mètode saltat: les 10 superfícies corren.
 
 ⚠️ **Segueix sent PROHIBIT fer-lo verd tocant-lo.** Si un assert d'aquí falla, el que s'ha
 trencat és un lector, no l'assert: comparar només la germana d'exterior o acceptar 1 fila on
@@ -42,7 +43,9 @@ De les **10 superfícies**, 6 amagaven la germana. El bloc 1 n'ha desancorat 5:
     ✅ s6 · specs graduats        (pom/s6_views)               C4/3 · era 1 de 4
     ✅ cells de grading           (pom/grading_views)          C4/4 · era 1 de 4
     ✅ deltes de taula de mesures (models_app/views.py:1771)   C4/5 · 4 files i 2 deltes
-    🚩 model-poms del taller      (patterns/views.py:605)      OBERT — contradicció de scope
+    ✅ model-poms del taller      (patterns/views.py:605)      C4/3 · era 1 de 4 — el
+                                                               queryset desancorat al bloc 3;
+                                                               `PatternPOM` NO s'ha tocat
 
 **Hi havia DOS modes de fallada, i el segon era el pitjor de veure.** Cinc superfícies
 AMAGAVEN (la germana no sortia del `filter`: faltava una fila i la pantalla es veia coherent).
@@ -80,7 +83,6 @@ import contextlib
 import csv
 import datetime
 import io
-import unittest
 
 from django.contrib.auth import get_user_model
 from django.db import connection, transaction
@@ -154,7 +156,8 @@ class GermanesALesSuperficiesC4Test(TenantTestCase):
     hauria embrutat la línia base. El bloc 1 les ha desancorades i el contracte ja corre a cada
     execució de `fhort.models_app`, que és on ha d'estar: vigilant que no torni a passar.
 
-    Queda UN sol mètode saltat, `test_10`, i el motiu no és tècnic — v. el seu docstring.
+    Cap mètode saltat des del bloc 3: `test_10` (model-poms) s'hi va despertar amb la llei
+    «dues cares, dues línies».
     """
 
     @classmethod
@@ -450,36 +453,30 @@ class GermanesALesSuperficiesC4Test(TenantTestCase):
 
     # ── 10 · patterns/views model-poms (:605) ────────────────────────────────────────
 
-    @unittest.skip(
-        'C4/BLOC 1 — SALTAT PER CONTRADICCIÓ DE SCOPE, NO PER DEFECTE TÈCNIC. '
-        'Decisió pendent de l\'Agus: v. el docstring.')
     def test_10_la_llista_del_taller_treu_les_quatre_germanes(self):
-        """🚩 L'ÚNIC MÈTODE SALTAT, I NO ÉS PERQUÈ NO ES PUGUI ARREGLAR.
+        """✅ DESPERTAT AL BLOC 3 (04/08). La contradicció de scope que el tenia saltat l'ha
+        resolta l'Agus: **dues cares, dues línies**, i val també per a la llista del taller.
 
-        Es va provar i FUNCIONA: treure l'àncora del queryset de `BaseMeasurement` a
-        `patterns/views.model_poms` fa passar aquest test, sense tocar `PatternPOM`. Es va
-        revertir a posta, per dues raons que xoquen entre elles i que no són meves de resoldre:
+        El que el mantenia saltat eren dues coses que xocaven:
 
-        ① **El brief del bloc 1 exclou patrons explícitament** («NO: … tocar `PatternPOM`
-           (patrons queden fora de C4)»), i alhora llista `model-poms` entre les 10
-           superfícies. Les dues coses no poden ser certes alhora.
+        ① el brief del bloc 1 excloïa patrons («NO: … tocar `PatternPOM`») i alhora llistava
+           `model-poms` entre les 10 superfícies. Resolt distingint-les: s'ha desancorat el
+           queryset de `BaseMeasurement` a `patterns/views.model_poms` i **`PatternPOM` no
+           s'ha tocat** — no té els eixos ni a l'esquema i segueix fora de C4;
 
-        ② **Un test committat fixa el comportament CONTRARI a aquest**:
-           `test_lectors_instancia_cins::test_la_llista_del_taller_no_repeteix_la_fila_per_germana`
-           exigeix que el taller vegi UNA sola fila. Fer passar aquest test fa caure aquell.
-           No es pot satisfer els dos, i triar és una decisió de PRODUCTE sobre la llista de
-           treball del taller, no una de mecànica.
+        ② un test committat fixava el contrari
+           (`test_lectors_instancia_cins::test_la_llista_del_taller_no_repeteix_la_fila_per_germana`,
+           que exigia UNA fila). Ha caigut i s'ha reescrit amb la llei nova
+           (`…_fa_una_fila_per_germana`): les dues superfícies diuen ara el mateix.
 
-        EL QUE SÍ ÉS MESURABLE I QUEDA DIT: amb l'àncora viva i les comportes fora, un POM
-        mesurat NOMÉS per instància (la sisa esquerra i la dreta, sense «la sisa») desapareix
-        SENCER de la llista del taller — el patronista no veu que hi hagi res a mesurar-hi.
+        El que decidia era mesurable i pesava: amb l'àncora viva, un POM mesurat NOMÉS per
+        instància (la sisa esquerra i la dreta, sense «la sisa») desapareixia SENCER de la
+        llista i el patronista no veia que hi hagués res a mesurar-hi.
 
-        La meitat del dany que l'àncora evitava ja no existeix: el seu motiu escrit era que el
-        taller veuria N files «sense res que digués quina fila és quina», i amb els eixos al
-        payload sí que hi hauria alguna cosa que ho digués. La meitat que queda —dues germanes
-        comparteixen els MATEIXOS ancoratges, perquè `PatternPOM` és `(pattern_piece,
-        pom_master)` i no té els eixos— és real i és el sostre dur de F2-patrons (§II.10: el
-        DXF no sobreviu un roundtrip amb instància). Tancar-la és decisió humana + migració.
+        🚩 EL QUE QUEDA OBERT I NO ÉS D'AQUÍ: dues germanes ensenyen els MATEIXOS
+        `ancoratges`, perquè `PatternPOM` és `(pattern_piece, pom_master)` i no té els eixos.
+        És el sostre dur de F2-patrons (§II.10: el DXF no sobreviu un roundtrip amb
+        instància), i tancar-lo és decisió humana + migració.
         """
         from fhort.patterns.models import PatternFile
         from fhort.patterns.views import PatternFileViewSet

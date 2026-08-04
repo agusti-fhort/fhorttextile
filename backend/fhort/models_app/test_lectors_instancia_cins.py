@@ -252,10 +252,25 @@ class LectorsInstanciaCinsTest(TenantTestCase):
                 (EXTERIOR, LEFT): 40.0,
             }, 'cada element ha de portar el valor de LA SEVA germana i dir quina és')
 
-    def test_la_llista_del_taller_no_repeteix_la_fila_per_germana(self):
-        """El forat #1 dels dos d'Onada 1. `model-poms` creua les mesures amb els ancoratges
-        del patró per `pom_id`: sense àncora, el taller veuria tres files repetint el MATEIX
-        conjunt d'ancoratges i res que digués quina fila és quina."""
+    def test_la_llista_del_taller_fa_una_fila_per_germana(self):
+        """C4 — DUES CARES, DUES LÍNIES (decisió d'Agus, 04/08). Aquest test es deia
+        `test_la_llista_del_taller_no_repeteix_la_fila_per_germana` i exigia el contrari.
+
+        L'àncora que fixava («el taller veuria tres files repetint el MATEIX conjunt
+        d'ancoratges i res que digués quina fila és quina») tenia dues meitats i només se'n
+        sosté una. La que cau: ara cada fila SÍ que diu quina és, perquè el payload en porta
+        `capa` i `instancia`. La que queda —que les germanes comparteixen ancoratges, perquè
+        `PatternPOM` és `(pattern_piece, pom_master)` i no té els eixos— és real, però costa
+        menys que el que l'àncora cobrava: un POM mesurat NOMÉS per instància desapareixia
+        SENCER de la llista, i el patronista no veia que hi hagués res a mesurar-hi.
+
+        El que NO s'afluixa és el motiu de l'àncora: que el taller no perdi cap mesura en
+        silenci. Abans es garantia servint-ne una de sola; ara, servint-les totes tres i
+        exigint que cada fila digui de qui és — que és estrictament més fort, perquè un
+        col·lapse tornaria a donar `total` < 3 i aquests asserts cauríen.
+
+        `PatternPOM` segueix sense tocar-se: aquest test no li demana res.
+        """
         from rest_framework.test import APIRequestFactory, force_authenticate
 
         from fhort.patterns.models import PatternFile
@@ -274,9 +289,23 @@ class LectorsInstanciaCinsTest(TenantTestCase):
                 resp.render()
 
             self.assertEqual(resp.status_code, 200)
-            self.assertEqual(resp.data['total'], 1,
-                             'la llista de treball del taller ha de servir una sola fila')
-            self.assertEqual(resp.data['results'][0]['nom_fitxa'], 'A-EXT')
+            self.assertEqual(resp.data['total'], 3,
+                             'les tres germanes són feina real del taller: hi han de ser')
+
+            per_eixos = {(f['capa'], f['instancia']): f for f in resp.data['results']}
+            self.assertEqual(set(per_eixos), {(EXTERIOR, ''), (FOLRE, ''), (EXTERIOR, LEFT)},
+                             'cada fila ha de dir de quina capa i de quina instància és')
+            self.assertEqual(per_eixos[(EXTERIOR, '')]['nom_fitxa'], 'A-EXT')
+            self.assertEqual(per_eixos[(FOLRE, '')]['nom_fitxa'], 'A-FOL')
+            self.assertEqual(per_eixos[(EXTERIOR, LEFT)]['nom_fitxa'], 'A-ESQ')
+            self.assertEqual(
+                {k: float(f['valor_fitxa_cm']) for k, f in per_eixos.items()},
+                {(EXTERIOR, ''): 100.0, (FOLRE, ''): 98.0, (EXTERIOR, LEFT): 40.0},
+                'cada fila ha de portar el valor de LA SEVA germana')
+
+            # L'àncora forta de cada fila segueix sent la PK de la mesura, que és per on el
+            # front hi indexa (`ModelPomList`, `key={f.base_measurement}`).
+            self.assertEqual(len({f['base_measurement'] for f in resp.data['results']}), 3)
 
     def test_el_patrimoni_que_viatja_no_emet_dues_claus_iguals(self):
         """El forat #2. `_llegeix_patrimoni` emet cada mesura amb `_clau_natural_pom`, que no
