@@ -31,24 +31,60 @@ import { overlayBase, Z_GUARD } from './ui/overlay'
  *    `transition_task` que el kanban, amb `auto='guard_30min'` perquè el log no digui que la
  *    pausa la va fer el tècnic.
  *
- * QA: per no esperar 30 minuts reals, els llindars es poden escurçar per sessió de navegador
+ * ⚠️ **ELS VALORS DE PRODUCCIÓ SÓN 30 I 3 MINUTS** (`LLINDAR_PROD_MIN` / `GRACIA_PROD_MIN`) i són
+ * els que manen sempre que ningú no hagi armat un override.
+ *
+ * **L'OVERRIDE DE QA ÉS D'UN SOL ÚS, I ÉS EL FIX D'AQUESTA PEÇA.** Abans vivia a `localStorage`
+ * i, com que `localStorage` sobreviu a tancar el navegador, no era «per sessió»: era PERMANENT.
+ * Un `ftt_guard_llindar_min = 1` posat en un QA el 27/07 seguia encès el 04/08, fent saltar el
+ * modal cada minut a qui obrís aquell perfil, i el símptoma no assenyala mai la causa (ningú no
+ * va a mirar el `localStorage` d'un navegador per explicar un modal). Vegeu
+ * DIAGNOSI_CICLE_TASCA_COMPLET.
+ *
+ * Ara la clau **es consumeix en llegir-la**: s'aplica a aquesta càrrega de pàgina i s'esborra.
+ * Un QA no pot deixar-la encesa perquè ja no hi ha res encès quan plega — com a molt, la sessió
+ * on la va posar. I un valor fora de rang no s'aplica gens: el rang és el del QA legítim
+ * (escurçar per no esperar mitja hora), mai allargar — un guard que salti als 300 minuts no és
+ * un guard.
+ *
+ * QA — armar l'override i RECARREGAR (cal repetir-ho per a cada recàrrega):
  *   localStorage.setItem('ftt_guard_llindar_min', '1')
  *   localStorage.setItem('ftt_guard_gracia_min', '0.5')
- * i recarregar. Sense les claus, els valors de producció.
  */
 
-const LLINDAR_MIN = llegeixMinuts('ftt_guard_llindar_min', 30)   // fins a l'avís
-const GRACIA_MIN = llegeixMinuts('ftt_guard_gracia_min', 3)      // per respondre'l
+const LLINDAR_PROD_MIN = 30   // producció: minuts fins a l'avís
+const GRACIA_PROD_MIN = 3     // producció: minuts per respondre'l
+// Sòl d'un override de QA; el sostre és el propi valor de producció (escurçar, mai allargar).
+const OVERRIDE_MIN_MIN = 0.25
+
+const LLINDAR_MIN = consumeixOverride('ftt_guard_llindar_min', LLINDAR_PROD_MIN)
+const GRACIA_MIN = consumeixOverride('ftt_guard_gracia_min', GRACIA_PROD_MIN)
 const REFRESC_MS = 60_000   // re-llegeix quin és el tram obert (pot haver-ne començat un altre)
 const TICK_MS = 1_000
 
-function llegeixMinuts(clau, defecte) {
+/**
+ * Minuts d'un override de QA, o el valor de producció. **Consumeix la clau**: la llegeix i la
+ * treu, de manera que cap override no pot sobreviure a la càrrega de pàgina que l'aplica.
+ * Fora de rang → producció, i es diu per consola (l'únic rastre que lliga símptoma i causa).
+ */
+function consumeixOverride(clau, defecte) {
+  let cru
   try {
-    const cru = Number(window.localStorage.getItem(clau))
-    return Number.isFinite(cru) && cru > 0 ? cru : defecte
+    cru = window.localStorage.getItem(clau)
+    if (cru != null) window.localStorage.removeItem(clau)
   } catch {
     return defecte   // localStorage bloquejat (mode privat): el guard no es queda sense llindar
   }
+  if (cru == null || cru === '') return defecte
+  const n = Number(cru)
+  if (!Number.isFinite(n) || n < OVERRIDE_MIN_MIN || n > defecte) {
+    console.warn(`[guard-tasca] ${clau}="${cru}" fora de rang [${OVERRIDE_MIN_MIN}, ${defecte}]: `
+      + `s'ignora; val el de producció (${defecte} min).`)
+    return defecte
+  }
+  console.warn(`[guard-tasca] override de QA actiu: ${clau}=${n} min (producció: ${defecte}). `
+    + `La clau ja s'ha consumit; per repetir-ho, torna-la a posar i recarrega.`)
+  return n
 }
 
 const MONO = 'IBM Plex Mono, monospace'
