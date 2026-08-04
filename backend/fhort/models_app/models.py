@@ -1282,15 +1282,17 @@ class SizeCheckLine(models.Model):
         unique_together = [('size_check', 'pom', 'capa', 'instancia')]
         constraints = [
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_sizecheckline_capa_gate_c1',
-            ),
+            # ✅ C4/G2 (04/08) — retirada per la migració 0077. La línia de check és una
+            # PRESA: la modista mesura la sisa dreta i l'esquerra per separat, i el veredicte
+            # de tolerància de cadascuna es jutja amb la SEVA. Amb la comporta viva i les
+            # germanes ja creades, obrir un Size Check petava amb `IntegrityError` —
+            # `_materialize_lines` sembra una línia per mesura amb els seus eixos.
             # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='models_app_sizecheckline_instancia_gate_cins',
-            ),
+            # ✅ C4/G2 (04/08) — retirada per la migració 0077. La línia de check és una
+            # PRESA: la modista mesura la sisa dreta i l'esquerra per separat, i el veredicte
+            # de tolerància de cadascuna es jutja amb la SEVA. Amb la comporta viva i les
+            # germanes ja creades, obrir un Size Check petava amb `IntegrityError` —
+            # `_materialize_lines` sembra una línia per mesura amb els seus eixos.
         ]
 
     def __str__(self):

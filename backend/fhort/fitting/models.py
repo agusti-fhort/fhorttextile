@@ -435,19 +435,12 @@ class PieceFittingLine(models.Model):
         # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA
         # (v. `models_app.BaseMeasurement.Meta`).
         unique_together = [('piece_fitting', 'pom', 'size_label', 'capa', 'instancia')]
-        constraints = [
-            # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`). C4 la retira.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='fitting_piecefittingline_capa_gate_c1',
-            ),
-            # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
-            # C4-ins la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='fitting_piecefittingline_instancia_gate_cins',
-            ),
-        ]
+        # ✅ C4/G2 (04/08) — les dues comportes retirades (migració fitting/0023). La línia
+        # de fitting és on es MESURA la peça real: si la fitxa demana la sisa dreta i
+        # l'esquerra, la modista pren dues xifres i aquí hi ha d'haver dues línies. El sembrat
+        # les clona de l'spec amb els seus eixos (`fitting/services.py:339`), o sigui que amb
+        # germanes vives crear una PieceFitting hauria petat aquí.
+        constraints = []
 
     def __str__(self):
         return f'{self.piece_fitting_id} · {self.pom.codi_client} @ {self.size_label}'
