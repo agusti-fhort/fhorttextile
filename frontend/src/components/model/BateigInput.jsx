@@ -14,7 +14,11 @@ import { useState, useEffect } from 'react'
 // Viu aquí i no dins de MeasureGrid perquè les DUES superfícies que bategen —la graella de
 // consulta/check i la taula d'entrada de Mesures— facin servir EL MATEIX camp i la mateixa
 // porta (`baseMeasurements.setNoms`), i no dos mecanismes que divergeixin.
-export default function BateigInput({ value, placeholder, title, onSave, style }) {
+// `autoFocus` + `onExit`: la taula de Mesures (v8.1) no pot tenir el nom SEMPRE dins d'un input
+// —un input no salta de línia, i la llei d'allà és que un nom no es talli mai—, o sigui que hi
+// entra per clic i en surt en perdre el focus. Tots dos són OPCIONALS: sense ells el component
+// és exactament el d'abans, que és com el fa servir `MeasureGrid`.
+export default function BateigInput({ value, placeholder, title, onSave, style, autoFocus = false, onExit = null }) {
   const [val, setVal] = useState(value ?? '')
   const [focused, setFocused] = useState(false)
   const [hover, setHover] = useState(false)
@@ -24,10 +28,12 @@ export default function BateigInput({ value, placeholder, title, onSave, style }
     const v = (val ?? '').trim()
     setVal(v)
     if (v !== (value ?? '')) onSave(v)
+    onExit?.()
   }
   const viu = focused || hover
   return (
     <input
+      autoFocus={autoFocus}
       value={val ?? ''} placeholder={placeholder} title={title} aria-label={title}
       onChange={e => setVal(e.target.value)}
       onFocus={() => setFocused(true)} onBlur={commit}

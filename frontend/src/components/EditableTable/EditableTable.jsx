@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -10,6 +10,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 
 import { formatDelta } from '../../utils/format'
+import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 
 // El bloc de REGLA es distingeix per FONS (crema de la casa) i per un SEPARADOR gruixut
 // respecte de la mesura: el color agrupa, el filet talla. Dos senyals, no un — la lliçó del
@@ -20,12 +21,20 @@ const REGIME_OPTIONS = ['LINEAR', 'STEP', 'FIXED']
 import BateigInput from '../model/BateigInput'
 import { baseMeasurements, models } from '../../api/endpoints'
 
+// TIPOGRAFIA DE LA v8.1 (brief C5-UI · P1). Els dos cossos NO són tokens de la casa a posta:
+// la maqueta aprovada demana 9,5px a la capçalera i 12,5px al valor, i cap dels graons del
+// sistema (--fs-caption 8 · --fs-label 10 · --fs-body 12) hi cau a sobre. Es declaren aquí, amb
+// nom, en comptes d'escampar-los per les cel·les — i els COLORS segueixen sent tokens, sempre.
+const FS_HEAD = '9.5px'   // capçaleres, versaletes
+const FS_VAL = '12.5px'   // valors i noms de fila
+
 const thS = {
-  padding: '6px 10px', textAlign: 'left', fontSize: 'var(--fs-body)',
+  padding: '4px 10px', textAlign: 'left', fontSize: FS_HEAD,
   fontWeight: 500, whiteSpace: 'nowrap',
+  textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)',
   borderBottom: '1px solid var(--border)',
 }
-const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 'var(--fs-body)' }
+const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: FS_VAL }
 // Règims editables a mà (les NORMES de gradació, mirall de GradingRule.LOGICA_CHOICES). FIXED és una
 // norma igual que LINEAR/STEP → canviable des del desplegable. ZERO/EXCEPTION NO s'ofereixen com a tria
 // nova (ZERO = nínxol "sempre 0"; EXCEPTION = tipus APLICAT per cel·la pel motor —override/excepció—,
@@ -84,11 +93,39 @@ export default function EditableTable({
         const size = col.split('.')[1]
         return { ...r, graded: { ...r.graded, [size]: parseFloat(value) || 0 } }
       }
-      if (col.includes('value')) return { ...r, [col]: parseFloat(value) || 0 }
+      // v8.1 — BUIT ÉS BUIT, no zero. `parseFloat('') || 0` convertia una cel·la esborrada en
+      // un 0, i un 0 no és `null`: la fila passava el filtre de `buildPayload` i es desava com
+      // una mesura de zero centímetres. La llei del carril («buit = es descarta») no es podia
+      // complir perquè no hi havia manera d'arribar al buit. Un text no numèric tampoc no
+      // s'escriu: es queda al buffer de l'input, que el marca en vermell.
+      if (col.includes('value')) {
+        const cru = String(value ?? '').replace(',', '.').trim()
+        if (cru === '') return { ...r, [col]: null }
+        const n = parseFloat(cru)
+        return Number.isNaN(n) ? r : { ...r, [col]: n }
+      }
       return { ...r, [col]: value }
     }))
     setDirty(true)
   }
+
+  // EL CARRIL (v8.1) — ↓/Enter baixa, ↑ puja, i el focus no surt mai de la columna de valors.
+  // Els inputs es registren per `row.id` i la navegació es resol sobre `localRows`, que és
+  // l'ordre REAL de la pantalla (el DnD el reordena); indexar per posició de render seria
+  // navegar per un ordre que ja no existeix després d'arrossegar una fila.
+  const valRefs = useRef({})
+  const registerVal = useCallback((rowId, el) => {
+    if (el) valRefs.current[rowId] = el
+    else delete valRefs.current[rowId]
+  }, [])
+  const rowsRef = useRef(localRows)
+  useEffect(() => { rowsRef.current = localRows }, [localRows])
+  const navVal = useCallback((rowId, dir) => {
+    const ordre = rowsRef.current
+    const i = ordre.findIndex(r => r.id === rowId)
+    const target = ordre[i + dir]
+    if (target) valRefs.current[target.id]?.focus()
+  }, [])
 
   // EL BATEIG — desa IMMEDIATAMENT per la porta pròpia i estreta del paquet NOMS-POM
   // (`PATCH base-measurements/<id>/noms/`), com ja fa la graella de consulta. No passa pel
@@ -282,8 +319,19 @@ export default function EditableTable({
   // catàleg) → BD neta = columnes buides. I desar mesures segueix sense fabricar cap regla:
   // `buildPayload` no envia `rules`, i aquell guard mort no torna.
   const displaySize = baseSize || sizeRun?.[0]
-  const colCount = (readOnly ? 0 : 2) + 7
+  const colCount = (readOnly ? 0 : 2) + 9
   const stickyHd = (left, w) => ({ ...thS, position: 'sticky', left, zIndex: 3, width: w, minWidth: w, background: 'var(--bg-muted)' })
+  // Bloc d'IDENTITAT de la fila, congelat a l'esquerra: Capa · nomenclatura · nom. Amb dues
+  // germanes vives (el mateix POM a l'exterior i al folre, la sisa esquerra i la dreta) el nom
+  // sol ja no diu quina fila és cadascuna, i és justament la columna que ha de quedar visible
+  // mentre s'escruta la taula cap a la dreta.
+  const W_CAPA = 104
+  const W_CODI = 90
+  const W_NOM = 236
+  // Quantes files es desaran i quantes cauran. La llei del carril («buit = es descarta») és
+  // muda si el descart només es veu fila a fila: aquí es llegeix el total abans de desar.
+  const nInformades = localRows.filter(r => r.base_value_cm != null && r.base_value_cm !== '').length
+  const nBuides = localRows.length - nInformades
 
   return (
     <div>
@@ -323,9 +371,10 @@ export default function EditableTable({
               }}>
                 {!readOnly && <th rowSpan={2} style={thS}></th>}
                 <th rowSpan={2} style={thS}>#</th>
-                <th rowSpan={2} style={stickyHd(0, 90)}>{t('measuregrid.col_pom')}</th>
-                <th rowSpan={2} style={stickyHd(90, 190)}>{t('measuregrid.col_nom')}</th>
-                <th rowSpan={2} style={{ ...thS, textAlign: 'right', minWidth: 90, background: 'var(--gold-pale)' }}>
+                <th rowSpan={2} style={stickyHd(0, W_CAPA)}>{t('capa.col')}</th>
+                <th rowSpan={2} style={stickyHd(W_CAPA, W_CODI)}>{t('measuregrid.col_pom')}</th>
+                <th rowSpan={2} style={stickyHd(W_CAPA + W_CODI, W_NOM)}>{t('measuregrid.col_nom')}</th>
+                <th rowSpan={2} style={{ ...thS, textAlign: 'right', minWidth: 100, background: 'var(--gold-pale)' }}>
                   {displaySize || t('editable_table.col.base_value')}
                 </th>
                 {(
@@ -346,10 +395,15 @@ export default function EditableTable({
             </thead>
             <SortableContext items={localRows.map(r => r.id)} strategy={verticalListSortingStrategy}>
               <tbody>
-                {localRows.map(row => (
+                {localRows.map((row, i) => (
                   <SortableRow
                     key={row.id}
                     row={row}
+                    // El número de fila és la POSICIÓ a la pantalla, no `row.ordre`. Les germanes
+                    // d'un mateix POM comparteixen `ordre` (l'exterior i el folre del pit són la
+                    // mateixa posició de fitxa), i pintar-lo cru donava «1 · 1 · 1 · 1 · 2 · 3…»:
+                    // una numeració que no compta res i que fa dubtar de si falten files.
+                    n={i + 1}
                     displaySize={displaySize}
                     readOnly={readOnly}
                     onCellChange={handleCellChange}
@@ -357,6 +411,9 @@ export default function EditableTable({
                     delta={calcDelta(row)}
                     onBateig={handleBateig}
                     onRegla={handleRegla}
+                    widths={{ capa: W_CAPA, codi: W_CODI, nom: W_NOM }}
+                    registerVal={registerVal}
+                    onNav={navVal}
                   />
                 ))}
               </tbody>
@@ -374,6 +431,14 @@ export default function EditableTable({
         </DndContext>
       </div>
 
+
+      {!readOnly && (
+        <div style={{ display: 'flex', gap: 18, marginTop: 10, fontSize: 'var(--fs-label)',
+                      color: 'var(--text-muted)' }}>
+          <span>{t('editable_table.count_filled', { n: nInformades })}</span>
+          {nBuides > 0 && <span>{t('editable_table.count_empty', { n: nBuides })}</span>}
+        </div>
+      )}
 
       {!readOnly && (dirty || onPomSave) && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
@@ -393,10 +458,16 @@ export default function EditableTable({
   )
 }
 
-function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta, onBateig, onRegla }) {
+function SortableRow({ row, n, displaySize, readOnly, onCellChange, onDelete, delta, onBateig, onRegla,
+                       widths, registerVal, onNav }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
+
+  // BUIT = ES DESCARTA. La fila no desapareix ni es bloqueja: es rebaixa i s'hi diu, perquè el
+  // descart passa en DESAR i no en teclejar. Qui la deixa en blanc ho fa a posta o per descuit,
+  // i la diferència entre les dues coses és haver-ho pogut llegir abans de prémer el botó.
+  const buida = row.base_value_cm == null || row.base_value_cm === ''
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -422,75 +493,79 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
           </span>
         </td>
       )}
-      <td style={{ ...tdS, color: 'var(--text-muted)' }}>{(row.ordre ?? 0) + 1}</td>
-      <td style={stickyTd(0, 90)}>
+      <td style={{ ...tdS, color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>{n}</td>
+      {/* LA CAPA (D-31.22) — de quina matèria de la peça parla aquesta mesura. Es mostra SEMPRE,
+          també quan totes les files diuen «Exterior»: una columna que apareix el dia que neix la
+          primera germana faria que la taula canviés de forma sota els peus del tècnic, i el que
+          ha de canviar és el CONTINGUT d'una cel·la, no el nombre de columnes.
+          És LECTURA: moure una mesura de capa és partir-la en dues, i això és un acte propi
+          (la germana de capa), no un desplegable que es toca de passada. */}
+      <td style={{ ...stickyTd(0, widths.capa), color: 'var(--text-main)', whiteSpace: 'normal' }}>
+        {etiquetaCapa(row.capa, t)}
+      </td>
+      <td style={stickyTd(widths.capa, widths.codi)}>
         {/* C3 — NOMENCLATURA DEL CLIENT del model (CustomerPOMAlias): el codi que el tècnic
             escriu als documents d'aquest client (Brownie diu "A" on el catàleg diu "CH"), i
             els seus noms EN/local. Sense àlies per aquest POM, el catàleg de la casa, com
             sempre. La nomenclatura per-model (nom_fitxa) segueix manant per damunt de tot:
             és la que el tècnic ha escrit aquí mateix. */}
-        <EditableCell value={row.nom_fitxa || row.client_code || row.pom_code}
-          onChange={v => onCellChange(row.id, 'nom_fitxa', v)}
-          mono gold readOnly={readOnly} />
+        <NomenInput value={row.nom_fitxa} placeholder={row.client_code || row.pom_code || ''}
+          readOnly={readOnly} onCommit={v => onCellChange(row.id, 'nom_fitxa', v)} />
         {row.is_key && (
           <i className="ti ti-star" title="KEY"
             style={{ fontSize: 9, marginLeft: 5, color: 'var(--gold)', verticalAlign: 'middle' }} />
         )}
       </td>
-      <td style={stickyTd(90, 190)}>
+      <td style={{ ...stickyTd(widths.capa + widths.codi, widths.nom), opacity: buida ? 0.55 : 1 }}>
         {(() => {
           // Llei de presentació de la casa (nom internacional dalt · llengua de qui llegeix
           // sota), APLICADA AL CLIENT: si el POM té àlies, manen les seves descripcions.
           const dalt = row.client_name_en || row.nom_en || row.nom_ca || row.pom_code
-          // C5 — el subtítol anava al token de captions (8px), pensat per a badges i peus, no
-          // per a una columna que es llegeix a cada fila: puja al token immediatament superior
-          // (--fs-label, 10px). Segueix per sota del nom (--fs-body, 12px).
           const sota = row.client_name_en ? row.client_name_local : row.nom_ca
-          const estilDalt = { fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }
-          const estilSota = { fontSize: 'var(--fs-label)', fontStyle: 'italic', color: 'var(--text-muted)', whiteSpace: 'normal' }
-          // EL BATEIG (31/07) — les DUES línies s'editen aquí, que és on es treballa.
+          // v8.1 — EL SUBTÍTOL TRADUÏT PERMANENT SE'N VA A LA ⓘ. Era una segona línia a cada
+          // fila d'una taula que ara n'ha de mostrar tretze i distingir-ne quatre germanes: el
+          // que ha de saltar a la vista és QUINA mesura és cada fila (capa i instància), no el
+          // mateix nom dit dues vegades. La traducció no es perd; es demana.
+          // …i NOMÉS si diu una cosa diferent del que ja es llegeix. Una ⓘ que repeteix el nom de
+          // la fila («Cord width» → «Cord width») és una promesa d'informació que no compleix; és
+          // la mateixa regla que ja aplica `nomsDePom` a la segona línia de les altres taules.
+          const nomVisible = row.nom_canonic_model || dalt
+          const candidat = row.nom_traduit_model || sota || ''
+          const traduit = candidat && candidat !== nomVisible ? candidat : ''
+          // LA INSTÀNCIA VIU DINS DEL NOM, no en una columna a part i no com a sufix del codi.
+          // Paraula sencera («Esquerra», mai «L») i EN EL COLOR DEL NOM: és el nom d'aquesta
+          // mesura el que s'allarga, no una etiqueta enganxada al costat. Amb `AH-L`/`AH-R` com
+          // a única marca, dir quina fila és quina volia dir conèixer la nomenclatura del client.
+          const inst = etiquetaInstancia(row.instancia, t)
+          const estilDalt = { fontSize: FS_VAL, color: 'var(--text-main)', whiteSpace: 'normal' }
+          // EL BATEIG (31/07) — el nom canònic s'edita aquí, que és on es treballa.
           //
-          // El paquet del bateig va cablejar això a `MeasureGrid` (consulta/check) i aquesta
-          // taula —la d'entrada de Mesures— es va quedar amb dos `div` estàtics: el clic no
-          // armava res perquè no hi havia res a armar. Mateix camp i MATEIXA PORTA que allà
-          // (`baseMeasurements.setNoms` → PATCH base-measurements/<id>/noms/), no un segon mecanisme.
-          //
-          // El catàleg va de PLACEHOLDER: buidar el camp torna a deixar-lo manar, i mentre el
-          // bateig és buit el que es llegeix és exactament el d'abans.
+          // Mateix camp i MATEIXA PORTA que `MeasureGrid` (`baseMeasurements.setNoms` → PATCH
+          // base-measurements/<id>/noms/), no un segon mecanisme. El catàleg va de PLACEHOLDER:
+          // buidar el camp torna a deixar-lo manar.
           //
           // Una fila encara no desada (`tmp-…`) no té BaseMeasurement a què penjar el nom:
           // es queda com a text fins que es desa. Batejar-la abans seria escriure a un id
           // que no existeix.
           const bmId = row.id != null && !String(row.id).startsWith('tmp-') ? row.id : null
-          if (!readOnly && bmId != null && onBateig) {
-            return (
-              <>
-                <BateigInput value={row.nom_canonic_model || ''} placeholder={dalt || ''}
-                  title={t('measuregrid.nom_canonic_tip')}
-                  onSave={v => onBateig(bmId, { nom_canonic_model: v })}
-                  style={estilDalt} />
-                <BateigInput value={row.nom_traduit_model || ''} placeholder={sota || dalt || ''}
-                  title={t('measuregrid.nom_traduit_tip')}
-                  onSave={v => onBateig(bmId, { nom_traduit_model: v })}
-                  style={estilSota} />
-              </>
-            )
-          }
+          const nomEditable = !readOnly && bmId != null && onBateig
           return (
-            <>
-              <div style={estilDalt}>{row.nom_canonic_model || dalt}</div>
-              {(row.nom_traduit_model || (sota && sota !== dalt)) && (
-                <div style={estilSota}>{row.nom_traduit_model || sota}</div>
-              )}
-            </>
+            <NomCanonic
+              value={row.nom_canonic_model || ''} placeholder={dalt || ''} instancia={inst}
+              traduccio={traduit} editable={nomEditable} estil={estilDalt}
+              title={t('measuregrid.nom_canonic_tip')}
+              onSave={v => onBateig(bmId, { nom_canonic_model: v })} />
           )
         })()}
       </td>
       <td style={{ ...tdS, textAlign: 'right', background: 'var(--gold-pale)' }}>
-        <EditableCell
+        <CarrilInput
           value={row.base_value_cm}
-          onChange={v => onCellChange(row.id, 'base_value_cm', v)}
-          mono right readOnly={readOnly} />
+          readOnly={readOnly}
+          onCommit={v => onCellChange(row.id, 'base_value_cm', v)}
+          registerVal={el => registerVal?.(row.id, el)}
+          onNav={dir => onNav?.(row.id, dir)}
+          hint={buida ? t('editable_table.row_discarded') : undefined} />
       </td>
       {(
         <>
@@ -543,6 +618,136 @@ function SortableRow({ row, displaySize, readOnly, onCellChange, onDelete, delta
         </td>
       )}
     </tr>
+  )
+}
+
+// EL NOM DE LA FILA (v8.1) — text que SALTA DE LÍNIA, amb la instància a dins i la traducció a la ⓘ.
+//
+// El nom no viu dins d'un input permanent com al bateig de `MeasureGrid`, i el motiu és físic: un
+// `<input>` no fa salt de línia, i «1/2 bottom width relaxed» o «CENTER FRONT YOKE HEIGHT» hi
+// queden tallats a mitja paraula. La llei de la v8.1 és que un nom no es talli mai. Així que en
+// repòs és text (que embolcalla) i el camp del bateig hi entra amb un clic — mateix component i
+// MATEIXA PORTA que a l'altra graella (`BateigInput` → `baseMeasurements.setNoms`), no un segon
+// mecanisme.
+//
+// La INSTÀNCIA va enganxada al nom i en el SEU color: no és una etiqueta al costat, és que aquesta
+// mesura es diu «Profunditat de sisa · Esquerra». La ⓘ porta el nom en l'idioma de qui llegeix;
+// era una segona línia permanent a cada fila i ara es demana, que és la freqüència amb què es mira.
+function NomCanonic({ value, placeholder, instancia, traduccio, editable, estil, title, onSave }) {
+  const [editant, setEditant] = useState(false)
+  const [hover, setHover] = useState(false)
+
+  if (editable && editant) {
+    return (
+      <BateigInput value={value} placeholder={placeholder} title={title}
+        autoFocus onExit={() => setEditant(false)} onSave={onSave} style={estil} />
+    )
+  }
+  return (
+    <div
+      onClick={editable ? (() => setEditant(true)) : undefined}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      title={editable ? title : undefined}
+      style={{
+        ...estil, cursor: editable ? 'text' : 'default',
+        borderBottom: `1px ${editable && hover ? 'dashed var(--border)' : 'solid transparent'}`,
+      }}>
+      {value || placeholder}
+      {instancia && <span style={{ fontWeight: 500 }}>{` · ${instancia}`}</span>}
+      {traduccio && (
+        <i className="ti ti-info-circle" title={traduccio} aria-label={traduccio}
+          onClick={e => e.stopPropagation()}
+          style={{ fontSize: 12, marginLeft: 6, color: 'var(--text-muted)', cursor: 'help' }} />
+      )}
+    </div>
+  )
+}
+
+// EL CARRIL (v8.1) — la columna de valors és un camp SEMPRE OBERT, no un text que s'ha de clicar.
+//
+// Amb `EditableCell` cada mesura costava un clic per entrar-hi i un altre clic per sortir-ne: tretze
+// files són tretze viatges al ratolí, i la mà del tècnic no surt del teclat numèric. Ara ↓/Enter
+// baixa, ↑ puja, i Tab recorre els camps de la fila com a qualsevol formulari.
+//
+// El buffer és LOCAL i el commit és IMMEDIAT: es tecleja lliure (coma decimal inclosa) i el que
+// puja al model és el número net. Un text no numèric es queda al buffer i es marca en vermell —no
+// s'escriu i no es perd—, perquè escriure `NaN` a la taula i esborrar-lo en silenci seria pitjor
+// que no acceptar-lo. Buit sí que s'escriu: buit és una decisió (la fila es descarta).
+function CarrilInput({ value, readOnly, onCommit, registerVal, onNav, hint }) {
+  const [txt, setTxt] = useState(value == null ? '' : String(value))
+  const [focused, setFocused] = useState(false)
+  const [bad, setBad] = useState(false)
+
+  // La font de veritat torna del model mentre no s'hi escriu; amb el focus a dins mana el buffer
+  // (si no, un refresc de la taula trepitjaria el que s'està teclejant).
+  useEffect(() => { if (!focused) { setTxt(value == null ? '' : String(value)); setBad(false) } }, [value, focused])
+
+  if (readOnly) {
+    return (
+      <span style={{ fontFamily: 'monospace', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+        {value == null || value === '' ? <span style={{ color: 'var(--text-muted)' }}>—</span> : value}
+      </span>
+    )
+  }
+
+  const onChange = (raw) => {
+    setTxt(raw)
+    const net = raw.replace(',', '.').trim()
+    if (net !== '' && Number.isNaN(parseFloat(net))) { setBad(true); return }
+    setBad(false)
+    onCommit(raw)
+  }
+
+  return (
+    <input
+      ref={registerVal}
+      type="text" inputMode="decimal" value={txt} title={hint}
+      onFocus={e => { setFocused(true); e.target.select() }}
+      onBlur={() => setFocused(false)}
+      onChange={e => onChange(e.target.value)}
+      onKeyDown={e => {
+        if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); onNav(1) }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); onNav(-1) }
+        else if (e.key === 'Escape') { setTxt(value == null ? '' : String(value)); setBad(false) }
+      }}
+      style={{
+        width: 78, padding: '3px 8px', textAlign: 'right',
+        fontFamily: 'inherit', fontSize: FS_VAL, fontWeight: 600,
+        fontVariantNumeric: 'tabular-nums',
+        color: 'var(--text-main)', background: 'var(--white)',
+        border: `1px solid ${bad ? 'var(--err)' : 'var(--border)'}`, borderRadius: 5,
+        boxSizing: 'border-box',
+      }}
+    />
+  )
+}
+
+// Nomenclatura CURTA de la fila (`nom_fitxa`: A, A-FOL, AH-L). Camp sempre obert perquè el Tab
+// del carril hi pugui entrar; en repòs sembla text pla (la vora només apareix en hover/focus),
+// que és el patró del bateig i de la columna POM de `MeasureGrid`. El placeholder és el codi del
+// catàleg: buit vol dir «mana el catàleg», mai «sense nom».
+function NomenInput({ value, placeholder, readOnly, onCommit }) {
+  const [txt, setTxt] = useState(value ?? '')
+  const [focused, setFocused] = useState(false)
+  useEffect(() => { if (!focused) setTxt(value ?? '') }, [value, focused])
+
+  if (readOnly) {
+    return <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--gold)' }}>{value || placeholder}</span>
+  }
+  return (
+    <input
+      value={txt} placeholder={placeholder}
+      onFocus={() => setFocused(true)}
+      onBlur={() => { setFocused(false); if ((txt ?? '') !== (value ?? '')) onCommit(txt) }}
+      onChange={e => setTxt(e.target.value)}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      style={{
+        width: 74, padding: '2px 6px', fontFamily: 'monospace', fontSize: FS_VAL,
+        fontWeight: 600, color: 'var(--gold)', background: focused ? 'var(--white)' : 'transparent',
+        border: '1px solid transparent', borderRadius: 5, boxSizing: 'border-box',
+        ...(focused && { borderColor: 'var(--gold)' }),
+      }}
+    />
   )
 }
 

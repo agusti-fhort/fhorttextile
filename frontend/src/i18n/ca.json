@@ -3143,7 +3143,10 @@
       "delta": "Delta",
       "break_delta": "Delta break",
       "break_size": "Talla break"
-    }
+    },
+    "row_discarded": "Sense valor: aquesta fila es descartarà en desar.",
+    "count_filled": "{{n}} informades",
+    "count_empty": "{{n}} en blanc → es descartaran"
   },
   "dashboard": {
     "tab_home": "Inici",
@@ -4188,5 +4191,20 @@
     "session_expiring_body": "La teva sessió és a punt d'acabar. Vols continuar treballant?",
     "session_keep": "Continua treballant",
     "session_logout": "Tancar sessió"
+  },
+  "capa": {
+    "exterior": "Exterior",
+    "folre": "Folre",
+    "entretela": "Entretela",
+    "farciment": "Farciment",
+    "reforc": "Reforç",
+    "fornitura": "Fornitura",
+    "col": "Capa"
+  },
+  "instancia": {
+    "left": "Esquerra",
+    "right": "Dreta",
+    "relaxed": "Relaxada",
+    "extended": "Estirada"
   }
 }

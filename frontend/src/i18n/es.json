@@ -3143,7 +3143,10 @@
       "delta": "Delta",
       "break_delta": "Delta break",
       "break_size": "Talla break"
-    }
+    },
+    "row_discarded": "Sin valor: esta fila se descartará al guardar.",
+    "count_filled": "{{n}} informadas",
+    "count_empty": "{{n}} en blanco → se descartarán"
   },
   "dashboard": {
     "tab_home": "Inicio",
@@ -4188,5 +4191,20 @@
     "session_expiring_body": "Tu sesión está a punto de acabar. ¿Quieres seguir trabajando?",
     "session_keep": "Seguir trabajando",
     "session_logout": "Cerrar sesión"
+  },
+  "capa": {
+    "exterior": "Exterior",
+    "folre": "Forro",
+    "entretela": "Entretela",
+    "farciment": "Relleno",
+    "reforc": "Refuerzo",
+    "fornitura": "Fornitura",
+    "col": "Capa"
+  },
+  "instancia": {
+    "left": "Izquierda",
+    "right": "Derecha",
+    "relaxed": "Relajada",
+    "extended": "Estirada"
   }
 }
