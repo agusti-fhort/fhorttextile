@@ -214,16 +214,25 @@ const checkSource = {
 
   buildRows(raw, ctx) {
     const stages = raw.baseData?.stages || []
-    const lineByPom = {}
-    for (const l of (raw.check?.lines || [])) lineByPom[l.pom_id] = l
+    // C4/BLOC 1-BIS — EL CREUAMENT ÉS PER LA PK DE LA MESURA, NO PEL POM. Es feia
+    // `lineByPom[l.pom_id]`, i amb dues germanes vives les DUES files de `base_stages`
+    // rebien la MATEIXA línia de check: el mateix valor mesurat, el mateix veredicte de
+    // tolerància i la mateixa cel·la de decisió·nota. Una de les dues preses no arribava a
+    // la pantalla i el veredicte quedava atribuït a la germana equivocada.
+    //
+    // Les dues bandes parlen ara el mateix idioma: `base_stages` ja servia
+    // `base_measurement_id` i les línies del check el porten des d'A2 (`bebd11a0`). Es
+    // creua per la PK i no pels eixos perquè la PK és una clau i prou —no cal recompondre
+    // res— i perquè `base_stages` no emet capa ni instància.
+    const lineByBm = new Map()
+    for (const l of (raw.check?.lines || [])) {
+      if (l.base_measurement_id != null) lineByBm.set(l.base_measurement_id, l)
+    }
     return (raw.baseData?.rows || []).map(r => {
-      const line = lineByPom[r.pom_id]
+      const line = lineByBm.get(r.base_measurement_id)
       return {
         pom_id: r.pom_id,
-        // C4/BLOC 3 — clau de fila per a MeasureGrid: la PK de la mesura, que `base_stages`
-        // ja serveix. 🚩 El creuament amb les línies del check segueix sent per `pom_id`
-        // (`lineByPom`, aquí sobre) i NO es pot arreglar des d'aquí: el payload de
-        // `serializers_size_check` no porta ni els eixos ni el `base_measurement_id`.
+        // Clau de fila per a MeasureGrid: la PK de la mesura, que `base_stages` ja serveix.
         rowKey: r.base_measurement_id ?? r.pom_id,
         codi: r.nom_fitxa || r.pom_code,
         pom_code: r.pom_code,
