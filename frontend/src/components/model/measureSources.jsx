@@ -8,6 +8,7 @@
 
 import { pieceFittings, fittingSessions, baseMeasurements } from '../../api/endpoints'
 import { buildFittingGroups, buildFittingRows, makeFittingOnSave, regimeLeadCol } from './fittingGridAdapter'
+import { identitatMesura } from '../../utils/identitatMesura'
 
 // Deriva pomRows + versionNumbers + baseLabel d'un `grid` (pieceFittings.get). Còpia fidel de la
 // projecció que feia FittingDetail (base única; l'eix multi-talla viu a Escalat).
@@ -17,14 +18,17 @@ function deriveFitting(grid) {
   const baseLabel = (model.base_size_label || '').trim()
   const pomMap = new Map()
   for (const l of lines) {
-    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, {
-      pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key,
+    // C4/BLOC 1-BIS — s'agrupa per la MESURA, no pel POM: dues germanes són dues files.
+    const ident = identitatMesura(l)
+    if (!pomMap.has(ident)) pomMap.set(ident, {
+      pom_id: l.pom_id, capa: l.capa, instancia: l.instancia,
+      codi: l.codi, nom: l.nom, is_key: l.is_key,
       nom_en: l.nom_en, nom_local: l.nom_local, nom_fitxa: l.nom_fitxa, bm_id: l.bm_id,
       logica: l.logica, increment_base: l.increment_base,
       increment_break: l.increment_break, talla_break_label: l.talla_break_label,
       cells: {},
     })
-    pomMap.get(l.pom_id).cells[l.size_label] = l
+    pomMap.get(ident).cells[l.size_label] = l
   }
   const versionNumbers = [...new Set(
     lines.flatMap(l => (l.evolucio || []).map(e => e.version_number))

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { fittingSessions, fittingPhotos } from '../../api/endpoints'
 import { thStyle, useDebouncedSave, SaveStatus, fmtMeasure, useUnit } from '../../pages/fittingShared'
 import { orderedSizes } from '../../utils/sizeRun'
+import { identitatMesura } from '../../utils/identitatMesura'
 
 // Sprint Y — Panell de la SESSIÓ de fitting dins la superfície Mesures (mode sessió). Migra de
 // FittingDetail: la franja de context (estat/data/responsable/lloc/persona) + el panell plegable
@@ -18,8 +19,10 @@ function changedRows(grid) {
   const baseLabel = (grid?.model?.base_size_label || '').trim()
   const pomMap = new Map()
   for (const l of lines) {
-    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, { pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key, cells: {} })
-    pomMap.get(l.pom_id).cells[l.size_label] = l
+    // C4/BLOC 1-BIS — s'agrupa per la MESURA, no pel POM: dues germanes són dues files.
+    const ident = identitatMesura(l)
+    if (!pomMap.has(ident)) pomMap.set(ident, { pom_id: l.pom_id, capa: l.capa, instancia: l.instancia, codi: l.codi, nom: l.nom, is_key: l.is_key, cells: {} })
+    pomMap.get(ident).cells[l.size_label] = l
   }
   const baseOf = (l) => l?.evolucio?.[0]?.valor_cm ?? null
   const isMod = (l) => {

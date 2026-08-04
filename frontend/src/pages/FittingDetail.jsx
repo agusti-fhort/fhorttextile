@@ -10,6 +10,7 @@ import EditorHeader from '../components/model/EditorHeader'
 import { buildFittingGroups, buildFittingRows, regimeLeadCol } from '../components/model/fittingGridAdapter'
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from './fittingShared'
 import { orderedSizes } from '../utils/sizeRun'
+import { identitatMesura } from '../utils/identitatMesura'
 
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
 
@@ -121,8 +122,10 @@ function changedRows(grid) {
   const baseLabel = (grid.model?.base_size_label || '').trim()
   const pomMap = new Map()
   for (const l of lines) {
-    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, { pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key, cells: {} })
-    pomMap.get(l.pom_id).cells[l.size_label] = l
+    // C4/BLOC 1-BIS — s'agrupa per la MESURA, no pel POM: dues germanes són dues files.
+    const ident = identitatMesura(l)
+    if (!pomMap.has(ident)) pomMap.set(ident, { pom_id: l.pom_id, capa: l.capa, instancia: l.instancia, codi: l.codi, nom: l.nom, is_key: l.is_key, cells: {} })
+    pomMap.get(ident).cells[l.size_label] = l
   }
   const baseOf = (l) => l?.evolucio?.[0]?.valor_cm ?? null
   const isMod = (l) => {
@@ -577,8 +580,11 @@ export default function FittingDetail() {
   // Matriu: files = POM. P1 — l'única columna de talla és la BASE (l'eix multi-talla viu a Escalat).
   const pomMap = new Map()
   for (const l of lines) {
-    if (!pomMap.has(l.pom_id)) pomMap.set(l.pom_id, {
-      pom_id: l.pom_id, codi: l.codi, nom: l.nom, is_key: l.is_key,
+    // C4/BLOC 1-BIS — s'agrupa per la MESURA, no pel POM: dues germanes són dues files.
+    const ident = identitatMesura(l)
+    if (!pomMap.has(ident)) pomMap.set(ident, {
+      pom_id: l.pom_id, capa: l.capa, instancia: l.instancia,
+      codi: l.codi, nom: l.nom, is_key: l.is_key,
       // Nomenclatura 2 línies (nom EN canònic dalt · idioma usuari sota) — heretada per MeasureGrid (P5).
       nom_en: l.nom_en, nom_local: l.nom_local, nom_fitxa: l.nom_fitxa, bm_id: l.bm_id,
       // Règim per POM (mateix valor a cada talla) → etiqueta de regla a la capçalera de fila.
@@ -586,7 +592,7 @@ export default function FittingDetail() {
       increment_break: l.increment_break, talla_break_label: l.talla_break_label,
       cells: {},
     })
-    pomMap.get(l.pom_id).cells[l.size_label] = l
+    pomMap.get(ident).cells[l.size_label] = l
   }
   const pomRows = [...pomMap.values()]
 
