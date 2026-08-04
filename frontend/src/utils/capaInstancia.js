@@ -59,3 +59,29 @@ export function etiquetaInstancia(slug, t) {
 
 /** `true` si la fila parla d'una capa que no és l'exterior (per si cal marcar-la). */
 export const esGermanaDeCapa = (slug) => !!slug && slug !== 'exterior'
+
+/**
+ * EL SUFIX QUE FA ÚNIC EL NOM D'UNA MESURA — per a les superfícies d'UNA sola línia de text.
+ *
+ * Les graelles tenen una columna de CAPA i poden posar la instància dins la cel·la del nom. Les
+ * taules de PAPER de la fitxa tècnica no: hi ha una cel·la, i el que hi càpiga és tot el que el
+ * tècnic llegirà. Amb dues germanes, «Chest width» i «Chest width» eren dues files idèntiques
+ * amb xifres diferents — el pitjor que pot fer un document que va al fabricant.
+ *
+ * L'ORDRE ÉS instància i DESPRÉS capa, i no a l'inrevés: la instància qualifica la mesura («la
+ * sisa esquerra») i la capa diu de quina matèria parla («…al folre»). Es llegeix com es diu.
+ *
+ * L'EXTERIOR NO S'ESCRIU. És la capa per defecte i la que té la immensa majoria de files: dir-ho
+ * a cada línia seria repetir «Exterior» tretze vegades per distingir-ne una. La germana és la
+ * que porta marca, que és també com es llegeix un document en paper.
+ *
+ * Torna `''` per a la mesura única d'exterior — el cas normal, que no ha de canviar de forma.
+ */
+export function sufixIdentitat(fila, t) {
+  if (!fila) return ''
+  const trams = []
+  const inst = etiquetaInstancia(fila.instancia, t)
+  if (inst) trams.push(inst)
+  if (esGermanaDeCapa(fila.capa)) trams.push(etiquetaCapa(fila.capa, t))
+  return trams.length ? ` · ${trams.join(' · ')}` : ''
+}

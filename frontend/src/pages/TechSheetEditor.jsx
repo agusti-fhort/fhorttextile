@@ -24,7 +24,8 @@ import { useUnit, fmtMeasure } from './fittingShared'
 import { comptaPecesInserides, esPecaInserible } from '../utils/pecaInsercio'
 import { potTancar, treuAncoratgeFantasma } from '../utils/tracatPloma'
 import { reparteixCotes, superficieDeCotes } from '../utils/cotesAuto'
-import { nomenclaturaDePom } from '../utils/nomenclaturaPom'
+import { nomenclaturaDePom, nomsDePom } from '../utils/nomenclaturaPom'
+import { sufixIdentitat } from '../utils/capaInstancia'
 // F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
 import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
 
@@ -302,6 +303,29 @@ function flattenObjects(objects = []) {
 // recurs, només perquè un POM tenant-only sense res no es quedi sense etiqueta; abans era el
 // segon criteri i és el que feia sortir "POM-020" com si fos nomenclatura.
 export const cotaLabelDe = (bm) => (bm && (bm.nom_fitxa || bm.codi_client || bm.pom_code_global)) || ''
+
+// EL NOM D'UNA MESURA A UNA TAULA DE PAPER — punt únic de les QUATRE taules de la fitxa.
+//
+// Fins avui cada taula portava la seva pròpia cadena en línia (`nom_en || nom_client ||
+// pom_code_global`, `rule.pom_nom_en || …`, `row.nom_en`), i les quatre tenien el mateix parell
+// de forats:
+//
+//  · EL BATEIG NO ARRIBAVA. Rebatejar un POM al model es veia a Mesures i al panell de cotes, i
+//    el paper seguia imprimint el nom del catàleg. La regla d'or de l'Agus —un canvi de nom es
+//    veu IGUAL a tot arreu— es trencava exactament al document que va al fabricant.
+//    `nomsDePom` ja resolia això i no el consumia ningú.
+//
+//  · LA GERMANA NO ES DISTINGIA. Els payloads porten `capa` i `instancia` des de C4, però la
+//    cel·la imprimia només el nom: a ROSALIA, «Chest width» i «Chest width» eren dues files amb
+//    xifres diferents i res que digués quina era el folre. En una graella ho salva la columna de
+//    capa; en un imprès no hi ha res més que aquesta cel·la.
+//
+// La segona línia (`sub`) es queda: és el nom en la llengua del document i no compta com a
+// identitat. El sufix va a la PRIMERA, que és la que es llegeix.
+const nomDeTaula = (fila, tDoc) => {
+  const { canonic, local } = nomsDePom(fila)
+  return { text: `${canonic}${sufixIdentitat(fila, tDoc)}`, sub: local }
+}
 
 // F2 (precedent de col·locació) — objectes del croquis als quals el tècnic assigna una vista
 // (viewSlot) i sobre la bbox dels quals es normalitzen les cotes.
@@ -4933,7 +4957,7 @@ export default function TechSheetEditor() {
     // almenys una fila porta xifra.
     const rows = bms.map(bm => [
       nomenclaturaDePom(bm),
-      { text: bm.nom_en || bm.nom_client || bm.pom_code_global || '', sub: bm.nom_ca || '' },
+      nomDeTaula(bm, tDoc),
       fmtMeasure(bm.base_value_cm, unit) ?? '',
     ])
     addObject(fitTableObj({
@@ -4960,33 +4984,20 @@ export default function TechSheetEditor() {
   //     muda sense que res ho digués.
   const insertTableT1a = async (sfId) => {
     if (!locked) return
-    const ruleSetId = model?.grading_rule_set ?? null
-    let bms, rules
+    // LA CRIDA AL RULESET SE'N VA amb l'última cosa que en llegia. Les columnes de Regla/Δ/Break
+    // ja van sortir d'aquesta taula el 31/07; l'únic que en quedava viu era `rule.pom_nom_en`
+    // per al nom canònic, i el nom ara el resol `nomsDePom` —que a més sap del bateig, cosa que
+    // la regla no podia saber—. Amb això, `grading-rules/` deixa de ser una dependència de la
+    // T1a: una petició menys i un índex per `pom_id` menys, que era l'últim d'aquesta funció.
+    let bms
     try {
-      const peticions = [fetch(`${API}/api/v1/models/${model.id}/base-measurements/`, { headers: authHeaders })]
-      // GUARD: la crida al ruleset NOMÉS existeix si hi ha ruleset.
-      if (ruleSetId != null) {
-        peticions.push(fetch(`${API}/api/v1/grading-rules/?rule_set=${ruleSetId}`, { headers: authHeaders }))
-      }
-      const [rBm, rRules] = await Promise.all(peticions)
-      if (!rBm.ok || (rRules && !rRules.ok)) { flash(t('tech_sheet.flash_table_fetch_error')); return }
+      const rBm = await fetch(`${API}/api/v1/models/${model.id}/base-measurements/`, { headers: authHeaders })
+      if (!rBm.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
       const dBm = await rBm.json()
       bms = dBm.results || dBm || []
-      if (rRules) {
-        const dRules = await rRules.json()
-        rules = dRules.results || dRules || []
-      } else {
-        rules = []
-      }
     } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
     if (!bms.length) { flash(t('tech_sheet.flash_empty_table')); return }
 
-    // Índex per pom_id. Amb ruleset mana la GradingRule; sense, la resident de cada fila.
-    const rulesByPom = {}
-    rules.forEach(r => { rulesByPom[r.pom] = r })
-    bms.forEach(bm => {
-      if (rulesByPom[bm.pom_id] == null && bm.regla_model) rulesByPom[bm.pom_id] = bm.regla_model
-    })
     // La taula del FITTING és per anotar-hi a mà el que es mesura damunt la peça: hi queden la
     // referència, el POM, la base i les dues columnes on s'escriu. Regla/Δ, Break i Tol± en
     // surten (Agus, 31/07) — són dades de GRADUACIÓ, i el fitting no és on es decideixen; el
@@ -4999,17 +5010,19 @@ export default function TechSheetEditor() {
       { key: 'nova', label: tDoc('tech_sheet.tbl_col_new_measure'), width: 34 },
       { key: 'coment', label: tDoc('tech_sheet.tbl_col_comments'), width: 60 },
     ]
-    const filesDe = (sub) => sub.map(bm => {
-      const rule = rulesByPom[bm.pom_id]
-      return [
-        bm.nom_fitxa || bm.pom_abbreviation || '',
-        // Amb ruleset el nom canònic ve de la regla; amb regla resident la regla no en porta,
-        // i el nom canònic és el `nom_en` que base-measurements ja exposa.
-        { text: rule?.pom_nom_en || bm.nom_en || bm.nom_client || bm.pom_code_global || '', sub: bm.nom_ca || '' },
-        fmtMeasure(bm.base_value_cm, unit) ?? '',
-        '', '',                                  // mesura nova · comentaris: per omplir a mà
-      ]
-    })
+    const filesDe = (sub) => sub.map(bm => [
+      // R2 — la nomenclatura per `nomenclaturaDePom`, com la taula de mesures base. Feia
+      // `nom_fitxa || pom_abbreviation`, que és la mateixa cadena escurçada i amb el codi del
+      // client saltat: dues còpies de la mateixa llei que ja havien divergit un cop.
+      nomenclaturaDePom(bm),
+      // El nom canònic de la REGLA ja no mana: el bateig del model és el que el tècnic ha
+      // escrit per a AQUESTA peça i ha de sortir igual a la pantalla i al paper (regla d'or).
+      // `rule.pom_nom_en` era el nom del catàleg vist des del ruleset — el mateix que
+      // `nomsDePom` ja resol, però sense poder saber res del bateig.
+      nomDeTaula(bm, tDoc),
+      fmtMeasure(bm.base_value_cm, unit) ?? '',
+      '', '',                                  // mesura nova · comentaris: per omplir a mà
+    ])
     // F3 — una taula per secció NOMÉS si el tècnic ho ha demanat I el document en té més
     // d'una. Amb una sola secció (o cap) el resultat és exactament el d'abans.
     const seccions = seccionsDeFiles(bms)
@@ -5066,8 +5079,10 @@ export default function TechSheetEditor() {
     // una LINEAR pura sense cap break les marcava totes (TATE: 0 regles amb break, 18 files
     // de 23 amb Break pintat). Un break no es dedueix: està declarat o no hi és.
     const filesDe = (sub) => sub.map(row => [
-      row.ref || row.abbreviation || row.codi || '',
-      { text: row.nom_en || '', sub: row.nom_ca || '' },
+      // R2 — mateixa llei que les altres taules. `graded-table` ja serveix `ref` resolt al
+      // servidor i `nomenclaturaDePom` n'accepta els sinònims (`abbreviation`, `codi`).
+      nomenclaturaDePom(row),
+      nomDeTaula(row, tDoc),
       ...sizeLabels.map(sl => cellForSize(row, sl)),
     ])
     // F3 — mateix criteri que a la T1a: opcional, i només si el document té més d'una secció.
@@ -5139,8 +5154,8 @@ export default function TechSheetEditor() {
       return v ? (fmtMeasure(v.valor_real, unit) ?? '–') : '–'
     }
     const rows = (data.rows || []).map(row => [
-      row.codi || row.pom_code || '',
-      { text: row.nom_en || '', sub: row.nom_local || '' },
+      nomenclaturaDePom(row),
+      nomDeTaula(row, tDoc),
       ...esdev.map(s => cella(row, s)),
       row.ultim_comentari?.text || '',
     ])
