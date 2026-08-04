@@ -3454,7 +3454,25 @@ export default function TechSheetEditor() {
   useEffect(() => {
     if (!pomRows.length) return
     const bmById = new Map(pomRows.map(bm => [bm.id, bm]))
-    const bmByPom = new Map(pomRows.map(bm => [bm.pom_id, bm]))
+    // C4/BLOC 3 — el pla B per `pom_id` NO TRIA ENTRE GERMANES. `new Map(...)` es queda
+    // l'ÚLTIMA entrada de cada clau: amb la sisa esquerra i la dreta vives, una cota sense
+    // `bmId` es rellegia amb el nom de la que la consulta hagués retornat després, i quina
+    // ho decidia l'ordenació del backend. I el text re-derivat no es queda a la pantalla: el
+    // primer desat de debò del document l'hi escriu. Una cota rebatejada amb el nom de la
+    // seva germana, persistida, i sense res que ho digués.
+    //
+    // Quan el POM té més d'una mesura, doncs, no hi ha pla B: la cota cau a la degradació
+    // que aquest efecte ja té documentada (es queda amb l'últim text conegut). Escollir-ne
+    // una és el que fa mal; no escollir, no.
+    //
+    // 🚩 NO es pot fer millor des d'aquí: `base-measurements/` (`pom/wizard_views.py:356`,
+    // l'endpoint que alimenta `pomRows`) NO emet `capa` ni `instancia` ni `clau` — serveix
+    // les germanes però sense dir quina és quina. Amb els eixos al payload, aquest pla B
+    // podria creuar per la identitat sencera en comptes de renunciar-hi.
+    const comptePerPom = new Map()
+    for (const bm of pomRows) comptePerPom.set(bm.pom_id, (comptePerPom.get(bm.pom_id) || 0) + 1)
+    const bmByPom = new Map(pomRows.filter(bm => comptePerPom.get(bm.pom_id) === 1)
+                                   .map(bm => [bm.pom_id, bm]))
     let canvis = false
     const nextPages = pages.map(p => {
       const objects = (p.objects || []).map(o => {
