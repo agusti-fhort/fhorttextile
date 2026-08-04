@@ -31,7 +31,10 @@ CAPES = [
     ('exterior',  'Shell',        'Exterior',  'Exterior'),
     ('folre',     'Lining',       'Folre',     'Forro'),
     ('entretela', 'Interfacing',  'Entretela', 'Entretela'),
-    ('farciment', 'Padding',      'Farciment', 'Relleno'),
+    # `Relleno / Guata`: el castellà en porta dos perquè al taller es diuen les dues coses i
+    # cap de les dues no és un sinònim de l'altra prou net per triar-ne una (D-31.22, Agus
+    # 04/08). El nom és per als ulls; el contracte és el slug, que no es toca.
+    ('farciment', 'Padding',      'Farciment', 'Relleno / Guata'),
     ('reforc',    'Underlining',  'Reforç',    'Refuerzo'),
     ('fornitura', 'Trim',         'Fornitura', 'Fornitura'),
 ]
