@@ -2313,6 +2313,24 @@
       "no_sessions": "Este modelo aún no tiene ningún fitting realizado.",
       "empty": "Ningún POM tomado en estas sesiones.",
       "des_de_mesures": "Toma escrita en la tabla de medidas"
+    },
+    "print": {
+      "load_err": "No se ha podido cargar la hoja de fitting.",
+      "print": "Imprimir",
+      "sheet": "Hoja de fitting",
+      "session_line": "HOJA DE FITTING · {{data}} · Talla base {{base}}",
+      "col_n": "#",
+      "col_layer": "Layer",
+      "col_code": "Code",
+      "col_name": "POM name",
+      "col_spec": "Spec",
+      "col_meas": "Meas.",
+      "col_decision": "Decision",
+      "col_comments": "Comments",
+      "legend_ac": "ACCEPTED — la medida es correcta, ninguna acción.",
+      "legend_ad": "ADJUSTED — la nueva medida sustituye la especificación.",
+      "legend_rj": "REJECTED — rehacer según especificación; indicad el motivo en Comments.",
+      "signature": "Medido por ____________________ · Fecha ____ / ____ / ______ · Firma ____________________"
     }
   },
   "wizard_base_size_required": "El sistema de tallas ha cambiado. Selecciona la talla base.",

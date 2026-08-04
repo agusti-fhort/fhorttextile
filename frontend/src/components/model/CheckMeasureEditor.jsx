@@ -457,7 +457,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       <EditorHeader model={model} onBack={onBack} />
       <DependencyPanel model={model} />
       {/* Sprint Y — en mode sessió (font fitting), el panell de la sessió: context + Canvis/Observacions/Imatges. */}
-      {ctx.fittingSession && <SessionPanel session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} grid={raw?.grid} />}
+      {ctx.fittingSession && <SessionPanel session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} grid={raw?.grid} modelId={model.id} />}
       {/* P0 — la PROMOCIÓ viu aquí, sobre la taula de mesures del model: és el material que
           promou i el lloc on el tècnic ja hi és. Acte separat i explícit, mai un pas d'un flux
           (llei D-PROM). El component s'auto-amaga sense capability CONFIGURE o sense item. */}

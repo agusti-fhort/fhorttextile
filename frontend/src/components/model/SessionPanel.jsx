@@ -52,7 +52,7 @@ function EditableContextField({ sessionId, field, label, value }) {
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
 const muted = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }
 
-export default function SessionPanel({ session, pieceFittingId, grid }) {
+export default function SessionPanel({ session, pieceFittingId, grid, modelId = null }) {
   const { t } = useTranslation()
   const unit = useUnit()                       // unitat del tenant (CM|INCH) → format de presentació
   const [open, setOpen] = useState(false)
@@ -104,8 +104,21 @@ export default function SessionPanel({ session, pieceFittingId, grid }) {
         </span>
         <EditableContextField sessionId={session.id} field="model_persona" label={t('fitting.id.persona')} value={session.model_persona} />
         <EditableContextField sessionId={session.id} field="lloc" label={t('fitting.id.location')} value={session.lloc} />
+        {/* C5-UI/P5 — EL FULL QUE ES PORTA A LA SALA. Viu a la franja de la sessió i no dins del
+            panell plegable: es demana ABANS de començar a mesurar, i una porta que s'ha de
+            desplegar arriba tard. S'obre en una pestanya pròpia perquè imprimir-lo no faci
+            perdre la graella que s'està treballant. */}
+        {modelId && (
+          <a href={`/fittings/${session.id}/full/${modelId}`} target="_blank" rel="noopener noreferrer"
+            style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5,
+                     border: '1px solid var(--gold)', borderRadius: 6, padding: '4px 11px',
+                     fontSize: 'var(--fs-body)', color: 'var(--gold)', textDecoration: 'none' }}>
+            <i className="ti ti-download" style={{ fontSize: 14 }} />
+            {t('fitting.print.sheet')}
+          </a>
+        )}
         <button onClick={() => setOpen(o => !o)} style={{
-          marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)',
+          marginLeft: modelId ? 0 : 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)',
           fontSize: 'var(--fs-body)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <i className={`ti ti-chevron-${open ? 'up' : 'down'}`} style={{ fontSize: 14 }} />
           {t(open ? 'fitting.session.collapse' : 'fitting.session.expand')}

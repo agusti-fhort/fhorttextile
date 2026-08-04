@@ -1106,7 +1106,11 @@ export function headerLabels(tr) {
 // desbordament els necessita: són DERIVACIONS declarades, escrites també a la spec. Marge
 // contra vora de caixa = el mateix sagnat que el text té per l'esquerra dins d'aquella caixa;
 // carrer entre dues columnes d'una mateixa fila = 6pt.
-const HDR_H_V3 = {
+// EXPORTAT (C5-UI/P5): el full d'impressió del FITTING reutilitza aquesta capçalera i la
+// llei és que la geometria NO S'INTERPRETA, ES MESURA. Una segona transcripció al full seria
+// una segona veritat que divergiria a la primera correcció de la spec. Es publica la DADA, no
+// el render: el full la pinta en HTML i la fitxa en Konva, però tots dos mesuren d'aquí.
+export const HDR_H_V3 = {
   W: 784.7, H: 70.4,
   divisors: [141.4, 463.2, 714.2],                  // verticals, de dalt a baix
   logo: { x: 7.0, y: 18.0, w: 126.0, h: 28.0 },     // B3 · caixa intocable

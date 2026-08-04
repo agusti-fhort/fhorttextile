@@ -11,6 +11,7 @@ import { modelFitxers } from './api/endpoints'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Models = lazy(() => import('./pages/Models'))
+const FittingPrintSheet = lazy(() => import('./pages/FittingPrintSheet'))
 const POMs = lazy(() => import('./pages/POMs'))
 const TaskTypes = lazy(() => import('./pages/TaskTypes'))
 const GarmentTypes = lazy(() => import('./pages/GarmentTypes'))
@@ -305,6 +306,14 @@ export default function App() {
         <Route path="/models/:id/ftt/:fitxerId" element={
           <ProtectedRoute>
             <TechSheetEditor />
+          </ProtectedRoute>
+        } />
+        {/* C5-UI/P5 — FULL DE FITTING per imprimir. FORA del Shell a posta: el que s'imprimeix
+            és el full, i el menú lateral i la barra de dalt no hi tenen res a fer. La ruta porta
+            sessió I model perquè una sessió de grup té més d'una peça i el full és d'una sola. */}
+        <Route path="/fittings/:sessionId/full/:modelId" element={
+          <ProtectedRoute>
+            <FittingPrintSheet />
           </ProtectedRoute>
         } />
         {/* W2 — Taller de patró: FORA del Shell, com l'editor .ftt. És una eina a pantalla
