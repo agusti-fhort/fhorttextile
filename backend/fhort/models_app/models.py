@@ -978,15 +978,13 @@ class ModelGradingOverride(models.Model):
         ordering = ['model', 'pom', 'size_label']
         constraints = [
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_modelgradingoverride_capa_gate_c1',
-            ),
+            # ✅ C4/G3 (04/08) — retirada per la migració 0078. L'override és l'ajust MANUAL
+            # d'una cel·la: pinar la talla M de la sisa dreta no pot moure l'esquerra, i
+            # `escalat/ajustar-talla` ja hi escriu per la identitat sencera des de `959147a5`.
             # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='models_app_modelgradingoverride_instancia_gate_cins',
-            ),
+            # ✅ C4/G3 (04/08) — retirada per la migració 0078. L'override és l'ajust MANUAL
+            # d'una cel·la: pinar la talla M de la sisa dreta no pot moure l'esquerra, i
+            # `escalat/ajustar-talla` ja hi escriu per la identitat sencera des de `959147a5`.
         ]
 
     def __str__(self):
@@ -1474,15 +1472,19 @@ class POMPlacement(models.Model):
                 fields=['item_fitxer', 'pom', 'view_slot', 'capa', 'instancia'],
                 name='uniq_pomplacement_item_pom_view_capa_instancia'),
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='models_app_pomplacement_capa_gate_c1',
-            ),
+            # ✅ C4/G3 (04/08) — retirada per la migració 0078. La col·locació és on la mesura
+            # es lliga al CROQUIS, i és el punt on «dues cares, dues línies» es veurà de debò:
+            # la sisa dreta i l'esquerra són dues cotes al dibuix, no una.
+            # 🚩 La decisió de producte sobre la col·locació automàtica (una cota o dues per a
+            # un POM amb germanes) segueix OBERTA — v. el commit `b56b2dfb`. Retirar la
+            # comporta no la pren: la deixa possible.
             # C1-ins — la comporta d'instància (v. `BaseMeasurement.Meta`). C4-ins la retira.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='models_app_pomplacement_instancia_gate_cins',
-            ),
+            # ✅ C4/G3 (04/08) — retirada per la migració 0078. La col·locació és on la mesura
+            # es lliga al CROQUIS, i és el punt on «dues cares, dues línies» es veurà de debò:
+            # la sisa dreta i l'esquerra són dues cotes al dibuix, no una.
+            # 🚩 La decisió de producte sobre la col·locació automàtica (una cota o dues per a
+            # un POM amb germanes) segueix OBERTA — v. el commit `b56b2dfb`. Retirar la
+            # comporta no la pren: la deixa possible.
         ]
         indexes = [
             models.Index(fields=['item_fitxer', 'view_slot'],
