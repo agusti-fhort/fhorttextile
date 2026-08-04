@@ -402,6 +402,22 @@ def base_measurements_view(request, model_id):
         data = [{
             'id': bm.id,
             'pom_id': bm.pom_id,
+            # C4/BLOC 1-BIS — ELS DOS EIXOS AL CONTRACTE. El queryset d'aquesta vista mai no
+            # ha filtrat per capa ni per instància: ja servia les germanes. El que no feia era
+            # dir de quina és cadascuna, i sense això `pom_id` no és una clau dins de
+            # `results`.
+            #
+            # Aquest endpoint alimenta TOT l'editor de fitxa (`TechSheetEditor.pomRows`), que
+            # hi munta mapes per `pom_id` per re-derivar l'etiqueta de les cotes vives i per
+            # col·locar-ne de noves. `new Map(...)` es queda l'ÚLTIMA entrada de cada clau: amb
+            # dues germanes, una cota es rellegia amb el nom de la que la consulta hagués
+            # retornat després —desempat del planner, no del document— i el primer desat de
+            # debò l'escrivia al `.ftt`.
+            #
+            # No s'hi afegeix cap identificador de fila: `id` (aquí sobre) JA és la PK del
+            # BaseMeasurement.
+            'capa': bm.capa,
+            'instancia': bm.instancia,
             # F1: la regla resident d'aquest POM (None si el model no en té cap).
             'regla_model': regla_by_pom.get(bm.pom_id),
             'codi_client': bm.pom.codi_client,
