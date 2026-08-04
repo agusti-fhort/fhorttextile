@@ -135,6 +135,15 @@ export const COL = {
 const ROT_SNAPS = [0, 45, 90, 135, 180, 225, 270, 315]
 const ROT_SNAP_TOL = 22.5001
 const SENSE_SNAP = []
+// Nanses del Transformer. La llista sencera és el DEFAULT de Konva, escrita aquí perquè el
+// valor s'ha de poder tornar a posar explícitament: el Transformer és un de sol per a tot el
+// llenç (rect, ellipse, image, sketch_svg, pattern_piece, path, group, data_block, table…) i
+// restringir-lo per a un tipus no pot deixar-lo restringit per als altres.
+const ANCORES_TOTES = ['top-left', 'top-center', 'top-right', 'middle-right',
+  'middle-left', 'bottom-left', 'bottom-center', 'bottom-right']
+// Caixa de text: només amplada. L'alçada la mana el text reflowat, i una nansa vertical que no
+// fa res és pitjor que no tenir-la.
+const ANCORES_AMPLADA = ['middle-left', 'middle-right']
 const KONVA_COL = { white: '#ffffff', gold: '#c27a2a', goldPale: '#f5e6d0', border: '#e0d5c5', textMain: '#1d1d1b', textMuted: '#868685', inkSoft: '#8a857c', pom: '#dc2626' }
 
 // F1 — la caixa on entra una peça de patró. Una peça és MOLT més gran que la pàgina (el
@@ -198,6 +207,11 @@ export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Math.r
 // obj.width — que és el que textBoxParts ja consumeix. Així el descriptor segueix sent una
 // funció pura de l'objecte i la paritat pantalla=PDF es manté per construcció.
 const TEXT_PAD_X_PX = 7    // marge lateral del fons, en px de pàgina
+// Interlineat de la caixa de text. Fins ara viatjava implícit dins de `fs * 1.2` (l'alçada d'UNA
+// línia) i el text es pintava amb l'interlineat 1 de Konva; en fer-lo explícit, n línies ocupen
+// n * 1.2 * fs i UNA línia queda exactament on era: Konva centra el glif dins de `lineHeightPx`
+// (`Text.js` → `translateY`) i compensa amb `alignY` quan `verticalAlign` és middle.
+const TEXT_BOX_LINE_H = 1.2
 export function measureTextWidthMm({ text, fontSize, fontFamily, fontStyle }) {
   const node = new Konva.Text({
     text: text || '', fontSize: fontSize || 11, fontFamily: fontFamily || FONT,
@@ -206,6 +220,20 @@ export function measureTextWidthMm({ text, fontSize, fontFamily, fontStyle }) {
   const w = node.getTextWidth()
   node.destroy()
   return toMm(w + TEXT_PAD_X_PX * 2)
+}
+// L'alçada que ocupa el text un cop REFLOWAT a la seva amplada. Es mesura aquí, FORA de
+// textBoxParts, per la mateixa raó que l'amplada (vegeu el comentari de sobre): el descriptor
+// ha de seguir sent una funció pura de l'objecte i la mesura necessita un node de Konva.
+// No es persisteix: es deriva de `text` + `width`, que són els que sí que es desen.
+export function measureTextBoxHeightPx(obj) {
+  const node = new Konva.Text({
+    text: obj.text || '', width: toPx(obj.width || 120),
+    fontSize: obj.fontSize || 11, fontFamily: obj.fontFamily || FONT,
+    fontStyle: obj.fontStyle || 'normal', lineHeight: TEXT_BOX_LINE_H,
+  })
+  const h = node.height()
+  node.destroy()
+  return h
 }
 export const toPx = (mm) => mm * MM_TO_PX
 export const toMm = (px) => px / MM_TO_PX
@@ -1451,7 +1479,10 @@ function HeaderBlock({ modelData, versio, placeholderMode, logoUrl, config, page
 
 // ─── Descriptor compartit objecte → Konva ───────────────────────────────────
 // Live i offscreen consumeixen aquests helpers perquè pantalla i PDF no derivin.
-function textBoxParts(obj) {
+// `alcadaPx`: l'alçada del text ja reflowat (mesurada per qui crida amb measureTextBoxHeightPx).
+// Sense passar-la, la caixa és d'UNA línia — que és el cas de l'etiqueta de cota, sempre d'una
+// (R2, avall). Aquesta funció NO mesura: ha de continuar sent pura per no trencar la paritat.
+function textBoxParts(obj, { alcadaPx = null } = {}) {
   const pad = obj.bgPadding || 4
   const fs = obj.fontSize || 11
   const w = toPx(obj.width || 120)
@@ -1462,12 +1493,22 @@ function textBoxParts(obj) {
   // Ara la caixa de línia és explícita i el text s'hi centra: mateixa alçada per als dos i
   // una sola font de veritat. `height` i `verticalAlign` viatgen dins `text`, que és el que
   // el llenç i l'export a PDF fan servir tots dos → la paritat es manté per construcció.
-  const lineH = fs * 1.2
+  const lineH = fs * TEXT_BOX_LINE_H
+  // La caixa creix cap avall amb el text (decisió Agus 04/08); mai per sota d'una línia.
+  const boxH = Math.max(lineH, alcadaPx ?? 0)
   return {
-    group: { x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0, scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1 },
-    bg: { x: -pad, y: -pad, width: w + pad * 2, height: lineH + pad * 2, fill: obj.bgFill, cornerRadius: 3 },
+    // width/height propis al Group: en deixar anar una nansa, handleTransformEnd llegeix
+    // `node.width()`, i un Konva.Group sense l'atribut en retorna 0 (Node: default 0) — la caixa
+    // col·lapsaria al mínim de 2 mm. No mouen el marc del Transformer, que surt de
+    // getClientRect() i, en un Container, es calcula NOMÉS a partir dels fills.
+    group: {
+      x: toPx(obj.x), y: toPx(obj.y), rotation: obj.rotation || 0,
+      scaleX: obj.scaleX || 1, scaleY: obj.scaleY || 1, width: w, height: boxH,
+    },
+    bg: { x: -pad, y: -pad, width: w + pad * 2, height: boxH + pad * 2, fill: obj.bgFill, cornerRadius: 3 },
     text: {
-      text: obj.text || '', width: w, height: lineH, fontSize: fs, fontFamily: obj.fontFamily || FONT,
+      text: obj.text || '', width: w, height: boxH, lineHeight: TEXT_BOX_LINE_H,
+      fontSize: fs, fontFamily: obj.fontFamily || FONT,
       fontStyle: obj.fontStyle || 'normal', fill: obj.fill || KONVA_COL.textMain,
       align: obj.align || 'left', verticalAlign: 'middle', textDecoration: obj.textDecoration || '',
     },
@@ -1709,11 +1750,17 @@ function bakePathEntries(entries, sx, sy, deg) {
     : { ...entry, segments: cook(entry.segments) }))
 }
 
+// Un text amb fons: es pinta com a Group (Rect + Text), però és un `text` a la dada.
+const esTextBox = (obj) => !!(obj && obj.type === 'text' && obj.bgFill)
+
 function blocksTransform(obj) {
   // C1 — una cota (grup amb pomId) NO fa servir el Transformer d'escala/rotació: s'edita amb
   // nanses d'extrem (no escalat lliure que distorsioni el text ni la geometria).
+  // El text amb fons SÍ que hi entra ara: quan es va excloure (TS-4c-B) l'alçada del fons sortia
+  // del fontSize i no hi havia res a redimensionar. Ara la caixa té amplada i alçada pròpies i
+  // el camí de `text` a handleTransformEnd ja fa el que toca: l'escala va a `width`, mai al cos.
   return obj && (obj.type === 'line' || obj.type === 'arrow' || obj.type === 'field'
-    || (obj.type === 'text' && obj.bgFill) || (obj.type === 'group' && obj.pomId != null))
+    || (obj.type === 'group' && obj.pomId != null))
 }
 
 function commonValue(objects, key) {
@@ -1788,7 +1835,7 @@ async function addObjectToLayer(layer, obj, ctx, cotaLabel) {
       return
     }
     if (obj.bgFill) {
-      const p = textBoxParts(obj)
+      const p = textBoxParts(obj, { alcadaPx: measureTextBoxHeightPx(obj) })
       const g = new Konva.Group(p.group)
       g.add(new Konva.Rect(p.bg))
       g.add(new Konva.Text({ ...p.text, listening: false }))
@@ -2128,9 +2175,10 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
         </Group>
       )
     }
-    // Text amb fons (text_box): Group amb un Rect darrere; no redimensionable per Transformer.
+    // Text amb fons (text_box): Group amb un Rect darrere. Les nanses en canvien l'AMPLADA;
+    // el text s'hi reflueix i la caixa creix cap avall. El cos de lletra no s'hi toca mai.
     if (obj.bgFill) {
-      const p = textBoxParts(obj)
+      const p = textBoxParts(obj, { alcadaPx: measureTextBoxHeightPx(obj) })
       return (
         <Group {...common} onDblClick={onDblText} onDblTap={onDblText}>
           <Rect {...p.bg} />
@@ -7045,6 +7093,7 @@ export default function TechSheetEditor() {
                     stroke={KONVA_COL.gold} strokeWidth={1} strokeScaleEnabled={false} listening={false} />
                 ))}
                 <Transformer ref={trRef} rotateEnabled ignoreStroke keepRatio={shiftHeld || (selectedObjects.length === 1 && (selObj?.type === 'data_block' || selObj?.type === 'table' || selObj?.type === 'pattern_piece'))}
+                  enabledAnchors={selectedObjects.length === 1 && esTextBox(selObj) ? ANCORES_AMPLADA : ANCORES_TOTES}
                   rotationSnaps={shiftHeld ? ROT_SNAPS : SENSE_SNAP} rotationSnapTolerance={ROT_SNAP_TOL}
                   padding={5}
                   borderStroke={KONVA_COL.textMuted} borderStrokeWidth={0.5} borderDash={[4, 4]}
