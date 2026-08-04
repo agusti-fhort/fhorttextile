@@ -93,7 +93,8 @@
   "graduacio": {
     "button": "Graduació",
     "usar_err": "No s'ha pogut aplicar el joc de regles.",
-    "cua_propagar": "Informa la graduació i la propagació continuarà tota sola."
+    "cua_propagar": "Informa la graduació i la propagació continuarà tota sola.",
+    "editar_model": "Editar el model"
   },
   "size_map_title": "Sistemes de talles",
   "size_map_subtitle": "Runs de client derivats i sistemes canònics",

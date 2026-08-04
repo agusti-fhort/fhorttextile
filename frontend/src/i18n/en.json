@@ -93,7 +93,8 @@
   "graduacio": {
     "button": "Grading",
     "usar_err": "Could not apply the rule set.",
-    "cua_propagar": "Set the grading and the propagation will carry on by itself."
+    "cua_propagar": "Set the grading and the propagation will carry on by itself.",
+    "editar_model": "Edit the model"
   },
   "size_map_title": "Size systems",
   "size_map_subtitle": "Derived customer runs and canonical systems",

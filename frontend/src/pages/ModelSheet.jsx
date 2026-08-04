@@ -9,7 +9,7 @@ import { fittingSource } from '../components/model/measureSources'
 import MeasuresEntryPanel from '../components/model/MeasuresEntryPanel'
 import FittingRepasPanel from '../components/model/FittingRepasPanel'
 import PropagatedEditor from './PropagatedEditor'
-import ModelWizard from './ModelWizard'
+import GraduacioPanel from '../components/grading/GraduacioPanel'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
 import { MaduresaBadge, EncarrecDelClient } from '../components/model/FederacioBadge'
@@ -383,6 +383,27 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [graduacioObert, setGraduacioObert] = useState(false)
   const [propagarEnCua, setPropagarEnCua] = useState(false)
   const [usantJoc, setUsantJoc] = useState(false)
+  // P11 — l'estat que el pas de Graduació necessita i que abans posava el wizard.
+  // `fitTriat` és el fit que s'està mirant (null = encara cap tria explícita, i llavors mana el
+  // del model); `jocVist` és el joc seleccionat en aquesta obertura, perquè el picker el marqui
+  // abans que `reloadModel` torni. Tots dos es netegen en tancar: el calaix no recorda tries que
+  // no s'han arribat a aplicar.
+  const [fitTriat, setFitTriat] = useState(null)
+  const [jocVist, setJocVist] = useState(null)
+
+  // EL FIT VIGENT DEL MODEL. Amb graduació, mana el del RULESET (és el que el model gradua de
+  // debò); sense, se sembra del `fit_type` del propi model — la mateixa cadena que feia el
+  // wizard (`ModelWizard.jsx:305-317`). `grading_fit_nom` és el `nom_en` del fit del ruleset i
+  // els codis de `FITS` són exactament el seu majúscula, o sigui que la conversió és exacta.
+  const fitDelModel = (model?.grading_fit_nom || model?.fit_type || '').trim()
+  const fitGraduacio = fitTriat ?? (fitDelModel ? fitDelModel.toUpperCase() : null)
+
+  // Què falta del costat de les TALLES per poder graduar, amb el mateix ordre de precedència que
+  // el wizard: primer el sistema, després el run, després la talla base. El panell en fa la frase.
+  const sizingMissing = !model?.size_system ? 'system'
+    : !(model?.size_run_model || '').trim() ? 'run'
+      : !(model?.base_size_label || '').trim() ? 'base'
+        : null
 
   const obreGraduacio = useCallback(() => setGraduacioObert(true), [])
 
@@ -392,6 +413,8 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const cancelaGraduacio = useCallback(() => {
     setGraduacioObert(false)
     setPropagarEnCua(false)
+    setFitTriat(null)
+    setJocVist(null)
   }, [])
 
   // MIRA ABANS d'executar. Dues preguntes, en aquest ordre:
@@ -448,14 +471,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       .finally(() => setUsantJoc(false))
   }, [id, usantJoc, propagarEnCua, reloadModel, reloadTaula, t])   // eslint-disable-line react-hooks/exhaustive-deps
 
-  // El wizard desat pel seu propi botó (l'usuari ha tocat més coses que la graduació): mateix
-  // tancament, mateixa rellegida. No reprèn la propagació: desar el model sencer és un altre
-  // acte que el gest que havia quedat en cua.
-  const acabaGraduacio = useCallback(() => {
-    setGraduacioObert(false)
-    setPropagarEnCua(false)
-    reloadModel(); reloadTaula()
-  }, [reloadModel, reloadTaula])
+  // P11: `acabaGraduacio` se'n va amb el wizard. Era el seu «onSaved» —desar el MODEL sencer des
+  // del calaix—, i el calaix ja no desa cap model: l'únic acte que escriu és «Usar aquest joc»,
+  // que ja tanca i rellegeix dins de `onUsarJoc`.
   const execPropagar = (allowReopen) => {
     if (propagating) return
     setPropagating(true)
@@ -711,10 +729,20 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           </div>
         )}
         {/* FaseB — avís de 2 passos en propagar amb dades existents (mira abans). Pas 1 segons gravetat. */}
-        {/* EL WIZARD D'EDITAR MODEL, obert al PAS 4, com a CALAIX LATERAL (31/07).
-            No és cap pantalla nova de graduació: és el wizard real, amb els seus quatre
-            passos navegables i el «← Enrere» viu. Si al pas 4 falta la construcció, l'usuari
-            va al pas 2, la posa i torna — l'atzucac s'acaba.
+        {/* P11 — EL CALAIX DE GRADUACIÓ ÉS EL PAS DE GRADUACIÓ, ja no el wizard sencer.
+            Fins ara aquí s'hi encastava `ModelWizard` obert al pas 4: quatre passos navegables,
+            capçalera de wizard i botons de desar el MODEL, per a un gest que és triar un joc de
+            regles. `GraduacioPanel` ja existia extret precisament per a això (`6af2f6f2`, i la
+            seva pròpia capçalera ho diu: «el mateix pas per als DOS llocs que l'ensenyen»);
+            el que faltava era que aquest costat el cridés.
+
+            El que NO canvia: l'escriptura segueix sent `onUsarJoc` (`update-step2`), amb el seu
+            409 de client aliè i la represa de la propagació en cua. Cap mecànica nova.
+
+            L'ATZUCAC TÉ SORTIDA IGUALMENT. L'argument del wizard era «si falta la construcció,
+            l'usuari va al pas 2». El panell ja diu QUIN eix falta (`grading_missing_axes`) i
+            aquí s'hi posa la porta que hi porta: «editar el model». Es diu el problema i s'ofereix
+            el camí, en comptes d'obligar a travessar tres passos que no es volien tocar.
 
             LATERAL i sense enfosquir: la taula de Mesures ha de quedar VISIBLE i llegible a
             sota mentre es decideix. Qui vulgui entrar la graduació a mà tanca el calaix i es
@@ -725,6 +753,23 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                         padding: '1.25rem 1.5rem 2rem',
                         boxShadow: '-8px 0 28px rgba(0,0,0,0.16)',
                         borderLeft: '0.5px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                          gap: 12, marginBottom: 14 }}>
+              <h2 style={{ margin: 0, fontSize: 'var(--fs-h2)', fontWeight: 500 }}>
+                {t('graduacio.button')}
+              </h2>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" onClick={() => navigate(`/models/${id}/editar`)}
+                  style={{ ...btnSecondary, fontSize: 'var(--fs-body)' }}>
+                  <i className="ti ti-edit" style={{ fontSize: 14 }} aria-hidden="true" />
+                  {t('graduacio.editar_model')}
+                </button>
+                <button type="button" onClick={cancelaGraduacio}
+                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+                  {t('app.close')}
+                </button>
+              </div>
+            </div>
             {propagarEnCua && (
               <p style={{ margin: '0 0 12px', padding: '8px 12px', borderRadius: 6,
                           border: '0.5px solid var(--gold)', background: 'var(--gold-pale)',
@@ -732,12 +777,29 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 {t('graduacio.cua_propagar')}
               </p>
             )}
-            <ModelWizard
-              embedModelId={parseInt(id)}
-              initialBlock={4}
-              onClose={cancelaGraduacio}
-              onSaved={acabaGraduacio}
-              onUsarJoc={onUsarJoc}
+            <GraduacioPanel
+              axes={{
+                target: model.target || null,
+                construction: model.construction || null,
+                // El grup CANÒNIC surt de `garment_type.grup`, que hi és sempre — a diferència
+                // del FK `garment_group`, buit als models importats (v. serializers.py:219-222).
+                garmentGroupCodi: model.garment_type_grup || null,
+                garmentTypeId: model.garment_type || null,
+                garmentTypeItemId: model.garment_type_item || null,
+              }}
+              sizing={model.size_system ? {
+                size_system_id: model.size_system,
+                size_system_nom: model.size_system_nom,
+              } : null}
+              sizingMissing={sizingMissing}
+              fit={fitGraduacio}
+              /* Canviar de fit invalida el joc triat: el ruleset pertany a un fit, i deixar-lo
+                 seleccionat mentre es mira un altre fit ensenyaria una tria que ja no s'aplica. */
+              onFit={(codi) => { setFitTriat(codi); setJocVist(null) }}
+              gradingRuleSetId={jocVist ?? model.grading_rule_set ?? null}
+              onUsar={(rs) => { setJocVist(rs.id); onUsarJoc(rs) }}
+              /* Sense «Sense graduació»: qui obre aquest calaix ve expressament a informar-la, i
+                 tancar-lo ja és la manera de no fer-ho (llei del propi panell). */
             />
           </div>
         )}
