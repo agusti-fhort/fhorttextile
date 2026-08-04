@@ -130,7 +130,7 @@ def _etapes_de_fitting(model_id):
 
     Retorna `(etapes, celles)`:
       · etapes  → [{key, context, at}] en ordre cronològic
-      · celles → {key: {pom_id: {'valor_real', 'nota'}}}
+      · celles → {key: {(pom_id, capa, instancia): {'valor_real', 'nota'}}}   ← C4
 
     NO hi ha carry-forward, a diferència de `base_stages_view`. Allà cada columna és un
     SNAPSHOT de la fitxa sencera en aquell moment (per això arrossega); aquí cada columna és
@@ -144,16 +144,19 @@ def _etapes_de_fitting(model_id):
     """
     notes = _notes_de_check(model_id)
 
-    # FASE_2/C1-ins — ÀNCORA als dos eixos: `celles[clau]` s'indexa per `c.pom_id` pelat i
-    # ÉS el payload (`_fila`, més avall, hi entra pel mateix `pom_id`). Dues instàncies del
-    # mateix POM mesurades el mateix segon es fondrien a la mateixa cel·la i l'última llegida
-    # guanyaria. El Repàs, fins a C4-ins, és el de l'exterior i de la instància única — igual
-    # que els quatre mapes de nomenclatura d'aquesta mateixa vista.
-    from fhort.pom.models import MeasurementLayer
+    # C4 — L'ÀNCORA SE'N VA I LA CEL·LA S'INDEXA PER LA IDENTITAT SENCERA.
+    #
+    # L'àncora existia perquè `celles[clau]` s'indexava per `c.pom_id` pelat i és el que `_fila`
+    # consulta: dues germanes mesurades el mateix segon es fondrien a la mateixa cel·la. Ara la
+    # clau és `(pom_id, capa, instancia)` a les dues bandes —aquí i a `_fila`—, o sigui que el
+    # filtre ja no protegeix res: només amagaria la presa de la germana d'una etapa on SÍ que
+    # es va prendre, i la columna sortiria buida com si ningú no l'hagués mesurada.
+    #
+    # El `MeasurementChangeLog` porta els dos eixos des del signal F1 (`signals.py:335-341`), o
+    # sigui que la clau completa surt de la fila mateixa: no cal endevinar-la ni fer cap join.
     logs = (MeasurementChangeLog.objects
             .filter(model_id=model_id,
                     context__in=CONTEXTOS_DE_FITTING,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                     valor_anterior__isnull=False)   # re-mesura, no alta inicial
             .order_by('created_at', 'id'))
 
@@ -167,7 +170,7 @@ def _etapes_de_fitting(model_id):
             etapes.append({'key': clau, 'context': c.context, 'at': c.created_at})
             celles[clau] = {}
         check_id = _check_id_del_motiu(c.motiu)
-        celles[clau][c.pom_id] = {
+        celles[clau][(c.pom_id, c.capa, c.instancia)] = {
             'valor_real': float(c.valor_nou),
             'nota': notes.get((check_id, c.pom_id, c.capa, c.instancia), '') if check_id else '',
         }
@@ -264,23 +267,24 @@ class FittingRepasView(APIView):
         # R1 (31/07) — el BATEIG hi viatja també: és del MODEL, com `ordre` i `nom_fitxa`, i
         # sense ell la taula fitting_history de la fitxa imprimia el nom del catàleg d'un POM
         # que el tècnic havia rebatejat.
-        # C2/Onada 1 — ÀNCORA EXTERIOR EXPLÍCITA per als QUATRE mapes, i tots quatre alhora:
-        # ancorar-ne un i deixar-ne un altre per POM sol donaria files amb l'ordre d'una capa
-        # i el nom d'una altra. La fila que els consulta (`_fila`, aquí sota) s'indexa per
-        # `pom_id` i no porta capa; donar-n'hi seria afegir un camp al payload, i el
-        # contracte no es toca fins a C4. El Repàs, fins llavors, és el de l'exterior.
-        # FASE_2/C1-ins — el segon eix entra a la mateixa àncora i pel mateix argument
-        # sencer: la fila no porta instància i donar-n'hi és canvi de contracte (C4-ins).
-        from fhort.pom.models import MeasurementLayer
+        # C4 — ELS QUATRE MAPES CREIXEN A LA CLAU SENCERA, i tots quatre alhora (era la llei
+        # de C2/Onada 1 i segueix sent-ho): un que cresqui i un altre que no dona files amb
+        # l'ordre d'una capa i el nom d'una altra.
+        #
+        # L'àncora existia perquè la fila que els consulta (`_fila`, aquí sota) s'indexava per
+        # `pom_id` i no portava capa. Ara la fila porta la identitat sencera i la publica, o
+        # sigui que el filtre seria pèrdua: la germana es quedaria sense nomenclatura de
+        # croquis, sense bateig i **sense `bm_id`** — i el `bm_id` és l'àncora per PK de fila
+        # que fa servir el corpus de cotes `.ftt`, o sigui que perdre'l no és cosmètic.
         bm_data = list(BaseMeasurement.objects
-                       .filter(model_id=model.id,
-                               capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
-                       .values_list('pom_id', 'ordre', 'nom_fitxa', 'id',
+                       .filter(model_id=model.id)
+                       .values_list('pom_id', 'capa', 'instancia', 'ordre', 'nom_fitxa', 'id',
                                     'nom_canonic_model', 'nom_traduit_model'))
-        ordre_map = {p: o for p, o, _, _, _, _ in bm_data}
-        nom_fitxa_map = {p: nf for p, _, nf, _, _, _ in bm_data}
-        bm_id_map = {p: i for p, _, _, i, _, _ in bm_data}
-        bateig_map = {p: (nc or '', nt or '') for p, _, _, _, nc, nt in bm_data}
+        ordre_map = {(p, c, i): o for p, c, i, o, _, _, _, _ in bm_data}
+        nom_fitxa_map = {(p, c, i): nf for p, c, i, _, nf, _, _, _ in bm_data}
+        bm_id_map = {(p, c, i): bid for p, c, i, _, _, bid, _, _ in bm_data}
+        bateig_map = {(p, c, i): (nc or '', nt or '')
+                      for p, c, i, _, _, _, nc, nt in bm_data}
 
         # Files = els POMs que s'han fitat en aquesta talla (no el cens sencer de POMs del
         # model: una fila buida a totes les sessions no és repàs, és soroll). Els POMs que
@@ -288,20 +292,25 @@ class FittingRepasView(APIView):
         # tindria columnes i cap fila.
         files = {}
 
-        def _fila(pom_id, pom):
-            fila = files.get(pom_id)
+        def _fila(ident, pom):
+            """`ident` és `(pom_id, capa, instancia)` — la identitat de la mesura, no el POM."""
+            fila = files.get(ident)
             if fila is None:
-                fila = files[pom_id] = {
+                pom_id, capa, instancia = ident
+                fila = files[ident] = {
                     'pom_id': pom_id,
-                    'codi': nom_fitxa_map.get(pom_id) or (pom.pom_code if pom else ''),
+                    # C4 — els dos eixos al contracte: `pom_id` ja no desempata dues germanes.
+                    'capa': capa,
+                    'instancia': instancia,
+                    'codi': nom_fitxa_map.get(ident) or (pom.pom_code if pom else ''),
                     'pom_code': pom.pom_code if pom else '',
                     'nom_en': pom.name_en if pom else '',
                     'nom_local': pom.name_cat if pom else '',
                     # CRUS i al costat del catàleg: '' = no batejat → mana el catàleg.
-                    'nom_canonic_model': (bateig_map.get(pom_id) or ('', ''))[0],
-                    'nom_traduit_model': (bateig_map.get(pom_id) or ('', ''))[1],
-                    'nom_fitxa': nom_fitxa_map.get(pom_id),
-                    'bm_id': bm_id_map.get(pom_id),
+                    'nom_canonic_model': (bateig_map.get(ident) or ('', ''))[0],
+                    'nom_traduit_model': (bateig_map.get(ident) or ('', ''))[1],
+                    'nom_fitxa': nom_fitxa_map.get(ident),
+                    'bm_id': bm_id_map.get(ident),
                     'is_key': pom.is_key_measure if pom else False,
                     'valors': {},
                     'ultim_comentari': None,
@@ -311,7 +320,11 @@ class FittingRepasView(APIView):
         for l in linies:
             if l.size_label != talla:
                 continue
-            _fila(l.pom_id, l.pom)['valors'][str(l.piece_fitting.session_id)] = {
+            # La línia de fitting SAP de quina germana parla: porta els dos eixos des de C1 i
+            # C1-ins. Abans es col·lapsaven aquí, a `files[pom_id]`, i l'última llegida
+            # guanyava la cel·la de la sessió.
+            _fila((l.pom_id, l.capa, l.instancia), l.pom)['valors'][
+                str(l.piece_fitting.session_id)] = {
                 'valor_real': l.valor_real,
                 'valor_teoric': l.valor_teoric,
                 'nota': l.nota or '',
@@ -319,14 +332,16 @@ class FittingRepasView(APIView):
 
         # Etapes: els POMs que hi surten poden no haver estat mai en cap sessió. Es resolen
         # d'una tacada (sense N+1) i només els que encara no tenen fila.
-        poms_etapa = {pid for celles in etapa_celles.values() for pid in celles}
+        # C4 — les cel·les d'etapa ja venen indexades per la identitat sencera; el que es
+        # resol contra `POMMaster` segueix sent el POM, que és qui té la nomenclatura.
+        poms_etapa = {ident[0] for celles in etapa_celles.values() for ident in celles}
         if poms_etapa:
             from fhort.pom.models import POMMaster
             poms = {p.id: p for p in POMMaster.objects.filter(id__in=poms_etapa)
                     .select_related('pom_global')}
             for clau, celles in etapa_celles.items():
-                for pom_id, dades in celles.items():
-                    _fila(pom_id, poms.get(pom_id))['valors'][clau] = {
+                for ident, dades in celles.items():
+                    _fila(ident, poms.get(ident[0]))['valors'][clau] = {
                         'valor_real': dades['valor_real'],
                         # Una etapa no porta valor teòric: el log guarda el que es va mesurar,
                         # no contra què. Null i prou — inventar-lo seria pitjor que no dir-ho.
@@ -347,7 +362,13 @@ class FittingRepasView(APIView):
                         'text': nota, 'session_id': sessio['id'], 'data': sessio['data'],
                     }
 
-        rows = sorted(files.values(), key=lambda r: (ordre_map.get(r['pom_id'], 10 ** 9), r['pom_id']))
+        # C4 — l'ordre es demana amb la clau sencera i desempata pels dos eixos: dues germanes
+        # comparteixen `ordre` (és el del POM a la fitxa) i, sense desempat, qui va primer ho
+        # decidiria l'ordre d'inserció al dict, que ve del pla de Postgres.
+        rows = sorted(files.values(),
+                      key=lambda r: (ordre_map.get((r['pom_id'], r['capa'], r['instancia']),
+                                                   10 ** 9),
+                                     r['pom_id'], r['capa'], r['instancia']))
 
         return Response({
             'model': {
