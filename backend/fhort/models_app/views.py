@@ -1813,7 +1813,11 @@ def set_measurements_view(request, model_id):
     # BaseMeasurement actius del model el pom dels quals NO hi és → soft-delete (is_active=False),
     # com fa el xat IA, per persistir la X d'eliminar fila. None = client antic, no desactivar.
     keep_pom_ids = request.data.get('keep_pom_ids', None)
-    if not measurements and keep_pom_ids is None:
+    # C4/BLOC 1-TER — `keep_mesures` és la mateixa llista amb la IDENTITAT de cada fila
+    # (`{pom_id, capa, instancia}`) en comptes del `pom_id` pelat. Els dos conviuen: v.
+    # `_poda_mesures` per què el vell no es pot reinterpretar.
+    keep_mesures = request.data.get('keep_mesures', None)
+    if not measurements and keep_pom_ids is None and keep_mesures is None:
         return Response({'error': 'measurements és obligatori'}, status=400)
 
     from fhort.pom.models import POMMaster
@@ -1873,15 +1877,11 @@ def set_measurements_view(request, model_id):
             except POMMaster.DoesNotExist:
                 errors.append(f'POMMaster {pom_id} no trobat')
 
-        if keep_pom_ids is not None:
-            keep = [int(x) for x in keep_pom_ids]
-            # FASE_3/C1-ins — la poda és per FILA, no per POM (v. el germà bessó
-            # d'aquesta mateixa poda a `set_grading_view`, amb l'argument sencer).
-            deactivated = (BaseMeasurement.objects
-                           .filter(model=model, is_active=True,
-                                   capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
-                           .exclude(pom_id__in=keep)
-                           .update(is_active=False))
+        if keep_mesures is not None or keep_pom_ids is not None:
+            # C4/BLOC 1-TER — la poda resol per FILA quan el client diu els eixos, i conserva
+            # el comportament d'abans quan no els diu. L'argument sencer viu a `_poda_mesures`,
+            # que és també el que fa servir `gravar_pom_view`: dues portes, una sola llei.
+            deactivated = _poda_mesures(model, keep_mesures, keep_pom_ids)
 
     # NOTE: set-measurements només fa upsert de BaseMeasurement (+ el log via signal). La generació
     # de GradedSpec viu EXCLUSIVAMENT a generar-grading → generate_graded_specs (l'únic camí que
@@ -1912,7 +1912,10 @@ def gravar_pom_view(request, model_id):
     measurements = request.data.get('measurements', [])
     rules = request.data.get('rules', [])
     keep_pom_ids = request.data.get('keep_pom_ids', None)
-    if not measurements and keep_pom_ids is None:
+    # C4/BLOC 1-TER — v. `_poda_mesures`: la llista amb els eixos poda per FILA; la de
+    # `pom_id` pelats conserva el comportament d'abans.
+    keep_mesures = request.data.get('keep_mesures', None)
+    if not measurements and keep_pom_ids is None and keep_mesures is None:
         return Response({'error': 'measurements és obligatori'}, status=400)
 
     from fhort.pom.models import GradingRule, POMMaster
@@ -2032,20 +2035,11 @@ def gravar_pom_view(request, model_id):
             if errors:
                 raise ValueError('; '.join(errors))
 
-            if keep_pom_ids is not None:
-                keep = [int(x) for x in keep_pom_ids]
-                # FASE_3/C1-ins — LA PODA NO ÉS PER POM: la identitat de la baixa és la
-                # FILA. `keep_pom_ids` és una llista de `pom_id` pelats que ve del front, i
-                # amb dues germanes vives podar per POM en mataria una que ningú no ha tret
-                # de la taula — un esborrat silenciós, que és el mode de fallada que tot
-                # aquest tram existeix per matar. Mentre el contracte no porti eixos
-                # (C4-ins), la poda es limita a l'exterior de la instància única: la fila
-                # que el front SÍ que està mirant.
-                deactivated = (BaseMeasurement.objects
-                               .filter(model=model, is_active=True,
-                                       capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
-                               .exclude(pom_id__in=keep)
-                               .update(is_active=False))
+            if keep_mesures is not None or keep_pom_ids is not None:
+                # C4/BLOC 1-TER — mateixa llei que l'altra porta (v. `_poda_mesures`). El
+                # contracte ja porta els eixos i la baixa és per FILA; el client que només
+                # sap dir `pom_id` conserva el comportament d'abans, que és no matar-ne cap.
+                deactivated = _poda_mesures(model, keep_mesures, keep_pom_ids)
 
             valid_logiques = {code for code, _ in GradingRule.LOGICA_CHOICES}
             for r in rules:
@@ -2942,6 +2936,57 @@ def escalat_ajustar_talla_view(request, model_id):
     linies = [{'id': f'{pom.id}:{s}', 'valor_real': graded.get(s)} for s in size_run]
     return Response({'ok': True, 'propagat': propagat, 'motiu': motiu,
                      'grading_version_id': gv.id if gv else None, 'linies': linies}, status=200)
+
+
+def _poda_mesures(model, keep_mesures, keep_pom_ids):
+    """Desactiva les mesures actives del model que el client NO ha dit que conserva.
+
+    ── C4/BLOC 1-TER · LA PODA RESOL PER FILA, I EL CLIENT VELL NO EN MATA CAP ─────────
+    Les dues portes que podaven (`set_measurements_view` i `gravar_pom_view`) ho feien amb
+    `keep_pom_ids`, una llista d'ENTERS, i ancorades a `(exterior, '')`. L'àncora no era un
+    defecte de lectura: era el gest d'esborrar que no arribava. Amb dues germanes a la taula,
+    treure la fila del folre i desar no feia res —la consulta no la mirava— i l'usuari no
+    tenia manera de saber-ho.
+
+    Desancorar-la sense tocar el contracte no ho arregla, l'empitjora. Un `pom_id` pelat no
+    pot dir «conserva el folre i treu l'exterior»: només diu de quins POMs es parla. Amb la
+    llista d'enters només hi ha dues lectures possibles, i totes dues són dolentes —o cap
+    germana es pot esborrar mai, o esborrar-ne una les mata totes.
+
+    LA SORTIDA ÉS QUE EL CONTRACTE PORTI LA IDENTITAT, igual que a l'upsert:
+
+      · `keep_mesures` — llista de `{pom_id, capa, instancia}`. La poda hi resol per la fila
+        sencera: sobreviu qui hi és, cau qui no. És el camí del client d'avui.
+      · `keep_pom_ids` sol — el client ANTIC. Es conserva EXACTAMENT el comportament d'abans:
+        poda limitada a l'exterior de la instància única.
+
+    ⚠️ I la segona no és una mancança que algú hagi d'«arreglar» després. **Una llista de POMs
+    no diu que cap germana s'hagi de treure.** Interpretar-ne el silenci com una ordre
+    d'esborrar seria decidir per un client que no ha dit res —exactament el que aquest tram ha
+    prohibit a l'upsert—, i el preu de l'error no és una cel·la mal pintada: és una mesura
+    donada de baixa que ningú no ha demanat.
+
+    Torna el nombre de files desactivades.
+    """
+    from fhort.models_app.models import BaseMeasurement
+    from fhort.pom.models import MeasurementLayer
+
+    vives = BaseMeasurement.objects.filter(model=model, is_active=True)
+
+    if keep_mesures is not None:
+        conserva = {(int(k['pom_id']),) + _identitat_de_mesura(k)
+                    for k in keep_mesures if k.get('pom_id')}
+        # `.exclude()` no pot expressar una clau composta: es resol en Python sobre les files
+        # vives del model, que són poques i ja s'han de llegir igualment.
+        baixes = [bm.id for bm in vives
+                  if (bm.pom_id, bm.capa, bm.instancia) not in conserva]
+        return BaseMeasurement.objects.filter(id__in=baixes).update(is_active=False) if baixes else 0
+
+    keep = [int(x) for x in keep_pom_ids]
+    return (vives
+            .filter(capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+            .exclude(pom_id__in=keep)
+            .update(is_active=False))
 
 
 def _identitat_de_mesura(m):
