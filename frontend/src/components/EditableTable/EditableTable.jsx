@@ -147,8 +147,19 @@ export default function EditableTable({
 
   const calcDelta = (row) => {
     // Δ computed on the backend (mean of increments between sizes with data).
-    if (deltes) {
-      const d = deltes[row.pom_id]
+    //
+    // C4/BLOC 3 — LA CLAU DEL DICT ÉS `row.clau`, NO `row.pom_id`. El bloc 1 va desancorar
+    // `taula-mesures` i la clau de `deltes` va passar a `{pom_id}|{capa}|{instancia}`
+    // (`pom/identitat.clau_mesura`), que és el que la fila porta ara a `clau`. Amb `pom_id`
+    // pelat no hi havia col·lisió: hi havia BUIT — `deltes['12']` no existeix quan la clau
+    // desada és `'12|exterior|'`, o sigui que la columna Δ ensenyava '—' a TOTES les files de
+    // TOTS els models, també els que no tenen cap germana. No petava i no avisava.
+    //
+    // La clau no es reconstrueix aquí: la porta la fila. El backend és l'únic que decideix com
+    // s'aplana (v. la capçalera de `pom/identitat.py`), i muntar-la a mà en aquest fitxer seria
+    // el segon lloc que ho sap.
+    if (deltes && row.clau) {
+      const d = deltes[row.clau]
       return d == null ? '—' : `±${d}`
     }
     // Local fallback (table without backend deltas, e.g. new unsaved rows).
