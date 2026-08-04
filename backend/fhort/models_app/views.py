@@ -1822,6 +1822,24 @@ def set_measurements_view(request, model_id):
     created = updated = deactivated = 0
     errors = []
 
+    # C4/BLOC 1-BIS — mateix guard que a `gravar_pom_view`: dues entrades del MATEIX request
+    # que escriuen a la mateixa fila són un error de petició, no una escriptura. Executar-ho
+    # seria «l'última guanya» dins del bucle.
+    identitats = set()
+    for m in measurements:
+        pom_id = m.get('pom_id')
+        if not pom_id:
+            continue
+        ident = (int(pom_id),) + _identitat_de_mesura(m)
+        if ident in identitats:
+            capa, instancia = ident[1], ident[2]
+            return Response({'errors': [
+                f'POM {pom_id} (capa={capa or "exterior"}, instància={instancia or "única"}): '
+                'la petició porta dues mesures per a la mateixa fila i no es pot decidir '
+                'quina val'
+            ]}, status=400)
+        identitats.add(ident)
+
     with transaction.atomic():
         for m in measurements:
             pom_id = m.get('pom_id')
@@ -1831,10 +1849,13 @@ def set_measurements_view(request, model_id):
                 continue
             try:
                 pom = POMMaster.objects.get(id=pom_id)
-                # FASE_3/C1-ins — literals (v. `_write_base`).
+                # C4/BLOC 1-BIS — la fila es resol per la IDENTITAT SENCERA (els eixos vénen
+                # del payload; qui no els digui rep el literal de sempre). Amb el literal fix
+                # que hi havia, dues germanes queien sobre la mateixa fila.
+                capa, instancia = _identitat_de_mesura(m)
                 _, was_created = BaseMeasurement.objects.update_or_create(
                     model=model, pom=pom,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                    capa=capa, instancia=instancia,
                     defaults={
                         'base_value_cm': float(value),
                         'notes': m.get('notes', ''),
@@ -1924,6 +1945,7 @@ def gravar_pom_view(request, model_id):
     errors = []
     fora_rang = []
     prepared = []
+    identitats = set()
     for m in measurements:
         pom_id = m.get('pom_id')
         value = _to_float(m.get('base_value_cm'), 'base_value_cm', errors)
@@ -1938,7 +1960,23 @@ def gravar_pom_view(request, model_id):
         if fora:
             fora_rang.append(f'POM {pom_id}: {fora}')
             continue
-        prepared.append((m, value))
+
+        # C4/BLOC 1-BIS — LA IDENTITAT DE LA FILA SURT DEL PAYLOAD (v. `_identitat_de_mesura`).
+        capa, instancia = _identitat_de_mesura(m)
+        ident = (int(pom_id), capa, instancia)
+        if ident in identitats:
+            # 🔴 DUES ENTRADES DEL MATEIX REQUEST QUE ESCRIUEN A LA MATEIXA FILA. Executar-ho
+            # seria «l'última guanya» dins del propi bucle —el valor de la primera no arribaria
+            # mai a la BD i ningú no ho sabria—, i és exactament el mode de fallada que aquest
+            # tram existeix per matar. No es tria: es rebutja la petició sencera.
+            errors.append(
+                f'POM {pom_id} (capa={capa or "exterior"}, instància={instancia or "única"}): '
+                'la petició porta dues mesures per a la mateixa fila i no es pot decidir '
+                'quina val'
+            )
+            continue
+        identitats.add(ident)
+        prepared.append((m, value, capa, instancia))
 
     # El rang físic té resposta pròpia (422) i mai es barreja amb els errors de forma (400):
     # un número impossible no és una petició mal escrita, és una dada que no pot existir.
@@ -1957,22 +1995,25 @@ def gravar_pom_view(request, model_id):
                 model=model, is_active=True, base_value_cm__isnull=False,
             ).exists()
 
-            for m, value in prepared:
+            for m, value, capa, instancia in prepared:
                 try:
                     pom = POMMaster.objects.get(id=m.get('pom_id'))
                 except POMMaster.DoesNotExist:
                     errors.append(f"POMMaster {m.get('pom_id')} no trobat")
                     continue
 
-                # FASE_3/C1-ins — literals: el body és `{'pom_id': …}` i no porta eixos
-                # (v. `_write_base`, l'explicació canònica).
+                # C4/BLOC 1-BIS — la fila es resol per la IDENTITAT SENCERA. Amb el literal
+                # `(exterior, '')` que hi havia, dues germanes de la taula queien sobre la
+                # mateixa fila i la segona escrivia damunt la primera. Els eixos vénen del
+                # payload (v. `_identitat_de_mesura`); qui no els digui rep el literal de
+                # sempre, i el `.first()` deixa de poder triar perquè la clau ja és única.
                 bm = BaseMeasurement.objects.filter(
                     model=model, pom=pom,
-                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='').first()
+                    capa=capa, instancia=instancia).first()
                 if bm is None:
                     bm = BaseMeasurement(
                         model=model, pom=pom,
-                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                        capa=capa, instancia=instancia,
                         created_by=request.user)
                     created += 1
                 else:
@@ -2901,6 +2942,32 @@ def escalat_ajustar_talla_view(request, model_id):
     linies = [{'id': f'{pom.id}:{s}', 'valor_real': graded.get(s)} for s in size_run]
     return Response({'ok': True, 'propagat': propagat, 'motiu': motiu,
                      'grading_version_id': gv.id if gv else None, 'linies': linies}, status=200)
+
+
+def _identitat_de_mesura(m):
+    """Els dos eixos d'una mesura tal com arriben pel cos d'una petició. Punt únic.
+
+    ── C4/BLOC 1-BIS · EL CONTRACTE D'ESCRIPTURA S'OBRE ────────────────────────────────
+    Fins ara els escriptors que reben el POM per HTTP declaraven els eixos amb el literal
+    del cas (`_write_base` en té l'acta), perquè el cos era `{'pom_id': …}` i prou. Amb dues
+    germanes vives això deixa de ser una declaració i passa a ser una col·lisió: dues files
+    de la taula hi cauen a sobre i la segona escriu el seu valor damunt de la primera.
+
+    Ara el client els pot dir, i els diu com a DOS CAMPS —no com la cadena aplanada
+    `{pom}|{capa}|{inst}`—, que és el que mana `pom/identitat.py`: la cadena serveix la vora
+    del payload on la mesura ha de ser clau d'un objecte JSON, i escriure no és aquest cas.
+
+    QUI NO ELS DIU REP EL LITERAL DE SEMPRE, i això és deliberat: un client antic (o una
+    fila que encara no s'ha desat mai, que no té eixos perquè no té mesura) segueix escrivint
+    a l'exterior de la instància única, exactament com abans. El que NO es fa mai és mirar
+    quines files hi ha i triar-ne una: això seria el desempat a l'atzar que tot aquest tram
+    persegueix. El default és explícit i no depèn de les dades.
+
+    ⚠️ Un `None` explícit al cos es tracta com el valor buit, no com el text «None»: les
+    columnes són NOT NULL amb default i un client que enviï `null` vol dir «la de sempre».
+    """
+    from fhort.pom.models import MeasurementLayer
+    return (m.get('capa') or MeasurementLayer.SLUG_DEFECTE, m.get('instancia') or '')
 
 
 def _write_base(model, pom, valor, auth_user, motiu):
