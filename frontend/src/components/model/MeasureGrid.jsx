@@ -474,7 +474,14 @@ export default function MeasureGrid({
             // C2 — candidata a poda: indicador SUBTIL (un filet a l'esquerra), mai un automatisme.
             const soroll = isNoiseRow(r, groups)
             return (
-              <tr key={r.pom_id} style={{ background: rowBg }}
+              // C4/BLOC 3 — la clau de React de la FILA no pot ser el `pom_id`. Aquesta
+              // graella la comparteixen les quatre superfícies (Mesures, Escalat, Fitting,
+              // Repàs) i totes quatre poden servir dues germanes del mateix POM: dues `<tr>`
+              // amb la mateixa clau fan que React en reconciliï una amb l'estat de l'altra
+              // —cel·la enfocada, ordre en arrossegar— i avisi per consola sense que res peti.
+              // `rowKey` el posa cada adaptador amb la identitat més forta que el SEU payload
+              // li dona; el `pom_id` queda de pla B per a qui encara no en pot donar cap.
+              <tr key={r.rowKey || r.pom_id} style={{ background: rowBg }}
                 draggable={reorderable || undefined}
                 onDragStart={reorderable ? (() => { dragFrom.current = i }) : undefined}
                 onDragOver={reorderable ? (e => e.preventDefault()) : undefined}

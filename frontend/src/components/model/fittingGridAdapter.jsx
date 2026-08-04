@@ -49,6 +49,10 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers) {
     }
     return {
       pom_id: row.pom_id, codi: row.codi, is_key: row.is_key,
+      // C4/BLOC 3 — clau de fila per a MeasureGrid. Aquí la més forta disponible és el
+      // `bm_id`; 🚩 les germanes ja s'han perdut abans (`deriveFitting`/`FittingDetail`
+      // agrupen per `pom_id` perquè el payload de línies de fitting no porta els eixos).
+      rowKey: row.bm_id || row.pom_id,
       nom_en: row.nom_en, nom_local: row.nom_local,
       nom_fitxa: row.nom_fitxa, bm_id: row.bm_id,   // P4 — autoria de nom a nivell model
       logica: row.logica, increment_base: row.increment_base,
@@ -163,6 +167,8 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel) {
       // el lineId per saber de quina germana parla. L'escriptura (`escalat/ajustar-talla`)
       // encara és per `pom_id` sol: desancorar-la és feina del bloc 2.
       clau: row.clau, capa: row.capa, instancia: row.instancia,
+      // Clau de fila per a MeasureGrid: la identitat sencera de la mesura.
+      rowKey: row.clau || row.pom_id,
       nom_en: row.nom_en, nom_local: row.nom_ca,
       logica: row.logica, increment_base: row.increment_base,
       increment_break: row.increment_break, talla_break_label: row.talla_break_label,

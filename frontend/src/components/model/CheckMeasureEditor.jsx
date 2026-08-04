@@ -220,6 +220,11 @@ const checkSource = {
       const line = lineByPom[r.pom_id]
       return {
         pom_id: r.pom_id,
+        // C4/BLOC 3 — clau de fila per a MeasureGrid: la PK de la mesura, que `base_stages`
+        // ja serveix. 🚩 El creuament amb les línies del check segueix sent per `pom_id`
+        // (`lineByPom`, aquí sobre) i NO es pot arreglar des d'aquí: el payload de
+        // `serializers_size_check` no porta ni els eixos ni el `base_measurement_id`.
+        rowKey: r.base_measurement_id ?? r.pom_id,
         codi: r.nom_fitxa || r.pom_code,
         pom_code: r.pom_code,
         nom_en: r.nom_en, nom_local: r.nom_ca,

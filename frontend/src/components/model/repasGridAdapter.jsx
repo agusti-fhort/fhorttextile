@@ -127,6 +127,7 @@ export function buildRepasRows(rows, sessions) {
     return {
       pom_id: row.pom_id, codi: row.codi, pom_code: row.pom_code, is_key: row.is_key,
       capa: row.capa, instancia: row.instancia,
+      rowKey: ident,   // clau de fila per a MeasureGrid (v. `ident` aquí sobre)
       nom_en: row.nom_en, nom_local: row.nom_local, nom_fitxa: row.nom_fitxa, bm_id: row.bm_id,
       cells: {
         repas: {
