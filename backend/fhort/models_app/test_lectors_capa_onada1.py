@@ -42,9 +42,11 @@ def comporta_alcada(*taules):
     try:
         with connection.cursor() as cur:
             for taula in taules:
+                # `IF EXISTS` — C4/G1-G4 (04/08) han retirat les 40 comportes: alçar-ne una
+                # que ja no hi és és el mateix estat, i el `finally` retorna igual.
                 cur.execute(
                     f'ALTER TABLE "{connection.schema_name}"."{taula}" '
-                    f'DROP CONSTRAINT "{taula}_capa_gate_c1"'
+                    f'DROP CONSTRAINT IF EXISTS "{taula}_capa_gate_c1"'
                 )
         yield
     finally:

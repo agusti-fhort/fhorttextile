@@ -48,9 +48,11 @@ def comportes_alcades(*taules):
         with connection.cursor() as cur:
             for taula in taules:
                 for sufix in ('capa_gate_c1', 'instancia_gate_cins'):
+                    # `IF EXISTS` — C4/G1-G4 (04/08) han retirat les 40 comportes: alçar-ne
+                    # una que ja no hi és és el mateix estat, i el `finally` retorna igual.
                     cur.execute(
                         f'ALTER TABLE "{connection.schema_name}"."{taula}" '
-                        f'DROP CONSTRAINT "{taula}_{sufix}"'
+                        f'DROP CONSTRAINT IF EXISTS "{taula}_{sufix}"'
                     )
         yield
     finally:
