@@ -74,10 +74,14 @@ class BaseStagesNoRegressioTest(TenantTestCase):
         self.assertEqual(len(dades['rows']), 2)
         self.assertEqual(sorted(dades['rows'][0].keys()), [
             # `nom_canonic_model` i `nom_traduit_model`: ampliació AUTORITZADA per l'Agus
-            # 30/07 — sprint noms-POM (el bateig del model, buit = mana el catàleg). Són
-            # camps AFEGITS: cap dels altres canvia de nom, de valor ni d'ordre.
-            'base_measurement_id', 'base_value_cm', 'is_key', 'nom_ca', 'nom_canonic_model',
-            'nom_en', 'nom_fitxa', 'nom_traduit_model',
+            # 30/07 — sprint noms-POM (el bateig del model, buit = mana el catàleg).
+            # `capa` i `instancia`: ampliació de C4/BLOC 2 (`6e259c8b`, 04/08) — la fila diu
+            # de QUINA germana és, que és el que permet que dues mesures del mateix POM no es
+            # confonguin a la taula. Aquest test va fer la seva feina: va detectar el canvi de
+            # contracte, i el canvi era volgut.
+            # Tots són camps AFEGITS: cap dels altres canvia de nom, de valor ni d'ordre.
+            'base_measurement_id', 'base_value_cm', 'capa', 'instancia', 'is_key',
+            'nom_ca', 'nom_canonic_model', 'nom_en', 'nom_fitxa', 'nom_traduit_model',
             'pom_code', 'pom_id', 'takes', 'tol_minus', 'tol_plus',
         ])
         # L'ordre el mana `ordre` de la fitxa, no l'id d'alta.
@@ -87,6 +91,9 @@ class BaseStagesNoRegressioTest(TenantTestCase):
         self.assertEqual(fila_pit['base_value_cm'], 100.0)
         self.assertEqual(fila_pit['is_key'], True)
         self.assertEqual((fila_pit['tol_minus'], fila_pit['tol_plus']), (0.5, 0.5))
+        # Els dos eixos no són decoratius: una mesura que no es desdobla els porta al seu
+        # valor canònic, i és el que deixa que la germana en porti un altre sense col·lidir.
+        self.assertEqual((fila_pit['capa'], fila_pit['instancia']), ('exterior', ''))
 
     def test_la_forma_de_cada_estadi_es_exactament_aquesta(self):
         """`key`, `context` i `at` — el trio que el front fa servir per pintar la capçalera."""
