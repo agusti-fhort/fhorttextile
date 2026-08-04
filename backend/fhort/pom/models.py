@@ -624,16 +624,20 @@ class GarmentPOMMap(models.Model):
         constraints = [
             # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`, on hi ha
             # l'argument sencer). C4 la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='pom_garmentpommap_capa_gate_c1',
-            ),
+            # ✅ C4/G4 (04/08) — retirada per la migració pom/0057. El CATÀLEG és l'últim grup
+            # a posta: una germana declarada aquí es propaga a tots els models que en neixin
+            # (C-31.h, la sembra item→model), o sigui que obrir-lo abans que les superfícies
+            # del model sabessin llegir-les hauria escampat el problema en comptes de
+            # contenir-lo. És l'única de les quatre taules d'aquest grup que viu també a
+            # `public`: el catàleg és compartit.
             # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
             # C4-ins la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='pom_garmentpommap_instancia_gate_cins',
-            ),
+            # ✅ C4/G4 (04/08) — retirada per la migració pom/0057. El CATÀLEG és l'últim grup
+            # a posta: una germana declarada aquí es propaga a tots els models que en neixin
+            # (C-31.h, la sembra item→model), o sigui que obrir-lo abans que les superfícies
+            # del model sabessin llegir-les hauria escampat el problema en comptes de
+            # contenir-lo. És l'única de les quatre taules d'aquest grup que viu també a
+            # `public`: el catàleg és compartit.
         ]
 
     def __str__(self):
@@ -925,16 +929,14 @@ class ItemBaseMeasurement(models.Model):
         unique_together = [('base_set', 'pom', 'capa', 'instancia')]
         constraints = [
             # C1/T4 — la comporta (v. `models_app.BaseMeasurement.Meta`). C4 la retira.
-            models.CheckConstraint(
-                condition=models.Q(capa='exterior'),
-                name='pom_itembasemeasurement_capa_gate_c1',
-            ),
+            # ✅ C4/G4 (04/08) — retirada per la migració pom/0057, al costat de
+            # `GarmentPOMMap` (v. l'argument allà). La base de l'ITEM és la plantilla d'on
+            # surten les mesures d'un model nou.
             # C1-ins — la comporta d'instància (v. `models_app.BaseMeasurement.Meta`).
             # C4-ins la retira per migració.
-            models.CheckConstraint(
-                condition=models.Q(instancia=''),
-                name='pom_itembasemeasurement_instancia_gate_cins',
-            ),
+            # ✅ C4/G4 (04/08) — retirada per la migració pom/0057, al costat de
+            # `GarmentPOMMap` (v. l'argument allà). La base de l'ITEM és la plantilla d'on
+            # surten les mesures d'un model nou.
         ]
 
     def __str__(self):
