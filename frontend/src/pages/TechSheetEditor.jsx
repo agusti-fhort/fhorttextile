@@ -2180,7 +2180,11 @@ export function ObjectNode({ obj, src, tableData, modelData, versio, placeholder
     if (obj.bgFill) {
       const p = textBoxParts(obj, { alcadaPx: measureTextBoxHeightPx(obj) })
       return (
-        <Group {...common} onDblClick={onDblText} onDblTap={onDblText}>
+        // width/height explícits: aquí el Group es pinta amb `common` (x/y/rotació/escala), que
+        // NO porta mida — a diferència del camí d'export, que sí que consumeix `p.group`. Sense
+        // això `node.width()` és 0 i el resize desaria l'amplada mínima. Provat a pantalla.
+        <Group {...common} width={p.group.width} height={p.group.height}
+          onDblClick={onDblText} onDblTap={onDblText}>
           <Rect {...p.bg} />
           <Text {...p.text} listening={false} />
         </Group>
