@@ -135,6 +135,25 @@ class POMAlert(models.Model):
         related_name='pom_alerts',
     )
     pom = models.ForeignKey('pom.POMMaster', on_delete=models.PROTECT, related_name='alerts', null=True, blank=True)
+    # C4/BLOC 2 — ELS DOS EIXOS. Una alerta és el veredicte sobre UNA mesura, no sobre un POM:
+    # la sisa dreta pot desviar 2 cm i l'esquerra estar dins de tolerància, i són dues coses
+    # diferents que un tècnic ha de poder veure per separat. Amb la clau curta
+    # (`update_or_create` per `(model, pom, size_fitting)`) les dues germanes escrivien la
+    # MATEIXA alerta: l'última guanyava, i el missatge —que porta la talla i la desviació—
+    # acabava descrivint una fila i titulant-ne una altra.
+    #
+    # NO porten comporta CHECK, i és deliberat. Les 40 comportes de C1/C1-ins són el dic que
+    # aquest tram està a punt de retirar; afegir-ne dues de noves per treure-les tot seguit
+    # seria fer soroll. I aquesta taula no és font de res: una alerta es DERIVA d'una mesura
+    # que sí que està gatejada.
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de la mesura alertada: slug de pom.MeasurementLayer (per SLUG, mai per PK).",
+    )
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic. '' és la instància única.",
+    )
     tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES, blank=True, default='desviacio')
     valor_detectat = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     valor_esperat = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)

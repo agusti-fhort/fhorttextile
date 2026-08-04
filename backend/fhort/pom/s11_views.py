@@ -197,8 +197,16 @@ def check_tolerances_view(request, model_id):
             desv = round(float(val) - spec, 2)
 
             if abs(desv) > tol:
+                # C4/BLOC 2 — els eixos entren a la clau amb el LITERAL de la mesura
+                # única, i no copiats de cap fila: aquesta vista rep un payload manual
+                # (`{pom_id, valor}`) i `base_map` s'hi indexa per POM, o sigui que la font
+                # no sap dir de quina germana parla. La llei és la de `_write_base`: o es
+                # copien d'una fila que els sap dir, o es declaren amb el literal del cas.
+                # Aquí toca el segon. 🚩 Queda obert que aquesta porta pugui alertar d'una
+                # germana; el que es tanca és que en trepitgi una sense dir-ho.
                 alert, created = POMAlert.objects.update_or_create(
                     model=model, pom=pom,
+                    capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
                     defaults={
                         'desviacio_cm': desv,
                         'tolerancia_cm': tol,

@@ -300,6 +300,49 @@ class EscripturaGermanesTest(TenantTestCase):
             self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
             self.assertEqual(self._valors(), {(FOLRE, ''): 40.0})
 
+    # ── ALERTES (C4/BLOC 2 · POMAlert) ──────────────────────────────────────────────
+
+    def test_dues_germanes_fora_de_tolerancia_fan_dues_alertes(self):
+        """Una alerta és el veredicte sobre UNA mesura, no sobre un POM: la sisa dreta pot
+        desviar i l'esquerra no. Amb la clau `(model, pom, size_fitting)` les dues germanes
+        escrivien la MATEIXA fila, l'última guanyava, i el `missatge` —que porta la talla i
+        la desviació— acabava descrivint una mesura i titulant-ne una altra."""
+        from fhort.fitting.models import (FittingSession, GradingVersion, PieceFitting,
+                                          PieceFittingLine, POMAlert, SizeFitting)
+        from fhort.pom.s10_views import fitting_vs_spec_view
+
+        with comportes_alcades(*TAULES, 'fitting_piecefittingline'):
+            self._germanes()
+            perfil = UserProfile.objects.get(user=self.user)
+            sf, _ = SizeFitting.objects.get_or_create(
+                model=self.model, numero=1,
+                defaults={'codi': 'SF-W', 'tipus': 'SizeSet', 'estat': 'Pendent',
+                          'creat_per': perfil})
+            gv = GradingVersion.objects.create(size_fitting=sf, version_number=1,
+                                               is_active=True)
+            sessio = FittingSession.objects.create(
+                model=self.model, fase='Proto', responsable=perfil,
+                data=datetime.date(2027, 1, 15))
+            pf = PieceFitting.objects.create(session=sessio, model=self.model,
+                                             grading_version=gv)
+            # Les dues germanes desvien MOLT, i cadascuna amb una xifra distinta.
+            PieceFittingLine.objects.create(
+                piece_fitting=pf, pom=self.pom, size_label='S',
+                valor_teoric=100.0, valor_real=130.0)
+            PieceFittingLine.objects.create(
+                piece_fitting=pf, pom=self.pom, size_label='S', capa=FOLRE,
+                valor_teoric=40.0, valor_real=55.0)
+
+            req = APIRequestFactory().get(f'/x/{pf.id}/vs-spec/')
+            force_authenticate(req, user=self.user)
+            resp = fitting_vs_spec_view(req, pf.id)
+            self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
+
+            alertes = {(a.capa, a.instancia): float(a.desviacio_cm)
+                       for a in POMAlert.objects.filter(model=self.model)}
+            self.assertEqual(alertes, {(EXTERIOR, ''): 30.0, (FOLRE, ''): 15.0},
+                             'cada germana ha de tenir LA SEVA alerta amb LA SEVA desviació')
+
     # ── El client antic segueix escrivint on escrivia ───────────────────────────────
 
     def test_una_fila_sense_eixos_va_a_lexterior_de_la_instancia_unica(self):
