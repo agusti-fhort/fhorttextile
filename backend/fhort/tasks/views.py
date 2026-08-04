@@ -3,7 +3,7 @@ from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -12,7 +12,26 @@ from .models import TimerEntrada
 from .serializers import TimerEntradaSerializer
 
 
-class TimerEntradaViewSet(viewsets.ModelViewSet):
+class TimerEntradaViewSet(viewsets.ReadOnlyModelViewSet):
+    """Trams de temps del PROPI tècnic. **Lectura + les dues accions**, mai CRUD.
+
+    Un `TimerEntrada` no és un recurs que el client redacti: neix i mor dins de `transition_task`
+    (`services_c.py:_open_timer` / `_close_open_timer`), que és qui sap tancar-lo amb la seva
+    durada i alimentar-ne el Welford. Com a `ModelViewSet`, però, el router publicava també
+    `POST /timers/`, `PUT|PATCH /timers/<id>/` i `DELETE /timers/<id>/` amb només `IsAuthenticated`
+    — i `inici` i `model_task` són escrivibles al serializer (`read_only_fields` només cobreix
+    `tecnic`, `minuts`, `fi` i `last_heartbeat`). Amb això, el temps facturable era **inventable i
+    esborrable des del navegador**, per `id`, sense passar per cap transició ni deixar cap
+    `TaskTransition` al log.
+
+    El fitxer de test d'aquesta zona ja declarava la llei —«l'única porta d'escriptura ha de ser
+    `heartbeat`» (`test_guard_tasca_oblidada.py:11`)—; el que faltava era aplicar-la al nivell
+    correcte. Defensar `last_heartbeat` camp a camp tapava un forat i deixava la porta oberta.
+
+    Cap consumidor perd res: `timers.create` està declarat a `endpoints.js` però **no el crida
+    ningú** (verificat), i no hi ha ni `update` ni `remove`. El que segueix viu és el que es fa
+    servir: `list` (guard + pàgina de temps), `retrieve`, i les accions `tancar` i `heartbeat`.
+    """
     permission_classes = [IsAuthenticated]
     serializer_class = TimerEntradaSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
@@ -36,12 +55,6 @@ class TimerEntradaViewSet(viewsets.ModelViewSet):
         if profile is None:
             return qs.none()
         return qs.filter(tecnic=profile)
-
-    def perform_create(self, serializer):
-        profile = self._get_profile()
-        if profile is None:
-            raise PermissionDenied('Usuari sense UserProfile en aquest tenant.')
-        serializer.save(tecnic=profile)
 
     @action(detail=False, methods=['post'], url_path='heartbeat')
     def heartbeat(self, request):
