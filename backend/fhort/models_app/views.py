@@ -1636,8 +1636,19 @@ def measurements_table_view(request, model_id):
     base_measurements = BaseMeasurement.objects.filter(
         model=model,
         is_active=True,
-    ).select_related('pom', 'pom__pom_global').order_by('ordre', 'pom__codi_client')
+    ).select_related('pom', 'pom__pom_global').order_by(
+        'ordre', 'pom__codi_client', 'capa', 'instancia')
 
+    # C4 — EL MAPA DE GRADUATS CREIX A LA IDENTITAT SENCERA.
+    #
+    # Aquesta vista MAI no va tenir àncora al queryset: les files sempre han sortit totes
+    # (una per `BaseMeasurement`). El seu defecte era l'altre —i pitjor de veure—: `graded_by_pom`
+    # i `deltas` són diccionaris per `pom_id` pelat, o sigui que amb dues germanes la pantalla
+    # ensenyava LES DUES FILES i totes dues llegien la mateixa entrada. Una de les dues sortia
+    # amb el graduat i el delta de la seva germana com si fossin seus.
+    #
+    # Absència vs. valor equivocat: les cinc superfícies ancorades AMAGAVEN; aquesta COL·LAPSAVA.
+    # És pitjor perquè no hi ha res a la pantalla que suggereixi que falta o sobra res.
     graded_by_pom = {}
     try:
         from fhort.fitting.models import GradedSpec
@@ -1651,10 +1662,10 @@ def measurements_table_view(request, model_id):
             gv = vigent_grading_version(sf)
             if gv:
                 for spec in GradedSpec.objects.filter(grading_version=gv):
-                    pom_id = spec.pom_id
-                    if pom_id not in graded_by_pom:
-                        graded_by_pom[pom_id] = {}
-                    graded_by_pom[pom_id][spec.size_label] = (
+                    ident = (spec.pom_id, spec.capa, spec.instancia)
+                    if ident not in graded_by_pom:
+                        graded_by_pom[ident] = {}
+                    graded_by_pom[ident][spec.size_label] = (
                         float(spec.graded_value_cm) if spec.graded_value_cm is not None else None
                     )
     except Exception:
@@ -1687,6 +1698,7 @@ def measurements_table_view(request, model_id):
         return float(v) if v is not None else None
 
     # C3 — nomenclatura del CLIENT del model, mateix resolutor que la resta de superfícies.
+    from fhort.pom.identitat import clau_mesura
     from fhort.pom.nomenclatura import alies_per_pom, camps_de
     alias_by_pom = alies_per_pom(model.customer_id)
 
@@ -1699,6 +1711,12 @@ def measurements_table_view(request, model_id):
             'id': bm.id,
             'ordre': bm.ordre,
             'pom_id': pom.id,
+            # C4 — els dos eixos al contracte. Aquesta taula sempre ha pintat una fila per
+            # germana; el que li faltava era dir QUINA és cada fila, i és el que fan aquests
+            # dos camps més la `clau` de sota (la que enllaça amb `deltes`).
+            'capa': bm.capa,
+            'instancia': bm.instancia,
+            'clau': clau_mesura(pom.id, bm.capa, bm.instancia),
             'pom_code': pom.codi_client,
             **camps_de(alias_by_pom, pom.id),
             'nom_fitxa': bm.nom_fitxa or '',
@@ -1720,7 +1738,7 @@ def measurements_table_view(request, model_id):
             'is_key': bm.is_key,
             'origen': bm.origen,
             'notes': bm.notes or '',
-            'graded': graded_by_pom.get(pom.id, {}),
+            'graded': graded_by_pom.get((pom.id, bm.capa, bm.instancia), {}),
             # Règim (additiu; consumidors antics ignoren camps desconeguts).
             'logica': getattr(rule, 'logica', None) if rule else None,
             'increment_base': _flt(getattr(rule, 'increment_base', None)) if rule else None,
@@ -1743,15 +1761,22 @@ def measurements_table_view(request, model_id):
     ]
 
     # Δ = mean of increments between consecutive sizes with data; None if <2 values.
+    #
+    # C4 — LA CLAU DEL DICT ÉS LA IDENTITAT DE LA MESURA, NO EL POM. Amb `str(pom_id)`, dues
+    # germanes escrivien a la mateixa entrada i la segona esborrava el delta de la primera:
+    # `deltes` tenia dues entrades per a quatre files, i dues files de la pantalla ensenyaven
+    # un delta que no era el seu. La clau ve de `pom.identitat.clau_mesura`, la mateixa forma
+    # que fa servir `pom/grading_views.cells` — l'altre lector que publica la mesura com a
+    # clau d'objecte JSON.
     deltas = {}
     for r in rows:
         values = [_size_value(r, s) for s in sizes_with_data]
         values = [v for v in values if v is not None]
         if len(values) >= 2:
             increments = [values[i + 1] - values[i] for i in range(len(values) - 1)]
-            deltas[str(r['pom_id'])] = round(sum(increments) / len(increments), 2)
+            deltas[r['clau']] = round(sum(increments) / len(increments), 2)
         else:
-            deltas[str(r['pom_id'])] = None
+            deltas[r['clau']] = None
 
     # Taula tancada? (SizeFitting estat='Tancat' → vista de només lectura al frontend)
     tancat = False
