@@ -91,20 +91,7 @@
     "warn_sealed_stale": "La versió v{{version}} està SEGELLADA a producció — i ja ha quedat enrere: la base ha canviat {{n}} vegada/es des del segell. Propagar la superarà."
   },
   "germana": {
-    "afegir": "Afegir germana",
-    "titol": "Afegir una germana",
-    "subtitol": "Una cara més de «{{nom}}» ({{capa}}). Neix buida, al costat.",
-    "mena_capa": "Una altra capa",
-    "mena_instancia": "Una altra instància",
-    "tria_capa": "Capa de la germana",
-    "tria_instancia": "Instància de la germana",
-    "cap_capa": "Aquest POM ja té una fila a cada capa.",
-    "cap_instancia": "Aquest POM ja té una fila a cada instància.",
-    "nom": "Nomenclatura",
-    "nom_ph_obligatori": "p. ex. {{base}}-L",
-    "nom_ajuda": "Opcional: sense res, hereta la de la fila mare.",
-    "nom_ajuda_obligatori": "Obligatòria: dues instàncies del mateix POM no poden compartir nomenclatura.",
-    "crear": "Afegir la fila"
+    "capa_tecla": "Germana de capa · tecla L"
   },
   "graduacio": {
     "button": "Graduació",
@@ -3224,7 +3211,6 @@
       "break_size": "Talla break"
     },
     "row_discarded": "Sense valor: aquesta fila es descartarà en desar.",
-    "row_discard_mark": "· es descartarà",
     "save_saving": "desant…",
     "save_saved": "desat",
     "save_failed": "no s'ha pogut desar",
@@ -3235,7 +3221,14 @@
     "finder_eix": "→ {{eix}}",
     "finder_nivell_item": "de l'item",
     "finder_nivell_type": "de la família",
-    "finder_nivell_cataleg": "del catàleg del client"
+    "finder_nivell_cataleg": "del catàleg del client",
+    "kbd_next": "següent",
+    "kbd_prev": "anterior",
+    "kbd_capa": "germana de capa",
+    "kbd_instancia": "focus als grups d'instància",
+    "kbd_nomen": "nomenclatura",
+    "kbd_finder": "última fila ↓ = cercador",
+    "kbd_buit": "buit = es descarta"
   },
   "dashboard": {
     "tab_home": "Inici",
@@ -4290,19 +4283,7 @@
     "col": "Capa"
   },
   "instancia": {
-    "left": "Esquerra",
-    "right": "Dreta",
-    "relaxed": "Relaxada",
-    "extended": "Estirada",
-    "top": "Superior",
-    "bottom": "Inferior",
-    "cf": "CF",
-    "cb": "CB",
-    "side": "Costura lateral",
-    "waistband_seam": "Costura de cinturilla",
     "grup": "Instància",
-    "eix_posicio": "Posició",
-    "eix_estat": "Estat",
     "mes": "més",
     "mes_tip": "Posició i combinacions — modal complet",
     "tip_aquesta": "{{nom}} — aquesta fila",

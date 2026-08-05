@@ -91,20 +91,7 @@
     "warn_sealed_stale": "Version v{{version}} is SEALED for production — and has already fallen behind: the base has changed {{n}} time(s) since the seal. Propagating will supersede it."
   },
   "germana": {
-    "afegir": "Add sibling",
-    "titol": "Add a sibling",
-    "subtitol": "Another face of “{{nom}}” ({{capa}}). It starts empty, right below.",
-    "mena_capa": "Another layer",
-    "mena_instancia": "Another instance",
-    "tria_capa": "Sibling layer",
-    "tria_instancia": "Sibling instance",
-    "cap_capa": "This POM already has a row on every layer.",
-    "cap_instancia": "This POM already has a row for every instance.",
-    "nom": "Nomenclature",
-    "nom_ph_obligatori": "e.g. {{base}}-L",
-    "nom_ajuda": "Optional: left blank, it inherits the parent row's.",
-    "nom_ajuda_obligatori": "Required: two instances of the same POM cannot share a nomenclature.",
-    "crear": "Add the row"
+    "capa_tecla": "Layer sibling · key L"
   },
   "graduacio": {
     "button": "Grading",
@@ -3224,7 +3211,6 @@
       "break_size": "Break size"
     },
     "row_discarded": "No value: this row will be discarded on save.",
-    "row_discard_mark": "· will be discarded",
     "save_saving": "saving…",
     "save_saved": "saved",
     "save_failed": "couldn't save",
@@ -3235,7 +3221,14 @@
     "finder_eix": "→ {{eix}}",
     "finder_nivell_item": "from the item",
     "finder_nivell_type": "from the family",
-    "finder_nivell_cataleg": "from the client catalogue"
+    "finder_nivell_cataleg": "from the client catalogue",
+    "kbd_next": "next",
+    "kbd_prev": "previous",
+    "kbd_capa": "layer sibling",
+    "kbd_instancia": "focus the instance groups",
+    "kbd_nomen": "nomenclature",
+    "kbd_finder": "last row ↓ = finder",
+    "kbd_buit": "blank = discarded"
   },
   "dashboard": {
     "tab_home": "Home",
@@ -4290,19 +4283,7 @@
     "col": "Layer"
   },
   "instancia": {
-    "left": "Left",
-    "right": "Right",
-    "relaxed": "Relaxed",
-    "extended": "Extended",
-    "top": "Top",
-    "bottom": "Bottom",
-    "cf": "CF",
-    "cb": "CB",
-    "side": "Side seam",
-    "waistband_seam": "Waistband seam",
     "grup": "Instance",
-    "eix_posicio": "Position",
-    "eix_estat": "State",
     "mes": "more",
     "mes_tip": "Position and combinations — full dialog",
     "tip_aquesta": "{{nom}} — this row",

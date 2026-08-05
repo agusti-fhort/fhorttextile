@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import BateigInput from './BateigInput'
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from '../../pages/fittingShared'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
+import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
 
 // MeasureGrid — editor únic de mesures (un component, dos modes treball/consulta) que serveix els
 // DOS eixos via SLOTS, reusant l'esquelet del fitting editor (MeasureTable):
@@ -218,10 +219,13 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
                    instancia = '', marca = null, bmId, editable, onNomSave, onNomsSave = null,
                    editCodi = false, style }) {
   const { t } = useTranslation()
+  const dicc = useDiccionariMesures()
   // La INSTÀNCIA s'enganxa al nom en TOTES les branques: és el nom d'aquesta mesura el que
-  // s'allarga («Profunditat de sisa · Esquerra»), i el que no pot passar és que la germana
-  // esquerra i la dreta es llegeixin igual segons per quina branca hi entri la cel·la.
-  const inst = etiquetaInstancia(instancia, t)
+  // s'allarga («Front armhole · Left»), i el que no pot passar és que la germana esquerra i la
+  // dreta es llegeixin igual segons per quina branca hi entri la cel·la.
+  // Va en ANGLÈS CANÒNIC i no es tradueix (05/08): és la paraula que allarga el nom del POM i
+  // de la qual surt el sufix del codi. El diccionari mana quan hi és.
+  const inst = etiquetaInstancia(instancia, dicc)
   const Inst = () => (inst ? <span style={{ fontWeight: 500 }}>{` · ${inst}`}</span> : null)
   // v3 (`.tagd`) — una germana que el sistema ha mogut sola porta etiqueta. El número d'una
   // derivada s'assembla a un de mesurat, i qui llegeix la columna de dalt a baix ha de poder

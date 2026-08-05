@@ -28,21 +28,23 @@ test('la germana de CAPA porta la seva capa', () => {
   assert.equal(sufixIdentitat({ capa: 'folre', instancia: '' }, t), ' · capa.folre')
 })
 
-test('la germana d\'INSTÀNCIA porta la seva instància', () => {
-  assert.equal(sufixIdentitat({ capa: 'exterior', instancia: 'left' }, t), ' · instancia.left')
-  assert.equal(sufixIdentitat({ capa: 'exterior', instancia: 'right' }, t), ' · instancia.right')
+test('la germana d\'INSTÀNCIA porta la seva instància, EN ANGLÈS CANÒNIC', () => {
+  // No passa per `t()`: la paraula d'instància és la que allarga el nom del POM i de la qual
+  // surt el sufix del codi (`AHL`). Traduir-la deixaria dues llengües a la mateixa línia.
+  assert.equal(sufixIdentitat({ capa: 'exterior', instancia: 'left' }, t), ' · Left')
+  assert.equal(sufixIdentitat({ capa: 'exterior', instancia: 'right' }, t), ' · Right')
 })
 
 test('amb els dos eixos: INSTÀNCIA primer, capa després', () => {
   // Es llegeix com es diu: la instància qualifica la mesura («la sisa esquerra») i la capa diu
   // de quina matèria parla («…al folre»). L'ordre invers no es llegeix.
   assert.equal(sufixIdentitat({ capa: 'folre', instancia: 'left' }, t),
-    ' · instancia.left · capa.folre')
+    ' · Left · capa.folre')
 })
 
 test('una instància composta es desmunta pels guions, sense perdre cap tram', () => {
   assert.equal(sufixIdentitat({ capa: 'exterior', instancia: 'left-relaxed' }, t),
-    ' · instancia.left · instancia.relaxed')
+    ' · Left · Relaxed')
 })
 
 test('un slug desconegut es mostra CRU, mai desapareix', () => {
@@ -65,6 +67,24 @@ test('etiquetaCapa: el buit és l\'exterior, no «sense capa»', () => {
 })
 
 test('etiquetaInstancia: la instància única torna buit, no un guió penjat', () => {
-  assert.equal(etiquetaInstancia('', t), '')
-  assert.equal(etiquetaInstancia(null, t), '')
+  assert.equal(etiquetaInstancia(''), '')
+  assert.equal(etiquetaInstancia(null), '')
+})
+
+test('LA PARAULA D\'INSTÀNCIA NO ES TRADUEIX: anglès canònic sempre', () => {
+  // La promesa de fons: la mateixa fila es llegeix igual a la pantalla catalana, a l'anglesa i
+  // a la fitxa que va al fabricant, perquè el sufix del codi (`L`) surt d'aquesta paraula.
+  assert.equal(etiquetaInstancia('left'), 'Left')
+  assert.equal(etiquetaInstancia('waistband_seam'), 'Waistband seam')
+  assert.equal(etiquetaInstancia('extended'), 'Extended / stretched')
+  // CF/CB són acrònims del sector i no es desmunten ni es capitalitzen.
+  assert.equal(etiquetaInstancia('cf'), 'CF')
+})
+
+test('amb diccionari MANA LA BD: un tenant pot tenir una instància que el front no coneix', () => {
+  const dicc = { instancies: { POSICIO: [{ slug: 'sleeve_head', nom_en: 'Sleeve head' }] } }
+  assert.equal(etiquetaInstancia('sleeve_head', dicc), 'Sleeve head')
+  // I si la BD reanomena una de canòniques, mana ella i no el mirall d'aquest fitxer.
+  const renom = { instancies: { POSICIO: [{ slug: 'left', nom_en: 'Left side' }] } }
+  assert.equal(etiquetaInstancia('left', renom), 'Left side')
 })

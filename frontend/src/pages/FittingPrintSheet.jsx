@@ -207,7 +207,8 @@ function Pagina({ files, desDe, capcalera, ultima, baseLabel, dataSessio, logoUr
           </thead>
           <tbody>
             {files.map((l, j) => {
-              const inst = etiquetaInstancia(l.instancia, tEn)
+              // La instància ja ÉS anglès canònic (no es tradueix): no li cal cap traductor.
+              const inst = etiquetaInstancia(l.instancia)
               return (
                 <tr key={l.id}>
                   <TdPr>{desDe + j + 1}</TdPr>

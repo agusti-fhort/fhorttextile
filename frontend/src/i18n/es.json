@@ -91,20 +91,7 @@
     "warn_sealed_stale": "La versión v{{version}} está SELLADA en producción — y ya se ha quedado atrás: la base ha cambiado {{n}} vez/veces desde el sellado. Propagar la superará."
   },
   "germana": {
-    "afegir": "Añadir hermana",
-    "titol": "Añadir una hermana",
-    "subtitol": "Una cara más de «{{nom}}» ({{capa}}). Nace vacía, al lado.",
-    "mena_capa": "Otra capa",
-    "mena_instancia": "Otra instancia",
-    "tria_capa": "Capa de la hermana",
-    "tria_instancia": "Instancia de la hermana",
-    "cap_capa": "Este POM ya tiene una fila en cada capa.",
-    "cap_instancia": "Este POM ya tiene una fila en cada instancia.",
-    "nom": "Nomenclatura",
-    "nom_ph_obligatori": "p. ej. {{base}}-L",
-    "nom_ajuda": "Opcional: si se deja vacía, hereda la de la fila madre.",
-    "nom_ajuda_obligatori": "Obligatoria: dos instancias del mismo POM no pueden compartir nomenclatura.",
-    "crear": "Añadir la fila"
+    "capa_tecla": "Hermana de capa · tecla L"
   },
   "graduacio": {
     "button": "Graduación",
@@ -3224,7 +3211,6 @@
       "break_size": "Talla break"
     },
     "row_discarded": "Sin valor: esta fila se descartará al guardar.",
-    "row_discard_mark": "· se descartará",
     "save_saving": "guardando…",
     "save_saved": "guardado",
     "save_failed": "no se ha podido guardar",
@@ -3235,7 +3221,14 @@
     "finder_eix": "→ {{eix}}",
     "finder_nivell_item": "del item",
     "finder_nivell_type": "de la familia",
-    "finder_nivell_cataleg": "del catálogo del cliente"
+    "finder_nivell_cataleg": "del catálogo del cliente",
+    "kbd_next": "siguiente",
+    "kbd_prev": "anterior",
+    "kbd_capa": "hermana de capa",
+    "kbd_instancia": "foco en los grupos de instancia",
+    "kbd_nomen": "nomenclatura",
+    "kbd_finder": "última fila ↓ = buscador",
+    "kbd_buit": "vacío = se descarta"
   },
   "dashboard": {
     "tab_home": "Inicio",
@@ -4290,19 +4283,7 @@
     "col": "Capa"
   },
   "instancia": {
-    "left": "Izquierda",
-    "right": "Derecha",
-    "relaxed": "Relajada",
-    "extended": "Estirada",
-    "top": "Superior",
-    "bottom": "Inferior",
-    "cf": "CF",
-    "cb": "CB",
-    "side": "Costura lateral",
-    "waistband_seam": "Costura de pretina",
     "grup": "Instancia",
-    "eix_posicio": "Posición",
-    "eix_estat": "Estado",
     "mes": "más",
     "mes_tip": "Posición y combinaciones — modal completo",
     "tip_aquesta": "{{nom}} — esta fila",

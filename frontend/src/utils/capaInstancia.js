@@ -38,21 +38,28 @@
 export const CAPES = ['exterior', 'folre', 'entretela', 'farciment', 'reforc', 'fornitura']
 
 /**
- * Trams d'instància amb literal propi: els DEU slugs que el diccionari sembra (D-31.26).
+ * LES PARAULES D'INSTÀNCIA NO ES TRADUEIXEN (decisió d'Agus, 05/08). Van en ANGLÈS CANÒNIC, tal
+ * com les porta el diccionari (`MeasurementInstance.nom_en`), i per un motiu que no és d'estil:
+ * la paraula ALLARGA EL NOM DEL POM i d'ella surt el sufix del codi. «FRONT ARMHOLE · Left» amb
+ * sufix `L` es llegeix igual a la pantalla catalana, a l'anglesa i a la fitxa que va al
+ * fabricant; «FRONT ARMHOLE · Esquerra» amb codi `AHL` són dues llengües a la mateixa línia i
+ * el sufix deixa de dir d'on ve. És DADA de domini, com LINEAR/STEP o un codi de POM.
  *
- * Aquí hi ha la LLISTA i a `i18n/*.json` els literals; l'ESTRUCTURA (de quin eix és cadascun,
- * quin sufix compon, en quin ordre s'ofereixen) NO es duplica i es demana al backend
- * (`utils/diccionariMesuresFont.js`). El repartiment és a posta: una etiqueta s'ha de poder
- * pintar abans que cap petició torni i ha de canviar quan l'usuari canvia d'idioma, i cap de
- * les dues coses les pot fer una resposta d'API.
+ * Per això aquests literals ja NO són a `i18n/*.json`: hi eren, i s'han tret.
  *
- * Un slug que NO sigui aquí —el que un tenant s'hagi creat— es mostra cru; qui el tingui a mà
- * (el modal de posicions) pot passar el `nom_*` del diccionari com a etiqueta.
+ * Aquest mapa és el MIRALL de la sembra (`seed_measurement_instances.POSICIONS`/`ESTATS`), i
+ * existeix per una sola raó: etiquetar una fila ABANS que el diccionari arribi. Qui el tingui a
+ * mà passa `dicc` i llavors mana la BD —que és qui pot tenir una instància que un tenant s'hagi
+ * creat—; sense diccionari, mana aquest mapa; sense cap dels dos, el slug es mostra cru.
  */
-export const INSTANCIES = [
-  'left', 'right', 'top', 'bottom', 'cf', 'cb', 'side', 'waistband_seam',
-  'relaxed', 'extended',
-]
+export const NOM_INSTANCIA = {
+  left: 'Left', right: 'Right', top: 'Top', bottom: 'Bottom',
+  cf: 'CF', cb: 'CB', side: 'Side seam', waistband_seam: 'Waistband seam',
+  relaxed: 'Relaxed', extended: 'Extended / stretched',
+}
+
+/** Els slugs que el diccionari sembra (D-31.26): vuit posicions i dos estats. */
+export const INSTANCIES = Object.keys(NOM_INSTANCIA)
 
 const SEP_INSTANCIA = '-'
 
@@ -70,15 +77,27 @@ export function etiquetaCapa(slug, t) {
 }
 
 /**
- * Literal de la INSTÀNCIA en l'idioma de qui llegeix, PARAULA SENCERA i mai abreujada
- * (`'left-relaxed'` → «Esquerra · Relaxada»). `''` és la instància ÚNICA i torna `''`: no hi ha
- * res a qualificar, i pintar-hi un guió faria semblar que hi falta alguna cosa.
+ * La INSTÀNCIA en ANGLÈS CANÒNIC, PARAULA SENCERA i mai abreujada (`'left-relaxed'` → «Left ·
+ * Relaxed»). `''` és la instància ÚNICA i torna `''`: no hi ha res a qualificar, i pintar-hi un
+ * guió faria semblar que hi falta alguna cosa.
+ *
+ * `dicc` és opcional i és qui MANA quan hi és: el diccionari de la BD pot portar una instància
+ * que aquest fitxer no coneix (la que un tenant s'hagi creat). Sense ell, el mirall de la sembra.
  */
-export function etiquetaInstancia(slug, t) {
+export function etiquetaInstancia(slug, dicc = null) {
   if (!slug) return ''
   return String(slug).split(SEP_INSTANCIA)
-    .map(tram => (INSTANCIES.includes(tram) ? t(`instancia.${tram}`) : cru(tram)))
+    .map(tram => nomDelDiccionari(dicc, tram) || NOM_INSTANCIA[tram] || cru(tram))
     .join(' · ')
+}
+
+/** El `nom_en` d'un tram simple, tal com el diccionari de la BD el porta. */
+function nomDelDiccionari(dicc, tram) {
+  for (const files of Object.values(dicc?.instancies || {})) {
+    const f = files.find(x => x.slug === tram)
+    if (f) return f.nom_en || ''
+  }
+  return ''
 }
 
 /** `true` si la fila parla d'una capa que no és l'exterior (per si cal marcar-la). */
@@ -100,11 +119,14 @@ export const esGermanaDeCapa = (slug) => !!slug && slug !== 'exterior'
  * que porta marca, que és també com es llegeix un document en paper.
  *
  * Torna `''` per a la mesura única d'exterior — el cas normal, que no ha de canviar de forma.
+ *
+ * La CAPA es tradueix (és una matèria: folre, entretela) i la INSTÀNCIA no (és vocabulari
+ * canònic que allarga el nom del POM). Per això `t` només serveix la primera.
  */
-export function sufixIdentitat(fila, t) {
+export function sufixIdentitat(fila, t, dicc = null) {
   if (!fila) return ''
   const trams = []
-  const inst = etiquetaInstancia(fila.instancia, t)
+  const inst = etiquetaInstancia(fila.instancia, dicc)
   if (inst) trams.push(inst)
   if (esGermanaDeCapa(fila.capa)) trams.push(etiquetaCapa(fila.capa, t))
   return trams.length ? ` · ${trams.join(' · ')}` : ''
