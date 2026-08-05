@@ -3221,6 +3221,9 @@
     },
     "row_discarded": "Sense valor: aquesta fila es descartarà en desar.",
     "row_discard_mark": "· es descartarà",
+    "save_saving": "desant…",
+    "save_saved": "desat",
+    "save_failed": "no s'ha pogut desar",
     "count_filled": "{{n}} informades",
     "count_empty": "{{n}} en blanc → es descartaran"
   },

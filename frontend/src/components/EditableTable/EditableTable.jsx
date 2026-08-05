@@ -127,6 +127,33 @@ export default function EditableTable({
     if (target) valRefs.current[target.id]?.focus()
   }, [])
 
+  // v8.1 — L'INDICADOR DE DESAT, per a les portes que desen SOLES.
+  //
+  // Aquesta taula té dos camps que no passen pel botó de desar: el BATEIG del nom i la REGLA.
+  // Tots dos escriuen al servidor en perdre el focus, i fins ara no ho deia res: el tècnic
+  // canviava un nom, no veia cap moviment, i l'única manera de saber si havia arribat era
+  // recarregar. La maqueta ho resol amb un flaix a la barra d'estat, i és el que es fa aquí.
+  //
+  // L'ESTAT D'ERROR NO ÉS A LA MAQUETA i s'hi afegeix a posta: la maqueta no té servidor i no pot
+  // fallar. Pintar «desat» quan la petició ha petat seria la pitjor mentida que pot dir un
+  // indicador de desat — val més dir-ho i que el tècnic torni a provar-ho.
+  const [desat, setDesat] = useState(null)          // null | 'saving' | 'saved' | 'failed'
+  const desatT = useRef(null)
+  useEffect(() => () => clearTimeout(desatT.current), [])
+  const marcaDesat = (promesa) => {
+    clearTimeout(desatT.current)
+    setDesat('saving')
+    return Promise.resolve(promesa)
+      .then(r => {
+        setDesat('saved')
+        // El «desat» s'esvaeix sol: és una confirmació, no un estat de la taula.
+        desatT.current = setTimeout(() => setDesat(null), 2000)
+        return r
+      })
+      // L'error es queda a la vista fins al desat següent, que és quan deixa de ser cert.
+      .catch(e => { setDesat('failed'); throw e })
+  }
+
   // EL BATEIG — desa IMMEDIATAMENT per la porta pròpia i estreta del paquet NOMS-POM
   // (`PATCH base-measurements/<id>/noms/`), com ja fa la graella de consulta. No passa pel
   // botó de desar de la taula a posta: rebatejar una mesura no és editar-ne el valor, i
@@ -134,8 +161,8 @@ export default function EditableTable({
   // mesures a un desat que ningú ha demanat. `localRows` s'actualitza a mà perquè el que es
   // veu sigui el que s'acaba de desar sense haver de recarregar la taula sencera.
   const handleBateig = (bmId, camps) =>
-    baseMeasurements.setNoms(bmId, camps)
-      .then(() => setLocalRows(prev => prev.map(r => (r.id === bmId ? { ...r, ...camps } : r))))
+    marcaDesat(baseMeasurements.setNoms(bmId, camps)
+      .then(() => setLocalRows(prev => prev.map(r => (r.id === bmId ? { ...r, ...camps } : r)))))
       .catch(e => { console.error('No s\'ha pogut desar el nom', e) })
 
   // LA REGLA es desa per la SEVA porta (`set_pom_regim_view`, upsert de la ModelGradingRule
@@ -157,7 +184,7 @@ export default function EditableTable({
     }
     if (String(row[camp] ?? '') === String(net ?? '')) return
     setLocalRows(prev => prev.map(r => (r.id === row.id ? { ...r, [camp]: net } : r)))
-    models.setPomRegla(modelId, row.pom_id, { [camp]: net })
+    marcaDesat(models.setPomRegla(modelId, row.pom_id, { [camp]: net }))
       .catch(e => console.error('No s\'ha pogut desar la regla', e))
   }
 
@@ -490,6 +517,14 @@ export default function EditableTable({
                       color: 'var(--text-muted)' }}>
           <span>{t('editable_table.count_filled', { n: nInformades })}</span>
           {nBuides > 0 && <span>{t('editable_table.count_empty', { n: nBuides })}</span>}
+          {/* A la dreta del tot, com a la maqueta: els recomptes diuen QUÈ hi ha a la taula i
+              el flaix diu QUÈ acaba de passar. Són dues lectures diferents i no s'han de barrejar. */}
+          {desat && (
+            <span aria-live="polite" style={{ marginLeft: 'auto',
+                                              color: desat === 'failed' ? 'var(--err)' : 'var(--gold)' }}>
+              {t(`editable_table.save_${desat}`)}
+            </span>
+          )}
         </div>
       )}
 

@@ -3221,6 +3221,9 @@
     },
     "row_discarded": "Sin valor: esta fila se descartará al guardar.",
     "row_discard_mark": "· se descartará",
+    "save_saving": "guardando…",
+    "save_saved": "guardado",
+    "save_failed": "no se ha podido guardar",
     "count_filled": "{{n}} informadas",
     "count_empty": "{{n}} en blanco → se descartarán"
   },

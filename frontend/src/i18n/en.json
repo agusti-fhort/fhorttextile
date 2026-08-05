@@ -3221,6 +3221,9 @@
     },
     "row_discarded": "No value: this row will be discarded on save.",
     "row_discard_mark": "· will be discarded",
+    "save_saving": "saving…",
+    "save_saved": "saved",
+    "save_failed": "couldn't save",
     "count_filled": "{{n}} filled in",
     "count_empty": "{{n}} blank → will be discarded"
   },
