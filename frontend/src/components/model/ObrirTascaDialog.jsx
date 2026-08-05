@@ -38,7 +38,10 @@ export default function ObrirTascaDialog({ cara, tasca, rondaOberta, onAccio, on
   const cares = {
     [CARA_CONFLICTE]: {
       icona: 'ti-user-exclamation',
-      titol: t('obrir_tasca.conflicte_titol', { tecnic: tasca?.obert_per_nom || tasca?.assignee_nom || '—' }),
+      // S-19 — el nom que hi va és el de qui hi TÉ EL RELLOTGE, i prou: la cara de conflicte
+      // ja només surt quan n'hi ha un d'obert. Caure a `assignee_nom` seria tornar a barrejar
+      // planificació amb realitat, justament al text que diu qui la té.
+      titol: t('obrir_tasca.conflicte_titol', { tecnic: tasca?.obert_per_nom || '—' }),
       cos: t('obrir_tasca.conflicte_cos'),
       opcions: [{
         clau: 'treballar',

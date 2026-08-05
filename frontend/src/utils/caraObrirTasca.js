@@ -39,13 +39,16 @@ export function caraObrirTasca(tasca, jo) {
   // lliurable no mereix el diàleg de ronda — es reobre i prou (rectificació de sempre).
   if (tasca.status === 'Done' && tasca.es_lliurable) return CARA_LLIURADA
 
-  // D-7 · algú altre hi és. `obert_per` (el TRAM) mana sobre `assignee` (la planificació):
-  // si algú hi té el rellotge corrent, això és un conflicte encara que la tasca estigui
-  // assignada a un tercer.
+  // D-7 · algú altre HI ÉS. I «hi és» vol dir que hi té el rellotge corrent: `obert_per`, el
+  // TRAM. Res més.
+  //
+  // S-19 (05/08) — abans hi havia una segona condició: assignada a un altre, encara que ningú
+  // hi treballés, també obria el diàleg. Era mirar la PLANIFICACIÓ i dir-ne conflicte. Una
+  // tasca assignada a algú que no l'ha començada és feina prevista, i agafar-la és el gest
+  // normal del taller: fer-hi preguntar equivalia a posar una porta on no hi ha paret. Que
+  // l'assignee sigui un altre pot ser una NOTA a la pantalla —el panell de Tasques ja la
+  // pinta—, mai un diàleg.
   if (tasca.obert_per != null && tasca.obert_per !== jo) return CARA_CONFLICTE
-  if (tasca.obert_per == null && tasca.assignee != null && tasca.assignee !== jo) {
-    return CARA_CONFLICTE
-  }
 
   return CARA_CAP
 }

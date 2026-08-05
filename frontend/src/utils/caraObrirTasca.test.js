@@ -38,8 +38,20 @@ test('algú altre hi té el rellotge corrent → conflicte', () => {
   assert.equal(caraObrirTasca(tasca({ obert_per: ALTRE, assignee: ALTRE }), JO), CARA_CONFLICTE)
 })
 
-test('assignada a un altre encara que ningú hi treballi → conflicte', () => {
-  assert.equal(caraObrirTasca(tasca({ obert_per: null, assignee: ALTRE }), JO), CARA_CONFLICTE)
+// S-19 (05/08) — L'AFIRMACIÓ GIRADA. Abans aquest cas obria el diàleg; ara no. Assignada a un
+// altre sense rellotge corrent és feina PREVISTA, i agafar-la ha de ser sense fricció.
+test('assignada a un altre però sense ningú treballant-hi → CAP modal', () => {
+  assert.equal(caraObrirTasca(tasca({ obert_per: null, assignee: ALTRE }), JO), CARA_CAP)
+  assert.equal(obreSenseFriccio(tasca({ obert_per: null, assignee: ALTRE }), JO), true)
+})
+
+test('assignada a un altre i pausada tampoc pregunta res', () => {
+  assert.equal(
+    caraObrirTasca(tasca({ obert_per: null, assignee: ALTRE, status: 'Paused' }), JO), CARA_CAP)
+})
+
+test('...però si el rellotge corre, encara que l\'assignee sigui JO, hi ha conflicte', () => {
+  assert.equal(caraObrirTasca(tasca({ obert_per: ALTRE, assignee: JO }), JO), CARA_CONFLICTE)
 })
 
 test('el TRAM mana sobre l\'assignee: si el rellotge és meu, no hi ha conflicte', () => {
