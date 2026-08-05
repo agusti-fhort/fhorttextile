@@ -3214,6 +3214,7 @@
       "sheet_name": "Sheet name",
       "description": "Description",
       "base_value": "Base value",
+      "base_size_label": "Base size",
       "regime": "Regime",
       "delta": "Delta",
       "break_delta": "Break delta",

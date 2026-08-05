@@ -3214,6 +3214,7 @@
       "sheet_name": "Nom fitxa",
       "description": "Descripció",
       "base_value": "Valor base",
+      "base_size_label": "Talla base",
       "regime": "Règim",
       "delta": "Delta",
       "break_delta": "Delta break",

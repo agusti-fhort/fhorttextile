@@ -464,8 +464,27 @@ export default function EditableTable({
                 <th rowSpan={2} style={stickyHd(0, W_CAPA)}>{t('capa.col')}</th>
                 <th rowSpan={2} style={stickyHd(W_CAPA, W_CODI)}>{t('measuregrid.col_pom')}</th>
                 <th rowSpan={2} style={stickyHd(W_CAPA + W_CODI, W_NOM)}>{t('measuregrid.col_nom')}</th>
+                {/* v8.1 — LA CAPÇALERA DEL CARRIL DIU DE QUINA TALLA SÓN AQUESTES XIFRES.
+                    Era el literal de la talla sol, amb el cos de versaleta de la resta de
+                    capçaleres: una «S» de 9,5 px perduda entre «RÈGIM» i «DELTA BREAK». És
+                    l'única columna on s'escriuen mesures i la primera pregunta de qui obre la
+                    taula és de quina talla parlen — l'etiqueta ho nomena i el cos gran ho fa
+                    trobar sense llegir.
+                    Sense talla base (model sense `base_size_label`) es queda el literal de
+                    sempre: inventar-hi una etiqueta «Talla base» sobre un «Valor base» seria
+                    prometre una talla que ningú ha declarat. */}
                 <th rowSpan={2} style={{ ...thS, textAlign: 'right', minWidth: 100, background: 'var(--gold-pale)' }}>
-                  {displaySize || t('editable_table.col.base_value')}
+                  {displaySize ? (
+                    <>
+                      <span style={{ display: 'block', fontWeight: 600, color: 'var(--gold)' }}>
+                        {t('editable_table.col.base_size_label')}
+                      </span>
+                      <span style={{ display: 'block', fontSize: 15, fontWeight: 600, lineHeight: 1.1,
+                                     letterSpacing: 'normal', textTransform: 'none', color: 'var(--text-main)' }}>
+                        {displaySize}
+                      </span>
+                    </>
+                  ) : t('editable_table.col.base_value')}
                 </th>
                 {(
                   <th colSpan={4} style={{ ...thS, textAlign: 'center', background: REGLA_BG, borderLeft: SEP }}>
