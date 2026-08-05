@@ -206,13 +206,21 @@ class RondaLliurableTest(RondaTest):
         self.assertTrue(ronda_lliurable(r))
         self.assertEqual(r.tasques.get(task_type=self.tt_pom).status, 'Pending')
 
-    def test_rondes_lliurables_llista_els_seq(self):
+    def test_rondes_lliurables_diu_seq_motiu_i_data(self):
+        """F2.7 — sense data, un badge que digui «lliurable» no diu si va passar avui o al març."""
+        from django.utils import timezone
         from fhort.tasks.services_r import rondes_lliurables
+
         self._fes_lliurable('tech_sheet')
         r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['tech_sheet'])
         self.assertEqual(rondes_lliurables(self.model), [])
-        r2.tasques.update(status='Done')
-        self.assertEqual(rondes_lliurables(self.model), [2])
+
+        r2.tasques.update(status='Done', finished_at=timezone.now())
+        fora = rondes_lliurables(self.model)
+        self.assertEqual(len(fora), 1)
+        self.assertEqual(fora[0]['seq'], 2)
+        self.assertEqual(fora[0]['motiu'], Ronda.MOTIU_NOVA_MOSTRA)
+        self.assertIsNotNone(fora[0]['lliurat_el'])
 
     def test_sample_check_existeix_al_cataleg(self):
         """El cens el va buscar als tres schemes i al codi sencer: no existia enlloc."""

@@ -161,14 +161,27 @@ def ronda_lliurable(ronda):
 
 
 def rondes_lliurables(model):
-    """Els `seq` de les rondes del model que ja han lliurat. Fet CONSULTABLE per al PM.
+    """Les rondes del model que JA han lliurat. Fet CONSULTABLE per al PM.
 
-    Només el fet: quines voltes han donat el que havien de donar. L'avís visual (qui el veu,
-    quan i com) és F2 — aquí no es notifica ningú.
+    Retorna `[{'seq', 'motiu', 'lliurat_el'}]`, de la més antiga a la més nova. `lliurat_el` és
+    l'instant en què va caure l'ÚLTIM lliurable de la volta — el moment en què el PM podria
+    haver-ho sabut. Sense data, un badge que digui «lliurable» no diu si va passar avui o al març.
+
+    F2.7 — només el FET. Qui el veu, quan i com és pintat; notificar activament (correu, push)
+    és una decisió a part que aquest sprint no pren.
     """
+    from django.db.models import Max
+
     from .models import Ronda
-    return [r.seq for r in Ronda.objects.filter(model=model).order_by('seq')
-            if ronda_lliurable(r)]
+    fora = []
+    for r in Ronda.objects.filter(model=model).order_by('seq'):
+        if not ronda_lliurable(r):
+            continue
+        quan = (r.tasques.filter(task_type__es_lliurable=True)
+                .aggregate(q=Max('finished_at'))['q'])
+        fora.append({'seq': r.seq, 'motiu': r.motiu,
+                     'lliurat_el': quan.isoformat() if quan else None})
+    return fora
 
 
 # ── F1.7 · D-2 · EL TEMPS DECLARAT ───────────────────────────────────────────

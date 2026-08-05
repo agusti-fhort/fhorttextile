@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { models as modelsApi, commerce } from '../api/endpoints'
 import ActionsMenu, { PHASES } from '../components/model/ActionsMenu'
 import { MaduresaBadge } from '../components/model/FederacioBadge'
+import BadgeLliurable from '../components/model/BadgeLliurable'
 import ModelsFilterPanel from '../components/model/ModelsFilterPanel'
 import { useFilterOptions, garmentTypeLabel, garmentGroupLabel } from '../components/model/filterOptions'
 import Feedback from '../components/ui/Feedback'
@@ -474,6 +475,10 @@ function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale, intentMo
           <SetBadge m={m} t={t} />
           {/* RETORN-2 — la maduresa que l'estudi publica. Només es pinta si ha arribat. */}
           <MaduresaBadge model={m} t={t} />
+          {/* F2.7 · RONDA — el PM ha de veure quins models ja han lliurat SENSE entrar-hi un per
+              un. Es pinta només si n'hi ha: una llista de 200 files no pot portar 200 pastilles
+              que diguin «encara no». */}
+          <BadgeLliurable rondes={m.lliurable_ronda_n} compacte locale={locale} />
           {m.collection &&<span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>· {m.collection}</span>}
           <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{m.temporada}{m.any ? ` ${m.any}` : ''}</span>
           <span title={t(m.has_order ? 'models_list.with_order_hint' : 'models_list.direct_hint')} style={{

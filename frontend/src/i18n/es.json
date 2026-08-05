@@ -4324,5 +4324,13 @@
     "err_futur": "No se puede declarar tiempo que aún no ha pasado.",
     "err_mode": "Elige una de las dos formas.",
     "err_servidor": "No se ha podido guardar el tiempo declarado."
+  },
+  "lliurable": {
+    "badge": "Entregable · ronda {{n}}",
+    "compacte": "Entregable R{{n}}",
+    "badge_titol": "La ronda {{n}} ya ha entregado todos sus productos",
+    "historic": "Entregadas: {{llista}}",
+    "motiu_nova_mostra": "R{{n}} muestra",
+    "motiu_correccio": "R{{n}} corrección"
   }
 }

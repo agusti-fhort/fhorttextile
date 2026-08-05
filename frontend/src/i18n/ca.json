@@ -4324,5 +4324,13 @@
     "err_futur": "No es pot declarar temps que encara no ha passat.",
     "err_mode": "Tria una de les dues formes.",
     "err_servidor": "No s'ha pogut desar el temps declarat."
+  },
+  "lliurable": {
+    "badge": "Lliurable · ronda {{n}}",
+    "compacte": "Lliurable R{{n}}",
+    "badge_titol": "La ronda {{n}} ja ha lliurat tots els seus productes",
+    "historic": "Lliurades: {{llista}}",
+    "motiu_nova_mostra": "R{{n}} mostra",
+    "motiu_correccio": "R{{n}} correcció"
   }
 }

@@ -4324,5 +4324,13 @@
     "err_futur": "You cannot declare time that hasn't happened yet.",
     "err_mode": "Pick one of the two ways.",
     "err_servidor": "Could not save the declared time."
+  },
+  "lliurable": {
+    "badge": "Deliverable · round {{n}}",
+    "compacte": "Deliverable R{{n}}",
+    "badge_titol": "Round {{n}} has delivered all its products",
+    "historic": "Delivered: {{llista}}",
+    "motiu_nova_mostra": "R{{n}} sample",
+    "motiu_correccio": "R{{n}} correction"
   }
 }

@@ -18,6 +18,7 @@ import { authFetch } from '../api/authFetch'
 import { missatgeError } from '../api/errorsAuth'
 import useAuthStore from '../store/auth'
 import ObrirTascaDialog from '../components/model/ObrirTascaDialog'
+import BadgeLliurable from '../components/model/BadgeLliurable'
 import { CARA_CAP, caraDeError, caraObrirTasca } from '../utils/caraObrirTasca'
 import { CODE_PER_TAB, saltDeSuperficie } from '../utils/sessioActiva'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
@@ -1171,6 +1172,9 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
             </span>
           </>
         )}
+        {/* F2.7 — l'avís de lliurable va a la capçalera, al costat de la identitat del model:
+            el PM que obre la fitxa ho ha de veure sense buscar-ho. */}
+        <BadgeLliurable rondes={model.lliurable_ronda_n} />
         {model.nom_prenda && (
           <>
             <span style={{ color: 'var(--border)' }}>·</span>
