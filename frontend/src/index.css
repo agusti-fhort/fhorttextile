@@ -21,6 +21,11 @@
   --intern-bg:  #edeff0; /* gris fred — columna/peu de cost intern (NOMÉS pantalla, mai al PDF) */
   --border:     #e0d5c5;
   --base-hairline: #e3cfa3; /* filet de la columna de talla base (graella fitting) */
+  /* Taula de mesures (maqueta v8.1 · D-31.18). Dos cremes molt clars que NO són cap dels
+     existents a posta: --gold-pale ja marca la COLUMNA activa i --model-band el bloc de Regla,
+     i reutilitzar-los faria que la fila enfocada es confongués amb l'una o amb l'altre. */
+  --fila-activa: #fdf8ee; /* fila amb el focus al carril de valors */
+  --fila-neix:   #fdf2da; /* flaix d'una fila acabada de néixer (s'esvaeix a transparent) */
 
   /* Aliases legacy (per components existents) */
   --charcoal:   #1d1d1b;
@@ -73,3 +78,13 @@ body {
 
 /* Spinner global (icones de càrrega: afegir animation: spin 0.8s linear infinite). */
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* L'ANIMACIÓ DE NAIXEMENT d'una fila (maqueta v8.1). Una germana neix AL COSTAT DE LA MARE i no
+   al final de la taula: sense cap senyal, en una graella de tretze files, el tècnic no sap on ha
+   anat a parar el que acaba de crear. El flaix és la resposta al gest, i per això s'apaga sol.
+   Es declara aquí i no inline perquè un `@keyframes` no es pot expressar amb estils de React. */
+@keyframes ftt-neix { from { background: var(--fila-neix); } to { background: transparent; } }
+.ftt-fila-neix > td { animation: ftt-neix 1s ease-out; }
+/* Qui ha demanat menys moviment al sistema no el rep: la fila apareix i prou (la posició ja la
+   diu, perquè neix enganxada a la mare). */
+@media (prefers-reduced-motion: reduce) { .ftt-fila-neix > td { animation: none; } }

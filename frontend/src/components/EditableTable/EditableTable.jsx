@@ -206,6 +206,7 @@ export default function EditableTable({
       ordre: localRows.length,
     }
     setLocalRows(prev => [...prev, newRow])
+    marcaNeix(newRow.id)
     setDirty(true)
   }
 
@@ -221,6 +222,25 @@ export default function EditableTable({
   // ⚠️ NO ES DESA SOLA, i és correcte: `buildPayload` només envia les files amb valor, com ha
   // fet sempre amb les files noves. Una germana sense mesura encara no és una mesura.
   const [germanaDe, setGermanaDe] = useState(null)   // fila mare del diàleg obert
+
+  // v8.1 — LA FILA ACTIVA I LA FILA QUE ACABA DE NÉIXER.
+  //
+  // Totes dues responen la mateixa pregunta —«on sóc?»— en dos moments diferents. Amb tretze
+  // files i quatre germanes, la columna de valors sola no situa: el carril mou el focus amunt i
+  // avall sense que res acompanyi la mirada cap a l'esquerra, on hi ha el nom que diu QUINA
+  // mesura s'està teclejant. El ressaltat de fila és aquesta línia de lectura.
+  //
+  // `filaNeix` es buida sola: el flaix és la resposta a un gest, no un estat de la fila. Es guarda
+  // l'id i no un booleà per fila perquè només n'hi pot haver una de recent.
+  const [filaActiva, setFilaActiva] = useState(null)
+  const [filaNeix, setFilaNeix] = useState(null)
+  const neixT = useRef(null)
+  useEffect(() => () => clearTimeout(neixT.current), [])
+  const marcaNeix = (id) => {
+    clearTimeout(neixT.current)
+    setFilaNeix(id)
+    neixT.current = setTimeout(() => setFilaNeix(null), 1100)
+  }
 
   const creaGermana = ({ capa, instancia, nom_fitxa }) => {
     const mare = germanaDe
@@ -248,6 +268,7 @@ export default function EditableTable({
       const fins = i < 0 ? prev.length : i + 1
       return [...prev.slice(0, fins), nova, ...prev.slice(fins)]
     })
+    marcaNeix(nova.id)
     setDirty(true)
   }
 
@@ -475,6 +496,9 @@ export default function EditableTable({
                     n={i + 1}
                     displaySize={displaySize}
                     readOnly={readOnly}
+                    activa={row.id === filaActiva}
+                    neix={row.id === filaNeix}
+                    onActiva={setFilaActiva}
                     onCellChange={handleCellChange}
                     onDelete={handleDeleteRow}
                     onGermana={() => setGermanaDe(row)}
@@ -546,8 +570,8 @@ export default function EditableTable({
   )
 }
 
-function SortableRow({ row, n, displaySize, readOnly, onCellChange, onDelete, onGermana, delta, onBateig, onRegla,
-                       widths, registerVal, onNav }) {
+function SortableRow({ row, n, displaySize, readOnly, activa, neix, onActiva, onCellChange, onDelete, onGermana,
+                       delta, onBateig, onRegla, widths, registerVal, onNav }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -557,22 +581,25 @@ function SortableRow({ row, n, displaySize, readOnly, onCellChange, onDelete, on
   // i la diferència entre les dues coses és haver-ho pogut llegir abans de prémer el botó.
   const buida = row.base_value_cm == null || row.base_value_cm === ''
 
+  // L'arrossegament mana sobre el ressaltat: mentre una fila viatja, el que ha de dir el fons és
+  // que viatja. El fons de la fila i el de les cel·les congelades han de ser el MATEIX valor, o
+  // el ressaltat es partiria just a la frontera de la columna sticky.
+  const rowBg = isDragging ? 'var(--bg-muted)' : (activa ? 'var(--fila-activa)' : 'var(--white)')
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    background: isDragging ? 'var(--bg-muted)' : undefined,
+    background: rowBg,
     borderBottom: '0.5px solid var(--border)',
   }
-
-  const rowBg = isDragging ? 'var(--bg-muted)' : 'var(--white)'
   const stickyTd = (left, w) => ({
     ...tdS, position: 'sticky', left, zIndex: 1, width: w, minWidth: w,
     background: rowBg, borderBottom: '0.5px solid var(--border)',
   })
 
   return (
-    <tr ref={setNodeRef} style={style}>
+    <tr ref={setNodeRef} style={style} className={neix ? 'ftt-fila-neix' : undefined}>
       {!readOnly && (
         <td style={tdS}>
           <span {...attributes} {...listeners}
@@ -659,6 +686,10 @@ function SortableRow({ row, n, displaySize, readOnly, onCellChange, onDelete, on
           onCommit={v => onCellChange(row.id, 'base_value_cm', v)}
           registerVal={el => registerVal?.(row.id, el)}
           onNav={dir => onNav?.(row.id, dir)}
+          // La fila activa és la que té el focus AL CARRIL, no la que s'ha clicat: el carril és
+          // el recorregut de treball, i és ell qui ha de dir per on va.
+          onEnfoca={() => onActiva?.(row.id)}
+          onDesenfoca={() => onActiva?.(prev => (prev === row.id ? null : prev))}
           hint={buida ? t('editable_table.row_discarded') : undefined} />
       </td>
       {(
@@ -898,7 +929,7 @@ function NomCanonic({ value, placeholder, instancia, traduccio, marca = '', edit
 // puja al model és el número net. Un text no numèric es queda al buffer i es marca en vermell —no
 // s'escriu i no es perd—, perquè escriure `NaN` a la taula i esborrar-lo en silenci seria pitjor
 // que no acceptar-lo. Buit sí que s'escriu: buit és una decisió (la fila es descarta).
-function CarrilInput({ value, readOnly, onCommit, registerVal, onNav, hint }) {
+function CarrilInput({ value, readOnly, onCommit, registerVal, onNav, hint, onEnfoca, onDesenfoca }) {
   const [txt, setTxt] = useState(value == null ? '' : String(value))
   const [focused, setFocused] = useState(false)
   const [bad, setBad] = useState(false)
@@ -927,8 +958,8 @@ function CarrilInput({ value, readOnly, onCommit, registerVal, onNav, hint }) {
     <input
       ref={registerVal}
       type="text" inputMode="decimal" value={txt} title={hint}
-      onFocus={e => { setFocused(true); e.target.select() }}
-      onBlur={() => setFocused(false)}
+      onFocus={e => { setFocused(true); e.target.select(); onEnfoca?.() }}
+      onBlur={() => { setFocused(false); onDesenfoca?.() }}
       onChange={e => onChange(e.target.value)}
       onKeyDown={e => {
         if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); onNav(1) }
@@ -940,7 +971,9 @@ function CarrilInput({ value, readOnly, onCommit, registerVal, onNav, hint }) {
         fontFamily: 'inherit', fontSize: FS_VAL, fontWeight: 600,
         fontVariantNumeric: 'tabular-nums',
         color: 'var(--text-main)', background: 'var(--white)',
-        border: `1px solid ${bad ? 'var(--err)' : 'var(--border)'}`, borderRadius: 5,
+        // v8.1 — la cel·la del carril amb el focus porta la vora daurada (`tr.cur input.val`).
+        // El vermell del valor no numèric mana per damunt: un error és més urgent que una posició.
+        border: `1px solid ${bad ? 'var(--err)' : focused ? 'var(--gold)' : 'var(--border)'}`, borderRadius: 5,
         boxSizing: 'border-box',
       }}
     />
