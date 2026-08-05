@@ -727,8 +727,9 @@ export const pomAlerts = {
 
 export const timers = {
   list: (params) => client.get('/api/v1/timers/', { params }),
-  create: (data) => client.post('/api/v1/timers/', data),
-  tancar: (id) => client.post(`/api/v1/timers/${id}/tancar/`),
+  // F1.7 — `create` i `tancar` JUBILATS. El viewset és ReadOnly des de 89009858 (el temps
+  // facturable era inventable des del navegador) i l'acció `tancar` tancava un tram sense passar
+  // per la màquina d'estats, deixant la tasca En curs sense tram. El Stop és qui tanca feina.
   // Guard de tasca oblidada: segella el tram obert del PROPI tècnic (sense pk — el backend el
   // busca pel perfil). Confirmar el modal rearma el llindar des del segell nou. 404 si ja no hi
   // ha cap tasca En curs (pausada des d'una altra pestanya) → el front s'ha de resincronitzar.

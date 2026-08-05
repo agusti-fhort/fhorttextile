@@ -3,7 +3,6 @@ from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -82,17 +81,18 @@ class TimerEntradaViewSet(viewsets.ReadOnlyModelViewSet):
                          'last_heartbeat': timer.last_heartbeat.isoformat()},
                         status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['post'], url_path='tancar')
-    def tancar(self, request, pk=None):
-        timer = self.get_object()
-        if timer.fi is not None:
-            raise ValidationError('El timer ja està tancat.')
-        now = timezone.now()
-        delta = now - timer.inici
-        minutes = max(0, int(delta.total_seconds() // 60))
-        timer.fi = now
-        timer.minuts = minutes
-        timer.actiu = False
-        timer.save(update_fields=['fi', 'minuts', 'actiu'])
-        serializer = self.get_serializer(timer)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    # F1.7 — JUBILADA l'acció `tancar` (`POST /api/v1/timers/<pk>/tancar/`).
+    #
+    # Tancava un tram SENSE passar per `transition_task`: cap `TaskTransition`, cap
+    # `record_actual_time`, i la tasca quedava «En curs» sense tram obert — l'anomalia «òrfena»
+    # que el cron compta i no toca. Era, a més, l'última escriptura pública que quedava en aquest
+    # viewset: el pas a `ReadOnlyModelViewSet` (89009858) va tancar el router, però les `@action`
+    # no en depenen.
+    #
+    # El seu únic consumidor era el botó de `/temps` (`TimeTracking.jsx`), que a la pràctica no
+    # funcionava: la pàgina llegeix `data_inici`/`data_fi`/`created_at` i el serializer emet
+    # `inici`/`fi` (i `created_at` no existeix a la taula), de manera que el botó disparava sobre
+    # el primer tram de la llista —normalment ja tancat— i rebia un 400 (§S-3).
+    #
+    # Qui vulgui tancar feina té el Stop, que passa per la màquina d'estats. La refeta de la
+    # pàgina de temps és F2.

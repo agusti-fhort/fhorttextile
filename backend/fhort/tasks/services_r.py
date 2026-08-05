@@ -169,3 +169,72 @@ def rondes_lliurables(model):
     from .models import Ronda
     return [r.seq for r in Ronda.objects.filter(model=model).order_by('seq')
             if ronda_lliurable(r)]
+
+
+# ── F1.7 · D-2 · EL TEMPS DECLARAT ───────────────────────────────────────────
+
+class TempsDeclaratError(Exception):
+    """Rebuig d'una declaració de temps (tipus de tasca intern, dades incoherents…)."""
+
+
+def declara_temps(task, profile, *, minuts=None, inici=None, fi=None):
+    """Registra temps que el sistema NO ha pogut mesurar.
+
+    D-2, tercera pota: «externes = temps declarat». Una tasca `Externa-lliure` (patró a mà,
+    revisió de disseny, aclariments) es fa **fora de l'eina**: no hi ha cap escriptura que batre
+    i el rellotge no hi arriba mai. Fins avui aquell temps simplement no existia enlloc.
+
+    Dues formes, EXCLOENTS:
+      · `minuts`        — «hi he dedicat 90 minuts». El tram s'ancora acabant ARA.
+      · `inici` + `fi`  — «hi vaig treballar de tal a tal hora».
+
+    El tram neix TANCAT (`fi` informat, `actiu=False`) i amb `origen='declarat'`, de manera que
+    `TRAMS_SANS` el compta i el Welford l'aprèn igual que un de mesurat: una tasca és una mostra
+    (D-3) tant si el temps s'ha comptat sol com si l'ha dit una persona.
+
+    Guard dur: **només tasques `Externa-lliure`**. Declarar hores sobre una tasca interna seria
+    poder inventar temps facturable a mà sobre feina que l'eina SÍ que mesura.
+    """
+    import datetime as _dt
+
+    from django.utils import timezone
+
+    from .models import TimerEntrada
+    from .services_i import MAX_MINUTS_TRAM
+
+    if task.task_type.tipus != 'Externa-lliure':
+        raise TempsDeclaratError(
+            "El temps només es declara en tasques Externa-lliure: les internes es mesuren soles.")
+    if profile is None:
+        raise TempsDeclaratError('Cal un perfil de tècnic per declarar temps.')
+
+    te_minuts = minuts is not None
+    te_franja = inici is not None or fi is not None
+    if te_minuts == te_franja:
+        raise TempsDeclaratError("Cal {minuts} O BÉ {inici, fi}, mai els dos ni cap dels dos.")
+
+    if te_minuts:
+        try:
+            minuts = int(minuts)
+        except (TypeError, ValueError):
+            raise TempsDeclaratError('`minuts` ha de ser un enter.')
+        fi = timezone.now()
+        inici = fi - _dt.timedelta(minutes=minuts)
+    else:
+        if inici is None or fi is None:
+            raise TempsDeclaratError('La franja necessita `inici` I `fi`.')
+        if fi <= inici:
+            raise TempsDeclaratError('`fi` ha de ser posterior a `inici`.')
+        minuts = int((fi - inici).total_seconds() // 60)
+
+    if minuts <= 0:
+        raise TempsDeclaratError('Un tram declarat ha de durar com a mínim un minut.')
+    # Mateix sostre que la higiene de trams: un tram de més d'un dia no és una jornada llarga,
+    # és una dada que no ens creiem. Aquí es rebutja en comptes d'excloure'l després en silenci.
+    if minuts > MAX_MINUTS_TRAM:
+        raise TempsDeclaratError(
+            f'Un tram declarat no pot superar {MAX_MINUTS_TRAM} minuts ({MAX_MINUTS_TRAM // 60} h).')
+
+    return TimerEntrada.objects.create(
+        model_task=task, tecnic=profile, inici=inici, fi=fi, minuts=minuts,
+        actiu=False, origen=TimerEntrada.ORIGEN_DECLARAT)

@@ -21,6 +21,15 @@ class TimerEntrada(models.Model):
     last_heartbeat = models.DateTimeField(null=True, blank=True,
                                           help_text='Últim senyal de vida del tècnic sobre el '
                                                     'tram obert. null = cap encara (val `inici`).')
+    # F1.7 · D-2 — d'on surt aquest tram. `mesurat` = el rellotge el va obrir i tancar el sistema
+    # (tot l'històric i tot el camí normal). `declarat` = una persona ha dit quant hi ha
+    # treballat, perquè la feina no passa per aquí: les tasques Externa-lliure (patró a mà,
+    # revisió de disseny) es fan fora de l'eina i el seu temps no és observable. Un tram declarat
+    # neix TANCAT i alimenta el Welford igual que un de mesurat — una tasca, una mostra (D-3).
+    ORIGEN_MESURAT = 'mesurat'
+    ORIGEN_DECLARAT = 'declarat'
+    ORIGEN_CHOICES = [(ORIGEN_MESURAT, 'Mesurat'), (ORIGEN_DECLARAT, 'Declarat')]
+    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default=ORIGEN_MESURAT)
 
     class Meta:
         verbose_name = 'Entrada de timer'

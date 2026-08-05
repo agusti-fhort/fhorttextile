@@ -20,7 +20,6 @@ export default function TimeTracking() {
   const { t, i18n } = useTranslation()
   const [allTimers, setAllTimers] = useState([])
   const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
 
   const loadTimers = () => {
     setLoading(true)
@@ -40,16 +39,11 @@ export default function TimeTracking() {
     return d === today && (t.data_fi || !t.actiu)
   })
 
-  const closeActive = async () => {
-    if (!actiu) return
-    setSubmitting(true)
-    try {
-      await timers.tancar(actiu.id)
-      loadTimers()
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  // F1.7 — el botó de tancar tram ha marxat amb el seu endpoint: tancava sense passar per
+  // `transition_task` i deixava la tasca En curs sense tram obert. El Stop del pla de treball és
+  // qui tanca feina. ⚠️ Aquesta pàgina, a més, llegeix `data_inici`/`data_fi`/`created_at` i el
+  // servidor emet `inici`/`fi`: la llista del dia i el gràfic de 7 dies són sempre buits (§S-3).
+  // La refeta sencera és F2; aquí només se n'ha tret l'única part que ESCRIVIA.
 
   const dateLocale = i18n.language === 'es' ? 'es-ES' : i18n.language === 'en' ? 'en-GB' : 'ca-ES'
   const last7Days = (() => {
@@ -115,20 +109,6 @@ export default function TimeTracking() {
                 }}>
                   <i className="ti ti-player-pause" style={{fontSize: 14}} />
                   {t('time_tracking.pause')}
-                </button>
-                <button
-                  onClick={closeActive}
-                  disabled={submitting}
-                  style={{
-                    background: submitting ? 'rgba(163,45,45,0.5)' : 'var(--err)',
-                    color: 'white', border: 'none', borderRadius: 8,
-                    padding: '8px 18px', fontSize: 'var(--fs-body)',
-                    cursor: submitting ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 6,
-                  }}
-                >
-                  <i className="ti ti-player-stop" style={{fontSize: 14}} />
-                  {submitting ? t('time_tracking.stopping') : t('time_tracking.stop')}
                 </button>
               </div>
             </>

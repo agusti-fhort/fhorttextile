@@ -46,6 +46,7 @@ urlpatterns = router.urls
 # Sprint B — define tasks of a model (bulk/individual). Requires define_tasks capability.
 try:
     from fhort.tasks.views_b import (define_model_tasks_view, transition_task_view,
+                                     temps_declarat_view,
                                      claim_task_view, assign_model_view, unassign_model_view,
                                      model_task_log_view, open_model_task_view)
     from django.urls import path as _path_b
@@ -53,6 +54,9 @@ try:
         _path_b('models/<int:model_id>/define-tasks/', define_model_tasks_view),
         _path_b('models/<int:model_id>/task-log/', model_task_log_view),
         _path_b('model-task-items/<int:pk>/transition/', transition_task_view),
+        # F1.7 · D-2 — temps DECLARAT per a les tasques Externa-lliure (les que es fan fora de
+        # l'eina i que cap batec pot observar).
+        _path_b('model-tasks/<int:pk>/temps-declarat/', temps_declarat_view),
         # P4a-back — self-claim entre tècnics (handoff §6). Gated execute_tasks (NO define_tasks).
         _path_b('model-task-items/<int:pk>/claim/', claim_task_view),
         # Porta-menú — obrir una tasca concreta del model (crea-si-falta + En curs). execute_tasks.

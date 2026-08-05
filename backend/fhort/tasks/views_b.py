@@ -461,9 +461,16 @@ def transition_task_view(request, pk):
         result = transition_task(task, to_status, profile, auto=auto)
     except TransitionError as e:
         cos = {'error': str(e)}
-        if getattr(e, 'code', None):
-            cos['code'] = e.code
-        return Response(cos, status=http_status.HTTP_400_BAD_REQUEST)
+        codi = getattr(e, 'code', None)
+        if codi:
+            cos['code'] = codi
+        # F1.7 · §S-2 — la MATEIXA paret sortia amb dos codis HTTP segons la porta: 409 per
+        # `open-task` i 400 per aquí. Un client que discrimini per status (i n'hi ha: ModelSheet
+        # i WorkPlan miren `err.response.status`) veia dues coses diferents pel mateix motiu, i
+        # D-5 penja d'aquest disparador. El conflicte d'estat és 409 a les dues portes; la resta
+        # de rebuigs —transició il·legal— segueixen sent 400, que és el que són.
+        return Response(cos, status=(http_status.HTTP_409_CONFLICT if codi
+                                     else http_status.HTTP_400_BAD_REQUEST))
     return Response(result, status=http_status.HTTP_200_OK)
 
 
@@ -1361,3 +1368,48 @@ def time_by_model_view(request):
         out.append({'model_id': m['model_id'], 'label': m['label'], 'nom': m['nom'],
                     'est': m['est'], 'real': m['real'], 'n': m['n'], 'fases': fases})
     return Response({'models': out})
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def temps_declarat_view(request, pk):
+    """POST /api/v1/model-tasks/<pk>/temps-declarat/  ·  {minuts} XOR {inici, fi}
+
+    F1.7 · D-2, tercera pota: «externes = temps declarat». Una tasca `Externa-lliure` es fa fora
+    de l'eina —patró a mà, revisió de disseny— i no hi ha cap escriptura que batre: el rellotge
+    no hi arriba mai i, fins avui, aquell temps no existia enlloc.
+
+    Crea un `TimerEntrada` ja TANCAT amb `origen='declarat'`, que el Welford aprèn igual que un
+    de mesurat (una tasca, una mostra — D-3). Guard dur a `declara_temps`: sobre una tasca
+    Interna es rebutja, perquè allà el temps SÍ que es mesura sol i declarar-lo a mà seria poder
+    inventar hores facturables.
+    """
+    from django.utils.dateparse import parse_datetime
+
+    from .models import ModelTask
+    from .services_r import TempsDeclaratError, declara_temps
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        task = ModelTask.objects.select_related('task_type').get(pk=pk)
+    except ModelTask.DoesNotExist:
+        return Response({'error': 'ModelTask no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    dades = request.data or {}
+    inici, fi = dades.get('inici'), dades.get('fi')
+    try:
+        tram = declara_temps(
+            task, profile,
+            minuts=dades.get('minuts'),
+            inici=parse_datetime(inici) if inici else None,
+            fi=parse_datetime(fi) if fi else None)
+    except TempsDeclaratError as e:
+        return Response({'error': str(e), 'code': 'temps_declarat_invalid'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    return Response({'timer_id': tram.pk, 'model_task': task.pk, 'minuts': tram.minuts,
+                     'inici': tram.inici.isoformat(), 'fi': tram.fi.isoformat(),
+                     'origen': tram.origen},
+                    status=http_status.HTTP_201_CREATED)

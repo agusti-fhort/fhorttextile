@@ -167,18 +167,29 @@ class GuardTascaOblidadaTest(TenantTestCase):
         self.assertEqual(TimerEntrada.objects.filter(model_task=self.task).count(), 1)
         self.assertTrue(TimerEntrada.objects.filter(pk=timer.pk).exists())
 
-    def test_les_dues_portes_vives_sobreviuen_al_read_only(self):
-        """Tancar el CRUD no pot tancar el que sí que es fa servir: `list` i `heartbeat` (guard)
-        i `tancar` (pàgina de temps, `TimeTracking.jsx:47`)."""
+    def test_les_portes_vives_sobreviuen_al_read_only(self):
+        """Tancar el CRUD no pot tancar el que sí que es fa servir: `list`, `retrieve` i
+        `heartbeat` (guard)."""
         transition_task(self.task, 'InProgress', self.prof)
         api = self._api()
         self.assertEqual(api.get('/api/v1/timers/', {'actiu': 'true'}).status_code, 200)
         self.assertEqual(api.post('/api/v1/timers/heartbeat/').status_code, 200)
         timer = self._timer_obert()
         self.assertEqual(api.get(f'/api/v1/timers/{timer.pk}/').status_code, 200)
-        self.assertEqual(api.post(f'/api/v1/timers/{timer.pk}/tancar/').status_code, 200)
+
+    def test_l_accio_tancar_esta_JUBILADA(self):
+        """F1.7 — `tancar` tancava un tram sense passar per `transition_task`: cap
+        `TaskTransition`, cap `record_actual_time`, i la tasca quedava «En curs» sense tram obert
+        (l'anomalia «òrfena»). Era, a més, l'última escriptura pública d'aquest viewset: el pas a
+        `ReadOnlyModelViewSet` va tancar el router, però les `@action` no en depenen.
+
+        Qui vulgui tancar feina té el Stop, que passa per la màquina d'estats."""
+        transition_task(self.task, 'InProgress', self.prof)
+        timer = self._timer_obert()
+        resposta = self._api().post(f'/api/v1/timers/{timer.pk}/tancar/')
+        self.assertIn(resposta.status_code, (404, 405))
         timer.refresh_from_db()
-        self.assertIsNotNone(timer.fi)
+        self.assertIsNone(timer.fi, 'el tram s\'ha tancat per una porta que ja no hi hauria de ser')
 
     def test_serializer_exposa_last_heartbeat_en_lectura(self):
         """El frontend llegeix el segell d'aquí per saber des d'on comptar."""
