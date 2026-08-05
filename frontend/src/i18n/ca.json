@@ -3036,7 +3036,7 @@
     "import_dxf_soon": "Format DXF disponible pròximament",
     "flat_replace_svg": "Reemplaçar SVG",
     "flat_import_invalid": "Aquest fitxer no és un SVG vàlid.",
-    "image_uploading_one": "Pujant una imatge…",
+    "image_uploading_one": "Pujant {{count}} imatge…",
     "image_uploading_other": "Pujant {{count}} imatges…",
     "image_upload_error": "No s'ha pogut pujar la imatge. Torna-ho a provar.",
     "flat_import_error": "No s'ha pogut importar l'SVG.",
@@ -3081,7 +3081,8 @@
     "table_variant_repas": "T3 — Repàs de fittings",
     "lib_table_no_repas": "El model no té cap fitting registrat: no hi ha esdeveniments per omplir la taula.",
     "tab_preview_nota": "Obre la fitxa en lectura. No es compta temps ni es toca la tasca.",
-    "tab_edit_nota": "Obre la fitxa per treballar-hi. El temps es compta."
+    "tab_edit_nota": "Obre la fitxa per treballar-hi. El temps es compta.",
+    "image_uploading": "Pujant {{count}} imatges…"
   },
   "estat_badge": {
     "pendent_inputs": "Pendent d'inputs",

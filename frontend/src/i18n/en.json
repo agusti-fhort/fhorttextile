@@ -3036,7 +3036,7 @@
     "import_dxf_soon": "DXF format coming soon",
     "flat_replace_svg": "Replace SVG",
     "flat_import_invalid": "This file is not a valid SVG.",
-    "image_uploading_one": "Uploading one image…",
+    "image_uploading_one": "Uploading {{count}} image…",
     "image_uploading_other": "Uploading {{count}} images…",
     "image_upload_error": "Could not upload the image. Try again.",
     "flat_import_error": "Could not import the SVG.",
@@ -3081,7 +3081,8 @@
     "table_variant_repas": "T3 — Fitting review",
     "lib_table_no_repas": "This model has no recorded fitting: there are no events to fill the table.",
     "tab_preview_nota": "Opens the sheet read-only. No time is tracked and the task is untouched.",
-    "tab_edit_nota": "Opens the sheet to work on it. Time is tracked."
+    "tab_edit_nota": "Opens the sheet to work on it. Time is tracked.",
+    "image_uploading": "Uploading {{count}} images…"
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",
