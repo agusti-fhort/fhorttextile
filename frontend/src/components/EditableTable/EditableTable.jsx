@@ -559,7 +559,7 @@ export default function EditableTable({
   const nBuides = localRows.length - nInformades
 
   return (
-    <div>
+    <div style={!readOnly ? { paddingBottom: 56 } : undefined}>
       {isImport && (
         <div style={{
           background: 'var(--warn-bg)', border: '1px solid var(--warn)',
@@ -730,13 +730,21 @@ export default function EditableTable({
           onCrear={creaGermana} />
       )}
 
+      {/* v8.1 · `.statusbar` :140-144 — LA BARRA D'ESTAT VA FIXA AL PEU DE LA FINESTRA i no
+          sota la taula. Amb tretze files i el carril obert, el que la barra diu —quantes es
+          desaran i quantes cauran— és exactament el que s'ha de poder llegir MENTRE s'escriu, i
+          sota la taula queda fora de pantalla just quan es fa servir. */}
       {!readOnly && (
-        <div style={{ display: 'flex', gap: 18, marginTop: 10, fontSize: 'var(--fs-label)',
-                      color: 'var(--text-muted)' }}>
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 20,
+          background: 'var(--white)', borderTop: '1px solid var(--border)',
+          padding: '10px 24px', display: 'flex', gap: 22, alignItems: 'center',
+          fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+        }}>
           <span>{t('editable_table.count_filled', { n: nInformades })}</span>
           {nBuides > 0 && <span>{t('editable_table.count_empty', { n: nBuides })}</span>}
-          {/* A la dreta del tot, com a la maqueta: els recomptes diuen QUÈ hi ha a la taula i
-              el flaix diu QUÈ acaba de passar. Són dues lectures diferents i no s'han de barrejar. */}
+          {/* A la dreta del tot: els recomptes diuen QUÈ hi ha a la taula i el flaix diu QUÈ
+              acaba de passar. Són dues lectures diferents i no s'han de barrejar. */}
           {desat && (
             <span aria-live="polite" style={{ marginLeft: 'auto',
                                               color: desat === 'failed' ? 'var(--err)' : 'var(--gold)' }}>
