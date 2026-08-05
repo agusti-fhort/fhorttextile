@@ -357,18 +357,23 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
     }
   }
 
-  // Table headers (translation only if lang ≠ en).
+  // v8.1 — la traducció ja no és una COLUMNA, és una ⓘ al costat del nom (el mateix patró que
+  // Mesures: `MeasureGrid.jsx`). Una columna sempre visible cobrava amplada a totes les files per
+  // informar només d'algunes; la ⓘ només apareix quan de debò hi ha una altra manera de dir-ho.
+  // Es manté la condició d'idioma d'abans: a UI anglesa no hi havia columna i tampoc hi ha ⓘ.
   const showTrad = lang !== 'en'
+  // `escurca` = columna que s'arronsa al seu contingut (width 1% + nowrap). Amb totes les
+  // numèriques arronsades, TOTA la folgança cau a CODI i NOM —que ara es llegeixen sencers— i hi
+  // queda marge per encabir-hi Layer/Instància més endavant sense redissenyar la taula.
   const headers = [
-    { label: t('grading.col.code'),       align: 'left'  },
+    { label: t('grading.col.code'),       align: 'left', escurca: true },
     { label: t('grading.col.pom_name'),    align: 'left'  },
-    ...(showTrad ? [{ label: t('grading.col.translation'), align: 'left' }] : []),
-    { label: t('grading.col.logic'),     align: 'left'  },
-    { label: t('grading.col.delta_size'),    align: 'right' },
-    { label: t('grading.col.delta_break'),    align: 'right' },
-    { label: t('grading.col.base_size'), align: 'right' },
-    { label: t('grading.col.base_value'), align: 'right' },
-    ...(editable ? [{ label: '', align: 'center' }] : []),
+    { label: t('grading.col.logic'),     align: 'left', escurca: true },
+    { label: t('grading.col.delta_size'),    align: 'right', escurca: true },
+    { label: t('grading.col.delta_break'),    align: 'right', escurca: true },
+    { label: t('grading.col.base_size'), align: 'right', escurca: true },
+    { label: t('grading.col.base_value'), align: 'right', escurca: true },
+    ...(editable ? [{ label: '', align: 'center', escurca: true }] : []),
   ]
 
   return (
@@ -457,6 +462,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                   <th key={i} style={{
                     padding: '8px 12px',
                     textAlign: h.align,
+                    ...(h.escurca ? { width: '1%', whiteSpace: 'nowrap' } : {}),
                     fontWeight: 600, color: 'var(--text-muted)', fontSize: 'var(--fs-label)',
                     textTransform: 'uppercase', letterSpacing: '0.06em',
                     borderBottom: '0.5px solid var(--border)',
@@ -471,6 +477,13 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                 const logica = LOGICA_COLORS[regim] || LOGICA_COLORS.FIXED
                 const aboveXl = r.valors_step?.above_xl
                 const isKey = r.increment > 0 && regim === 'LINEAR'
+                // La ⓘ només si la traducció DIU UNA ALTRA COSA. Un POM com A1, E2 o S2, que es
+                // diu igual en català, no mereix una icona que repeteixi el que ja es llegeix.
+                const nomEn = r.pom_nom_en || r.pom_nom
+                const nomCa = (r.pom_nom_ca || '').trim()
+                const traduccio = showTrad && nomCa
+                  && nomCa.toLowerCase() !== (nomEn || '').trim().toLowerCase()
+                  ? nomCa : ''
                 return (
                   <tr key={r.id} style={{ background: i % 2 === 0 ? 'var(--white)' : '#fafaf8' }}>
                     {/* CODI: codi global (POM-001) gris petit a sobre,
@@ -495,7 +508,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                       padding: '7px 12px', color: 'var(--text-main)',
                       borderBottom: '0.5px solid #f0eee9',
                     }}>
-                      {r.pom_nom_en || r.pom_nom}
+                      {nomEn}
                       {isKey && (
                         <span style={{
                           marginLeft: 6, fontSize: 'var(--fs-caption)', padding: '2px 5px', borderRadius: 3,
@@ -503,14 +516,12 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                           border: '0.5px solid #e0c8a0', fontWeight: 600,
                         }}>KEY</span>
                       )}
+                      {traduccio && (
+                        <i className="ti ti-info-circle" title={traduccio} aria-label={traduccio}
+                          style={{ fontSize: 12, marginLeft: 6, color: 'var(--text-muted)', cursor: 'help' }} />
+                      )}
                     </td>
-                    {showTrad && (
-                      <td style={{
-                        padding: '7px 12px', color: 'var(--text-muted)', fontStyle: 'italic',
-                        borderBottom: '0.5px solid #f0eee9',
-                      }}>{r.pom_nom_ca || '—'}</td>
-                    )}
-                    <td style={{ padding: '7px 12px', borderBottom: '0.5px solid #f0eee9' }}>
+                    <td style={{ padding: '7px 12px', borderBottom: '0.5px solid #f0eee9', whiteSpace: 'nowrap' }}>
                       <span style={{
                         fontSize: 'var(--fs-label)', padding: '2px 6px', borderRadius: 3,
                         background: logica.bg, color: logica.color,
@@ -523,7 +534,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                       padding: '7px 12px', textAlign: 'right',
                       fontWeight: 600,
                       color: Number(r.increment_base ?? r.increment) > 0 ? '#2a5a8a' : 'var(--text-muted)',
-                      borderBottom: '0.5px solid #f0eee9',
+                      borderBottom: '0.5px solid #f0eee9', whiteSpace: 'nowrap',
                     }}>
                       {r.increment_base != null
                         ? (Number(r.increment_base) > 0 ? `+${Number(r.increment_base)} cm` : '—')
@@ -543,7 +554,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                       padding: '7px 12px', textAlign: 'right',
                       fontSize: 'var(--fs-body)',
                       color: (r.increment_base != null ? r.talla_break_label : aboveXl) ? 'var(--gold)' : '#c0c0c0',
-                      borderBottom: '0.5px solid #f0eee9',
+                      borderBottom: '0.5px solid #f0eee9', whiteSpace: 'nowrap',
                     }}>
                       {r.increment_base != null
                         ? (r.talla_break_label
@@ -562,17 +573,17 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
                       color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
-                      borderBottom: '0.5px solid #f0eee9',
+                      borderBottom: '0.5px solid #f0eee9', whiteSpace: 'nowrap',
                     }}>{r.talla_base_etiqueta || '—'}</td>
                     <td style={{
                       padding: '7px 12px', textAlign: 'right',
                       color: 'var(--text-muted)',
-                      borderBottom: '0.5px solid #f0eee9',
+                      borderBottom: '0.5px solid #f0eee9', whiteSpace: 'nowrap',
                     }}>{Number(r.valor_base) > 0 ? `${r.valor_base} cm` : '—'}</td>
                     {editable && (
                       <td style={{
                         padding: '7px 12px', textAlign: 'center',
-                        borderBottom: '0.5px solid #f0eee9',
+                        borderBottom: '0.5px solid #f0eee9', whiteSpace: 'nowrap',
                       }}>
                         <ActionBtn
                           onClick={() => handleDeactivateRule(r.id)}

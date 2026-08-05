@@ -3458,7 +3458,6 @@
     "col": {
       "code": "Codi",
       "pom_name": "Nom POM",
-      "translation": "Traducció",
       "logic": "Lògica",
       "delta_size": "Δ/talla",
       "delta_break": "Δ break",

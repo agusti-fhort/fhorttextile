@@ -3458,7 +3458,6 @@
     "col": {
       "code": "Code",
       "pom_name": "POM name",
-      "translation": "Translation",
       "logic": "Logic",
       "delta_size": "Δ/size",
       "delta_break": "Δ break",
