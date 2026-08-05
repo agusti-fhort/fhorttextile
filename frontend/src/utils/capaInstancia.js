@@ -12,17 +12,24 @@
 //     exterior=Exterior/Shell · folre=Folre/Lining · entretela=Entretela/Interfacing ·
 //     farciment=Farciment/Padding · reforc=Reforç/Underlining · fornitura=Fornitura/Trim
 //
-// ⚠️ PER QUÈ UNA CONSTANT I NO UNA CRIDA AL CATÀLEG: `pom.MeasurementLayer` existeix i a staging
-// està sembrat amb aquests mateixos sis slugs, però a PROD la taula és BUIDA i no hi ha cap
-// endpoint que la publiqui. Una pantalla que en depengués sortiria sense etiquetes el dia del
-// desplegament. La sembra i el seu lector són feina de BACKEND, i queda ANOTADA com a pendent;
-// mentrestant el front porta el vocabulari escrit, que és exactament el que ja hi ha a la BD.
-// TODO(backend): sembrar `MeasurementLayer` a PROD + publicar-lo, i llavors llegir-lo d'aquí.
+// ⚠️ PER QUÈ UNES CONSTANTS I NO UNA CRIDA AL CATÀLEG: aquest mòdul és el camí de LECTURA i ha de
+// poder etiquetar una fila abans que cap petició torni. Les dues taules existeixen i estan
+// sembrades (`pom.MeasurementLayer`, 6 files · `pom.MeasurementInstance`, 10 files, verificat el
+// 05/08 als tres schemes: public, fhort i los), o sigui que el que hi ha escrit aquí sota és
+// exactament el que hi ha a la BD, no una invenció.
+//
+// ⚠️ EL DICCIONARI D'INSTÀNCIES JA EXISTEIX. El va crear `b631b12d` (F2 · D-31.26) i té DOS EIXOS:
+// POSICIÓ (left · right · top · bottom · cf · cb · side · waistband_seam) i ESTAT (relaxed ·
+// extended). Aquí sota només n'hi ha QUATRE amb literal propi, que és per què `cf` es llegeix
+// avui «Cf» i no «CF». Qui necessiti el diccionari SENCER —el gest de crear una germana, que ha
+// d'oferir les vuit posicions i els dos estats per separat, i la proposta de codi amb sufix— l'ha
+// de demanar al backend (`GET /api/v1/mesures/diccionari/`) i NO ampliar aquesta llista: duplicar
+// el vocabulari en dos llocs és la trampa que `nomenclaturaPom.js` ja va pagar una vegada.
 //
 // La INSTÀNCIA és un slug compost canònic (`'left'`, `'left-relaxed'`): es desmunta pels guions i
-// cada tram es tradueix per separat, perquè el diccionari d'instàncies encara no existeix (arriba
-// amb C4-ins i la Montse) i inventar-ne un aquí seria fabricar la font única equivocada. Un tram
-// desconegut es mostra CRU en comptes de desaparèixer: val més veure `sleeve-2` que no veure res.
+// cada tram es tradueix per separat, perquè els dos eixos són ORTOGONALS (v. la capçalera de
+// `pom.MeasurementInstance`). Un tram desconegut es mostra CRU en comptes de desaparèixer: val
+// més veure `sleeve-2` que no veure res.
 
 /** Slugs de capa que el catàleg de la casa sembra, en ordre de presentació (D-31.22). */
 export const CAPES = ['exterior', 'folre', 'entretela', 'farciment', 'reforc', 'fornitura']

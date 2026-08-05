@@ -322,9 +322,10 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
 
   // C5-UI/P4 — EL VEREDICTE i la finestra d'HISTÒRIC són estat d'aquesta pantalla, no de la font.
   //
-  // `veredictes` és local perquè avui no té on desar-se (`PieceFittingLine` no té camp `decisio`;
-  // v. el PENDENT anotat a `measureSources.fittingSource`). Quan el camp existeixi, això passa a
-  // sembrar-se de la línia i `onVeredicte` a fer PATCH: cap altre canvi a la graella.
+  // 🚩 `veredictes` és local I ES PERD EN RECARREGAR, i això és un DEFECTE, no un disseny: el camp
+  // `PieceFittingLine.decisio` existeix des de `fd102c06`, el PATCH l'accepta i el serializer
+  // l'emet a `line.decisio`. Falta sembrar-lo d'aquí i fer que `onVeredicte` el desi. Ho tanca C1.
+  // (El comentari anterior deia «avui no té on desar-se»; era d'abans de `fd102c06`.)
   //
   // `histFrom` a `null` vol dir «les dues últimes preses», que és el que es mira en obrir. Es
   // recalcula contra el total real a `finestraHistoric`, o sigui que una versió nova no deixa mai

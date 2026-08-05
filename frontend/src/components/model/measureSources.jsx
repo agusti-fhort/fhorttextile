@@ -72,12 +72,18 @@ export const fittingSource = {
   // on es pren la mesura i es decideix què se'n fa. El check té la seva pròpia cel·la de
   // decisió·nota (una altra semàntica: acceptar o descartar una PRESA), i Escalat no decideix res.
   //
-  // 🚨 PENDENT DE BACKEND — EL VEREDICTE NO ES DESA. `PieceFittingLine` té `valor_real` i `nota`
-  // però NO té camp `decisio`: el veredicte viu en estat local i es perd en recarregar. Cal una
-  // migració (camp `decisio` amb choices ACCEPTED/ADJUSTED/REJECTED + null), exposar-lo al
-  // serializer i acceptar-lo al PATCH del ViewSet, que ja admet `nota`. La interacció sencera
-  // —color al número, tecles A/J/R, botons— ja és aquí i s'hi endollarà sense tocar la UI.
-  // La NOTA sí que es desa de debò: el camp existeix i la porta és la mateixa d'ara.
+  // EL VEREDICTE ES DESA, i el camí és el MATEIX que el de la nota: PATCH per línia sobre
+  // `piece-fitting-lines/<id>/`. `PieceFittingLine.decisio` existeix des de `fd102c06` (D-31.21)
+  // amb els tres choices i `''` = sense decidir —que NO és ACCEPTED—, el serializer de cel·la
+  // l'accepta a l'escriptura i l'emet a la lectura, i `views.py` guarda que un REJECTED no sembri
+  // res. El serializer de la graella també l'emet a `line.decisio` a cada lectura.
+  //
+  // 🚩 EL QUE FALTA ÉS AL FRONT, no al backend: avui `CheckMeasureEditor` guarda el veredicte en
+  // estat local i no crida cap PATCH, o sigui que es perd en recarregar. Ho tanca el bloc C1.
+  //
+  // (Aquí hi va haver un «🚨 PENDENT DE BACKEND — no té camp `decisio`». Era cert abans de
+  // `fd102c06` i va sobreviure al commit que el va desmentir: qui llegia el fitxer en concloïa
+  // que calia una migració que ja existia, i per això el defecte va durar tant.)
   buildGroups(raw, ctx) {
     return buildFittingGroups(raw.baseLabel, raw.versionNumbers, ctx.t, {
       hist: ctx.hist || null,
