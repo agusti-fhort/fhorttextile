@@ -154,6 +154,30 @@ SENSE_DEFINICIO = {
           'i IC ja té el seu POM propi (495).',
 }
 
+#: `codi_client` del POMMaster que s'encunya, quan el codi de Brownie NO es pot fer servir.
+#:
+#: El costum de la casa és que el `codi_client` d'un POM que va entrar per Brownie SIGUI el
+#: codi de Brownie (E6, E88, BR1, UT1, IC2… tots hi són). Però `codi_client` **no és únic i
+#: s'usa com a clau de cerca** (`seed_losan_rules` fa `filter(codi_client=...).first()`), o
+#: sigui que duplicar-lo faria que aquella cerca depengués de l'ordre de la taula.
+#:
+#: Set dels 23 xoquen amb un codi ja ocupat per un POM que no té res a veure (l'`F1` de
+#: staging és «FRONT LEG OPENING», l'`U` és «Width sequins piece»…). Aquests set porten
+#: abreviatura de casa, a l'estil de les que ja hi ha (CH, WA, THI, SK L, HEM W). El codi de
+#: Brownie no es perd: viu a l'àlies, que és on ha de viure.
+CODI_CATALEG = {
+    'F1': 'SIDE CURV',   # 530 ja és 'F1' · FRONT LEG OPENING
+    'F2': 'SIDE L TOT',  # 531 ja és 'F2' · BACK LEG OPENING
+    'F3': 'CF L TOT',    # per coherència amb F4, encara que 'F3' fos lliure
+    'F4': 'CB L TOT',
+    'G1': 'RIB H',       # 453 conserva el codi 'G1' com a herència; el nou és el canalé
+    'P':  'YK H CB',     # 441 ja és 'P' · Chest piece height at side seam
+    'P1': 'YK H SIDE',   # 442 ja és 'P1' · Chest piece height at center
+    'P2': 'YK H CF',     # per coherència amb la resta del canesú
+    'U':  'OVERLAP F',   # 439 i 512 ja són 'U'
+    'IC': 'ELB PCH POS',  # 495 ja és 'IC' · ELBOW POSITION
+}
+
 #: Acrònims que la caixa de frase NO abaixa (llei de nomenclatura del brief).
 ACRONIMS = {'CF', 'CB', 'HPS', 'HSP', 'CT', 'AH', 'FS', 'PP'}
 

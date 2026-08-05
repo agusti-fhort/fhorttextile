@@ -41,8 +41,9 @@ from django.db import transaction
 from django_tenants.utils import schema_context
 
 from fhort.pom.models import CustomerPOMAlias, POMMaster
-from fhort.pom.seed_data.brownie_cataleg_v3 import (ENCUNYAR, REPUNTS, RESOLUCIO,
-                                                    SENSE_DEFINICIO, caixa_de_frase)
+from fhort.pom.seed_data.brownie_cataleg_v3 import (CODI_CATALEG, ENCUNYAR, REPUNTS,
+                                                    RESOLUCIO, SENSE_DEFINICIO,
+                                                    caixa_de_frase)
 from fhort.tasks.models import Customer
 
 XLSX = Path('/var/www/ftt-staging/docs/BROWNIE_CATALEG_POM_v3.xlsx')
@@ -92,6 +93,8 @@ class Command(BaseCommand):
         parser.add_argument('--no-dry-run', action='store_true')
         parser.add_argument('--schema', default=TENANT)
         parser.add_argument('--xlsx', default=str(XLSX))
+        parser.add_argument('--encunyar', action='store_true',
+                            help='Crea els POMs de D4. Sense això només els llista.')
 
     def handle(self, *args, **opts):
         dry = not opts['no_dry_run']
@@ -103,7 +106,7 @@ class Command(BaseCommand):
         files = llegir_full(Path(opts['xlsx']))
         self.stdout.write(f'  full: {len(files)} codis\n')
 
-        noms_pom = noms_alias = alies_nous = repuntats = 0
+        noms_pom = noms_alias = alies_nous = repuntats = encunyats = 0
         d4, sense_def, protegits, canvis = [], [], [], []
 
         with schema_context(schema), transaction.atomic():
@@ -121,10 +124,32 @@ class Command(BaseCommand):
                 codi, nom = f['codi'], f['nom']
 
                 if codi in ENCUNYAR:
-                    d4.append((codi, nom, f['logica'], ENCUNYAR[codi]))
-                    continue
+                    if not opts['encunyar']:
+                        d4.append((codi, nom, f['logica'], ENCUNYAR[codi]))
+                        continue
+                    # L'ENCUNYAMENT. `codi_client` és el codi de Brownie tret que ja estigui
+                    # ocupat (v. CODI_CATALEG); `pom_global=None` i `pendent_revisio=True`
+                    # perquè un POM nascut d'un catàleg de client és una PROPOSTA fins que
+                    # algú el promou a canònic — la mateixa llei que governa
+                    # `MeasurementLayer.is_system` i `CustomerPOMAlias.pendent_revisio`.
+                    pom, creat = POMMaster.objects.get_or_create(
+                        codi_client=CODI_CATALEG.get(codi, codi), nom_client=nom,
+                        defaults={'actiu': True, 'pendent_revisio': True,
+                                  'origen_import': 'BRW-CATALEG-v3'},
+                    )
+                    encunyats += int(creat)
+                    if creat:
+                        vell = al[codi].pom_id if codi in al and al[codi].pom_id else None
+                        canvis.append(
+                            f'  🆕 {codi:5} pom {pom.id} «{nom}» (codi_cataleg '
+                            f'{pom.codi_client!r})'
+                            + (f' · l\'àlies deixa {vell}' if vell else ''))
 
-                if codi in REPUNTS:
+                # ⚠️ `elif`, no `if`: un codi que s'acaba d'encunyar ja té el seu POM i no ha
+                # de tornar a passar per la cadena de resolució — hi trobaria l'àlies VELL
+                # (el de G1 a 453, el d'U a 439…) i el POM nou quedaria orfe el mateix segon
+                # de néixer.
+                elif codi in REPUNTS:
                     pom_id, vell, motiu = REPUNTS[codi]
                     pom = POMMaster.objects.filter(pk=pom_id).first()
                     if not pom:
@@ -173,6 +198,7 @@ class Command(BaseCommand):
             f'\n── RECOMPTE ──\n'
             f'  àlies de Brownie creats: {alies_nous} · actualitzats: {noms_alias}\n'
             f'  noms de POMMaster actualitzats: {noms_pom} · repunts: {repuntats}\n'
+            f'  POMs ENCUNYATS (D4): {encunyats}\n'
             f'  noms NO tocats per POM compartit (D2): {len(protegits)}')
 
         self.stdout.write(f'\n── D2 · nom canònic protegit (l\'etiqueta va a l\'àlies): '
