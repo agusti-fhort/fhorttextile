@@ -399,16 +399,34 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   const ctx = { t, model, readOnly, lockRules, onFeedback, sizeRun,
                 fittingSession: sourceCtx?.fittingSession, decisio, hist }
 
+  // 🔴 LA CÀRREGA QUE ARRIBA TARD NO POT MANAR (05/08).
+  //
+  // Aquesta pantalla canvia de FONT en calent: s'obre amb la font `check` i, quan la sessió de
+  // fitting acaba d'arribar, `src` passa a `fittingSource` i es torna a carregar. Les dues
+  // càrregues viatgen alhora i totes dues feien `setRaw`, o sigui que qui manava era **la que
+  // resolia l'última**, no la que correspon a la font vigent.
+  //
+  // Efecte mesurat al banc (model 188, sessió 147): `piece-fittings/31/` tornava primer i
+  // `size-checks/25/` després, i la graella de FITTING es quedava amb el `raw` del CHECK —que no
+  // porta `pomRows`— i pintava «Encara no hi ha mesures base» sobre una peça amb 52 línies. Sense
+  // error a la consola i sense res a la xarxa que ho digués: la pantalla, simplement, era buida.
+  //
+  // El comptador és el mínim que ho tanca: cada càrrega s'apunta el seu torn i, en tornar, només
+  // escriu si segueix sent l'última demanada. No cal AbortController —les respostes velles poden
+  // arribar, només han de callar.
+  const torn = useRef(0)
   const load = useCallback(() => {
+    const meu = ++torn.current
     setLoading(true)
     Promise.resolve(src.load(model, { t, readOnly, onFeedback, fittingSession: sourceCtx?.fittingSession }))
-      .then(r => setRaw(r))
+      .then(r => { if (meu === torn.current) setRaw(r) })
       // El 400 de create-piece («el model no té cap GradingVersion activa») és un diagnòstic
       // accionable, no un error de xarxa: cal DIR-LO. Però el text del backend és català fix, i
       // aquesta superfície la miren tenants EN/ES → el cas conegut passa per clau i18n; la resta
       // d'errors mostren el text del servidor (patró de doResolve), amb el genèric de xarxa de
       // seguretat. Amb raw=null la graella surt buida i la pantalla queda viva.
       .catch(e => {
+        if (meu !== torn.current) return   // una càrrega vella tampoc no pot buidar la nova
         setRaw(null)
         const msg = e?.response?.data?.error || ''
         onFeedback?.({
@@ -418,7 +436,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
             : (msg || t('sizecheck.open_error')),
         })
       })
-      .finally(() => setLoading(false))
+      .finally(() => { if (meu === torn.current) setLoading(false) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model.id, readOnly, src, sourceCtx?.fittingSession])
 
