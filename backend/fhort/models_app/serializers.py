@@ -441,11 +441,48 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
             'pom_code', 'pom_name_en', 'pom_name_cat',
             'pom_abbreviation', 'pom_is_key', 'pom_category',
             'pom_codi_client', 'pom_nom_client',
+            # C4 — ELS DOS EIXOS D'IDENTITAT (D-31.22 · D-31.26). Hi entren com a ESCRIVIBLES
+            # perquè la pantalla de PRESA els ha de poder tocar per fila (moure una mesura de
+            # capa, partir-la per instància) i l'únic camí que ho feia fins ara era
+            # `set-measurements`, que reescriu `origen` a 'MANUAL' i les toleràncies de TOTES
+            # les files del payload. Fer passar una presa per allà convertiria una base
+            # 'CHECKED' en 'MANUAL' sense que ningú ho hagués demanat: dany d'auditoria dins
+            # d'un canvi de nom de columna.
+            'capa', 'instancia',
             'base_value_cm', 'is_active', 'notes',
             'nom_fitxa', 'origen',
             'updated_at',
         )
         read_only_fields = ('updated_at',)
+
+    def validate(self, attrs):
+        """La CLAU ÚNICA `(model, pom, capa, instancia)` i la invariant del nom, dites a temps.
+
+        Totes dues viuen a la BD i, sense això, arriben com un IntegrityError —un 500 mut— quan
+        el que ha passat és que l'usuari ha triat una cara que aquesta mesura ja té.
+        """
+        inst = self.instance
+        camps = {
+            'model': attrs.get('model', getattr(inst, 'model', None)),
+            'pom': attrs.get('pom', getattr(inst, 'pom', None)),
+            'capa': attrs.get('capa', getattr(inst, 'capa', '') or ''),
+            'instancia': attrs.get('instancia', getattr(inst, 'instancia', '') or ''),
+        }
+        if camps['model'] and camps['pom']:
+            germanes = BaseMeasurement.objects.filter(**camps)
+            if inst is not None:
+                germanes = germanes.exclude(pk=inst.pk)
+            if germanes.exists():
+                raise serializers.ValidationError({'instancia': (
+                    'Aquesta mesura ja té una fila en aquesta capa i instància.'
+                )})
+        # `models_app_basemeasurement_instancia_exigeix_nom`: amb instància, el nom és obligatori.
+        nom = attrs.get('nom_fitxa', getattr(inst, 'nom_fitxa', '') or '')
+        if camps['instancia'] and not (nom or '').strip():
+            raise serializers.ValidationError({'nom_fitxa': (
+                'Una mesura amb instància ha de portar nomenclatura.'
+            )})
+        return attrs
 
 
 class WatchpointSerializer(serializers.ModelSerializer):
