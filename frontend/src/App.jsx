@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Entrar from './pages/Entrar'
 import Shell from './components/layout/Shell'
 import GuardTascaOblidada from './components/GuardTascaOblidada'
+import SessioActiva from './components/SessioActiva'
 import AvisSessio from './components/AvisSessio'
 import { modelFitxers } from './api/endpoints'
 
@@ -90,7 +91,13 @@ function ProtectedRoute({ children }) {
   // Va com a GERMÀ de children: repintar-se cada segon no arrossega l'app sencera.
   // AvisSessio (K5) va al costat del guard de tasca oblidada i pel mateix motiu: tots dos
   // són globals i han de viure allà on la persona treballa, no en una pantalla concreta.
-  if (estatAuth === AUTH_VALID) return <>{children}<GuardTascaOblidada /><AvisSessio /></>
+  // F2.3 — `SessioActiva` va aquí pel MATEIX motiu que els altres dos: des de F1 el Stop és
+  // l'únic gest que tanca una tasca, i el tècnic ha de veure què té obert tant si és a Mesures
+  // com al Taller de patró com a l'editor de fitxa. Un Stop per pantalla serien cinc llocs on
+  // el gest que factura pot divergir.
+  if (estatAuth === AUTH_VALID) {
+    return <>{children}<GuardTascaOblidada /><AvisSessio /><SessioActiva /></>
+  }
   return <Navigate to="/login" replace state={{ from: location }} />
 }
 

@@ -2638,7 +2638,7 @@
     "gravar_confirm_ok": "Gravar POM",
     "gravar_confirm_cancel": "Cancel·lar",
     "save_pom_err": "No s'ha pogut gravar POM.",
-    "unsaved_pom_hint": "Grava POM per tancar la tasca i activar Mesures.",
+    "unsaved_pom_hint": "Grava POM per definir les mesures i activar Mesures. La tasca la tanques tu amb Acabar.",
     "sealed_title": "La versió v{{v}} de l'escalat està aprovada (segellada a producció).",
     "sealed_hint": "El que ja s'ha aprovat no canvia: per editar-lo, crea'n una versió nova.",
     "sealed_new_version": "Crear nova versió",
@@ -4296,5 +4296,11 @@
     "consultar": "Només consultar",
     "consultar_nota": "S'obre en lectura. No es compta temps ni es reassigna res.",
     "ronda_error": "No s'ha pogut obrir la volta nova."
+  },
+  "sessio": {
+    "acabar": "Acabar",
+    "confirma": "Acabes «{{tasca}}»?",
+    "confirma_nota": "La tasca quedarà feta i podrà entrar a albarà. Desar no la tanca; això sí.",
+    "anar_al_model": "Anar al model"
   }
 }

@@ -2638,7 +2638,7 @@
     "gravar_confirm_ok": "Save POM",
     "gravar_confirm_cancel": "Cancel",
     "save_pom_err": "Could not save POM.",
-    "unsaved_pom_hint": "Save POM to close the task and enable Measurements.",
+    "unsaved_pom_hint": "Save POM to define the measurements and enable Measures. You close the task yourself with Finish.",
     "sealed_title": "Grading version v{{v}} is approved (sealed for production).",
     "sealed_hint": "What has been approved does not change: to edit it, create a new version.",
     "sealed_new_version": "Create new version",
@@ -4296,5 +4296,11 @@
     "consultar": "Just view",
     "consultar_nota": "Opens read-only. No time is tracked and nothing is reassigned.",
     "ronda_error": "Could not open the new round."
+  },
+  "sessio": {
+    "acabar": "Finish",
+    "confirma": "Finish «{{tasca}}»?",
+    "confirma_nota": "The task will be marked done and can go on a delivery note. Saving does not close it; this does.",
+    "anar_al_model": "Go to the model"
   }
 }
