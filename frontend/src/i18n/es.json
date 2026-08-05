@@ -4284,7 +4284,21 @@
     "left": "Izquierda",
     "right": "Derecha",
     "relaxed": "Relajada",
-    "extended": "Estirada"
+    "extended": "Estirada",
+    "top": "Superior",
+    "bottom": "Inferior",
+    "cf": "CF",
+    "cb": "CB",
+    "side": "Costura lateral",
+    "waistband_seam": "Costura de pretina",
+    "grup": "Instancia",
+    "eix_posicio": "Posición",
+    "eix_estat": "Estado",
+    "mes": "más",
+    "mes_tip": "Posición y combinaciones — modal completo",
+    "tip_aquesta": "{{nom}} — esta fila",
+    "tip_repartida": "Repartida — la hermana es {{nom}}",
+    "tip_parteix": "{{nom}} — parte el POM (valores heredados)"
   },
   "obrir_tasca": {
     "conflicte_titol": "Esta tarea la tiene abierta {{tecnic}}",

@@ -11,6 +11,11 @@ import { CSS } from '@dnd-kit/utilities'
 
 import { formatDelta } from '../../utils/format'
 import { etiquetaCapa, etiquetaInstancia, CAPES, INSTANCIES } from '../../utils/capaInstancia'
+import {
+  DIMS_EN_LINIA, COMPLEMENTARIA, eixDe, tramsInstancia, composaInstancia,
+  codiProposat, codiBase,
+} from '../../utils/diccionariMesures'
+import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
 
 // El bloc de REGLA es distingeix per FONS (crema de la casa) i per un SEPARADOR gruixut
 // respecte de la mesura: el color agrupa, el filet talla. Dos senyals, no un — la lliçó del
@@ -66,6 +71,10 @@ export default function EditableTable({
   const [localRows, setLocalRows] = useState(rows)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  // El vocabulari d'identitat (capes + instàncies + regla de composició). Amb `null` —mentre
+  // no ha arribat, o si la petició falla— les píndoles surten inertes i la taula es veu igual:
+  // la superfície de mesures no pot dependre d'un GET per pintar-se.
+  const dicc = useDiccionariMesures()
 
   useEffect(() => { setLocalRows(rows); setDirty(false) }, [rows])
 
@@ -221,7 +230,7 @@ export default function EditableTable({
   //
   // ⚠️ NO ES DESA SOLA, i és correcte: `buildPayload` només envia les files amb valor, com ha
   // fet sempre amb les files noves. Una germana sense mesura encara no és una mesura.
-  const [germanaDe, setGermanaDe] = useState(null)   // fila mare del diàleg obert
+  const [germanaDe, setGermanaDe] = useState(null)   // fila mare del diàleg de CAPA
 
   // v8.1 — LA FILA ACTIVA I LA FILA QUE ACABA DE NÉIXER.
   //
@@ -269,6 +278,75 @@ export default function EditableTable({
       return [...prev.slice(0, fins), nova, ...prev.slice(fins)]
     })
     marcaNeix(nova.id)
+    setDirty(true)
+  }
+
+  // ── B1 · LES PÍNDOLES D'INSTÀNCIA (v8.1 · `dimState` :235-242) ─────────────────────────────
+  //
+  // L'ESTAT D'UNA DIMENSIÓ ES MIRA A LA FAMÍLIA, NO A LA FILA. La família és el mateix POM a la
+  // mateixa capa: l'exterior i el folre del pit són dues mesures diferents i cadascuna es pot
+  // partir per la seva banda. Quan una germana ja ha pres una opció de l'eix, l'eix queda REPARTIT
+  // i les dues píndoles es deshabiliten —també la que està encesa—: repartir dues vegades pel
+  // mateix eix no vol dir res, i la manera de desfer-ho és treure una de les dues files.
+  //
+  // `mine` es calcula per EIX i no per pertinença a les dues opcions en línia: una fila que ja
+  // sigui `top` té l'eix POSICIÓ ocupat encara que ni «Esquerra» ni «Dreta» hi surtin enceses, i
+  // el tooltip ho ha de dir amb el nom real (el diccionari en té vuit, i aquí només n'hi caben
+  // dues; la resta viuen al modal `＋`).
+  const dimState = (row, eix) => {
+    const meus = tramsInstancia(dicc, row.instancia)
+    const mine = meus.find(s => eixDe(dicc, s) === eix) || null
+    const capa = row.capa || 'exterior'
+    const repartida = localRows.some(x =>
+      x.pom_id === row.pom_id && (x.capa || 'exterior') === capa &&
+      tramsInstancia(dicc, x.instancia).some(s => eixDe(dicc, s) === eix))
+    return { mine, repartida }
+  }
+
+  // PARTIR UN POM (v8.1 · `splitPair` :306-319). La fila DESAPAREIX i en neixen DUES: la que s'ha
+  // triat i la seva complementària, totes dues amb els valors heretats i amb el codi compost
+  // segons D-31.26 (`base + sufix`, concatenat).
+  //
+  // ⚠️ ELS VALORS S'HERETEN, i és el que mana la maqueta. És el contrari del que fa la germana de
+  // CAPA (que neix buida a posta): allà s'AFEGEIX una mesura que ningú ha pres mai, i aquí es
+  // PARTEIX una que ja estava presa —la sisa mesurada val per a totes dues bandes fins que algú
+  // les torni a mesurar—. Són dos actes diferents i per això tenen dues respostes diferents.
+  //
+  // La fila original es perd a propòsit: la seva identitat `(pom, capa, '')` deixa d'existir, i
+  // `keep_mesures` (que es construeix de `localRows`) ja no la portarà → el backend la poda i
+  // escriu les dues noves. Això ÉS partir; conservar-la deixaria tres files on n'hi ha d'haver dues.
+  const parteix = (row, opt) => {
+    if (!dicc) return
+    const eix = eixDe(dicc, opt)
+    const comp = COMPLEMENTARIA[opt]
+    if (!eix || !comp) return
+    const meus = tramsInstancia(dicc, row.instancia)
+    const altres = meus.filter(s => eixDe(dicc, s) !== eix)
+    // El codi base és el que quedava abans que cap sufix s'hi enganxés: re-partir `AHL` ha de
+    // donar `AHL`/`AHR` i no `AHLL`.
+    const base = codiBase(dicc, row.nom_fitxa || row.client_code || row.pom_code || '', meus)
+    const fill = (tram) => {
+      const trams = [...altres, tram]
+      const inst = composaInstancia(dicc, trams)
+      // La invariant de BD `instancia_exigeix_nom` no admet nom buit amb instància. Amb un eix
+      // que no compon sufix (els ESTATS) la proposta és el codi base tal qual, que ja val; si
+      // ni tan sols n'hi hagués, el slug fa de nom abans que deixar petar el desat amb un 500.
+      const codi = codiProposat(dicc, base, trams) || inst.toUpperCase()
+      return {
+        ...row,
+        id: `tmp-${Date.now()}-${tram}`,
+        instancia: inst,
+        nom_fitxa: codi,
+        // `clau` és la que serveix el backend per indexar els deltes: una identitat nova no en
+        // té cap, i heretar la de la mare li ensenyaria el Δ d'una fila que ja no existeix.
+        clau: undefined,
+      }
+    }
+    setLocalRows(prev => {
+      const i = prev.findIndex(r => r.id === row.id)
+      if (i < 0) return prev
+      return [...prev.slice(0, i), fill(opt), fill(comp), ...prev.slice(i + 1)]
+    })
     setDirty(true)
   }
 
@@ -409,7 +487,7 @@ export default function EditableTable({
   // catàleg) → BD neta = columnes buides. I desar mesures segueix sense fabricar cap regla:
   // `buildPayload` no envia `rules`, i aquell guard mort no torna.
   const displaySize = baseSize || sizeRun?.[0]
-  const colCount = (readOnly ? 0 : 2) + 9
+  const colCount = (readOnly ? 0 : 2) + 9 + (readOnly ? 0 : 2)
   const stickyHd = (left, w) => ({ ...thS, position: 'sticky', left, zIndex: 3, width: w, minWidth: w, background: 'var(--bg-muted)' })
   // Bloc d'IDENTITAT de la fila, congelat a l'esquerra: Capa · nomenclatura · nom. Amb dues
   // germanes vives (el mateix POM a l'exterior i al folre, la sisa esquerra i la dreta) el nom
@@ -464,6 +542,15 @@ export default function EditableTable({
                 <th rowSpan={2} style={stickyHd(0, W_CAPA)}>{t('capa.col')}</th>
                 <th rowSpan={2} style={stickyHd(W_CAPA, W_CODI)}>{t('measuregrid.col_pom')}</th>
                 <th rowSpan={2} style={stickyHd(W_CAPA + W_CODI, W_NOM)}>{t('measuregrid.col_nom')}</th>
+                {/* v8.1 — EL GRUP D'INSTÀNCIA. Dues dimensions en línia (les parelles freqüents) i
+                    el `＋`, que obre les vuit posicions del diccionari. Va entre el NOM i el valor
+                    perquè és part de QUINA mesura és la fila, no de què s'hi mesura. */}
+                {!readOnly && (
+                  <th colSpan={2} style={{ ...thS, textAlign: 'center', background: 'var(--gold-pale)',
+                                           color: 'var(--gold)', fontWeight: 600, borderLeft: '1px solid var(--border)' }}>
+                    {t('instancia.grup')}
+                  </th>
+                )}
                 {/* v8.1 — LA CAPÇALERA DEL CARRIL DIU DE QUINA TALLA SÓN AQUESTES XIFRES.
                     Era el literal de la talla sol, amb el cos de versaleta de la resta de
                     capçaleres: una «S» de 9,5 px perduda entre «RÈGIM» i «DELTA BREAK». És
@@ -495,6 +582,14 @@ export default function EditableTable({
               </tr>
               {(
                 <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
+                  {!readOnly && (
+                    <>
+                      <th style={{ ...thS, textAlign: 'center', minWidth: 132, borderLeft: '1px solid var(--border)' }}>
+                        {t('instancia.eix_posicio')}
+                      </th>
+                      <th style={{ ...thS, textAlign: 'center', minWidth: 132 }}>{t('instancia.eix_estat')}</th>
+                    </>
+                  )}
                   <th style={{ ...thS, minWidth: 92, background: REGLA_BG, borderLeft: SEP }}>{t('editable_table.col.regime')}</th>
                   <th style={{ ...thS, textAlign: 'right', minWidth: 82, background: REGLA_BG }}>{t('editable_table.col.delta')}</th>
                   <th style={{ ...thS, textAlign: 'right', minWidth: 82, background: REGLA_BG }}>{t('editable_table.col.break_delta')}</th>
@@ -518,6 +613,9 @@ export default function EditableTable({
                     activa={row.id === filaActiva}
                     neix={row.id === filaNeix}
                     onActiva={setFilaActiva}
+                    dicc={dicc}
+                    dimState={dimState}
+                    onParteix={parteix}
                     onCellChange={handleCellChange}
                     onDelete={handleDeleteRow}
                     onGermana={() => setGermanaDe(row)}
@@ -590,7 +688,8 @@ export default function EditableTable({
 }
 
 function SortableRow({ row, n, displaySize, readOnly, activa, neix, onActiva, onCellChange, onDelete, onGermana,
-                       delta, onBateig, onRegla, widths, registerVal, onNav }) {
+                       delta, onBateig, onRegla, widths, registerVal, onNav,
+                       dicc, dimState, onParteix }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -698,6 +797,21 @@ function SortableRow({ row, n, displaySize, readOnly, activa, neix, onActiva, on
           )
         })()}
       </td>
+      {/* v8.1 — LES PÍNDOLES D'INSTÀNCIA, una cel·la per dimensió, i el `＋` de les altres sis
+          posicions. Amb el diccionari encara en vol surten inertes: la taula no espera cap GET. */}
+      {!readOnly && DIMS_EN_LINIA.map((d, k) => {
+        const st = dicc ? dimState(row, d.key) : { mine: null, repartida: false }
+        return (
+          <td key={d.key} style={{ ...tdS, textAlign: 'center', padding: '4px 8px',
+                                   borderLeft: k === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
+            {d.opts.map(o => (
+              <PindolaInstancia key={o} slug={o} dicc={dicc}
+                encesa={st.mine === o} repartida={st.repartida} altra={st.mine}
+                onTria={() => onParteix(row, o)} />
+            ))}
+          </td>
+        )
+      })}
       <td style={{ ...tdS, textAlign: 'right', background: 'var(--gold-pale)' }}>
         <CarrilInput
           value={row.base_value_cm}
@@ -773,6 +887,39 @@ function SortableRow({ row, n, displaySize, readOnly, activa, neix, onActiva, on
         </td>
       )}
     </tr>
+  )
+}
+
+// LA PÍNDOLA D'UNA OPCIÓ D'INSTÀNCIA (v8.1 · `.qw` :76-86). Paraula SENCERA, mai una inicial:
+// «Esquerra», no «L». El sufix `L` és per al CODI, i confondre les dues coses és el que feia que
+// dir quina fila era quina volgués dir conèixer la nomenclatura del client.
+//
+// ELS TRES ESTATS, cadascun amb el seu tooltip, perquè una píndola apagada i una de deshabilitada
+// no volen dir el mateix i a cop d'ull s'assemblen:
+//   · ENCESA      → «Esquerra — aquesta fila»
+//   · REPARTIDA   → «Repartida — la germana és Dreta» (o el nom real, si l'eix el va prendre una
+//                   posició que no surt en línia: `top`, `cf`…)
+//   · LLIURE      → «Esquerra — parteix el POM (valors heretats)», que diu QUÈ passarà en prémer.
+function PindolaInstancia({ slug, dicc, encesa, repartida, altra, onTria }) {
+  const { t } = useTranslation()
+  const nom = etiquetaInstancia(slug, t)
+  const inert = !dicc || repartida
+  const tip = encesa ? t('instancia.tip_aquesta', { nom })
+    : repartida ? t('instancia.tip_repartida', {
+      nom: etiquetaInstancia(altra && altra !== slug ? altra : slug, t) })
+      : t('instancia.tip_parteix', { nom })
+  return (
+    <button type="button" disabled={inert} onClick={onTria} title={tip} aria-label={tip}
+      aria-pressed={encesa}
+      style={{
+        font: 'inherit', fontSize: 'var(--fs-label)', borderRadius: 999, padding: '2px 10px',
+        margin: '0 2px', cursor: inert ? 'default' : 'pointer',
+        border: `1px solid ${encesa ? 'var(--gold)' : 'var(--border)'}`,
+        background: encesa ? 'var(--gold-pale)' : 'var(--white)',
+        color: encesa ? 'var(--gold)' : 'var(--text-muted)',
+        fontWeight: encesa ? 600 : 400,
+        opacity: inert && !encesa ? 0.4 : 1,
+      }}>{nom}</button>
   )
 }
 

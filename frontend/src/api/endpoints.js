@@ -216,6 +216,13 @@ export const poms = {
   crearTenant: (data) => client.post('/api/v1/poms/crear-tenant/', data),    // POM tenant-only nou
 }
 
+// El VOCABULARI D'IDENTITAT d'una mesura: capes (D-31.22) + instàncies (D-31.26) + la regla
+// de composició del codi. Un sol GET perquè els dos eixos es miren sempre junts.
+// ⚠️ No confondre amb el diccionari de NOMENCLATURA d'un client (`pom/customers/…/dictionary/`).
+export const diccionariMesures = {
+  get: () => client.get('/api/v1/mesures/diccionari/'),
+}
+
 // CRUD complet (GarmentTypeViewSet és ModelViewSet). S'usa al tram 7 (finder 3 columnes).
 export const garmentTypes = {
   list: (params) => client.get('/api/v1/garment-types/', { params }),

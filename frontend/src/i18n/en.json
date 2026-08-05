@@ -4284,7 +4284,21 @@
     "left": "Left",
     "right": "Right",
     "relaxed": "Relaxed",
-    "extended": "Extended"
+    "extended": "Extended",
+    "top": "Top",
+    "bottom": "Bottom",
+    "cf": "CF",
+    "cb": "CB",
+    "side": "Side seam",
+    "waistband_seam": "Waistband seam",
+    "grup": "Instance",
+    "eix_posicio": "Position",
+    "eix_estat": "State",
+    "mes": "more",
+    "mes_tip": "Position and combinations — full dialog",
+    "tip_aquesta": "{{nom}} — this row",
+    "tip_repartida": "Split — the sister is {{nom}}",
+    "tip_parteix": "{{nom}} — split the POM (values inherited)"
   },
   "obrir_tasca": {
     "conflicte_titol": "{{tecnic}} has this task open",

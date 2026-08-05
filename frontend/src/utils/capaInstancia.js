@@ -20,11 +20,14 @@
 //
 // ⚠️ EL DICCIONARI D'INSTÀNCIES JA EXISTEIX. El va crear `b631b12d` (F2 · D-31.26) i té DOS EIXOS:
 // POSICIÓ (left · right · top · bottom · cf · cb · side · waistband_seam) i ESTAT (relaxed ·
-// extended). Aquí sota només n'hi ha QUATRE amb literal propi, que és per què `cf` es llegeix
-// avui «Cf» i no «CF». Qui necessiti el diccionari SENCER —el gest de crear una germana, que ha
-// d'oferir les vuit posicions i els dos estats per separat, i la proposta de codi amb sufix— l'ha
-// de demanar al backend (`GET /api/v1/mesures/diccionari/`) i NO ampliar aquesta llista: duplicar
-// el vocabulari en dos llocs és la trampa que `nomenclaturaPom.js` ja va pagar una vegada.
+// extended). Els deu slugs són a `INSTANCIES`, aquí sota, i els seus literals a i18n.
+//
+// ⚠️ QUÈ ES DUPLICA I QUÈ NO. Aquí hi ha els SLUGS i els seus literals, perquè una etiqueta s'ha
+// de poder pintar abans que cap petició torni i ha de canviar en canviar d'idioma. L'ESTRUCTURA
+// —de quin eix és cadascun, quin sufix compon el codi, en quin ordre s'ofereixen— NO es duplica:
+// la mana el backend (`GET /api/v1/mesures/diccionari/` · `utils/diccionariMesuresFont.js`), i és
+// el que ha de llegir tot el que ESCRIU (partir un POM, el modal de posicions, el cercador amb
+// sufixos). Tenir l'estructura en dos llocs seria la trampa que `nomenclaturaPom.js` ja va pagar.
 //
 // La INSTÀNCIA és un slug compost canònic (`'left'`, `'left-relaxed'`): es desmunta pels guions i
 // cada tram es tradueix per separat, perquè els dos eixos són ORTOGONALS (v. la capçalera de
@@ -34,8 +37,22 @@
 /** Slugs de capa que el catàleg de la casa sembra, en ordre de presentació (D-31.22). */
 export const CAPES = ['exterior', 'folre', 'entretela', 'farciment', 'reforc', 'fornitura']
 
-/** Trams d'instància amb literal propi. La resta es mostra crua (v. capçalera). */
-export const INSTANCIES = ['left', 'right', 'relaxed', 'extended']
+/**
+ * Trams d'instància amb literal propi: els DEU slugs que el diccionari sembra (D-31.26).
+ *
+ * Aquí hi ha la LLISTA i a `i18n/*.json` els literals; l'ESTRUCTURA (de quin eix és cadascun,
+ * quin sufix compon, en quin ordre s'ofereixen) NO es duplica i es demana al backend
+ * (`utils/diccionariMesuresFont.js`). El repartiment és a posta: una etiqueta s'ha de poder
+ * pintar abans que cap petició torni i ha de canviar quan l'usuari canvia d'idioma, i cap de
+ * les dues coses les pot fer una resposta d'API.
+ *
+ * Un slug que NO sigui aquí —el que un tenant s'hagi creat— es mostra cru; qui el tingui a mà
+ * (el modal de posicions) pot passar el `nom_*` del diccionari com a etiqueta.
+ */
+export const INSTANCIES = [
+  'left', 'right', 'top', 'bottom', 'cf', 'cb', 'side', 'waistband_seam',
+  'relaxed', 'extended',
+]
 
 const SEP_INSTANCIA = '-'
 

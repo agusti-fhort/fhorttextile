@@ -4284,7 +4284,21 @@
     "left": "Esquerra",
     "right": "Dreta",
     "relaxed": "Relaxada",
-    "extended": "Estirada"
+    "extended": "Estirada",
+    "top": "Superior",
+    "bottom": "Inferior",
+    "cf": "CF",
+    "cb": "CB",
+    "side": "Costura lateral",
+    "waistband_seam": "Costura de cinturilla",
+    "grup": "Instància",
+    "eix_posicio": "Posició",
+    "eix_estat": "Estat",
+    "mes": "més",
+    "mes_tip": "Posició i combinacions — modal complet",
+    "tip_aquesta": "{{nom}} — aquesta fila",
+    "tip_repartida": "Repartida — la germana és {{nom}}",
+    "tip_parteix": "{{nom}} — parteix el POM (valors heretats)"
   },
   "obrir_tasca": {
     "conflicte_titol": "Aquesta tasca la té oberta {{tecnic}}",
