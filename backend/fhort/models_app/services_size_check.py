@@ -276,12 +276,15 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
         # Finalitza la tasca Kanban size_check → Done. Gate TOU: si no existeix la tasca
         # o la transició no és vàlida, NO peta.
         try:
-            from fhort.tasks.models import ModelTask
             from fhort.tasks.services_c import transition_task
-            task = (ModelTask.objects
-                    .filter(model=model, task_type__code='size_check')
-                    .exclude(status='Done').order_by('-id').first())
-            if task is not None:
+            from fhort.tasks.services_r import tasca_vigent
+            # F1.0 — abans: `.exclude(status='Done').order_by('-id').first()`, o sigui LA MÉS
+            # NOVA no-Done: el criteri OPOSAT al de `_close_pom_task_for_model` (§S-4). El guard
+            # `status != 'Done'` es conserva al call-site perquè `tasca_vigent` SÍ pot retornar
+            # una Done (regla 3: només la descarta si n'hi ha una de viva), i aquí una Done no
+            # s'ha de reobrir per tornar-la a tancar.
+            task = tasca_vigent(model, 'size_check')
+            if task is not None and task.status != 'Done':
                 if task.status != 'InProgress':
                     transition_task(task, 'InProgress', profile)   # Done només des d'InProgress
                 transition_task(task, 'Done', profile)

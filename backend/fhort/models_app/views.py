@@ -1695,12 +1695,12 @@ def _close_pom_task_for_model(model, profile):
     (l'única porta: status=Done, finished_at, tanca timer, record_actual_time, log).
     Done només és vàlid des de InProgress → si està Pending/Paused, hi passem primer.
     Sense tasca pom → no fa res. Ja Done → idempotent."""
-    from fhort.tasks.models import ModelTask
     from fhort.tasks.services_c import transition_task
+    from fhort.tasks.services_r import tasca_vigent
 
-    task = (ModelTask.objects
-            .filter(model=model, task_type__code='pom')
-            .order_by('id').first())
+    # F1.0 — abans: `.order_by('id').first()`, o sigui LA MÉS ANTIGA. Amb una ronda oberta això
+    # tancava la tasca de la ronda 1 mentre el tècnic treballava la 2 (§S-4 de la diagnosi).
+    task = tasca_vigent(model, 'pom')
     if not task:
         return {'closed': False, 'reason': 'no_pom_task'}
     if task.status == 'Done':

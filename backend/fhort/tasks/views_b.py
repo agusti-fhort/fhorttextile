@@ -27,6 +27,7 @@ from .services_d import (advance_phase_gate, advance_phases_chain, regress_phase
 from .services_e import (request_production, set_production_status,
                          ProductionError, has_delivered_production)
 from .services_g import lookup_estimated_minutes
+from .services_r import tasca_vigent
 
 
 class TaskTypeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -556,8 +557,11 @@ def open_model_task_view(request, model_id):
         return Response({'error': f"No pots obrir una tasca del tipus '{code}' (no és a la teva allow-list).",
                          'code': 'task_type_not_allowed'},
                         status=http_status.HTTP_403_FORBIDDEN)
-    # 1. Crea-si-falta (mirall de define_model_tasks_view). La canònica és la prevista.
-    task = ModelTask.objects.filter(model=model, task_type=tt, origen='prevista').first()
+    # 1. Crea-si-falta (mirall de define_model_tasks_view). QUINA és «la tasca del model» ho
+    # decideix `tasca_vigent` i ningú més (F1.0): amb una ronda oberta, la porta ha d'obrir la
+    # tasca de la RONDA, no la prevista de sota. Si no en troba cap, el que es crea segueix sent
+    # una `prevista` — la ronda no es crea per aquí, es crea amb `obrir_ronda`.
+    task = tasca_vigent(model, code)
     created = False
     if task is None:
         order = ModelTask.objects.filter(model=model).count()
