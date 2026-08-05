@@ -4302,5 +4302,28 @@
     "confirma": "Finish «{{tasca}}»?",
     "confirma_nota": "The task will be marked done and can go on a delivery note. Saving does not close it; this does.",
     "anar_al_model": "Go to the model"
+  },
+  "temps_declarat": {
+    "titol": "Declare time",
+    "subtitol": "«{{tasca}}» happens outside the tool: you have to state the time yourself.",
+    "mode_durada": "Duration",
+    "mode_franja": "Start and end",
+    "minuts": "Minutes spent",
+    "inici": "Started",
+    "fi": "Ended",
+    "nota": "Recorded as declared time and counts the same as measured time.",
+    "desa": "Save",
+    "boto": "Declare time",
+    "ok": "Time declared: {{minuts}} min.",
+    "err_minuts": "State how many minutes, in figures.",
+    "err_enter": "Minutes must be a whole number.",
+    "err_zero": "It has to be at least one minute.",
+    "err_sostre": "A single entry cannot exceed 24 hours. If it was longer, declare it in parts.",
+    "err_franja_incompleta": "Both start and end are needed.",
+    "err_invertida": "The end must come after the start.",
+    "err_data": "Those dates cannot be read.",
+    "err_futur": "You cannot declare time that hasn't happened yet.",
+    "err_mode": "Pick one of the two ways.",
+    "err_servidor": "Could not save the declared time."
   }
 }

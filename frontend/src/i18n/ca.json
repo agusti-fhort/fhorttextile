@@ -4302,5 +4302,28 @@
     "confirma": "Acabes «{{tasca}}»?",
     "confirma_nota": "La tasca quedarà feta i podrà entrar a albarà. Desar no la tanca; això sí.",
     "anar_al_model": "Anar al model"
+  },
+  "temps_declarat": {
+    "titol": "Declarar temps",
+    "subtitol": "«{{tasca}}» es fa fora de l'eina: el temps l'has de dir tu.",
+    "mode_durada": "Durada",
+    "mode_franja": "Inici i fi",
+    "minuts": "Minuts dedicats",
+    "inici": "Va començar",
+    "fi": "Va acabar",
+    "nota": "Es registra com a temps declarat i compta igual que el mesurat.",
+    "desa": "Desar",
+    "boto": "Declarar temps",
+    "ok": "Temps declarat: {{minuts}} min.",
+    "err_minuts": "Cal dir quants minuts, en xifres.",
+    "err_enter": "Els minuts han de ser un nombre enter.",
+    "err_zero": "Ha de ser com a mínim un minut.",
+    "err_sostre": "Un tram no pot passar de 24 hores. Si en van ser més, declara'ls per separat.",
+    "err_franja_incompleta": "Cal l'inici i el final.",
+    "err_invertida": "El final ha de ser posterior a l'inici.",
+    "err_data": "Les dates no s'entenen.",
+    "err_futur": "No es pot declarar temps que encara no ha passat.",
+    "err_mode": "Tria una de les dues formes.",
+    "err_servidor": "No s'ha pogut desar el temps declarat."
   }
 }

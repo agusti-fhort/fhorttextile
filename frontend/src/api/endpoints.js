@@ -299,6 +299,9 @@ export const modelTasks = {
   transition: (id, data) => client.post(`/api/v1/model-task-items/${id}/transition/`, data),
   // Self-claim entre tècnics (P4a-back, gated execute_tasks, self-only). Sense body: assignee = jo.
   claim: (id) => client.post(`/api/v1/model-task-items/${id}/claim/`),
+  // F2.5 · D-2 — temps DECLARAT per a les tasques Externa-lliure (les que es fan fora de l'eina
+  // i que cap batec pot observar). Cos: {minuts} XOR {inici, fi}. El backend rebutja les internes.
+  tempsDeclarat: (id, data) => client.post(`/api/v1/model-tasks/${id}/temps-declarat/`, data),
 }
 // Alias retrocompatible (KanbanTasks vell encara importa `tasks`; es reconstrueix al tram 4).
 export const tasks = modelTasks

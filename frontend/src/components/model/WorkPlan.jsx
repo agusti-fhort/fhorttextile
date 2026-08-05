@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
 import Modal from '../ui/Modal'
+import TempsDeclaratForm from './TempsDeclaratForm'
 import { models, modelTasks } from '../../api/endpoints'
 import { formatMinutes } from '../../utils/format'
 import { taskTypeLabel } from '../../utils/taskType'
@@ -114,7 +115,7 @@ function TransportBtn({ icon, active, title, onClick }) {
   )
 }
 
-function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop }) {
+function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop, onDeclarar }) {
   const { t } = useTranslation()
   const out = isOutOfCharge(task)
   const transport = TRANSPORT[task.status] || TRANSPORT.Pending
@@ -167,6 +168,14 @@ function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop }) {
           <TransportBtn icon="ti-player-play"  active={playActive} title={mine ? t('model_sheet.dashboard.workplan.play') : t('model_sheet.dashboard.workplan.handoff_play')} onClick={() => onPlay(task)} />
           <TransportBtn icon="ti-player-pause" active={mine && transport.pause} title={t('model_sheet.dashboard.workplan.pause')} onClick={() => onPause(task)} />
           <TransportBtn icon="ti-player-stop"  active={mine && transport.stop}  title={t('model_sheet.dashboard.workplan.stop')}  onClick={() => onStop(task)} />
+          {/* F2.5 · D-2 — les tasques EXTERNES es fan fora de l'eina i el rellotge no hi arriba
+              mai: l'única manera que aquell temps entri al sistema és dir-lo. Va aquí, al costat
+              del transport, i no dins d'un menú: si estigués amagat ningú no el faria servir i
+              les hores del patró a mà seguirien sense existir. Les internes no el veuen mai. */}
+          {task.tipus_extern && (
+            <TransportBtn icon="ti-clock-plus" active title={t('temps_declarat.boto')}
+                          onClick={() => onDeclarar(task)} />
+          )}
         </div>
         <Badge variant={STATUS_VARIANT[task.status] || 'gray'} style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {t(`model_sheet.dashboard.task_status.${task.status}`, { defaultValue: task.status })}
@@ -183,6 +192,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   const [myProfileId, setMyProfileId] = useState(null)
   const [toast, setToast] = useState(null)        // { type, text }
   const [handoff, setHandoff] = useState(null)     // task pendent de reassignar (diàleg §6)
+  const [declarant, setDeclarant] = useState(null)  // F2.5: tasca externa a la qual declarar temps
   const [claiming, setClaiming] = useState(false)  // guard anti-doble-clic del claim
   const toastTimer = useRef(null)
 
@@ -348,7 +358,8 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
         <div style={cardsGrid}>
           {list.map(task => (
             <TaskCard key={task.id} task={task} mine={isMine(task)} hasToolRoute={Boolean(toolRoute(task, modelId))}
-              onPlay={handlePlay} onPause={handlePause} onStop={handleStop} />
+              onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
+              onDeclarar={setDeclarant} />
           ))}
         </div>
       )}
@@ -369,6 +380,17 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
                         transition: 'width 200ms' }} />
         </div>
       </div>
+      {declarant && (
+        <TempsDeclaratForm
+          tasca={declarant}
+          onFet={(d) => {
+            setDeclarant(null)
+            showToast('ok', t('temps_declarat.ok', { minuts: d?.minuts ?? 0 }))
+            onRefresh?.()
+          }}
+          onCancel={() => setDeclarant(null)}
+        />
+      )}
       {handoff && (
         <Modal
           title={t('model_sheet.dashboard.workplan.handoff_title')}

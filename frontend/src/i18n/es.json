@@ -4302,5 +4302,28 @@
     "confirma": "¿Acabas «{{tasca}}»?",
     "confirma_nota": "La tarea quedará hecha y podrá entrar en albarán. Guardar no la cierra; esto sí.",
     "anar_al_model": "Ir al modelo"
+  },
+  "temps_declarat": {
+    "titol": "Declarar tiempo",
+    "subtitol": "«{{tasca}}» se hace fuera de la herramienta: el tiempo lo tienes que decir tú.",
+    "mode_durada": "Duración",
+    "mode_franja": "Inicio y fin",
+    "minuts": "Minutos dedicados",
+    "inici": "Empezó",
+    "fi": "Acabó",
+    "nota": "Se registra como tiempo declarado y cuenta igual que el medido.",
+    "desa": "Guardar",
+    "boto": "Declarar tiempo",
+    "ok": "Tiempo declarado: {{minuts}} min.",
+    "err_minuts": "Hay que decir cuántos minutos, en cifras.",
+    "err_enter": "Los minutos tienen que ser un número entero.",
+    "err_zero": "Tiene que ser como mínimo un minuto.",
+    "err_sostre": "Un tramo no puede pasar de 24 horas. Si fueron más, decláralos por separado.",
+    "err_franja_incompleta": "Hacen falta el inicio y el final.",
+    "err_invertida": "El final tiene que ser posterior al inicio.",
+    "err_data": "Las fechas no se entienden.",
+    "err_futur": "No se puede declarar tiempo que aún no ha pasado.",
+    "err_mode": "Elige una de las dos formas.",
+    "err_servidor": "No se ha podido guardar el tiempo declarado."
   }
 }
