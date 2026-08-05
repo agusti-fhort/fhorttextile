@@ -65,3 +65,38 @@ test('un tram declarat es marca com a tal', () => {
 test('sense nom de tipus cau al code, mai a undefined', () => {
   assert.equal(estatSessio(tram(), tasca({ task_type_name: null })).nom, 'pom')
 })
+
+// ── F2.4 · el salt entre superfícies ────────────────────────────────────────
+import { CODE_PER_TAB, saltDeSuperficie } from './sessioActiva.js'
+
+const viva = (extra = {}) => ({ id: 1, status: 'Paused', ...extra })
+
+test('el mapa de pestanyes NO inclou la fitxa tècnica', () => {
+  // Aquell tab és una llista; entrar-hi és navegar. La sessió de la fitxa l'obre «Modificar».
+  assert.equal(CODE_PER_TAB['Fitxa tècnica'], undefined)
+  assert.equal(CODE_PER_TAB.Mesures, 'pom')
+  assert.equal(CODE_PER_TAB.Escalat, 'grading')
+})
+
+test('saltar a una superfície de treball amb la tasca lliure', () => {
+  assert.deepEqual(saltDeSuperficie('Escalat', viva(), 7, 'cap'), { tab: 'Escalat', code: 'grading' })
+})
+
+test('un tab que no és superfície no fa saltar res', () => {
+  assert.equal(saltDeSuperficie('Fitxers', viva(), 7, 'cap'), null)
+  assert.equal(saltDeSuperficie('Fitxa tècnica', viva(), 7, 'cap'), null)
+})
+
+test('sense tasca no se n\'inventa cap: que la creï un gest explícit', () => {
+  assert.equal(saltDeSuperficie('Mesures', null, 7, 'cap'), null)
+})
+
+test('SILENCI: si caldria preguntar, no se salta i no es pregunta', () => {
+  assert.equal(saltDeSuperficie('Mesures', viva(), 7, 'conflicte'), null)
+  assert.equal(saltDeSuperficie('Mesures', viva(), 7, 'albaranada'), null)
+  assert.equal(saltDeSuperficie('Mesures', viva(), 7, 'lliurada'), null)
+})
+
+test('una tasca ja acabada no reobre sola en canviar de pestanya', () => {
+  assert.equal(saltDeSuperficie('Mesures', viva({ status: 'Done' }), 7, 'cap'), null)
+})

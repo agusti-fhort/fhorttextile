@@ -46,3 +46,29 @@ export function estatSessio(tram, tasca) {
     declarat: tram.origen === 'declarat',
   }
 }
+
+/**
+ * F2.4 · D-1 — QUIN `TaskType` treballa cada pestanya.
+ *
+ * Només hi són les pestanyes que SÓN una superfície de treball inline. «Fitxa tècnica» no hi és
+ * a posta: aquell tab és una LLISTA de fitxes, i entrar-hi és navegar, no treballar — la sessió
+ * de la fitxa l'obre «Modificar» (F2.2), que és el gest que sí que ho és. Obrir-la en clicar el
+ * tab imputaria temps a qui només passa a mirar quantes fitxes hi ha.
+ */
+export const CODE_PER_TAB = { Mesures: 'pom', Escalat: 'grading' }
+
+/**
+ * La superfície nova a la qual la sessió ha de saltar, o `null` si no n'hi ha cap.
+ *
+ * SILENCIÓS per contracte (D-1): si el salt no es pot fer net —no hi ha tasca, la té algú altre,
+ * està albaranada— es retorna `null` i NO es pregunta res. L'usuari ha canviat de pestanya, no ha
+ * demanat obrir res: interrompre'l amb un diàleg que no ha convocat seria pitjor que no saltar.
+ */
+export function saltDeSuperficie(tabNou, tascaDelTab, jo, cara) {
+  const code = CODE_PER_TAB[tabNou]
+  if (!code) return null                       // el tab no és una superfície de treball
+  if (!tascaDelTab) return null                // encara no existeix: que la creï un gest explícit
+  if (cara !== 'cap') return null              // conflicte / lliurada / albaranada → silenci
+  if (tascaDelTab.status === 'Done') return null
+  return { tab: tabNou, code }
+}

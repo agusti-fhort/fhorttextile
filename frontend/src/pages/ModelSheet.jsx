@@ -19,6 +19,7 @@ import { missatgeError } from '../api/errorsAuth'
 import useAuthStore from '../store/auth'
 import ObrirTascaDialog from '../components/model/ObrirTascaDialog'
 import { CARA_CAP, caraDeError, caraObrirTasca } from '../utils/caraObrirTasca'
+import { CODE_PER_TAB, saltDeSuperficie } from '../utils/sessioActiva'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
@@ -336,9 +337,25 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     setWpVersion(v => v + 1)
   }, [reloadModel, reloadTaula, reloadTasks, setModel])
   // Sortir de mode edició/entrada en canviar de tab (pausa la tasca si n'hi havia).
+  //
+  // F2.4 · D-1 — I SALTAR, si el tab nou també és una superfície de treball. El tècnic que passa
+  // de Mesures a Escalat no ha canviat de feina: ha canviat d'eina, i el rellotge l'ha de
+  // seguir. SILENCIÓS per contracte: si el salt no es pot fer net (la tasca la té algú altre,
+  // està albaranada, o encara no existeix) NO es pregunta res i simplement no se salta —
+  // l'usuari ha canviat de pestanya, no ha demanat obrir res. L'única pista visible és
+  // l'indicador de F2.3, que canvia de nom de tasca tot sol.
   useEffect(() => {
-    if ((editing && editing !== activeTab) || (mesuresEntry && activeTab !== 'Mesures')) exitEdit()
-  }, [activeTab, editing, mesuresEntry, exitEdit])
+    const sortia = (editing && editing !== activeTab) || (mesuresEntry && activeTab !== 'Mesures')
+    if (!sortia) return
+    exitEdit()
+    if (taskParam || fittingSessionParam) return   // context entrant explícit: mana ell
+    const code = CODE_PER_TAB[activeTab]
+    if (!code) return
+    const vigent = tascaVigentDe(code)
+    if (!saltDeSuperficie(activeTab, vigent, jo, caraObrirTasca(vigent, jo))) return
+    obreDeDebo(activeTab, code)
+  }, [activeTab, editing, mesuresEntry, exitEdit, taskParam, fittingSessionParam,
+      tascaVigentDe, jo, obreDeDebo])
   // Pausa la tasca NOMÉS en desmuntar el ModelSheet si quedava En curs (idempotent: si exitEdit ja
   // l'ha pausada, activeTaskRef és null i no es demana res → cap 400 Paused→Paused).
   useEffect(() => () => { pauseActiveTask() }, [pauseActiveTask])
