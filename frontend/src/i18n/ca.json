@@ -4381,5 +4381,14 @@
     "enrere": "Enrere",
     "confirmar": "Confirmar",
     "err_servidor": "No s'ha pogut canviar l'estat de la tasca."
+  },
+  "presa": {
+    "col_base_vigent": "Base vigent",
+    "count_pending": "{{n}} per prendre",
+    "count_taken": "{{n}} preses",
+    "kbd_buit": "buit = encara no presa",
+    "row_pending": "Encara no s’ha pres aquesta mesura.",
+    "subtitol": "La presa es compara amb la base vigent del model. La base no canvia fins que es resol la comprovació.",
+    "titol": "Mesurar prenda"
   }
 }

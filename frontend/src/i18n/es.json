@@ -4381,5 +4381,14 @@
     "enrere": "Atrás",
     "confirmar": "Confirmar",
     "err_servidor": "No se ha podido cambiar el estado de la tarea."
+  },
+  "presa": {
+    "col_base_vigent": "Base vigente",
+    "count_pending": "{{n}} por tomar",
+    "count_taken": "{{n}} tomadas",
+    "kbd_buit": "vacío = aún no tomada",
+    "row_pending": "Todavía no se ha tomado esta medida.",
+    "subtitol": "La toma se compara con la base vigente del modelo. La base no cambia hasta que se resuelve la comprobación.",
+    "titol": "Medir prenda"
   }
 }

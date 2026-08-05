@@ -161,6 +161,11 @@ export const baseMeasurements = {
   setNoms: (id, body) => client.patch(`/api/v1/base-measurements/${id}/noms/`, body),
   // Reordena els POM del model en bloc (ordre ÚNIC i global; es materialitza a Grading en propagar).
   reorder: (modelId, ids) => client.post(`/api/v1/models/${modelId}/base-measurements/reorder/`, { ids }),
+  // La mesura NEIX per aquí quan la crea una PRESA (una germana de capa, la partició d'un POM,
+  // una fila del cercador). No passa per `set-measurements` a posta: aquell endpoint reescriu
+  // `origen` a 'MANUAL' i les toleràncies de TOTES les files del payload, i una presa no pot
+  // convertir en manual la base que una altra sessió va deixar 'CHECKED'.
+  create: (body) => client.post('/api/v1/base-measurements/', body),
 }
 
 // D-12 — Watchpoints: advertències de text lliure ancorades al model (+ tasca d'origen), open→resolved.

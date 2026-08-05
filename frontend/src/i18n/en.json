@@ -4381,5 +4381,14 @@
     "enrere": "Back",
     "confirmar": "Confirm",
     "err_servidor": "The task state could not be changed."
+  },
+  "presa": {
+    "col_base_vigent": "Current base",
+    "count_pending": "{{n}} still to take",
+    "count_taken": "{{n}} taken",
+    "kbd_buit": "blank = not taken yet",
+    "row_pending": "This measurement has not been taken yet.",
+    "subtitol": "The take is compared against the model’s current base. The base only changes when the check is resolved.",
+    "titol": "Measure garment"
   }
 }

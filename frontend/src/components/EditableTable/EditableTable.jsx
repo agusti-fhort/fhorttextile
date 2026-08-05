@@ -66,6 +66,26 @@ const btnSecondary = {
   borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer',
 }
 
+// UNA SOLA TAULA, DOS MODES (05/08). «Definició POM» i «Mesurar prenda» són la mateixa eina
+// —`mesures`— i han de ser la mateixa taula: la mateixa identitat de fila, els mateixos grups
+// d'instància, el mateix carril, la mateixa barra d'estat, el mateix cercador. Fins avui eren
+// dues pantalles que no s'assemblaven en res.
+//
+// El que ELS DIFERENCIA és una sola cosa, i és la que el domini diu: **l'autoria CREA la base;
+// la presa MESURA CONTRA la base vigent**. D'aquí surten les dues úniques divergències:
+//
+//  1. ON VA EL NÚMERO DEL CARRIL. A l'autoria és la base i es desa amb el botó, en bloc. A la
+//     presa és la PRESA, va a la seva línia de size check i s'hi desa sola; la base no es toca
+//     fins que algú resol el check. Per això el mode `presa` no té botó de desar: no hi ha res
+//     a confirmar en bloc, i deixar-lo hi seria una promesa d'un acte que no existeix.
+//  2. UNA COLUMNA QUE LA v8.1 NO TÉ: la BASE VIGENT, en lectura, just abans del carril. Sense
+//     ella «mesurar contra» no es pot fer —el que es compara és la xifra que s'acaba de prendre
+//     amb la que el model ja tenia— i la maqueta no la porta perquè és d'autoria, on encara no
+//     hi ha cap base contra què mesurar. S'hi afegeix a posta i es diu al report.
+//
+// La resta del mode `presa` NO és una pantalla nova: és aquesta, amb les escriptures d'identitat
+// (capa · instància · nomenclatura · afegir · treure) anant per fila a la seva porta en comptes
+// d'esperar el botó, perquè enmig d'una presa no hi ha cap moment natural per prémer «desar».
 export default function EditableTable({
   rows,
   sizeRun,
@@ -76,7 +96,12 @@ export default function EditableTable({
   saveLabel,
   onPomSave,
   onSaved,
+  // `null` = mode autoria_base. Amb objecte = mode presa, i porta les portes per fila:
+  //   {baseLabel, onValor(row,val), onIdentitat(row,camps), onParteix(row,filles),
+  //    onNova(pom,eixos), onTreu(row), onReordena(ids)}
+  presa = null,
 }) {
+  const esPresa = !!presa
   const { t, i18n } = useTranslation()
   const [localRows, setLocalRows] = useState(rows)
   const [saving, setSaving] = useState(false)
@@ -109,12 +134,33 @@ export default function EditableTable({
       const oldIdx = prev.findIndex(r => r.id === active.id)
       const newIdx = prev.findIndex(r => r.id === over.id)
       if (oldIdx < 0 || newIdx < 0) return prev
-      return arrayMove(prev, oldIdx, newIdx).map((r, i) => ({ ...r, ordre: i }))
+      const seguit = arrayMove(prev, oldIdx, newIdx).map((r, i) => ({ ...r, ordre: i }))
+      // A la presa l'ordre es desa tot sol: no hi ha botó que el pugui confirmar després.
+      if (esPresa) marcaDesat(presa.onReordena(seguit.map(r => r.id))).catch(() => {})
+      return seguit
     })
-    setDirty(true)
+    if (!esPresa) setDirty(true)
   }
 
   const handleCellChange = (rowId, col, value) => {
+    // A la PRESA cada camp té la seva porta i s'hi desa sol: el número va a la línia del check
+    // i la nomenclatura a la mesura. Enmig d'una presa no hi ha cap moment natural per prémer
+    // «desar», i el buffer local només serviria per perdre feina si algú tanca la pestanya.
+    if (esPresa) {
+      const fila = localRows.find(r => r.id === rowId)
+      if (!fila) return
+      if (col === 'base_value_cm') {
+        const cru = String(value ?? '').replace(',', '.').trim()
+        if (cru !== '' && Number.isNaN(parseFloat(cru))) return
+        const net = cru === '' ? null : parseFloat(cru)
+        setLocalRows(prev => prev.map(r => (r.id === rowId ? { ...r, base_value_cm: net } : r)))
+        marcaDesat(presa.onValor(fila, net)).catch(() => {})
+        return
+      }
+      setLocalRows(prev => prev.map(r => (r.id === rowId ? { ...r, [col]: value } : r)))
+      marcaDesat(presa.onIdentitat(fila, { [col]: value })).catch(() => {})
+      return
+    }
     setLocalRows(prev => prev.map(r => {
       if (r.id !== rowId) return r
       if (col.startsWith('graded.')) {
@@ -198,6 +244,11 @@ export default function EditableTable({
       .catch(e => { console.error('No s\'ha pogut desar el nom', e) })
 
   const handleDeleteRow = (rowId) => {
+    if (esPresa) {
+      const fila = localRows.find(r => r.id === rowId)
+      if (fila) marcaDesat(presa.onTreu(fila)).catch(() => {})
+      return
+    }
     setLocalRows(prev => prev.filter(r => r.id !== rowId).map((r, i) => ({ ...r, ordre: i })))
     setDirty(true)
   }
@@ -207,6 +258,11 @@ export default function EditableTable({
   const handleAddRow = (pom, eixos = {}) => {
     const capa = eixos.capa || 'exterior'
     const instancia = eixos.instancia || ''
+    if (esPresa) {
+      // A la presa la fila neix a la BD: no hi ha botó que la pugui desar més tard.
+      marcaDesat(presa.onNova(pom, { capa, instancia })).catch(() => {})
+      return
+    }
     // La invariant `instancia_exigeix_nom` demana nom quan hi ha instància: el cercador el
     // PROPOSA aquí mateix amb la regla de D-31.26, i el patronista el pot reescriure.
     const nomFitxa = instancia
@@ -248,6 +304,7 @@ export default function EditableTable({
   const handleCapa = (row, capa) => {
     if ((row.capa || 'exterior') === capa) return
     setLocalRows(prev => prev.map(r => (r.id === row.id ? { ...r, capa } : r)))
+    if (esPresa) { marcaDesat(presa.onIdentitat(row, { capa })).catch(() => {}); return }
     setDirty(true)
   }
 
@@ -308,6 +365,12 @@ export default function EditableTable({
       .map(r => r.capa || 'exterior'))
     const seguent = capesDelDiccionari.find(c => !preses.has(c))
     if (!seguent) return
+    if (esPresa) {
+      marcaDesat(presa.onNova(
+        { id: mare.pom_id, codi_client: mare.pom_code },
+        { capa: seguent, instancia: inst, nom_fitxa: mare.nom_fitxa || '' })).catch(() => {})
+      return
+    }
     insereixGermana(mare, { capa: seguent, instancia: inst, nom_fitxa: mare.nom_fitxa || '' })
   }
 
@@ -413,11 +476,17 @@ export default function EditableTable({
     const compTrams = ambComplementaria && aGirar
       ? trams.map(s => (s === aGirar ? COMPLEMENTARIA[s] : s))
       : null
+    const files = [fill(trams, 'a')]
+    if (compTrams) files.push(fill(compTrams, 'b'))
+    if (esPresa) {
+      // La fila mare no desapareix i en neix una de nova: a la BD la mesura ja existeix i té
+      // preses penjades. Es REESCRIU la seva identitat i la germana s'hi afegeix al costat.
+      marcaDesat(presa.onParteix(row, files)).catch(() => {})
+      return
+    }
     setLocalRows(prev => {
       const i = prev.findIndex(r => r.id === row.id)
       if (i < 0) return prev
-      const files = [fill(trams, 'a')]
-      if (compTrams) files.push(fill(compTrams, 'b'))
       return [...prev.slice(0, i), ...files, ...prev.slice(i + 1)]
     })
     setDirty(true)
@@ -530,7 +599,8 @@ export default function EditableTable({
   // (un grup per eix + el `＋`) · valor · accions. Es compta i no s'escriu a mà perquè el nombre
   // de grups d'instància el decideix la BD, i un literal aquí tornaria a ser el segon lloc que
   // creu saber quantes dimensions hi ha.
-  const colCount = (readOnly ? 0 : 1) + 4 + (readOnly ? 0 : dims.length + 1) + 1 + (readOnly ? 0 : 1)
+  const colCount = (readOnly ? 0 : 1) + 4 + (readOnly ? 0 : dims.length + 1)
+    + (esPresa ? 1 : 0) + 1 + (readOnly ? 0 : 1)
   const stickyHd = (left, w) => ({ ...thS, position: 'sticky', left, zIndex: 3, width: w, minWidth: w, background: 'var(--bg-muted)' })
   // Bloc d'IDENTITAT de la fila, congelat a l'esquerra: Capa · nomenclatura · nom. Amb dues
   // germanes vives (el mateix POM a l'exterior i al folre, la sisa esquerra i la dreta) el nom
@@ -558,7 +628,9 @@ export default function EditableTable({
           {' · '}<b style={{ color: 'var(--gold)' }}><Kbd>I</Kbd> {t('editable_table.kbd_instancia')}</b>
           {' · '}<Kbd>N</Kbd> {t('editable_table.kbd_nomen')}
           {' · '}{t('editable_table.kbd_finder')}
-          {' · '}{t('editable_table.kbd_buit')}
+          {/* «buit = es descarta» és una llei de l'AUTORIA. A la presa, una fila en blanc és
+              una mesura que encara no s'ha pres — no es descarta res. */}
+          {' · '}{t(esPresa ? 'presa.kbd_buit' : 'editable_table.kbd_buit')}
         </p>
       )}
       {isImport && (
@@ -596,6 +668,17 @@ export default function EditableTable({
                   <th colSpan={dims.length + 1} style={{ ...thS, textAlign: 'center', background: 'var(--gold-pale)',
                                            color: 'var(--gold)', fontWeight: 600, borderLeft: '1px solid var(--border)' }}>
                     {t('instancia.grup')}
+                  </th>
+                )}
+                {/* LA BASE VIGENT — la columna que la v8.1 NO té, i que la presa necessita.
+                    «Mesurar contra» vol dir comparar la xifra que s'acaba de prendre amb la que
+                    el model ja tenia; sense aquesta columna el carril seria un número sol i la
+                    comparació s'hauria de fer de memòria. En LECTURA sempre: la base no la mou
+                    una presa, la mou resoldre el check. */}
+                {esPresa && (
+                  <th rowSpan={2} style={{ ...thS, textAlign: 'right', minWidth: 96,
+                                           borderLeft: '1px solid var(--border)' }}>
+                    {presa.baseLabel || t('presa.col_base_vigent')}
                   </th>
                 )}
                 {/* v8.1 — LA CAPÇALERA DEL CARRIL DIU DE QUINA TALLA SÓN AQUESTES XIFRES.
@@ -660,6 +743,7 @@ export default function EditableTable({
                     onActiva={setFilaActiva}
                     dicc={dicc}
                     dims={dims}
+                    esPresa={esPresa}
                     dimState={dimState}
                     onParteix={parteix}
                     onMesInstancia={() => setPosicionsDe(row)}
@@ -717,8 +801,10 @@ export default function EditableTable({
           padding: '10px 24px', display: 'flex', gap: 22, alignItems: 'center',
           fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
         }}>
-          <span>{t('editable_table.count_filled', { n: nInformades })}</span>
-          {nBuides > 0 && <span>{t('editable_table.count_empty', { n: nBuides })}</span>}
+          <span>{t(esPresa ? 'presa.count_taken' : 'editable_table.count_filled', { n: nInformades })}</span>
+          {nBuides > 0 && (
+            <span>{t(esPresa ? 'presa.count_pending' : 'editable_table.count_empty', { n: nBuides })}</span>
+          )}
           {/* A la dreta del tot: els recomptes diuen QUÈ hi ha a la taula i el flaix diu QUÈ
               acaba de passar. Són dues lectures diferents i no s'han de barrejar. */}
           {desat && (
@@ -730,7 +816,10 @@ export default function EditableTable({
         </div>
       )}
 
-      {!readOnly && (dirty || onPomSave) && (
+      {/* CAP BOTÓ DE DESAR EN BLOC A LA PRESA: tot s'ha desat ja, camp a camp. Un botó aquí
+          prometria un acte que no existeix, i el que SÍ que existeix —tancar el check— viu a la
+          barra de resolució, que és de la sessió i no de la taula. */}
+      {!readOnly && !esPresa && (dirty || onPomSave) && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
           {dirty && (
             <button type="button" onClick={() => { setLocalRows(rows); setDirty(false) }}
@@ -749,7 +838,7 @@ export default function EditableTable({
 }
 
 function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete,
-                       onBateig, widths, registerVal, onNav,
+                       onBateig, widths, registerVal, onNav, esPresa,
                        dicc, dims, dimState, onParteix, onMesInstancia, onGermanaCapa,
                        capesLliures, onCapa }) {
   const { t } = useTranslation()
@@ -918,6 +1007,16 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
                      color: 'var(--text-main)', cursor: 'pointer' }}>＋</button>
         </td>
       )}
+      {/* LA BASE VIGENT, en lectura. `—` quan el model encara no en té cap: una fila que s'està
+          prenent per primera vegada no ment dient zero. */}
+      {esPresa && (
+        <td style={{ ...tdS, textAlign: 'right', borderLeft: '1px solid var(--border)',
+                     fontVariantNumeric: 'tabular-nums', color: 'var(--text-main)' }}>
+          {row.base_vigent == null || row.base_vigent === ''
+            ? <span style={{ color: 'var(--text-muted)' }}>—</span>
+            : row.base_vigent}
+        </td>
+      )}
       {/* v8.1 `td.valcell` — EL CARRIL, acotat pels dos costats amb `--line` sobre `--sel`. */}
       <td style={{ ...tdS, textAlign: 'right', background: 'var(--gold-pale)',
                    borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
@@ -941,7 +1040,7 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           onTeclaNomen={() => document.querySelector(`[data-fila="${row.id}"] input[data-nomen]`)?.focus()}
           onEnfoca={() => onActiva?.(row.id)}
           onDesenfoca={() => onActiva?.(prev => (prev === row.id ? null : prev))}
-          hint={buida ? t('editable_table.row_discarded') : undefined} />
+          hint={buida ? t(esPresa ? 'presa.row_pending' : 'editable_table.row_discarded') : undefined} />
       </td>
       {!readOnly && (
         <td style={{ ...tdS, whiteSpace: 'nowrap' }}>

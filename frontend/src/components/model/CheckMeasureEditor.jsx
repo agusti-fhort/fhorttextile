@@ -5,6 +5,7 @@ import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines
 import { effectiveRegime } from '../../utils/gradingRegime'
 import { finestraHistoric } from './fittingGridAdapter'
 import MeasureGrid from './MeasureGrid'
+import EditableTable from '../EditableTable/EditableTable'
 import EditorHeader from './EditorHeader'
 import DependencyPanel from './DependencyPanel'
 import WatchpointsPanel from './WatchpointsPanel'
@@ -492,6 +493,73 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model.id, load, onFeedback, t])
 
+  // ── EL MODE `presa` DE L'EINA `mesures` ─────────────────────────────────────────────────────
+  //
+  // La font `check` deixa de construir columnes i passa a servir FILES amb la forma que la taula
+  // de mesures ja entén. És la mateixa conversió que feia `buildRows`, retallada al que la v8.1
+  // ensenya: identitat (capa · instància · nomenclatura · nom) + la presa + la base vigent.
+  //
+  // QUÈ HI HA DEIXAT DE SORTIR, i per què: el RÈGIM, la Δ, el break i «a partir de» (prendre una
+  // mesura no és editar la regla de graduació), la TOLERÀNCIA, i el vocabulari de fitting —«REAL
+  // (PROTO)» i «DECISIÓ · NOTA»—, que és d'una altra eina. Ordre d'Agus, 05/08.
+  const esPresa = src.kind === 'check'
+  const rowsPresa = !esPresa ? [] : (raw?.baseData?.rows || []).map(r => {
+    const line = (raw?.check?.lines || []).find(
+      l => l.base_measurement_id != null && l.base_measurement_id === r.base_measurement_id)
+    return {
+      // La taula indexa per `row.id`, que és el que fa servir per saber si una fila ja viu a la
+      // BD (el bateig hi penja). Aquí SEMPRE hi viu: la presa no inventa mesures.
+      id: r.base_measurement_id,
+      lineId: line?.id ?? null,
+      pom_id: r.pom_id, pom_code: r.pom_code,
+      capa: r.capa, instancia: r.instancia,
+      nom_fitxa: r.nom_fitxa || '',
+      nom_en: r.nom_en, nom_ca: r.nom_ca,
+      nom_canonic_model: r.nom_canonic_model || '',
+      nom_traduit_model: r.nom_traduit_model || '',
+      is_key: r.is_key,
+      // EL CARRIL PORTA LA PRESA, no la base: és el número que la modista escriu avui.
+      base_value_cm: line?.valor_real ?? null,
+      // …i al costat, la base VIGENT, que és contra el que es mesura.
+      base_vigent: line?.valor_teoric ?? null,
+    }
+  })
+
+  // Les PORTES PER FILA. Cadascuna escriu el mínim i rellegeix: la font de veritat torna del
+  // servidor, mai del buffer local (mateix patró que `onNomSave`/`onReorder` d'aquí sobre).
+  const presaPortes = {
+    baseLabel: t('presa.col_base_vigent'),
+    // La presa va a la SEVA línia de size check. La base del model no es toca fins que algú
+    // resol la comprovació — és tota la diferència entre prendre i autoritzar.
+    onValor: (row, valor) => (row.lineId == null
+      ? Promise.reject(new Error('sense línia'))
+      : sizeCheckLines.update(row.lineId, { valor_real: valor })),
+    onIdentitat: (row, camps) => baseMeasurements.update(row.id, camps).then(() => load()),
+    // PARTIR un POM des de la presa: la mesura ja existeix i té preses penjades, o sigui que la
+    // MARE es reescriu (no es destrueix, com fa l'autoria sobre files encara no desades) i la
+    // germana neix al seu costat amb el valor heretat i el MATEIX origen que la mare — mai
+    // 'MANUAL', que diria que algú l'ha mesurada a mà.
+    onParteix: (row, filles) => {
+      const [a, b] = filles
+      return baseMeasurements.update(row.id, { instancia: a.instancia, nom_fitxa: a.nom_fitxa })
+        .then(() => (b ? baseMeasurements.create({
+          model: model.id, pom: row.pom_id, capa: row.capa || 'exterior',
+          instancia: b.instancia, nom_fitxa: b.nom_fitxa,
+          base_value_cm: row.base_vigent ?? null, origen: row.origen || 'TEMPLATE',
+        }) : null))
+        .then(() => load())
+    },
+    onNova: (pom, eixos) => baseMeasurements.create({
+      model: model.id, pom: pom.id, capa: eixos.capa || 'exterior',
+      instancia: eixos.instancia || '', nom_fitxa: eixos.nom_fitxa || '',
+      // Neix SENSE valor: una mesura que ningú ha pres no en té cap, i 'TEMPLATE' és
+      // exactament el que el domini diu d'una fila materialitzada i encara buida.
+      base_value_cm: null, origen: 'TEMPLATE',
+    }).then(() => load()),
+    onTreu: (row) => onPodar(row),
+    onReordena: (ids) => baseMeasurements.reorder(model.id, ids).then(() => load()),
+  }
+
   if (loading) return <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('common.loading')}</div>
 
   // Els 4 seams de dades venen SEMPRE de la font — cap `if (mode)` escampat pel render.
@@ -518,6 +586,23 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           <PromoteToItemButton model={model} onFeedback={onFeedback} />
         </div>
       )}
+      {/* «MESURAR PRENDA» ÉS L'EINA `mesures`, EN MODE `presa` (05/08) — la MATEIXA taula que
+          «Definició POM», no una pantalla que se li assembli. Per això aquí hi ha `EditableTable`
+          i no la graella de consulta: la identitat de la fila, els grups d'instància, el carril,
+          la barra d'estat i el cercador han de ser els mateixos objectes, no dues còpies.
+          El FITTING (font `fitting`) segueix a `MeasureGrid`: és una altra eina, amb la seva
+          maqueta (fitting_v3) i el seu vocabulari —versions, veredicte, decisió i nota—, i
+          barrejar-les seria desfer el que aquest canvi acaba d'unificar. */}
+      {esPresa ? (
+        <EditableTable
+          rows={rowsPresa}
+          sizeRun={sizeRun}
+          baseSize={raw?.baseData?.base_size || model?.base_size_label}
+          modelId={model.id}
+          readOnly={readOnly}
+          presa={presaPortes}
+        />
+      ) : (
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
         onSave={readOnly ? undefined : onSave} onNomSave={canEditNom ? onNomSave : undefined}
         onNomsSave={canEditNom && src.onNomsSave ? onNomsSave : undefined}
@@ -540,6 +625,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
             <p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>
           )
         } />
+      )}
 
       {/* v3 (`.bar` :193-198) — LA BARRA DE RECOMPTES. La graella diu QUÈ té cada fila; això diu
           on és la sessió sencera, que és la pregunta de qui la tanca. «Sense decidir» és el que
