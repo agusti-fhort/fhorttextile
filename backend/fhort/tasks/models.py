@@ -61,6 +61,13 @@ class TaskType(models.Model):
     name = models.CharField(max_length=200)
     default_order = models.PositiveIntegerField(default=0)
     active = models.BooleanField(default=True)
+    # `visible` NO és `active`. Un tipus inactiu està RETIRAT del catàleg: ni s'ofereix ni
+    # s'hi pot obrir feina. Un tipus invisible segueix sent vàlid i les seves tasques vives
+    # segueixen funcionant —només que la UI no l'ofereix per iniciar-lo de nou, perquè encara
+    # no té pantalla o perquè avui no toca. Tornaran: per això no s'esborren ni es desactiven.
+    visible = models.BooleanField(
+        default=True,
+        help_text='El catàleg l\'ofereix a la UI. False = vàlid però no oferible (encara).')
     # --- Catàleg canònic (Sprint catàleg de tasques) ---
     fase = models.CharField(max_length=20, choices=FASE_CHOICES, default='Dev. tècnic')
     tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES, default='Interna')

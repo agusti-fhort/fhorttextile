@@ -12,8 +12,10 @@ class TaskTypeSerializer(serializers.ModelSerializer):
         # F2.0 — `tipus` i `es_lliurable` s'hi afegeixen perquè la UI sàpiga QUÈ té davant sense
         # inventar-s'ho: `tipus` decideix si la tasca admet temps declarat (F2.5, Externa-lliure)
         # i `es_lliurable` si compta per a l'avís de ronda lliurada (F2.7).
+        # T1 — `visible` s'hi afegeix perquè la UI sàpiga QUÈ ha d'oferir sense mantenir cap
+        # llista pròpia de codis: qui decideix si una targeta es pinta és el catàleg.
         fields = ['id', 'code', 'name', 'default_order', 'active', 'fase', 'eina', 'mode',
-                  'tipus', 'es_lliurable']
+                  'tipus', 'es_lliurable', 'visible']
 
 
 class ModelTaskSerializer(serializers.ModelSerializer):
