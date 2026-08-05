@@ -563,18 +563,12 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     }
   }
 
-  if (loading) {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center',
-                    color: 'var(--text-muted)',
-                    fontSize: 'var(--fs-body)' }}>
-        {t('model_sheet.loading')}
-      </div>
-    )
-  }
-
   // F2.1 — les quatre sortides del modal. `consultar` és la que no toca res: ni rellotge, ni
   // assignació, ni feina nova. Les altres tres escriuen, i cada una diu a la seva nota què fa.
+  //
+  // ÚLTIM HOOK del component, i per això mateix ha d'anar ABANS del retorn de `loading`: declarat
+  // a sota, el primer render (loading=true) no el cridava i el segon sí → React #310 «Rendered
+  // more hooks than during the previous render» a cada càrrega del full. Cap hook per sota d'aquí.
   const accioDialeg = useCallback((accio) => {
     const d = dialeg
     setDialeg(null)
@@ -602,6 +596,17 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       }))
       .finally(() => setOpeningTask(false))
   }, [dialeg, obreDeDebo, obreFitxa, id, reloadTasks, reloadModel, t])
+
+  // ——— A partir d'aquí, RETORNS. Cap hook per sota. ———
+  if (loading) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center',
+                    color: 'var(--text-muted)',
+                    fontSize: 'var(--fs-body)' }}>
+        {t('model_sheet.loading')}
+      </div>
+    )
+  }
 
   return (
     <div style={{ width: '100%' }}>

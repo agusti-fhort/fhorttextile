@@ -358,3 +358,66 @@ sense cap tasca lliurable. Es reconfirma aquí perquè ara té conseqüència vi
 ---
 
 *Patró B · 9 commits locals · cap push · cap suite · 137 tests de frontend + 55 de backend, verds.*
+
+---
+
+# ADDENDA · 2026-08-05 · el full de model petava per React #310
+
+## La causa, en una línia
+
+`accioDialeg` —el `useCallback` que F2.1 (`bed64468`) va afegir per a les quatre sortides del
+modal— va quedar declarat **per sota** del retorn primerenc `if (loading)` de `ModelSheet.jsx`.
+
+Un hook per sota d'un `return` no és cosmètic: és un hook **condicional**.
+
+- `loading` neix a `true` (`ModelSheet.jsx:142`) → el **primer** render surt per la porta de
+  `loading` i munta N hooks, sense `accioDialeg`.
+- Quan el `Promise.all` de la càrrega acaba, `setLoading(false)` → el **segon** render passa de
+  llarg el retorn i crida el hook N+1 → React #310, *«Rendered more hooks than during the
+  previous render»*.
+
+O sigui: el crash no és de la recàrrega, és de la **transició loading→loaded**, i per tant
+passava a **cada** càrrega del full. Verificat amb contraprova: amb el bundle d'abans del fix,
+`/models/164` ensenya el fallback de l'`AppErrorBoundary` a la càrrega inicial i a les tres F5.
+El 401/200 del backend i el 502 de permisos de log no hi tenien res a veure.
+
+## El fix (commit únic)
+
+Moure el bloc sencer d'`accioDialeg` **amunt**, davant del `if (loading)`. Cap altra línia
+tocada: mateixes dependències, mateix cos, mateix ordre relatiu a la resta de hooks (ja era
+l'últim). Hi queden dues marques de frontera al fitxer perquè no torni a passar:
+`ÚLTIM HOOK del component` sobre `accioDialeg` i `A partir d'aquí, RETORNS. Cap hook per sota`
+sobre el retorn de `loading`.
+
+## Cens de la resta (cap altre cas)
+
+Recorregut sencer de `ModelSheet.jsx` (9 components) i dels 5 components que F2 va crear o
+tocar — `ObrirTascaDialog` (F2.1), `SessioActiva` (F2.3), `BadgeLliurable` (F2.7),
+`TempsDeclaratForm` (F2.5), `WorkPlan` (F2.4): **cap** hook després d'un retorn primerenc, cap
+hook dins d'`if`/`&&`/ternari/bucle, cap hook fora d'un component o custom hook, cap custom hook
+nou. Els sis camps derivats de F2.0 (`ModelSheet.jsx:185-193`) són càlculs purs, no hooks.
+
+## Verificació
+
+- `npm run build` net · `node --test caraObrirTasca.test.js` → 15/15.
+- **Navegador real** (bundle de `frontend/dist` + API viva de staging via `django.test.Client`):
+  models **164**, **188 (ROSALIA, tasca `pom` albaranada)** i **174 (`pom` d'un altre tècnic)**;
+  per a cadascun: càrrega + **3 recàrregues dures** + salt Mesures → Fitxa tècnica → Escalat.
+  Zero errors de consola, zero `pageerror`, cap error boundary.
+- El modal s'ha obert de debò i s'ha premut la primària: cara **ALBARANADA** al 188 i cara
+  **CONFLICTE** al 174 → `accioDialeg` executat, sense #310. **Zero escriptures** a staging
+  (només el camí `consultar`, que per contracte no toca res).
+
+## 🚩 Trobat pel camí · NO tocat (fora de scope)
+
+- **`models_app/serializers.py:314` i `:355` llegeixen `rs.target_id`**, un FK que la migració
+  `0043` (P7, «un rol, un vincle») va **retirar**. La branca és el fallback per a un ruleset amb
+  `targets` buit, i quan hi cau peta amb `AttributeError` → **`GET /api/v1/models/<id>/` respon
+  500**. Reproduït a staging amb els models **163, 164, 182 i 188** (el 185 passa perquè té
+  targets). Bug pre-existent, aliè a F2 (la línia és de `7b0fdfd9`, 27/07) i **no tocat**: per a
+  la QA d'aquest fix s'ha esquivat només dins el harness. Cal decidir si el fallback s'esborra o
+  es reescriu sobre `targets`.
+- **Cap `Ronda` a staging** (`Ronda.objects.count() == 0`): la cara **LLIURADA** del modal no és
+  provable amb dades reals. Queda coberta pels 15 tests unitaris de `caraObrirTasca`.
+
+*Patró A + B · 1 commit · cap push · cap suite.*
