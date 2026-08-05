@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
-import { modelTasks, timers } from '../api/endpoints'
+import { OBERT, useTramObert } from '../api/tramObert'
 import { durada, estatSessio, segonsDeSessio } from '../utils/sessioActiva'
 
 /**
@@ -18,41 +18,28 @@ import { durada, estatSessio, segonsDeSessio } from '../utils/sessioActiva'
  * s'estava tancant. T4 el mou a on la decisió ja s'està prenent —en SORTIR de la superfície de
  * treball— i aquí només queda la informació, que és el que sempre va ser útil.
  *
- * ⚠️ DEUTE CONEGUT: aquest component sondeja `timers.list` pel seu compte, com fa
- * `GuardTascaOblidada`. Són dues preguntes diferents (ell vigila la INACTIVITAT, això mostra la
- * PRESÈNCIA) i tenen modes de fallada diferents, però llegeixen el mateix endpoint. Convergir-los
- * en una font única és feina de F3, anotada al report.
+ * ✅ F3.2 · DEUTE SALDAT: la lectura ja no és pròpia. Sondejava `timers.list` pel seu compte, com
+ * fa `GuardTascaOblidada`, i eren quatre peticions per minut i dos rellotges desfasats per saber
+ * una sola cosa. Ara tots dos escolten `api/tramObert`. Les PREGUNTES segueixen sent diferents
+ * —ell vigila la INACTIVITAT, això mostra la PRESÈNCIA— i per això la política es queda a cada
+ * banda: davant d'un error de xarxa el guard es manté armat i aquesta píndola s'amaga, que és el
+ * que cadascun ha de fer. De regal, en pausar-se una tasca la píndola marxa a l'instant en comptes
+ * d'anar-se'n quan li toqués el minut.
  */
 
-const REFRESC_MS = 60_000   // el mateix ritme que el guard: la sessió no canvia més de pressa
 const TICK_MS = 30_000      // només per repintar la durada; l'instant absolut mana
 
 export default function SessioActiva() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [sessio, setSessio] = useState(null)
   const [ara, setAra] = useState(() => Date.now())
-  const viu = useRef(true)
 
-  const llegeix = useCallback(() => {
-    return timers.list({ actiu: 'true' })
-      .then(res => {
-        const files = res?.data?.results ?? res?.data ?? []
-        const obert = (Array.isArray(files) ? files : []).find(f => f.fi == null)
-        if (!obert) { if (viu.current) setSessio(null); return }
-        // La font de veritat és l'ESTAT DE LA TASCA; el tram només hi posa el rellotge.
-        return modelTasks.get(obert.model_task)
-          .then(r => { if (viu.current) setSessio(estatSessio(obert, r?.data)) })
-      })
-      .catch(() => { if (viu.current) setSessio(null) })
-  }, [])
-
-  useEffect(() => {
-    viu.current = true
-    llegeix()
-    const id = setInterval(llegeix, REFRESC_MS)
-    return () => { viu.current = false; clearInterval(id) }
-  }, [llegeix])
+  // Sense dada confirmada no s'ensenya res: `estatSessio` ja diu que `null` (una píndola que
+  // menteix és pitjor que cap píndola) i qualsevol estat que no sigui OBERT hi cau igual.
+  const resultat = useTramObert()
+  const sessio = resultat?.estat === OBERT
+    ? estatSessio(resultat.tram, resultat.tasca)
+    : null
 
   useEffect(() => {
     const id = setInterval(() => setAra(Date.now()), TICK_MS)

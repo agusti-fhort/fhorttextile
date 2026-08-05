@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { modelTasks, timers } from '../api/endpoints'
 import { recordaTascaActiva } from '../api/tascaActiva'
+import { ERR_LLISTA, OBERT, refresca, subscriu } from '../api/tramObert'
 import { taskTypeLabel } from '../utils/taskType'
 import { primaryBtn, selS } from './ui/buttons'
 import { overlayBase, Z_GUARD } from './ui/overlay'
@@ -59,7 +60,6 @@ const OVERRIDE_MIN_MIN = 0.25
 
 const LLINDAR_MIN = consumeixOverride('ftt_guard_llindar_min', LLINDAR_PROD_MIN)
 const GRACIA_MIN = consumeixOverride('ftt_guard_gracia_min', GRACIA_PROD_MIN)
-const REFRESC_MS = 60_000   // re-llegeix quin és el tram obert (pot haver-ne començat un altre)
 const TICK_MS = 1_000
 
 /**
@@ -117,51 +117,55 @@ export default function GuardTascaOblidada() {
   }, [])
 
   // ── Àncora: quin tram tinc obert i des de quin senyal es compta ─────────────
-  const llegeixTram = useCallback(() => {
-    return timers.list({ actiu: 'true' })
-      .then(res => {
-        const files = res?.data?.results ?? res?.data ?? []
-        const obert = (Array.isArray(files) ? files : []).find(f => f.fi == null)
-        if (!obert) { setTram(null); setTasca(null); return undefined }
-        if (rendits.current.has(obert.id)) { setTram(null); setTasca(null); return undefined }
-        // UN TRAM OBERT NO ÉS PROVA QUE LA TASCA ESTIGUI EN CURS. A staging hi ha timers
-        // zombis (oberts fa setmanes) damunt de tasques ja pausades: armar-hi el guard el feia
-        // demanar InProgress→Paused, que la màquina d'estats rebutja amb un 400 — i com que en
-        // fallar es rellegia el tram, el mateix zombi rearmava el guard a cada tick. 282 POSTs
-        // en minuts. La font del guard és l'ESTAT DE LA TASCA; el timer només hi posa l'àncora.
-        return modelTasks.get(obert.model_task)
-          .then(r => {
-            const info = r?.data
-            if (info?.status !== 'InProgress') {
-              // Anomalia de DADES, no del guard: s'ignora en silenci per a l'usuari (no hi pot
-              // fer res) i es diu un sol cop a la consola, per si algú investiga.
-              if (!anomaliesVistes.current.has(obert.id)) {
-                anomaliesVistes.current.add(obert.id)
-                console.warn(`[guard-tasca] timer ${obert.id} obert sobre la tasca `
-                  + `${obert.model_task}, que és ${info?.status ?? 'desconeguda'} i no En curs: `
-                  + 'anomalia de dades, el guard l\'ignora.')
-              }
-              rendits.current.add(obert.id)
-              setTram(null); setTasca(null)
-              return
-            }
-            // El segell mana sobre l'obertura: confirmar el modal rearma des d'aquí.
-            const ancora = new Date(obert.last_heartbeat || obert.inici).getTime()
-            setTram(prev => {
-              if (prev && prev.timerId === obert.id && prev.ancora === ancora) return prev
-              pausant.current = false
-              return { timerId: obert.id, taskId: obert.model_task, ancora }
-            })
-            setTasca({
-              id: obert.model_task,
-              nom: taskTypeLabel(t, info.task_type_code, info.task_type_name),
-              model: info.model_codi || '',
-            })
-          })
-          .catch(() => { setTram(null); setTasca(null) })
-      })
-      .catch(() => { /* xarxa caiguda: el cron de servidor és la xarxa de sota */ })
-  }, [t])
+  // F3.2 · la LECTURA és compartida (`api/tramObert`); la POLÍTICA de sota segueix sent d'aquest
+  // guard i només d'ell. Convergir la lectura treu quatre peticions per minut i el desfasament
+  // entre els dos rellotges; convergir la política hauria perdut casos.
+  const neteja = useCallback(() => { setTram(null); setTasca(null) }, [])
+
+  // S'ESCOLTA la font, no se'n deriva: el que el guard ensenya no és una funció pura de l'última
+  // lectura. Hi pesen coses que només sap ell —els trams rendits, i el fet d'haver acabat de
+  // demanar una pausa— i per això la política va al callback de la subscripció.
+  const aplica = useCallback(resultat => {
+    // XARXA CAIGUDA: NO ES DESARMA. Que un GET falli no és prova que la tasca s'hagi tancat, i
+    // desarmar-se a cada fallada és desarmar-se justament quan el guard hauria de comptar. Es
+    // manté l'estat i el cron del servidor és la xarxa de sota. (Era el `.catch` buit d'abans.)
+    if (resultat.estat === ERR_LLISTA) return
+    if (resultat.estat !== OBERT) { neteja(); return }   // CAP · ERR_TASCA
+    const { tram: obert, tasca: info } = resultat
+    if (rendits.current.has(obert.id)) { neteja(); return }
+    // UN TRAM OBERT NO ÉS PROVA QUE LA TASCA ESTIGUI EN CURS. A staging hi ha timers zombis
+    // (oberts fa setmanes) damunt de tasques ja pausades: armar-hi el guard el feia demanar
+    // InProgress→Paused, que la màquina d'estats rebutja amb un 400 — i com que en fallar es
+    // rellegia el tram, el mateix zombi rearmava el guard a cada tick. 282 POSTs en minuts. La
+    // font del guard és l'ESTAT DE LA TASCA; el timer només hi posa l'àncora.
+    if (info?.status !== 'InProgress') {
+      // Anomalia de DADES, no del guard: s'ignora en silenci per a l'usuari (no hi pot fer res)
+      // i es diu un sol cop a la consola, per si algú investiga.
+      if (!anomaliesVistes.current.has(obert.id)) {
+        anomaliesVistes.current.add(obert.id)
+        console.warn(`[guard-tasca] timer ${obert.id} obert sobre la tasca `
+          + `${obert.model_task}, que és ${info?.status ?? 'desconeguda'} i no En curs: `
+          + 'anomalia de dades, el guard l\'ignora.')
+      }
+      rendits.current.add(obert.id)
+      neteja()
+      return
+    }
+    // El segell mana sobre l'obertura: confirmar el modal rearma des d'aquí.
+    const ancora = new Date(obert.last_heartbeat || obert.inici).getTime()
+    setTram(prev => {
+      if (prev && prev.timerId === obert.id && prev.ancora === ancora) return prev
+      pausant.current = false
+      return { timerId: obert.id, taskId: obert.model_task, ancora }
+    })
+    setTasca({
+      id: obert.model_task,
+      nom: taskTypeLabel(t, info.task_type_code, info.task_type_name),
+      model: info.model_codi || '',
+    })
+  }, [neteja, t])
+
+  useEffect(() => subscriu(aplica), [aplica])
 
   // K6 — aquest guard ja sap quina tasca duc En curs (la sondeja cada minut per armar el
   // llindar). El camí de tancament de sessió n'ha de poder llegir l'id, i no ha de muntar
@@ -169,24 +173,22 @@ export default function GuardTascaOblidada() {
   // dada que ja hi ha. Derivat de `tasca`, no una font nova.
   useEffect(() => { recordaTascaActiva(tasca?.id ?? null) }, [tasca])
 
+  // El sondeig i la re-lectura en tornar el focus viuen a `tramObert`. El que NO se'n va d'aquí
+  // és REPOSICIONAR EL RELLOTGE: si la pestanya ha estat hores en segon pla el termini pot haver
+  // vençut mentre ningú no mirava, i qui decideix és `ara` contra els instants absoluts (§1). La
+  // lectura és compartida; aquest gest és del guard.
   useEffect(() => {
-    llegeixTram()
-    const id = setInterval(llegeixTram, REFRESC_MS)
-    // En tornar el focus es rellegeix I es reposiciona el rellotge: si la pestanya ha estat
-    // hores en segon pla, el termini pot haver vençut mentre ningú no mirava.
     const alTornar = () => {
       if (document.visibilityState !== 'visible') return
       setAra(Date.now())
-      llegeixTram()
     }
     document.addEventListener('visibilitychange', alTornar)
     window.addEventListener('focus', alTornar)
     return () => {
-      clearInterval(id)
       document.removeEventListener('visibilitychange', alTornar)
       window.removeEventListener('focus', alTornar)
     }
-  }, [llegeixTram])
+  }, [])
 
   // El tick NOMÉS repinta. Cap suma acumulada: el que decideix és Date.now() (vegeu §1).
   useEffect(() => {
@@ -209,7 +211,7 @@ export default function GuardTascaOblidada() {
     modelTasks.transition(taskId, { to_status: 'Paused', auto: 'guard_30min' })
       .then(() => {
         setAvis({ type: 'ok', text: t('guard_tasca.pausada') })
-        setTram(null); setTasca(null); llegeixTram()
+        neteja(); refresca()
       })
       .catch(err => {
         // EL GUARD ES REN. No es reintenta MAI sobre aquest tram: el que ha fallat un cop
@@ -219,13 +221,13 @@ export default function GuardTascaOblidada() {
         rendeix(timerId, `transition ${err?.response?.status ?? 'sense resposta'}`)
         setAvis({ type: 'err', text: t('guard_tasca.pausa_fallida') })
       })
-  }, [haVencut, tram, llegeixTram, rendeix, t])
+  }, [haVencut, tram, neteja, rendeix, t])
 
   // Confirmar = batec: el segell nou torna com a àncora i rearma el llindar sencer.
   function confirma() {
     timers.heartbeat()
-      .then(() => llegeixTram())
-      .catch(() => { setTram(null); llegeixTram() })   // 404: la tasca ja no és En curs → resync
+      .then(() => refresca())
+      .catch(() => { setTram(null); refresca() })   // 404: la tasca ja no és En curs → resync
   }
 
   function pausaAra() {
@@ -233,7 +235,7 @@ export default function GuardTascaOblidada() {
     pausant.current = true
     const { timerId } = tram
     modelTasks.transition(tram.taskId, { to_status: 'Paused' })   // gest HUMÀ: sense marca
-      .then(() => { setTram(null); setTasca(null); llegeixTram() })
+      .then(() => { neteja(); refresca() })
       // Mateixa rendició que l'auto-pausa: si la porta ha dit que no, insistir no la farà canviar.
       .catch(err => rendeix(timerId, `pausa manual ${err?.response?.status ?? 'sense resposta'}`))
   }
