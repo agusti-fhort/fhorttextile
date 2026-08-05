@@ -730,7 +730,11 @@
       "tree_phase_prototype": "Prototype",
       "tree_phase_samples": "Samples",
       "tree_phase_preprod": "Pre-production",
-      "tree_phase_prod": "Production"
+      "tree_phase_prod": "Production",
+      "gest_declarat": "Declared time",
+      "gest_declarat_nota": "External work: time is declared, not clocked. The gesture to declare it comes with its own screen.",
+      "gest_sense_pantalla_nota": "No screen of its own yet: it starts and counts time, but transport is manual.",
+      "gest_sense_eina_nota": "No tool in the catalogue: it starts and counts time, but transport is manual."
     },
     "dashboard": {
       "err_load": "Error loading the dashboard",

@@ -4,9 +4,10 @@ import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
 import Modal from '../ui/Modal'
 import TempsDeclaratForm from './TempsDeclaratForm'
-import { models, modelTasks } from '../../api/endpoints'
+import { models, modelTasks, taskTypes } from '../../api/endpoints'
 import { formatMinutes } from '../../utils/format'
 import { taskTypeLabel } from '../../utils/taskType'
+import { destiDeTasca } from '../../utils/destiTasca'
 
 // Pla de treball — PEÇA P3 + P4a (Q4 crescut): l'encàrrec del model com a procés.
 // Consumeix dashboard.tasques (compositor enriquit a P1, JA ordenat canònic) — NO reordena.
@@ -19,40 +20,11 @@ import { taskTypeLabel } from '../../utils/taskType'
 
 const API = import.meta.env.VITE_API_URL || ''
 
-// task_type_code → ruta de l'eina al frontend. Mini-taula LOCAL (mirall del kanban
-// KanbanTasks.jsx pom/tech_sheet/size_check; duplicació mínima conscient, deute anotat a P0 §B —
-// NO importem ACTIONS del kanban). null = tipus sense eina → transport manual (§4).
-function toolRoute(task, modelId) {
-  switch (task.task_type_code) {
-    // J1+: "Definició POM" (pom) → el TAB Mesures en mode ENTRADA (mode=entry): obre la genesi/wizard
-    // d'entrada per definir/afegir POMs, encara que el model JA tingui mesures (no consulta). Sense
-    // task_id (la definició de POMs no en porta). Ja NO la pàgina standalone.
-    case 'pom':        return `/models/${modelId}?tab=Mesures&mode=entry`
-    case 'tech_sheet': return `/models/${modelId}/fitxa?task_id=${task.id}`
-    // J1: "Mesurar prenda" (size_check) → el TAB Mesures del ModelSheet amb task_id (el tab el consumeix
-    // sense encunyar-ne cap de nova). Ja NO va a la pàgina standalone (jubilada).
-    case 'size_check': return `/models/${modelId}?tab=Mesures&task_id=${task.id}`
-    // "Escalat" (grading = definir la regla de gradació) → editor propagat editable, amb task_id
-    // (compta temps). scaling ("Escalat CAD" = aplicar al patró) és tasca diferent, eina futura → null.
-    case 'grading':    return `/models/${modelId}/escalat?task_id=${task.id}`
-    // W2: el patró s'anota al TALLER (POMs i costures sobre la geometria); el tab Patró
-    // ha quedat de porta i ja no hi ha eines. Amb task_id: el taller REPRÈN aquesta tasca
-    // en lloc d'encunyar-ne una de nova, igual que fa Mesures.
-    case 'pattern_digit':
-    case 'pattern_cad': return `/models/${modelId}/patro/taller?task_id=${task.id}`
-    default:           return null
-  }
-}
-
-function toolTab(task) {
-  switch (task.task_type_code) {
-    case 'pom':
-    case 'size_check':
-      return 'Mesures'
-    default:
-      return null
-  }
-}
+// T2 — la mini-taula local de destins (sis casos i un `default: null`) marxa d'aquí. Emmirallava
+// la del Kanban, que ja no existeix (`fc98cab6`), i la seva bessona de `TaskTree`; el que decideix
+// on va una tasca és el CATÀLEG (`tipus`/`eina`/`mode`), traduït pel resolutor únic
+// `utils/destiTasca`. Aquí només cal creuar la tasca amb el seu tipus per `code` — el compositor
+// del dashboard no porta `eina`/`mode`, o sigui que el catàleg es demana a part i es creua.
 
 // task_type.code → icona Tabler (no hi havia mapa compartit; design system).
 const TASK_ICON = {
@@ -208,6 +180,28 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
 
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
 
+  // El CATÀLEG, per `code`. El compositor del dashboard no porta `eina`/`mode` (només `code`),
+  // o sigui que es demana a part i es creua aquí. Mentre no ha arribat, cap targeta navega —
+  // que és millor que navegar a un destí endevinat.
+  const [tipusPerCode, setTipusPerCode] = useState({})
+  useEffect(() => {
+    let alive = true
+    taskTypes.list({ page_size: 200 })
+      .then(res => {
+        const d = res?.data
+        const llista = Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : [])
+        if (!alive) return
+        const map = {}
+        for (const tt of llista) map[tt.code] = tt
+        setTipusPerCode(map)
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  const desti = (task) => destiDeTasca(tipusPerCode[task.task_type_code],
+    { modelId, taskId: task.id })
+
   const list = Array.isArray(tasques) ? tasques : []
   const isMine = (task) => task.assignee_id != null && task.assignee_id === myProfileId
 
@@ -259,8 +253,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   // idempotent al backend + navega (Done = reobertura §3.8). Sense eina: InProgress sense navegar (§4)
   // — la targeta passa a "en curs".
   function playMine(task) {
-    const route = toolRoute(task, modelId)
-    const tab = toolTab(task)
+    const teDesti = !!desti(task)
     // El backend decideix si cal crear/reobrir/claimar o fer no-op. Evita basar-se en l'estat
     // possiblement obsolet de la targeta i no pot demanar InProgress→InProgress.
     models.openTask(modelId, task.task_type_code)
@@ -270,9 +263,12 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
           id: res?.data?.task_id ?? task.id,
           status: res?.data?.status ?? task.status,
         }
-        if (route) {
-          if (tab) onOpenTab?.(tab)
-          navigate(toolRoute(openedTask, modelId))
+        // El destí es recalcula amb la tasca JA oberta: el task_id de la resposta és el que
+        // ha de viatjar a la URL (pot ser una tasca acabada de crear o la de la ronda viva).
+        const d = teDesti ? desti(openedTask) : null
+        if (d) {
+          if (d.tab) onOpenTab?.(d.tab)
+          navigate(d.route)
         } else {
           onRefresh?.()
         }
@@ -357,7 +353,7 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
       ) : (
         <div style={cardsGrid}>
           {list.map(task => (
-            <TaskCard key={task.id} task={task} mine={isMine(task)} hasToolRoute={Boolean(toolRoute(task, modelId))}
+            <TaskCard key={task.id} task={task} mine={isMine(task)} hasToolRoute={Boolean(desti(task))}
               onPlay={handlePlay} onPause={handlePause} onStop={handleStop}
               onDeclarar={setDeclarant} />
           ))}

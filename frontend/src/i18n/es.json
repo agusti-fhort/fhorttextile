@@ -730,7 +730,11 @@
       "tree_phase_prototype": "Prototipo",
       "tree_phase_samples": "Muestras",
       "tree_phase_preprod": "Preproducción",
-      "tree_phase_prod": "Producción"
+      "tree_phase_prod": "Producción",
+      "gest_declarat": "Tiempo declarado",
+      "gest_declarat_nota": "Trabajo externo: el tiempo se declara, no se cronometra. El gesto de declararlo llega con su propia pantalla.",
+      "gest_sense_pantalla_nota": "Aún no tiene pantalla propia: se inicia y cuenta tiempo, pero el transporte es manual.",
+      "gest_sense_eina_nota": "Sin herramienta en el catálogo: se inicia y cuenta tiempo, pero el transporte es manual."
     },
     "dashboard": {
       "err_load": "Error al cargar el dashboard",

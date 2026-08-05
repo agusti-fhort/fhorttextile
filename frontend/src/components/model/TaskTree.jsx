@@ -5,6 +5,10 @@ import Badge from '../ui/Badge'
 import { models, taskTypes } from '../../api/endpoints'
 import { taskTypeLabel } from '../../utils/taskType'
 import { formatMinutes } from '../../utils/format'
+import {
+  GEST_DECLARAT, GEST_EINA, GEST_SENSE_EINA, GEST_SENSE_PANTALLA,
+  destiDeTasca, esOferible, gestDeTasca,
+} from '../../utils/destiTasca'
 
 // B2/TL1 — Arbre per INICIAR tasques des del Model Sheet (fase → TaskType → targeta + "Iniciar").
 // Targetes amb el MATEIX llenguatge visual que el WorkPlan del Dashboard. Tres estats:
@@ -35,20 +39,10 @@ const TASK_ICON = {
 }
 const STATUS_VARIANT = { Done: 'ok', InProgress: 'gold', Paused: 'warn', Pending: 'gray' }
 
-// Patró d'eina (duplicació mínima conscient, mirall de WorkPlan.jsx): code → ruta + tab.
-function toolRoute(code, taskId, modelId) {
-  switch (code) {
-    case 'pom':        return `/models/${modelId}?tab=Mesures&mode=entry`
-    case 'tech_sheet': return `/models/${modelId}/fitxa?task_id=${taskId}`
-    case 'size_check': return `/models/${modelId}?tab=Mesures&task_id=${taskId}`
-    case 'grading':    return `/models/${modelId}/escalat?task_id=${taskId}`
-    // W2 (mirall de WorkPlan): el patró s'anota al TALLER, reprenent la tasca.
-    case 'pattern_digit':
-    case 'pattern_cad': return `/models/${modelId}/patro/taller?task_id=${taskId}`
-    default:           return null
-  }
-}
-function toolTab(code) { return (code === 'pom' || code === 'size_check') ? 'Mesures' : null }
+// T2 — el destí ja no es cableja aquí: el diu el CATÀLEG (`tipus`/`eina`/`mode`), traduït pel
+// resolutor únic `utils/destiTasca`. El `switch (code)` que hi havia (sis casos i un default
+// null) era la causa que «Revisió de patró CAD» no fes res: el catàleg tenia la resposta i
+// ningú l'hi preguntava.
 
 const sectionTitle = {
   fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
@@ -96,28 +90,31 @@ export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // T3: auditoria — avisa (NO silencia) si algun TaskType actiu té `eina` però cap ruta d'eina
-  // mapejada a toolRoute. Aquests s'inicien + refresquen sense navegar (eina futura: patró, bom…).
-  useEffect(() => {
-    if (!types.length) return
-    const unmapped = types.filter(tt => tt.eina && !toolRoute(tt.code, 1, modelId))
-    if (unmapped.length) {
-      console.warn('[TaskTree] TaskTypes actius amb `eina` sense ruta d\'eina mapejada (s\'inicien sense navegar):',
-        unmapped.map(tt => `${tt.code}→${tt.eina}`).join(', '))
-    }
-  }, [types, modelId])
+  // L'auditoria de B1 escrivia a la consola els tipus amb `eina` i sense ruta, i ningú no la
+  // llegia mai (T0 §S-3). Ara el forat no es denuncia per consola: es diu a la targeta, que és
+  // on el tècnic el troba.
 
   const start = (tt) => {
+    const gest = gestDeTasca(tt)
+    // EXTERNA-LLIURE — el temps es DECLARA, no es cronometra: aquí no s'obre cap tasca. Fins
+    // avui aquest botó cridava `open-task`, que posa la tasca En curs i obre un TimerEntrada
+    // real; com que no hi ha cap pantalla on treballar ni cap batec que el sostingui, el que
+    // quedava era un rellotge corrent sol. El gest de declarar arriba a T3, amb la seva maqueta.
+    if (gest === GEST_DECLARAT) return
+
     setError(''); setStarting(tt.code)
     models.openTask(modelId, tt.code)
       .then(res => {
         onTaskStarted?.()
-        const taskId = res?.data?.task_id
-        const route = toolRoute(tt.code, taskId, modelId)
-        if (route) {
-          const tab = toolTab(tt.code)
-          if (tab) onOpenTab?.(tab)
-          navigate(route)
+        // Sense superfície no es navega. Iniciar-la segueix sent útil —declara la intenció i
+        // engega el compte— però el transport encara és manual, i portar el tècnic a una
+        // pantalla que no fa el que la targeta promet seria pitjor que no moure'l.
+        const desti = gest === GEST_EINA
+          ? destiDeTasca(tt, { modelId, taskId: res?.data?.task_id })
+          : null
+        if (desti) {
+          if (desti.tab) onOpenTab?.(desti.tab)
+          navigate(desti.route)
         }
       })
       .catch(err => {
@@ -128,8 +125,13 @@ export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTa
   }
 
   // Agrupa per fase respectant l'ordre canònic; les fases sense tipus no es mostren.
+  // `esOferible` filtra pel CATÀLEG (`visible`), no per cap llista de codis d'aquí: qui decideix
+  // què s'ofereix és el catàleg, i amagar-ne un és una fila de BD, no un desplegament.
   const byPhase = {}
-  for (const tt of types) { (byPhase[tt.fase] = byPhase[tt.fase] || []).push(tt) }
+  for (const tt of types) {
+    if (!esOferible(tt)) continue
+    ;(byPhase[tt.fase] = byPhase[tt.fase] || []).push(tt)
+  }
   const ordered = [...PHASE_ORDER, ...Object.keys(byPhase).filter(p => !PHASE_ORDER.includes(p))]
     .filter(p => byPhase[p] && byPhase[p].length)
   // Creuament TaskType.code → ModelTask existent (status + assignee) via el compositor del dashboard.
@@ -144,6 +146,14 @@ export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTa
     const faded = otherTech || !exists            // estats 2 i 3
     const icon = TASK_ICON[tt.code] || 'ti-checkbox'
     const busy = starting === tt.code
+    // El gest de la targeta surt del catàleg. Cada un que no navega porta la seva nota: el
+    // tècnic ha de saber PER QUÈ el botó no el mou, no quedar-se mirant una targeta muda.
+    const gest = gestDeTasca(tt)
+    const NOTA = {
+      [GEST_DECLARAT]: 'model_sheet.tasks.gest_declarat_nota',
+      [GEST_SENSE_PANTALLA]: 'model_sheet.tasks.gest_sense_pantalla_nota',
+      [GEST_SENSE_EINA]: 'model_sheet.tasks.gest_sense_eina_nota',
+    }[gest]
     return (
       <div key={tt.code} style={{
         flex: '1 1 220px', maxWidth: 320, minWidth: 0,
@@ -174,18 +184,24 @@ export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTa
 
         {/* Peu: botó Iniciar + badge d'estat (si existeix) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-          <button type="button" disabled={!!starting} onClick={() => start(tt)}
-            title={t('model_sheet.tasks.tree_start_task')}
+          <button type="button" disabled={!!starting || gest === GEST_DECLARAT}
+            onClick={() => start(tt)}
+            title={t(NOTA || 'model_sheet.tasks.tree_start_task')}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              border: otherTech ? '1px solid var(--border)' : '1px solid var(--gold)',
+              border: (otherTech || gest === GEST_DECLARAT) ? '1px solid var(--border)' : '1px solid var(--gold)',
               borderRadius: 6, background: 'transparent',
-              color: otherTech ? 'var(--text-muted)' : 'var(--gold)',
+              color: (otherTech || gest === GEST_DECLARAT) ? 'var(--text-muted)' : 'var(--gold)',
               fontFamily: 'inherit', fontSize: 'var(--fs-body)', fontWeight: 600,
-              padding: '5px 12px', cursor: starting ? 'default' : 'pointer', opacity: busy ? 0.5 : 1,
+              padding: '5px 12px',
+              cursor: (starting || gest === GEST_DECLARAT) ? 'default' : 'pointer',
+              opacity: busy ? 0.5 : 1,
             }}>
-            <i className="ti ti-player-play" style={{ fontSize: 14 }} />
-            {t('model_sheet.tasks.tree_start_task')}
+            <i className={`ti ${gest === GEST_DECLARAT ? 'ti-clock-edit' : 'ti-player-play'}`}
+              style={{ fontSize: 14 }} />
+            {gest === GEST_DECLARAT
+              ? t('model_sheet.tasks.gest_declarat')
+              : t('model_sheet.tasks.tree_start_task')}
           </button>
           {exists && (
             <Badge variant={STATUS_VARIANT[mt.status] || 'gray'} style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -193,6 +209,11 @@ export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTa
             </Badge>
           )}
         </div>
+        {NOTA && (
+          <div style={{ marginTop: 6, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', whiteSpace: 'normal' }}>
+            {t(NOTA)}
+          </div>
+        )}
       </div>
     )
   }

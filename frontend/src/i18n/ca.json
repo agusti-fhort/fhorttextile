@@ -730,7 +730,11 @@
       "tree_phase_prototype": "Prototip",
       "tree_phase_samples": "Mostres",
       "tree_phase_preprod": "Preproducció",
-      "tree_phase_prod": "Producció"
+      "tree_phase_prod": "Producció",
+      "gest_declarat": "Temps declarat",
+      "gest_declarat_nota": "Feina externa: el temps es declara, no es cronometra. El gest de declarar-lo arriba amb la pantalla pròpia.",
+      "gest_sense_pantalla_nota": "Encara no té pantalla pròpia: s'inicia i compta temps, però el transport és manual.",
+      "gest_sense_eina_nota": "Sense eina al catàleg: s'inicia i compta temps, però el transport és manual."
     },
     "dashboard": {
       "err_load": "Error carregant el dashboard",
