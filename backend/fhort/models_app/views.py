@@ -1976,22 +1976,23 @@ def set_measurements_view(request, model_id):
                 # del payload; qui no els digui rep el literal de sempre). Amb el literal fix
                 # que hi havia, dues germanes queien sobre la mateixa fila.
                 capa, instancia = _identitat_de_mesura(m)
-                _, was_created = BaseMeasurement.objects.update_or_create(
-                    model=model, pom=pom,
-                    capa=capa, instancia=instancia,
-                    defaults={
-                        'base_value_cm': float(value),
-                        'notes': m.get('notes', ''),
-                        'nom_fitxa': m.get('nom_fitxa', '') or '',
-                        'origen': 'MANUAL',
-                        # Re-entrar un valor reactiva una fila prèviament eliminada.
-                        'is_active': True,
-                        # Sprint 5B.1: copy tolerance from the catalogue POM.
-                        'tolerancia_minus': pom.tolerancia_default_minus,
-                        'tolerancia_plus': pom.tolerancia_default_plus,
-                    }
-                )
-                if was_created: created += 1
+                # L'ORIGEN I LES TOLERÀNCIES NO SÓN EFECTE SECUNDARI D'AQUESTA ESCRIPTURA
+                # (v. `_procedencia_de_mesura`): abans anaven als `defaults` de l'upsert i
+                # això les reescrivia a CADA fila del payload, canviés el valor o no.
+                bm = BaseMeasurement.objects.filter(
+                    model=model, pom=pom, capa=capa, instancia=instancia).first()
+                es_nova = bm is None
+                if es_nova:
+                    bm = BaseMeasurement(model=model, pom=pom, capa=capa, instancia=instancia)
+                valor_nou = float(value)
+                _procedencia_de_mesura(bm, m, pom, valor_nou, es_nova)
+                bm.base_value_cm = valor_nou
+                bm.notes = m.get('notes', '')
+                bm.nom_fitxa = m.get('nom_fitxa', '') or ''
+                # Re-entrar un valor reactiva una fila prèviament eliminada.
+                bm.is_active = True
+                bm.save()
+                if es_nova: created += 1
                 else: updated += 1
             except POMMaster.DoesNotExist:
                 errors.append(f'POMMaster {pom_id} no trobat')
@@ -2133,7 +2134,8 @@ def gravar_pom_view(request, model_id):
                 bm = BaseMeasurement.objects.filter(
                     model=model, pom=pom,
                     capa=capa, instancia=instancia).first()
-                if bm is None:
+                es_nova = bm is None
+                if es_nova:
                     bm = BaseMeasurement(
                         model=model, pom=pom,
                         capa=capa, instancia=instancia,
@@ -2141,13 +2143,14 @@ def gravar_pom_view(request, model_id):
                     created += 1
                 else:
                     updated += 1
+                # Mateixa llei que l'altra porta (v. `_procedencia_de_mesura`): l'origen i les
+                # toleràncies NO són efecte secundari de desar la taula. Es calcula ABANS
+                # d'escriure el valor nou, perquè la regla compara amb el que hi havia.
+                _procedencia_de_mesura(bm, m, pom, value, es_nova)
                 bm.base_value_cm = value
                 bm.notes = m.get('notes', '') or ''
                 bm.nom_fitxa = m.get('nom_fitxa', '') or ''
-                bm.origen = 'MANUAL'
                 bm.is_active = True
-                bm.tolerancia_minus = pom.tolerancia_default_minus
-                bm.tolerancia_plus = pom.tolerancia_default_plus
                 bm._changed_by = request.user
                 bm._motiu = 'gravar_pom'
                 bm.save()
@@ -3184,6 +3187,54 @@ def _identitat_de_mesura(m):
     """
     from fhort.pom.models import MeasurementLayer
     return (m.get('capa') or MeasurementLayer.SLUG_DEFECTE, m.get('instancia') or '')
+
+
+#: Sentinella per distingir «el payload no en diu res» de «el payload diu None».
+_NO_DIT = object()
+
+
+def _procedencia_de_mesura(bm, m, pom, valor_nou, es_nova):
+    """L'ORIGEN I LES TOLERÀNCIES D'UNA FILA: què s'hi toca i, sobretot, què NO (Agus, 05/08).
+
+    ── EL DEFECTE ─────────────────────────────────────────────────────────────────────
+    Les dues portes d'escriptura massiva d'aquest fitxer (`set_measurements_view` i
+    `gravar_pom_view`) forçaven `origen='MANUAL'` i reescrivien les dues toleràncies des del
+    catàleg a **cada fila del payload**, hi hagués canviat el valor o no. Efecte: qualsevol
+    escriptura que passés per allà —encara que només vingués a moure una fila de capa o a
+    reenviar la taula sencera sense tocar cap xifra— convertia en `MANUAL` una base que una
+    sessió de size check havia deixat `CHECKED`, i li tornava les toleràncies del catàleg
+    esborrant les que algú hagués afinat.
+
+    ── PER QUÈ IMPORTA ────────────────────────────────────────────────────────────────
+    Trenca la PRECEDÈNCIA TEMPORAL: l'última mesura escrita és la veritat i el seu origen ha
+    de ser el que li correspon. Un `MANUAL` fals diu «això ho va teclejar algú» sobre una
+    xifra que va sortir d'una presa de proto, i qui després auditi «qui va mesurar això» rep
+    una resposta falsa que ja no es pot desfer —`origen` el sobreescriu el canvi següent i
+    no és append-only (`MeasurementChangeLog` sí, i és qui salva els mobles).
+
+    ── LA REGLA ───────────────────────────────────────────────────────────────────────
+    · Si el payload ho diu EXPLÍCITAMENT, mana el payload. Sempre.
+    · Si no ho diu i la fila NEIX, `MANUAL` i les toleràncies del catàleg: és el naixement,
+      no hi ha res a trepitjar.
+    · Si no ho diu i la fila JA HI ÉS:
+        - amb el valor CANVIAT → `MANUAL` (algú l'acaba de teclejar: l'origen li correspon);
+        - amb el valor IGUAL   → **no es toca res**. Aquesta escriptura no ha mesurat res.
+    Les toleràncies, un cop la fila existeix, no es reescriuen mai des del catàleg: són
+    patrimoni de la fila i el catàleg només les sembra.
+    """
+    origen = m.get('origen', _NO_DIT)
+    if origen is not _NO_DIT and origen:
+        bm.origen = origen
+    elif es_nova or bm.base_value_cm != valor_nou:
+        bm.origen = 'MANUAL'
+
+    for camp, defecte in (('tolerancia_minus', pom.tolerancia_default_minus),
+                          ('tolerancia_plus', pom.tolerancia_default_plus)):
+        dit = m.get(camp, _NO_DIT)
+        if dit is not _NO_DIT:
+            setattr(bm, camp, dit)
+        elif es_nova:
+            setattr(bm, camp, defecte)
 
 
 def _write_base(model, pom, valor, auth_user, motiu, capa=None, instancia=''):
