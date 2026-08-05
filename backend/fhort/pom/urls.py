@@ -87,4 +87,14 @@ try:
 except Exception:
     _dictionary_paths = []
 
-urlpatterns = _sprint7_pom_paths + _size_map_paths + _dictionary_paths + router.urls
+# El VOCABULARI D'IDENTITAT d'una mesura (capes + instàncies). Un sol GET perquè les dues
+# taules es miren sempre juntes. NO és el diccionari de nomenclatura del client (a sobre).
+try:
+    from .identity_views import measurement_identity_vocabulary_view
+    _identity_paths = [
+        path('mesures/diccionari/', measurement_identity_vocabulary_view),
+    ]
+except Exception:
+    _identity_paths = []
+
+urlpatterns = _sprint7_pom_paths + _size_map_paths + _dictionary_paths + _identity_paths + router.urls
