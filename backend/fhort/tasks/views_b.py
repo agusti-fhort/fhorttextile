@@ -1417,6 +1417,76 @@ def temps_declarat_view(request, pk):
 
 @api_view(['POST'])
 @permission_classes([_ExecuteTasks])
+def crono_declarat_view(request, pk):
+    """POST /api/v1/model-tasks/<pk>/crono/  ·  {accio: engegar|aturar|descartar|corregir}
+
+    T3 · LA PORTA DEL CRONO DECLARAT. La maqueta aprovada mana una cosa per sobre de tota la
+    resta: «viu al servidor; sobreviu a recarregar, canviar de pestanya i tancar el navegador».
+    Per això aquí no hi ha cap cronòmetre de navegador que després desa: `engegar` obre un
+    `TimerEntrada` REAL amb `origen='declarat'`, i el que el navegador fa és pintar-lo.
+
+    Les quatre accions són les quatre de la maqueta, i cap d'elles tanca la tasca: acabar-la és
+    un gest propi (T4). `corregir` accepta {minuts} XOR {inici, fi}, la mateixa regla de D-2.
+    """
+    from django.utils.dateparse import parse_datetime
+
+    from .models import ModelTask, TimerEntrada
+    from .services_r import (TempsDeclaratError, atura_crono_declarat, corregeix_tram_declarat,
+                             descarta_tram_declarat, engega_crono_declarat)
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        task = ModelTask.objects.select_related('task_type').get(pk=pk)
+    except ModelTask.DoesNotExist:
+        return Response({'error': 'ModelTask no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    dades = request.data or {}
+    accio = dades.get('accio')
+
+    def _tram_per_id():
+        """El tram sobre el qual s'actua. Sempre d'AQUESTA tasca: un id de fora no val."""
+        tram = TimerEntrada.objects.filter(pk=dades.get('timer_id'), model_task=task).first()
+        if tram is None:
+            raise TempsDeclaratError('Tram no trobat en aquesta tasca.')
+        return tram
+
+    try:
+        if accio == 'engegar':
+            tram = engega_crono_declarat(task, profile)
+        elif accio == 'aturar':
+            tram = atura_crono_declarat(task, profile)
+        elif accio == 'descartar':
+            descarta_tram_declarat(_tram_per_id())
+            return Response({'descartat': True, 'model_task': task.pk},
+                            status=http_status.HTTP_200_OK)
+        elif accio == 'corregir':
+            inici, fi = dades.get('inici'), dades.get('fi')
+            tram = corregeix_tram_declarat(
+                _tram_per_id(),
+                minuts=dades.get('minuts'),
+                inici=parse_datetime(inici) if inici else None,
+                fi=parse_datetime(fi) if fi else None)
+        else:
+            return Response({'error': "`accio` ha de ser engegar|aturar|descartar|corregir.",
+                             'code': 'accio_desconeguda'},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+    except TempsDeclaratError as e:
+        return Response({'error': str(e), 'code': 'crono_invalid'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+
+    task.refresh_from_db()
+    return Response({'timer_id': tram.pk, 'model_task': task.pk, 'status': task.status,
+                     'inici': tram.inici.isoformat(),
+                     'fi': tram.fi.isoformat() if tram.fi else None,
+                     'minuts': tram.minuts, 'origen': tram.origen},
+                    status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
 def obrir_ronda_view(request, model_id):
     """POST /api/v1/models/<model_id>/obrir-ronda/  ·  {motiu, codes: [...]}
 

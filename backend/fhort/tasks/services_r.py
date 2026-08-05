@@ -317,3 +317,154 @@ def declara_temps(task, profile, *, minuts=None, inici=None, fi=None):
     return TimerEntrada.objects.create(
         model_task=task, tecnic=profile, inici=inici, fi=fi, minuts=minuts,
         actiu=False, origen=TimerEntrada.ORIGEN_DECLARAT)
+
+
+# ── T3 · D-2 · EL CRONO DE TEMPS DECLARAT ────────────────────────────────────
+#
+# `declara_temps` (F1.7) cobreix «ja he treballat, apunta-ho». El que faltava és l'altra meitat:
+# «començo ARA i encara no sé quant durarà». La maqueta aprovada
+# (`ops/maquetes/maqueta_temps_declarat_i_modal_v1.html`) ho fixa en quatre gestos —engegar,
+# aturar, acceptar/descartar, corregir— i en una frase que mana sobre tot el disseny:
+#
+#     «Viu al servidor: sobreviu a recarregar, canviar de pestanya i tancar el navegador.»
+#
+# Per això el crono NO és un cronòmetre de navegador que després desa: és un `TimerEntrada` OBERT
+# de debò, amb `origen='declarat'` des del primer segon. El navegador només el pinta. I per això
+# s'engega per la MATEIXA porta que tota la resta (`transition_task`): així hereta l'exclusió
+# un-InProgress-per-tècnic, el log de transicions i l'auto-assignació, en comptes de tenir-ne una
+# versió pròpia que caldria mantenir en paral·lel.
+
+def _tram_obert(task):
+    """El tram obert d'una tasca, o None. Invariant del sistema: n'hi ha ≤1."""
+    from .models import TimerEntrada
+    return TimerEntrada.objects.filter(model_task=task, fi__isnull=True, actiu=True).first()
+
+
+def engega_crono_declarat(task, profile):
+    """Obre un tram DECLARAT viu sobre una tasca externa. Idempotent.
+
+    Merita el model, com el primer batec d'escriptura fa a les internes (D-10): un model que
+    comença per una tasca externa també ha de meritar, i aquí no hi haurà cap escriptura que
+    ho dispari. La meritació passa per `_meritar_si_cal`, que ja porta el guard d'idempotència
+    — les tres funcions de facturació no es toquen.
+
+    Retorna el `TimerEntrada` obert.
+    """
+    from .models import TimerEntrada
+    from .services_batec import _meritar_si_cal
+    from .services_c import TransitionError, _open_timer, transition_task
+
+    if task.task_type.tipus != 'Externa-lliure':
+        raise TempsDeclaratError(
+            'El crono declarat és per a tasques Externa-lliure: les internes es mesuren soles.')
+    if profile is None:
+        raise TempsDeclaratError('Cal un perfil de tècnic per engegar el crono.')
+
+    obert = _tram_obert(task)
+    if obert is not None:
+        # Ja n'hi ha un de viu: engegar dos cops no obre dos trams. Si era MESURAT (ve d'una
+        # porta antiga), es queda com està: convertir-lo seria reescriure temps ja comptat.
+        return obert
+
+    if task.status != 'InProgress':
+        try:
+            transition_task(task, 'InProgress', profile, origen=TimerEntrada.ORIGEN_DECLARAT)
+        except TransitionError as e:
+            raise TempsDeclaratError(str(e))
+        tram = _tram_obert(task)
+    else:
+        # En curs i sense tram obert: l'anomalia que el guard ja anota i no pot recollir. Aquí es
+        # tapa obrint el tram que falta, sense inventar cap transició que la màquina prohibeix.
+        tram = _open_timer(task, profile, origen=TimerEntrada.ORIGEN_DECLARAT)
+
+    _meritar_si_cal(task)
+    return tram
+
+
+def atura_crono_declarat(task, profile):
+    """Tanca la sessió declarada i deixa la tasca PAUSADA, amb el tram a punt de confirmar.
+
+    La tasca no es tanca mai per aquí: acabar-la és un gest propi (T4). El tram queda desat —
+    el crono viu al servidor— i el tècnic encara pot descartar-lo o corregir-lo.
+
+    Retorna el `TimerEntrada` tancat.
+    """
+    from .models import TimerEntrada
+    from .services_c import TransitionError, transition_task
+
+    tram = _tram_obert(task)
+    if tram is None:
+        raise TempsDeclaratError('Aquesta tasca no té cap crono en marxa.')
+    if tram.origen != TimerEntrada.ORIGEN_DECLARAT:
+        raise TempsDeclaratError('El tram obert no és declarat: atura\'l pel transport normal.')
+
+    if task.status == 'InProgress':
+        try:
+            transition_task(task, 'Paused', profile)   # tanca el tram amb la seva durada
+        except TransitionError as e:
+            raise TempsDeclaratError(str(e))
+    tram.refresh_from_db()
+    return tram
+
+
+def descarta_tram_declarat(tram):
+    """Esborra un tram declarat ja tancat: «no queda cap temps registrat per aquesta sessió».
+
+    Només trams DECLARATS i només tancats: esborrar temps mesurat seria esborrar evidència, i
+    esborrar-ne un de viu seria una altra manera d'aturar-lo.
+    """
+    from .models import TimerEntrada
+
+    if tram.origen != TimerEntrada.ORIGEN_DECLARAT:
+        raise TempsDeclaratError('Només es descarta temps declarat.')
+    if tram.fi is None:
+        raise TempsDeclaratError('Atura el crono abans de descartar-lo.')
+    tram.delete()
+
+
+def corregeix_tram_declarat(tram, *, minuts=None, inici=None, fi=None):
+    """Reescriu la mesura d'un tram declarat: durada O BÉ franja, mai les dues (D-2).
+
+    És la mateixa regla que `declara_temps` i es valida igual, perquè és la mateixa pregunta feta
+    en un altre moment: quant hi has dedicat de debò.
+    """
+    import datetime as _dt
+
+    from django.utils import timezone
+
+    from .models import TimerEntrada
+    from .services_i import MAX_MINUTS_TRAM
+
+    if tram.origen != TimerEntrada.ORIGEN_DECLARAT:
+        raise TempsDeclaratError('Només es corregeix temps declarat.')
+    if tram.fi is None:
+        raise TempsDeclaratError('Atura el crono abans de corregir-lo.')
+
+    te_minuts = minuts is not None
+    te_franja = inici is not None or fi is not None
+    if te_minuts == te_franja:
+        raise TempsDeclaratError('Cal {minuts} O BÉ {inici, fi}, mai els dos ni cap dels dos.')
+
+    if te_minuts:
+        try:
+            minuts = int(minuts)
+        except (TypeError, ValueError):
+            raise TempsDeclaratError('`minuts` ha de ser un enter.')
+        fi = tram.fi or timezone.now()
+        inici = fi - _dt.timedelta(minutes=minuts)
+    else:
+        if inici is None or fi is None:
+            raise TempsDeclaratError('La franja necessita `inici` I `fi`.')
+        if fi <= inici:
+            raise TempsDeclaratError('`fi` ha de ser posterior a `inici`.')
+        minuts = int((fi - inici).total_seconds() // 60)
+
+    if minuts <= 0:
+        raise TempsDeclaratError('Un tram declarat ha de durar com a mínim un minut.')
+    if minuts > MAX_MINUTS_TRAM:
+        raise TempsDeclaratError(
+            f'Un tram declarat no pot superar {MAX_MINUTS_TRAM} minuts ({MAX_MINUTS_TRAM // 60} h).')
+
+    tram.inici, tram.fi, tram.minuts = inici, fi, minuts
+    tram.save(update_fields=['inici', 'fi', 'minuts'])
+    return tram

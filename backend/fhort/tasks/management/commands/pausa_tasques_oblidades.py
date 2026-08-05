@@ -14,6 +14,10 @@ Llindar 40 min > els 30 del navegador a posta: així el camí normal és sempre 
 dóna 3 min a la persona per dir-hi la seva) i el cron només recull el que aquell no ha pogut
 tancar. Es mesura des de `last_heartbeat`, o des d'`inici` si no n'hi ha hagut mai cap.
 
+**Els trams DECLARATS (`origen='declarat'`) no els toca** (T3): no tenen batec per definició —la
+feina externa passa fora de l'eina— i aquest guard mesura silenci. Matar-los als 40 min seria
+pausar el tècnic a mitja feina per no haver fet res que aquí es pugui veure.
+
 Ús:  manage.py pausa_tasques_oblidades [--dry-run] [--tenant SCHEMA] [--minuts N]
 Idempotent: un cop pausada, la tasca ja no té tram obert i la següent passada no la veu.
 
@@ -64,8 +68,15 @@ class Command(BaseCommand):
         for tenant in tenants:
             with schema_context(tenant.schema_name):
                 ara = timezone.now()
+                # T3 — ELS TRAMS DECLARATS QUEDEN FORA, i no és una excepció de conveniència:
+                # aquest guard mesura SILENCI (temps sense senyal de vida), i un tram declarat no
+                # en té ni n'ha de tenir. La feina externa es fa fora de l'eina —dibuixant a
+                # Polipattern, parlant amb disseny— i ningú no hi bat res. Sense aquesta
+                # exclusió, la cron mataria cada crono declarat als 40 minuts, a mitja feina, i
+                # el tècnic trobaria la tasca pausada sola sense haver fet res mal fet.
                 oberts = (TimerEntrada.objects
                           .filter(fi__isnull=True, actiu=True, model_task__status='InProgress')
+                          .exclude(origen=TimerEntrada.ORIGEN_DECLARAT)
                           .select_related('model_task', 'model_task__task_type', 'tecnic')
                           .order_by('inici'))
                 pausades = 0

@@ -16,12 +16,15 @@ ALLOWED = {
 }
 
 
-def _open_timer(task, profile):
+def _open_timer(task, profile, origen=TimerEntrada.ORIGEN_MESURAT):
     # Invariant ≤1 timer obert per tasca: tanca qualsevol obert previ abans d'obrir-ne un de nou
     # (defensa contra fuites; en condicions normals no n'hi ha cap d'obert en entrar a InProgress).
+    #
+    # T3 — `origen` viatja des de la porta: un tram DECLARAT neix declarat, no es converteix
+    # després. El default deixa tots els camins d'abans exactament com estaven.
     _close_open_timer(task)
-    TimerEntrada.objects.create(model_task=task, tecnic=profile,
-                                inici=timezone.now(), actiu=True)
+    return TimerEntrada.objects.create(model_task=task, tecnic=profile,
+                                       inici=timezone.now(), actiu=True, origen=origen)
 
 
 def _close_open_timer(task):
@@ -184,7 +187,8 @@ def _meritar_conjunt(model, now):
 
 
 @transaction.atomic
-def transition_task(task, to_status, profile, force=False, auto=None):
+def transition_task(task, to_status, profile, force=False, auto=None,
+                    origen=TimerEntrada.ORIGEN_MESURAT):
     """Aplica una transició d'estat. Imposa 'una sola InProgress per tècnic' (global):
     en entrar a InProgress, pausa l'altra InProgress del mateix tècnic (tanca timer + log).
     Retorna dict amb la tasca i, si escau, la pausada automàticament.
@@ -241,8 +245,8 @@ def transition_task(task, to_status, profile, force=False, auto=None):
                 # no va fer.
                 _log(other, 'InProgress', 'Paused', profile, auto='exclusio_inprogress')
             paused_task_id = other.pk
-        # Obrir timer de la tasca que entra
-        _open_timer(task, profile)
+        # Obrir timer de la tasca que entra (T3: `origen` el decideix qui obre la porta)
+        _open_timer(task, profile, origen=origen)
         if task.started_at is None:
             task.started_at = now
         if frm == 'Done':
