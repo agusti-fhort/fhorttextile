@@ -2238,7 +2238,9 @@
       "col_note": "Note",
       "note_ph": "note…",
       "note_err": "Could not save the note.",
-      "verdicte_err": "Couldn't save the verdict."
+      "verdicte_err": "Couldn't save the verdict.",
+      "sense_decidir": "Undecided",
+      "marca_derivada": "DERIVED"
     },
     "gate": {
       "title": "Piece gate",

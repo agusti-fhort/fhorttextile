@@ -24,6 +24,9 @@ function deriveFitting(grid) {
       pom_id: l.pom_id, capa: l.capa, instancia: l.instancia,
       codi: l.codi, nom: l.nom, is_key: l.is_key,
       nom_en: l.nom_en, nom_local: l.nom_local, nom_fitxa: l.nom_fitxa, bm_id: l.bm_id,
+      // F2 · l'ORIGEN de la mesura base d'aquesta germana. 'DERIVAT' = el sistema l'ha moguda
+      // perquè s'ha corregit la seva germana. El serializer l'emet des de C4/F2.
+      origen: l.origen,
       logica: l.logica, increment_base: l.increment_base,
       increment_break: l.increment_break, talla_break_label: l.talla_break_label,
       cells: {},
@@ -78,12 +81,12 @@ export const fittingSource = {
   // l'accepta a l'escriptura i l'emet a la lectura, i `views.py` guarda que un REJECTED no sembri
   // res. El serializer de la graella també l'emet a `line.decisio` a cada lectura.
   //
-  // 🚩 EL QUE FALTA ÉS AL FRONT, no al backend: avui `CheckMeasureEditor` guarda el veredicte en
-  // estat local i no crida cap PATCH, o sigui que es perd en recarregar. Ho tanca el bloc C1.
+  // El front l'escriu des de C1: `buildFittingRows` el sembra de `line.decisio` i `onVeredicte`
+  // en fa PATCH per la mateixa porta que la nota.
   //
   // (Aquí hi va haver un «🚨 PENDENT DE BACKEND — no té camp `decisio`». Era cert abans de
   // `fd102c06` i va sobreviure al commit que el va desmentir: qui llegia el fitxer en concloïa
-  // que calia una migració que ja existia, i per això el defecte va durar tant.)
+  // que calia una migració que ja existia, i per això el veredicte es va perdre durant dies.)
   buildGroups(raw, ctx) {
     return buildFittingGroups(raw.baseLabel, raw.versionNumbers, ctx.t, {
       hist: ctx.hist || null,

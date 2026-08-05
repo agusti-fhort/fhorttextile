@@ -146,6 +146,10 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) 
       // que la fila ho DIGUÉS: sense aquests dos camps, la graella pintava dues «Chest width»
       // seguides i el nom no deia quina era el folre.
       capa: row.capa, instancia: row.instancia,
+      // v3 — LA MARCA D'UNA GERMANA DERIVADA. Una fila que el sistema ha mogut sola (origen
+      // 'DERIVAT') no és una presa: ho ha de dir, perquè el número s'assembla a un de mesurat.
+      // Sense `origen` al payload no es pinta res — cap superfície canvia de forma.
+      marca: row.origen === 'DERIVAT' ? 'derivada' : null,
       rowKey: row.bm_id || `${row.pom_id}|${row.capa || ''}|${row.instancia || ''}`,
       nom_en: row.nom_en, nom_local: row.nom_local,
       nom_fitxa: row.nom_fitxa, bm_id: row.bm_id,   // P4 — autoria de nom a nivell model

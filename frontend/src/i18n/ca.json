@@ -2238,7 +2238,9 @@
       "col_note": "Nota",
       "note_ph": "nota…",
       "note_err": "No s'ha pogut desar la nota.",
-      "verdicte_err": "No s'ha pogut desar el veredicte."
+      "verdicte_err": "No s'ha pogut desar el veredicte.",
+      "sense_decidir": "Sense decidir",
+      "marca_derivada": "DERIVADA"
     },
     "gate": {
       "title": "Gate de la peça",

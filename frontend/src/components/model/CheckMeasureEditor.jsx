@@ -306,6 +306,45 @@ const checkSource = {
   },
 }
 
+// Els recomptes es fan sobre les línies de la TALLA BASE, que són les úniques que es decideixen
+// (l'eix multi-talla viu a Escalat): comptar-les totes donaria tres vegades el mateix veredicte.
+// El buffer optimista mana sobre la línia, igual que a la cel·la, o el recompte aniria un pas
+// enrere del que la modista acaba de prémer.
+const RECOMPTES = [
+  { clau: 'ACCEPTED', col: 'var(--ok)' },
+  { clau: 'ADJUSTED', col: 'var(--warn)' },
+  { clau: 'REJECTED', col: 'var(--err)' },
+]
+function RecomptesFitting({ lines, baseLabel, buffer }) {
+  const { t } = useTranslation()
+  const base = lines.filter(l => !baseLabel || l.size_label === baseLabel)
+  const veredicteDe = (l) => (l.id in (buffer || {}) ? buffer[l.id] : (l.decisio || null))
+  const n = { ACCEPTED: 0, ADJUSTED: 0, REJECTED: 0 }
+  let pendents = 0
+  for (const l of base) {
+    const v = veredicteDe(l)
+    if (v && v in n) n[v] += 1
+    else pendents += 1
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+                  padding: '10px 16px', marginTop: 12, borderTop: '1px solid var(--border)',
+                  background: 'var(--bg-card)', fontSize: 'var(--fs-body)', color: TEXT_2 }}>
+      {RECOMPTES.map(({ clau, col }) => (
+        <span key={clau}>
+          <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%',
+                                            display: 'inline-block', marginRight: 5, background: col }} />
+          {clau} <b style={{ color: 'var(--text-main)', fontWeight: 600 }}>{n[clau]}</b>
+        </span>
+      ))}
+      <span>
+        {t('fitting.grid.sense_decidir')}{' '}
+        <b style={{ color: pendents ? 'var(--text-main)' : TEXT_2, fontWeight: 600 }}>{pendents}</b>
+      </span>
+    </div>
+  )
+}
+
 export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false, taskId = null, source = null, sourceCtx = null, lockRules = false, onSessionSaved = null }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -501,6 +540,15 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
             <p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2 }}>{t('basestage.empty')}</p>
           )
         } />
+
+      {/* v3 (`.bar` :193-198) — LA BARRA DE RECOMPTES. La graella diu QUÈ té cada fila; això diu
+          on és la sessió sencera, que és la pregunta de qui la tanca. «Sense decidir» és el que
+          de debò importa: el buit NO és ACCEPTED, i el que no es pot marxar deixant enrere són
+          les cel·les que ningú ha mirat. */}
+      {src.kind === 'fitting' && rows.length > 0 && (
+        <RecomptesFitting lines={raw?.lines || []} baseLabel={raw?.baseLabel || ''}
+          buffer={veredictes} />
+      )}
 
       {src.supportsResolve && !readOnly && check && rows.length > 0 && (
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>

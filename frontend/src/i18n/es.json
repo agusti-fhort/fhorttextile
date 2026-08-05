@@ -2238,7 +2238,9 @@
       "col_note": "Nota",
       "note_ph": "nota…",
       "note_err": "No se ha podido guardar la nota.",
-      "verdicte_err": "No se ha podido guardar el veredicto."
+      "verdicte_err": "No se ha podido guardar el veredicto.",
+      "sense_decidir": "Sin decidir",
+      "marca_derivada": "DERIVADA"
     },
     "gate": {
       "title": "Gate de la pieza",

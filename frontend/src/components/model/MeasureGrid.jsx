@@ -215,13 +215,24 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
 // `editCodi` és fals (fitting), la 2a línia mostra nom_fitxa amb precedència i és EDITABLE via
 // `onNomSave(bmId, value)` (P4: NO toca el POM tenant compartit).
 function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitModel = '',
-                   instancia = '', bmId, editable, onNomSave, onNomsSave = null, editCodi = false, style }) {
+                   instancia = '', marca = null, bmId, editable, onNomSave, onNomsSave = null,
+                   editCodi = false, style }) {
   const { t } = useTranslation()
   // La INSTÀNCIA s'enganxa al nom en TOTES les branques: és el nom d'aquesta mesura el que
   // s'allarga («Profunditat de sisa · Esquerra»), i el que no pot passar és que la germana
   // esquerra i la dreta es llegeixin igual segons per quina branca hi entri la cel·la.
   const inst = etiquetaInstancia(instancia, t)
   const Inst = () => (inst ? <span style={{ fontWeight: 500 }}>{` · ${inst}`}</span> : null)
+  // v3 (`.tagd`) — una germana que el sistema ha mogut sola porta etiqueta. El número d'una
+  // derivada s'assembla a un de mesurat, i qui llegeix la columna de dalt a baix ha de poder
+  // distingir una PRESA d'un CÀLCUL sense obrir res.
+  const Marca = () => (marca ? (
+    <span style={{ fontSize: 'var(--fs-caption)', border: '1px solid var(--border)',
+                   borderRadius: 999, padding: '1px 7px', marginLeft: 6, whiteSpace: 'nowrap',
+                   color: 'var(--text-muted)', background: 'var(--white)' }}>
+      {t(`fitting.grid.marca_${marca}`)}
+    </span>
+  ) : null)
   const catCanonic = nomEn || nomLocal || ''
   const canon = nomEn && nomLocal && nomLocal !== nomEn ? nomLocal : (nomLocal || '')
   // editCodi → la 2a línia és el nom LOCAL (la nomenclatura curta viu a la columna POM, no aquí).
@@ -275,7 +286,7 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
     return (
       <td style={style}>
         <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>
-          {top || '—'}<Inst />
+          {top || '—'}<Inst /><Marca />
           {local && (
             <i className="ti ti-info-circle" title={local} aria-label={local}
               style={{ fontSize: 12, marginLeft: 6, color: 'var(--text-muted)', cursor: 'help' }} />
@@ -287,7 +298,7 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
   // LLEGAT (fitting): la 2a línia ÉS la nomenclatura curta del model i s'hi escriu. No es toca.
   return (
     <td style={style}>
-      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>{top || '—'}<Inst /></div>
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>{top || '—'}<Inst /><Marca /></div>
       <input
         value={val ?? ''} onChange={e => setVal(e.target.value)}
         onFocus={() => setFocused(true)} onBlur={commit}
@@ -593,7 +604,7 @@ export default function MeasureGrid({
                   title={soroll ? t('measuregrid.poda_candidata') : undefined} />
                 <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} nomFitxa={r.nom_fitxa} bmId={r.bm_id}
                   nomCanonicModel={r.nom_canonic_model} nomTraduitModel={r.nom_traduit_model}
-                  instancia={r.instancia}
+                  instancia={r.instancia} marca={r.marca}
                   editable={editable} onNomSave={onNomSave} onNomsSave={onNomsSave}
                   editCodi={editCodi} style={stickyTd(COL_CAPA_W + COL_POM_W, COL_NOM_W, rowBg)} />
                 {leadCols.map((c, idx) => (
