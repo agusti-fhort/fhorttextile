@@ -216,16 +216,30 @@ def transition_task(task, to_status, profile, force=False, auto=None):
     now = timezone.now()
 
     if to_status == 'InProgress':
-        # Regla: una sola InProgress per tècnic (a qualsevol model)
-        other = (ModelTask.objects.filter(assignee=profile, status='InProgress')
-                 .exclude(pk=task.pk).first())
-        if other:
+        # F1.5 · D-6 — Regla: una sola InProgress per tècnic (a qualsevol model), i ara ancorada
+        # a QUI TREBALLA i no a qui la té assignada.
+        #
+        # `assignee` és un camp de PLANIFICACIÓ; el rellotge s'ancora a `TimerEntrada.tecnic`, que
+        # és qui hi és de debò. I com que aquesta funció només escriu `assignee` quan és `None`
+        # (unes línies més avall), els dos eixos divergien sols: sempre que actor ≠ assignat, la
+        # consulta d'exclusió no veia la tasca oberta i el tècnic n'acabava amb dues alhora.
+        # No és teòric — hi ha el cas a la BD: timers 116 i 117, tècnic 1, 24/06, solapats
+        # 122 min i 0 min (§Q5.2 de la diagnosi del cicle).
+        #
+        # Mirant els TRAMS OBERTS la invariant torna a ser certa per construcció: el que tanca
+        # l'exclusió és exactament el que el rellotge considera «obert».
+        obertes = (ModelTask.objects
+                   .filter(timers__tecnic=profile, timers__fi__isnull=True, timers__actiu=True)
+                   .exclude(pk=task.pk).distinct())
+        for other in obertes:
             _close_open_timer(other)
-            other.status = 'Paused'
-            other.save(update_fields=['status', 'updated_at'])
-            # Aquesta pausa tampoc no és un gest sobre `other`: el tècnic n'ha obert una altra i el
-            # sistema li ha tancat aquesta. Sense marca, el log li atribuïa una pausa que no va fer.
-            _log(other, 'InProgress', 'Paused', profile, auto='exclusio_inprogress')
+            if other.status == 'InProgress':
+                other.status = 'Paused'
+                other.save(update_fields=['status', 'updated_at'])
+                # Aquesta pausa tampoc no és un gest sobre `other`: el tècnic n'ha obert una altra
+                # i el sistema li ha tancat aquesta. Sense marca, el log li atribuïa una pausa que
+                # no va fer.
+                _log(other, 'InProgress', 'Paused', profile, auto='exclusio_inprogress')
             paused_task_id = other.pk
         # Obrir timer de la tasca que entra
         _open_timer(task, profile)
@@ -306,6 +320,32 @@ def transition_task(task, to_status, profile, force=False, auto=None):
         sync_estat_segur(_model, SENTIT_MADURESA)
 
     return {'task_id': task.pk, 'status': to_status, 'paused_task_id': paused_task_id}
+
+
+def traspassa_tram(task, profile):
+    """F1.5 · D-7 — El relleu d'una tasca EN CURS, fet visible.
+
+    Fins avui, endur-se una tasca d'un altre (per `open-task` o per `claim`) reassignava
+    l'`assignee` i prou: el tram del tècnic anterior **quedava obert**, seguint-li imputant temps
+    a ell, i el nou treballava sense rellotge propi. Al log no en quedava cap fila — el relleu era
+    l'únic moviment del sistema que no deixava rastre.
+
+    Aquí es tanca el tram de qui la tenia, se n'obre un per a qui l'agafa, i s'escriu un
+    `TaskTransition` marcat `auto='handoff'` perquè el log digui QUÈ ha passat sense atribuir a
+    ningú un gest que no ha fet. L'estat de la tasca no es toca: seguia `InProgress` i hi segueix
+    — el que canvia és de qui és el rellotge.
+
+    Retorna el pk del tècnic anterior (o None si la tasca no tenia cap tram obert).
+    """
+    anterior = (TimerEntrada.objects
+                .filter(model_task=task, fi__isnull=True, actiu=True)
+                .values_list('tecnic_id', flat=True).first())
+    if anterior == profile.pk:
+        return None                      # ja és seva: cap relleu
+    _open_timer(task, profile)           # tanca TOTS els oberts i n'obre un per al nou
+    if anterior is not None:
+        _log(task, task.status, task.status, profile, auto='handoff')
+    return anterior
 
 
 def rectification_count(task) -> int:

@@ -21,7 +21,8 @@ from .serializers_b import (TaskTypeSerializer, ModelTaskSerializer,
                             SupplierSerializer, ProductionSerializer,
                             GarmentTypeItemSerializer, TaskTimeEstimateSerializer,
                             CustomerSerializer)
-from .services_c import transition_task, TransitionError, rectification_count
+from .services_c import (transition_task, traspassa_tram, TransitionError,
+                         rectification_count)
 from .services_d import (advance_phase_gate, advance_phases_chain, regress_phase,
                          model_ready_for_gate, GateError)
 from .services_e import (request_production, set_production_status,
@@ -509,6 +510,10 @@ def claim_task_view(request, pk):
     if old_assignee_id == profile.id:
         return Response(ModelTaskSerializer(task).data, status=http_status.HTTP_200_OK)
     # Self-claim: SEMPRE a mi mateix. Mai un tercer.
+    # F1.5 · D-7 — el relleu tanca el tram de qui la tenia i n'obre un per a mi, amb la seva fila
+    # al log (`auto='handoff'`). Aquesta porta i la branca de claim d'`open-task` fan el MATEIX:
+    # dues portes, un sol relleu.
+    traspassa_tram(task, profile)
     task.assignee = profile
     task.save(update_fields=['assignee', 'updated_at'])
     # Mateixa cascada que ModelTaskViewSet.perform_update: old != new → neteja l'ordre manual i
@@ -584,7 +589,11 @@ def open_model_task_view(request, model_id):
                 cos['code'] = e.code
             return Response(cos, status=http_status.HTTP_409_CONFLICT)
     elif task.assignee_id != profile.id:
+        # F1.5 · D-7 — HANDOFF CONSCIENT. Abans això reassignava i prou: el tram de l'anterior
+        # quedava OBERT i seguia imputant-li temps a ell mentre el nou hi treballava sense
+        # rellotge propi, i no en quedava cap fila al log. Ara el relleu és un acte visible.
         old_assignee_id = task.assignee_id
+        handoff_de = traspassa_tram(task, profile)
         task.assignee = profile
         task.save(update_fields=['assignee', 'updated_at'])
         from fhort.planning.plan_service import recompute_for_technicians, cleanup_queue_order
