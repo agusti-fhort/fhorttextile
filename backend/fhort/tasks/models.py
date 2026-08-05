@@ -61,6 +61,13 @@ class TaskType(models.Model):
     mode = models.CharField(max_length=40, null=True, blank=True,
                             help_text="Context d'obertura de l'eina (sub-mode). null si sense eina.")
     facturable = models.BooleanField(default=True)
+    # F1.6 — «aquesta tasca produeix un PRODUCTE que s'entrega?». No és `facturable`, que parla
+    # de l'albarà: una tasca pot ser facturable i no lliurar res (definir POMs es cobra i no
+    # s'entrega), i el que decideix si una RONDA ja ha donat el que havia de donar
+    # (`services_r.ronda_lliurable`) són els lliurables, no la feina intermèdia.
+    es_lliurable = models.BooleanField(
+        default=False,
+        help_text='La tasca produeix un lliurable per al client (fitxa, patró).')
 
     class Meta:
         ordering = ['default_order', 'code']

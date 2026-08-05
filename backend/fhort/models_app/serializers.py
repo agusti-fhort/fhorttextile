@@ -250,6 +250,11 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     # de tasques segueix escopada exactament com fins ara: aquí no s'exposa cap tasca, ni qui hi
     # treballa, ni quantes n'hi ha — només si la feina de POM del model està tancada.
     pom_task_done = serializers.SerializerMethodField()
+    # F1.6 — les voltes que ja han lliurat, per al PM. NOMÉS EL FET consultable: quines rondes
+    # han donat tot el que havien de donar (`task_type.es_lliurable` totes Done). L'avís visual
+    # —qui el veu, quan i com— és F2; aquí no es notifica ningú. Llista buida = cap ronda, o cap
+    # ronda acabada: el consumidor no ha de distingir-ho per decidir si ensenya res.
+    lliurable_ronda_n = serializers.SerializerMethodField()
     # SET-1 · A4 — el conjunt, niuat, amb les germanes per navegar-hi des de la capçalera.
     # DESVIACIÓ ANOTADA: `fields='__all__'` exposava `garment_set` com a pk ESCRIVIBLE; aquesta
     # declaració el fa read-only. Cap caller el feia servir (0 hits al frontend; els dos únics
@@ -268,6 +273,10 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     # Precedència: mana el ruleset quan n'hi ha (porta els noms CANÒNICS del catàleg, en
     # anglès i possiblement multi-target); si no, el camp propi TAL QUAL. No s'inventa res:
     # si el model tampoc no en té, segueix sent None i la capçalera calla.
+    def get_lliurable_ronda_n(self, obj):
+        from fhort.tasks.services_r import rondes_lliurables   # import local: cicle models_app↔tasks
+        return rondes_lliurables(obj)
+
     def get_pom_task_done(self, obj):
         # La unicitat (model, task_type) només val per a `origen='prevista'` (tasks/models.py),
         # o sigui que un model pot tenir més d'una tasca `pom`. «Feta» = n'hi ha ALGUNA de Done:

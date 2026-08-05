@@ -144,18 +144,6 @@ def tancar_ronda(ronda):
     return ronda
 
 
-def _tasktype_te_es_lliurable():
-    """F1.1→F1.6 · pont de vida curta.
-
-    El flag `TaskType.es_lliurable` neix a F1.6, dues fases més enllà. `ronda_lliurable` ha
-    d'existir des d'ara (l'API de la ronda és una peça sola), i abans que el camp hi sigui no
-    pot filtrar-hi: seria un `FieldError` en runtime que cap `manage.py check` veu.
-    ⚠️ AQUESTA FUNCIÓ MOR A F1.6 — si la trobes viva després, és deute.
-    """
-    from .models import TaskType
-    return any(f.name == 'es_lliurable' for f in TaskType._meta.get_fields())
-
-
 def ronda_lliurable(ronda):
     """La ronda ha produït tot el que havia de lliurar?
 
@@ -166,9 +154,18 @@ def ronda_lliurable(ronda):
     Sense cap tasca lliurable a la ronda retorna **False**, no True: «no hi ha res per lliurar»
     no és «ja està lliurat», i un avís al PM que salta sobre el buit és soroll.
     """
-    if not _tasktype_te_es_lliurable():
-        return False   # F1.6 encara no ha sembrat el flag: res és lliurable.
     qs = ronda.tasques.filter(task_type__es_lliurable=True)
     if not qs.exists():
         return False
     return not qs.exclude(status='Done').exists()
+
+
+def rondes_lliurables(model):
+    """Els `seq` de les rondes del model que ja han lliurat. Fet CONSULTABLE per al PM.
+
+    Només el fet: quines voltes han donat el que havien de donar. L'avís visual (qui el veu,
+    quan i com) és F2 — aquí no es notifica ningú.
+    """
+    from .models import Ronda
+    return [r.seq for r in Ronda.objects.filter(model=model).order_by('seq')
+            if ronda_lliurable(r)]

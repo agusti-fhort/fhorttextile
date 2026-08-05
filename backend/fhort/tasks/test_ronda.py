@@ -177,3 +177,49 @@ class RondaTest(TenantTestCase):
         pot petar amb FieldError."""
         r = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom', 'tech_sheet'])
         self.assertFalse(ronda_lliurable(r))
+
+
+class RondaLliurableTest(RondaTest):
+    """F1.6 · el flag `es_lliurable` ja hi és i `ronda_lliurable` deixa de ser sempre fals."""
+
+    def _fes_lliurable(self, *codes):
+        TaskType.objects.filter(code__in=codes).update(es_lliurable=True)
+        TaskType.objects.exclude(code__in=codes).update(es_lliurable=False)
+
+    def test_sense_cap_tasca_lliurable_la_ronda_no_es_lliurable(self):
+        """«No hi ha res per lliurar» no és «ja està lliurat»: un avís al PM sobre el buit és
+        soroll."""
+        self._fes_lliurable('tech_sheet')
+        r = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
+        self.assertFalse(ronda_lliurable(r))
+
+    def test_la_ronda_no_es_lliurable_mentre_el_producte_no_estigui_fet(self):
+        self._fes_lliurable('tech_sheet')
+        r = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom', 'tech_sheet'])
+        self.assertFalse(ronda_lliurable(r))
+
+    def test_la_ronda_es_lliurable_amb_el_producte_fet_i_la_feina_intermedia_oberta(self):
+        """Els lliurables són els PRODUCTES, no la feina de suport: el POM pot quedar obert."""
+        self._fes_lliurable('tech_sheet')
+        r = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom', 'tech_sheet'])
+        r.tasques.filter(task_type=self.tt_fitxa).update(status='Done')
+        self.assertTrue(ronda_lliurable(r))
+        self.assertEqual(r.tasques.get(task_type=self.tt_pom).status, 'Pending')
+
+    def test_rondes_lliurables_llista_els_seq(self):
+        from fhort.tasks.services_r import rondes_lliurables
+        self._fes_lliurable('tech_sheet')
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['tech_sheet'])
+        self.assertEqual(rondes_lliurables(self.model), [])
+        r2.tasques.update(status='Done')
+        self.assertEqual(rondes_lliurables(self.model), [2])
+
+    def test_sample_check_existeix_al_cataleg(self):
+        """El cens el va buscar als tres schemes i al codi sencer: no existia enlloc."""
+        tt = TaskType.objects.get(code='sample_check')
+        self.assertTrue(tt.active)
+        self.assertEqual(tt.default_order, 47)
+        self.assertFalse(tt.es_lliurable)
+
+    def test_patronatge_ja_no_hi_es(self):
+        self.assertFalse(TaskType.objects.filter(code='patronatge').exists())
