@@ -299,3 +299,78 @@ Mesures/entry · Mesurar prenda → Mesures amb `task_id`), ara pel mateix resol
    córrer rellotges orfes.
 
 **T3 i T4 no s'han començat** (ordre d'Agus: les seves pantalles s'estan dibuixant).
+
+---
+
+# T3 · EL CRONO DE TEMPS DECLARAT · `984f027e` (backend) + `9b3ee38d` (pantalla)
+
+> Desbloquejat perquè la maqueta va arribar: `ops/maquetes/maqueta_temps_declarat_i_modal_v1.html`
+> (05/08, 13:19). Llegida ABANS de tocar res, com mana la regla de pantalles.
+
+## El que la maqueta fixa, i com s'ha complert
+
+| la maqueta diu | com s'ha fet |
+|---|---|
+| «Viu al servidor: sobreviu a recarregar, canviar de pestanya i tancar el navegador» | `engegar` obre un `TimerEntrada` **real** amb `origen='declarat'`. **Zero `localStorage`** al component. |
+| «Sempre declarat, també quan ve del crono» | l'`origen` viatja per la porta (`transition_task(..., origen=…)`, kwarg amb default `mesurat`) |
+| «El guard d'inactivitat no els toca» | `pausa_tasques_oblidades` exclou `origen='declarat'` |
+| «Engegar el crono merita el model» | `_meritar_si_cal(task)` — les tres funcions de facturació **no s'han tocat** |
+| «Desar temps no tanca la tasca» | `aturar` deixa la tasca **Paused**; tancar-la és T4 |
+| «Descartar esborra el tram» | `descartar` fa `delete()`, i només sobre trams declarats i ja tancats |
+
+## Decisions de disseny que no eren òbvies
+
+- **El crono s'engega per la MATEIXA porta que tota la resta** (`transition_task`). Així hereta
+  l'exclusió un-InProgress-per-tècnic, el log de transicions i l'auto-assignació. L'alternativa
+  —una via pròpia per a les externes— hauria estat una segona màquina d'estats a mantenir.
+- **`engegar` és idempotent**, i això és el que fa que obrir el crono i re-enganxar-s'hi després
+  d'un F5 siguin **el mateix gest**. Sense això caldria un endpoint de lectura i un estat local
+  que mentiria a la primera cursa.
+- **La porta és per `(model, code)`**, no per id de tasca: quan el tècnic prem el botó d'una
+  externa, la tasca sovint encara no existeix (igual que `open-task`, i per la mateixa raó).
+
+## Verificació
+
+- 11 tests nous (`test_crono_declarat`), amb la **contraprova** del guard: un tram declarat de 5 h
+  sobreviu, un de mesurat de 5 h cau. Els quatre fitxers veïns (guard · temps declarat ·
+  meritació · exclusió) segueixen verds: **53**.
+- **A pantalla, contra la BD de staging** —l'únic lloc on la promesa es pot provar—: crono obert →
+  **F5** → segueix corrent amb el temps acumulat → «Aturar» → «Confirma el temps abans de desar».
+- Els 3 trams de 0 min que la prova va deixar s'han **esborrat**: entrarien al corpus que F3.1 ha
+  de mesurar com si fossin feina real.
+
+---
+
+# T4 · EL MODAL D'ACABAR · `336d5682`
+
+La píndola flotant de F2.3 marxa; l'indicador de sessió es queda (maqueta §2). El gest es fa
+**en sortir** d'una superfície de treball, amb les dues sortides escrites i el temps dit en veu
+alta: `Aquesta sessió: X · total de la tasca: Y`. En confirmar, es reposiciona al panell de
+Tasques del model — **el Kanban no existeix i queda aparcat**.
+
+Dos camps additius al `ModelTaskSerializer` (`temps_consumit_min`, `sessio_inici`): el modal els
+necessitava i **no podia obrir un tercer sondeig de `timers.list`** quan justament F3.2 va a
+convergir els dos que ja hi ha.
+
+**Verificació a pantalla** (model 163): entrar en edició d'Escalat → sortir → modal amb «L'he
+acabat» premarcat → «La pauso, hi seguiré» → la tasca queda **Pausada** i la vista salta a
+**Tasques**. La píndola apareix **sense cap botó d'acabar**. Staging s'ha deixat com estava: 3
+trams i 6 transicions de la prova, esborrats.
+
+## ⚠️ El que T4 NO cobreix, i per què
+
+**La Fitxa tècnica no té el modal.** El seu «desar i sortir» viu a `TechSheetEditor.jsx`, que és
+**frontera declarada** en aquest tram. La peça hi encaixaria amb quatre línies (el component ja
+és independent), però tocar aquell fitxer no toca. **Queda pendent i explícit**: avui, sortir de
+la fitxa segueix sense preguntar res.
+
+## 🚩 Les quatre decisions que la maqueta declara pendents
+
+La maqueta les llista com a «coses que he decidit jo i que has de confirmar». **S'han implementat
+tal com hi són**; si en canvies alguna, són canvis petits:
+
+1. **«L'he acabat» ve preseleccionat.** Alternativa: cap opció premarcada, i obligar a triar.
+2. **El modal surt sempre** en desar i sortir, també si la sessió ha durat dos minuts.
+3. **«Descartar» esborra el tram** i no deixa rastre. Si en vols traça (qui i quan), cal desar-lo
+   marcat en comptes d'esborrar-lo.
+4. **El crono no es pot pausar**, només aturar.
