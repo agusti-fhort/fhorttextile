@@ -242,6 +242,89 @@ class MeasurementLayer(models.Model):
         return f'{self.slug} · {self.nom_ca or self.nom_en}'
 
 
+class MeasurementInstance(models.Model):
+    """INSTÀNCIA d'una mesura: QUINA de les repeticions del mateix POM és aquesta (D-31.26).
+
+    Bessona de `MeasurementLayer` i pel mateix motiu d'infraestructura (`fhort.pom` és
+    l'única app que és a SHARED **i** a TENANT alhora), amb el mateix contracte: el `slug`
+    és el que desen les columnes `instancia` de les taules de mesura —mai la PK, llei G9—
+    i els tres noms són per als ulls.
+
+    **NO ÉS UN CATÀLEG DE POMS.** El catàleg té UN POM per mesura; el MODEL diu quantes
+    cares en té (D-31.19). Aquesta taula és el vocabulari amb què s'anomenen aquelles cares,
+    no una llista de mesures noves: `left`/`right` no són dos POMs de sisa, són la mateixa
+    sisa dita dues vegades.
+
+    **DOS EIXOS, NO UN.** Una germana es distingeix per ON es mesura (POSICIÓ: la sisa
+    esquerra, la cintura per dalt) o per COM (ESTAT: la goma relaxada, la goma estirada).
+    Són ortogonals i es componen amb guió al slug que es desa (`'left-relaxed'`), tal com
+    ja el desmunta `frontend/src/utils/capaInstancia.js`. Separar-los aquí és el que permet
+    que el gest de crear una germana ofereixi les vuit posicions i els dos estats sense
+    barrejar-los en una sola llista de deu.
+
+    **EL SUFIX ÉS DE LA POSICIÓ, MAI DE L'ESTAT.** La instància AMPLIA la nomenclatura: el
+    sistema PROPOSA `codi base + sufix` en crear la germana (B→BT, FS→FSCF), estil Brownie
+    —concatenació directa, sense guió— i el patronista el pot editar, perquè el `nom_fitxa`
+    és lliure. Els estats no componen sufix: fan servir el codi oficial del client si en té
+    (B1 = «stretched waist width») o la descripció. Per això `sufix` és buit als dos estats
+    i no és un oblit.
+
+    **LA PROPOSTA NO ÉS L'OBLIGACIÓ.** `instancia_exigeix_nom` (invariant viva de BD) demana
+    que tota germana porti nom; qui el posa és el patronista. Aquesta taula li dona el
+    vocabulari i una proposta de codi, no li tria el nom.
+
+    Mateixa llei de catàleg que la capa: **la sembra no esborra mai** (`update_or_create` per
+    `slug`), `is_system=True` és propietat de la casa, i un tenant pot crear-se la seva
+    instància (`is_system=False`, `pendent_revisio=True`) sense que la sembra la toqui.
+    """
+
+    ORIGEN_SEED = 'SEED'
+    ORIGEN_MANUAL = 'MANUAL'
+    ORIGEN_IMPORT = 'IMPORT'
+    ORIGEN_CHOICES = [
+        (ORIGEN_SEED, 'Sembra'),
+        (ORIGEN_MANUAL, 'Manual'),
+        (ORIGEN_IMPORT, 'Importació'),
+    ]
+
+    #: ON es mesura (lateralitat, vora, costura de referència).
+    EIX_POSICIO = 'POSICIO'
+    #: COM es mesura (amb tensió o sense).
+    EIX_ESTAT = 'ESTAT'
+    EIX_CHOICES = [
+        (EIX_POSICIO, 'Posició'),
+        (EIX_ESTAT, 'Estat'),
+    ]
+
+    #: La instància ÚNICA: cadena buida, no una fila d'aquesta taula. Una mesura que només
+    #: es fa un cop no té res a qualificar (v. `sufixIdentitat`, que hi torna `''`).
+    SLUG_UNICA = ''
+
+    slug = models.SlugField(max_length=30, unique=True)
+    nom_en = models.CharField(max_length=120)
+    nom_ca = models.CharField(max_length=120)
+    nom_es = models.CharField(max_length=120)
+    eix = models.CharField(max_length=8, choices=EIX_CHOICES, db_index=True)
+    #: Sufix que s'enganxa al codi base per PROPOSAR el codi de la germana (B→BT). Buit a
+    #: l'eix ESTAT per decisió, i buit també a `waistband_seam`, que és un DATUM: es diu a la
+    #: descripció, no al codi (full INSTANCIES, decisió Agus 05/08).
+    sufix = models.CharField(max_length=4, blank=True, default='')
+    #: Propietat de la casa: no s'esborra (mateix guard que `MeasurementLayer.is_system`).
+    is_system = models.BooleanField(default=False)
+    #: Instància nascuda al tenant i encara no promoguda a canònica.
+    pendent_revisio = models.BooleanField(default=False)
+    origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default=ORIGEN_MANUAL)
+    display_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = 'Instància de mesura'
+        verbose_name_plural = 'Instàncies de mesura'
+        ordering = ['eix', 'display_order', 'slug']
+
+    def __str__(self):
+        return f'{self.slug} · {self.nom_ca or self.nom_en}'
+
+
 class POMEstadisticaGlobal(models.Model):
     pom_global = models.ForeignKey(POMGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')
     garment_type_global = models.ForeignKey(GarmentTypeGlobal, on_delete=models.CASCADE, related_name='estadistiques_globals')
