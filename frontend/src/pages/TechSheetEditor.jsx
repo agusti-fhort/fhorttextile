@@ -5755,6 +5755,14 @@ export default function TechSheetEditor() {
       },
     }
   }, [sketchObjs])
+  // F1.3 · §S-1 — el precedent de cota s'escriu al CATÀLEG (`POMPlacement` penja d'`ItemFitxer`),
+  // i aquella fila no té camp `model`: el backend NO pot deduir de quin model és la feina. És
+  // l'única escriptura de tècnic del cens amb aquest forat. El batec, doncs, el fa el client:
+  // `timers.heartbeat()` segella el tram obert del PROPI tècnic sense necessitar cap model_id.
+  const batecPrecedent = useCallback(() => {
+    fetch(`${API}/api/v1/timers/heartbeat/`, { method: 'POST', headers: authHeaders })
+      .catch(() => {})   // el batec mai no pot fer caure el desat que observa
+  }, [authHeaders])
   const desarUnaPrecedent = useCallback(async (cota) => {
     const built = construirPrecedentCota(cota)
     if (!built) { setF2Msg(t('tech_sheet.f2_desar_sense_host')); return }
@@ -5762,8 +5770,9 @@ export default function TechSheetEditor() {
       const r = await fetch(`${API}/api/v1/item-fitxers/${built.host.sourceItemFitxer}/pom-placements/`, {
         method: 'POST', headers: authHeaders, body: JSON.stringify(built.body) })
       setF2Msg(r.ok ? t('tech_sheet.f2_desar_ok') : t('tech_sheet.f2_desar_err'))
+      if (r.ok) batecPrecedent()
     } catch { setF2Msg(t('tech_sheet.f2_desar_err')) }
-  }, [construirPrecedentCota, authHeaders, t])
+  }, [construirPrecedentCota, authHeaders, t, batecPrecedent])
   // Llei de convivència (D1): ACCEPTAR una proposta escriu precedent al catàleg — SILENCIÓS i
   // sense error si no hi ha origen (només queda la cota viva). El sistema aprèn de l'acceptació.
   const escriurePrecedentSilent = useCallback(async (cota) => {
@@ -5772,8 +5781,9 @@ export default function TechSheetEditor() {
     try {
       await fetch(`${API}/api/v1/item-fitxers/${built.host.sourceItemFitxer}/pom-placements/`, {
         method: 'POST', headers: authHeaders, body: JSON.stringify(built.body) })
+      batecPrecedent()
     } catch { /* acceptar no ha de petar si el precedent no es pot desar */ }
-  }, [construirPrecedentCota, authHeaders])
+  }, [construirPrecedentCota, authHeaders, batecPrecedent])
 
   // ── F3 · PROPOSAR cotes amb IA de visió ─────────────────────────────────────
   // Rasteritza la pàgina SENSE cotes (ni col·locades ni proposades) ni overlays, envia els

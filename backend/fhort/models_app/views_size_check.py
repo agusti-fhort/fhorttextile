@@ -11,6 +11,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
+from fhort.tasks.services_batec import SUP_PRESA, batec_de_request
+
 from . import services_size_check as sc_services
 from .models import SizeCheck, SizeCheckLine
 from .serializers_size_check import (
@@ -72,6 +74,8 @@ class SizeCheckViewSet(mixins.RetrieveModelMixin,
             )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        # F1.3 — gravar el check ja no el TANCA (F1.2), però sí que és feina: bat.
+        batec_de_request(request, self.get_object().model_id, SUP_PRESA)
         return Response(result)
 
 
@@ -86,3 +90,9 @@ class SizeCheckLineViewSet(mixins.UpdateModelMixin,
         if getattr(connection, 'schema_name', None) == 'public':
             return SizeCheckLine.objects.none()
         return self.queryset
+
+    def perform_update(self, serializer):
+        # F1.3 — l'autosave d'una cel·la de presa és el batec més fi que hi ha: el tècnic hi és,
+        # anotant. El `model_id` ve de la línia (`SizeCheckLine.size_check.model`).
+        serializer.save()
+        batec_de_request(self.request, serializer.instance.size_check.model_id, SUP_PRESA)

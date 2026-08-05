@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { fittingSessions, fittingPhotos } from '../../api/endpoints'
+import { fittingSessions, fittingPhotos, timers } from '../../api/endpoints'
 import { thStyle, useDebouncedSave, SaveStatus, fmtMeasure, useUnit } from '../../pages/fittingShared'
 import { orderedSizes } from '../../utils/sizeRun'
 import { identitatMesura } from '../../utils/identitatMesura'
@@ -77,6 +77,10 @@ export default function SessionPanel({ session, pieceFittingId, grid, modelId = 
     if (!files.length) return
     setUploading(true); setErr(null)
     Promise.all(files.map(f => fittingPhotos.upload(session.id, f, pieceFittingId)))
+      // F1.3 · §S-1 — `POST fitting-photos/` va per `session`/`piece_fitting` i el backend no en
+      // pot deduir el model: el batec el fa el client. `heartbeat` segella el tram obert del
+      // propi tècnic sense necessitar model_id, i mai fa caure la pujada que observa.
+      .then(r => { timers.heartbeat().catch(() => {}); return r })
       .then(reloadPhotos)
       .catch(() => setErr(t('fitting.save.image_error')))
       .finally(() => { setUploading(false); e.target.value = '' })

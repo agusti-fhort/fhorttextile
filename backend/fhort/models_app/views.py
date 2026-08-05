@@ -17,6 +17,10 @@ from fhort.pom.services import SealedGradingVersionError, _te_regles
 from fhort.pom.grading_regime import (
     CODI_LINEAR_ZERO, MISSATGE_LINEAR_ZERO, es_linear_degenerada,
 )
+# F1.3 — el batec d'escriptura: escriure sobre un model és el senyal de «hi estic
+# treballant» (D-2). El decorador bat NOMÉS en 2xx i mai llança.
+from fhort.tasks.services_batec import (SUP_ESCALAT, SUP_FITXA, SUP_MESURES, SUP_PRESA,
+                                        bat_escriptura, batec_de_request)
 from fhort.pom.models import MeasurementLayer
 from fhort.pom.plausibilitat import CODI_MESURA_FORA_RANG, mesura_fora_de_rang
 from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
@@ -522,6 +526,10 @@ class BaseMeasurementViewSet(viewsets.ModelViewSet):
         # _changed_by takes priority over the original created_by for edits.
         serializer.instance._changed_by = self.request.user
         serializer.save()
+        # F1.3 — editar una cel·la de la graella de mides ÉS treballar. El `model_id` no ve del
+        # camí sinó de la fila (`BaseMeasurement.model`), i és per això que aquesta superfície
+        # —la que més s'escriu— no tenia rellotge fins avui.
+        batec_de_request(self.request, serializer.instance.model_id, SUP_MESURES)
 
 
 
@@ -1651,6 +1659,7 @@ def copiar_de_model_view(request, model_id, src_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_MESURES)
 def close_table_view(request, model_id):
     """POST /api/v1/models/<id>/tancar-taula/ — Sprint B · tancar la taula de mides.
 
@@ -2004,6 +2013,7 @@ def set_measurements_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_MESURES)
 def gravar_pom_view(request, model_id):
     """POST /api/v1/models/<id>/gravar-pom/
 
@@ -2248,6 +2258,14 @@ def reorder_measurements_view(request, model_id):
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
 def upload_file_view(request, model_id):
+    """F1.3 · AQUESTA PORTA NO BAT, I ÉS UNA DECISIÓ, NO UN OBLIT.
+
+    Pujar un fitxer a un model no diu a QUINA feina pertany: no hi ha cap `TaskType` amb l'eina
+    de «fitxers» (el catàleg mapeja `mesures`/`escalat`/`fitxa`/`patro`, i cap d'ells és això).
+    Un adjunt pot ser d'una fitxa, d'un patró, d'un fitting o de res. Batre-hi obligaria a triar
+    una superfície a l'atzar i imputar temps a la tasca equivocada — pitjor que no imputar-ne.
+    Si algun dia un `TaskType` reclama els adjunts, el batec entra aquí amb el seu `code`.
+    """
     try:
         model = Model.objects.get(id=model_id)
     except Model.DoesNotExist:
@@ -2569,6 +2587,7 @@ def measurements_chat_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_ESCALAT)
 def generate_grading_view(request, model_id):
     try:
         model = Model.objects.get(id=model_id)
@@ -2907,6 +2926,7 @@ def set_size_override_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([_ExecuteTasksCap])
+@bat_escriptura(SUP_ESCALAT)
 def escalat_ajustar_talla_view(request, model_id):
     """POST /api/v1/models/<model_id>/escalat/ajustar-talla/  Body: {pom_id, talla, valor}
 
@@ -3242,6 +3262,7 @@ def grading_status_view(request, model_id):
 
 @api_view(['POST'])
 @permission_classes([_ExecuteTasksCap])
+@bat_escriptura(SUP_MESURES)
 def base_measurements_reorder_view(request, model_id):
     """POST /api/v1/models/<model_id>/base-measurements/reorder/  Body: {ids: [bm_id, ...] ordenats}
 
@@ -3325,6 +3346,7 @@ def base_measurement_noms_view(request, bm_id):
     for camp, valor in canvis.items():
         setattr(bm, camp, valor)
     bm.save(update_fields=[*canvis.keys(), 'updated_at'])
+    batec_de_request(request, bm.model_id, SUP_MESURES)   # F1.3 — batejar una fila és treballar
 
     return Response({
         'id': bm.id,
@@ -4361,6 +4383,7 @@ def acte_canonic_base_set_view(request, base_set_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_MESURES)
 def desactivar_pom_view(request, model_id, pom_id):
     """C1 (PRINCIPI DEL SOROLL, 2026-07-22) — PODA d'un POM del model. SOFT, mai DELETE.
 
@@ -4474,6 +4497,7 @@ def _sembra_step_des_dels_specs(model, pom_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@bat_escriptura(SUP_ESCALAT)
 def set_pom_regim_view(request, model_id, pom_id):
     """PG-4b-3a / P3 — UPSERT de la REGLA resident (ModelGradingRule) per (model, pom).
 

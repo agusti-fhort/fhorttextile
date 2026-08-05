@@ -34,6 +34,8 @@ from .serializers import (
     PieceFittingLineSerializer,
     FittingPhotoSerializer,
 )
+from fhort.tasks.services_batec import SUP_PRESA, batec_de_request
+
 from . import services
 from fhort.accounts.capabilities import HasCapability, SCHEDULE_FITTINGS
 
@@ -525,6 +527,7 @@ class PieceFittingViewSet(mixins.RetrieveModelMixin,
             )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        batec_de_request(request, pf.model_id, SUP_PRESA)   # F1.3
         return Response({
             'id': pf.pk, 'gate': pf.gate, 'gate_motiu': pf.gate_motiu, 'gate_at': pf.gate_at,
         })
@@ -548,12 +551,14 @@ class PieceFittingViewSet(mixins.RetrieveModelMixin,
             if 'segellada a producció' in str(e):
                 body['code'] = 'grading_sealed'
             return Response(body, status=status.HTTP_400_BAD_REQUEST)
+        batec_de_request(request, self.get_object().model_id, SUP_PRESA)   # F1.3
         return Response(result)
 
     @action(detail=True, methods=['post'])
     def discard(self, request, pk=None):
         """Revert valor_real := valor_teoric for all lines (pure measurement revert)."""
         result = services.discard_piece_fitting(int(pk))
+        batec_de_request(request, self.get_object().model_id, SUP_PRESA)   # F1.3
         return Response(result)
 
 
@@ -586,10 +591,14 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
 
     def partial_update(self, request, *args, **kwargs):
         # Guards ABANS de desar; delega només si la línia és editable.
-        rebuig = self._rebuig_escriptura(self.get_object())
+        linia = self.get_object()
+        rebuig = self._rebuig_escriptura(linia)
         if rebuig is not None:
             return rebuig
-        return super().partial_update(request, *args, **kwargs)
+        resposta = super().partial_update(request, *args, **kwargs)
+        # F1.3 — l'autosave d'una presa és el batec més fi: el tècnic hi és, mesurant.
+        batec_de_request(request, linia.piece_fitting.model_id, SUP_PRESA)
+        return resposta
 
     @action(detail=True, methods=['post'], url_path='propagar')
     def propagar(self, request, pk=None):

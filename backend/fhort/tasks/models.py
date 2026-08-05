@@ -14,6 +14,10 @@ class TimerEntrada(models.Model):
     # No és inactivitat: és DURADA des de l'últim senyal (decisió Patró C).
     # GANXO F-MÀ (no construït): aquest és el senyal que alimentarà `last_activity_at` del TTL de
     # la mà. Qui escrigui aquí haurà d'escriure els dos alhora, no inventar-se un segon batec.
+    # F1.3 — EL GANXO S'HA HONRAT: l'escriptura de dades també bat AQUÍ
+    # (`services_batec.batec_escriptura`), no en un camp propi. Hi ha dos emissors i UN sol
+    # camp: el guard (presència: «sóc davant de la pantalla») i l'escriptura (activitat: «he
+    # escrit»). Qui n'afegeixi un tercer, que escrigui aquí mateix.
     last_heartbeat = models.DateTimeField(null=True, blank=True,
                                           help_text='Últim senyal de vida del tècnic sobre el '
                                                     'tram obert. null = cap encara (val `inici`).')
