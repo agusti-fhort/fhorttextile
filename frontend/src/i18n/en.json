@@ -3226,7 +3226,13 @@
     "save_saved": "saved",
     "save_failed": "couldn't save",
     "count_filled": "{{n}} filled in",
-    "count_empty": "{{n}} blank → will be discarded"
+    "count_empty": "{{n}} blank → will be discarded",
+    "finder_ph": "code or name…  «C.f» lining · «S.l» left · ↓ from the last row",
+    "finder_hint": "Enter confirms · Esc back to the lane",
+    "finder_eix": "→ {{eix}}",
+    "finder_nivell_item": "from the item",
+    "finder_nivell_type": "from the family",
+    "finder_nivell_cataleg": "from the client catalogue"
   },
   "dashboard": {
     "tab_home": "Home",

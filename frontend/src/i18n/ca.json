@@ -3226,7 +3226,13 @@
     "save_saved": "desat",
     "save_failed": "no s'ha pogut desar",
     "count_filled": "{{n}} informades",
-    "count_empty": "{{n}} en blanc → es descartaran"
+    "count_empty": "{{n}} en blanc → es descartaran",
+    "finder_ph": "codi o nom…  «C.f» folre · «S.l» esquerra · ↓ des de l'última fila",
+    "finder_hint": "Enter confirma · Esc torna al carril",
+    "finder_eix": "→ {{eix}}",
+    "finder_nivell_item": "de l'item",
+    "finder_nivell_type": "de la família",
+    "finder_nivell_cataleg": "del catàleg del client"
   },
   "dashboard": {
     "tab_home": "Inici",

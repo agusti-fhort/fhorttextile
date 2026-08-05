@@ -3226,7 +3226,13 @@
     "save_saved": "guardado",
     "save_failed": "no se ha podido guardar",
     "count_filled": "{{n}} informadas",
-    "count_empty": "{{n}} en blanco → se descartarán"
+    "count_empty": "{{n}} en blanco → se descartarán",
+    "finder_ph": "código o nombre…  «C.f» forro · «S.l» izquierda · ↓ desde la última fila",
+    "finder_hint": "Enter confirma · Esc vuelve al carril",
+    "finder_eix": "→ {{eix}}",
+    "finder_nivell_item": "del item",
+    "finder_nivell_type": "de la familia",
+    "finder_nivell_cataleg": "del catálogo del cliente"
   },
   "dashboard": {
     "tab_home": "Inicio",

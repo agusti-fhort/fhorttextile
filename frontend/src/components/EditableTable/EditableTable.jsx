@@ -25,7 +25,7 @@ const REGLA_BG = 'var(--model-band)'
 const SEP = '2px solid var(--border)'
 const REGIME_OPTIONS = ['LINEAR', 'STEP', 'FIXED']
 import BateigInput from '../model/BateigInput'
-import { baseMeasurements, models } from '../../api/endpoints'
+import { baseMeasurements, models, poms } from '../../api/endpoints'
 
 // TIPOGRAFIA DE LA v8.1 (brief C5-UI · P1). Els dos cossos NO són tokens de la casa a posta:
 // la maqueta aprovada demana 9,5px a la capçalera i 12,5px al valor, i cap dels graons del
@@ -130,11 +130,15 @@ export default function EditableTable({
   }, [])
   const rowsRef = useRef(localRows)
   useEffect(() => { rowsRef.current = localRows }, [localRows])
+  // v8.1 — DES DE L'ÚLTIMA FILA, ↓ ENTRA AL CERCADOR. El carril no s'acaba en una paret: el
+  // gest natural després de la darrera mesura és afegir-ne una altra, i és allà on és el camp.
+  const finderRef = useRef(null)
   const navVal = useCallback((rowId, dir) => {
     const ordre = rowsRef.current
     const i = ordre.findIndex(r => r.id === rowId)
     const target = ordre[i + dir]
-    if (target) valRefs.current[target.id]?.focus()
+    if (target) { valRefs.current[target.id]?.focus(); return }
+    if (dir > 0 && i === ordre.length - 1) finderRef.current?.focus()
   }, [])
 
   // v8.1 — L'INDICADOR DE DESAT, per a les portes que desen SOLES.
@@ -203,14 +207,25 @@ export default function EditableTable({
     setDirty(true)
   }
 
-  const handleAddRow = (pom) => {
+  // `eixos` ve del sufix del cercador (`C.f` → capa folre · `S.l` → instància left). Sense
+  // sufix, la fila neix com sempre: exterior i instància única.
+  const handleAddRow = (pom, eixos = {}) => {
+    const capa = eixos.capa || 'exterior'
+    const instancia = eixos.instancia || ''
+    // La invariant `instancia_exigeix_nom` demana nom quan hi ha instància: el cercador el
+    // PROPOSA aquí mateix amb la regla de D-31.26, i el patronista el pot reescriure.
+    const nomFitxa = instancia
+      ? (codiProposat(dicc, pom.codi_client || '', [instancia]) || instancia.toUpperCase())
+      : ''
     const newRow = {
       id: `tmp-${Date.now()}`,
       pom_id: pom.id,
       pom_code: pom.codi_client,
       nom_ca: pom.nom_ca || pom.nom_client || '',
       nom_en: pom.nom_en || pom.nom_client || '',
-      nom_fitxa: '',
+      nom_fitxa: nomFitxa,
+      capa,
+      instancia,
       base_value_cm: null,
       graded: {},
       ordre: localRows.length,
@@ -652,7 +667,12 @@ export default function EditableTable({
               <tfoot>
                 <tr>
                   <td colSpan={colCount} style={{ padding: '8px 12px' }}>
-                    <AddPOMInline onAdd={handleAddRow} />
+                    <CercadorPOM dicc={dicc} modelId={modelId} onAdd={handleAddRow}
+                      registerFinder={el => { finderRef.current = el }}
+                      onSurt={() => {
+                        const ultima = rowsRef.current[rowsRef.current.length - 1]
+                        if (ultima) valRefs.current[ultima.id]?.focus()
+                      }} />
                   </td>
                 </tr>
               </tfoot>
@@ -1396,118 +1416,159 @@ function EditableCell({ value, onChange, mono, gold, right, signed, readOnly }) 
   )
 }
 
-function AddPOMInline({ onAdd }) {
+// ── B3 · EL CERCADOR DEL PEU DE TAULA (v8.1 · `tr.newrow` :272-277 · `.finder` :119) ─────────
+//
+// Tres coses que el botó «Afegir POM» d'abans no feia:
+//
+//  1. ÉS SEMPRE VISIBLE. Era un botó que calia trobar i clicar per obrir un camp. La v8.1 el vol
+//     al peu, obert, perquè afegir una mesura és part de treballar la taula i no una excepció.
+//  2. AGRUPA PER PROXIMITAT. «de l'item» · «de la família» · «del catàleg del client». Qui busca
+//     «C» a la taula d'un jersei vol la seva cintura, no la d'una americana que comparteix
+//     catàleg. El nivell el resol el backend (`?model=`), que és qui sap el mapa de l'item.
+//  3. ENTÉN ELS SUFIXOS. «C.f» és la cintura AL FOLRE i «S.l» la sisa ESQUERRA: en una taula amb
+//     germanes, escriure el codi i triar després la capa a un altre lloc són dos gestos per a
+//     una sola intenció.
+//
+// LA RESOLUCIÓ DEL SUFIX ÉS DETERMINISTA i va per aquest ordre, contra el diccionari real:
+//     sufix exacte d'instància (L·R·T·B·CF·CB·S) → prefix de CAPA → prefix d'instància.
+// L'ordre importa perquè hi ha col·lisions: `f` és prefix de `folre` I de `fornitura`, i es
+// resol pel `display_order` del catàleg (folre va primer, que és el que la maqueta demana amb
+// «C.f»); `r` podria ser `right` o `relaxed`, i el sufix exacte `R` mana i dona `right`.
+// Un sufix que no resol NO s'inventa: la cerca es fa amb el text sencer.
+function resolSufix(dicc, cua) {
+  if (!dicc || !cua) return null
+  const c = cua.toLowerCase()
+  const posicions = dicc.instancies?.POSICIO || []
+  const estats = dicc.instancies?.ESTAT || []
+  const totes = [...posicions, ...estats]
+  const perOrdre = (a, b) => (a.display_order ?? 99) - (b.display_order ?? 99)
+
+  const perSufix = totes.find(f => (f.sufix || '').toLowerCase() === c)
+  if (perSufix) return { instancia: perSufix.slug }
+
+  const capa = [...(dicc.capes || [])].sort(perOrdre)
+    .find(f => f.slug.toLowerCase().startsWith(c) && f.slug !== dicc.regles?.capa_defecte)
+  if (capa) return { capa: capa.slug }
+
+  const inst = [...totes].sort(perOrdre).find(f => f.slug.toLowerCase().startsWith(c))
+  if (inst) return { instancia: inst.slug }
+  return null
+}
+
+const NIVELLS = ['item', 'type', 'cataleg']
+
+function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt }) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
-  const [open, setOpen] = useState(false)
-  const token = localStorage.getItem('access_token')
-  const API = import.meta.env.VITE_API_URL || ''
+  const [sel, setSel] = useState(0)
+  const [obert, setObert] = useState(false)
+  const inputRef = useRef(null)
+
+  // El text es parteix en «què busco» i «com el vull»: `C.f` → busca `C`, capa `folre`.
+  const m = query.trim().match(/^(.*?)\.([a-zA-Z]{1,2})$/)
+  const eixos = m ? resolSufix(dicc, m[2]) : null
+  const cerca = eixos ? m[1] : query.trim()
 
   useEffect(() => {
-    if (query.length < 2) { setResults([]); return }
-    const timer = setTimeout(async () => {
-      try {
-        const r = await fetch(
-          `${API}/api/v1/poms/cerca/?q=${encodeURIComponent(query)}&page_size=10`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        const d = await r.json()
-        setResults(d.results || d || [])
-      } catch {
-        setResults([])
-      }
+    if (cerca.length < 2) { setResults([]); setObert(false); return }
+    const timer = setTimeout(() => {
+      poms.cerca({ q: cerca, page_size: 10, ...(modelId ? { model: modelId } : {}) })
+        .then(r => {
+          setResults(r.data?.results || [])
+          setSel(0); setObert(true)
+        })
+        .catch(() => { setResults([]); setObert(false) })
     }, 300)
     return () => clearTimeout(timer)
-  }, [query])
+  }, [cerca, modelId])
 
-  const handleCreatePOM = async (nom) => {
-    try {
-      const r = await fetch(`${API}/api/v1/poms/crear-tenant/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          nom_client: nom,
-          codi_client: nom.toUpperCase().replace(/\s+/g, '_').slice(0, 20),
-          actiu: true,
-          pendent_revisio: true,
-        }),
-      })
-      const d = await r.json()
-      if (r.ok) {
-        onAdd({ id: d.id, codi_client: d.codi_client, nom_client: d.nom_client })
-        setQuery(''); setResults([]); setOpen(false)
-      }
-    } catch (e) {
-      console.error('Error creant POM', e)
-    }
+  const tria = (p) => {
+    if (!p) return
+    onAdd(p, eixos || {})
+    setQuery(''); setResults([]); setObert(false)
   }
 
-  if (!open) {
-    return (
-      <button type="button" onClick={() => setOpen(true)}
-        style={{ background: 'none', border: 'none', cursor: 'pointer',
-                 fontSize: 'var(--fs-body)', color: 'var(--gold)', padding: '4px 0',
-                 }}>
-        <i className="ti ti-plus" /> {t('editable_table.add_pom')}
-      </button>
-    )
-  }
+  const perNivell = NIVELLS
+    .map(n => [n, results.filter(r => (r.nivell || 'cataleg') === n)])
+    .filter(([, files]) => files.length > 0)
 
   return (
-    <div style={{ position: 'relative', display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
       <input
-        autoFocus
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        placeholder={t('editable_table.search_placeholder')}
-        style={{ padding: '4px 8px', border: '1px solid var(--border)',
-                 borderRadius: 4, fontSize: 'var(--fs-body)', width: 220,
-                 }}
-      />
-      {(results.length > 0 || query.length >= 2) && (
+        ref={el => { inputRef.current = el; registerFinder?.(el) }}
+        value={query} onChange={e => setQuery(e.target.value)}
+        placeholder={t('editable_table.finder_ph')}
+        onKeyDown={e => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            if (results.length) setSel(s => Math.min(s + 1, results.length - 1))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            // A dalt de tot de la llista (o sense llista) la fletxa TORNA AL CARRIL: el cercador
+            // és el final del recorregut, no un cul-de-sac.
+            if (sel === 0 || !obert) { setObert(false); onSurt?.() } else setSel(s => s - 1)
+          } else if (e.key === 'Enter') {
+            e.preventDefault(); tria(results[sel])
+          } else if (e.key === 'Escape') {
+            e.preventDefault(); setQuery(''); setObert(false); onSurt?.()
+          }
+        }}
+        style={{
+          font: 'inherit', fontSize: FS_VAL, color: 'var(--text-main)', width: 320,
+          border: '1px solid var(--gold)', borderRadius: 5, padding: '6px 10px',
+          background: 'var(--white)', boxSizing: 'border-box',
+        }} />
+      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+        {eixos
+          ? t('editable_table.finder_eix', {
+            eix: eixos.capa ? etiquetaCapa(eixos.capa, t) : etiquetaInstancia(eixos.instancia, t),
+          })
+          : t('editable_table.finder_hint')}
+      </span>
+
+      {obert && (
         <div style={{
-          position: 'absolute', top: '100%', left: 0, marginTop: 4,
-          background: 'var(--bg-main)',
-          border: '0.5px solid var(--border)', borderRadius: 6,
-          zIndex: 100, minWidth: 280,
+          position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, zIndex: 40,
+          background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 7,
+          boxShadow: '0 -8px 24px rgba(0,0,0,0.12)', minWidth: 410, maxHeight: 290, overflow: 'auto',
         }}>
-          {results.map(p => (
-            <div key={p.id}
-              onClick={() => { onAdd(p); setQuery(''); setResults([]); setOpen(false) }}
-              style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 'var(--fs-body)',
-                       borderBottom: '0.5px solid var(--border)',
-                       }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-muted)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <span style={{ color: 'var(--gold)', marginRight: 8 }}>
-                {p.codi_client}
-              </span>
-              {p.nom_client || p.nom_ca || p.nom_en}
+          {perNivell.map(([nivell, files]) => (
+            <div key={nivell}>
+              <div style={{ fontSize: 'var(--fs-caption)', textTransform: 'uppercase',
+                            letterSpacing: '0.06em', color: 'var(--text-muted)',
+                            padding: '7px 12px 3px', borderTop: '1px solid var(--border)' }}>
+                {t(`editable_table.finder_nivell_${nivell}`)}
+              </div>
+              {files.map(p => {
+                const k = results.indexOf(p)
+                return (
+                  <div key={p.id} onMouseDown={e => { e.preventDefault(); tria(p) }}
+                    onMouseEnter={() => setSel(k)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px',
+                             cursor: 'pointer', fontSize: 'var(--fs-body)',
+                             background: k === sel ? 'var(--gold-pale)' : 'transparent' }}>
+                    <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 56 }}>{p.codi_client}</span>
+                    <span>{p.nom_client || p.nom_en || p.nom_ca}</span>
+                    {eixos && (
+                      <span style={{ background: 'var(--gold-pale)', color: 'var(--gold)',
+                                     border: '1px solid var(--border)', borderRadius: 999,
+                                     padding: '1px 8px', fontSize: 'var(--fs-caption)' }}>
+                        {eixos.capa ? etiquetaCapa(eixos.capa, t) : etiquetaInstancia(eixos.instancia, t)}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           ))}
-          {query.length >= 2 && results.length === 0 && (
-            <div style={{
-              padding: '8px 12px', fontSize: 'var(--fs-body)',
-              color: 'var(--text-muted)',
-            }}>
-              {t('editable_table.no_pom_found', { query })}{' '}
-              <button type="button"
-                onClick={() => handleCreatePOM(query)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer',
-                         color: 'var(--gold)', fontSize: 'var(--fs-body)', padding: 0,
-                         }}>
-                + {t('editable_table.create_pom', { query })}
-              </button>
+          {results.length === 0 && (
+            <div style={{ padding: '8px 12px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+              {t('editable_table.no_pom_found', { query: cerca })}
             </div>
           )}
         </div>
       )}
-      <button type="button" onClick={() => { setOpen(false); setQuery('') }}
-        style={{ background: 'none', border: 'none', cursor: 'pointer',
-                 fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-        ✕
-      </button>
     </div>
   )
 }

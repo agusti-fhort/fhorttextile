@@ -134,6 +134,39 @@ def search_poms_view(request):
             Q(pom_global__nom_en__icontains=q)
         ).select_related('pom_global', 'categoria')[:20]
 
+        # EL NIVELL DE PROXIMITAT (v8.1 · cercador agrupat). Amb `?model=`, cada resultat diu si
+        # el POM ve de l'ITEM d'aquest model, de la seva FAMÍLIA (un altre item del mateix
+        # GarmentType) o del CATÀLEG del client. Sense `?model=` tots surten com a 'cataleg': el
+        # nivell és una relació amb un model concret, i inventar-la sense model seria mentir.
+        #
+        # Es resol amb DUES consultes de `pom_id` i no per resultat: vint resultats × dues
+        # comprovacions serien quaranta viatges a la BD per pintar una llista desplegable.
+        ids_item, ids_familia = set(), set()
+        model_id = request.query_params.get('model')
+        if model_id:
+            from fhort.models_app.models import Model as ModelPeça
+            from fhort.pom.models import GarmentPOMMap
+            m = (ModelPeça.objects
+                 .filter(pk=model_id)
+                 .values('garment_type_item_id', 'garment_type_item__garment_type_id')
+                 .first())
+            if m and m['garment_type_item_id']:
+                ids_item = set(GarmentPOMMap.objects
+                               .filter(garment_type_item_id=m['garment_type_item_id'])
+                               .values_list('pom_id', flat=True))
+                gt = m['garment_type_item__garment_type_id']
+                if gt:
+                    ids_familia = set(GarmentPOMMap.objects
+                                      .filter(garment_type_item__garment_type_id=gt)
+                                      .values_list('pom_id', flat=True)) - ids_item
+
+        def _nivell(pom_id):
+            if pom_id in ids_item:
+                return 'item'
+            if pom_id in ids_familia:
+                return 'type'
+            return 'cataleg'
+
         data = [{
             'id': p.id,
             'codi_client': p.codi_client,
@@ -141,7 +174,13 @@ def search_poms_view(request):
             'nom_ca': p.pom_global.nom_ca if p.pom_global_id else '',
             'nom_en': p.pom_global.nom_en if p.pom_global_id else '',
             'categoria_nom': p.categoria.nom_ca if p.categoria_id else '',
+            'nivell': _nivell(p.id),
         } for p in poms]
+
+        # L'ordre és el de PROXIMITAT: el que l'item ja declara primer. Qui busca «C» a la taula
+        # d'un jersei vol la seva cintura, no la d'una americana que comparteix catàleg.
+        ordre = {'item': 0, 'type': 1, 'cataleg': 2}
+        data.sort(key=lambda r: (ordre[r['nivell']], (r['codi_client'] or '')))
 
         return Response({'results': data})
     except Exception as e:
