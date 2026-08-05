@@ -2584,14 +2584,13 @@
     "loading": "Cargando…",
     "no_active_task": "Ninguna tarea en curso",
     "task_n": "Tarea #{{n}}",
-    "pause": "Pausar",
-    "stop": "Detener",
-    "stopping": "Deteniendo…",
     "today_entries": "Hoy ({{count}} entradas)",
     "no_entries_today": "Sin entradas hoy",
     "weekly_summary": "Resumen semanal",
     "weekly_total": "Total semanal",
-    "min_value": "{{n}}min"
+    "origen_declarat": "declarado",
+    "des_de": "desde las {{hora}}",
+    "tancar_hint": "Para acabar la tarea, usa Acabar en el indicador de sesión."
   },
   "model_measurements": {
     "err_grading": "Error generando el grading",

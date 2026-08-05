@@ -2584,14 +2584,13 @@
     "loading": "Carregant…",
     "no_active_task": "Cap tasca en curs",
     "task_n": "Tasca #{{n}}",
-    "pause": "Pausar",
-    "stop": "Aturar",
-    "stopping": "Aturant…",
     "today_entries": "Avui ({{count}} entrades)",
     "no_entries_today": "Sense entrades avui",
     "weekly_summary": "Resum setmanal",
     "weekly_total": "Total setmanal",
-    "min_value": "{{n}}min"
+    "origen_declarat": "declarat",
+    "des_de": "des de les {{hora}}",
+    "tancar_hint": "Per acabar la tasca, fes servir Acabar a l'indicador de sessió."
   },
   "model_measurements": {
     "err_grading": "Error generant grading",

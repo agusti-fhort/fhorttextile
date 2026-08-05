@@ -2584,14 +2584,13 @@
     "loading": "Loading…",
     "no_active_task": "No task in progress",
     "task_n": "Task #{{n}}",
-    "pause": "Pause",
-    "stop": "Stop",
-    "stopping": "Stopping…",
     "today_entries": "Today ({{count}} entries)",
     "no_entries_today": "No entries today",
     "weekly_summary": "Weekly summary",
     "weekly_total": "Weekly total",
-    "min_value": "{{n}}min"
+    "origen_declarat": "declared",
+    "des_de": "since {{hora}}",
+    "tancar_hint": "To finish the task, use Finish on the session indicator."
   },
   "model_measurements": {
     "err_grading": "Error generating grading",
