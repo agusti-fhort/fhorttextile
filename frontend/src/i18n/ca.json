@@ -4354,5 +4354,17 @@
     "descartar_no": "No, seguir",
     "descartar_si": "Sí, descartar",
     "err_servidor": "No s'ha pogut completar el gest del crono."
+  },
+  "acabar_tasca": {
+    "titol": "Has acabat {{tasca}}?",
+    "cos": "Els canvis ja estan desats. El que decideixes ara és l'estat de la tasca.",
+    "fet": "L'he acabat",
+    "fet_nota": "La tasca passa a feta i queda disponible per a l'albarà. Si després cal tocar-hi, s'obrirà una tasca nova.",
+    "pausa": "La pauso, hi seguiré",
+    "pausa_nota": "La tasca queda oberta i el rellotge s'atura. Torna al panell de tasques del model.",
+    "temps": "Aquesta sessió: {{sessio}} · total de la tasca: {{total}}",
+    "enrere": "Enrere",
+    "confirmar": "Confirmar",
+    "err_servidor": "No s'ha pogut canviar l'estat de la tasca."
   }
 }

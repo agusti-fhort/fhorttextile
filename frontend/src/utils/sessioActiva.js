@@ -26,6 +26,16 @@ export function durada(segons) {
 }
 
 /**
+ * Minuts de la SESSIÓ oberta d'una fila de `ModelTaskSerializer` (`sessio_inici`). 0 si no n'hi
+ * ha cap. El modal de T4 l'ensenya al costat del total: tancar una tasca sense saber quant temps
+ * s'hi tanca és decidir a cegues.
+ */
+export function minutsDeSessio(tasca, ara = Date.now()) {
+  if (!tasca?.sessio_inici) return 0
+  return Math.floor(segonsDeSessio({ inici: tasca.sessio_inici }, ara) / 60)
+}
+
+/**
  * `00:14:32` — el rellotge GRAN del crono declarat (T3). A diferència de `durada`, aquí sí que
  * hi van els segons: el crono es mira mentre corre i un número que no es mou sembla espatllat.
  */

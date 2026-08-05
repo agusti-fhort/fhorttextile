@@ -51,6 +51,10 @@ class ModelTaskSerializer(serializers.ModelSerializer):
     albaranada = serializers.SerializerMethodField()
     obert_per = serializers.SerializerMethodField()
     obert_per_nom = serializers.SerializerMethodField()
+    # T4 — el modal d'acabar diu en veu alta quant temps s'està tancant: la sessió que s'acaba i
+    # el total de la tasca. Sense això la decisió es pren a cegues, i és la que porta a albarà.
+    temps_consumit_min = serializers.SerializerMethodField()
+    sessio_inici = serializers.SerializerMethodField()
 
     class Meta:
         model = ModelTask
@@ -62,7 +66,8 @@ class ModelTaskSerializer(serializers.ModelSerializer):
                   # F2.0 — genealogia (F1.1) + estat derivat per al modal de F2.1.
                   'ronda', 'ronda_seq', 'mare', 'motiu',
                   'assignee_nom', 'es_lliurable', 'tipus_extern',
-                  'es_vigent', 'albaranada', 'obert_per', 'obert_per_nom']
+                  'es_vigent', 'albaranada', 'obert_per', 'obert_per_nom',
+                  'temps_consumit_min', 'sessio_inici']
         # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
         # origen el fixa el backend en crear (prevista per defecte; ad_hoc des de l'arbre global,
         # Sprint 4) → read-only per al client.
@@ -100,6 +105,18 @@ class ModelTaskSerializer(serializers.ModelSerializer):
     def _tram_obert(self, obj):
         return (obj.timers.filter(fi__isnull=True, actiu=True)
                 .select_related('tecnic').order_by('-inici').first())
+
+    def get_temps_consumit_min(self, obj):
+        """Minuts SANS acumulats. Mateixa higiene que el recompute i que l'albarà: els trams
+        desbocats no són temps treballat, i aquí no poden dir una xifra diferent."""
+        from .services_i import _real_minutes
+        return _real_minutes(obj)
+
+    def get_sessio_inici(self, obj):
+        """Quan va començar el tram OBERT (null si no n'hi ha cap). El modal en calcula la
+        sessió; el serializer no li dóna una durada perquè el rellotge corre mentre es llegeix."""
+        tram = obj.timers.filter(fi__isnull=True, actiu=True).first()
+        return tram.inici.isoformat() if tram else None
 
     def get_obert_per(self, obj):
         tram = self._tram_obert(obj)

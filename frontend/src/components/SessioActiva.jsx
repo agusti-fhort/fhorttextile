@@ -6,18 +6,17 @@ import { modelTasks, timers } from '../api/endpoints'
 import { durada, estatSessio, segonsDeSessio } from '../utils/sessioActiva'
 
 /**
- * F2.3 · INDICADOR PERSISTENT DE SESSIÓ + EL GEST D'ACABAR (D-2).
+ * F2.3 · INDICADOR PERSISTENT DE SESSIÓ · T4 (maqueta v1, §2): «diu què corre i des de quan».
  *
  * UN component per a tota l'app, muntat al costat de `GuardTascaOblidada` a `App.jsx`, i no un
  * botó per pantalla: el tècnic salta de Mesures a Fitxa a Escalat i la sessió és la mateixa cosa
- * a totes. Un Stop per superfície voldria dir cinc llocs on el gest que factura pot divergir.
+ * a totes.
  *
- * Per què això existeix: des de F1, **desar ja no tanca res** i el Stop és l'ÚNIC gest que porta
- * una tasca a Done — i Done és el que entra a albarà. Un gest amb aquesta conseqüència no pot
- * dependre de recordar-se'n: ha de veure's sempre, amb el nom del que està obert i des de quan.
- *
- * La confirmació és UNA FRASE, no un modal pesat: acabar és normal, i el diàleg ha de pesar el
- * que pesa el gest.
+ * **JA NO TANCA RES.** F2.3 hi va posar el gest d'acabar perquè, des de F1, desar no tanca i
+ * calia que Done tingués una porta visible. La porta era aquesta píndola flotant, i el lloc
+ * estava equivocat: acabar arribava per sorpresa, lluny de la feina i sense dir quant temps
+ * s'estava tancant. T4 el mou a on la decisió ja s'està prenent —en SORTIR de la superfície de
+ * treball— i aquí només queda la informació, que és el que sempre va ser útil.
  *
  * ⚠️ DEUTE CONEGUT: aquest component sondeja `timers.list` pel seu compte, com fa
  * `GuardTascaOblidada`. Són dues preguntes diferents (ell vigila la INACTIVITAT, això mostra la
@@ -33,8 +32,6 @@ export default function SessioActiva() {
   const navigate = useNavigate()
   const [sessio, setSessio] = useState(null)
   const [ara, setAra] = useState(() => Date.now())
-  const [confirmant, setConfirmant] = useState(false)
-  const [tancant, setTancant] = useState(false)
   const viu = useRef(true)
 
   const llegeix = useCallback(() => {
@@ -62,15 +59,6 @@ export default function SessioActiva() {
     return () => clearInterval(id)
   }, [])
 
-  const acaba = () => {
-    if (!sessio || tancant) return
-    setTancant(true)
-    modelTasks.transition(sessio.taskId, { to_status: 'Done' })
-      .then(() => { setConfirmant(false); return llegeix() })
-      .catch(() => setConfirmant(false))
-      .finally(() => setTancant(false))
-  }
-
   if (!sessio) return null
   const mins = durada(segonsDeSessio({ inici: sessio.inici }, ara))
 
@@ -80,33 +68,6 @@ export default function SessioActiva() {
       display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end',
       fontFamily: 'IBM Plex Mono, monospace',
     }}>
-      {confirmant && (
-        <div style={{
-          background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8,
-          padding: '10px 14px', maxWidth: 320, boxShadow: '0 4px 18px rgba(0,0,0,0.14)',
-        }}>
-          <p style={{ margin: '0 0 10px', fontSize: 'var(--fs-body)', lineHeight: 1.45 }}>
-            {t('sessio.confirma', { tasca: sessio.nom })}
-          </p>
-          <p style={{ margin: '0 0 12px', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
-            {t('sessio.confirma_nota')}
-          </p>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => setConfirmant(false)} disabled={tancant} style={{
-              fontFamily: 'inherit', fontSize: 'var(--fs-body)', padding: '5px 10px',
-              border: 'none', background: 'transparent', color: 'var(--text-muted)',
-              cursor: tancant ? 'not-allowed' : 'pointer',
-            }}>{t('common.cancel')}</button>
-            <button onClick={acaba} disabled={tancant} style={{
-              fontFamily: 'inherit', fontSize: 'var(--fs-body)', fontWeight: 600,
-              padding: '5px 12px', border: 'none', borderRadius: 6,
-              background: 'var(--gold)', color: 'var(--white)',
-              cursor: tancant ? 'not-allowed' : 'pointer', opacity: tancant ? 0.5 : 1,
-            }}>{t('sessio.acabar')}</button>
-          </div>
-        </div>
-      )}
-
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 999,
@@ -131,18 +92,6 @@ export default function SessioActiva() {
           <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-muted)' }}>
             {mins}
           </span>
-        </button>
-        <button
-          onClick={() => setConfirmant(v => !v)}
-          title={t('sessio.acabar')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5, border: 'none', borderRadius: 999,
-            background: 'var(--gold)', color: 'var(--white)', cursor: 'pointer',
-            padding: '5px 12px', fontFamily: 'inherit', fontSize: 'var(--fs-body)', fontWeight: 600,
-          }}
-        >
-          <i className="ti ti-player-stop" />
-          {t('sessio.acabar')}
         </button>
       </div>
     </div>

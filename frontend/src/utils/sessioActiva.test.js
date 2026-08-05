@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { durada, estatSessio, segonsDeSessio , cronometre} from './sessioActiva.js'
+import { durada, estatSessio, segonsDeSessio , cronometre, minutsDeSessio } from './sessioActiva.js'
 
 const T0 = new Date('2026-08-05T10:00:00Z').getTime()
 const tram = (extra = {}) => ({
@@ -113,4 +113,17 @@ test('el cronòmetre pinta hh:mm:ss amb dos dígits sempre', () => {
 test('el cronòmetre no pinta mai negatius ni decimals', () => {
   assert.equal(cronometre(-10), '00:00:00')
   assert.equal(cronometre(59.9), '00:00:59')
+})
+
+// ── T4 · els minuts de la sessió que el modal ensenya ────────────────────────
+test('sense tram obert, la sessió és 0 minuts', () => {
+  assert.equal(minutsDeSessio(null), 0)
+  assert.equal(minutsDeSessio({ id: 1 }), 0)
+  assert.equal(minutsDeSessio({ sessio_inici: null }), 0)
+})
+
+test('amb tram obert, la sessió es compta contra ara i en MINUTS sencers', () => {
+  const ara = Date.parse('2026-08-05T12:00:00Z')
+  assert.equal(minutsDeSessio({ sessio_inici: '2026-08-05T11:18:00Z' }, ara), 42)
+  assert.equal(minutsDeSessio({ sessio_inici: '2026-08-05T11:59:31Z' }, ara), 0)
 })

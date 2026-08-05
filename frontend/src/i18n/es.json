@@ -4354,5 +4354,17 @@
     "descartar_no": "No, seguir",
     "descartar_si": "Sí, descartar",
     "err_servidor": "No se ha podido completar el gesto del crono."
+  },
+  "acabar_tasca": {
+    "titol": "¿Has acabado {{tasca}}?",
+    "cos": "Los cambios ya están guardados. Lo que decides ahora es el estado de la tarea.",
+    "fet": "La he acabado",
+    "fet_nota": "La tarea pasa a hecha y queda disponible para el albarán. Si después hay que tocarla, se abrirá una tarea nueva.",
+    "pausa": "La pauso, seguiré",
+    "pausa_nota": "La tarea queda abierta y el reloj se para. Vuelve al panel de tareas del modelo.",
+    "temps": "Esta sesión: {{sessio}} · total de la tarea: {{total}}",
+    "enrere": "Atrás",
+    "confirmar": "Confirmar",
+    "err_servidor": "No se ha podido cambiar el estado de la tarea."
   }
 }

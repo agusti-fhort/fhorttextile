@@ -18,9 +18,10 @@ import { authFetch } from '../api/authFetch'
 import { missatgeError } from '../api/errorsAuth'
 import useAuthStore from '../store/auth'
 import ObrirTascaDialog from '../components/model/ObrirTascaDialog'
+import ModalAcabarTasca from '../components/model/ModalAcabarTasca'
 import BadgeLliurable from '../components/model/BadgeLliurable'
 import { CARA_CAP, caraDeError, caraObrirTasca } from '../utils/caraObrirTasca'
-import { CODE_PER_TAB, saltDeSuperficie } from '../utils/sessioActiva'
+import { CODE_PER_TAB, saltDeSuperficie, minutsDeSessio } from '../utils/sessioActiva'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
@@ -314,13 +315,32 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     if (cara !== CARA_CAP) { setDialeg({ cara, tab, code, tasca: vigent }); return }
     obreDeDebo(tab, code)
   }
-  const exitEdit = useCallback(() => {
-    pauseActiveTask()
+  // T4 — SORTIR ÉS DECIDIR. Fins ara sortir pausava en silenci, i acabar una tasca depenia de
+  // trobar la píndola flotant de F2.3. Ara, en desar i sortir d'una superfície de treball, el
+  // modal central pregunta el que la persona ja està pensant: ho has acabat o hi seguiràs?
+  // Sense tram viu (res obert) no hi ha res a decidir i la sortida és neta com abans.
+  const [acabant, setAcabant] = useState(null)   // {taskId, code} | null
+  const netejaEdicio = useCallback(() => {
     setEditTaskId(null)
     setEditing(null)
     setMesuresEntry(false)
     setMesuresIntent(null)
-  }, [pauseActiveTask])
+  }, [])
+  const exitEdit = useCallback(() => {
+    const tid = activeTaskRef.current
+    if (tid == null) { netejaEdicio(); return }
+    setAcabant({ taskId: tid })
+  }, [netejaEdicio])
+  // La transició la fa el modal; aquí només queda deixar-ho tot al seu lloc. `activeTaskRef` es
+  // buida perquè el cleanup de desmuntatge no torni a demanar una pausa ja feta (el 400 de la
+  // PEÇA 2), i la reposició va al panell de Tasques del model — el Kanban no existeix.
+  const acabatOPausat = useCallback(() => {
+    activeTaskRef.current = null
+    setAcabant(null)
+    netejaEdicio()
+    reloadTasks(); reloadModel()
+    setActiveTab('Tasques')
+  }, [netejaEdicio, reloadTasks, reloadModel])
   const finishPomEntry = useCallback(() => {
     activeTaskRef.current = null
     setEditTaskId(null)
@@ -610,6 +630,15 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
 
   return (
     <div style={{ width: '100%' }}>
+      {acabant && (
+        <ModalAcabarTasca
+          taskId={acabant.taskId}
+          nomTasca={(modelTaskRows.find(r => r.id === acabant.taskId)?.task_type_name) || ''}
+          minutsSessio={minutsDeSessio(modelTaskRows.find(r => r.id === acabant.taskId))}
+          minutsTotal={modelTaskRows.find(r => r.id === acabant.taskId)?.temps_consumit_min ?? 0}
+          onFet={acabatOPausat}
+          onCancel={() => setAcabant(null)} />
+      )}
       <ObrirTascaDialog
         cara={dialeg?.cara}
         tasca={dialeg?.tasca}

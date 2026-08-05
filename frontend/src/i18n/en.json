@@ -4354,5 +4354,17 @@
     "descartar_no": "No, carry on",
     "descartar_si": "Yes, discard",
     "err_servidor": "The clock action could not be completed."
+  },
+  "acabar_tasca": {
+    "titol": "Have you finished {{tasca}}?",
+    "cos": "Your changes are already saved. What you decide now is the state of the task.",
+    "fet": "I've finished it",
+    "fet_nota": "The task is marked done and becomes available for the delivery note. If it needs touching later, a new task will be opened.",
+    "pausa": "I'm pausing, I'll carry on",
+    "pausa_nota": "The task stays open and the clock stops. Back to the model task panel.",
+    "temps": "This session: {{sessio}} · task total: {{total}}",
+    "enrere": "Back",
+    "confirmar": "Confirm",
+    "err_servidor": "The task state could not be changed."
   }
 }
