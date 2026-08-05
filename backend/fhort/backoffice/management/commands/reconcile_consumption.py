@@ -2,11 +2,18 @@
 Management command: reconcile_consumption
 Sprint 4 — Meritació retroactiva (backfill N10).
 
-Troba models amb activitat real (tasca InProgress/Done/Paused) però sense
+Troba models amb ESCRIPTURA real (algun TimerEntrada amb last_heartbeat) però sense
 consumption_started_at (forats N10: models anteriors al hook 4.2 o amb
 fallada transitòria de facturació). Per a cada forat, reconstrueix el
 merited_at com el MIN(TaskTransition.at where to_status='InProgress') de
 totes les seves tasques, i fa la triple escriptura atòmica:
+
+F1.4 · D-10 — el criteri era «hi ha una tasca InProgress/Done/Paused», o sigui la mera
+obertura d'una porta. Amb el gallet de meritació mogut al batec d'escriptura
+(`tasks/services_batec`), aquell criteri hauria remeritat pel darrere tot el que el gallet
+nou decideix no meritar. `merited_at` segueix sortint de la 1a `→InProgress` perquè és
+l'instant en què va començar la feina d'aquell tram; el que ha canviat és QUI entra a la
+llista, no com se li posa data.
   1. Model.consumption_started_at (TENANT)
   2. ConsumptionRecord (TENANT)
   3. ModelConsumptionEvent (PUBLIC) — via schema_context('public')
@@ -65,9 +72,11 @@ class Command(BaseCommand):
         from fhort.tasks.models import TaskTransition
         from fhort.tasks.signals import model_consumption_started
 
+        # F1.4 · D-10 — mateix canvi de criteri que a la branca de model sol: batec real, no
+        # mera existència d'una tasca moguda.
         forats = (GarmentSet.objects
                   .filter(consumption_started_at__isnull=True,
-                          peces__model_tasks__status__in=['InProgress', 'Done', 'Paused'])
+                          peces__model_tasks__timers__last_heartbeat__isnull=False)
                   .distinct())
 
         for gs in forats:
@@ -165,12 +174,18 @@ class Command(BaseCommand):
                 # no és cosmètic — sense ell, una peça d'un conjunt ja meritat com a conjunt
                 # (però amb la seva marca encara buida per qualsevol motiu) tornaria a meritar
                 # pel seu compte i el set passaria a comptar 2.
+                # F1.4 · D-10 — el criteri de forat s'alinea amb el gallet nou. Abans bastava
+                # que existís una tasca en qualsevol estat mogut: o sigui que un model on algú
+                # havia obert una porta tres segons i no hi havia escrit mai entrava aquí i el
+                # reconcile el meritava. Amb la meritació moguda al batec d'escriptura, això
+                # tornaria a meritar exactament el que el gallet nou ha decidit NO meritar.
+                # El criteri és ara el mateix fet: hi ha algun tram amb `last_heartbeat`.
                 gaps = (
                     Model.objects
                     .filter(
                         consumption_started_at__isnull=True,
                         garment_set__isnull=True,
-                        model_tasks__status__in=['InProgress', 'Done', 'Paused'],
+                        model_tasks__timers__last_heartbeat__isnull=False,
                     )
                     .distinct()
                     .select_related('customer')

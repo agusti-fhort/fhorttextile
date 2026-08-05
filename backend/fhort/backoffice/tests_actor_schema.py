@@ -81,7 +81,8 @@ class ActorSchemaTest(TenantTestCase):
     # ── reconcile passa l'actor del tenant que recorre ─────────────────────────
     def test_reconcile_passa_actor(self):
         from fhort.models_app.models import Model
-        from fhort.tasks.models import Customer, ModelTask, TaskTransition, TaskType
+        from fhort.tasks.models import (Customer, ModelTask, TaskTransition, TaskType,
+                                        TimerEntrada)
 
         schema = self.tenant.schema_name
         cust = Customer.objects.create(codi='BRW', nom='Brownie SL')
@@ -95,6 +96,13 @@ class ActorSchemaTest(TenantTestCase):
         tt = TaskType.objects.create(code='patronatge', name='Patronatge')
         task = ModelTask.objects.create(model=model, task_type=tt, status='InProgress')
         TaskTransition.objects.create(model_task=task, to_status='InProgress')
+        # F1.4 · D-10 — «activitat real» ja no vol dir «hi ha una tasca moguda» sinó «algú hi ha
+        # ESCRIT»: el criteri de forat de `reconcile_consumption` mira `TimerEntrada.last_heartbeat`.
+        # El que aquest test prova és la propagació d'`actor_schema`, no el criteri; el fixture
+        # s'actualitza perquè segueixi representant un model amb feina real a sobre.
+        prof = UserProfile.objects.get(user=u)
+        TimerEntrada.objects.create(model_task=task, tecnic=prof, inici=timezone.now(),
+                                    last_heartbeat=timezone.now())
 
         call_command('reconcile_consumption', tenant=schema, verbosity=0)
 

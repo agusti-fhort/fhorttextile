@@ -38,6 +38,39 @@ SUP_ESCALAT = 'grading'
 SUP_FITXA = 'tech_sheet'
 
 
+def _meritar_si_cal(task):
+    """F1.4 · D-10 — EL GALLET DE MERITACIÓ, al seu lloc nou.
+
+    Abans vivia a `transition_task`: la primera `→InProgress` de qualsevol tasca meritava el
+    model. El fet facturable era «algú ha obert una porta», i tocar-ne una tres segons per error
+    facturava. Ara és «algú hi ha ESCRIT», que és el que aquest mòdul sap i la màquina d'estats
+    no.
+
+    Les funcions de meritació no s'han tocat (`services_c._meritar_model` / `_meritar_conjunt`):
+    el seu guard d'idempotència és un `UPDATE ... WHERE consumption_started_at IS NULL` atòmic,
+    de manera que cridar-les a cada batec és barat i segur — la segona vegada no fan res.
+
+    No-fatal, igual que abans: el tècnic ja té la feina desada i un error de facturació no li
+    pot tombar l'escriptura. El forat el recull `reconcile_consumption`.
+    """
+    from django.utils import timezone
+
+    from fhort.models_app.models import Model
+
+    from .services_c import _meritar_conjunt, _meritar_model
+
+    try:
+        model = Model.objects.select_related('customer', 'garment_set').get(pk=task.model_id)
+        if model.consumption_started_at is not None:
+            return   # ja meritat: ni una consulta més
+        if model.garment_set_id:
+            _meritar_conjunt(model, timezone.now())
+        else:
+            _meritar_model(model, timezone.now())
+    except Exception:
+        logger.exception('meritacio fallida (batec) model=%s task=%s', task.model_id, task.pk)
+
+
 def batec_escriptura(model, code, profile):
     """Registra que algú ESTÀ TREBALLANT aquest model en aquesta superfície.
 
@@ -72,6 +105,15 @@ def batec_escriptura(model, code, profile):
                 # treballar-hi ha d'obrir una RONDA, i això és un acte humà, no un efecte d'un PATCH.
                 return {'batec': False, 'accio': 'refusada', 'task_id': task.pk,
                         'code': getattr(e, 'code', None)}
+            # El tram que `transition_task` acaba d'obrir neix amb `last_heartbeat` posat: qui
+            # obre una tasca ESCRIVINT ja ha escrit. Si no s'estampés, un model on l'única
+            # activitat fos aquest primer desat quedaria fora del criteri de forat de
+            # `reconcile_consumption` (que ara mira precisament el batec), i el runtime i el
+            # reconcile discreparien sobre el mateix fet.
+            TimerEntrada.objects.filter(
+                model_task=task, tecnic=profile, fi__isnull=True, actiu=True
+            ).update(last_heartbeat=timezone.now())
+            _meritar_si_cal(task)
             return {'batec': True, 'accio': 'oberta', 'task_id': task.pk}
 
         # Ja en curs: es renova el segell del tram obert d'AQUEST tècnic. Si el tram obert és
@@ -79,6 +121,7 @@ def batec_escriptura(model, code, profile):
         n = (TimerEntrada.objects
              .filter(model_task=task, tecnic=profile, fi__isnull=True, actiu=True)
              .update(last_heartbeat=timezone.now()))
+        _meritar_si_cal(task)
         return {'batec': bool(n), 'accio': 'renovat' if n else 'sense_tram', 'task_id': task.pk}
     except Exception:
         logger.exception('batec_escriptura fallit model=%s code=%s', getattr(model, 'pk', model), code)

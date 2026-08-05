@@ -255,21 +255,21 @@ def transition_task(task, to_status, profile, force=False, auto=None):
         # MÓN TÈCNIC (sagrat): la fase passa a Dev com avui, fora de tota lògica de facturació.
         Model.objects.filter(pk=task.model_id, fase_actual='Pending').update(fase_actual='Dev')
 
-        # MERITACIÓ SaaS (FHORT→tenant). N10: no-fatal, aïllat — mai bloqueja la transició
-        # del tècnic. Llei DUES FACTURACIONS SEPARADES: aquest atomic NO conté res del
-        # mòdul comercial; un error de commerce no pot revertir una meritació amb èxit.
-        try:
-            with transaction.atomic():
-                model = Model.objects.select_related('customer', 'garment_set').get(
-                    pk=task.model_id)
-                if model.garment_set_id:
-                    _meritar_conjunt(model, now)
-                else:
-                    _meritar_model(model, now)
-        except Exception:
-            logger.exception("meritacio fallida model=%s task=%s", task.model_id, task.pk)
-            # NO re-raise: el tecnic ja te la transicio feta; el forat es reconcilia despres
-            # amb `reconcile_consumption`.
+        # F1.4 · D-10 — AQUÍ hi havia la MERITACIÓ SaaS, i ja no hi és.
+        #
+        # El fet facturable era «algú ha obert una porta»: la primera `→InProgress` de qualsevol
+        # tasca meritava el model, emetia l'event a `public` i reancorava el pla. Tocar una porta
+        # tres segons per error facturava (verificat: els 21 ConsumptionRecord del tenant tenien
+        # `merited_at == started_at` de la primera tasca).
+        #
+        # Ara el fet facturable és «algú hi ha ESCRIT»: el gallet viu a
+        # `services_batec.batec_escriptura`, que és l'únic lloc que sap que hi ha hagut feina
+        # real i no només una pestanya oberta. Les funcions `_meritar_model` / `_meritar_conjunt`
+        # / `_emetre_meritacio` NO s'han tocat: han canviat de gallet, no de disseny, i el guard
+        # d'idempotència segueix sent el seu `UPDATE ... WHERE consumption_started_at IS NULL`.
+        #
+        # El que ES QUEDA aquí és el món tècnic (`fase_actual='Dev'`, a dalt) i l'encàrrec
+        # (`assign_work_order`, a sota): ni l'un ni l'altre són facturació SaaS.
 
         # B4a — ENCÀRREC (mòdul comercial, studio→tercers). Món separat: savepoint propi, i
         # s'intenta encara que la meritació hagi fallat (són independents). Assigna work_order
