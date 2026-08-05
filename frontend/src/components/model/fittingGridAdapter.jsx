@@ -92,9 +92,14 @@ export function buildFittingGroups(baseLabel, versionNumbers, t, opts = {}) {
 // Sense pomRows (font no carregada / resposta incompleta) → cap fila, no una excepció: la graella
 // té un estat buit i és el que ha de sortir. Mirall de buildEscalatRows, que ja ho fa des de sempre.
 export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) {
-  // `decisio` (opt-in) porta l'estat del veredicte i les dues portes que l'escriuen. El veredicte
-  // NO es desa: `PieceFittingLine` no té camp on posar-lo (v. la nota de PENDENT a `measureSources`).
-  // La NOTA sí —el camp existeix i el ViewSet l'accepta—, o sigui que va per la seva porta real.
+  // EL VEREDICTE VIU A `line.decisio` (D-31.21) i el serializer l'emet a cada lectura, o sigui que
+  // se sembra SEMPRE —també en consulta—: una sessió segellada s'ha de poder rellegir amb els
+  // mateixos colors amb què es va decidir, i fins ara els perdia tots en obrir-la.
+  //
+  // `decisio` (opt-in) només afegeix les dues PORTES que escriuen. El seu `valors` és un buffer
+  // OPTIMISTA que es consulta amb `in` i no per veritat: `null` hi és un valor legítim —«s'acaba
+  // de treure el veredicte»— i amb `||` es llegiria com «no hi ha res al buffer» i la cel·la
+  // tornaria a pintar el que hi havia desat.
   const { decisio = null } = opts
   return (pomRows || []).map(row => {
     const cells = {}
@@ -104,7 +109,9 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) 
       const history = {}
       for (const vn of versionNumbers) history[`v${vn}`] = evoMap.has(vn) ? evoMap.get(vn) : null
       const baseValue = line?.evolucio?.[0]?.valor_cm ?? null
-      const veredicte = line && decisio ? (decisio.valors[line.id] || null) : null
+      const veredicte = !line ? null
+        : (decisio && line.id in decisio.valors) ? decisio.valors[line.id]
+          : (line.decisio || null)
       cells[baseLabel] = {
         history,
         active: line ? {

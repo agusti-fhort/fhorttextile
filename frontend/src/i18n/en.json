@@ -2237,7 +2237,8 @@
       },
       "col_note": "Note",
       "note_ph": "note…",
-      "note_err": "Could not save the note."
+      "note_err": "Could not save the note.",
+      "verdicte_err": "Couldn't save the verdict."
     },
     "gate": {
       "title": "Piece gate",

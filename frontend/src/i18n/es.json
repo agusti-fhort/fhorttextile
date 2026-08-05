@@ -2237,7 +2237,8 @@
       },
       "col_note": "Nota",
       "note_ph": "nota…",
-      "note_err": "No se ha podido guardar la nota."
+      "note_err": "No se ha podido guardar la nota.",
+      "verdicte_err": "No se ha podido guardar el veredicto."
     },
     "gate": {
       "title": "Gate de la pieza",

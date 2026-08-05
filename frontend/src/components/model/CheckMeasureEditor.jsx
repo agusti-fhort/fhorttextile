@@ -322,10 +322,13 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
 
   // C5-UI/P4 — EL VEREDICTE i la finestra d'HISTÒRIC són estat d'aquesta pantalla, no de la font.
   //
-  // 🚩 `veredictes` és local I ES PERD EN RECARREGAR, i això és un DEFECTE, no un disseny: el camp
-  // `PieceFittingLine.decisio` existeix des de `fd102c06`, el PATCH l'accepta i el serializer
-  // l'emet a `line.decisio`. Falta sembrar-lo d'aquí i fer que `onVeredicte` el desi. Ho tanca C1.
-  // (El comentari anterior deia «avui no té on desar-se»; era d'abans de `fd102c06`.)
+  // `veredictes` és un BUFFER OPTIMISTA, no la font de veritat. La font és `line.decisio`, que el
+  // serializer emet i `buildFittingRows` sembra; el buffer només existeix perquè el botó respongui
+  // a l'instant sense esperar el PATCH ni rellegir la peça sencera.
+  //
+  // EN FALLAR, ES DESFÀ. Un veredicte que es pinta i no arriba al servidor és pitjor que un que no
+  // es pinta: la modista continua avall creient que ha decidit. Es treu l'entrada del buffer (no
+  // s'hi escriu el valor vell) perquè la cel·la torni a llegir la línia, que és qui té la veritat.
   //
   // `histFrom` a `null` vol dir «les dues últimes preses», que és el que es mira en obrir. Es
   // recalcula contra el total real a `finestraHistoric`, o sigui que una versió nova no deixa mai
@@ -335,7 +338,16 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   const totalPreses = raw?.versionNumbers?.length ?? 0
   const decisio = src.kind === 'fitting' && !readOnly ? {
     valors: veredictes,
-    onVeredicte: (lineId, v) => setVeredictes(prev => ({ ...prev, [lineId]: v })),
+    onVeredicte: (lineId, v) => {
+      setVeredictes(prev => ({ ...prev, [lineId]: v }))
+      // Mateixa porta que la nota: PATCH per línia. `''` i no `null` — el buit del camp és una
+      // cadena buida i vol dir «sense decidir», que NO és ACCEPTED (v. `PieceFittingLine`).
+      pieceFittingLines.update(lineId, { decisio: v || '' })
+        .catch(() => {
+          setVeredictes(prev => { const n = { ...prev }; delete n[lineId]; return n })
+          onFeedback?.({ type: 'err', text: t('fitting.grid.verdicte_err') })
+        })
+    },
     onNota: (lineId, nota) => pieceFittingLines.update(lineId, { nota: nota || '' })
       .catch(() => onFeedback?.({ type: 'err', text: t('fitting.grid.note_err') })),
   } : null
