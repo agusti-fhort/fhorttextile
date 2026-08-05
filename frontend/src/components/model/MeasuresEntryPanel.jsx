@@ -34,7 +34,6 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   const [pomsSuggerits, setPomsSuggerits] = useState([])
   const [taulaRows, setTaulaRows] = useState([])
   const [sizesAmbDades, setSizesAmbDades] = useState(null)
-  const [deltes, setDeltes] = useState(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   // B4 — quan la sembra retorna code='base_set_absent', el món del model (item × sistema de
@@ -60,9 +59,10 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   const toggleIn = (setter) => (pom) => setter(prev =>
     prev.includes(pom.pom_id) ? prev.filter(x => x !== pom.pom_id) : [...prev, pom.pom_id])
 
+  // Els `deltes` de la resposta ja no es guarden: eren per a la columna Δ, que aquesta taula ja
+  // no té (05/08). El backend els segueix servint per a Escalat, que és qui els treballa.
   const refreshTableMeta = (d) => {
     setSizesAmbDades(d.sizes_amb_dades || null)
-    setDeltes(d.deltes || null)
   }
 
   // Recarrega la taula i fixa el mode (mirall de ModelMeasurements.reloadTable, sense l'estat 'tancat':
@@ -461,7 +461,6 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
               }))}
             sizeRun={sizeRun}
             baseSize={model?.base_size_label}
-            deltes={deltes}
             modelId={id}
             isImport={false}
             saveLabel={savingPom ? t('common.saving') : t('model_measurements.save_pom')}
