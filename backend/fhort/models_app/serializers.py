@@ -306,13 +306,21 @@ class ModelDetailSerializer(serializers.ModelSerializer):
             model_id=obj.pk, task_type__code='pom', status='Done').exists()
 
     def get_grading_target_nom(self, obj):
+        # N1 — aquí hi havia un tercer graó: si la M2M `targets` era buida, es llegia el FK
+        # legacy `GradingRuleSet.target`. Aquell FK el va RETIRAR la migració `pom/0043` (P7,
+        # «un rol, un vincle»), i des de llavors la branca no era un fallback sinó un
+        # AttributeError: qualsevol model amb ruleset de targets buits feia 500 el seu propi GET.
+        #
+        # S'esborra en comptes de reescriure's sobre `targets` perquè seria codi mort per
+        # construcció: la 0043 reconcilia FK→M2M ABANS de l'esborrat («tot `target` no NULL ha
+        # de constar a `targets`»), o sigui que no existeix cap estat on `targets` sigui buida i
+        # el FK tingués res a dir. El que el graó cobria de debò —ruleset sense cap target— ja
+        # el cobreix l'última línia, que cau al camp lliure del Model.
         rs = obj.grading_rule_set if obj.grading_rule_set_id else None
         if rs:
             noms = [t.nom_en for t in rs.targets.all()]
             if noms:
                 return ' / '.join(noms)
-            if rs.target_id:
-                return rs.target.nom_en
         return (obj.target or '').strip() or None
 
     def get_grading_fit_nom(self, obj):
@@ -351,9 +359,9 @@ class ModelDetailSerializer(serializers.ModelSerializer):
             val = (legacy or '').strip()
             return {idioma: val for idioma in _CATALEG_NOM_ATTR} if val else None
 
+        # Mateix graó mort que a `get_grading_target_nom`, i mateix motiu per esborrar-lo: el FK
+        # `target` no existeix des de `pom/0043`, i la M2M ja conté tot el que ell tenia.
         targets = list(rs.targets.all()) if rs else []
-        if rs and not targets and rs.target_id:
-            targets = [rs.target]
         return {
             'target': per_idiomes(targets, obj.target),
             'fit': per_idiomes([rs.fit_type] if rs and rs.fit_type_id else [], obj.fit_type),
