@@ -19,7 +19,7 @@ from fhort.pom.models import GarmentType
 from fhort.tasks.models import Customer, GarmentTypeItem, ModelTask, Ronda, TaskType
 from fhort.tasks.serializers_b import ModelTaskSerializer
 from fhort.tasks.services_c import transition_task
-from fhort.tasks.services_r import obrir_ronda
+from fhort.tasks.services_r import obrir_correccio, obrir_ronda
 
 
 class ContracteF2Test(TenantTestCase):
@@ -84,10 +84,13 @@ class ContracteF2Test(TenantTestCase):
         self.assertIsNone(self._dades()['ronda_seq'], 'la ronda 1 és implícita: seq null')
 
     def test_la_filla_diu_de_qui_es_filla(self):
-        r = obrir_ronda(self.model, Ronda.MOTIU_CORRECCIO, ['pom'])
-        d = self._dades(r.tasques.get())
+        # S-20 — la correcció ja no obre volta: el contracte que es fixa aquí és la GENEALOGIA
+        # (`mare` + `motiu`), que és el que la UI llegeix, i aquell no ha canviat.
+        _, tasques = obrir_correccio(self.model, ['pom'])
+        d = self._dades(tasques[0])
         self.assertEqual(d['mare'], self.task.pk)
         self.assertEqual(d['motiu'], Ronda.MOTIU_CORRECCIO)
+        self.assertIsNone(d['ronda_seq'], 'una correcció de la volta 1 no inventa cap volta')
 
     # ── obert_per: el TRAM, no l'assignee ────────────────────────────────────
     def test_obert_per_es_null_si_ningu_hi_treballa(self):

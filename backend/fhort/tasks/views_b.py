@@ -1427,7 +1427,8 @@ def obrir_ronda_view(request, model_id):
     `motiu`: `nova_mostra` (el client demana una altra volta) | `correccio` (ho refem nosaltres).
     `codes`: slugs de `TaskType` que entren a la volta (G9: mai ids).
     """
-    from .services_r import RondaError, obrir_ronda
+    from .models import Ronda
+    from .services_r import RondaError, obrir_correccio, obrir_ronda
 
     profile = getattr(request.user, 'profile', None)
     if profile is None:
@@ -1448,11 +1449,23 @@ def obrir_ronda_view(request, model_id):
         return Response({'error': f"No pots obrir tasques del tipus: {', '.join(fora)}.",
                          'code': 'task_type_not_allowed'},
                         status=http_status.HTTP_403_FORBIDDEN)
+    # S-20 — les dues sortides d'aquesta porta ja no fan el mateix. Una nova MOSTRA obre volta i
+    # puja el comptador; una CORRECCIÓ no, perquè `seq` compta mostres i no esmenes nostres. El
+    # client segueix demanant-ho igual (`motiu`): qui sap la diferència és el servei.
+    motiu = dades.get('motiu')
     try:
-        ronda = obrir_ronda(model, dades.get('motiu'), codes, profile=profile)
+        if motiu == Ronda.MOTIU_CORRECCIO:
+            ronda, tasques = obrir_correccio(model, codes, profile=profile)
+        else:
+            ronda = obrir_ronda(model, motiu, codes, profile=profile)
+            tasques = list(ronda.tasques.all())
     except RondaError as e:
         return Response({'error': str(e), 'code': 'ronda_invalida'},
                         status=http_status.HTTP_400_BAD_REQUEST)
-    return Response({'ronda_id': ronda.pk, 'seq': ronda.seq, 'motiu': ronda.motiu,
-                     'tasques': list(ronda.tasques.values_list('id', flat=True))},
+    # `ronda_id`/`seq` poden ser NULL en una correcció: la de la mare quan n'hi havia, i res quan
+    # la mare és la prevista (la volta 1, implícita). El client no els llegeix; el contracte ho diu.
+    return Response({'ronda_id': ronda.pk if ronda else None,
+                     'seq': ronda.seq if ronda else None,
+                     'motiu': motiu,
+                     'tasques': [t.id for t in tasques]},
                     status=http_status.HTTP_201_CREATED)

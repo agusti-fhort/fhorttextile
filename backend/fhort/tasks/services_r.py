@@ -20,8 +20,10 @@ que ho impedeix: **un sol criteri, un sol lloc**.
 ## La regla, en tres línies
 
 1. Si el model té una **Ronda oberta** i aquella ronda té una tasca d'aquest `code` → **aquella**.
-2. Si no (o si la ronda no cobreix aquest `code`) → la **prevista** (`origen='prevista'`).
+2. Si no (o si la ronda no cobreix aquest `code`) → la **prevista** i les seves **correccions**.
 3. Dins del conjunt triat, **mai una `Done` si n'hi ha una de viva**.
+4. I entre les vives, **mana la correcció més recent** (S-20): una correcció conviu amb la tasca
+   que corregeix dins de la mateixa volta, i el que és vigent és l'esmena, no allò que s'esmena.
 
 La regla 2 cobreix el cas «hi ha ronda oberta però d'un altre abast»: una ronda s'obre amb una
 llista de codes concreta, i els codes que no hi són segueixen vivint a la tasca base. Sense aquesta
@@ -50,25 +52,31 @@ def tasca_vigent(model, code, *, ronda=None):
 
     Retorna una `ModelTask` o `None`. No crea res, no transiciona res: és una consulta.
     """
+    from django.db.models import Q
+
     from .models import ModelTask
 
     qs = ModelTask.objects.filter(model=model, task_type__code=code)
 
     r = ronda if ronda is not None else _ronda_oberta(model)
-    if r is not None:
-        de_la_ronda = qs.filter(ronda=r)
-        if de_la_ronda.exists():
-            qs = de_la_ronda
-        else:
-            # Regla 2: la ronda no cobreix aquest code → mana la tasca base.
-            qs = qs.filter(origen='prevista')
+    if r is not None and qs.filter(ronda=r).exists():
+        qs = qs.filter(ronda=r)
     else:
-        qs = qs.filter(origen='prevista')
+        # Regla 2: sense ronda (o amb una que no cobreix aquest code) mana la tasca BASE. I amb
+        # ella hi van les seves CORRECCIONS (S-20): una correcció no obre ronda, neix `ad_hoc` i
+        # hereta la ronda de la mare —NULL quan la mare és la prevista—, o sigui que filtrar
+        # només per `origen='prevista'` la deixaria fora i el resolutor no la trobaria mai.
+        qs = qs.filter(Q(origen='prevista') | Q(motiu='correccio', ronda__isnull=True))
 
-    # Regla 3: la feina viva mana sobre la tancada. `order_by('id')` és desempat determinista;
-    # amb la unique parcial viva no hi hauria d'haver mai dues `prevista` del mateix tipus, però
-    # un resolutor no pot dependre que una constraint no s'hagi trencat mai.
-    return qs.exclude(status='Done').order_by('id').first() or qs.order_by('id').first()
+    # Regla 3: la feina viva mana sobre la tancada.
+    vives = qs.exclude(status='Done')
+    tria = vives if vives.exists() else qs
+    # Regla 4 (S-20): dins del conjunt triat, una CORRECCIÓ mana sobre allò que corregeix, i la
+    # més recent sobre les anteriors. Ara que una correcció conviu amb la seva mare dins de la
+    # mateixa volta, `order_by('id').first()` retornaria la mare —la feina que ja se sap que no
+    # va sortir bé. `order_by('id')` es queda com a desempat determinista de la resta.
+    return (tria.filter(motiu='correccio').order_by('-id').first()
+            or tria.order_by('id').first())
 
 
 # ── F1.1 · LA RONDA ──────────────────────────────────────────────────────────
@@ -85,7 +93,8 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     facturat. El que es fa és **feina nova amb identitat pròpia**: una `Ronda`, i sota seu una
     `ModelTask` per code, cadascuna apuntant amb `mare` a la tasca homònima de la volta anterior.
 
-    `motiu`: `Ronda.MOTIU_NOVA_MOSTRA` | `Ronda.MOTIU_CORRECCIO`.
+    `motiu`: `Ronda.MOTIU_NOVA_MOSTRA`. Les CORRECCIONS ja no passen per aquí (S-20): no obren
+    volta, i tenen porta pròpia a `obrir_correccio`.
     `tasques_codes`: slugs de `TaskType` (G9: mai ids). Els inactius i els inexistents s'ignoren
     en silenci? NO — es rebutgen, perquè obrir una ronda a la qual li falta mitja feina és pitjor
     que no obrir-la.
@@ -100,6 +109,8 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
     from .models import ModelTask, Ronda, TaskType
     from .services_g import lookup_estimated_minutes
 
+    if motiu == Ronda.MOTIU_CORRECCIO:
+        raise RondaError('Una correcció no obre ronda: fes servir `obrir_correccio`.')
     if motiu not in dict(Ronda.MOTIU_CHOICES):
         raise RondaError(f'Motiu de ronda desconegut: {motiu!r}.')
     codes = list(dict.fromkeys(tasques_codes or []))   # dedup preservant ordre
@@ -132,6 +143,61 @@ def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
                 assignee=profile,
                 estimated_minutes=lookup_estimated_minutes(model, tt))
     return ronda
+
+
+def obrir_correccio(model, tasques_codes, *, profile=None):
+    """Refà feina que no va sortir bé. **No obre cap Ronda** (S-20, 05/08).
+
+    Una ronda és una MOSTRA: `Ronda.seq` és el número que el PM llegeix i el que billing
+    consultarà per a les voltes pactades. Fins avui una correcció n'obria una i el comptador
+    pujava, de manera que un model amb tres esmenes nostres semblava que hagués fet tres
+    mostres al client. Comptaven dues coses diferents amb el mateix número.
+
+    Ara una correcció és el que sempre va ser: una tasca NOVA lligada a la que corregeix
+    (`mare`), amb `motiu='correccio'`, que **hereta la ronda de la mare** — i NULL quan la mare
+    és la prevista, que és la volta 1 implícita. El model ja ho preveia (`ModelTask.motiu`
+    existeix a part del de la Ronda «perquè una tasca ad-hoc pot néixer d'una correcció sense
+    que s'obri cap ronda»); el que faltava era que el servei ho fes.
+
+    A diferència d'`obrir_ronda`, això NO topa amb la ronda oberta: una correcció dins de la
+    volta que s'està treballant és el cas normal, no una excepció.
+
+    Retorna `(ronda_heretada | None, [ModelTask])`. Atòmic.
+    """
+    from django.db import transaction
+
+    from .models import ModelTask, Ronda, TaskType
+    from .services_g import lookup_estimated_minutes
+
+    codes = list(dict.fromkeys(tasques_codes or []))
+    if not codes:
+        raise RondaError('Una correcció sense cap tasca no és una correcció.')
+
+    tipus = {t.code: t for t in TaskType.objects.filter(code__in=codes, active=True)}
+    desconeguts = [c for c in codes if c not in tipus]
+    if desconeguts:
+        raise RondaError(f"Tipus de tasca inexistents o inactius: {', '.join(desconeguts)}.")
+
+    # Sense mare no hi ha correcció: corregir vol dir refer ALGUNA COSA. Si el model no té encara
+    # aquella tasca, el que toca és obrir-la (`open-task`), no corregir-la.
+    mares = {code: tasca_vigent(model, code) for code in codes}
+    orfes = [c for c, m in mares.items() if m is None]
+    if orfes:
+        raise RondaError(f"No hi ha res a corregir de: {', '.join(orfes)}.")
+
+    fetes = []
+    with transaction.atomic():
+        base_order = ModelTask.objects.filter(model=model).count()
+        for i, code in enumerate(codes):
+            mare = mares[code]
+            tt = tipus[code]
+            fetes.append(ModelTask.objects.create(
+                model=model, task_type=tt, order=base_order + i,
+                status='Pending', origen='ad_hoc',
+                ronda=mare.ronda, mare=mare, motiu=Ronda.MOTIU_CORRECCIO,
+                assignee=profile,
+                estimated_minutes=lookup_estimated_minutes(model, tt)))
+    return (fetes[0].ronda if fetes else None), fetes
 
 
 def tancar_ronda(ronda):

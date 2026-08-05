@@ -22,7 +22,8 @@ from django_tenants.test.cases import TenantTestCase
 
 from fhort.pom.models import GarmentType
 from fhort.tasks.models import Customer, GarmentTypeItem, ModelTask, Ronda, TaskType
-from fhort.tasks.services_r import (RondaError, obrir_ronda, ronda_lliurable, tancar_ronda,
+from fhort.tasks.services_r import (RondaError, obrir_correccio, obrir_ronda,
+                                    ronda_lliurable, tancar_ronda,
                                     tasca_vigent)
 
 
@@ -75,7 +76,7 @@ class RondaTest(TenantTestCase):
 
     def test_la_filla_apunta_a_la_mare_homonima(self):
         """La genealogia ha de dir de QUINA tasca és repetició, no només que ho és."""
-        r = obrir_ronda(self.model, Ronda.MOTIU_CORRECCIO, ['pom', 'tech_sheet'])
+        r = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom', 'tech_sheet'])
         pom_r2 = r.tasques.get(task_type=self.tt_pom)
         fitxa_r2 = r.tasques.get(task_type=self.tt_fitxa)
         self.assertEqual(pom_r2.mare, self.pom_r1)
@@ -91,7 +92,13 @@ class RondaTest(TenantTestCase):
     def test_no_es_poden_obrir_dues_rondes_alhora(self):
         obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
         with self.assertRaises(RondaError):
+            obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
+
+    def test_obrir_ronda_ja_no_accepta_una_correccio(self):
+        """S-20 — la correcció té porta pròpia; per aquí ja no passa."""
+        with self.assertRaises(RondaError):
             obrir_ronda(self.model, Ronda.MOTIU_CORRECCIO, ['pom'])
+        self.assertEqual(Ronda.objects.filter(model=self.model).count(), 0)
 
     def test_ronda_amb_code_inexistent_es_rebutja_sencera(self):
         with self.assertRaises(RondaError):
@@ -169,7 +176,7 @@ class RondaTest(TenantTestCase):
 
     def test_la_ronda_3_es_numera_despres_de_la_2_tancada(self):
         tancar_ronda(obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom']))
-        self.assertEqual(obrir_ronda(self.model, Ronda.MOTIU_CORRECCIO, ['pom']).seq, 3)
+        self.assertEqual(obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom']).seq, 3)
 
     # ── El lliurable, abans que el flag existeixi (F1.6) ─────────────────────
     def test_ronda_lliurable_es_fals_mentre_no_hi_hagi_flag(self):
@@ -231,3 +238,82 @@ class RondaLliurableTest(RondaTest):
 
     def test_patronatge_ja_no_hi_es(self):
         self.assertFalse(TaskType.objects.filter(code='patronatge').exists())
+
+
+class CorreccioSenseRondaTest(RondaTest):
+    """S-20 (05/08) · `Ronda.seq` compta MOSTRES, no correccions.
+
+    Fins avui una correcció obria ronda i el comptador pujava: un model amb tres esmenes
+    nostres semblava que hagués fet tres mostres al client. `seq` és el número que el PM llegeix
+    i el que billing consultarà per a les voltes pactades — no pot comptar dues coses.
+
+    Ara una correcció és una tasca nova lligada a la mare, amb `motiu='correccio'`, que HERETA
+    la ronda de la mare (NULL quan la mare és la prevista, que és la volta 1 implícita).
+    """
+
+    def test_la_correccio_no_crea_ronda_i_hereta_la_de_la_mare(self):
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
+        original = r2.tasques.get(task_type=self.tt_pom)   # abans: ara la volta en tindrà DUES
+        rondes_abans = Ronda.objects.filter(model=self.model).count()
+
+        ronda, tasques = obrir_correccio(self.model, ['pom'])
+
+        self.assertEqual(Ronda.objects.filter(model=self.model).count(), rondes_abans)
+        self.assertEqual(ronda, r2)
+        self.assertEqual(len(tasques), 1)
+        correccio = tasques[0]
+        self.assertEqual(correccio.ronda, r2)
+        self.assertEqual(correccio.mare, original)
+        # La volta 2 té ara la tasca original i la seva esmena, totes dues seves.
+        self.assertEqual(r2.tasques.filter(task_type=self.tt_pom).count(), 2)
+        self.assertEqual(correccio.motiu, Ronda.MOTIU_CORRECCIO)
+        self.assertEqual(correccio.origen, 'ad_hoc')
+
+    def test_la_correccio_sobre_la_prevista_no_te_ronda(self):
+        """La volta 1 és implícita: la seva correcció també viu amb `ronda=NULL`."""
+        ronda, tasques = obrir_correccio(self.model, ['pom'])
+        self.assertIsNone(ronda)
+        self.assertIsNone(tasques[0].ronda)
+        self.assertEqual(tasques[0].mare, self.pom_r1)
+        self.assertEqual(Ronda.objects.filter(model=self.model).count(), 0)
+
+    def test_corregir_no_topa_amb_la_ronda_oberta(self):
+        """Corregir DINS de la volta que s'està treballant és el cas normal, no una excepció."""
+        obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
+        ronda, tasques = obrir_correccio(self.model, ['pom'])   # no ha d'aixecar RondaError
+        self.assertEqual(len(tasques), 1)
+
+    def test_tres_correccions_seguides_no_mouen_el_comptador_de_mostres(self):
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
+        for _ in range(3):
+            obrir_correccio(self.model, ['pom'])
+        self.assertEqual(list(Ronda.objects.filter(model=self.model)
+                              .values_list('seq', flat=True)), [r2.seq])
+
+    def test_no_hi_ha_correccio_sense_res_a_corregir(self):
+        """Corregir vol dir REFER alguna cosa: sense mare, el que toca és obrir la tasca."""
+        ModelTask.objects.filter(model=self.model, task_type=self.tt_pom).delete()
+        with self.assertRaises(RondaError):
+            obrir_correccio(self.model, ['pom'])
+
+    # ── El resolutor amb dues tasques del mateix code a la mateixa volta ─────
+    def test_tasca_vigent_prefereix_la_correccio_dins_la_ronda(self):
+        r2 = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
+        original = r2.tasques.get(task_type=self.tt_pom)
+        _, tasques = obrir_correccio(self.model, ['pom'])
+
+        vigent = tasca_vigent(self.model, 'pom')
+        self.assertEqual(vigent, tasques[0])
+        self.assertNotEqual(vigent, original)
+
+    def test_tasca_vigent_prefereix_la_correccio_MES_RECENT(self):
+        obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
+        obrir_correccio(self.model, ['pom'])
+        _, segona = obrir_correccio(self.model, ['pom'])
+        self.assertEqual(tasca_vigent(self.model, 'pom'), segona[0])
+
+    def test_tasca_vigent_veu_la_correccio_de_la_prevista(self):
+        """Sense ronda, la correcció neix amb `ronda=NULL` i `origen='ad_hoc'`: si el resolutor
+        filtrés només per `origen='prevista'`, no la trobaria mai."""
+        _, tasques = obrir_correccio(self.model, ['pom'])
+        self.assertEqual(tasca_vigent(self.model, 'pom'), tasques[0])
