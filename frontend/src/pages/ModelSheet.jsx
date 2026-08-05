@@ -7,6 +7,7 @@ import WatchpointDrawer from '../components/model/WatchpointDrawer'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import { fittingSource } from '../components/model/measureSources'
 import MeasuresEntryPanel from '../components/model/MeasuresEntryPanel'
+import ComprovacioPanel from '../components/model/ComprovacioPanel'
 import FittingRepasPanel from '../components/model/FittingRepasPanel'
 import PropagatedEditor from './PropagatedEditor'
 import GraduacioPanel from '../components/grading/GraduacioPanel'
@@ -230,7 +231,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [editing, setEditing] = useState(null)        // null | 'Mesures' | 'Escalat'
   // Subvista de Mesures en CONSULTA: la taula del model ↔ el repàs dels fittings fets. Les dues
   // miren la mateixa matèria (POM × columnes) des de dos costats; no mereixen dues tabs.
-  const [mesuresView, setMesuresView] = useState('taula')   // 'taula' | 'repas'
+  // D-31.17 — la COMPROVACIÓ entra com a tercera subvista de Mesures, que és on la maqueta la
+  // posa (`.sub2`: Taula de mesures · Repàs de fittings · Comprovació). No és una tab pròpia del
+  // model: el que comprova són les mesures, i sortir de Mesures per mirar-les seria perdre el fil.
+  const [mesuresView, setMesuresView] = useState('taula')   // 'taula' | 'repas' | 'comprovacio'
   const [editTaskId, setEditTaskId] = useState(null)
   // Sprint Y — sessió de fitting resolta (quan hi ha ?fitting_session=): la font fitting la rep per
   // sourceCtx. null = camí del check normal.
@@ -770,7 +774,8 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 // Commutador de subvista (consulta): taula del model ↔ repàs dels fittings fets.
                 <div style={{ display: 'flex', gap: 6 }}>
                   {[['taula', 'model_sheet.measures_view_table', 'ti-table'],
-                    ['repas', 'model_sheet.measures_view_repas', 'ti-history']].map(([key, label, icon]) => (
+                    ['repas', 'model_sheet.measures_view_repas', 'ti-history'],
+                    ['comprovacio', 'comprovacio.titol', 'ti-checkup']].map(([key, label, icon]) => (
                     <button key={key} type="button" onClick={() => setMesuresView(key)}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -835,6 +840,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 onFeedback={fb => setFeedback(fb)} onResolved={exitEdit} onBack={exitEdit} />
             ) : mesuresView === 'repas' ? (
               <FittingRepasPanel model={model} />
+            ) : mesuresView === 'comprovacio' ? (
+              // CONSULTA PURA: l'enllaç «veure →» no escriu res, porta a la taula (i a l'edició
+              // només si el tècnic hi entra pel seu gest). Comprovar i entrar són dos moments.
+              <ComprovacioPanel model={model} onVeureFila={() => setMesuresView('taula')} />
             ) : (
               <CheckMeasureEditor model={model} readOnly />
             )}

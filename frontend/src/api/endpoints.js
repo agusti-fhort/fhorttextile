@@ -122,6 +122,9 @@ export const models = {
   // retirat. Si algun dia cal editar una talla no-base per API, es reobre conscientment.
   // Taula base amb estadis (històric per presa + tolerància + base vigent). Read-only.
   baseStages: (modelId) => client.get(`/api/v1/models/${modelId}/base-stages/`),
+  // D-31.17 — LA COMPROVACIÓ del model: què falta i què s'ha de mirar abans que la fitxa
+  // surti cap al fabricant. Lectura pura; aquesta pantalla no escriu res.
+  comprovacio: (modelId) => client.get(`/api/v1/models/${modelId}/comprovacio/`),
   // Peça 2 — propagació conscient (origen Mesures): {new_version:true} crea v+1 sobre la vigent. Sobre
   // una versió segellada retorna 409 {error:'sealed', version_number} → cal doble confirmació
   // ({allow_reopen_sealed:true}).

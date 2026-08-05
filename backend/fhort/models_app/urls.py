@@ -39,6 +39,7 @@ from .views import (
     promoure_a_item_view,
 )
 
+from .comprovacio_views import comprovacio_view
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
 from .ftt_template_views import DocumentTemplateViewSet
 from .item_fitxer_views import ItemFitxerViewSet
@@ -228,6 +229,9 @@ urlpatterns = (
         # pròpia i estreta, abans del router: el ViewSet genèric obriria tota la fila.
         path('base-measurements/<int:bm_id>/noms/', base_measurement_noms_view),
         path('models/<int:model_id>/base-stages/', base_stages_view),
+        # D-31.17 — LA COMPROVACIÓ del model. Lectura pura: què falta i què s'ha de mirar
+        # abans que la fitxa surti cap al fabricant. Cap escriptura per aquesta porta.
+        path('models/<int:model_id>/comprovacio/', comprovacio_view),
         path('models/<int:model_id>/pom/<int:pom_id>/regim/', set_pom_regim_view),
         # C1 — poda SOFT d'un POM del model des de la graella (mai DELETE dur).
         path('models/<int:model_id>/pom/<int:pom_id>/desactivar/', desactivar_pom_view),
