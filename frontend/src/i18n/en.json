@@ -2686,7 +2686,7 @@
     "tab_preview": "Preview",
     "tab_edit": "Edit",
     "tab_updated": "Updated",
-    "tab_hint": "Sheets can be edited from the Kanban (Tech sheet task) or from the Edit button. The final PDF is generated when the sheet is frozen.",
+    "tab_hint": "«Preview» opens the sheet read-only; «Edit» opens a work session on it and tracks time. The final PDF will be generated when the sheet is frozen.",
     "tab_new_title": "New tech sheet",
     "tab_new_hint": "The name tells this sheet apart from its siblings on the same model (one per piece, for instance).",
     "tab_new_name": "Sheet name",
@@ -3080,7 +3080,9 @@
     "node_mode_nodes": "Nodes",
     "obj_action_node_mode": "Not available while editing nodes",
     "table_variant_repas": "T3 — Fitting review",
-    "lib_table_no_repas": "This model has no recorded fitting: there are no events to fill the table."
+    "lib_table_no_repas": "This model has no recorded fitting: there are no events to fill the table.",
+    "tab_preview_nota": "Opens the sheet read-only. No time is tracked and the task is untouched.",
+    "tab_edit_nota": "Opens the sheet to work on it. Time is tracked."
   },
   "estat_badge": {
     "pendent_inputs": "Pending inputs",

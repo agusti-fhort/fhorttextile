@@ -281,6 +281,26 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       .finally(() => setOpeningTask(false))
   }, [id, t, reloadTasks, tascaVigentDe])
 
+  // F2.2 · D-1 — LA PORTA DE LA FITXA. Era el forat original de tota aquesta feina: «Modificar»
+  // navegava sense `task_id`, l'editor autodesava cada 2 s i el temps d'editar la fitxa no
+  // existia enlloc. Ara obre sessió sobre la tasca vigent `tech_sheet` i propaga el `task_id` a
+  // la URL, que és el que fa que l'editor demani el lock i pausi en sortir.
+  const obreFitxa = useCallback((fitxerId) => {
+    const anar = tid => navigate(`/models/${id}/ftt/${fitxerId}?task_id=${tid}`)
+    const vigent = tascaVigentDe('tech_sheet')
+    const cara = caraObrirTasca(vigent, jo)
+    if (cara !== CARA_CAP) { setDialeg({ cara, tab: 'Fitxa tècnica', code: 'tech_sheet', tasca: vigent, fitxerId }); return }
+    setOpeningTask(true)
+    models.openTask(parseInt(id), 'tech_sheet')
+      .then(res => anar(res.data.task_id))
+      .catch(e => {
+        const c = caraDeError(e)
+        if (c) setDialeg({ cara: c, tab: 'Fitxa tècnica', code: 'tech_sheet', tasca: vigent, fitxerId })
+        else setFeedback({ type: 'err', text: motiuOpenTask(e, t) })
+      })
+      .finally(() => setOpeningTask(false))
+  }, [id, jo, navigate, t, tascaVigentDe])
+
   // F2.1 · REGLA D'OR — el modal NO surt en el cas normal. `caraObrirTasca` decideix, i si diu
   // CARA_CAP s'obre directament: zero fricció, zero clics. Només quan hi ha conflicte, feina
   // lliurada o albarà emès es demana res a ningú.
@@ -544,19 +564,26 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     // CONSULTAR: el tab i prou. Sense `enterEdit` no hi ha `open-task`, i sense open-task no
     // hi ha ni rellotge ni reassignació — que és exactament el que promet la nota del botó.
     if (accio === 'consultar') { setEditing(null); setMesuresEntry(false); setActiveTab(d.tab); return }
-    if (accio === 'treballar') { obreDeDebo(d.tab, d.code); return }
+    if (accio === 'treballar') {
+      if (d.fitxerId) { obreFitxa(d.fitxerId); return }   // la fitxa té la seva pròpia navegació
+      obreDeDebo(d.tab, d.code); return
+    }
     // `ronda` i `correccio` van per la MATEIXA porta: una correcció és una volta d'una sola
     // tasca. El backend hi posa el motiu i la genealogia (mare) sense que la UI ho hagi de saber.
     const motiu = accio === 'ronda' ? 'nova_mostra' : 'correccio'
     setOpeningTask(true)
     models.obrirRonda(parseInt(id), { motiu, codes: [d.code] })
-      .then(() => { reloadTasks(); reloadModel(); obreDeDebo(d.tab, d.code) })
+      .then(() => {
+        reloadTasks(); reloadModel()
+        if (d.fitxerId) obreFitxa(d.fitxerId)
+        else obreDeDebo(d.tab, d.code)
+      })
       .catch(e => setFeedback({
         type: 'err',
         text: e?.response?.data?.error || t('obrir_tasca.ronda_error'),
       }))
       .finally(() => setOpeningTask(false))
-  }, [dialeg, obreDeDebo, id, reloadTasks, reloadModel, t])
+  }, [dialeg, obreDeDebo, obreFitxa, id, reloadTasks, reloadModel, t])
 
   return (
     <div style={{ width: '100%' }}>
@@ -892,8 +919,8 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           />
         )}
         {activeTab === 'Patró' && <PatternTab modelId={parseInt(id)} />}
-        {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} />}
-        {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} />}
+        {activeTab === 'Fitxers' && <TabFiles modelId={parseInt(id)} onEditFitxa={obreFitxa} />}
+        {activeTab === 'Fitxa tècnica' && <TechSheetTab modelId={id} navigate={navigate} onModificar={obreFitxa} />}
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}
         {activeTab === "Registre d'activitat" && <RegistreActivitatTab modelId={id} />}
       </div>
@@ -911,7 +938,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
 //
 // Consulta des del Model obre sense task_id → mode consulta (l'editor desa igual, però no
 // imputa temps). L'edició registrada es fa des del Kanban, que passa ?task_id=...
-function TechSheetTab({ modelId, navigate }) {
+function TechSheetTab({ modelId, navigate, onModificar }) {
   const { t, i18n } = useTranslation()
   // Cutover .ftt (F8): la fitxa és un ModelFitxer tipus TECHSHEET (no el TechSheet O2O).
   // `null` = encara carregant; `[]` = el model no en té cap.
@@ -936,7 +963,11 @@ function TechSheetTab({ modelId, navigate }) {
     if (!nom || creant) return
     setCreant(true); setErr(null)
     modelFitxers.crearFitxa(modelId, { nom, descripcio: (nova.descripcio || '').trim() || undefined })
-      .then(({ data }) => navigate(`/models/${modelId}/ftt/${data.id}`))
+      // F2.2 — crear una fitxa ÉS treballar-hi: s'obre amb sessió, com «Modificar». Si no hi ha
+      // porta (el tab s'usés sense el pare), la navegació de consulta és el fallback honest.
+      .then(({ data }) => (onModificar
+        ? onModificar(data.id)
+        : navigate(`/models/${modelId}/ftt/${data.id}?mode=consulta`)))
       .catch(() => { setErr(t('tech_sheet.tab_new_err')); setCreant(false) })
   }
 
@@ -1059,10 +1090,21 @@ function TechSheetTab({ modelId, navigate }) {
                          fontFamily: FILES_MONO, color: 'var(--text-muted)' }}
                 title={t('tech_sheet.tab_updated')}>{dataDe(f)}</span>
           <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-            <button onClick={() => navigate(`/models/${modelId}/ftt/${f.id}`)} style={btnOutline}>
+            {/* F2.2 · D-1 — fins avui aquests dos botons feien EXACTAMENT el mateix `navigate`,
+                i cap dels dos comptava temps. Ara diuen coses diferents perquè fan coses
+                diferents: PREVISUALITZAR obre en lectura (sense `task_id` l'editor no demana
+                lock i l'autosave no dispara, o sigui que no hi ha ni batec ni sessió) i
+                MODIFICAR obre sessió sobre la tasca vigent, passant pel modal si cal.
+                La consulta és la sortida digna del superior que només ve a mirar: per això és
+                visible i no està amagada darrere d'un menú. */}
+            <button onClick={() => navigate(`/models/${modelId}/ftt/${f.id}?mode=consulta`)}
+                    style={btnOutline} title={t('tech_sheet.tab_preview_nota')}>
+              <i className="ti ti-eye" style={{ marginRight: 6 }} />
               {t('tech_sheet.tab_preview')}
             </button>
-            <button onClick={() => navigate(`/models/${modelId}/ftt/${f.id}`)} style={btnOutline}>
+            <button onClick={() => onModificar?.(f.id)} style={btnOutline}
+                    title={t('tech_sheet.tab_edit_nota')}>
+              <i className="ti ti-pencil" style={{ marginRight: 6 }} />
               {t('tech_sheet.tab_edit')}
             </button>
           </div>
@@ -1699,7 +1741,7 @@ function iconForExt(ext) {
   return 'ti-file'
 }
 
-function TabFiles({ modelId }) {
+function TabFiles({ modelId, onEditFitxa }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   // K2 — aquest tab va per `authFetch` (no per `fetch` cru): un 401 per access token
@@ -1725,7 +1767,9 @@ function TabFiles({ modelId }) {
   // Una sola llei d'obertura per a les dues portes.
   const esFitxaTecnica = (f) => f.tipus === 'TECHSHEET' || fileExt(f.nom_fitxer) === 'ftt'
   const obrirFitxer = (f) => {
-    if (esFitxaTecnica(f)) navigate(`/models/${modelId}/ftt/${f.id}`)
+    // F2.2 — obrir des de la llista és MIRAR. Qui vulgui treballar-hi té «Modificar» al tab de
+    // Fitxa tècnica (o el botó Editar del panell de detall), que sí obren sessió.
+    if (esFitxaTecnica(f)) navigate(`/models/${modelId}/ftt/${f.id}?mode=consulta`)
     else obrirPreview(f)
   }
   const [history, setHistory] = useState(null)   // { fitxer, chain[], loading }
@@ -1979,7 +2023,7 @@ function TabFiles({ modelId }) {
                 onPreview={() => obrirPreview(selected)}
                 onHistory={() => openHistory(selected)}
                 onNewVersion={file => handleUpload(file, selected.id)}
-                onEdit={() => navigate(`/models/${modelId}/ftt/${selected.id}`)}
+                onEdit={() => onEditFitxa(selected.id)}
                 onDelete={() => handleDelete(selected.id)} />
             ) : (
               <div style={{

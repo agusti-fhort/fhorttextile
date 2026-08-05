@@ -2686,7 +2686,7 @@
     "tab_preview": "Previsualizar",
     "tab_edit": "Modificar",
     "tab_updated": "Actualizado",
-    "tab_hint": "Las fichas se pueden editar desde el Kanban (tarea Ficha técnica) o desde el botón Modificar. El PDF definitivo se generará al congelar la ficha.",
+    "tab_hint": "«Previsualizar» abre la ficha en lectura; «Modificar» abre sesión de trabajo y cuenta el tiempo. El PDF definitivo se generará al congelar la ficha.",
     "tab_new_title": "Nueva ficha técnica",
     "tab_new_hint": "El nombre distingue esta ficha de sus hermanas del mismo modelo (por ejemplo, una por pieza).",
     "tab_new_name": "Nombre de la ficha",
@@ -3080,7 +3080,9 @@
     "node_mode_nodes": "Nodos",
     "obj_action_node_mode": "No disponible mientras se editan nodos",
     "table_variant_repas": "T3 — Repaso de fittings",
-    "lib_table_no_repas": "El modelo no tiene ningún fitting registrado: no hay eventos para rellenar la tabla."
+    "lib_table_no_repas": "El modelo no tiene ningún fitting registrado: no hay eventos para rellenar la tabla.",
+    "tab_preview_nota": "Abre la ficha en lectura. No se cuenta tiempo ni se toca la tarea.",
+    "tab_edit_nota": "Abre la ficha para trabajar en ella. El tiempo se cuenta."
   },
   "estat_badge": {
     "pendent_inputs": "Pendiente de inputs",
