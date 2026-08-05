@@ -10,6 +10,9 @@ import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
 import FhortLogo from '../components/brand/FhortLogo'
 import FilePicker from '../components/model/FilePicker'
+import ModalAcabarTasca from '../components/model/ModalAcabarTasca'
+import { modelTasks } from '../api/endpoints'
+import { minutsDeSessio } from '../utils/sessioActiva'
 import AssetNavigator from '../components/assets/AssetNavigator'
 import Contenidor from '../components/ui/Contenidor'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
@@ -2613,6 +2616,11 @@ export default function TechSheetEditor() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const taskId = searchParams.get('task_id')
+  // T4 · EL GEST D'ACABAR TAMBÉ AQUÍ. `tech_sheet` és `es_lliurable=True`: la seva Done dispara
+  // l'avís de lliurable al PM i entra a albarà. Era l'única superfície de treball que se sortia
+  // sense preguntar res, justament la que té conseqüència econòmica.
+  const [acabant, setAcabant] = useState(null)   // fila de ModelTask | null
+  const tascaResolta = useRef(false)
   // Mode .ftt: l'editor llegeix/desa el document .ftt (ModelFitxer) en comptes del TechSheet (O2O).
   const fttMode = !!fitxerId
   const isEditMode = !!taskId
@@ -3439,8 +3447,11 @@ export default function TechSheetEditor() {
 
     return () => {
       cancelled = true
-      // Si venia d'una tasca (Kanban), deixa-la en Pausa; allibera sempre el lock del .ftt.
-      if (taskId) {
+      // Si venia d'una tasca, deixa-la en Pausa; allibera sempre el lock del .ftt.
+      // T4 — si la sortida ha passat pel modal, la tasca JA té el seu estat (Done o Paused) i
+      // aquesta pausa cega en demanaria una altra: Done→Paused és il·legal i Paused→Paused
+      // també, o sigui un 400 per una feina ja feta. `tascaResolta` és el testimoni.
+      if (taskId && !tascaResolta.current) {
         fetch(`${API}/api/v1/model-task-items/${taskId}/transition/`, {
           method: 'POST', headers: authHeaders,
           body: JSON.stringify({ to_status: 'Paused' }), keepalive: true,
@@ -6652,6 +6663,16 @@ export default function TechSheetEditor() {
 
   // PEÇA P/C: pan actiu (eina 'pan' o espai) i cursor del viewport segons l'eina activa.
   const panActive = locked && (tool === 'pan' || spaceHeld)
+  // SORTIR. Sense tasca (consulta, plantilla) la sortida és directa, com sempre. Amb tasca,
+  // primer es pregunta: la fila es demana ARA i només ara —una lectura, cap sondeig— perquè el
+  // modal pugui dir el nom i el temps que s'està tancant.
+  const sortirDeLaFitxa = () => {
+    if (!taskId || acabant) { navigate(`/models/${id}`); return }
+    modelTasks.get(taskId)
+      .then(({ data }) => setAcabant(data))
+      .catch(() => navigate(`/models/${id}`))   // si no es pot llegir, no es reté ningú aquí
+  }
+
   const viewportCursor = !locked ? 'default'
     : zoomModHeld ? (zoomOutMod ? 'zoom-out' : 'zoom-in')   // C1: modificador de zoom → lupa
     : panActive ? (panning ? 'grabbing' : 'grab')
@@ -6661,10 +6682,19 @@ export default function TechSheetEditor() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
+      {acabant && (
+        <ModalAcabarTasca
+          taskId={acabant.id}
+          nomTasca={acabant.task_type_name}
+          minutsSessio={minutsDeSessio(acabant)}
+          minutsTotal={acabant.temps_consumit_min ?? 0}
+          onFet={() => { tascaResolta.current = true; navigate(`/models/${id}`) }}
+          onCancel={() => setAcabant(null)} />
+      )}
       {/* ── Topbar (patró navbar del dashboard: blanc, logo + breadcrumb, gold per a l'acció
             principal) ── */}
       <header style={{ flexShrink: 0, height: 56, display: 'flex', alignItems: 'center', gap: 14, padding: '0 1.2rem', borderBottom: `1px solid ${COL.border}`, background: COL.sidebar, color: COL.textMain }}>
-        <button onClick={() => navigate(`/models/${id}`)} title={t('tech_sheet.back_to_model')}
+        <button onClick={sortirDeLaFitxa} title={t('tech_sheet.back_to_model')}
           style={{ ...headerBtn, padding: '5px 8px' }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 15 }} />
         </button>
@@ -6672,7 +6702,7 @@ export default function TechSheetEditor() {
         <span style={{ width: 1, height: 24, background: COL.border }} />
         {/* Breadcrumb: model → editor (com "Models → Blusa CALLIE" al dashboard) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: COL.textMuted, minWidth: 0 }}>
-          <span onClick={() => navigate(`/models/${id}`)} style={{ cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <span onClick={sortirDeLaFitxa} style={{ cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
           </span>
           <i className="ti ti-chevron-right" style={{ fontSize: 14 }} />
