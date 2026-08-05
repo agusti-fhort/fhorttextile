@@ -10,7 +10,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 
 import { formatDelta } from '../../utils/format'
-import { etiquetaCapa, etiquetaInstancia, CAPES, INSTANCIES } from '../../utils/capaInstancia'
+import { etiquetaCapa, etiquetaInstancia, esGermanaDeCapa, CAPES, INSTANCIES } from '../../utils/capaInstancia'
 import {
   DIMS_EN_LINIA, COMPLEMENTARIA, EIX_POSICIO, EIX_ESTAT, eixDe, filaInstancia,
   tramsInstancia, composaInstancia,
@@ -271,6 +271,31 @@ export default function EditableTable({
   const creaGermana = ({ capa, instancia, nom_fitxa }) => {
     const mare = germanaDe
     setGermanaDe(null)
+    insereixGermana(mare, { capa, instancia, nom_fitxa })
+  }
+
+  // v8.1 — LA TECLA `L`: la germana de CAPA sense diàleg i sense treure la mà del carril.
+  //
+  // La maqueta la resol amb `mkLayerSibling`, que agafa LA SEGÜENT capa del catàleg. Aquí s'agafa
+  // la següent LLIURE (saltant les que aquest POM ja té amb la mateixa instància), perquè la clau
+  // única és `(model, pom, capa, instancia)` i oferir-ne una de presa escriuria damunt d'una fila
+  // existent en silenci. Sense cap capa lliure no fa res: no hi ha germana possible.
+  //
+  // El NOM no cal (la capa ja distingeix la fila i la BD no l'exigeix), o sigui que el gest pot
+  // ser d'una sola tecla. El diàleg segueix existint per a qui vulgui TRIAR la capa; això és la
+  // drecera del cas freqüent, que és folrar.
+  const germanaCapaRapida = (mare) => {
+    if (!mare) return
+    const inst = mare.instancia || ''
+    const preses = new Set(localRows
+      .filter(r => r.pom_id === mare.pom_id && (r.instancia || '') === inst)
+      .map(r => r.capa || 'exterior'))
+    const seguent = CAPES.find(c => !preses.has(c))
+    if (!seguent) return
+    insereixGermana(mare, { capa: seguent, instancia: inst, nom_fitxa: mare.nom_fitxa || '' })
+  }
+
+  const insereixGermana = (mare, { capa, instancia, nom_fitxa }) => {
     if (!mare) return
     const nova = {
       ...mare,
@@ -650,6 +675,7 @@ export default function EditableTable({
                     dimState={dimState}
                     onParteix={parteix}
                     onMesInstancia={() => setPosicionsDe(row)}
+                    onGermanaCapa={() => germanaCapaRapida(row)}
                     onCellChange={handleCellChange}
                     onDelete={handleDeleteRow}
                     onGermana={() => setGermanaDe(row)}
@@ -740,7 +766,7 @@ export default function EditableTable({
 
 function SortableRow({ row, n, displaySize, readOnly, activa, neix, onActiva, onCellChange, onDelete, onGermana,
                        delta, onBateig, onRegla, widths, registerVal, onNav,
-                       dicc, dimState, onParteix, onMesInstancia }) {
+                       dicc, dimState, onParteix, onMesInstancia, onGermanaCapa }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -753,7 +779,13 @@ function SortableRow({ row, n, displaySize, readOnly, activa, neix, onActiva, on
   // L'arrossegament mana sobre el ressaltat: mentre una fila viatja, el que ha de dir el fons és
   // que viatja. El fons de la fila i el de les cel·les congelades han de ser el MATEIX valor, o
   // el ressaltat es partiria just a la frontera de la columna sticky.
-  const rowBg = isDragging ? 'var(--bg-muted)' : (activa ? 'var(--fila-activa)' : 'var(--white)')
+  // v8.1 (`tr.lin` :45-46) — LA FILA D'UNA CAPA QUE NO ÉS L'EXTERIOR TÉ FONS PROPI. La columna
+  // de Capa ja ho diu amb lletres, però amb tretze files el que separa dos blocs a cop d'ull és
+  // el to, no llegir la primera cel·la de cadascuna. L'arrossegament mana sobre tots dos.
+  const deCapa = esGermanaDeCapa(row.capa)
+  const rowBg = isDragging ? 'var(--bg-muted)'
+    : activa ? (deCapa ? 'var(--fila-capa-activa)' : 'var(--fila-activa)')
+      : (deCapa ? 'var(--fila-capa)' : 'var(--white)')
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -884,6 +916,9 @@ function SortableRow({ row, n, displaySize, readOnly, activa, neix, onActiva, on
           onNav={dir => onNav?.(row.id, dir)}
           // La fila activa és la que té el focus AL CARRIL, no la que s'ha clicat: el carril és
           // el recorregut de treball, i és ell qui ha de dir per on va.
+          // v8.1 — la tecla `L` fa la germana de CAPA sense treure la mà del carril. És el gest
+          // més freqüent de la taula (tota peça folrada el fa) i costava anar a buscar una icona.
+          onTeclaCapa={onGermanaCapa}
           onEnfoca={() => onActiva?.(row.id)}
           onDesenfoca={() => onActiva?.(prev => (prev === row.id ? null : prev))}
           hint={buida ? t('editable_table.row_discarded') : undefined} />
@@ -1281,7 +1316,8 @@ function NomCanonic({ value, placeholder, instancia, traduccio, marca = '', edit
 // puja al model és el número net. Un text no numèric es queda al buffer i es marca en vermell —no
 // s'escriu i no es perd—, perquè escriure `NaN` a la taula i esborrar-lo en silenci seria pitjor
 // que no acceptar-lo. Buit sí que s'escriu: buit és una decisió (la fila es descarta).
-function CarrilInput({ value, readOnly, onCommit, registerVal, onNav, hint, onEnfoca, onDesenfoca }) {
+function CarrilInput({ value, readOnly, onCommit, registerVal, onNav, hint, onEnfoca, onDesenfoca,
+                       onTeclaCapa }) {
   const [txt, setTxt] = useState(value == null ? '' : String(value))
   const [focused, setFocused] = useState(false)
   const [bad, setBad] = useState(false)
@@ -1317,6 +1353,11 @@ function CarrilInput({ value, readOnly, onCommit, registerVal, onNav, hint, onEn
         if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); onNav(1) }
         else if (e.key === 'ArrowUp') { e.preventDefault(); onNav(-1) }
         else if (e.key === 'Escape') { setTxt(value == null ? '' : String(value)); setBad(false) }
+        else if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey && onTeclaCapa) {
+          // Al carril s'hi escriuen NÚMEROS: una `l` no hi és mai un valor, i per això pot ser
+          // una drecera sense robar res al teclat numèric.
+          e.preventDefault(); onTeclaCapa()
+        }
       }}
       style={{
         width: 78, padding: '3px 8px', textAlign: 'right',

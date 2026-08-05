@@ -26,6 +26,10 @@
      i reutilitzar-los faria que la fila enfocada es confongués amb l'una o amb l'altre. */
   --fila-activa: #fdf8ee; /* fila amb el focus al carril de valors */
   --fila-neix:   #fdf2da; /* flaix d'una fila acabada de néixer (s'esvaeix a transparent) */
+  /* Fila d'una capa que NO és l'exterior (folre, entretela…). El to diu «aquesta mesura parla
+     d'una altra matèria» sense fer-hi cap columna nova; amb el focus a sobre, la variant. */
+  --fila-capa:        #fbf6ee;
+  --fila-capa-activa: #f7efdf;
 
   /* Aliases legacy (per components existents) */
   --charcoal:   #1d1d1b;
