@@ -40,8 +40,10 @@ export default function SessionActions({ session, pieceFittingId, taskId, onSave
     try { const r = await fittingSessions.seal(session.id); estat = r.data?.estat }
     catch { setErr(t('fitting.save.seal_error')); setBusy(false); return }
     if (estat !== 'Tancada') { setErr(t('fitting.save.not_sealed')); setBusy(false); return }
-    // Tasca a Done (no fatal: la sessió ja és Tancada encara que la transició falli).
-    if (taskId) { try { await modelTasks.transition(taskId, { to_status: 'Done' }) } catch { /* no-op */ } }
+    // F1.2 — AQUÍ hi havia `transition(taskId, {to_status:'Done'})` dins d'un `catch {}` buit.
+    // Desar no tanca (D-2): «Gravar i tornar» segella la SESSIÓ, i el Stop humà tanca la TASCA.
+    // El catch buit, a més, s'empassava el 409 d'albarà i deixava la sessió tancada amb la
+    // tasca viva sense dir-ho a ningú (germà de §S-5).
     setBusy(false)
     onSaved?.()
   }

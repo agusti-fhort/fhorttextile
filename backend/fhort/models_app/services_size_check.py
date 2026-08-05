@@ -154,12 +154,16 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
     grading que un segell pugui refusar). Es conserva a la signatura perquè hi ha tests que
     el passen; candidat a retirar quan es netegi la signatura.
 
+    F1.2 (2026-08-05): resoldre un size check JA NO TANCA LA TASCA. Desar no tanca (D-2); el
+    Stop humà és l'únic gest que tanca. `tasca_finalitzada` es conserva al retorn per contracte
+    i ara és sempre False.
+
     GRAVAR (estat='Acceptat'):
       · cap línia 'valor_descartat' → estat='Acceptat': promou None→'tolerancia_acceptada',
         escriu CHECKED (NOMÉS base, abs<1e-6 skip), incrementa measurements_version si la base
-        canvia (perquè l'estalitud ho vegi), finalitza tasca → Done.
-      · alguna línia 'valor_descartat' → estat='Rebutjat': NO promou, NO CHECKED, NO Done
-        (proto a refer). Es grava la constància de decisions.
+        canvia (perquè l'estalitud ho vegi). La tasca queda VIVA.
+      · alguna línia 'valor_descartat' → estat='Rebutjat': NO promou, NO CHECKED (proto a refer).
+        Es grava la constància de decisions.
     DESCARTAR (estat='Descartat'): NO toca línies, NO propaga, tasca viva.
 
     REAGENDAR: quan la tasca queda viva (Rebutjat o Descartat) i ve `data_represa` (date o
@@ -273,24 +277,17 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
                 measurements_version=F('measurements_version') + 1
             )
 
-        # Finalitza la tasca Kanban size_check → Done. Gate TOU: si no existeix la tasca
-        # o la transició no és vàlida, NO peta.
-        try:
-            from fhort.tasks.services_c import transition_task
-            from fhort.tasks.services_r import tasca_vigent
-            # F1.0 — abans: `.exclude(status='Done').order_by('-id').first()`, o sigui LA MÉS
-            # NOVA no-Done: el criteri OPOSAT al de `_close_pom_task_for_model` (§S-4). El guard
-            # `status != 'Done'` es conserva al call-site perquè `tasca_vigent` SÍ pot retornar
-            # una Done (regla 3: només la descarta si n'hi ha una de viva), i aquí una Done no
-            # s'ha de reobrir per tornar-la a tancar.
-            task = tasca_vigent(model, 'size_check')
-            if task is not None and task.status != 'Done':
-                if task.status != 'InProgress':
-                    transition_task(task, 'InProgress', profile)   # Done només des d'InProgress
-                transition_task(task, 'Done', profile)
-                tasca_finalitzada = True
-        except Exception as e:
-            logger.warning(f"SizeCheck {sc.pk}: no s'ha pogut finalitzar la tasca size_check: {e}")
+        # F1.2 — AQUÍ hi havia el tancament de la tasca `size_check` a Done, dins d'un
+        # `try/except Exception` amb `logger.warning`. Marxa sencer, i per DUES raons:
+        #
+        #   1. **Desar no tanca** (D-2). El Stop humà és l'únic gest que tanca una tasca.
+        #   2. **El `except` era una boca tapada** (§S-5 de la diagnosi pre-F1): sobre una tasca
+        #      albaranada el `TransitionError('tasca_albaranada')` queia aquí dins i el `resolve`
+        #      retornava èxit igualment. El tècnic gravava el check, la base es consolidava, i
+        #      ningú no sabia que la tasca s'havia quedat viva.
+        #
+        # `tasca_finalitzada` es conserva al retorn (contracte d'API) i ara és SEMPRE False:
+        # el consumidor que l'ensenyi deixarà d'ensenyar-ho tot sol, que és el que ara és veritat.
 
     # Rebutjat / Descartat: NO es propaga; la tasca queda viva. Si ve data_represa, reagenda.
     reagendada = False

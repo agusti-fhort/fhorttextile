@@ -1675,11 +1675,12 @@ def close_table_view(request, model_id):
     from fhort.pom.services import get_or_create_size_fitting, close_base
     profile = getattr(request.user, 'profile', None)
     try:
-        # Atòmic (B4): si es tanca la taula, es tanca la tasca. Tot o res.
+        # Atòmic (B4). F1.2 — «tancar taula» tanca la TAULA (close_base), no la tasca: el Stop
+        # humà és l'únic que tanca (D-2). Aquí la tasca només s'assegura oberta.
         with transaction.atomic():
             sf = get_or_create_size_fitting(model, request.user.id)
             result = close_base(sf.id, request.user.id)
-            pom_task = _close_pom_task_for_model(model, profile)
+            pom_task = _assegura_pom_task_oberta(model, profile)
     except ValueError as e:
         return Response({'error': str(e)}, status=400)
     except Exception as e:
@@ -1690,29 +1691,42 @@ def close_table_view(request, model_id):
     return Response({'sf_id': sf.id, 'pom_task': pom_task, **result})
 
 
-def _close_pom_task_for_model(model, profile):
-    """B4 · en tancar la taula, la tasca POM del model passa a Done via transition_task
-    (l'única porta: status=Done, finished_at, tanca timer, record_actual_time, log).
-    Done només és vàlid des de InProgress → si està Pending/Paused, hi passem primer.
-    Sense tasca pom → no fa res. Ja Done → idempotent."""
-    from fhort.tasks.services_c import transition_task
+def _assegura_pom_task_oberta(model, profile):
+    """F1.2 · DESAR NO TANCA MAI (D-2). Desar assegura que la tasca està OBERTA.
+
+    Fins avui aquesta funció tancava la tasca `pom` a `Done` a cada desat, i el resultat mesurat
+    era el ping-pong: 28 de 49 transicions `→Done` eren repeticions sobre una tasca ja tancada, i
+    tot el que el tècnic feia entre «Gravar» i el gest següent no tenia rellotge (la feina seguia,
+    la tasca no). El Stop humà és ara l'ÚNIC que tanca.
+
+    Obrir-si-cal no és un efecte secundari: **és el batec fort**. Qui desa està treballant, i una
+    tasca `Pending`/`Paused` que rep un desat ha d'estar `InProgress`.
+
+    Retorna `{'oberta': bool, 'reason': str|None, 'task_id': int|None}`. Cap consumidor de
+    frontend llegeix aquest dict (verificat); qui el llegeix és `gravar_pom_view`, per al seu
+    gate `no_pom_task`.
+    """
+    from fhort.tasks.services_c import TransitionError, transition_task
     from fhort.tasks.services_r import tasca_vigent
 
     # F1.0 — abans: `.order_by('id').first()`, o sigui LA MÉS ANTIGA. Amb una ronda oberta això
     # tancava la tasca de la ronda 1 mentre el tècnic treballava la 2 (§S-4 de la diagnosi).
     task = tasca_vigent(model, 'pom')
     if not task:
-        return {'closed': False, 'reason': 'no_pom_task'}
-    if task.status == 'Done':
-        return {'closed': False, 'reason': 'already_done', 'task_id': task.id}
+        return {'oberta': False, 'reason': 'no_pom_task', 'task_id': None}
+    if task.status == 'InProgress':
+        return {'oberta': True, 'reason': 'ja_oberta', 'task_id': task.id}
 
-    # Done només es pot assolir des de InProgress (ALLOWED a services_c). Pending/Paused
-    # hi passen primer perquè la transició no peti.
-    if task.status in ('Pending', 'Paused'):
+    # Pending/Paused → oberta. Done → reobertura (rectificació): és una decisió del tècnic que
+    # ha tornat a desar sobre feina tancada, i el log l'ha de veure com el que és.
+    try:
         transition_task(task, 'InProgress', profile)
-        task.refresh_from_db()
-    transition_task(task, 'Done', profile)
-    return {'closed': True, 'task_id': task.id}
+    except TransitionError as e:
+        # L'única paret real aquí és l'albarà emès (D-5): no es reobre, s'obre una RONDA. Es
+        # retorna el `code` perquè la porta HTTP pugui dir-ho i el front oferir la sortida.
+        return {'oberta': False, 'reason': getattr(e, 'code', None) or 'transicio_refusada',
+                'task_id': task.id, 'error': str(e)}
+    return {'oberta': True, 'reason': 'oberta', 'task_id': task.id}
 
 
 @api_view(['GET'])
@@ -2191,7 +2205,7 @@ def gravar_pom_view(request, model_id):
             ).exists():
                 raise ValueError('Cal introduir mides abans de gravar POM')
 
-            pom_task = _close_pom_task_for_model(model, profile)
+            pom_task = _assegura_pom_task_oberta(model, profile)
             if pom_task.get('reason') == 'no_pom_task':
                 raise ValueError('Cal obrir la tasca POM abans de gravar-la')
     except ValueError as e:

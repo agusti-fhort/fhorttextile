@@ -113,16 +113,16 @@ class RondaTest(TenantTestCase):
         obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
         self.assertEqual(tasca_vigent(self.model, 'tech_sheet'), self.fitxa_r1)
 
-    def test_S4_gravar_pom_de_la_ronda_2_NO_toca_la_ronda_1(self):
+    def test_S4_el_desat_de_la_ronda_2_NO_toca_la_ronda_1(self):
         """EL CAS EXACTE DE §S-4. Amb el criteri vell (`order_by('id').first()`) el desat de la
-        volta 2 hauria resolt la tasca de la volta 1 i l'hauria tancada."""
-        from fhort.models_app.views import _close_pom_task_for_model
+        volta 2 hauria resolt la tasca de la volta 1 — i, aleshores, l'hauria TANCADA."""
+        from fhort.models_app.views import _assegura_pom_task_oberta
 
         r = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
         pom_r2 = r.tasques.get(task_type=self.tt_pom)
         pom_r1_updated_abans = ModelTask.objects.get(pk=self.pom_r1.pk).updated_at
 
-        res = _close_pom_task_for_model(self.model, self.prof)
+        res = _assegura_pom_task_oberta(self.model, self.prof)
 
         self.assertEqual(res.get('task_id'), pom_r2.pk,
                          'El desat ha resolt una tasca que no és la de la ronda oberta.')
@@ -130,6 +130,36 @@ class RondaTest(TenantTestCase):
         self.assertEqual(pom_r1_ara.updated_at, pom_r1_updated_abans,
                          'La ronda 1 s\'ha tocat: exactament el dany que §S-4 anunciava.')
         self.assertEqual(pom_r1_ara.status, 'Done')
+
+    def test_el_desat_obre_la_tasca_i_no_la_tanca(self):
+        """F1.2 · D-2 en una línia: desar deixa la tasca EN CURS, mai Done."""
+        from fhort.models_app.views import _assegura_pom_task_oberta
+
+        r = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
+        pom_r2 = r.tasques.get(task_type=self.tt_pom)
+        self.assertEqual(pom_r2.status, 'Pending')
+
+        res = _assegura_pom_task_oberta(self.model, self.prof)
+
+        pom_r2.refresh_from_db()
+        self.assertTrue(res['oberta'])
+        self.assertEqual(pom_r2.status, 'InProgress')
+
+    def test_el_desat_es_idempotent_sobre_una_tasca_ja_oberta(self):
+        """El ping-pong es mesurava en transicions repetides. Desar dos cops no n'ha d'escriure
+        cap de nova."""
+        from fhort.tasks.models import TaskTransition
+        from fhort.models_app.views import _assegura_pom_task_oberta
+
+        r = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])
+        pom_r2 = r.tasques.get(task_type=self.tt_pom)
+        _assegura_pom_task_oberta(self.model, self.prof)
+        n = TaskTransition.objects.filter(model_task=pom_r2).count()
+
+        _assegura_pom_task_oberta(self.model, self.prof)
+        _assegura_pom_task_oberta(self.model, self.prof)
+
+        self.assertEqual(TaskTransition.objects.filter(model_task=pom_r2).count(), n)
 
     def test_tancar_ronda_torna_la_vigencia_a_la_prevista(self):
         r = obrir_ronda(self.model, Ronda.MOTIU_NOVA_MOSTRA, ['pom'])

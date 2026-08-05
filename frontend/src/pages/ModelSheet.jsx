@@ -271,14 +271,11 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     setEditing(null)
     setMesuresEntry(false)
     setMesuresIntent(null)
-    setModelTaskRows(prev => prev.map(task => (
-      task.task_type_code === 'pom' ? { ...task, status: 'Done' } : task
-    )))
-    // El gate llegeix `model.pom_task_done`: l'optimisme de la fila de tasca ja no l'obre tot
-    // sol. `reloadModel()` (aquí sota) el confirmaria igualment, però el salt d'un anada-i-
-    // tornada deixaria la caixa de «encara no disponibles» un instant després d'acabar la
-    // feina. Es marca aquí pel mateix motiu que ja es marcava la fila.
-    setModel(m => (m ? { ...m, pom_task_done: true } : m))
+    // F1.2 — AQUÍ s'escrivia `status:'Done'` a la fila i `pom_task_done:true` al model, en local.
+    // Desar ja no tanca la tasca (D-2), de manera que aquell optimisme ara MENTIRIA: pintaria
+    // Done i el `reloadModel()` de tres línies més avall el desmentiria tot seguit.
+    // El gate de Mesures no se'n ressent — és `pomDone || hasBaseValue`, i qui acaba de gravar
+    // POM té valors base per definició.
     reloadTaula()
     reloadModel()
     reloadTasks()
