@@ -243,3 +243,251 @@ pre-omplertes — lliçó del model 1302) i la nota que explica que la v8.1 no e
 ---
 
 **Cap push. Cap suite. `git add` selectiu a tots els commits.**
+
+---
+---
+
+# TRAM U · SEGONA TONGADA — v8.1 manant, els dos modes, el fitting i la Comprovació
+
+> **Data:** 2026-08-05, vespre i nit · staging `dev` · **cap push · cap suite** · `git add` selectiu.
+> Aquesta part respon els dos briefs del vespre i el tancament. **Cap superfície s'hi reporta
+> sense haver-la obert al navegador amb el `dist` real i comparat bloc a bloc amb el seu HTML.**
+
+## U.1 · Els commits
+
+| # | commit | què |
+|---|---|---|
+| 1 | `f2e00eac` | les dimensions de la taula surten del diccionari de BD, no del codi |
+| 2 | `dda31147` | les paraules d'instància, en anglès canònic i fora d'i18n |
+| 3 | `91989bf7` | la taula d'autoria a la forma v8.1 (fora la regla, fora els grisos, la capa al seu lloc) |
+| 4 | `95b61cad` | la porta per fila dels dos eixos d'identitat |
+| 5 | `b8cda79a` | «Mesurar prenda» passa a ser la MATEIXA taula, en mode presa |
+| 6 | `20419138` | l'origen d'una mesura deixa de ser efecte secundari d'una altra escriptura |
+| 7 | `75e01595` | la graella de fitting tornava buida perquè manava la càrrega que arribava tard |
+| 8 | `4b99ee72` | la línia de dreceres del fitting (maqueta v3) |
+| 9 | `448ee468` | la Comprovació, construïda sencera (D-31.17) |
+
+**Gate:** `manage.py check` net · `npm run build` net · `node --test` 28 verds ·
+`manage.py test fhort.models_app.test_origen_no_es_efecte_secundari fhort.models_app.test_c4_escriptura_germanes` → **20 OK**.
+
+---
+
+## U.2 · README de maquetes — la línia falsa, retirada
+
+La línia «v8.2 = v8.1 + REGLA DE GRADUACIÓ… l'Agus l'ha confirmat el 05/08» **era falsa**: la va
+escriure Claude Chat, no l'Agus. Retirada i substituïda per l'**ordre viva, amb data i autor**:
+
+> **ORDRE VIVA · AGUS · 05/08/2026 vespre:** la columna de REGLA DE GRADUACIÓ (Règim · Δ ·
+> Δ break · Talla break) SOBRA de la taula de mesures. La v8.1 mana en FORMA.
+
+I la variant que sí que calia, anotada:
+
+> **«v8.2-presa» = v8.1 + la columna BASE VIGENT · mode presa · IMPLEMENTADA.** No té fitxer HTML
+> propi: és la v8.1 amb UNA columna més, en lectura, just abans del carril.
+
+`maqueta_mesures_carril_v8_2.html` queda **DESCARTADA**. *(`ops/` és untracked: no entra en cap commit.)*
+
+---
+
+## U.3 · 🔴 `set-measurements` ja no reescriu `origen` — commit `20419138`
+
+### Cens previ: qui escriu `origen='MANUAL'` per efecte secundari
+
+| lloc | qui hi entra | estat |
+|---|---|---|
+| `views.py:set_measurements_view` | `EditableTable.desa()` sense `onPomSave` (branca viva per a qualsevol client amb token) | ✅ **corregit** |
+| `views.py:gravar_pom_view` | `MeasuresEntryPanel.savePom` → **el camí REAL de la pantalla d'autoria** | ✅ **corregit** |
+| `views.py:measurements_chat_view` (~2551) | el xat d'IA de mesures, acció `AFEGIR` | 🚩 **NO tocat** — mateix defecte, fora del que el brief demanava |
+| `views.py:_write_base` · `escalat_ajustar_talla_view` | escriptura d'UNA mesura | no aplica: hi escriuen el valor i l'origen que els correspon |
+
+Cap altre consumidor de `set-measurements` (cens a `frontend/src`, `frontend-backoffice/src`, `*/urls.py`).
+
+### El defecte, mesurat
+
+Les dues portes posaven `origen='MANUAL'` i **les dues toleràncies del catàleg** als `defaults`
+de l'`update_or_create` — és a dir a **cada fila del payload**, hagués canviat el valor o no.
+N'hi havia prou de reenviar la taula (moure una fila de capa, desar sense tocar cap xifra)
+perquè una base `CHECKED` passés a `MANUAL` i les toleràncies afinades tornessin al defecte.
+
+Trenca la precedència temporal, i no es pot desfer mirant la fila: `origen` el sobreescriu el
+canvi següent; qui conserva la seqüència és `MeasurementChangeLog`, append-only.
+
+### La regla nova (`_procedencia_de_mesura`, punt únic per a les dues portes)
+
+- si el **payload ho diu explícitament**, mana el payload;
+- si la fila **neix** → `MANUAL` + toleràncies del catàleg (no hi ha res a trepitjar);
+- si la fila **ja hi és i el valor CANVIA** → `MANUAL` (algú acaba de teclejar-la);
+- si la fila **ja hi és i el valor és el MATEIX** → **no es toca res**.
+
+Un cop la fila existeix, les toleràncies no es reescriuen mai des del catàleg.
+
+### El test que ho fixa
+
+`backend/fhort/models_app/test_origen_no_es_efecte_secundari.py`, 5 casos: (1) `set-measurements`
+amb el mateix valor **deixa la base `CHECKED`** *(el del brief)*; (2) `gravar-pom`, igual;
+(3) **l'invers** — canviar el valor **sí** que passa a `MANUAL`; (4) el payload explícit mana
+sempre; (5) una fila nova neix `MANUAL` amb el catàleg.
+
+---
+
+## U.4 · FITTING — contrastat contra `maqueta_fitting_v3`
+
+### El blocador era un defecte de producte, no del banc — commit `75e01595`
+
+La pantalla canvia de FONT en calent (s'obre amb `check` i passa a `fittingSource` quan la sessió
+arriba); les dues càrregues viatjaven alhora i **totes dues feien `setRaw`**: manava la que
+resolia l'última. Traça al banc (model 188 · sessió 147):
+
+```
+200 GET /api/v1/piece-fittings/31/      ← la del FITTING, amb 52 línies
+200 GET /api/v1/size-checks/25/         ← la del CHECK, resol DESPRÉS i mana
+```
+
+La graella de fitting es quedava amb el `raw` del check —que no porta `pomRows`— i pintava
+«Encara no hi ha mesures base» sobre una peça amb 52 línies, **amb la consola neta i la xarxa
+tota a 200**. Un comptador de torn ho tanca (`.then`, `.catch` i `loading`). Amb el fix, **13 files**.
+
+### El fix C1 del veredicte: **ja hi era; verificat, no refet**
+
+Les quatre peces són a `617db73f`: `fittingGridAdapter.jsx:95-112` sembra de `line.decisio` ·
+`onVeredicte` → `pieceFittingLines.update(lineId,{decisio})` · i **els dos comentaris rancis ja
+estan esmenats** (`measureSources.jsx:87-89` en conserva l'acta).
+
+### Contrast bloc a bloc
+
+| bloc de la v3 | estat |
+|---|---|
+| Capa · codi en `--gold` · nom | ✅ |
+| **La instància DINS del nom, en negre** («Armhole depth · Left») | ✅ |
+| Els noms no es tallen mai | ✅ |
+| Columna de treball `--sel`, valor en negreta amb el color del veredicte | ✅ |
+| Segmented ACCEPTED · ADJUSTED · REJECTED | ✅ |
+| Nota amb placeholder en cursiva | ✅ |
+| Barra de recomptes amb «Sense decidir» | ✅ |
+| Germana amb etiqueta i folgança | ✅ |
+| Botó del full de fitting | ✅ |
+| Històric paginat `‹ ›` de 2 en 2 | ✅ el codi hi és (`PaginadorHistoric`); el model 188 té **una sola presa** → apareix a partir de 3 |
+| **Línia de dreceres** (`↓/Enter · ↑ · Tab · A · J · R · buit = no mesurat`) | ✅ **afegida** (`4b99ee72`); les tecles ja funcionaven i no ho deia res |
+| ⚠️ Vocabulari de capes de la v3 (`Interlining/Binding/Knit/Reinforcement`) | ✅ **NO copiat**: mana D-31.22 |
+
+**Divergències que queden — decisió d'Agus:**
+
+1. 🚩 **La columna RÈGIM no és a la v3** i la pantalla la té (en lectura). No l'he tret: és la
+   mateixa mena de decisió que la del punt 1, i la vull teva.
+2. 🚩 **Etiquetes del grup:** la v3 diu grup «Fitting 04/08» + «Real · S»; la pantalla diu grup
+   «S» + «BASE» / «FIT ACTUAL».
+
+---
+
+## U.5 · COMPROVACIÓ — construïda sencera (D-31.17) — commit `448ee468`
+
+Abans: **cap tab, cap ruta, cap component.**
+
+- **Entrada:** tercera subvista de Mesures (`Taula de mesures · Repàs de fittings · Comprovació`),
+  que és on la maqueta la posa (`.sub2`). No és tab pròpia: el que comprova són les mesures.
+- **Contracte:** `GET /api/v1/models/<id>/comprovacio/` — un de sol, perquè el veredicte de dalt
+  és la suma del detall de sota i partir-ho arriscaria que no quadressin.
+- **Consulta pura:** cap botó que escrigui; «veure →» porta a la taula.
+
+### D'on surt cada secció amb el sistema d'AVUI
+
+| secció | font real |
+|---|---|
+| Bloquegen l'enviament | `base_value_cm IS NULL` · POM sense `ModelGradingRule` resident |
+| Van quedar enrere | només `MeasurementChangeLog`: última PRESA (`context ∈ fitting/checked`) contra l'últim canvi |
+| Preses descartades | `SizeCheckLine.decisio='valor_descartat'` |
+| Fora de tolerància | `PieceFittingLine` fora de la banda **de la FILA**, no la del catàleg |
+| Famílies | `BaseMeasurement` per POM; folgança = exterior − folre quan totes dues hi són amb valor |
+
+### 🚩 El que la maqueta demana i el domini NO té — **no s'ha simulat**
+
+1. **BUIT DECLARAT AMB MOTIU** (`tr.gap`: «la germana es va proposar i es va treure: el coll passa
+   sota l'aixella esquerra»). No hi ha manera de desar que una cara NO existeix ni per què. Les
+   famílies ensenyen les cares que EXISTEIXEN i callen sobre les que no; el backend ho declara a
+   `limitacions: ['buit_declarat_amb_motiu']` i la pantalla ho diu al peu.
+   **Cal:** un `BaseMeasurementAbsent` (o `estat='DESCARTADA'` + `motiu` a `BaseMeasurement`) amb
+   la seva porta d'escriptura.
+2. **La nota per família** (`.fnote`). A la maqueta és text escrit a mà; no és cap dada. Omesa.
+3. **El «tipus» de POM** (`Dimensió`/`Col·locació`). No existeix; s'hi ensenya `POMGlobal.categoria`,
+   que és una altra taxonomia (`Upper body`, `LOSAN`).
+4. **«3 de 4 cares»** implica saber quantes cares s'esperen. No existeix; s'hi diu «N cares».
+
+---
+
+## U.6 · Vista de família i Wizard — **NO tocats** (ordre d'Agus)
+
+---
+
+## U.7 · DADES · `AH-L`/`AH-R` → `AHL`/`AHR`
+
+**Cens previ (tots els schemes de tenant):**
+
+```
+[fhort] 2 fila/es amb guió davant del sufix
+    model 188 (BRW-SS27-0001) · bm 2102 · instància «left»  · 'AH-L' → 'AHL'
+    model 188 (BRW-SS27-0001) · bm 2103 · instància «right» · 'AH-R' → 'AHR'
+[los]   0 fila/es
+TOTAL: 2 fila/es a 1 model.
+```
+
+**Script:** `backend/scripts_tmp/fix_sufix_instancia_guio.py` (untracked, com tot `scripts_tmp/`).
+
+```
+venv/bin/python manage.py shell < scripts_tmp/fix_sufix_instancia_guio.py     # cens
+ACCIO=aplicar ...   |   ACCIO=desfer ...
+```
+
+- **No endevina per la forma del text:** només toca files on `nom_fitxa` acaba exactament en
+  `-<sufix>` i el sufix és el que el **diccionari de BD** dona per a la instància d'aquella fila
+  (un POM `T-SHIRT` no es converteix en `TSHIRT`).
+- **Idempotent** (2a passada: «res a fer») i **reversible** amb `ACCIO=desfer`, que es basa en un
+  rastre amb el valor d'abans i **omet** les files que algú hagi rebatejat pel mig.
+- **Només toca el NOM** (`update_fields=['nom_fitxa']`).
+
+**Executat i verificat** (cens → aplicar → idempotència → desfer → aplicar). Estat final:
+`2102 'AHL'` · `2103 'AHR'`, `origen=MANUAL`, valors 23.2 i 23.0 intactes.
+
+---
+
+## U.8 · TANCAMENT · el contrast al navegador
+
+**Banc:** `frontend/dist` REAL servit per un servidor propi que dona l'API des del `Client` de
+test de Django amb `force_login` (el gunicorn viu rebutja els tokens del shell). **Escriptures
+tallades** (eco) excepte les portes idempotents d'obertura. Idioma per `localStorage['fhort.lang']`.
+
+| superfície | maqueta | contrast | consola | idiomes |
+|---|---|---|---|---|
+| Mesures `autoria_base` | v8.1 | ✅ bloc a bloc | neta | ca · es · en |
+| Mesures `presa` | v8.1 + BASE VIGENT | ✅ bloc a bloc | neta | ca · es · en |
+| **Fitting** (`CheckMeasureEditor` + `fittingSource`, `ModelSheet.jsx:830-836`) | fitting_v3 | ✅ bloc a bloc (13 files) | neta | ca |
+| **Comprovació** | comprovacio_v2 | ✅ bloc a bloc (5 seccions · 11 famílies) | neta | ca · es · en |
+| Vista de família | *descartada* | — | — | no tocada per ordre |
+| Wizard de model | *pendent de validació* | — | — | no tocada per ordre |
+
+Càrrega + F5 + navegació entre tabs amb la consola neta a tots els passos.
+
+**Prova que el diccionari MANA les columnes:** s'ha afegit una instància a la BD
+(`qa_sleeve_head`, sufix `SH`) i la píndola **«Sleeve head» apareix a la columna POSICIÓ sense
+tocar cap fitxer de codi**. Esborrada després (queden 10). ⚠️ El límit: afegir una **opció** és
+dada pura; afegir un **EIX nou** encara demana tocar `MeasurementInstance.EIX_CHOICES` +
+`EIX_NOMS`, perquè l'eix no té taula pròpia.
+
+**Cap escriptura del banc a la BD de staging**, verificat: sessió 147 `Oberta`, 10 instàncies,
+13 mesures del model 188 amb els seus orígens.
+
+---
+
+## U.9 · La cua oberta
+
+| # | què | on |
+|---|---|---|
+| 🚩 1 | `measurements_chat_view` té el mateix defecte d'`origen` que s'acaba de corregir a les altres dues portes | `models_app/views.py` ~2551 |
+| 🚩 2 | La columna **RÈGIM del fitting** no és a la v3 — decisió d'Agus | `CheckMeasureEditor.buildLeadCols` |
+| 🚩 3 | Etiquetes del grup del fitting («S / BASE / FIT ACTUAL» vs «Fitting 04/08 / Real · S») | `fittingGridAdapter` |
+| 🚩 4 | **El buit declarat amb motiu** no existeix al domini: bloqueja la secció de famílies de la Comprovació i la «Vista de família» absorbida | model + endpoint nous |
+| 🚩 5 | L'**EIX** d'instància no és una fila de BD (les opcions sí) | `MeasurementInstance.EIX_CHOICES` |
+| 🚩 6 | El **diàleg de germana** s'ha eliminat (les dues branques tenen gest propi a la fila) | `EditableTable` |
+
+---
+
+**Cap push. Cap suite. `git add` selectiu a tots els commits.**
