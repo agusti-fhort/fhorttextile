@@ -3220,6 +3220,7 @@
       "break_size": "Break size"
     },
     "row_discarded": "No value: this row will be discarded on save.",
+    "row_discard_mark": "· will be discarded",
     "count_filled": "{{n}} filled in",
     "count_empty": "{{n}} blank → will be discarded"
   },

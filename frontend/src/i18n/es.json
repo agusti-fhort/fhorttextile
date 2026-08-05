@@ -3220,6 +3220,7 @@
       "break_size": "Talla break"
     },
     "row_discarded": "Sin valor: esta fila se descartará al guardar.",
+    "row_discard_mark": "· se descartará",
     "count_filled": "{{n}} informadas",
     "count_empty": "{{n}} en blanco → se descartarán"
   },

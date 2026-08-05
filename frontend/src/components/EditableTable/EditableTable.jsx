@@ -569,7 +569,7 @@ function SortableRow({ row, n, displaySize, readOnly, onCellChange, onDelete, on
             style={{ fontSize: 9, marginLeft: 5, color: 'var(--gold)', verticalAlign: 'middle' }} />
         )}
       </td>
-      <td style={{ ...stickyTd(widths.capa + widths.codi, widths.nom), opacity: buida ? 0.55 : 1 }}>
+      <td style={{ ...stickyTd(widths.capa + widths.codi, widths.nom), opacity: buida ? 0.45 : 1 }}>
         {(() => {
           // Llei de presentació de la casa (nom internacional dalt · llengua de qui llegeix
           // sota), APLICADA AL CLIENT: si el POM té àlies, manen les seves descripcions.
@@ -607,6 +607,12 @@ function SortableRow({ row, n, displaySize, readOnly, onCellChange, onDelete, on
               value={row.nom_canonic_model || ''} placeholder={dalt || ''} instancia={inst}
               traduccio={traduit} editable={nomEditable} estil={estilDalt}
               title={t('measuregrid.nom_canonic_tip')}
+              // v8.1 — LA MARCA DEL DESCART ES LLEGEIX, no es descobreix passant-hi per sobre.
+              // El motiu ja hi era (al `title` de l'input del carril), però un tooltip només el
+              // troba qui ja sospita; el que ha de saltar a la vista escombrant la taula és
+              // QUINES files no arribaran a desar-se. Va enganxada al nom i en cursiva petita,
+              // com la maqueta: és un aclariment del nom, no una columna d'estat.
+              marca={buida ? t('editable_table.row_discard_mark') : ''}
               onSave={v => onBateig(bmId, { nom_canonic_model: v })} />
           )
         })()}
@@ -814,7 +820,7 @@ function GermanaDialog({ mare, existents, onCancel, onCrear }) {
 // La INSTÀNCIA va enganxada al nom i en el SEU color: no és una etiqueta al costat, és que aquesta
 // mesura es diu «Profunditat de sisa · Esquerra». La ⓘ porta el nom en l'idioma de qui llegeix;
 // era una segona línia permanent a cada fila i ara es demana, que és la freqüència amb què es mira.
-function NomCanonic({ value, placeholder, instancia, traduccio, editable, estil, title, onSave }) {
+function NomCanonic({ value, placeholder, instancia, traduccio, marca = '', editable, estil, title, onSave }) {
   const [editant, setEditant] = useState(false)
   const [hover, setHover] = useState(false)
 
@@ -835,6 +841,9 @@ function NomCanonic({ value, placeholder, instancia, traduccio, editable, estil,
       }}>
       {value || placeholder}
       {instancia && <span style={{ fontWeight: 500 }}>{` · ${instancia}`}</span>}
+      {marca && (
+        <span style={{ fontSize: 10, fontStyle: 'italic', color: 'var(--text-muted)' }}>{`  ${marca}`}</span>
+      )}
       {traduccio && (
         <i className="ti ti-info-circle" title={traduccio} aria-label={traduccio}
           onClick={e => e.stopPropagation()}
