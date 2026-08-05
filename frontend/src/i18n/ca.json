@@ -2227,7 +2227,14 @@
       "note_err": "No s'ha pogut desar la nota.",
       "verdicte_err": "No s'ha pogut desar el veredicte.",
       "sense_decidir": "Sense decidir",
-      "marca_derivada": "DERIVADA"
+      "marca_derivada": "DERIVADA",
+      "kbd_next": "següent",
+      "kbd_prev": "anterior",
+      "kbd_tab": "valor → veredicte → nota",
+      "kbd_accepta": "accepta",
+      "kbd_ajusta": "ajusta",
+      "kbd_rebutja": "rebutja",
+      "kbd_buit": "buit = no mesurat"
     },
     "gate": {
       "title": "Gate de la peça",

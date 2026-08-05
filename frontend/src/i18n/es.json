@@ -2227,7 +2227,14 @@
       "note_err": "No se ha podido guardar la nota.",
       "verdicte_err": "No se ha podido guardar el veredicto.",
       "sense_decidir": "Sin decidir",
-      "marca_derivada": "DERIVADA"
+      "marca_derivada": "DERIVADA",
+      "kbd_next": "siguiente",
+      "kbd_prev": "anterior",
+      "kbd_tab": "valor → veredicto → nota",
+      "kbd_accepta": "acepta",
+      "kbd_ajusta": "ajusta",
+      "kbd_rebutja": "rechaza",
+      "kbd_buit": "vacío = no medido"
     },
     "gate": {
       "title": "Gate de la pieza",

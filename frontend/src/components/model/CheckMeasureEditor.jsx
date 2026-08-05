@@ -107,6 +107,14 @@ const btn = (variant) => ({
   background: variant === 'err' ? 'var(--err)' : variant === 'plain' ? 'var(--white)' : 'var(--gold)',
   color: variant === 'plain' ? 'var(--text-main)' : 'var(--white)', fontWeight: 500,
 })
+// fitting_v3 `kbd` :31-32 — la tecla dibuixada com una tecla.
+function Tecla({ children }) {
+  return (
+    <kbd style={{ border: `1px solid ${BORDER}`, borderRadius: 3, padding: '1px 5px',
+                  background: 'var(--white)', font: 'inherit', fontSize: 10,
+                  color: 'var(--text-muted)' }}>{children}</kbd>
+  )
+}
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
 const modal = { background: 'var(--white)', borderRadius: 8, padding: 24, maxWidth: 460, fontFamily: MONO, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }
 
@@ -611,6 +619,21 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           El FITTING (font `fitting`) segueix a `MeasureGrid`: és una altra eina, amb la seva
           maqueta (fitting_v3) i el seu vocabulari —versions, veredicte, decisió i nota—, i
           barrejar-les seria desfer el que aquest canvi acaba d'unificar. */}
+      {/* fitting_v3 `.hint` :159-162 — LA LÍNIA DE DRECERES del fitting. Les tecles existeixen
+          des de fa temps (↓/Enter i ↑ recorren el carril; A · J · R posen el veredicte sense
+          treure la mà del número) i no ho deia res: qui obria la sessió les havia de saber
+          d'abans. Només s'hi anuncia el que funciona en aquesta pantalla. */}
+      {!esPresa && !readOnly && rows.length > 0 && (
+        <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
+                    margin: '0 0 10px', lineHeight: 1.8 }}>
+          <Tecla>↓</Tecla>/<Tecla>Enter</Tecla> {t('fitting.grid.kbd_next')} · <Tecla>↑</Tecla> {t('fitting.grid.kbd_prev')}
+          {' · '}<Tecla>Tab</Tecla> {t('fitting.grid.kbd_tab')}
+          {' · '}<b style={{ color: 'var(--ok)' }}><Tecla>A</Tecla> {t('fitting.grid.kbd_accepta')}</b>
+          {' · '}<b style={{ color: 'var(--warn)' }}><Tecla>J</Tecla> {t('fitting.grid.kbd_ajusta')}</b>
+          {' · '}<b style={{ color: 'var(--err)' }}><Tecla>R</Tecla> {t('fitting.grid.kbd_rebutja')}</b>
+          {' · '}{t('fitting.grid.kbd_buit')}
+        </p>
+      )}
       {esPresa ? (
         <EditableTable
           rows={rowsPresa}

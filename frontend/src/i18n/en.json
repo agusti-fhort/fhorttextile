@@ -2227,7 +2227,14 @@
       "note_err": "Could not save the note.",
       "verdicte_err": "Couldn't save the verdict.",
       "sense_decidir": "Undecided",
-      "marca_derivada": "DERIVED"
+      "marca_derivada": "DERIVED",
+      "kbd_next": "next",
+      "kbd_prev": "previous",
+      "kbd_tab": "value → verdict → note",
+      "kbd_accepta": "accept",
+      "kbd_ajusta": "adjust",
+      "kbd_rebutja": "reject",
+      "kbd_buit": "blank = not measured"
     },
     "gate": {
       "title": "Piece gate",
