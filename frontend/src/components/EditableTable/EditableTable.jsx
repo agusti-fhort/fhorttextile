@@ -12,7 +12,8 @@ import { CSS } from '@dnd-kit/utilities'
 import { formatDelta } from '../../utils/format'
 import { etiquetaCapa, etiquetaInstancia, CAPES, INSTANCIES } from '../../utils/capaInstancia'
 import {
-  DIMS_EN_LINIA, COMPLEMENTARIA, eixDe, tramsInstancia, composaInstancia,
+  DIMS_EN_LINIA, COMPLEMENTARIA, EIX_POSICIO, EIX_ESTAT, eixDe, filaInstancia,
+  tramsInstancia, composaInstancia,
   codiProposat, codiBase,
 } from '../../utils/diccionariMesures'
 import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
@@ -231,6 +232,7 @@ export default function EditableTable({
   // ⚠️ NO ES DESA SOLA, i és correcte: `buildPayload` només envia les files amb valor, com ha
   // fet sempre amb les files noves. Una germana sense mesura encara no és una mesura.
   const [germanaDe, setGermanaDe] = useState(null)   // fila mare del diàleg de CAPA
+  const [posicionsDe, setPosicionsDe] = useState(null)  // fila mare del modal `＋`
 
   // v8.1 — LA FILA ACTIVA I LA FILA QUE ACABA DE NÉIXER.
   //
@@ -315,26 +317,29 @@ export default function EditableTable({
   // La fila original es perd a propòsit: la seva identitat `(pom, capa, '')` deixa d'existir, i
   // `keep_mesures` (que es construeix de `localRows`) ja no la portarà → el backend la poda i
   // escriu les dues noves. Això ÉS partir; conservar-la deixaria tres files on n'hi ha d'haver dues.
-  const parteix = (row, opt) => {
-    if (!dicc) return
-    const eix = eixDe(dicc, opt)
-    const comp = COMPLEMENTARIA[opt]
-    if (!eix || !comp) return
+  //
+  // `aplica` és el motor comú de les píndoles i del modal `＋`: rep els trams TRIATS (un per eix
+  // com a molt) i si se n'ha de fer també la complementària. Un sol camí perquè les dues portes
+  // componguin el codi i el slug exactament igual — dos camins voldrien dir dues identitats per a
+  // la mateixa germana, i la clau única de la BD no perdona això.
+  const aplicaInstancia = (row, trams, ambComplementaria) => {
+    if (!dicc || !trams.length) return
+    const eixosTocats = new Set(trams.map(s => eixDe(dicc, s)).filter(Boolean))
     const meus = tramsInstancia(dicc, row.instancia)
-    const altres = meus.filter(s => eixDe(dicc, s) !== eix)
+    const altres = meus.filter(s => !eixosTocats.has(eixDe(dicc, s)))
     // El codi base és el que quedava abans que cap sufix s'hi enganxés: re-partir `AHL` ha de
     // donar `AHL`/`AHR` i no `AHLL`.
     const base = codiBase(dicc, row.nom_fitxa || row.client_code || row.pom_code || '', meus)
-    const fill = (tram) => {
-      const trams = [...altres, tram]
-      const inst = composaInstancia(dicc, trams)
+    const fill = (tramsFila, marca) => {
+      const tots = [...altres, ...tramsFila]
+      const inst = composaInstancia(dicc, tots)
       // La invariant de BD `instancia_exigeix_nom` no admet nom buit amb instància. Amb un eix
       // que no compon sufix (els ESTATS) la proposta és el codi base tal qual, que ja val; si
       // ni tan sols n'hi hagués, el slug fa de nom abans que deixar petar el desat amb un 500.
-      const codi = codiProposat(dicc, base, trams) || inst.toUpperCase()
+      const codi = codiProposat(dicc, base, tots) || inst.toUpperCase()
       return {
         ...row,
-        id: `tmp-${Date.now()}-${tram}`,
+        id: `tmp-${Date.now()}-${marca}`,
         instancia: inst,
         nom_fitxa: codi,
         // `clau` és la que serveix el backend per indexar els deltes: una identitat nova no en
@@ -342,13 +347,25 @@ export default function EditableTable({
         clau: undefined,
       }
     }
+    // LA COMPLEMENTÀRIA ES GIRA PER LA POSICIÓ si n'hi ha (la sisa esquerra vol dir que n'hi ha
+    // una de dreta); si només s'ha triat un ESTAT, es gira l'estat. Les posicions sense parella
+    // (`side`, `waistband_seam`) no en tenen, i llavors no se'n crea cap segona fila.
+    const aGirar = trams.find(s => COMPLEMENTARIA[s] && eixDe(dicc, s) === EIX_POSICIO)
+      || trams.find(s => COMPLEMENTARIA[s])
+    const compTrams = ambComplementaria && aGirar
+      ? trams.map(s => (s === aGirar ? COMPLEMENTARIA[s] : s))
+      : null
     setLocalRows(prev => {
       const i = prev.findIndex(r => r.id === row.id)
       if (i < 0) return prev
-      return [...prev.slice(0, i), fill(opt), fill(comp), ...prev.slice(i + 1)]
+      const files = [fill(trams, 'a')]
+      if (compTrams) files.push(fill(compTrams, 'b'))
+      return [...prev.slice(0, i), ...files, ...prev.slice(i + 1)]
     })
     setDirty(true)
   }
+
+  const parteix = (row, opt) => aplicaInstancia(row, [opt], true)
 
   const calcDelta = (row) => {
     // Δ computed on the backend (mean of increments between sizes with data).
@@ -487,7 +504,7 @@ export default function EditableTable({
   // catàleg) → BD neta = columnes buides. I desar mesures segueix sense fabricar cap regla:
   // `buildPayload` no envia `rules`, i aquell guard mort no torna.
   const displaySize = baseSize || sizeRun?.[0]
-  const colCount = (readOnly ? 0 : 2) + 9 + (readOnly ? 0 : 2)
+  const colCount = (readOnly ? 0 : 2) + 9 + (readOnly ? 0 : 3)
   const stickyHd = (left, w) => ({ ...thS, position: 'sticky', left, zIndex: 3, width: w, minWidth: w, background: 'var(--bg-muted)' })
   // Bloc d'IDENTITAT de la fila, congelat a l'esquerra: Capa · nomenclatura · nom. Amb dues
   // germanes vives (el mateix POM a l'exterior i al folre, la sisa esquerra i la dreta) el nom
@@ -546,7 +563,7 @@ export default function EditableTable({
                     el `＋`, que obre les vuit posicions del diccionari. Va entre el NOM i el valor
                     perquè és part de QUINA mesura és la fila, no de què s'hi mesura. */}
                 {!readOnly && (
-                  <th colSpan={2} style={{ ...thS, textAlign: 'center', background: 'var(--gold-pale)',
+                  <th colSpan={3} style={{ ...thS, textAlign: 'center', background: 'var(--gold-pale)',
                                            color: 'var(--gold)', fontWeight: 600, borderLeft: '1px solid var(--border)' }}>
                     {t('instancia.grup')}
                   </th>
@@ -588,6 +605,7 @@ export default function EditableTable({
                         {t('instancia.eix_posicio')}
                       </th>
                       <th style={{ ...thS, textAlign: 'center', minWidth: 132 }}>{t('instancia.eix_estat')}</th>
+                      <th style={{ ...thS, textAlign: 'center', minWidth: 52 }}>{t('instancia.mes')}</th>
                     </>
                   )}
                   <th style={{ ...thS, minWidth: 92, background: REGLA_BG, borderLeft: SEP }}>{t('editable_table.col.regime')}</th>
@@ -616,6 +634,7 @@ export default function EditableTable({
                     dicc={dicc}
                     dimState={dimState}
                     onParteix={parteix}
+                    onMesInstancia={() => setPosicionsDe(row)}
                     onCellChange={handleCellChange}
                     onDelete={handleDeleteRow}
                     onGermana={() => setGermanaDe(row)}
@@ -641,6 +660,18 @@ export default function EditableTable({
           </table>
         </DndContext>
       </div>
+
+      {posicionsDe && (
+        <ModalPosicions
+          mare={posicionsDe}
+          dicc={dicc}
+          // Les cares que aquest POM JA té: la clau única és `(model, pom, capa, instancia)` i
+          // oferir-ne una de repetida escriuria damunt d'una fila existent en silenci.
+          existents={localRows.filter(r => r.pom_id === posicionsDe.pom_id
+            && (r.capa || 'exterior') === (posicionsDe.capa || 'exterior'))}
+          onCancel={() => setPosicionsDe(null)}
+          onAplica={(trams, ambComp) => { aplicaInstancia(posicionsDe, trams, ambComp); setPosicionsDe(null) }} />
+      )}
 
       {germanaDe && (
         <GermanaDialog
@@ -689,7 +720,7 @@ export default function EditableTable({
 
 function SortableRow({ row, n, displaySize, readOnly, activa, neix, onActiva, onCellChange, onDelete, onGermana,
                        delta, onBateig, onRegla, widths, registerVal, onNav,
-                       dicc, dimState, onParteix }) {
+                       dicc, dimState, onParteix, onMesInstancia }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -812,6 +843,18 @@ function SortableRow({ row, n, displaySize, readOnly, activa, neix, onActiva, on
           </td>
         )
       })}
+      {!readOnly && (
+        <td style={{ ...tdS, textAlign: 'center', padding: '4px 8px' }}>
+          {/* v8.1 `.qmore` — les altres sis posicions, les combinacions dels dos eixos i la
+              complementària desmarcable. Les dues parelles freqüents es queden en línia. */}
+          <button type="button" onClick={onMesInstancia} disabled={!dicc}
+            title={t('instancia.mes_tip')} aria-label={t('instancia.mes_tip')}
+            style={{ background: 'none', border: '1px dashed var(--border)', borderRadius: 999,
+                     padding: '3px 9px', font: 'inherit', fontSize: 'var(--fs-label)',
+                     color: dicc ? 'var(--text-muted)' : 'var(--border)',
+                     cursor: dicc ? 'pointer' : 'default' }}>＋</button>
+        </td>
+      )}
       <td style={{ ...tdS, textAlign: 'right', background: 'var(--gold-pale)' }}>
         <CarrilInput
           value={row.base_value_cm}
@@ -920,6 +963,129 @@ function PindolaInstancia({ slug, dicc, encesa, repartida, altra, onTria }) {
         fontWeight: encesa ? 600 : 400,
         opacity: inert && !encesa ? 0.4 : 1,
       }}>{nom}</button>
+  )
+}
+
+// ── B2 · EL MODAL `＋` · POSICIÓ I COMBINACIONS (v8.1 `.qmore` :268) ─────────────────────────
+//
+// Les píndoles de la fila porten les DUES PARELLES FREQÜENTS (esquerra/dreta · relaxada/estirada)
+// perquè són el 90% dels casos i han de costar un sol clic. Les altres sis posicions del
+// diccionari —superior, inferior, CF, CB, costura lateral, costura de cinturilla— i el CREUAMENT
+// dels dos eixos viuen aquí: en línia ocuparien mitja taula per a un cas que es fa un cop al mes.
+//
+// LA COMPLEMENTÀRIA ÉS DESMARCABLE, i aquesta és la diferència de fons amb les píndoles. Prémer
+// una píndola AFIRMA que n'hi ha dues (si hi ha una sisa esquerra, n'hi ha una de dreta). Però
+// «CF» pot ser l'única: una mesura al centre davant no implica que n'hi hagi una al centre
+// darrere. Qui ho sap és el patronista, i aquí se li pregunta en comptes de decidir-ho per ell.
+// Les posicions que no tenen parella (`side`, `waistband_seam`) ni tan sols ofereixen la casella.
+function ModalPosicions({ mare, dicc, existents, onCancel, onAplica }) {
+  const { t } = useTranslation()
+  const [posicio, setPosicio] = useState('')
+  const [estat, setEstat] = useState('')
+  const [ambComp, setAmbComp] = useState(true)
+
+  const posicions = dicc?.instancies?.[EIX_POSICIO] || []
+  const estats = dicc?.instancies?.[EIX_ESTAT] || []
+  const trams = [posicio, estat].filter(Boolean)
+
+  // Etiqueta: mana i18n (canvia amb l'idioma a l'instant); el nom del diccionari és el pla B per
+  // a un slug que un tenant s'hagi creat i que i18n no pot conèixer.
+  const etiqueta = (fila) => {
+    const propi = etiquetaInstancia(fila.slug, t)
+    return propi || fila.nom_ca || fila.nom_en || fila.slug
+  }
+
+  const preses = new Set(existents.map(r => r.instancia || ''))
+  const slugDe = (p, e) => composaInstancia(dicc, [p, e].filter(Boolean))
+  // Una combinació ja presa no s'ofereix: crear-la no faria res, escriuria damunt de la fila que
+  // ja hi ha i el tècnic veuria desaparèixer una mesura sense saber per què.
+  const jaHiEs = trams.length > 0 && preses.has(slugDe(posicio, estat))
+
+  const compDe = COMPLEMENTARIA[posicio] || (!posicio && COMPLEMENTARIA[estat]) || null
+  const base = codiBase(dicc, mare.nom_fitxa || mare.client_code || mare.pom_code || '',
+                        tramsInstancia(dicc, mare.instancia))
+  const codiA = trams.length ? (codiProposat(dicc, base, trams) || slugDe(posicio, estat).toUpperCase()) : ''
+  const compTrams = compDe ? trams.map(s => (s === (COMPLEMENTARIA[posicio] ? posicio : estat) ? compDe : s)) : []
+  const codiB = compDe && ambComp
+    ? (codiProposat(dicc, base, compTrams) || composaInstancia(dicc, compTrams).toUpperCase())
+    : ''
+
+  const xip = (actiu, onClick, clau, text, inert) => (
+    <button key={clau} type="button" onClick={inert ? undefined : onClick} disabled={inert}
+      style={{
+        padding: '5px 12px', borderRadius: 999, cursor: inert ? 'default' : 'pointer',
+        font: 'inherit', fontSize: 'var(--fs-body)',
+        border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
+        background: actiu ? 'var(--gold-pale)' : 'var(--white)',
+        color: actiu ? 'var(--gold)' : 'var(--text-main)', fontWeight: actiu ? 500 : 400,
+        opacity: inert ? 0.4 : 1,
+      }}>{text}</button>
+  )
+
+  return (
+    <div onClick={onCancel}
+      style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.28)',
+               display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: 'var(--white)', borderRadius: 10, padding: '1.25rem 1.4rem',
+                 width: 'min(560px, 92vw)', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 'var(--fs-h3)', fontWeight: 500 }}>
+          {t('instancia.modal_titol')}
+        </h3>
+        <p style={{ margin: '0 0 14px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+          {t('instancia.modal_subtitol', {
+            nom: mare.nom_canonic_model || mare.nom_en || mare.nom_ca || mare.pom_code || '',
+          })}
+        </p>
+
+        <p style={{ margin: '0 0 6px', fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
+                    textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          {t('instancia.eix_posicio')}
+        </p>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+          {posicions.map(f => xip(posicio === f.slug,
+            () => setPosicio(posicio === f.slug ? '' : f.slug), f.slug, etiqueta(f), false))}
+        </div>
+
+        <p style={{ margin: '0 0 6px', fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
+                    textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          {t('instancia.eix_estat')}
+        </p>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+          {estats.map(f => xip(estat === f.slug,
+            () => setEstat(estat === f.slug ? '' : f.slug), f.slug, etiqueta(f), false))}
+        </div>
+
+        {compDe && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+                          fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={ambComp} onChange={e => setAmbComp(e.target.checked)} />
+            <span>{t('instancia.modal_complementaria', { nom: etiquetaInstancia(compDe, t) })}</span>
+          </label>
+        )}
+
+        {/* LA PROPOSTA DE CODI, A LA VISTA ABANS DE CONFIRMAR. És el que anirà al `nom_fitxa`, i
+            el patronista el pot reescriure després: val més que el vegi ara que no que el
+            descobreixi a la taula. */}
+        {trams.length > 0 && (
+          <p style={{ margin: '0 0 12px', fontSize: 'var(--fs-body)',
+                      color: jaHiEs ? 'var(--err)' : 'var(--text-muted)' }}>
+            {jaHiEs
+              ? t('instancia.modal_ja_hi_es')
+              : t('instancia.modal_proposta', { codis: [codiA, codiB].filter(Boolean).join(' · ') })}
+          </p>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button type="button" onClick={onCancel} style={btnSecondary}>{t('app.cancel')}</button>
+          <button type="button" disabled={!trams.length || jaHiEs}
+            onClick={() => onAplica(trams, ambComp && !!compDe)}
+            style={btnPrimary(!trams.length || jaHiEs)}>
+            {t('instancia.modal_crear')}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 

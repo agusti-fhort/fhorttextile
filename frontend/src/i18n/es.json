@@ -4298,7 +4298,13 @@
     "mes_tip": "Posición y combinaciones — modal completo",
     "tip_aquesta": "{{nom}} — esta fila",
     "tip_repartida": "Repartida — la hermana es {{nom}}",
-    "tip_parteix": "{{nom}} — parte el POM (valores heredados)"
+    "tip_parteix": "{{nom}} — parte el POM (valores heredados)",
+    "modal_titol": "Posición y combinaciones",
+    "modal_subtitol": "Qué cara de «{{nom}}» es esta medida.",
+    "modal_complementaria": "Crear también la complementaria ({{nom}})",
+    "modal_proposta": "Código propuesto: {{codis}}",
+    "modal_ja_hi_es": "Esa combinación ya existe en la tabla.",
+    "modal_crear": "Crear"
   },
   "obrir_tasca": {
     "conflicte_titol": "Esta tarea la tiene abierta {{tecnic}}",

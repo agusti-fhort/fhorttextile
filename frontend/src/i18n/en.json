@@ -4298,7 +4298,13 @@
     "mes_tip": "Position and combinations — full dialog",
     "tip_aquesta": "{{nom}} — this row",
     "tip_repartida": "Split — the sister is {{nom}}",
-    "tip_parteix": "{{nom}} — split the POM (values inherited)"
+    "tip_parteix": "{{nom}} — split the POM (values inherited)",
+    "modal_titol": "Position and combinations",
+    "modal_subtitol": "Which face of «{{nom}}» this measurement is.",
+    "modal_complementaria": "Also create the complementary one ({{nom}})",
+    "modal_proposta": "Proposed code: {{codis}}",
+    "modal_ja_hi_es": "That combination is already in the table.",
+    "modal_crear": "Create"
   },
   "obrir_tasca": {
     "conflicte_titol": "{{tecnic}} has this task open",

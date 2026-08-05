@@ -4298,7 +4298,13 @@
     "mes_tip": "Posició i combinacions — modal complet",
     "tip_aquesta": "{{nom}} — aquesta fila",
     "tip_repartida": "Repartida — la germana és {{nom}}",
-    "tip_parteix": "{{nom}} — parteix el POM (valors heretats)"
+    "tip_parteix": "{{nom}} — parteix el POM (valors heretats)",
+    "modal_titol": "Posició i combinacions",
+    "modal_subtitol": "Quina cara de «{{nom}}» és aquesta mesura.",
+    "modal_complementaria": "Crear també la complementària ({{nom}})",
+    "modal_proposta": "Codi proposat: {{codis}}",
+    "modal_ja_hi_es": "Aquesta combinació ja existeix a la taula.",
+    "modal_crear": "Crear"
   },
   "obrir_tasca": {
     "conflicte_titol": "Aquesta tasca la té oberta {{tecnic}}",
