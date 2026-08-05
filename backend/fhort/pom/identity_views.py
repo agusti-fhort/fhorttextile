@@ -56,11 +56,18 @@ def measurement_identity_vocabulary_view(request):
     """
     GET /api/v1/mesures/diccionari/
 
-    → {capes: [...], instancies: {POSICIO: [...], ESTAT: [...]}, regles: {...}}
+    → {capes: [...], eixos: [...], instancies: {POSICIO: [...], ESTAT: [...]}, regles: {...}}
 
     Les instàncies van AGRUPADES PER EIX i no en una llista de deu: són ortogonals (una germana
     pot ser `left` i `relaxed` alhora) i barrejar-les faria que el diàleg de crear germana
     oferís deu opcions on n'hi ha vuit d'una mena i dues d'una altra.
+
+    **ELS EIXOS VIATGEN AMB NOM I EN ORDRE** (D-31.18). La taula de mesures pinta un GRUP DE
+    COLUMNES per eix, i les opcions de cada grup són les files de l'eix: si el nom de la columna
+    se l'escrivís el front, hi hauria dos llocs que saben quins eixos existeixen i el dia que
+    n'aparegui un tercer la columna nova sortiria sense capçalera. L'ordre de la llista és el de
+    presentació —és el mateix que decideix quin eix es gira en partir un POM—, i per això s'emet
+    com a LLISTA i no com les claus d'un diccionari, que no en tenen cap.
     """
     capes = [_fila(c) for c in MeasurementLayer.objects.all().order_by('display_order', 'slug')]
 
@@ -70,8 +77,16 @@ def measurement_identity_vocabulary_view(request):
         # a totes les files igualment perquè el client no hagi de saber en quin eix el pot trobar.
         instancies.setdefault(r.eix, []).append({**_fila(r), 'eix': r.eix, 'sufix': r.sufix})
 
+    # Només els eixos que TENEN files: un eix declarat i buit seria una columna sense cap opció.
+    eixos = [
+        {'clau': clau, **MeasurementInstance.EIX_NOMS.get(clau, {'nom_en': clau, 'nom_ca': clau, 'nom_es': clau})}
+        for clau, _ in MeasurementInstance.EIX_CHOICES
+        if instancies.get(clau)
+    ]
+
     return Response({
         'capes': capes,
+        'eixos': eixos,
         'instancies': instancies,
         'regles': {
             # Com es compon el codi PROPOSAT d'una germana (D-31.26, estil Brownie natiu).

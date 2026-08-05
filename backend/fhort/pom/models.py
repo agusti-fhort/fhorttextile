@@ -295,6 +295,15 @@ class MeasurementInstance(models.Model):
         (EIX_POSICIO, 'Posició'),
         (EIX_ESTAT, 'Estat'),
     ]
+    #: EL NOM DE L'EIX, trilingüe, per a qui n'ha de pintar una COLUMNA (D-31.18: la taula de
+    #: mesures té un grup de columnes per eix). Viu aquí, al costat de `EIX_CHOICES`, perquè
+    #: l'eix es DEFINEIX aquí i no té fila pròpia a cap taula: és el discriminant de les que hi
+    #: ha. Que el front se'ls escrigui seria el segon lloc que sap quins eixos hi ha, i el dia
+    #: que se n'afegís un tercer la columna nova sortiria sense nom.
+    EIX_NOMS = {
+        EIX_POSICIO: {'nom_en': 'Position', 'nom_ca': 'Posició', 'nom_es': 'Posición'},
+        EIX_ESTAT: {'nom_en': 'State', 'nom_ca': 'Estat', 'nom_es': 'Estado'},
+    }
 
     #: La instància ÚNICA: cadena buida, no una fila d'aquesta taula. Una mesura que només
     #: es fa un cop no té res a qualificar (v. `sufixIdentitat`, que hi torna `''`).

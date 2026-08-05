@@ -14,10 +14,6 @@
 // (el runner no resol imports sense extensió). Qui va a buscar el diccionari és
 // `utils/diccionariMesuresFont.js`, que sí que en depèn.
 
-/** Eixos de la instància (mirall de `MeasurementInstance.EIX_*`). */
-export const EIX_POSICIO = 'POSICIO'
-export const EIX_ESTAT = 'ESTAT'
-
 /**
  * PARELLES COMPLEMENTÀRIES. Partir un POM per una opció crea la fila triada I la seva germana:
  * la maqueta v8.1 ho fa amb `COMP`, i és el que fa que el gest sigui «partir» i no «afegir».
@@ -33,11 +29,50 @@ export const COMPLEMENTARIA = {
   relaxed: 'extended', extended: 'relaxed',
 }
 
-/** Les dues dimensions que la v8.1 ofereix EN LÍNIA, per slug. La resta viu al modal `＋`. */
-export const DIMS_EN_LINIA = [
-  { key: EIX_POSICIO, opts: ['left', 'right'] },
-  { key: EIX_ESTAT, opts: ['relaxed', 'extended'] },
-]
+/**
+ * LES DIMENSIONS DE LA TAULA SURTEN DE LA BD, NO D'AQUÍ (D-31.26 · «a BD i no a cap constant»).
+ *
+ * Un grup de columnes per EIX, i les opcions del grup són les files d'aquell eix, en el seu
+ * `display_order`. Abans hi havia una llista escrita a mà amb quatre slugs (`left`/`right` ·
+ * `relaxed`/`extended`), que són les DADES DE DEMOSTRACIÓ de la maqueta: el diccionari real en
+ * porta VUIT a l'eix de posició, i les altres sis no tenien manera d'arribar a la fila.
+ *
+ * Sense diccionari torna una llista buida: la taula es pinta igual, sense cap píndola, i les
+ * columnes apareixen quan el vocabulari arriba. Cap pantalla espera un GET per dibuixar-se.
+ */
+export function dimensionsDe(dicc) {
+  const perEix = dicc?.instancies || {}
+  // `eixos` mana l'ORDRE i porta el nom de la columna; sense ell (backend antic) es cau a les
+  // claus del diccionari d'instàncies, que almenys en dona la llista.
+  const declarats = dicc?.eixos?.length
+    ? dicc.eixos
+    : Object.keys(perEix).map(clau => ({ clau, nom_en: clau, nom_ca: clau, nom_es: clau }))
+  return declarats
+    .map(e => ({ ...e, opcions: [...(perEix[e.clau] || [])]
+      .sort((a, b) => (a.display_order ?? 99) - (b.display_order ?? 99)) }))
+    .filter(e => e.opcions.length > 0)
+}
+
+/**
+ * L'EIX QUE ES GIRA en partir un POM: el PRIMER que el diccionari declara (avui, la posició).
+ *
+ * Era el literal `'POSICIO'`. La regla de fons no és «la posició»: és que la lateralitat mana
+ * sobre l'estat perquè va primer —si es tria «esquerra · relaxada», la germana és «dreta ·
+ * relaxada», no «esquerra · estirada»—, i qui declara aquest ordre és el diccionari.
+ */
+export const eixPrincipal = (dicc) => dimensionsDe(dicc)[0]?.clau || null
+
+/**
+ * EL NOM D'UNA FILA DEL DICCIONARI en l'idioma de qui llegeix. Val per a capes i per a eixos —
+ * totes dues coses viatgen amb els tres noms sencers a posta (v. `identity_views._fila`), perquè
+ * canviar d'idioma no hagi de tornar a demanar el vocabulari.
+ *
+ * ⚠️ NO val per a les INSTÀNCIES: aquelles van en anglès canònic i no es tradueixen (les paraules
+ * que allarguen el nom del POM i en componen el sufix). Per a elles, `etiquetaInstancia`.
+ */
+export const nomEnIdioma = (fila, lang) =>
+  fila?.[`nom_${String(lang || 'ca').slice(0, 2)}`]
+  || fila?.nom_en || fila?.nom_ca || fila?.clau || fila?.slug || ''
 
 /** L'eix (`POSICIO`/`ESTAT`) d'un slug d'instància simple, o `null` si no és al diccionari. */
 export function eixDe(dicc, slug) {

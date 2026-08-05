@@ -14,22 +14,35 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
-  EIX_POSICIO, EIX_ESTAT, COMPLEMENTARIA,
+  COMPLEMENTARIA, dimensionsDe, eixPrincipal, nomEnIdioma,
   eixDe, filaInstancia, tramsInstancia, composaInstancia, codiProposat, codiBase,
 } from './diccionariMesures.js'
+
+// Els eixos NO són constants del front: són el que el diccionari declara. Aquí es fixen amb el
+// literal que la BD emet perquè el test parli del contracte, no de cap import.
+const EIX_POSICIO = 'POSICIO'
+const EIX_ESTAT = 'ESTAT'
 
 // Diccionari amb la forma EXACTA que emet `GET /api/v1/mesures/diccionari/` (verificat contra
 // el tenant `fhort` el 05/08). Retallat a les files que els casos toquen.
 const D = {
   capes: [{ slug: 'exterior' }, { slug: 'folre' }],
+  eixos: [
+    { clau: EIX_POSICIO, nom_en: 'Position', nom_ca: 'Posició', nom_es: 'Posición' },
+    { clau: EIX_ESTAT, nom_en: 'State', nom_ca: 'Estat', nom_es: 'Estado' },
+  ],
   instancies: {
     [EIX_POSICIO]: [
-      { slug: 'left', sufix: 'L' }, { slug: 'right', sufix: 'R' },
-      { slug: 'top', sufix: 'T' }, { slug: 'bottom', sufix: 'B' },
-      { slug: 'cf', sufix: 'CF' }, { slug: 'cb', sufix: 'CB' },
-      { slug: 'side', sufix: 'S' }, { slug: 'waistband_seam', sufix: '' },
+      { slug: 'left', sufix: 'L', display_order: 1 }, { slug: 'right', sufix: 'R', display_order: 2 },
+      { slug: 'top', sufix: 'T', display_order: 3 }, { slug: 'bottom', sufix: 'B', display_order: 4 },
+      { slug: 'cf', sufix: 'CF', display_order: 5 }, { slug: 'cb', sufix: 'CB', display_order: 6 },
+      { slug: 'side', sufix: 'S', display_order: 7 },
+      { slug: 'waistband_seam', sufix: '', display_order: 8 },
     ],
-    [EIX_ESTAT]: [{ slug: 'relaxed', sufix: '' }, { slug: 'extended', sufix: '' }],
+    [EIX_ESTAT]: [
+      { slug: 'relaxed', sufix: '', display_order: 1 },
+      { slug: 'extended', sufix: '', display_order: 2 },
+    ],
   },
   regles: { sufix_separador: '', instancia_separador: '-', capa_al_codi: false, instancia_unica: '' },
 }
@@ -114,4 +127,59 @@ test('el codi base no endevina: només treu el sufix que la fila DECLARA', () =>
 test('sense diccionari no s\'inventa res', () => {
   assert.equal(codiProposat(null, 'B', ['top']), 'B')
   assert.equal(composaInstancia(null, ['left']), 'left')
+})
+
+// ── LES DIMENSIONS DE LA TAULA SURTEN DE LA BD ──────────────────────────────────────────────
+// La prova que res no està codificat al front: canviant el diccionari canvien els grups de
+// columnes, les seves opcions i el seu ordre, sense tocar cap fitxer de codi.
+
+test('un grup de columnes per EIX, amb TOTES les opcions de l\'eix i en el seu ordre', () => {
+  const dims = dimensionsDe(D)
+  assert.deepEqual(dims.map(d => d.clau), [EIX_POSICIO, EIX_ESTAT])
+  // VUIT posicions, no les dues de la demostració de la maqueta.
+  assert.deepEqual(dims[0].opcions.map(o => o.slug),
+    ['left', 'right', 'top', 'bottom', 'cf', 'cb', 'side', 'waistband_seam'])
+  assert.deepEqual(dims[1].opcions.map(o => o.slug), ['relaxed', 'extended'])
+})
+
+test('un diccionari amb un eix MÉS dona una columna més, sense tocar el codi', () => {
+  const D3 = {
+    ...D,
+    eixos: [...D.eixos, { clau: 'CAPA_TECNICA', nom_en: 'Technique', nom_ca: 'Tècnica', nom_es: 'Técnica' }],
+    instancies: { ...D.instancies, CAPA_TECNICA: [{ slug: 'knit', sufix: 'K', display_order: 1 }] },
+  }
+  const dims = dimensionsDe(D3)
+  assert.equal(dims.length, 3)
+  assert.equal(dims[2].clau, 'CAPA_TECNICA')
+  assert.deepEqual(dims[2].opcions.map(o => o.slug), ['knit'])
+  // I el seu sufix entra a la composició del codi com qualsevol altre.
+  assert.equal(codiProposat(D3, 'X', ['knit']), 'XK')
+})
+
+test('un eix declarat SENSE files no fabrica cap columna buida', () => {
+  const D0 = { ...D, eixos: [...D.eixos, { clau: 'BUIT', nom_en: 'Empty' }] }
+  assert.deepEqual(dimensionsDe(D0).map(d => d.clau), [EIX_POSICIO, EIX_ESTAT])
+})
+
+test('l\'eix que es gira en partir un POM és el PRIMER del diccionari, no un literal', () => {
+  assert.equal(eixPrincipal(D), EIX_POSICIO)
+  const invertit = { ...D, eixos: [D.eixos[1], D.eixos[0]] }
+  assert.equal(eixPrincipal(invertit), EIX_ESTAT)
+  assert.equal(eixPrincipal(null), null)
+})
+
+test('sense diccionari no hi ha cap columna: la taula es pinta igual', () => {
+  assert.deepEqual(dimensionsDe(null), [])
+  assert.deepEqual(dimensionsDe({}), [])
+})
+
+test('el nom de la columna el posa el diccionari, en l\'idioma de qui llegeix', () => {
+  const [posicio] = dimensionsDe(D)
+  assert.equal(nomEnIdioma(posicio, 'ca'), 'Posició')
+  assert.equal(nomEnIdioma(posicio, 'es'), 'Posición')
+  assert.equal(nomEnIdioma(posicio, 'en'), 'Position')
+  // i18next dona codis com «ca-ES»: es mira el prefix, no la cadena sencera.
+  assert.equal(nomEnIdioma(posicio, 'ca-ES'), 'Posició')
+  // Un idioma que la fila no porta cau a l'anglès abans que a res buit.
+  assert.equal(nomEnIdioma({ nom_en: 'Position' }, 'de'), 'Position')
 })
