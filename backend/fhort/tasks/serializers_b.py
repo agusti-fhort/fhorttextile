@@ -9,14 +9,46 @@ class TaskTypeSerializer(serializers.ModelSerializer):
         model = TaskType
         # B1: s'exposen fase/eina/mode (additiu, read-only) perquè l'arbre de tasques agrupi per
         # fase i pugui navegar a l'eina correcta en iniciar. Referència sempre per `code` (G9).
-        fields = ['id', 'code', 'name', 'default_order', 'active', 'fase', 'eina', 'mode']
+        # F2.0 — `tipus` i `es_lliurable` s'hi afegeixen perquè la UI sàpiga QUÈ té davant sense
+        # inventar-s'ho: `tipus` decideix si la tasca admet temps declarat (F2.5, Externa-lliure)
+        # i `es_lliurable` si compta per a l'avís de ronda lliurada (F2.7).
+        fields = ['id', 'code', 'name', 'default_order', 'active', 'fase', 'eina', 'mode',
+                  'tipus', 'es_lliurable']
 
 
 class ModelTaskSerializer(serializers.ModelSerializer):
+    """F2.0 — EL CONTRACTE QUE LA UI DE F2 NECESSITA.
+
+    F1 va construir la genealogia (`ronda`, `mare`, `motiu`) i les regles noves (albarà, batec,
+    exclusió per trams) però **no en va exposar res**: el serializer seguia sent el de Sprint B.
+    La UI de F2 ha de decidir quina cara del modal ensenya, i no pot deduir-ho de l'`status`.
+
+    Els sis camps derivats responen sis preguntes concretes, totes read-only:
+
+      · `es_vigent`      — és AQUESTA la tasca que `tasca_vigent` resol per al seu code?
+      · `ronda_seq`      — de quina volta és (null = la 1a, implícita)
+      · `albaranada`     — té línia en albarà EMÈS? (la paret de D-5; cara C del modal)
+      · `obert_per`/`_nom` — QUI la té oberta ara, segons el TRAM (no segons `assignee`)
+      · `es_lliurable`   — el seu tipus produeix lliurable (F2.7)
+      · `tipus_extern`   — admet temps declarat (F2.5)
+
+    ⚠️ `obert_per` mira `TimerEntrada`, no `assignee`. És la lliçó de F1.5: `assignee` és
+    planificació i el rellotge és realitat, i confondre-les és el que va trencar l'exclusió.
+    """
+
     task_type_code = serializers.CharField(source='task_type.code', read_only=True)
     task_type_name = serializers.CharField(source='task_type.name', read_only=True)
     model_codi = serializers.CharField(source='model.codi_intern', read_only=True)
     rectifications = serializers.SerializerMethodField()
+    assignee_nom = serializers.CharField(source='assignee.nom_complet', read_only=True,
+                                         default=None)
+    es_lliurable = serializers.BooleanField(source='task_type.es_lliurable', read_only=True)
+    tipus_extern = serializers.SerializerMethodField()
+    ronda_seq = serializers.IntegerField(source='ronda.seq', read_only=True, default=None)
+    es_vigent = serializers.SerializerMethodField()
+    albaranada = serializers.SerializerMethodField()
+    obert_per = serializers.SerializerMethodField()
+    obert_per_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = ModelTask
@@ -24,7 +56,11 @@ class ModelTaskSerializer(serializers.ModelSerializer):
                   'status', 'origen', 'assignee', 'order', 'created_at', 'updated_at',
                   'started_at', 'finished_at', 'estimated_minutes', 'rectifications',
                   'planned_start', 'planned_end', 'planned_locked',
-                  'work_order', 'off_recipe', 'fitting_session']
+                  'work_order', 'off_recipe', 'fitting_session',
+                  # F2.0 — genealogia (F1.1) + estat derivat per al modal de F2.1.
+                  'ronda', 'ronda_seq', 'mare', 'motiu',
+                  'assignee_nom', 'es_lliurable', 'tipus_extern',
+                  'es_vigent', 'albaranada', 'obert_per', 'obert_per_nom']
         # started_at/finished_at els gestiona la transició; estimated_minutes és snapshot → read-only.
         # origen el fixa el backend en crear (prevista per defecte; ad_hoc des de l'arbre global,
         # Sprint 4) → read-only per al client.
@@ -36,10 +72,40 @@ class ModelTaskSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at', 'origen',
                             'started_at', 'finished_at', 'estimated_minutes',
                             'planned_start', 'planned_end', 'planned_locked',
-                            'work_order', 'off_recipe', 'fitting_session']
+                            'work_order', 'off_recipe', 'fitting_session',
+                            # La genealogia l'escriu `obrir_ronda`, mai el client.
+                            'ronda', 'mare', 'motiu']
 
     def get_rectifications(self, obj):
         return rectification_count(obj)
+
+    def get_tipus_extern(self, obj):
+        return obj.task_type.tipus == 'Externa-lliure'
+
+    def get_es_vigent(self, obj):
+        """La resolució la fa `tasca_vigent`, mai el client: si la UI se la reimplementés,
+        tornaríem a tenir dos criteris (§S-4)."""
+        from .services_r import tasca_vigent
+        vigent = tasca_vigent(obj.model_id, obj.task_type.code)
+        return bool(vigent and vigent.pk == obj.pk)
+
+    def get_albaranada(self, obj):
+        """La paret de D-5, precalculada. El modal de F2.1 no pot dependre NOMÉS del 409:
+        ha de poder ensenyar la cara C abans que l'usuari piqui contra la porta."""
+        return obj.delivery_note_lines.filter(
+            delivery_note__status__in=['ISSUED', 'INVOICED']).exists()
+
+    def _tram_obert(self, obj):
+        return (obj.timers.filter(fi__isnull=True, actiu=True)
+                .select_related('tecnic').order_by('-inici').first())
+
+    def get_obert_per(self, obj):
+        tram = self._tram_obert(obj)
+        return tram.tecnic_id if tram else None
+
+    def get_obert_per_nom(self, obj):
+        tram = self._tram_obert(obj)
+        return tram.tecnic.nom_complet if tram else None
 
 
 class SupplierSerializer(serializers.ModelSerializer):

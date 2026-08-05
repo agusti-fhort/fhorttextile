@@ -123,6 +123,15 @@ class ModelListSerializer(serializers.ModelSerializer):
     # no exposava ni `garment_set` ni `piece_number`, i un tècnic no podia saber que una fila era
     # la peça d'un producte. Read-only: l'única escriptura de `garment_set` és a la creació.
     garment_set = GarmentSetMiniSerializer(read_only=True)
+    # F2.7 — l'avís de LLIURABLE va a la LLISTA, no només al detall: el PM ha de veure quins
+    # models ja han donat el que havien de donar sense entrar-hi un per un. Llista de `seq` de
+    # rondes lliurades; buida = res a ensenyar (el consumidor no ha de distingir «cap ronda» de
+    # «cap acabada»).
+    lliurable_ronda_n = serializers.SerializerMethodField()
+
+    def get_lliurable_ronda_n(self, obj):
+        from fhort.tasks.services_r import rondes_lliurables   # local: cicle models_app↔tasks
+        return rondes_lliurables(obj)
 
     class Meta:
         model = Model
@@ -152,6 +161,7 @@ class ModelListSerializer(serializers.ModelSerializer):
             'created_at',
             'garment_type',
             'garment_type_item_nom',
+            'lliurable_ronda_n',
             'fase_actual',
             'responsable',
             'prioritat',
@@ -255,6 +265,9 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     # —qui el veu, quan i com— és F2; aquí no es notifica ningú. Llista buida = cap ronda, o cap
     # ronda acabada: el consumidor no ha de distingir-ho per decidir si ensenya res.
     lliurable_ronda_n = serializers.SerializerMethodField()
+    # F2.0 — la volta VIGENT del model: {seq, motiu, oberta_el} o null (la 1a és implícita).
+    # El modal de F2.1 l'ha de saber per titular la cara B («obrir ronda N+1»).
+    ronda_oberta = serializers.SerializerMethodField()
     # SET-1 · A4 — el conjunt, niuat, amb les germanes per navegar-hi des de la capçalera.
     # DESVIACIÓ ANOTADA: `fields='__all__'` exposava `garment_set` com a pk ESCRIVIBLE; aquesta
     # declaració el fa read-only. Cap caller el feia servir (0 hits al frontend; els dos únics
@@ -273,6 +286,12 @@ class ModelDetailSerializer(serializers.ModelSerializer):
     # Precedència: mana el ruleset quan n'hi ha (porta els noms CANÒNICS del catàleg, en
     # anglès i possiblement multi-target); si no, el camp propi TAL QUAL. No s'inventa res:
     # si el model tampoc no en té, segueix sent None i la capçalera calla.
+    def get_ronda_oberta(self, obj):
+        from fhort.tasks.services_r import _ronda_oberta   # import local: cicle models_app↔tasks
+        r = _ronda_oberta(obj)
+        return None if r is None else {'id': r.pk, 'seq': r.seq, 'motiu': r.motiu,
+                                       'oberta_el': r.oberta_el.isoformat()}
+
     def get_lliurable_ronda_n(self, obj):
         from fhort.tasks.services_r import rondes_lliurables   # import local: cicle models_app↔tasks
         return rondes_lliurables(obj)
