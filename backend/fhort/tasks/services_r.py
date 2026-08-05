@@ -31,14 +31,14 @@ de la unique.
 
 
 def _ronda_oberta(model):
-    """La Ronda oberta del model, o None.
+    """La Ronda oberta del model, o None. Oberta = `tancada_el IS NULL`.
 
-    F1.0 — STUB DELIBERAT: l'entitat `Ronda` neix a F1.1 amb la seva migració. Fins llavors això
-    retorna sempre None i la branca 1 de `tasca_vigent` és codi mort. La SIGNATURA de
-    `tasca_vigent` ja és la final: els tres call-sites es migren un sol cop, ara, i F1.1 només ha
-    d'omplir aquest cos.
+    `obrir_ronda` garanteix que no n'hi hagi dues; el `-seq` és una xarxa, no una política: si
+    alguna vegada n'hi hagués dues, mana la ÚLTIMA, que és la que el tècnic està treballant.
     """
-    return None
+    from .models import Ronda
+    return (Ronda.objects.filter(model=model, tancada_el__isnull=True)
+            .order_by('-seq').first())
 
 
 def tasca_vigent(model, code, *, ronda=None):
@@ -69,3 +69,106 @@ def tasca_vigent(model, code, *, ronda=None):
     # amb la unique parcial viva no hi hauria d'haver mai dues `prevista` del mateix tipus, però
     # un resolutor no pot dependre que una constraint no s'hagi trencat mai.
     return qs.exclude(status='Done').order_by('id').first() or qs.order_by('id').first()
+
+
+# ── F1.1 · LA RONDA ──────────────────────────────────────────────────────────
+
+class RondaError(Exception):
+    """Rebuig d'una operació de ronda (ja n'hi ha una d'oberta, cap code vàlid…)."""
+
+
+def obrir_ronda(model, motiu, tasques_codes, *, profile=None):
+    """Obre una volta nova de feina sobre un model i li crea les tasques.
+
+    Aquesta és la sortida de D-5. Una tasca amb línia en albarà EMÈS no es reobre mai —
+    `transition_task` la protegeix i ha de seguir fent-ho, perquè el que s'ha facturat s'ha
+    facturat. El que es fa és **feina nova amb identitat pròpia**: una `Ronda`, i sota seu una
+    `ModelTask` per code, cadascuna apuntant amb `mare` a la tasca homònima de la volta anterior.
+
+    `motiu`: `Ronda.MOTIU_NOVA_MOSTRA` | `Ronda.MOTIU_CORRECCIO`.
+    `tasques_codes`: slugs de `TaskType` (G9: mai ids). Els inactius i els inexistents s'ignoren
+    en silenci? NO — es rebutgen, perquè obrir una ronda a la qual li falta mitja feina és pitjor
+    que no obrir-la.
+
+    Les tasques neixen `origen='ad_hoc'`: és el que fa que la unique PARCIAL
+    `uniq_prevista_model_tasktype` les deixi conviure amb la prevista del mateix tipus.
+
+    Retorna la `Ronda` creada. Atòmic: o hi és sencera o no hi és.
+    """
+    from django.db import transaction
+
+    from .models import ModelTask, Ronda, TaskType
+    from .services_g import lookup_estimated_minutes
+
+    if motiu not in dict(Ronda.MOTIU_CHOICES):
+        raise RondaError(f'Motiu de ronda desconegut: {motiu!r}.')
+    codes = list(dict.fromkeys(tasques_codes or []))   # dedup preservant ordre
+    if not codes:
+        raise RondaError('Una ronda sense cap tasca no és una ronda.')
+    if _ronda_oberta(model) is not None:
+        raise RondaError('Aquest model ja té una ronda oberta; tanca-la abans d\'obrir-ne una altra.')
+
+    tipus = {t.code: t for t in TaskType.objects.filter(code__in=codes, active=True)}
+    desconeguts = [c for c in codes if c not in tipus]
+    if desconeguts:
+        raise RondaError(f"Tipus de tasca inexistents o inactius: {', '.join(desconeguts)}.")
+
+    # Les MARES es resolen ABANS de crear la Ronda, i el motiu és mecànic: un cop la ronda
+    # existeix, `tasca_vigent` ja resol per ella i retornaria les filles (o None). Aquí encara
+    # resol pel criteri vell, que és exactament «la tasca de la volta anterior».
+    mares = {code: tasca_vigent(model, code) for code in codes}
+
+    with transaction.atomic():
+        seguent = (Ronda.objects.filter(model=model)
+                   .order_by('-seq').values_list('seq', flat=True).first() or 1) + 1
+        ronda = Ronda.objects.create(model=model, seq=seguent, motiu=motiu)
+        base_order = ModelTask.objects.filter(model=model).count()
+        for i, code in enumerate(codes):
+            tt = tipus[code]
+            ModelTask.objects.create(
+                model=model, task_type=tt, order=base_order + i,
+                status='Pending', origen='ad_hoc',
+                ronda=ronda, mare=mares[code], motiu=motiu,
+                assignee=profile,
+                estimated_minutes=lookup_estimated_minutes(model, tt))
+    return ronda
+
+
+def tancar_ronda(ronda):
+    """Tanca una ronda (`tancada_el = ara`). Idempotent: tancar-ne una de tancada no fa res."""
+    from django.utils import timezone
+
+    from .models import Ronda
+    Ronda.objects.filter(pk=ronda.pk, tancada_el__isnull=True).update(tancada_el=timezone.now())
+    ronda.refresh_from_db()
+    return ronda
+
+
+def _tasktype_te_es_lliurable():
+    """F1.1→F1.6 · pont de vida curta.
+
+    El flag `TaskType.es_lliurable` neix a F1.6, dues fases més enllà. `ronda_lliurable` ha
+    d'existir des d'ara (l'API de la ronda és una peça sola), i abans que el camp hi sigui no
+    pot filtrar-hi: seria un `FieldError` en runtime que cap `manage.py check` veu.
+    ⚠️ AQUESTA FUNCIÓ MOR A F1.6 — si la trobes viva després, és deute.
+    """
+    from .models import TaskType
+    return any(f.name == 'es_lliurable' for f in TaskType._meta.get_fields())
+
+
+def ronda_lliurable(ronda):
+    """La ronda ha produït tot el que havia de lliurar?
+
+    Cert quan **totes** les tasques de la ronda el `TaskType` de les quals és `es_lliurable`
+    estan `Done`. Els lliurables són els PRODUCTES (fitxa, patró), no la feina intermèdia: una
+    ronda pot tenir el POM obert i ser lliurable igualment si la fitxa i el patró ja hi són.
+
+    Sense cap tasca lliurable a la ronda retorna **False**, no True: «no hi ha res per lliurar»
+    no és «ja està lliurat», i un avís al PM que salta sobre el buit és soroll.
+    """
+    if not _tasktype_te_es_lliurable():
+        return False   # F1.6 encara no ha sembrat el flag: res és lliurable.
+    qs = ronda.tasques.filter(task_type__es_lliurable=True)
+    if not qs.exists():
+        return False
+    return not qs.exclude(status='Done').exists()

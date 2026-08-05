@@ -67,6 +67,53 @@ class TaskType(models.Model):
         return self.code
 
 
+class Ronda(models.Model):
+    """F1.1 · Una VOLTA de feina sobre un model, després que la primera ja s'hagi lliurat.
+
+    Neix de la decisió D-5: una tasca **albaranada és intocable** (`transition_task` refusa
+    `Done→InProgress` si té línia en albarà EMÈS). Fins avui això deixava el model tapiat per
+    sempre — set 409 en dues hores sobre el model 188, i tota la feina posterior sense rellotge.
+    La sortida no és reobrir la tasca facturada: és **obrir-ne una de nova, penjada d'una Ronda**,
+    que el comercial pugui facturar a part i que el log sàpiga d'on ve.
+
+    `motiu` diu de qui és la culpa, i és el que decideix si es cobra:
+      · `nova_mostra` = el client demana una altra volta (feina nova, facturable)
+      · `correccio`   = ho refem nosaltres (feina de reparació)
+    La decisió comercial NO viu aquí: aquest camp és el fet, no la tarifa.
+
+    `seq` és el número de volta **dins del model** (la ronda 1 és implícita: tota la feina
+    històrica té `ModelTask.ronda = NULL`). No hi ha cap backfill i no n'hi ha d'haver: inventar
+    una fila Ronda per a 101 tasques que mai no van ser una «volta» seria escriure història.
+
+    Oberta = `tancada_el IS NULL`. N'hi pot haver **una de sola** oberta per model, i qui ho
+    imposa és `obrir_ronda` (`services_r`), no la BD: tancar-la és un acte humà i una constraint
+    parcial aquí obligaria a inventar-ne el tancament.
+    """
+    MOTIU_NOVA_MOSTRA = 'nova_mostra'
+    MOTIU_CORRECCIO = 'correccio'
+    MOTIU_CHOICES = [(MOTIU_NOVA_MOSTRA, 'Nova mostra'), (MOTIU_CORRECCIO, 'Correcció')]
+
+    model = models.ForeignKey('models_app.Model', on_delete=models.CASCADE,
+                              related_name='rondes')
+    seq = models.PositiveIntegerField(
+        help_text='Número de volta dins del model. La ronda 1 és implícita (ronda NULL).')
+    motiu = models.CharField(max_length=20, choices=MOTIU_CHOICES)
+    oberta_el = models.DateTimeField(auto_now_add=True)
+    tancada_el = models.DateTimeField(null=True, blank=True,
+                                      help_text='null = oberta. És la definició de «vigent».')
+
+    class Meta:
+        ordering = ['model', 'seq']
+        verbose_name = 'Ronda'
+        verbose_name_plural = 'Rondes'
+        constraints = [
+            models.UniqueConstraint(fields=['model', 'seq'], name='uniq_ronda_model_seq'),
+        ]
+
+    def __str__(self):
+        return f'{self.model_id} · ronda {self.seq} ({self.motiu})'
+
+
 class ModelTask(models.Model):
     """Instància de tasca d'un model. Estats nous (Sprint B); temps/log a Sprint C."""
     STATUS_CHOICES = [('Pending', 'Pending'), ('Paused', 'Paused'),
@@ -108,6 +155,20 @@ class ModelTask(models.Model):
     # no cau. Punter MUTABLE: en re-obrir la tasca des d'una altra sessió es reapunta (decisió 4).
     fitting_session = models.ForeignKey('fitting.FittingSession', on_delete=models.SET_NULL,
                                         null=True, blank=True, related_name='model_tasks')
+    # F1.1 — GENEALOGIA. Els tres camps responen tres preguntes diferents i cap n'implica una
+    # altra: `ronda` = a quina volta pertany (null = la 1a, implícita); `mare` = de quina tasca
+    # concreta és repetició (null = no repeteix res); `motiu` = per què existeix.
+    # SET_NULL als dos FK: esborrar una ronda o una tasca antiga no pot arrossegar feina viva —
+    # la filla perd la referència, no la vida.
+    ronda = models.ForeignKey('Ronda', on_delete=models.SET_NULL, null=True, blank=True,
+                              related_name='tasques')
+    mare = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name='filles',
+                             help_text='La tasca homònima de la volta anterior.')
+    # Es DUPLICA el motiu de la Ronda a posta: una tasca ad-hoc pot néixer d'una correcció sense
+    # que s'obri cap ronda (el cas d'una sola tasca refeta), i llavors la Ronda no existeix per
+    # respondre-ho. Quan totes dues hi són, `obrir_ronda` les escriu iguals.
+    motiu = models.CharField(max_length=20, choices=Ronda.MOTIU_CHOICES, null=True, blank=True)
 
     class Meta:
         ordering = ['model', 'order']
