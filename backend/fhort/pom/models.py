@@ -496,6 +496,26 @@ class CustomerPOMAlias(models.Model):
     language = models.CharField(max_length=2, blank=True, default='')
     origen = models.CharField(max_length=10, choices=ORIGEN_CHOICES, default='MANUAL')
     pendent_revisio = models.BooleanField(default=False)
+    # F3/D-31.26 — ÀLIES D'INSTÀNCIA: aquest codi del client no és una mesura pròpia, és una
+    # REPETICIÓ de la del `pom`. El doc oficial de Brownie declara A2/A3 variants de la mateixa
+    # fila que A: no són tres amplades de pit, són l'amplada de pit dita tres vegades.
+    #
+    # Sense aquesta marca els dos casos són indistingibles per al matcher —un codi que resol a
+    # un POM— i acabaria vinculant A2 al pit i donant la feina per feta. El que ha de passar és
+    # l'altra cosa: resol el POM i DEIXA LA FILA A «assignar instància», perquè QUINA cara és
+    # (la 2a? la de l'esquerra? l'estirada?) no ho diu el codi, ho diu qui mesura. Auto-triar-la
+    # seria inventar-se una dada que el document no porta.
+    #
+    # ⚠️ AQUÍ NOMÉS HI HA LA DADA, NO LA REGLA. El comportament del matcher és el full MATCHER i
+    # s'implementa al seu lloc; aquesta columna és el que llegirà quan hi sigui.
+    #
+    # Deliberadament NO desa QUINA instància és (ni l'ordinal «2a/3a» ni l'eix). Desar-ho seria
+    # exactament l'auto-tria que la regla prohibeix, i el `nom_fitxa` del model ja és el lloc on
+    # viu la resposta un cop una persona l'ha donada.
+    es_instancia = models.BooleanField(
+        default=False,
+        help_text="Aquest codi és una REPETICIÓ del POM apuntat, no una mesura pròpia. "
+                  "El matcher hi resol el POM però deixa la fila a «assignar instància».")
     creat_at = models.DateTimeField(auto_now_add=True)
     actualitzat_at = models.DateTimeField(auto_now=True)
 
