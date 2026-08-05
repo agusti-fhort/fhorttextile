@@ -4336,5 +4336,23 @@
     "historic": "Delivered: {{llista}}",
     "motiu_nova_mostra": "R{{n}} sample",
     "motiu_correccio": "R{{n}} correction"
+  },
+  "crono": {
+    "externa": "External",
+    "corre": "The clock is running",
+    "aturar": "Stop",
+    "descartar": "Discard",
+    "acceptar": "Accept the measure",
+    "corregir": "Correct by hand",
+    "enrere": "Back",
+    "confirma": "Confirm the time before saving",
+    "corregir_titol": "Correct the time by hand",
+    "nota_servidor": "It lives on the server: it survives reloading, switching tabs and closing the browser. The inactivity guard does not touch it.",
+    "nota_no_tanca": "The task stays open: saving time does not close it.",
+    "descartar_titol": "Discard this time?",
+    "descartar_nota": "The entry is deleted and no time is recorded for this session. The task is not closed.",
+    "descartar_no": "No, carry on",
+    "descartar_si": "Yes, discard",
+    "err_servidor": "The clock action could not be completed."
   }
 }

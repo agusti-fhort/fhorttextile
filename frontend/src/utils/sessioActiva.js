@@ -26,6 +26,16 @@ export function durada(segons) {
 }
 
 /**
+ * `00:14:32` — el rellotge GRAN del crono declarat (T3). A diferència de `durada`, aquí sí que
+ * hi van els segons: el crono es mira mentre corre i un número que no es mou sembla espatllat.
+ */
+export function cronometre(segons) {
+  const s = Math.max(0, Math.floor(segons))
+  const parts = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
+  return parts.map(n => String(n).padStart(2, '0')).join(':')
+}
+
+/**
  * Què ha d'ensenyar l'indicador. Retorna `null` quan no ha d'aparèixer — i el cas «no apareix»
  * és tan important com l'altre: un indicador que menteix sobre una sessió que no corre és pitjor
  * que no tenir-ne cap.

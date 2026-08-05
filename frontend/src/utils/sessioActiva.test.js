@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { durada, estatSessio, segonsDeSessio } from './sessioActiva.js'
+import { durada, estatSessio, segonsDeSessio , cronometre} from './sessioActiva.js'
 
 const T0 = new Date('2026-08-05T10:00:00Z').getTime()
 const tram = (extra = {}) => ({
@@ -99,4 +99,18 @@ test('SILENCI: si caldria preguntar, no se salta i no es pregunta', () => {
 
 test('una tasca ja acabada no reobre sola en canviar de pestanya', () => {
   assert.equal(saltDeSuperficie('Mesures', viva({ status: 'Done' }), 7, 'cap'), null)
+})
+
+// ── T3 · el rellotge gran del crono declarat ─────────────────────────────────
+test('el cronòmetre pinta hh:mm:ss amb dos dígits sempre', () => {
+  assert.equal(cronometre(0), '00:00:00')
+  assert.equal(cronometre(9), '00:00:09')
+  assert.equal(cronometre(872), '00:14:32')       // el de la maqueta
+  assert.equal(cronometre(3600), '01:00:00')
+  assert.equal(cronometre(86_399), '23:59:59')
+})
+
+test('el cronòmetre no pinta mai negatius ni decimals', () => {
+  assert.equal(cronometre(-10), '00:00:00')
+  assert.equal(cronometre(59.9), '00:00:59')
 })

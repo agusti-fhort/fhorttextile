@@ -4336,5 +4336,23 @@
     "historic": "Lliurades: {{llista}}",
     "motiu_nova_mostra": "R{{n}} mostra",
     "motiu_correccio": "R{{n}} correcció"
+  },
+  "crono": {
+    "externa": "Externa",
+    "corre": "El crono corre",
+    "aturar": "Aturar",
+    "descartar": "Descartar",
+    "acceptar": "Acceptar la mesura",
+    "corregir": "Corregir a mà",
+    "enrere": "Enrere",
+    "confirma": "Confirma el temps abans de desar",
+    "corregir_titol": "Corregir el temps a mà",
+    "nota_servidor": "Viu al servidor: sobreviu a recarregar, canviar de pestanya i tancar el navegador. El guard d'inactivitat no el toca.",
+    "nota_no_tanca": "La tasca segueix oberta: desar temps no la tanca.",
+    "descartar_titol": "Vols descartar aquest temps?",
+    "descartar_nota": "El tram s'esborra i no queda cap temps registrat per aquesta sessió. La tasca no es tanca.",
+    "descartar_no": "No, seguir",
+    "descartar_si": "Sí, descartar",
+    "err_servidor": "No s'ha pogut completar el gest del crono."
   }
 }

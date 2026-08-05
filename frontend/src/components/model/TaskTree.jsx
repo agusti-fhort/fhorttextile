@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Badge from '../ui/Badge'
+import CronoDeclarat from './CronoDeclarat'
 import { models, taskTypes } from '../../api/endpoints'
 import { taskTypeLabel } from '../../utils/taskType'
 import { formatMinutes } from '../../utils/format'
@@ -63,6 +64,7 @@ export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTa
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [starting, setStarting] = useState(null)   // code en curs d'iniciar
+  const [crono, setCrono] = useState(null)        // TaskType extern amb el crono obert (T3)
 
   useEffect(() => {
     let alive = true
@@ -96,11 +98,9 @@ export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTa
 
   const start = (tt) => {
     const gest = gestDeTasca(tt)
-    // EXTERNA-LLIURE — el temps es DECLARA, no es cronometra: aquí no s'obre cap tasca. Fins
-    // avui aquest botó cridava `open-task`, que posa la tasca En curs i obre un TimerEntrada
-    // real; com que no hi ha cap pantalla on treballar ni cap batec que el sostingui, el que
-    // quedava era un rellotge corrent sol. El gest de declarar arriba a T3, amb la seva maqueta.
-    if (gest === GEST_DECLARAT) return
+    // EXTERNA-LLIURE — el temps es DECLARA, no es cronometra: «Iniciar» no navega enlloc i no
+    // passa per `open-task`. Obre el CRONO (T3), que és un tram declarat que viu al servidor.
+    if (gest === GEST_DECLARAT) { setCrono(tt); return }
 
     setError(''); setStarting(tt.code)
     models.openTask(modelId, tt.code)
@@ -184,17 +184,17 @@ export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTa
 
         {/* Peu: botó Iniciar + badge d'estat (si existeix) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-          <button type="button" disabled={!!starting || gest === GEST_DECLARAT}
+          <button type="button" disabled={!!starting}
             onClick={() => start(tt)}
             title={t(NOTA || 'model_sheet.tasks.tree_start_task')}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              border: (otherTech || gest === GEST_DECLARAT) ? '1px solid var(--border)' : '1px solid var(--gold)',
+              border: otherTech ? '1px solid var(--border)' : '1px solid var(--gold)',
               borderRadius: 6, background: 'transparent',
-              color: (otherTech || gest === GEST_DECLARAT) ? 'var(--text-muted)' : 'var(--gold)',
+              color: otherTech ? 'var(--text-muted)' : 'var(--gold)',
               fontFamily: 'inherit', fontSize: 'var(--fs-body)', fontWeight: 600,
               padding: '5px 12px',
-              cursor: (starting || gest === GEST_DECLARAT) ? 'default' : 'pointer',
+              cursor: starting ? 'default' : 'pointer',
               opacity: busy ? 0.5 : 1,
             }}>
             <i className={`ti ${gest === GEST_DECLARAT ? 'ti-clock-edit' : 'ti-player-play'}`}
@@ -230,7 +230,16 @@ export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTa
       )}
       {loading ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('model_sheet.loading')}</div>
-      ) : ordered.map(phase => (
+      ) : null}
+      {crono && (
+        <CronoDeclarat
+          modelId={modelId}
+          code={crono.code}
+          nomTasca={taskTypeLabel(t, crono.code, crono.name)}
+          onTancat={() => onTaskStarted?.()}
+          onCancel={() => { setCrono(null); onTaskStarted?.() }} />
+      )}
+      {loading ? null : ordered.map(phase => (
         <div key={phase}>
           <div style={phaseTitle}>{t(PHASE_I18N[phase], { defaultValue: phase })}</div>
           <div style={cardsGrid}>

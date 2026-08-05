@@ -4336,5 +4336,23 @@
     "historic": "Entregadas: {{llista}}",
     "motiu_nova_mostra": "R{{n}} muestra",
     "motiu_correccio": "R{{n}} corrección"
+  },
+  "crono": {
+    "externa": "Externa",
+    "corre": "El crono corre",
+    "aturar": "Parar",
+    "descartar": "Descartar",
+    "acceptar": "Aceptar la medida",
+    "corregir": "Corregir a mano",
+    "enrere": "Atrás",
+    "confirma": "Confirma el tiempo antes de guardar",
+    "corregir_titol": "Corregir el tiempo a mano",
+    "nota_servidor": "Vive en el servidor: sobrevive a recargar, cambiar de pestaña y cerrar el navegador. El guard de inactividad no lo toca.",
+    "nota_no_tanca": "La tarea sigue abierta: guardar tiempo no la cierra.",
+    "descartar_titol": "¿Quieres descartar este tiempo?",
+    "descartar_nota": "El tramo se borra y no queda ningún tiempo registrado para esta sesión. La tarea no se cierra.",
+    "descartar_no": "No, seguir",
+    "descartar_si": "Sí, descartar",
+    "err_servidor": "No se ha podido completar el gesto del crono."
   }
 }

@@ -1417,8 +1417,8 @@ def temps_declarat_view(request, pk):
 
 @api_view(['POST'])
 @permission_classes([_ExecuteTasks])
-def crono_declarat_view(request, pk):
-    """POST /api/v1/model-tasks/<pk>/crono/  ·  {accio: engegar|aturar|descartar|corregir}
+def crono_declarat_view(request, model_id):
+    """POST /api/v1/models/<model_id>/crono/  ·  {code, accio: engegar|aturar|descartar|corregir}
 
     T3 · LA PORTA DEL CRONO DECLARAT. La maqueta aprovada mana una cosa per sobre de tota la
     resta: «viu al servidor; sobreviu a recarregar, canviar de pestanya i tancar el navegador».
@@ -1430,21 +1430,39 @@ def crono_declarat_view(request, pk):
     """
     from django.utils.dateparse import parse_datetime
 
-    from .models import ModelTask, TimerEntrada
+    from .models import ModelTask, TaskType, TimerEntrada
+    from .services_g import lookup_estimated_minutes
     from .services_r import (TempsDeclaratError, atura_crono_declarat, corregeix_tram_declarat,
-                             descarta_tram_declarat, engega_crono_declarat)
+                             descarta_tram_declarat, engega_crono_declarat, tasca_vigent)
 
     profile = getattr(request.user, 'profile', None)
     if profile is None:
         return Response({'error': 'Usuari sense perfil en aquest tenant.'},
                         status=http_status.HTTP_403_FORBIDDEN)
-    try:
-        task = ModelTask.objects.select_related('task_type').get(pk=pk)
-    except ModelTask.DoesNotExist:
-        return Response({'error': 'ModelTask no trobada.'}, status=http_status.HTTP_404_NOT_FOUND)
 
     dades = request.data or {}
-    accio = dades.get('accio')
+    code, accio = dades.get('code'), dades.get('accio')
+    try:
+        model = Model.objects.get(pk=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+    try:
+        tt = TaskType.objects.get(code=code, active=True)
+    except TaskType.DoesNotExist:
+        return Response({'error': f"Tipus de tasca '{code}' no trobat o inactiu."},
+                        status=http_status.HTTP_404_NOT_FOUND)
+    # La porta és per (model, code) i no per id de tasca, igual que `open-task` i per la mateixa
+    # raó (G9): el panell treballa amb el CATÀLEG, i la tasca d'una externa sovint encara no
+    # existeix quan el tècnic prem el botó. Qui és «la tasca» ho diu `tasca_vigent` i ningú més.
+    task = tasca_vigent(model, code)
+    if task is None:
+        if accio != 'engegar':
+            return Response({'error': 'Aquesta tasca no té cap crono.'},
+                            status=http_status.HTTP_404_NOT_FOUND)
+        task = ModelTask.objects.create(
+            model=model, task_type=tt, order=ModelTask.objects.filter(model=model).count(),
+            status='Pending', origen='prevista',
+            estimated_minutes=lookup_estimated_minutes(model, tt))
 
     def _tram_per_id():
         """El tram sobre el qual s'actua. Sempre d'AQUESTA tasca: un id de fora no val."""

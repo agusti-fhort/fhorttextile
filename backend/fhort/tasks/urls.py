@@ -58,7 +58,7 @@ try:
         # F1.7 · D-2 — temps DECLARAT per a les tasques Externa-lliure (les que es fan fora de
         # l'eina i que cap batec pot observar).
         _path_b('model-tasks/<int:pk>/temps-declarat/', temps_declarat_view),
-        _path_b('model-tasks/<int:pk>/crono/', crono_declarat_view),
+        _path_b('models/<int:model_id>/crono/', crono_declarat_view),
         # P4a-back — self-claim entre tècnics (handoff §6). Gated execute_tasks (NO define_tasks).
         _path_b('model-task-items/<int:pk>/claim/', claim_task_view),
         # Porta-menú — obrir una tasca concreta del model (crea-si-falta + En curs). execute_tasks.
