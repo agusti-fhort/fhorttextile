@@ -20,7 +20,7 @@ export const AUTH_INVALID = 'invalid'
 
 const useAuthStore = create((set, get) => ({
   token: null,
-  user: null,            // { id, username, nom_complet, rol_nom, color_avatar, capabilities }
+  user: null,            // { id, profile_id, username, nom_complet, rol_nom, color_avatar, capabilities }
   // P7 (Federació v2) — la CASA, no la persona: { nom, codi_tenant, tipologia }. Va a part de
   // `user` a posta: no és un atribut de qui ha entrat sinó d'on ha entrat, i sobreviu igual a
   // qualsevol usuari del mateix tenant. Null mentre /me no ha respost (i al schema public).
@@ -89,6 +89,11 @@ const useAuthStore = create((set, get) => ({
       set({
         user: {
           id: data.id,
+          // F2.1 — `profile_id` (UserProfile.id) NO és `id` (User.id) i no hi ha cap garantia
+          // que coincideixin. `ModelTask.assignee` i `TimerEntrada.tecnic` són FK a UserProfile,
+          // de manera que tota comparació «és meva?» ha de fer-se contra AQUEST camp. El
+          // serializer ja l'exposava; l'store el llençava.
+          profile_id: data.profile_id ?? null,
           username: data.username,
           nom_complet: data.nom_complet,
           rol_nom: data.rol_nom,

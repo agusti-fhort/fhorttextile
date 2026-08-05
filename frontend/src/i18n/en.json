@@ -4275,5 +4275,24 @@
     "right": "Right",
     "relaxed": "Relaxed",
     "extended": "Extended"
+  },
+  "obrir_tasca": {
+    "conflicte_titol": "{{tecnic}} has this task open",
+    "conflicte_cos": "You can look without touching anything, or take it over. If you take it over, their clock stops and yours starts.",
+    "conflicte_treballar": "Work on it myself",
+    "conflicte_treballar_nota": "Closes the previous holder's time entry and opens yours. It is recorded in the log.",
+    "lliurada_titol": "«{{tasca}}» is closed and delivered",
+    "lliurada_cos": "This round's work has already been handed over. To go back in, say what this is about.",
+    "lliurada_ronda": "Open round {{n}} · new sample",
+    "lliurada_ronda_nota": "A whole new round, at the client's request. Billed separately.",
+    "lliurada_correccio": "It's a correction",
+    "lliurada_correccio_nota": "New task linked to the previous one, to redo what didn't come out right.",
+    "albaranada_titol": "This work is already on an issued delivery note",
+    "albaranada_cos": "It cannot be modified: what has been invoiced stays put. Further work goes into a new task.",
+    "albaranada_extra": "Open an extra",
+    "albaranada_extra_nota": "New task linked to this one. It will go on the next delivery note.",
+    "consultar": "Just view",
+    "consultar_nota": "Opens read-only. No time is tracked and nothing is reassigned.",
+    "ronda_error": "Could not open the new round."
   }
 }

@@ -4275,5 +4275,24 @@
     "right": "Derecha",
     "relaxed": "Relajada",
     "extended": "Estirada"
+  },
+  "obrir_tasca": {
+    "conflicte_titol": "Esta tarea la tiene abierta {{tecnic}}",
+    "conflicte_cos": "Puedes mirarla sin tocar nada, o quedártela. Si te la quedas, su reloj se para y empieza el tuyo.",
+    "conflicte_treballar": "Trabajar en ella yo",
+    "conflicte_treballar_nota": "Se cierra el tramo de quien la tenía y se abre el tuyo. Queda constancia en el registro.",
+    "lliurada_titol": "«{{tasca}}» ya está cerrada y entregada",
+    "lliurada_cos": "El trabajo de esta vuelta ya se ha entregado. Para volver a ella hay que decir de qué se trata.",
+    "lliurada_ronda": "Abrir ronda {{n}} · nueva muestra",
+    "lliurada_ronda_nota": "Vuelta nueva entera, a petición del cliente. Se facturará aparte.",
+    "lliurada_correccio": "Es una corrección",
+    "lliurada_correccio_nota": "Tarea nueva ligada a la anterior, para rehacer lo que no salió bien.",
+    "albaranada_titol": "Este trabajo ya está en un albarán emitido",
+    "albaranada_cos": "No se puede modificar: lo que se ha facturado no se toca. El trabajo posterior va en una tarea nueva.",
+    "albaranada_extra": "Abrir un extra",
+    "albaranada_extra_nota": "Tarea nueva ligada a esta. Entrará en el próximo albarán.",
+    "consultar": "Solo consultar",
+    "consultar_nota": "Se abre en lectura. No se cuenta tiempo ni se reasigna nada.",
+    "ronda_error": "No se ha podido abrir la vuelta nueva."
   }
 }

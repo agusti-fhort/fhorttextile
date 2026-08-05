@@ -81,6 +81,10 @@ export const models = {
       .then(planChanged),   // C4 — l'auto-start pot reancorar el pla → invalida Board+Gantt
   // Acte lleuger de gènesi POM: base+nomenclatura+regles i tanca la tasca pom. No propaga.
   gravarPom: (id, data) => client.post(`/api/v1/models/${id}/gravar-pom/`, data),
+  // F2.1 — obre una VOLTA nova de feina (D-5). {motiu:'nova_mostra'|'correccio', codes:[slug]}.
+  // Una «correcció» és una volta d'una sola tasca: mateixa porta, motiu diferent. El backend hi
+  // posa la genealogia (mare) sense que la UI l'hagi de saber.
+  obrirRonda: (id, data) => client.post(`/api/v1/models/${id}/obrir-ronda/`, data),
   // Sprint B — CÒPIA model→model. Mirall de `materialitzar-poms` amb la font canviada (un altre
   // MODEL en comptes de l'ITEM). body: {pom_ids?, copy_values?, copy_run?, copy_grading?,
   // copy_files?} — totes les banderes per defecte certes. Mai trepitja el patrimoni del destí.

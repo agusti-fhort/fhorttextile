@@ -1413,3 +1413,46 @@ def temps_declarat_view(request, pk):
                      'inici': tram.inici.isoformat(), 'fi': tram.fi.isoformat(),
                      'origen': tram.origen},
                     status=http_status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([_ExecuteTasks])
+def obrir_ronda_view(request, model_id):
+    """POST /api/v1/models/<model_id>/obrir-ronda/  ·  {motiu, codes: [...]}
+
+    F2.1 — LA PORTA que a F1 no es va construir. El servei `obrir_ronda` hi era des de F1.1 i no
+    tenia manera d'invocar-se des de la UI, de manera que la sortida de D-5 existia només al
+    backend: el model 188 seguia tapiat a la pràctica.
+
+    `motiu`: `nova_mostra` (el client demana una altra volta) | `correccio` (ho refem nosaltres).
+    `codes`: slugs de `TaskType` que entren a la volta (G9: mai ids).
+    """
+    from .services_r import RondaError, obrir_ronda
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return Response({'error': 'Usuari sense perfil en aquest tenant.'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        model = Model.objects.get(pk=model_id)
+    except Model.DoesNotExist:
+        return Response({'error': 'Model no trobat.'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    dades = request.data or {}
+    codes = dades.get('codes') or []
+    # Els codes han de ser executables per qui obre la ronda: la mateixa allow-list que
+    # `open-task`. Obrir una volta és crear feina, i no es crea feina que un mateix no pot fer.
+    permesos = get_allowed_task_types(request.user)
+    fora = [c for c in codes if c not in permesos]
+    if fora:
+        return Response({'error': f"No pots obrir tasques del tipus: {', '.join(fora)}.",
+                         'code': 'task_type_not_allowed'},
+                        status=http_status.HTTP_403_FORBIDDEN)
+    try:
+        ronda = obrir_ronda(model, dades.get('motiu'), codes, profile=profile)
+    except RondaError as e:
+        return Response({'error': str(e), 'code': 'ronda_invalida'},
+                        status=http_status.HTTP_400_BAD_REQUEST)
+    return Response({'ronda_id': ronda.pk, 'seq': ronda.seq, 'motiu': ronda.motiu,
+                     'tasques': list(ronda.tasques.values_list('id', flat=True))},
+                    status=http_status.HTTP_201_CREATED)

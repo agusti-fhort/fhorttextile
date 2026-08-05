@@ -4275,5 +4275,24 @@
     "right": "Dreta",
     "relaxed": "Relaxada",
     "extended": "Estirada"
+  },
+  "obrir_tasca": {
+    "conflicte_titol": "Aquesta tasca la té oberta {{tecnic}}",
+    "conflicte_cos": "Pots mirar-la sense tocar res, o endur-te-la. Si te l'endús, el seu rellotge s'atura i comença el teu.",
+    "conflicte_treballar": "Treballar-hi jo",
+    "conflicte_treballar_nota": "Es tanca el tram de qui la tenia i s'obre el teu. Queda constància al registre.",
+    "lliurada_titol": "«{{tasca}}» ja està tancada i lliurada",
+    "lliurada_cos": "La feina d'aquesta volta ja s'ha entregat. Per tornar-hi cal dir de què es tracta.",
+    "lliurada_ronda": "Obrir ronda {{n}} · nova mostra",
+    "lliurada_ronda_nota": "Volta nova sencera, a petició del client. Es facturarà a part.",
+    "lliurada_correccio": "És una correcció",
+    "lliurada_correccio_nota": "Tasca nova lligada a l'anterior, per refer el que no va sortir bé.",
+    "albaranada_titol": "Aquesta feina ja és a un albarà emès",
+    "albaranada_cos": "No es pot modificar: el que s'ha facturat no es toca. La feina posterior va en una tasca nova.",
+    "albaranada_extra": "Obrir un extra",
+    "albaranada_extra_nota": "Tasca nova lligada a aquesta. Entrarà al proper albarà.",
+    "consultar": "Només consultar",
+    "consultar_nota": "S'obre en lectura. No es compta temps ni es reassigna res.",
+    "ronda_error": "No s'ha pogut obrir la volta nova."
   }
 }

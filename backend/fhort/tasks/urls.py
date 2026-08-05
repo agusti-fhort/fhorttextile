@@ -46,7 +46,7 @@ urlpatterns = router.urls
 # Sprint B — define tasks of a model (bulk/individual). Requires define_tasks capability.
 try:
     from fhort.tasks.views_b import (define_model_tasks_view, transition_task_view,
-                                     temps_declarat_view,
+                                     temps_declarat_view, obrir_ronda_view,
                                      claim_task_view, assign_model_view, unassign_model_view,
                                      model_task_log_view, open_model_task_view)
     from django.urls import path as _path_b
@@ -61,6 +61,8 @@ try:
         _path_b('model-task-items/<int:pk>/claim/', claim_task_view),
         # Porta-menú — obrir una tasca concreta del model (crea-si-falta + En curs). execute_tasks.
         _path_b('models/<int:model_id>/open-task/', open_model_task_view),
+        # F2.1 — la porta de la RONDA (el servei hi era des de F1.1, la porta no).
+        _path_b('models/<int:model_id>/obrir-ronda/', obrir_ronda_view),
         # Tram 2 — assignar/desassignar model a tècnic (compute de cua sencera). define_tasks.
         _path_b('models/<int:model_id>/assign/', assign_model_view),
         _path_b('models/<int:model_id>/unassign/', unassign_model_view),

@@ -17,6 +17,8 @@ import { models, watchpoints, modelTasks, fittingSessions, modelFitxers } from '
 import { authFetch } from '../api/authFetch'
 import { missatgeError } from '../api/errorsAuth'
 import useAuthStore from '../store/auth'
+import ObrirTascaDialog from '../components/model/ObrirTascaDialog'
+import { CARA_CAP, caraDeError, caraObrirTasca } from '../utils/caraObrirTasca'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
@@ -215,6 +217,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // Porta-menú: obre (crea-si-falta + auto-assign + En curs) la tasca `code` i navega a l'eina amb el
   // task_id. Reusa el servei open-task; el botó funciona encara que el model no tingui la tasca creada.
   const [openingTask, setOpeningTask] = useState(false)
+  // F2.1 — `UserProfile.id`, que és contra el que es comparen `assignee` i `obert_per`.
+  // MAI `user.id` (User.id): no hi ha cap garantia que coincideixin.
+  const jo = useAuthStore(s => s.user?.profile_id ?? null)
   // FASE A — edició INLINE: la tab commuta consulta↔edició mantenint el context (sidebar+tabs+
   // capçalera+watchpoint), en comptes de navegar a /mesures·/escalat. openTask posa la tasca
   // InProgress (compta-temps); en sortir de mode edició es pausa. El lifecycle del timer es mou de
@@ -238,10 +243,19 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     activeTaskRef.current = null
     modelTasks.transition(tid, { to_status: 'Paused' }).catch(() => {})
   }, [])
-  const enterEdit = (tab, code, intent = null) => {
-    if (openingTask) return
+  // F2.1 — la tasca VIGENT d'una superfície. El backend ja la marca (`es_vigent`, resolt amb
+  // `tasca_vigent`): aquí NO es reimplementa el criteri, només es llegeix.
+  const tascaVigentDe = useCallback(
+    code => modelTaskRows.find(x => x.task_type_code === code && x.es_vigent) || null,
+    [modelTaskRows])
+
+  // Declarat ABANS d'`obreDeDebo`, que el referencia dins d'un useCallback: en aquest fitxer
+  // ja hi ha hagut una TDZ que cap gate va veure, i l'ordre de declaració no és cosmètic.
+  const [dialeg, setDialeg] = useState(null)   // {cara, tab, code, tasca} | null
+
+  // El pas final d'obrir: el que enterEdit feia sempre, ara reutilitzable des del modal.
+  const obreDeDebo = useCallback((tab, code) => {
     setOpeningTask(true)
-    setMesuresIntent(intent)
     models.openTask(parseInt(id), code)
       .then(res => {
         setEditTaskId(res.data.task_id)
@@ -250,13 +264,33 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         // (size_check ve per URL i passa per editing='Mesures'; grading → tab Escalat.)
         if (tab === 'Mesures' && code === 'pom') setMesuresEntry(true)
         else setEditing(tab)
+        reloadTasks()
       })
       // EL TOAST DIU LA PARET, no «no s'ha pogut». Un 409 amb `code` porta el motiu del servidor
       // (avui només `tasca_albaranada`: la tasca ja té línia en un albarà EMÈS i reobrir-la seria
       // refacturar). Sense codi, el missatge genèric de sempre. Al model 188 això eren 7 intents
       // en dues hores amb el mateix toast mut (v. DIAGNOSI_CICLE_TASCA_COMPLET §M-2).
-      .catch(e => setFeedback({ type: 'err', text: motiuOpenTask(e, t) }))
+      //
+      // F2.1 — si l'estat precalculat anava ranci, el 409 encara pot obrir la cara correcta:
+      // el modal té dues entrades (estat i error) i una sola sortida.
+      .catch(e => {
+        const cara = caraDeError(e)
+        if (cara) setDialeg({ cara, tab, code, tasca: tascaVigentDe(code) })
+        else setFeedback({ type: 'err', text: motiuOpenTask(e, t) })
+      })
       .finally(() => setOpeningTask(false))
+  }, [id, t, reloadTasks, tascaVigentDe])
+
+  // F2.1 · REGLA D'OR — el modal NO surt en el cas normal. `caraObrirTasca` decideix, i si diu
+  // CARA_CAP s'obre directament: zero fricció, zero clics. Només quan hi ha conflicte, feina
+  // lliurada o albarà emès es demana res a ningú.
+  const enterEdit = (tab, code, intent = null) => {
+    if (openingTask) return
+    setMesuresIntent(intent)
+    const vigent = tascaVigentDe(code)
+    const cara = caraObrirTasca(vigent, jo)
+    if (cara !== CARA_CAP) { setDialeg({ cara, tab, code, tasca: vigent }); return }
+    obreDeDebo(tab, code)
   }
   const exitEdit = useCallback(() => {
     pauseActiveTask()
@@ -501,8 +535,38 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     )
   }
 
+  // F2.1 — les quatre sortides del modal. `consultar` és la que no toca res: ni rellotge, ni
+  // assignació, ni feina nova. Les altres tres escriuen, i cada una diu a la seva nota què fa.
+  const accioDialeg = useCallback((accio) => {
+    const d = dialeg
+    setDialeg(null)
+    if (!d) return
+    // CONSULTAR: el tab i prou. Sense `enterEdit` no hi ha `open-task`, i sense open-task no
+    // hi ha ni rellotge ni reassignació — que és exactament el que promet la nota del botó.
+    if (accio === 'consultar') { setEditing(null); setMesuresEntry(false); setActiveTab(d.tab); return }
+    if (accio === 'treballar') { obreDeDebo(d.tab, d.code); return }
+    // `ronda` i `correccio` van per la MATEIXA porta: una correcció és una volta d'una sola
+    // tasca. El backend hi posa el motiu i la genealogia (mare) sense que la UI ho hagi de saber.
+    const motiu = accio === 'ronda' ? 'nova_mostra' : 'correccio'
+    setOpeningTask(true)
+    models.obrirRonda(parseInt(id), { motiu, codes: [d.code] })
+      .then(() => { reloadTasks(); reloadModel(); obreDeDebo(d.tab, d.code) })
+      .catch(e => setFeedback({
+        type: 'err',
+        text: e?.response?.data?.error || t('obrir_tasca.ronda_error'),
+      }))
+      .finally(() => setOpeningTask(false))
+  }, [dialeg, obreDeDebo, id, reloadTasks, reloadModel, t])
+
   return (
     <div style={{ width: '100%' }}>
+      <ObrirTascaDialog
+        cara={dialeg?.cara}
+        tasca={dialeg?.tasca}
+        rondaOberta={model?.ronda_oberta}
+        onAccio={accioDialeg}
+        onCancel={() => setDialeg(null)}
+      />
       <ModelSheetHeader model={model} onDelete={handleDelete} onFeedback={setFeedback} onChanged={reloadModel} />
 
       <div style={{ padding: '0 1.5rem' }}>
