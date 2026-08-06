@@ -592,6 +592,9 @@ export default function EditableTable({
     const ident = identitatSenseEix(row, eix)
     setDesfent(null)
     if (esPresa) {
+      // Una superfície de presa que no declari la porta de desfer no ha de petar: la píndola
+      // simplement no fa res (i es veu, perquè segueix encesa).
+      if (!presa.onDesfaInstancia) return
       marcaDesat(presa.onDesfaInstancia(row, ident, germanes)).catch(() => {})
       return
     }
