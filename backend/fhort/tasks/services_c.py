@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 # Transicions permeses (from -> {to})
 ALLOWED = {
     'Pending':    {'InProgress'},
+    # ⚠️ `Paused → Done` NO hi és, i és una DECISIÓ (Patró C · Agus · 28/07, fixada a
+    # `test_stop_encadenat`): la màquina d'estats no es toca i el Stop sobre una tasca pausada
+    # és play+stop ENCADENAT, dues transicions legals en un sol gest d'usuari.
     'Paused':     {'InProgress'},
     'InProgress': {'Paused', 'Done'},
     'Done':       {'InProgress'},   # reobertura = rectificació
@@ -36,6 +39,17 @@ def _close_open_timer(task):
         t.minuts = max(0, int((now - t.inici).total_seconds() // 60))
         t.actiu = False
         t.save(update_fields=['fi', 'minuts', 'actiu'])
+
+
+def te_paret_albara(task):
+    """La tasca té línia en un albarà EMÈS? (D-5 · v2)
+
+    Punt únic: la fan servir `transition_task` —que la converteix en rebuig de la reobertura— i
+    el batec d'escriptura, que ha de poder DIR-LA sense intentar la transició. Escrita dues
+    vegades, el dia que el criteri canviï (avui `ISSUED`/`INVOICED`) només en canviaria una.
+    """
+    return task.delivery_note_lines.filter(
+        delivery_note__status__in=['ISSUED', 'INVOICED']).exists()
 
 
 def _log(task, frm, to, profile, auto=None):
@@ -207,8 +221,7 @@ def transition_task(task, to_status, profile, force=False, auto=None,
     # reobrir (rectificació = extra nova que genera línia al proper albarà). DRAFT NO bloqueja
     # (encara es pot desfer esborrant el DRAFT). Limitat estrictament a Done→InProgress.
     if not force and frm == 'Done' and to_status == 'InProgress':
-        if task.delivery_note_lines.filter(
-                delivery_note__status__in=['ISSUED', 'INVOICED']).exists():
+        if te_paret_albara(task):
             # El `code` és el que fa que el client pugui dir el MOTIU. Sense ell, aquest rebuig
             # arribava com un 409 mut i el tècnic veia «no s'ha pogut obrir la tasca» sense saber
             # que la paret és l'albarà: 7 intents en dues hores sobre el mateix model (188), tots

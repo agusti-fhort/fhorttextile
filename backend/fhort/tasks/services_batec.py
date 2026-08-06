@@ -13,6 +13,7 @@ A partir d'ara, **escriure és el senyal**. Cada escriptura d'usuari sobre un mo
 
   · tasca `Pending`/`Paused` → `InProgress` (obre tram)   ← el batec FORT
   · tasca `InProgress`       → renova `last_heartbeat` del tram obert  ← el batec normal
+  · tasca `Done`             → **no-op**: reobrir és un acte humà, no l'efecte d'un PATCH
   · sense tasca              → no-op silenciós
 
 ## El que NO fa, i és deliberat
@@ -81,12 +82,12 @@ def batec_escriptura(model, code, profile):
     Retorna un dict de traça `{'batec': bool, 'accio': str, 'task_id': int|None}`. **Mai llança**:
     el batec és observació, i una observació que trenca l'escriptura que observa no serveix.
 
-    `accio` ∈ {`oberta`, `renovat`, `sense_tasca`, `sense_perfil`, `refusada`, `error`}.
+    `accio` ∈ {`oberta`, `renovat`, `sense_tasca`, `sense_perfil`, `refusada`, `acabada`, `error`}.
     """
     from django.utils import timezone
 
     from .models import TimerEntrada
-    from .services_c import TransitionError, transition_task
+    from .services_c import TransitionError, te_paret_albara, transition_task
     from .services_r import tasca_vigent
 
     if profile is None:
@@ -96,6 +97,26 @@ def batec_escriptura(model, code, profile):
         if task is None:
             # Deliberat: el batec no crea tasques (v. capçalera del mòdul).
             return {'batec': False, 'accio': 'sense_tasca', 'task_id': None}
+
+        if task.status == 'Done':
+            # 🔴 ESCRIURE NO REOBRE UNA TASCA ACABADA (06/08). `ALLOWED` permet `Done →
+            # InProgress` perquè la REOBERTURA existeix com a acte —rectificació—, i el batec
+            # se'n servia sense voler: un `PATCH` sobre una cel·la d'una tasca ja tancada la
+            # tornava a obrir, li obria tram i li reiniciava el rellotge, tot en silenci. Només
+            # se'n salvaven les ja FACTURADES, que topaven amb la paret d'albarà; totes les
+            # altres queien.
+            #
+            # La capçalera d'aquest mòdul ja declarava el contracte —«tasca `Pending`/`Paused` →
+            # `InProgress`»— i `Done` no hi era. Ara el codi ho diu igual que el comentari:
+            # reobrir és un acte humà, i té la seva porta (`open-task` / ronda).
+            #
+            # La paret d'albarà es diu igualment i amb el seu codi: qui la toca ha de saber que
+            # el que hi ha al davant no és «ja està feta» sinó «ja està facturada», que és una
+            # altra conversa (obrir una RONDA).
+            if te_paret_albara(task):
+                return {'batec': False, 'accio': 'refusada', 'task_id': task.pk,
+                        'code': 'tasca_albaranada'}
+            return {'batec': False, 'accio': 'acabada', 'task_id': task.pk}
 
         if task.status != 'InProgress':
             try:
