@@ -66,11 +66,18 @@ class SizeSystemViewSet(viewsets.ModelViewSet):
     # sense això costava 1 query per sistema (§B3.3).
     # `order_by` explícit: sense ell la paginació no era determinista (l'atribut `ordering`
     # és inert sense OrderingFilter). `id` de desempat.
-    queryset = SizeSystem.objects.prefetch_related('talles', 'targets').order_by('codi', 'id')
+    # N1: les 3 capes noves també prefetchades — el serializer les recorre per fila, igual que
+    # `targets`, i sense això la Size Library feia 3 queries més per run.
+    queryset = (SizeSystem.objects
+                .select_related('customer')
+                .prefetch_related('talles', 'targets', 'construccions', 'fits', 'grups')
+                .order_by('codi', 'id'))
     filter_backends = [DjangoFilterBackend, SearchFilter]
     # LLEI 5 CAPES: el pas «Talles» del wizard llista SizeSystems PURS (escala, capa 3) filtrats
     # pel target de la peça. `targets` (M2M) additiu al filterset → GET size-systems/?targets=<id>.
-    filterset_fields = ['actiu', 'targets']
+    # N1: les altres tres capes i el tipus d'escala, filtrables amb el mateix contracte.
+    filterset_fields = ['actiu', 'targets', 'construccions', 'fits', 'grups',
+                        'tipus_escala', 'customer']
     search_fields = ['codi', 'nom']
     ordering = ['codi']
 

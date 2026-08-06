@@ -594,6 +594,51 @@ class SizeSystem(models.Model):
         verbose_name='Codi client',
     )
 
+    # ── N1 (2026-08-06 nit) · EL RUN ES DESCRIU A SI MATEIX ────────────────────────────
+    # Fins ara el run era una escala muda: qui deia per a qui servia era el `SizingProfile`
+    # (la combinació target×família×construcció×fit). Això obligava a inventar-se un perfil
+    # —i amb ell una graduació— per declarar que un run existeix per a un àmbit. Aquestes
+    # etiquetes són del RUN i NOMÉS descriuen a qui s'assembla: cap camp de graduació, cap
+    # FK a POMs, res que lligui capes.
+    TIPUS_ESCALA_CHOICES = [
+        ('ALPHA', 'Alpha (XS/S/M/L…)'),
+        ('NUM', 'Numèrica (34/36/38…)'),
+        ('MESOS', 'Mesos i edat (0M/3M · 2/4/6 anys)'),
+        ('ALTURA', 'Alçada en cm (50/56/62…)'),
+    ]
+    tipus_escala = models.CharField(
+        max_length=10, blank=True, default='',
+        choices=TIPUS_ESCALA_CHOICES,
+        verbose_name='Tipus d\'escala',
+        help_text="Deduït de les etiquetes de talla. Buit = no deduïble sol.",
+    )
+    # Les tres capes que faltaven, amb el patró que la casa ja fa servir per a `targets`:
+    # M2M al vocabulari, exposat i escrit per CODI (SlugRelatedField). 0..n per capa, i
+    # **buit NO vol dir universal** — mateixa llei que `targets` (v. serializers.py).
+    construccions = models.ManyToManyField(
+        'ConstructionType', blank=True, related_name='size_systems',
+        verbose_name='Construccions',
+    )
+    fits = models.ManyToManyField(
+        'FitType', blank=True, related_name='size_systems',
+        verbose_name='Fits',
+    )
+    # GRUP: el vocabulari surt de GARMENT TYPES (`GarmentGroup`), no de POM System
+    # (decisió d'Agus, 2026-08-06 nit). El vocabulari alternatiu —`POMCategory`— descriu
+    # àrees de cos, no famílies de peça, i no és font d'àmbit.
+    grups = models.ManyToManyField(
+        'GarmentGroup', blank=True, related_name='size_systems',
+        verbose_name='Grups de peça',
+    )
+    # Eix client com a FK (`customer_codi` és el codi curt heretat i es manté intacte).
+    # db_constraint=False + SET_NULL: mateix patró que `SizingProfile.customer`
+    # (models.py:1521) — `pom` és SHARED+TENANT i `tasks.Customer` és tenant-only.
+    customer = models.ForeignKey(
+        'tasks.Customer', on_delete=models.SET_NULL,
+        null=True, blank=True, db_constraint=False,
+        related_name='size_systems', verbose_name='Client',
+    )
+
     class Meta:
         verbose_name = 'Sistema de talles'
         verbose_name_plural = 'Sistemes de talles'

@@ -1,7 +1,9 @@
 from rest_framework import serializers
 
 from .models import (
+    ConstructionType,
     CustomerPOMAlias,
+    FitType,
     GarmentGroup,
     GarmentPOMMap,
     GarmentType,
@@ -114,10 +116,31 @@ class SizeSystemSerializer(serializers.ModelSerializer):
         many=True, slug_field='codi', source='targets',
         queryset=Target.objects.all(), required=False,
     )
+    # N1 (2026-08-06 nit) — les altres tres capes de restricció del RUN, amb el mateix patró
+    # que `target_codis`: llista de CODIS a la lectura, llista de codis a l'escriptura, i el
+    # SlugRelatedField ja valida que cada codi existeixi al seu vocabulari. Mateixa llei que
+    # `targets`: **buit NO és "universal"**, és "no declarat" — qui filtra ha de decidir què
+    # en fa, i el pas 3 del wizard ORDENA per proximitat sense amagar res (D-31.3).
+    construccio_codis = serializers.SlugRelatedField(
+        many=True, slug_field='codi', source='construccions',
+        queryset=ConstructionType.objects.all(), required=False,
+    )
+    fit_codis = serializers.SlugRelatedField(
+        many=True, slug_field='codi', source='fits',
+        queryset=FitType.objects.all(), required=False,
+    )
+    # El vocabulari de GRUP és `GarmentGroup` (Garment Types), no POM System.
+    grup_codis = serializers.SlugRelatedField(
+        many=True, slug_field='codi', source='grups',
+        queryset=GarmentGroup.objects.all(), required=False,
+    )
+    customer_alias = serializers.CharField(source='customer.nom', read_only=True, default=None)
 
     class Meta:
         model = SizeSystem
-        fields = ('id', 'codi', 'nom', 'descripcio', 'actiu', 'talles', 'target_codis', 'customer_codi')
+        fields = ('id', 'codi', 'nom', 'descripcio', 'actiu', 'talles', 'target_codis',
+                  'customer_codi', 'tipus_escala', 'construccio_codis', 'fit_codis',
+                  'grup_codis', 'customer', 'customer_alias')
 
 
 class GarmentTypeSerializer(serializers.ModelSerializer):
