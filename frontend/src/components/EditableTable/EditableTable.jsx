@@ -560,6 +560,29 @@ export default function EditableTable({
   // encara no han arribat a la BD (`tmp-…`) es retiren sempre en silenci: no hi ha res a perdre.
   const [desfent, setDesfent] = useState(null)   // {row, eix, germanes} pendent de confirmació
 
+  // V5a (06/08 vespre) — AQUEST MODAL TAMBÉ ES TANCA AMB TECLAT. El mateix que es va arreglar a
+  // `ModalPosicions` (commit 57) i que aquest va tornar a néixer sense: el vel és
+  // `position:fixed inset:0` i intercepta tots els clics de sota, o sigui que qui l'obre sense
+  // voler hi queda atrapat. Cap modal de la casa pot ser un cul-de-sac de teclat.
+  //
+  // I EL FOCUS, QUE AQUÍ NO ÉS COSMÈTIC: en obrir-se va al botó de CANCEL·LAR, no al de
+  // confirmar. Aquest modal retira germanes amb valor pres —feina de mesurar— i deixar el gest
+  // destructiu just sota l'Enter és convidar-hi. En tancar-se, el focus torna d'on venia (la
+  // píndola de la fila), que és des d'on es continua treballant.
+  const desferCancelRef = useRef(null)
+  const focusAbansDesfer = useRef(null)
+  useEffect(() => {
+    if (!desfent) return undefined
+    focusAbansDesfer.current = document.activeElement
+    const esc = (e) => { if (e.key === 'Escape') { e.preventDefault(); setDesfent(null) } }
+    document.addEventListener('keydown', esc)
+    desferCancelRef.current?.focus()
+    return () => {
+      document.removeEventListener('keydown', esc)
+      focusAbansDesfer.current?.focus?.()
+    }
+  }, [desfent])
+
   const teValor = (r) => r.base_value_cm != null && r.base_value_cm !== ''
   const trasDe = (r, eix) => tramsInstancia(dicc, r.instancia).filter(s => eixDe(dicc, s) !== eix)
   const clauResta = (r, eix) => [...trasDe(r, eix)].sort().join('|')
@@ -943,9 +966,11 @@ export default function EditableTable({
           style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.28)',
                    display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div onClick={e => e.stopPropagation()}
+            role="dialog" aria-modal="true" aria-labelledby="desfa-titol"
             style={{ background: 'var(--white)', borderRadius: 10, padding: '1.25rem 1.4rem',
                      width: 'min(460px, 92vw)', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
-            <h3 style={{ margin: '0 0 10px', fontSize: 'var(--fs-h3)', fontWeight: 600,
+            <h3 id="desfa-titol"
+                style={{ margin: '0 0 10px', fontSize: 'var(--fs-h3)', fontWeight: 600,
                          display: 'flex', alignItems: 'center', gap: 8 }}>
               <i className="ti ti-alert-triangle" style={{ color: 'var(--warn)' }} aria-hidden="true" />
               {t('instancia.desfa_titol')}
@@ -964,7 +989,7 @@ export default function EditableTable({
               ))}
             </ul>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setDesfent(null)}
+              <button type="button" ref={desferCancelRef} onClick={() => setDesfent(null)}
                 style={{ padding: '6px 14px', borderRadius: 6, border: '0.5px solid var(--border)',
                          background: 'var(--white)', color: 'var(--text-main)', font: 'inherit',
                          fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
