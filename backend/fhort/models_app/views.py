@@ -2590,19 +2590,38 @@ def measurements_chat_view(request, model_id):
                         codi_client__iexact=accio['pom_codi']
                     ).first()
                     if pom and accio.get('valor') is not None:
-                        # FASE_3/C1-ins — literals (v. `_write_base`).
-                        bm, created = BaseMeasurement.objects.update_or_create(
+                        # L'ORIGEN I LES TOLERÀNCIES NO SÓN EFECTE SECUNDARI D'AQUESTA
+                        # ESCRIPTURA — la mateixa llei que ja tenen les altres dues portes
+                        # (`set_measurements_view` i `gravar_pom_view`), aquí pendent des del
+                        # 05/08. Amb l'`update_or_create` d'abans, els `defaults` s'apliquen
+                        # TAMBÉ quan la fila ja hi és: un AFEGIR sobre una mesura que ja
+                        # existia la reescrivia a `MANUAL` —encara que vingués d'una presa de
+                        # size check i el valor fos el mateix— i li tornava les toleràncies
+                        # del catàleg, esborrant les que algú hagués afinat. I aquest camí és
+                        # el pitjor lloc per fabricar un `MANUAL` fals: qui ho ha teclejat és
+                        # una IA, i `origen` no és append-only (el registre que salva els
+                        # mobles és `MeasurementChangeLog`).
+                        #
+                        # FASE_3/C1-ins — literals dels eixos (v. `_write_base`).
+                        bm = BaseMeasurement.objects.filter(
                             model=model, pom=pom,
-                            capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
-                            defaults={
-                                'base_value_cm': float(accio['valor']),
-                                'origen': 'MANUAL',
-                                'ordre': base_measurements.count(),
-                                # Sprint 5B.1: copy tolerance from the catalogue POM.
-                                'tolerancia_minus': pom.tolerancia_default_minus,
-                                'tolerancia_plus': pom.tolerancia_default_plus,
-                            },
-                        )
+                            capa=MeasurementLayer.SLUG_DEFECTE, instancia='').first()
+                        created = bm is None
+                        if created:
+                            bm = BaseMeasurement(
+                                model=model, pom=pom,
+                                capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                                # L'ordre és de naixement: reasignar-lo a cada AFEGIR movia
+                                # al final una fila que ja tenia el seu lloc a la taula.
+                                ordre=base_measurements.count())
+                        valor_nou = float(accio['valor'])
+                        # El payload del xat no parla d'origen (no és al contracte d'acció de
+                        # la IA), o sigui que mana la regla de defecte: neix → MANUAL; ja hi
+                        # era i el valor canvia → MANUAL; ja hi era i el valor és el mateix →
+                        # no es toca res.
+                        _procedencia_de_mesura(bm, {}, pom, valor_nou, created)
+                        bm.base_value_cm = valor_nou
+                        bm.save()
                         accions_executades.append(
                             f"{'Afegit' if created else 'Actualitzat'} {pom.codi_client}"
                         )
