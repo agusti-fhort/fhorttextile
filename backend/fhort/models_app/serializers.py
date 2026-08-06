@@ -433,6 +433,13 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
     # Legacy POMMaster fields (fallback when there is no associated pom_global).
     pom_codi_client = serializers.CharField(source='pom.codi_client', read_only=True)
     pom_nom_client = serializers.CharField(source='pom.nom_client', read_only=True)
+    # Q1 (06/08) — `''` ÉS UN VALOR LEGÍTIM D'INSTÀNCIA: és LA MESURA ÚNICA, i el default del
+    # camp al model. DRF derivava el camp del model —que no declara `blank=True`— i en sortia
+    # `allow_blank=False`: tornar una germana a la identitat base (desfer la píndola) rebia un
+    # 400 «Aquest camp no pot estar en blanc» i el camí de tornada quedava tancat al BACKEND
+    # encara que la pantalla l'oferís. La invariant que sí que mana —amb instància, cal nom— es
+    # segueix comprovant a `validate()`, i és a l'altra banda: prohibeix el nom buit, no el slug.
+    instancia = serializers.CharField(required=False, allow_blank=True, max_length=60)
 
     class Meta:
         model = BaseMeasurement
