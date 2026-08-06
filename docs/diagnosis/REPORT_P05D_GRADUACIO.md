@@ -156,13 +156,16 @@ Se'n va de Definició POM tot el que P0.5b hi havia posat: la prop `mostraGradin
 | anti-31/07 contra BD | ✓ 114→115 · 2 MANUAL · 113 intactes · zero residu |
 | `test_g1_graduacio` (el test-pin del 31/07) | ✓ **Ran 7 tests · OK**, inclòs `test_desar_mesures_dun_model_sense_graduacio_no_len_inventa_cap` |
 
-⚠️ **La suite `fhort.pom` sencera no s'ha pogut tancar dins d'aquesta sessió**: passa dels 15
-minuts i dues corregudes simultànies es trepitgen el `--keepdb` (la llei coneguda de «mai dues
-corregudes alhora»; la primera va morir per `timeout` i va deixar la BD de test a mitges, que és
-el `relation "pom_rulesetscopenode" already exists` que es va veure). El que aquest tram toca del
-backend és **una línia additiva** a `taula-mesures` (`regla_origen`), que no canvia cap valor
-existent; el pin que vigila la llei d'aquest tram sí que s'ha corregut i és verd. Queda per
-córrer del CTO o d'una sessió amb temps: `manage.py test fhort.pom --noinput`.
+| `fhort.pom` (suite sencera) | ✓ **Ran 208 tests · OK** (825 s) |
+
+Dues trampes de mètode que van costar temps i que val la pena deixar escrites:
+
+- **`cmd | tail` amaga el codi de sortida.** Una correguda de tests que havia mort per
+  `timeout` va donar `exit 0` perquè el codi que arriba és el del `tail`. Es va repetir amb
+  redirecció a fitxer i `echo $?` abans de creure-se-la.
+- **Dues corregudes de test alhora es trepitgen el `--keepdb`** (llei ja coneguda). La primera
+  va morir per `timeout 900` i va deixar la BD de test a mitges → `relation
+  "pom_rulesetscopenode" already exists`. Se'n surt amb `--noinput`, que la recrea.
 
 El fum va **caçar un error d'expectativa meu** abans que cap humà el veiés: en anglès la columna
 és «Delta break», no «Break delta».
