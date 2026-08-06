@@ -874,6 +874,19 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
 
+  // EL LLAPIS D'IDENTITAT (Agus, 06/08) — la identitat de la fila (NOM + NOMENCLATURA) s'edita
+  // amb un gest DELIBERAT, i tots dos camps alhora.
+  //
+  // Abans cada camp s'obria pel seu compte clicant-hi a sobre. En una taula que es treballa amb
+  // el ratolí a sobre de tretze files, això vol dir que un clic mal posat obria un editor de
+  // nom sense que ningú l'hagués demanat — i el que hi ha a sota és el nom amb què aquesta
+  // mesura viatja al fabricant. Ara el text és ESTÀTIC i l'única porta és el llapis.
+  //
+  // L'estat viu a la FILA i no dins de cada camp, perquè el que s'obre és la identitat sencera:
+  // el nom i la nomenclatura són la mateixa resposta a «quina mesura és aquesta», i editar-los
+  // per separat era el que feia que se'n canviés un i l'altre es quedés dient una altra cosa.
+  const [editantIdentitat, setEditantIdentitat] = useState(false)
+
   // BUIT = ES DESCARTA, i qui ho diu és la BARRA D'ESTAT del peu, no la fila.
   //
   // Aquí hi havia dues marques a cada fila en blanc: el nom rebaixat a `opacity .45` i un
@@ -956,7 +969,8 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
             sempre. La nomenclatura per-model (nom_fitxa) segueix manant per damunt de tot:
             és la que el tècnic ha escrit aquí mateix. */}
         <NomenInput value={row.nom_fitxa} placeholder={row.client_code || row.pom_code || ''}
-          readOnly={readOnly} onCommit={v => onCellChange(row.id, 'nom_fitxa', v)} />
+          readOnly={readOnly || !editantIdentitat}
+          onCommit={v => onCellChange(row.id, 'nom_fitxa', v)} />
         {row.is_key && (
           <i className="ti ti-star" title="KEY"
             style={{ fontSize: 9, marginLeft: 5, color: 'var(--gold)', verticalAlign: 'middle' }} />
@@ -998,11 +1012,32 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           const bmId = row.id != null && !String(row.id).startsWith('tmp-') ? row.id : null
           const nomEditable = !readOnly && bmId != null && onBateig
           return (
-            <NomCanonic
-              value={row.nom_canonic_model || ''} placeholder={dalt || ''} instancia={inst}
-              traduccio={traduit} editable={nomEditable} estil={estilDalt}
-              title={t('measuregrid.nom_canonic_tip')}
-              onSave={v => onBateig(bmId, { nom_canonic_model: v })} />
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <NomCanonic
+                  value={row.nom_canonic_model || ''} placeholder={dalt || ''} instancia={inst}
+                  traduccio={traduit} editant={nomEditable && editantIdentitat} estil={estilDalt}
+                  title={t('measuregrid.nom_canonic_tip')}
+                  onExit={() => setEditantIdentitat(false)}
+                  onSave={v => onBateig(bmId, { nom_canonic_model: v })} />
+              </div>
+              {/* L'ÚNICA porta a l'edició de la identitat. Obre el nom I la nomenclatura alhora:
+                  són la mateixa resposta i s'han de poder quadrar de cop. */}
+              {nomEditable && (
+                <button type="button" data-llapis="1"
+                  onClick={() => setEditantIdentitat(v => !v)}
+                  aria-pressed={editantIdentitat}
+                  title={t('editable_table.edita_identitat')}
+                  aria-label={t('editable_table.edita_identitat')}
+                  style={{
+                    background: 'none', border: 'none', padding: 2, cursor: 'pointer',
+                    color: editantIdentitat ? 'var(--gold)' : 'var(--text-muted)',
+                    flexShrink: 0, lineHeight: 1,
+                  }}>
+                  <i className="ti ti-pencil" style={{ fontSize: 13 }} aria-hidden="true" />
+                </button>
+              )}
+            </div>
           )
         })()}
       </td>
@@ -1285,25 +1320,19 @@ function ModalPosicions({ mare, dicc, existents, onCancel, onAplica }) {
 // La INSTÀNCIA va enganxada al nom i en el SEU color: no és una etiqueta al costat, és que aquesta
 // mesura es diu «Profunditat de sisa · Esquerra». La ⓘ porta el nom en l'idioma de qui llegeix;
 // era una segona línia permanent a cada fila i ara es demana, que és la freqüència amb què es mira.
-function NomCanonic({ value, placeholder, instancia, traduccio, marca = '', editable, estil, title, onSave }) {
-  const [editant, setEditant] = useState(false)
-  const [hover, setHover] = useState(false)
-
-  if (editable && editant) {
+// `editant` ve de la FILA (el llapis), ja no d'un clic aquí dins: v. la capçalera de
+// `SortableRow`. En repòs el text és ESTÀTIC —ni cursor de text, ni subratllat en passar-hi per
+// sobre, ni res que convidi a clicar-lo—, perquè obrir l'editor del nom ha de ser una decisió i
+// no la conseqüència d'un clic mal posat mentre es treballa la taula.
+function NomCanonic({ value, placeholder, instancia, traduccio, marca = '', editant, estil, title, onExit, onSave }) {
+  if (editant) {
     return (
       <BateigInput value={value} placeholder={placeholder} title={title}
-        autoFocus onExit={() => setEditant(false)} onSave={onSave} style={estil} />
+        autoFocus onExit={onExit} onSave={onSave} style={estil} />
     )
   }
   return (
-    <div
-      onClick={editable ? (() => setEditant(true)) : undefined}
-      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      title={editable ? title : undefined}
-      style={{
-        ...estil, cursor: editable ? 'text' : 'default',
-        borderBottom: `1px ${editable && hover ? 'dashed var(--border)' : 'solid transparent'}`,
-      }}>
+    <div style={{ ...estil, cursor: 'default' }}>
       {value || placeholder}
       {instancia && <span style={{ fontWeight: 500 }}>{` · ${instancia}`}</span>}
       {marca && (

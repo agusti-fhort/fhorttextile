@@ -3258,7 +3258,8 @@
     "kbd_instancia": "focus als grups d'instància",
     "kbd_nomen": "nomenclatura",
     "kbd_finder": "última fila ↓ = cercador",
-    "kbd_buit": "buit = es descarta"
+    "kbd_buit": "buit = es descarta",
+    "edita_identitat": "Editar el nom i la nomenclatura"
   },
   "dashboard": {
     "tab_home": "Inici",

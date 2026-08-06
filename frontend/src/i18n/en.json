@@ -3258,7 +3258,8 @@
     "kbd_instancia": "focus the instance groups",
     "kbd_nomen": "nomenclature",
     "kbd_finder": "last row ↓ = finder",
-    "kbd_buit": "blank = discarded"
+    "kbd_buit": "blank = discarded",
+    "edita_identitat": "Edit name and nomenclature"
   },
   "dashboard": {
     "tab_home": "Home",

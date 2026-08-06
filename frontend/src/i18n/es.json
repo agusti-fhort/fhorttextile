@@ -3258,7 +3258,8 @@
     "kbd_instancia": "foco en los grupos de instancia",
     "kbd_nomen": "nomenclatura",
     "kbd_finder": "última fila ↓ = buscador",
-    "kbd_buit": "vacío = se descarta"
+    "kbd_buit": "vacío = se descarta",
+    "edita_identitat": "Editar el nombre y la nomenclatura"
   },
   "dashboard": {
     "tab_home": "Inicio",
