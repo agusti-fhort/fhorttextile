@@ -29,7 +29,8 @@ from django_tenants.utils import schema_context
 
 from fhort.models_app.models import Model, Watchpoint
 from fhort.models_app.services import (materialize_model_grading_rules,
-                                       origen_mgr_des_de_ruleset)
+                                       origen_mgr_des_de_ruleset,
+                                       poms_manual_a_preservar)
 from fhort.models_app.views import _validar_ruleset_assignable, comptar_regles_residents
 from fhort.pom.models import GradingRuleSet
 
@@ -78,11 +79,17 @@ def cal_materialitzar(model, rs) -> bool:
     model amb el FK nou i les residents velles no ha migrat — gradua exactament com abans i
     ho fa amb una etiqueta que diu el contrari.
 
-    Es compara el conjunt de POMs, que és el que la materialització garanteix («el set
-    resultant és EXACTAMENT source_rules»).
+    Es compara el conjunt de POMs del joc contra el de les residents.
+
+    ⚠️ 6.1 (2026-08-06) — la pregunta és «FALTA cap POM del joc?», no «són conjunts iguals?».
+    Des que la materialització preserva les `MANUAL` d'autoria, el model pot tenir residents
+    que el joc no porta (i, per als POMs preservats, la resident MANUAL substitueix la del
+    joc a posta). Amb la igualtat estricta, la comanda hauria trobat feina a fer a CADA
+    passada i hauria deixat de ser idempotent — que és el que promet la seva capçalera.
     """
     residents = set(model.grading_rules.values_list('pom_id', flat=True))
-    return residents != set(rs.regles.filter(actiu=True).values_list('pom_id', flat=True))
+    del_joc = set(rs.regles.filter(actiu=True).values_list('pom_id', flat=True))
+    return bool(del_joc - residents)
 
 
 class Command(BaseCommand):
@@ -133,10 +140,16 @@ class Command(BaseCommand):
 
                 venia_de = m.grading_rule_set
                 total, per_origen = comptar_regles_residents(m)
+                # 6.1 — les `MANUAL` d'autoria que sobreviuran. Es calcula ABANS del validador
+                # perquè el recompte que el dry-run imprimeix sigui el de veritat: aquesta
+                # comanda es llegeix per decidir, i un preview que infla el que es perdrà és
+                # tan dolent com un que ho amaga.
+                n_preservades = len(poms_manual_a_preservar(m, venia_de))
 
                 # 1r intent SENSE consentiment: és el que la UI ensenya a l'usuari.
                 avis = _validar_ruleset_assignable(
-                    rs, size_system_id=m.size_system_id, customer_id=m.customer_id, model=m)
+                    rs, size_system_id=m.size_system_id, customer_id=m.customer_id, model=m,
+                    preservades=n_preservades)
 
                 if avis:
                     payload, status = avis
@@ -162,7 +175,7 @@ class Command(BaseCommand):
                     # que s'esborrin les regles pròpies, i aquí només consentim el segon.
                     avis = _validar_ruleset_assignable(
                         rs, size_system_id=m.size_system_id, customer_id=m.customer_id,
-                        model=m, confirmat_residents=True)
+                        model=m, confirmat_residents=True, preservades=n_preservades)
                     if avis:
                         payload, status = avis
                         blocs.append(f'  ⛔ model {m.id:4} {m.codi_intern:16} {status} '
@@ -176,16 +189,21 @@ class Command(BaseCommand):
                 # wipe-and-recreate del qual el guard D-31.4 avisa: sense aquesta crida el
                 # model es queda amb el FK nou i les regles velles, gradua igual que abans i
                 # el 409 hauria avisat d'un esborrat que no passa.
+                # 6.1 — `joc_anterior` és el joc del qual venia: NOMÉS si estava classificat,
+                # les seves `MANUAL` són autoria demostrable i sobreviuen (v. `motiu_no_preserva`).
                 n_noves = materialize_model_grading_rules(
-                    m, rs.regles.filter(actiu=True), origen=origen_mgr_des_de_ruleset(rs))
+                    m, rs.regles.filter(actiu=True), origen=origen_mgr_des_de_ruleset(rs),
+                    joc_anterior=venia_de)
                 migrats += 1
 
                 # EL WATCHPOINT: qui, quan i D'ON VENIA. `created_by` va a NULL perquè no hi
                 # ha cap persona darrere d'una comanda — mentir-hi seria pitjor que el buit.
                 # `dades=None` → watchpoint HUMÀ (text lliure), no de sistema: aquest text
                 # l'ha d'entendre un tècnic, no un renderitzador de claus.
-                detall = (f'Se li han esborrat {total} regles residents ({per_origen}) i '
-                          f'se n\'hi han materialitzat {n_noves} del joc nou'
+                detall = (f'Se li han esborrat {total - n_preservades} regles residents '
+                          f'({per_origen}) i se n\'hi han materialitzat {n_noves} del joc nou'
+                          + (f'; {n_preservades} escrites a mà (MANUAL) s\'han conservat'
+                             if n_preservades else '')
                           if total else
                           f'No tenia regles residents; se n\'hi han materialitzat {n_noves}')
                 text = (f'Grading migrat a «{rs.nom}» (ruleset {rs.id}) el 2026-08-05 per la '

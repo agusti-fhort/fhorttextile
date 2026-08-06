@@ -2631,6 +2631,10 @@ def import_session_confirmar_view(request, token):
         new_rule_set = model.grading_rule_set
         resident_specs = None
         prev_grs_id = model.grading_rule_set_id
+        # 6.1 — el joc que el model tenia ABANS d'aquest import, com a OBJECTE: cal llegir-ne
+        # l'`origen` per decidir si les seves `MANUAL` són autoria. Capturat aquí, abans de
+        # qualsevol `save()` d'aquesta funció.
+        prev_grs_obj = model.grading_rule_set
         if fitxa_specs:
             try:
                 with transaction.atomic():
@@ -2698,6 +2702,13 @@ def import_session_confirmar_view(request, token):
                         new_rule_set = container
                         # SENSE residents: el contenidor mana (all-or-nothing de _load_grading_rules).
                         # Neteja residents ranços perquè l'herència del contenidor no quedi tapada.
+                        #
+                        # 🔴 6.1 · AQUESTA BRANCA NO PRESERVA LES `MANUAL`, I ÉS A POSTA. Salvar-ne
+                        # una sola deixaria el model amb residents, i `_load_grading_rules` és
+                        # ALL-OR-NOTHING: amb una resident viva el contenidor deixaria de graduar
+                        # els altres 24 POMs. Preservar aquí no salvaria una regla, desactivaria
+                        # el contenidor sencer en silenci. És l'únic camí de wipe que la decisió
+                        # 6.1 NO tanca, i el tancarà la política fina (decisió de l'Agus).
                         model.grading_rules.all().delete()
                         resident_specs = None
                         base_norm = _norm_label(base_size)
@@ -2735,7 +2746,8 @@ def import_session_confirmar_view(request, token):
                     # SEMBRA SELECTIVA de residents (origen=IMPORTED); el motor les llegeix amb prioritat.
                     if resident_specs is not None:
                         materialize_model_grading_rules_from_specs(
-                            model, resident_specs, origen='IMPORTED')
+                            model, resident_specs, origen='IMPORTED',
+                            joc_anterior=prev_grs_obj)
             except Exception as e:
                 model.grading_rule_set_id = prev_grs_id
                 new_rule_set = model.grading_rule_set

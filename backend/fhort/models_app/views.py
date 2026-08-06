@@ -590,7 +590,7 @@ def comptar_regles_residents(model):
 
 
 def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, confirmat=False,
-                                model=None, confirmat_residents=False):
+                                model=None, confirmat_residents=False, preservades=0):
     """D1 — porta d'entrada de l'assignació d'un GradingRuleSet a un model.
 
     Assignar un ruleset dispara un wipe-and-recreate de les regles residents
@@ -659,9 +659,21 @@ def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, co
     # D-31.4 — LES REGLES RESIDENTS QUE CAURAN. Va l'ÚLTIM dels quatre a posta: si el ruleset
     # no és assignable (buit, run divergent) no té sentit avisar del que s'hi perdria, perquè
     # no s'arribarà a assignar mai.
+    #
+    # 6.1 — `preservades` són les `MANUAL` d'autoria que sobreviuran al wipe. Es resten del que
+    # es demana permís per destruir, i si no queda res a destruir NO ES DEMANA RES: el permís i
+    # la destrucció han de mirar el mateix (F1-bis), i això val en els dos sentits.
     if model is not None and not confirmat_residents:
-        total, per_origen = comptar_regles_residents(model)
-        if total:
+        total_abans, per_origen = comptar_regles_residents(model)
+        total = total_abans - preservades
+        if total > 0:
+            per_origen = dict(per_origen)
+            if preservades:
+                restant = per_origen.get('MANUAL', 0) - preservades
+                if restant > 0:
+                    per_origen['MANUAL'] = restant
+                else:
+                    per_origen.pop('MANUAL', None)
             n_imported = per_origen.get('IMPORTED', 0)
             detall = ' · '.join(f'{n} {o}' for o, n in sorted(per_origen.items()))
             frase_imported = (
@@ -676,6 +688,9 @@ def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, co
                 'model_id': model.id,
                 'residents': total,
                 'per_origen': per_origen,
+                # 6.1 — les que es queden. Clau NOVA i additiva: el front que no la conegui
+                # segueix llegint `residents` i `per_origen` com sempre.
+                'preservades': preservades,
                 # Redundant amb `per_origen` I A POSTA: la llei diu que IMPORTED s'ha de poder
                 # distingir, i una clau de primer nivell no es pot passar per alt llegint el
                 # payload de pressa. Perdre una regla escrita a mà no és el mateix que perdre'n
@@ -684,7 +699,10 @@ def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, co
                 'message': (
                     f"Aquest model té {total} regles de graduació pròpies ({detall}). "
                     f"Assignar-li «{rs.nom}» les esborrarà i el model passarà a graduar "
-                    f"amb les del joc.{frase_imported} Confirma-ho per continuar."),
+                    f"amb les del joc.{frase_imported}"
+                    + (f" Les {preservades} escrites a mà (MANUAL) es conserven."
+                       if preservades else '')
+                    + " Confirma-ho per continuar."),
             }, 409)
 
     return None
@@ -1033,6 +1051,10 @@ def update_model_step2(request, model_id):
     # construcció, res a veure amb la graduació— reescrivia les residents i es menjava les
     # `origen='MANUAL'` sense 409, sense Watchpoint i sense que ningú hagués parlat de graduar.
     grs_abans = model.grading_rule_set_id
+    # 6.1 — l'OBJECTE, no només l'id: per decidir si les `MANUAL` són autoria cal llegir-ne
+    # l'`origen`, i s'ha de capturar ABANS del `setattr` (a partir d'aquí l'atribut ja resol el
+    # joc NOU). `None` si el model no en tenia cap, i és informació, no absència.
+    grs_abans_obj = model.grading_rule_set
     # Pas 5A — reutilitza el mateix resolutor que la creació (inclou garment_type_item_id).
     # S24b: se li passa el `model` perquè pugui ordenar el run contra el SizeSystem que ja té
     # quan el PATCH porta `size_run` sense `size_system_id`.
@@ -1053,6 +1075,11 @@ def update_model_step2(request, model_id):
     confirmat_residents = bool(d.get('confirmar_esborrat_residents'))
     residents_perdudes = (0, {})
     motiu_watchpoint = None
+    # 6.1 — els POMs de les `MANUAL` que sobreviuran. Buit per defecte: la porta de desacoblar
+    # («Sense graduació») segueix esborrant-ho tot, com abans. El gest hi diu explícitament que
+    # el model es queda SENSE graduació, i deixar-hi residents òrfenes el faria graduar igual
+    # (`_load_grading_rules` és all-or-nothing) — que és el contrari del que l'usuari ha demanat.
+    poms_preservats = set()
 
     # WIZARD pas 4 «Sense graduació» en EDICIÓ: buidatge EXPLÍCIT del ruleset. El resolutor només
     # ASSIGNA quan grading_rule_set_id és truthy (mai neteja); aquí, si la clau ve present i buida
@@ -1102,6 +1129,11 @@ def update_model_step2(request, model_id):
         # podria dir quantes n'hi havia.
         residents_perdudes = comptar_regles_residents(model)
         motiu_watchpoint = 'esborrat_residents'
+        # 6.1 — quines sobreviuran. Es passa al validador perquè EL PERMÍS I LA DESTRUCCIÓ
+        # MIRIN EL MATEIX (la llei de F1-bis): demanar permís per esborrar 4 regles que no
+        # s'esborraran és la mateixa mentida, amb el signe canviat.
+        from fhort.models_app.services import poms_manual_a_preservar
+        poms_preservats = poms_manual_a_preservar(model, grs_abans_obj)
         _err = _validar_ruleset_assignable(
             model.grading_rule_set,
             size_system_id=model.size_system_id,
@@ -1109,6 +1141,7 @@ def update_model_step2(request, model_id):
             confirmat=bool(d.get('confirmar_altre_client')),
             model=model,
             confirmat_residents=confirmat_residents,
+            preservades=len(poms_preservats),
         )
         if _err is not None:
             payload, status_code = _err
@@ -1127,17 +1160,25 @@ def update_model_step2(request, model_id):
         with transaction.atomic():
             n_regles = materialize_model_grading_rules(
                 model, model.grading_rule_set.regles.all(),
-                origen=origen_mgr_des_de_ruleset(model.grading_rule_set))
+                origen=origen_mgr_des_de_ruleset(model.grading_rule_set),
+                joc_anterior=grs_abans_obj)
         # R1 — el retorn d'aquesta funció es DESCARTAVA. Materialitzar 0 regles (ruleset buit)
         # esborrava les residents i tornava un 200 mut: exactament el que va buidar el 163.
         # Amb la validació D1 això ja no hauria de poder passar per l'endpoint; si passa igual
         # (dades tocades per un altre camí), que quedi rastre i que la resposta ho digui.
+        # 6.1 — «0 materialitzades» ja NO vol dir «sense residents»: pot voler dir que totes les
+        # del joc queien sobre POMs que el tècnic havia escrit a mà, i que per tant hi manen. Un
+        # rastre que menteix és pitjor que cap rastre, i aquí el matís canvia el diagnòstic.
         if n_regles == 0:
             import logging
+            _cua = (f"— totes les del joc cauen sobre POMs amb regla MANUAL preservada "
+                    f"({len(poms_preservats)}), que és qui gradua."
+                    if poms_preservats else
+                    "— el model queda SENSE regles residents.")
             logging.getLogger(__name__).warning(
                 f"update_model_step2: model {model.codi_intern} (id={model.id}) ha "
                 f"materialitzat 0 regles des del GradingRuleSet {model.grading_rule_set_id} "
-                f"— el model queda SENSE regles residents."
+                + _cua
             )
     # D-31.4 · EL RASTRE. La confirmació és una decisió, i una decisió que destrueix feina ha de
     # deixar constància que sobrevisqui a la sessió del navegador. Watchpoint i no un log: el log
@@ -1145,7 +1186,16 @@ def update_model_step2(request, model_id):
     # és on el trobarà el tècnic que d'aquí a un mes es pregunti on han anat les seves regles.
     # Neix `open` (default del model) i el tanca qui hagi comprovat que la graduació nova és bona.
     n_residents, per_origen = residents_perdudes
-    if n_residents:
+    # 6.1 — el rastre ha de dir el que ha passat, no el que hauria passat abans. `n_residents`
+    # és el recompte PREVI (i es queda: és el que hi havia); el que s'ha destruït de debò és
+    # aquest, i el que s'ha salvat surt a part. Sense aquesta resta, el Watchpoint hauria
+    # començat a dir «esborrades 2» d'un gest que n'ha esborrat 1.
+    n_preservades = len(poms_preservats)
+    n_esborrades = n_residents - n_preservades
+    # …i la condició mira les ESBORRADES, no les que hi havia: un Watchpoint existeix per
+    # respondre «on han anat les meves regles», i si no n'ha anat cap enlloc no hi ha res a
+    # respondre. Abans de 6.1 les dues xifres eren sempre la mateixa i la distinció no existia.
+    if n_esborrades:
         from fhort.models_app.models import Watchpoint
         _perfil = getattr(request.user, 'profile', None)
         _detall = ' · '.join(f'{n} {o}' for o, n in sorted(per_origen.items()))
@@ -1165,13 +1215,20 @@ def update_model_step2(request, model_id):
             }
         else:
             _text = (f"Assignat el joc de regles «{model.grading_rule_set.nom}» "
-                     f"(#{model.grading_rule_set_id}) esborrant {n_residents} regles pròpies "
-                     f"del model ({_detall}). Verifica la graduació abans d'entregar.")
+                     f"(#{model.grading_rule_set_id}) esborrant {n_esborrades} regles pròpies "
+                     f"del model ({_detall})."
+                     + (f" {n_preservades} escrites a mà (MANUAL) s'han conservat."
+                        if n_preservades else '')
+                     + " Verifica la graduació abans d'entregar.")
             _dades = {
                 'tipus': 'esborrat_residents',
                 'grading_rule_set_id': model.grading_rule_set_id,
                 'grading_rule_set_nom': model.grading_rule_set.nom,
+                # `residents` = les que hi HAVIA (l'acta d'abans, com sempre).
+                # `esborrades`/`preservades` = què n'ha passat (6.1).
                 'residents': n_residents,
+                'esborrades': n_esborrades,
+                'preservades': n_preservades,
                 'per_origen': per_origen,
                 'imported': per_origen.get('IMPORTED', 0),
                 'regles_materialitzades': n_regles,
@@ -1184,8 +1241,10 @@ def update_model_step2(request, model_id):
         'codi_intern': model.codi_intern,
         'regles_materialitzades': n_regles,
         # Que la resposta ho digui: qui ha confirmat ha de veure què ha passat de debò, no
-        # només que la crida ha anat bé.
-        'residents_esborrades': n_residents,
+        # només que la crida ha anat bé. 6.1: `residents_esborrades` passa a ser el que s'ha
+        # esborrat DE DEBÒ, i les salvades van a la clau nova.
+        'residents_esborrades': n_esborrades,
+        'residents_preservades': n_preservades,
     })
 
 
@@ -1643,16 +1702,31 @@ def copiar_de_model_view(request, model_id, src_id):
         #    re-materialitzar. NO es copien overrides ni watchpoints.
         if copy_grading and src.grading_rule_set_id:
             from fhort.models_app.services import (materialize_model_grading_rules,
-                                                   origen_mgr_des_de_ruleset)
+                                                   origen_mgr_des_de_ruleset,
+                                                   poms_manual_a_preservar)
+            # 6.1 — el joc que el DESTÍ tenia, capturat abans del `save()` (a partir d'aquí ja
+            # porta el de l'origen). Aquesta porta és MUDA —no compta residents, no demana
+            # permís, no deixa Watchpoint—, i per això la preservació hi val doble: és l'única
+            # protecció que hi arriba.
+            grs_dst_abans = dst.grading_rule_set
+            n_preservades_dst = len(poms_manual_a_preservar(dst, grs_dst_abans))
             dst.grading_rule_set_id = src.grading_rule_set_id
             dst.save(update_fields=['grading_rule_set'])
             grading_set = src.grading_rule_set_id
             n_regles = materialize_model_grading_rules(
                 dst, src.grading_rule_set.regles.all(),
-                origen=origen_mgr_des_de_ruleset(src.grading_rule_set))
-            if n_regles == 0:
+                origen=origen_mgr_des_de_ruleset(src.grading_rule_set),
+                joc_anterior=grs_dst_abans)
+            if n_preservades_dst:
+                warnings.append(
+                    f"{n_preservades_dst} regles de graduació escrites a mà (MANUAL) al model "
+                    f"de destí s'han conservat i manen sobre les del joc copiat.")
+            if n_regles == 0 and not n_preservades_dst:
                 # R1 (el forat que va buidar el 163): un ruleset buit esborra les residents i
                 # torna un 200 mut. Aquí no: queda al log i a la resposta.
+                # 6.1 — amb MANUAL preservades, «0 materialitzades» no vol dir «sense
+                # graduació»: vol dir que mana el tècnic. El warning d'això ja l'ha posat la
+                # preservació més amunt, i repetir-hi «SENSE regles residents» seria mentir.
                 logging.getLogger(__name__).warning(
                     "copiar_de_model: model %s (id=%s) ha materialitzat 0 regles des del "
                     "GradingRuleSet %s — el model queda SENSE regles residents.",

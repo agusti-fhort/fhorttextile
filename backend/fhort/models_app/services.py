@@ -253,17 +253,90 @@ def origen_mgr_des_de_ruleset(rule_set) -> str:
     return _ORIGEN_RS_A_MGR.get(getattr(rule_set, 'origen', None) or '', 'MANUAL')
 
 
-def materialize_model_grading_rules(model, source_rules, origen):
+#: Sentinella per a `joc_anterior`. NO és `None`: `None` vol dir «el model no tenia cap joc»,
+#: que és una informació ben real; això vol dir «el caller no m'ho ha dit», i llavors el motor
+#: es comporta exactament com abans de la decisió 6.1.
+JOC_ANTERIOR_NO_INFORMAT = object()
+
+
+def joc_classificat(rule_set) -> bool:
+    """El joc declara la seva provinença?
+
+    Un `GradingRuleSet` amb `origen` NULL no la declara, i les residents que en surten es
+    materialitzen com a `MANUAL` (`origen_mgr_des_de_ruleset`). A partir d'aquell moment «el
+    que ve del joc» i «el que ha escrit el tècnic» **es diuen igual i són indistingibles**:
+    `ModelGradingRule` no guarda de quin joc ve cada fila.
+    """
+    return bool(rule_set) and (getattr(rule_set, 'origen', None) or '') in _ORIGEN_RS_A_MGR
+
+
+def poms_manual_a_preservar(model, joc_anterior):
+    """Els `pom_id` de les residents `MANUAL` que han de sobreviure al wipe (set, possiblement buit).
+
+    ── DECISIÓ 6.1 (2026-08-06 nit), VERSIÓ MÍNIMA REVERSIBLE ────────────────────────────────
+    La regla és **estricta i literal**: es preserva NOMÉS si el joc del qual venien les
+    residents estava CLASSIFICAT. Llavors les seves regles porten el seu origen real
+    (CANONICAL/CLIENT_RUN/IMPORTED) i una `MANUAL` no en pot venir — o sigui que és autoria.
+
+    Tota la resta es comporta com abans de 6.1 i **s'ANOTA** (`motiu_no_preserva`):
+
+      · `no_informat` — el caller no diu de quin joc venien. Els camins que encara no han
+        adoptat 6.1 no canvien de comportament.
+      · `sense_joc` — el model no tenia cap joc. Aquí les `MANUAL` **probablement SÍ que són
+        autoria** (sense joc no hi ha joc-sense-classificar del qual puguin sortir), però
+        eixamplar la preservació a aquest cas és **política, i la política és de l'Agus**. Es
+        deixa anotat perquè demà es pugui decidir amb el cens al davant.
+      · `joc_sense_classificar` — el parany conegut: `origen_mgr_des_de_ruleset` materialitza
+        `MANUAL` per als jocs amb `origen` NULL, i llavors autoria i còpia es diuen igual.
+
+    La preservació no és gratuïta: `ModelGradingRule` té `unique_together('model','pom')`, i el
+    `bulk_create` de sota no porta conflict-handling. Per això la materialització SALTA les
+    regles del joc nou que cauen sobre un POM preservat — si no, el que surt d'aquí no és una
+    regla salvada, és un `IntegrityError`.
+    """
+    if motiu_no_preserva(joc_anterior):
+        return set()
+    return set(model.grading_rules.filter(origen='MANUAL').values_list('pom_id', flat=True))
+
+
+def motiu_no_preserva(joc_anterior):
+    """Per què aquest wipe NO preserva les `MANUAL`, com a codi curt, o `None` si sí que ho fa.
+
+    Serveix perquè els camins destructius ho puguin deixar escrit (Watchpoint, resposta, log):
+    la decisió 6.1 tanca el cas net i deixa dos casos oberts, i els oberts s'han de poder
+    comptar abans de decidir-ne la política.
+    """
+    if joc_anterior is JOC_ANTERIOR_NO_INFORMAT:
+        return 'no_informat'
+    if joc_anterior is None:
+        return 'sense_joc'
+    if not joc_classificat(joc_anterior):
+        return 'joc_sense_classificar'
+    return None
+
+
+def materialize_model_grading_rules(model, source_rules, origen,
+                                    joc_anterior=JOC_ANTERIOR_NO_INFORMAT):
     """Materialitza regles de grading residents al model des d'un iterable de
-    GradingRule. Wipe-and-recreate: el set resultant és EXACTAMENT source_rules.
+    GradingRule. Wipe-and-recreate: el set resultant és source_rules **més les `MANUAL`
+    preservades** (decisió 6.1; v. `poms_manual_a_preservar`).
 
     NO copia valor_base ni talla_base (viuen a BaseMeasurement / model.base_size_label).
     Idempotent per (model): esborra les regles residents prèvies abans de recrear.
     origen: 'IMPORTED' (W5) | 'CANONICAL' (wizard) | 'MANUAL'.
+
+    `joc_anterior`: el `GradingRuleSet` que el model tenia ABANS d'aquest gest (l'objecte, no
+    l'id), o `None` si no en tenia cap. Sense aquest argument el motor esborra tot, com sempre:
+    els camins que encara no l'informen no canvien de comportament.
     """
     from fhort.models_app.models import ModelGradingRule
     from fhort.pom.grading_regime import normalitza_logica
-    model.grading_rules.all().delete()
+    preservats = poms_manual_a_preservar(model, joc_anterior)
+    if preservats:
+        model.grading_rules.exclude(origen='MANUAL').delete()
+    else:
+        model.grading_rules.all().delete()
+    source_rules = [r for r in source_rules if r.pom_id not in preservats]
     objs = [
         ModelGradingRule(
             model=model, pom_id=r.pom_id,
@@ -283,15 +356,22 @@ def materialize_model_grading_rules(model, source_rules, origen):
     return len(objs)
 
 
-def materialize_model_grading_rules_from_specs(model, specs, origen):
+def materialize_model_grading_rules_from_specs(model, specs, origen,
+                                               joc_anterior=JOC_ANTERIOR_NO_INFORMAT):
     """Com materialize_model_grading_rules però des d'SPECS (dicts uniformes de grading_utils),
     no objectes GradingRule. Permet barrejar regles de CONTENIDOR i residents-només-de-model
     (conflictes resolts 'model_resident' / camí sense contenidor) en una sola sembra selectiva.
-    Wipe-and-recreate idempotent per (model): el set resultant és EXACTAMENT `specs`.
+    Wipe-and-recreate idempotent per (model): el set resultant és `specs` **més les `MANUAL`
+    preservades** (decisió 6.1; v. `poms_manual_a_preservar`).
     origen: 'IMPORTED' (W5) | 'CANONICAL' | 'MANUAL'."""
     from fhort.models_app.models import ModelGradingRule
     from fhort.pom.grading_regime import normalitza_logica
-    model.grading_rules.all().delete()
+    preservats = poms_manual_a_preservar(model, joc_anterior)
+    if preservats:
+        model.grading_rules.exclude(origen='MANUAL').delete()
+    else:
+        model.grading_rules.all().delete()
+    specs = [s for s in specs if s['pom_id'] not in preservats]
     objs = [
         ModelGradingRule(
             model=model, pom_id=s['pom_id'],
