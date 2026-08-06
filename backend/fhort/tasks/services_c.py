@@ -58,6 +58,38 @@ def _log(task, frm, to, profile, auto=None):
                                   auto=auto)
 
 
+def _aplica_exclusio_tecnic(profile, task):
+    """D-6 — UN TÈCNIC, UN SOL TRAM OBERT. Punt únic per a TOTES les portes que li'n obren un.
+
+    F1.5 va ancorar l'exclusió a QUI TREBALLA (`TimerEntrada.tecnic`) i no a qui la té assignada
+    (`assignee` és planificació), i la va tancar a `transition_task`. Però el RELLEU no hi passa:
+    `claim` i la branca de handoff d'`open-task` criden `traspassa_tram` sense cap transició —«el
+    relleu no canvia l'estat»—, i `_open_timer` només tanca els trams D'AQUESTA TASCA. Un tècnic
+    amb feina oberta que es quedava la tasca d'un altre acabava amb DOS trams oberts: el mateix
+    mal que F1.5 va matar, viu per l'altra porta, i el temps tornava a ser imputable a dos llocs
+    alhora (que és el que contamina `record_actual_time` i el Welford, D-3).
+
+    Tanca els trams oberts del tècnic en QUALSEVOL altra tasca i pausa les que estaven En curs.
+    La pausa va MARCADA (`auto='exclusio_inprogress'`): no és un gest del tècnic sobre aquella
+    tasca —ell n'ha obert una altra i el sistema li ha tancat aquesta—, i sense la marca el log
+    li atribuiria una pausa que no va fer.
+
+    Retorna el pk de l'última tasca pausada (o None), per a qui vulgui dir-ho a la resposta.
+    """
+    paused_task_id = None
+    obertes = (ModelTask.objects
+               .filter(timers__tecnic=profile, timers__fi__isnull=True, timers__actiu=True)
+               .exclude(pk=task.pk).distinct())
+    for other in obertes:
+        _close_open_timer(other)
+        if other.status == 'InProgress':
+            other.status = 'Paused'
+            other.save(update_fields=['status', 'updated_at'])
+            _log(other, 'InProgress', 'Paused', profile, auto='exclusio_inprogress')
+        paused_task_id = other.pk
+    return paused_task_id
+
+
 class TransitionError(Exception):
     """Rebuig d'una transició de tasca.
 
@@ -245,19 +277,9 @@ def transition_task(task, to_status, profile, force=False, auto=None,
         #
         # Mirant els TRAMS OBERTS la invariant torna a ser certa per construcció: el que tanca
         # l'exclusió és exactament el que el rellotge considera «obert».
-        obertes = (ModelTask.objects
-                   .filter(timers__tecnic=profile, timers__fi__isnull=True, timers__actiu=True)
-                   .exclude(pk=task.pk).distinct())
-        for other in obertes:
-            _close_open_timer(other)
-            if other.status == 'InProgress':
-                other.status = 'Paused'
-                other.save(update_fields=['status', 'updated_at'])
-                # Aquesta pausa tampoc no és un gest sobre `other`: el tècnic n'ha obert una altra
-                # i el sistema li ha tancat aquesta. Sense marca, el log li atribuïa una pausa que
-                # no va fer.
-                _log(other, 'InProgress', 'Paused', profile, auto='exclusio_inprogress')
-            paused_task_id = other.pk
+        # V3 (06/08) — el bucle viu ara a `_aplica_exclusio_tecnic`, perquè el RELLEU també hi
+        # ha de passar i tenir-lo escrit dues vegades hauria deixat divergir les dues portes.
+        paused_task_id = _aplica_exclusio_tecnic(profile, task)
         # Obrir timer de la tasca que entra (T3: `origen` el decideix qui obre la porta)
         _open_timer(task, profile, origen=origen)
         if task.started_at is None:
@@ -352,6 +374,15 @@ def traspassa_tram(task, profile):
     ningú un gest que no ha fet. L'estat de la tasca no es toca: seguia `InProgress` i hi segueix
     — el que canvia és de qui és el rellotge.
 
+    V3 (06/08) — I L'EXCLUSIÓ TAMBÉ VAL PER AL QUE ARRIBA. `_open_timer` només tanca els trams
+    D'AQUESTA TASCA: un tècnic que ja treballava en una altra i es quedava aquesta n'acabava amb
+    DOS d'oberts, perquè el bucle d'exclusió vivia només a la branca `InProgress` de
+    `transition_task` i el relleu no hi passa (no canvia l'estat, i és correcte que no el canviï).
+    Ara el relleu crida el mateix `_aplica_exclusio_tecnic` que obrir una tasca: la feina que el
+    tècnic tenia oberta queda PAUSADA i marcada (`auto='exclusio_inprogress'`), i el rastre del
+    relleu (`auto='handoff'`) segueix intacte, que són dos fets diferents i s'han de poder llegir
+    per separat.
+
     Retorna el pk del tècnic anterior (o None si la tasca no tenia cap tram obert).
     """
     anterior = (TimerEntrada.objects
@@ -359,6 +390,7 @@ def traspassa_tram(task, profile):
                 .values_list('tecnic_id', flat=True).first())
     if anterior == profile.pk:
         return None                      # ja és seva: cap relleu
+    _aplica_exclusio_tecnic(profile, task)   # la feina que el nou tenia oberta, pausada
     _open_timer(task, profile)           # tanca TOTS els oberts i n'obre un per al nou
     if anterior is not None:
         _log(task, task.status, task.status, profile, auto='handoff')

@@ -160,3 +160,60 @@ class ExclusioHandoffTest(TenantTestCase):
         task = self._tasca()
         traspassa_tram(task, self.b)
         self.assertFalse(TaskTransition.objects.filter(model_task=task, auto='handoff').exists())
+
+    # ── V3 (06/08) · D-6 TAMBÉ PER LA PORTA DEL RELLEU ───────────────────────
+    # L'exclusió es va tancar a `transition_task`, i el relleu no hi passa: `claim` i la branca
+    # de handoff d'`open-task` criden `traspassa_tram` SENSE transició —correctament, perquè el
+    # relleu no canvia l'estat— i `_open_timer` només tanca els trams D'AQUESTA TASCA. Els cinc
+    # tests de handoff d'aquí sobre parteixen sempre de B SENSE feina pròpia, i per això el forat
+    # va sobreviure. Aquests tres parteixen de B ja treballant.
+
+    def test_EL_FORAT_qui_fa_el_relleu_amb_feina_oberta_no_acaba_amb_dos_trams(self):
+        """🔴 EL CAS. B treballa a la seva tasca i es queda la d'A: si l'exclusió no val per al
+        relleu, B acaba amb DOS trams oberts i el temps torna a ser imputable a dos llocs
+        alhora — exactament el mal que F1.5 va matar, per l'altra porta."""
+        seva = self._tasca()
+        transition_task(seva, 'InProgress', self.b)
+        de_l_altre = self._tasca()
+        transition_task(de_l_altre, 'InProgress', self.a)
+
+        traspassa_tram(de_l_altre, self.b)
+
+        self.assertEqual(self._trams_oberts(self.b).count(), 1,
+                         'B ha quedat amb dos trams oberts: la invariant cau pel relleu')
+        self.assertEqual(self._trams_oberts(self.b).get().model_task_id, de_l_altre.pk)
+        seva.refresh_from_db(); de_l_altre.refresh_from_db()
+        self.assertEqual(seva.status, 'Paused')
+        self.assertEqual(de_l_altre.status, 'InProgress', "el relleu no canvia l'estat")
+
+    def test_la_pausa_del_relleu_va_marcada_i_no_es_confon_amb_el_handoff(self):
+        """Dos fets diferents, dues files diferents: la feina que B deixa queda marcada
+        `exclusio_inprogress` (no és un gest seu sobre aquella tasca) i el relleu manté la seva
+        `handoff`. Si es confonguessin, el log no podria dir per què va parar la primera."""
+        seva = self._tasca()
+        transition_task(seva, 'InProgress', self.b)
+        de_l_altre = self._tasca()
+        transition_task(de_l_altre, 'InProgress', self.a)
+
+        traspassa_tram(de_l_altre, self.b)
+
+        pausa = TaskTransition.objects.filter(model_task=seva, auto='exclusio_inprogress').get()
+        self.assertEqual(pausa.by, self.b)
+        self.assertEqual((pausa.from_status, pausa.to_status), ('InProgress', 'Paused'))
+        relleu = TaskTransition.objects.filter(model_task=de_l_altre, auto='handoff').get()
+        self.assertEqual(relleu.by, self.b)
+        self.assertFalse(TaskTransition.objects
+                         .filter(model_task=de_l_altre, auto='exclusio_inprogress').exists())
+
+    def test_el_relleu_no_toca_la_feina_d_ALTRES_tecnics(self):
+        """L'exclusió és PER TÈCNIC: que B es quedi una tasca no pot aturar el que fa C en una
+        altra. D-8 segueix valent — el que no es pot és tenir-ne dues un mateix."""
+        de_c = self._tasca()
+        transition_task(de_c, 'InProgress', self.a)   # A fa de tercer tècnic aquí
+        objectiu = self._tasca()
+
+        traspassa_tram(objectiu, self.b)
+
+        de_c.refresh_from_db()
+        self.assertEqual(de_c.status, 'InProgress')
+        self.assertEqual(self._trams_oberts(self.a).count(), 1)
