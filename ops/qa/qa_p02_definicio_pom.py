@@ -16,8 +16,14 @@ import json
 import mimetypes
 import pathlib
 import sys
+import urllib.error
+import urllib.request
 
 from playwright.sync_api import sync_playwright
+
+# El backend DESPLEGAT (gunicorn), no el codi del disc. La diferència entre els dos és
+# exactament el que aquest fum no veia (v. `ruta_viva`).
+BACKEND_VIU = 'http://127.0.0.1:8001'
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 DIST = REPO / 'frontend' / 'dist'
@@ -58,6 +64,29 @@ def fes_handler(dicc_ok=True):
     return _handler
 
 
+def ruta_viva(path):
+    """El PROCÉS QUE SERVEIX té aquesta ruta? Torna el codi HTTP.
+
+    ⚠️ AQUESTA ÉS LA COMPROVACIÓ QUE FALTAVA. Fins al 06/08 aquest fum estubejava la crida del
+    diccionari, o sigui que provava la pantalla contra una API imaginària i donava verd mentre
+    l'Agus rebia 404 a cada intent. El codi del disc tenia la ruta i `manage.py check` sortia
+    net; el que no la tenia era el gunicorn VIU, arrencat nou hores abans que la ruta existís.
+    Un fum que només mira el codi del disc no pot veure mai aquesta classe de defecte.
+
+    Sense credencial, una ruta VIVA amb `IsAuthenticated` respon 401 i una que no existeix, 404.
+    És, precisament, la distinció que ens interessa: 404 = el procés no la té.
+    """
+    req = urllib.request.Request(f'{BACKEND_VIU}{path}',
+                                 headers={'Host': 'staging.fhorttextile.tech'})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
+    except OSError as e:
+        return f'sense resposta ({e})'
+
+
 def _capcaleres(page):
     """El text de les capçaleres de la taula, en minúscules."""
     caps = page.locator('table thead')
@@ -86,6 +115,17 @@ def main():
     noms_eix = [e['nom_ca'] for e in eixos]
     fallides = []
 
+    # ── 0 · LA RUTA, AL BACKEND QUE SERVEIX ────────────────────────────────
+    # Va PRIMER i sense navegador: si el procés no té la ruta, tota la resta és teatre.
+    codi = ruta_viva(DICC)
+    if codi == 404:
+        fallides.append(f'{DICC} → 404 al backend VIU: el procés desplegat no té la ruta '
+                        f'(codi al disc ≠ codi que corre → cal reiniciar el servei)')
+    elif not isinstance(codi, int):
+        fallides.append(f'{DICC} → {codi}')
+    else:
+        print(f'  ✓ 0 · la ruta és VIVA al backend desplegat (HTTP {codi} sense credencial)')
+
     with sync_playwright() as p:
         b = p.chromium.launch()
         ctx = b.new_context(base_url=BASE, ignore_https_errors=True,
@@ -105,6 +145,25 @@ def main():
                             f'esperades {noms_eix}, trobades {trobats}')
         if errs:
             fallides.append(f'A · error de pàgina: {errs[0][:140]}')
+
+        # A2 · F5 × 3 — la cache del diccionari viu a nivell de MÒDUL, i una recàrrega la
+        # buida: si el vocabulari només arribés al primer muntatge, es veuria aquí.
+        for volta in (1, 2, 3):
+            page.reload(wait_until='networkidle')
+            page.wait_for_timeout(1400)
+            caps = _capcaleres(page)
+            falten = [n for n in noms_eix if n.lower() not in caps]
+            if falten:
+                fallides.append(f'A · F5 #{volta}: falten les columnes {falten}')
+        if not any('F5' in f for f in fallides):
+            print('  ✓ A · F5 × 3 · les columnes hi segueixen a cada recàrrega')
+
+        # A3 · cap 404 a la consola. És el que l'Agus veia i el fum no mirava.
+        quatre04 = [c for c in cons if '404' in c]
+        if quatre04:
+            fallides.append(f'A · 404 a la consola: {quatre04[0][:140]}')
+        else:
+            print('  ✓ A · consola sense cap 404')
         page.close()
 
         # ── B · diccionari CAIGUT ──────────────────────────────────────────
