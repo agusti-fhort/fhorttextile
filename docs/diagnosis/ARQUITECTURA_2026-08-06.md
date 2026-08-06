@@ -13,6 +13,21 @@
 
 ---
 
+> ## ⏱⏱ SEGONA ACTUALITZACIÓ · LA NIT DEL 06/08 (tram N1-N6, règim nocturn sense l'Agus)
+> El detall viu a [`REPORT_NIT_CAPES.md`](REPORT_NIT_CAPES.md) i la diagnosi que l'acompanya a
+> [`DIAGNOSI_VOCABULARIS.md`](DIAGNOSI_VOCABULARIS.md). El que aquesta nit canvia d'aquest
+> document:
+>
+> | punt | què n'ha estat |
+> |---|---|
+> | **§2.1-bis · els 3 camins de wipe que quedaven oberts** | ✅ **TANCATS TRES DELS QUATRE** per la decisió 6.1 (commit 86, `f8dd7eb7`): `update-step2`, `copiar_de_model` i el command `migra_brownie_ruleset` ja preserven les `MANUAL` d'autoria. W5 en tanca una branca de dues. |
+> | §2.1-bis · la 4a branca (W5 amb contenidor INTOCABLE) | 🔴 **OBERTA A POSTA** — preservar-hi una sola resident desactivaria el contenidor per als altres POMs (`_load_grading_rules` és all-or-nothing). Anotat a `extraction_views.py`. |
+> | §2.9 · els `SizingProfile` sense validació | 🟡 segueix obert, però ara el run **es descriu a si mateix** (N1): l'àmbit ja no exigeix inventar-se un perfil ni una graduació. |
+> | §2.7 · `TGIRL-EU-HEIGHT` | 🟡 classificat com a `ALTURA` per N1, i **proposat per a esborrat** al cens (no executat: cap esborrat aquesta nit). |
+> | **NOU · `TODDLER_EU` menteix amb el seu `base_unit`** | 🚩 `AGE_YEARS` amb etiquetes que són alçades en cm. Detectat per l'algorisme de N1 i **no corregit** (és dada, i la dada és de l'Agus). |
+> | **NOU · el vocabulari de grup té dues fonts** | 🚩 12 codis a BD contra 7 cablejats a `gradingAxes.js:49-57`. **`NEWBORN`, amb 162 POM Systems vius, es pinta amb el nom cru i l'últim de la fila.** Detall a `DIAGNOSI_VOCABULARIS.md` §T1.4. |
+> | §1.2/P11 · els fums de navegador | 🔴 **segueixen sense poder córrer**: `fhort` té 0 models. La nit ha verificat N1-N3 amb un fum **read-only** propi (`ops/qa/qa_n_capes_run.py`). |
+
 > ## ⏱ ACTUALITZAT LA NIT DEL 06/08 (tram V1-V6)
 > Aquest document és de la tarda. La nit del mateix dia se'n van tancar peces; el detall i
 > l'auditoria SQL viuen a [`REPORT_VESPRE_FORATS.md`](REPORT_VESPRE_FORATS.md). Estat per punt:
