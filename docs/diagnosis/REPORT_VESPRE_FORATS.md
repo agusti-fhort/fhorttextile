@@ -302,17 +302,56 @@ I `qa_q34_presa_reconciliada.py`, que corre contra dades **vives**, moria amb un
 
 ### 6.2 · Els controls sobre el HEAD final
 
+**Per peça, en commitar-la** (BD de tests sana, correguda de debò):
+
 | control | resultat |
 |---|---|
 | `manage.py check` | net |
-| `tests_sembra_grading` | **84/84 OK** |
-| suite `fhort.tasks` | **239/239 OK** |
+| `tests_sembra_grading` (amb els 7 de V1) | **84/84 OK** |
+| suite `fhort.tasks` (amb els 3 de V3) | **239/239 OK** |
 | `node --test src/utils/*.test.js` | **154/154 OK** |
 | `npm run build` | net |
 | eslint | 0 errors · **mateix perfil d'alertes que a la base** a tots els fitxers tocats |
 | fums de navegador (11) | ✅ muntatge · P0.2 · P0.2b · **P0.5d** · P0.6 · P0.7 · P0.8 · Q1 · Q2 · Q4 |
 | fums contra dades vives | ⏸️ q34 i els generadors: **a l'espera dels models de QA nous** (conseqüència esperada de V4, i ara ho DIUEN) |
 | restart + rutes vives | `update-step2` 401 · `claim` 401 · `xat-mesures` 401 · `regim` 401 |
+
+**Segell final per apps, SENSE `--keepdb`** (que és com la casa el fa):
+
+| suite | tests | resultat |
+|---|---|---|
+| `fhort.models_app` | 556 | **OK** |
+| `fhort.pom` | 218 | **OK** |
+| `fhort.tasks` + `fhort.fitting` | 326 | **OK** |
+| **total backend** | **1.100** | **verd** |
+
+> ⚠️ **A qui atribuir aquest segell.** Les dues últimes corregudes van córrer amb una **sessió
+> concurrent treballant sobre la mateixa branca** (commits 82-85, tram N1-N5) i amb feina seva
+> **sense commitar** al disc a `views.py`, `services.py`, `extraction_views.py`,
+> `migra_brownie_ruleset.py` i `tests_sembra_grading.py`. Django prova el DISC, no el HEAD de git:
+> el verd cobreix la barreja, no només els commits 72-81. Cap vermell, però el número no és
+> atribuïble a una sola mà.
+
+#### El parany del `--keepdb`, documentat perquè no torni a costar una hora
+
+La primera passada d'app sencera va donar **70 errors, tots a `setUpClass`** i cap dins d'un test.
+No era producte: era **residu**. Una correguda anterior havia mort per SIGTERM entre `setUpClass` i
+`tearDownClass` i havia deixat la fila `tenants_client(schema_name='test')` i el seu schema dins de
+la BD de proves reutilitzada, i `TenantTestCase.setUpClass` xoca amb la constraint única.
+
+Netejat el residu (`DELETE` de la fila + `DROP SCHEMA test CASCADE` sobre `test_ftt_staging`, mai
+sobre `ftt_staging`), la mateixa correguda va passar de 146 tests arrencats a 442 amb 17 errors —
+la **cua** de l'execució, perquè `TenantTestCase` hereta de `TransactionTestCase` i Django les posa
+al final. Classe per classe passaven totes (`PermisIDestruccioMirenElMateixTest` 7/7,
+`tests.py` 19/19) i cap deixava rastre.
+
+**Sense `--keepdb`: 556 tests, verd.** La lliçó és la convenció que ja hi era i el motiu pel qual hi
+és: *el segell es fa sense `--keepdb`*. I dues de mètode, pagades aquesta nit:
+- **`timeout` en una correguda llarga**: el `timeout 3000` que li vaig posar la va matar als 50
+  minuts i va fabricar el residu.
+- **Filtrar massa fi**: `... | grep -E "^(OK|FAILED|Ran )"` sobre una correguda que peta a
+  l'arrencada retorna **buit** i un `exit 1` mut. Cal capturar la sortida sencera a fitxer i
+  filtrar després.
 
 ### 6.3 · Grep de qui més llegia el que s'ha tocat
 
