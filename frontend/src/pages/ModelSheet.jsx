@@ -674,12 +674,22 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     }
   }, [loading, activeTab, fittingSessionParam, taskParam, id, t])
 
-  // Sprint Y — retorn després de gravar/descartar la sessió (Y5): a la fulla del grup si ve d'una
-  // convocatòria; si no, a la llista de fittings.
+  // Q4 (06/08) — «GRAVAR I TORNAR» TORNA D'ON VENIES: el tab Mesures del model.
+  //
+  // Anava a la fulla de la convocatòria (o a la llista), i la fulla, en veure la sessió ja
+  // segellada, reenviava a la FITXA del fitting (`FittingConvocatoriaSheet:71`): es gravava des
+  // de Mesures i s'aterrava en una acta de només lectura d'una altra pantalla. La fitxa és
+  // consultable des de Repàs de fittings; no és la sortida d'aquest gest.
+  //
+  // Se surt pel camí de sortida de sempre (`exitEdit`), que és qui pregunta al servidor si la
+  // tasca segueix viva i, si cal, obre el modal d'acabar/pausar. `netejaEdicio` treu
+  // `fitting_session` de la URL (és un `PARAMS_DE_TREBALL`) i amb això la superfície torna sola
+  // a la consulta de Mesures. El tab de retorn es fixa aquí perquè les entrades per URL (fulla
+  // de convocatòria, WorkPlan) no passen per `obreDeDebo` i no en tenen cap d'apuntat.
   const onSessionSaved = useCallback(() => {
-    const conv = fittingSession?.convocatoria
-    navigate(conv ? `/fittings/convocatoria/${conv}` : '/fittings')
-  }, [fittingSession, navigate])
+    tabDeRetornRef.current = 'Mesures'
+    exitEdit()
+  }, [exitEdit])
 
   // BLOC 1 — pom via URL ?mode=entry (WorkPlan/menú "Definició POM"): la tasca ve En curs però SENSE task_id
   // a la URL, així que el ModelSheet no la coneixia → quedava InProgress orfe (GAP P3 pom). La registrem pel
