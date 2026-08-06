@@ -139,23 +139,45 @@ const regleInput = {
   textAlign: 'right', border: `1px solid ${BORDER}`, borderRadius: 3, background: 'var(--white)',
   color: 'var(--text-main)', boxSizing: 'border-box',
 }
+const normRegle = (v) => (v === null || v === undefined ? '' : String(v).trim())
 function RegleEditCell({ modelId, row, sizeRun, onFeedback }) {
   const { t } = useTranslation()
   const [delta, setDelta] = useState(row.increment_base ?? '')
   const [brk, setBrk] = useState(row.increment_break ?? '')
   const [brkSize, setBrkSize] = useState(row.talla_break_label ?? '')
+  // L'ÚLTIM ESTAT DESAT. El `onBlur` no és una intenció de desar: salta també quan només s'ha
+  // passat pel camp. Sense aquesta referència, tabular per la taula feia un POST per fila, i
+  // `set_pom_regim_view` MATERIALITZA la resident des del fallback del catàleg i li estampa
+  // `origen='MANUAL'` — una passada de teclat convertia el patrimoni heretat en autoria humana.
+  const desat = useRef({
+    d: row.increment_base ?? '', b: row.increment_break ?? '', bs: row.talla_break_label ?? '',
+  })
   useEffect(() => {
     setDelta(row.increment_base ?? ''); setBrk(row.increment_break ?? '')
     setBrkSize(row.talla_break_label ?? '')
+    desat.current = {
+      d: row.increment_base ?? '', b: row.increment_break ?? '', bs: row.talla_break_label ?? '',
+    }
   }, [row.pom_id, row.increment_base, row.increment_break, row.talla_break_label])
 
   const save = (d, b, bs) => {
-    models.setPomRule(modelId, row.pom_id, {
-      logica: 'LINEAR',
-      increment_base: d === '' ? null : d,
-      talla_break_label: bs || null,
-      increment_break: bs ? (b === '' ? null : b) : null,
-    }).catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.regle_save_err') }))
+    const ref = desat.current
+    // NOMÉS ELS CAMPS CANVIATS: `set_pom_regim_view` actualitza per PRESÈNCIA de clau (views.py:4619),
+    // igual que fa `GraduacioSuperficie.grava` — el que no s'envia no es toca.
+    const brkVal = normRegle(bs) ? (normRegle(b) === '' ? null : b) : null
+    const payload = {}
+    if (normRegle(d) !== normRegle(ref.d)) payload.increment_base = normRegle(d) === '' ? null : d
+    if (normRegle(bs) !== normRegle(ref.bs)) payload.talla_break_label = normRegle(bs) || null
+    if (normRegle(brkVal) !== normRegle(ref.b)) payload.increment_break = brkVal
+    if (!Object.keys(payload).length) return          // res ha canviat: cap escriptura
+    // CAP RÈGIM PER DEFECTE (lliçó del 31/07). S'enviava `logica:'LINEAR'` sempre: una fila que
+    // heretava una altra lògica del catàleg quedava reescrita a LINEAR sense que ningú ho demanés.
+    // Només es declara el règim quan la fila NO en té cap i algú hi acaba d'escriure un delta o un
+    // trencament — el mateix criteri que `GraduacioSuperficie` (:158-162). Si ja en té, no es toca.
+    if (!row.logica && (normRegle(d) !== '' || normRegle(bs) !== '')) payload.logica = 'LINEAR'
+    models.setPomRule(modelId, row.pom_id, payload)
+      .then(() => { desat.current = { d, b: brkVal, bs } })
+      .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.regle_save_err') }))
   }
   if (row.logica === 'STEP') {
     // Règim irregular (STEP): no es desglossa a delta+break; es mostra inert (s'edita al fitting).
