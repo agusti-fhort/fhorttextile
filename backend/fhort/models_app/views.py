@@ -1023,6 +1023,16 @@ def update_model_step2(request, model_id):
         return Response({'error': 'Model no trobat'}, status=404)
 
     d = request.data
+    # ── F1-bis (Agus, 06/08 vespre) · EL PERMÍS I LA DESTRUCCIÓ MIREN EL MATEIX ──────────────
+    # EL JOC QUE EL MODEL TENIA ABANS que el resolutor toqui res. Sense aquesta foto, «ha
+    # canviat el joc?» no es pot respondre —a partir del `setattr` de sota el model ja porta el
+    # valor nou— i era exactament aquí que s'obria el forat: el permís (409 de D-31.4) mirava el
+    # PAYLOAD (`d.get('grading_rule_set_id')`) i la destrucció mirava l'ESTAT DEL MODEL
+    # (`model.grading_rule_set_id`). El predicat destructiu era el més ample, o sigui que
+    # QUALSEVOL `update-step2` sobre un model amb joc —un canvi de talla base, un canvi de
+    # construcció, res a veure amb la graduació— reescrivia les residents i es menjava les
+    # `origen='MANUAL'` sense 409, sense Watchpoint i sense que ningú hagués parlat de graduar.
+    grs_abans = model.grading_rule_set_id
     # Pas 5A — reutilitza el mateix resolutor que la creació (inclou garment_type_item_id).
     # S24b: se li passa el `model` perquè pugui ordenar el run contra el SizeSystem que ja té
     # quan el PATCH porta `size_run` sense `size_system_id`.
@@ -1034,41 +1044,83 @@ def update_model_step2(request, model_id):
     if d.get('collection') is not None:
         model.collection = d['collection'] or ''
 
+    # ── LES DUES PORTES QUE DESTRUEIXEN REGLES, i el que les separa de les que no en toquen cap.
+    # `canvia_joc` és el predicat ÚNIC: el joc entra al payload **i** el valor és un altre. Un
+    # PATCH que no parla de graduació —o que reenvia el joc que el model ja té— no toca cap regla.
+    joc_demanat = d.get('grading_rule_set_id') or None
+    desacobla_joc = 'grading_rule_set_id' in d and not joc_demanat and bool(grs_abans)
+    canvia_joc = bool(joc_demanat) and model.grading_rule_set_id != grs_abans
+    confirmat_residents = bool(d.get('confirmar_esborrat_residents'))
+    residents_perdudes = (0, {})
+    motiu_watchpoint = None
+
     # WIZARD pas 4 «Sense graduació» en EDICIÓ: buidatge EXPLÍCIT del ruleset. El resolutor només
     # ASSIGNA quan grading_rule_set_id és truthy (mai neteja); aquí, si la clau ve present i buida
     # (null), es desacobla la graduació i s'esborren les regles residents (queda estat "sense graduació",
     # vàlid). Idempotent i acotat a la intenció explícita del pas 4 — cap efecte si la clau no ve.
-    if 'grading_rule_set_id' in d and not d.get('grading_rule_set_id') and model.grading_rule_set_id:
+    #
+    # D-31.4 · LA SEGONA PORTA (Agus, 06/08 vespre). «Sense graduació» diu que desacobla el JOC;
+    # no diu que s'endugui les regles que el tècnic ha escrit A MÀ, i qui prem el botó espera
+    # quedar-se-les. Com que el gest les mata, ha de demanar permís amb el recompte al davant —i
+    # no pot sortir més barat que canviar de joc, que ja el demanava.
+    # El `tipus` és el MATEIX ('esborrat_residents') A POSTA: el fet és idèntic —les residents
+    # cauen— i el front ja el sap gestionar (`useConfirmacioRuleset.FLAG_PER_TIPUS`, mateix flag,
+    # mateix resum per origen). El que canvia és la CAUSA, i la causa viu al `message`, que el
+    # redacta el backend perquè és qui sap el recompte.
+    if desacobla_joc:
+        _total, _per_origen = comptar_regles_residents(model)
+        if _total and not confirmat_residents:
+            _detall = ' · '.join(f'{n} {o}' for o, n in sorted(_per_origen.items()))
+            _n_imported = _per_origen.get('IMPORTED', 0)
+            return Response({
+                'conflict': True,
+                'tipus': 'esborrat_residents',
+                'codi': 'GRADING_RESIDENTS_WIPE',
+                'model_id': model.id,
+                'residents': _total,
+                'per_origen': _per_origen,
+                'imported': _n_imported,
+                'message': (
+                    f"Aquest model té {_total} regles de graduació pròpies ({_detall}). "
+                    f"Deixar-lo sense graduació les esborrarà totes."
+                    + (f" {_n_imported} d'elles vénen del document del client (IMPORTED)."
+                       if _n_imported else '')
+                    + " Confirma-ho per continuar."),
+            }, status=409)
         model.grading_rule_set = None
         model.grading_rules.all().delete()
+        residents_perdudes = (_total, _per_origen)
+        motiu_watchpoint = 'desacoblat_graduacio'
 
     # D1 — valida ABANS de desar i abans del wipe-and-recreate. Es valida contra els valors
     # POSTERIORS a l'assignació (el mateix PATCH pot canviar size_system), i només quan el
-    # ruleset ve al payload: re-desar un model sense tocar la graduació no ha de rebotar.
-    residents_abans = (0, {})
-    if d.get('grading_rule_set_id') and model.grading_rule_set_id:
+    # ruleset CANVIA de debò: re-desar un model sense tocar la graduació —o reenviant el joc
+    # que ja hi és— no ha de rebotar ni ha de destruir res.
+    if canvia_joc:
         # D-31.4 — el recompte es pren AQUÍ, abans de validar i abans de desar: a partir de
         # `model.save()` el wipe-and-recreate de :1001 ja les haurà esborrades i el rastre no
         # podria dir quantes n'hi havia.
-        residents_abans = comptar_regles_residents(model)
+        residents_perdudes = comptar_regles_residents(model)
+        motiu_watchpoint = 'esborrat_residents'
         _err = _validar_ruleset_assignable(
             model.grading_rule_set,
             size_system_id=model.size_system_id,
             customer_id=model.customer_id,
             confirmat=bool(d.get('confirmar_altre_client')),
             model=model,
-            confirmat_residents=bool(d.get('confirmar_esborrat_residents')),
+            confirmat_residents=confirmat_residents,
         )
         if _err is not None:
             payload, status_code = _err
             return Response(payload, status=status_code)
 
     model.save()
-    # PG-2 Cas B: re-materialitza si hi ha ruleset (wipe-and-recreate cobreix canvi de profile).
+    # PG-2 Cas B: re-materialitza NOMÉS quan el joc canvia (F1-bis). El wipe-and-recreate cobreix
+    # el canvi de profile; el que no pot cobrir és un PATCH que no parla de graduació.
     # L'atomic embolcalla només la materialització → si peta, el model queda sense MGR i gradua
     # pel fallback PG-1 (ruleset extern). Degradació gràcil INTENCIONAL, no descuit.
     n_regles = None
-    if model.grading_rule_set_id:
+    if canvia_joc:
         from django.db import transaction
         from fhort.models_app.services import (materialize_model_grading_rules,
                                                origen_mgr_des_de_ruleset)
@@ -1092,17 +1144,30 @@ def update_model_step2(request, model_id):
     # el llegeix qui el va a buscar, i el Watchpoint viatja AMB EL MODEL a través dels gates, que
     # és on el trobarà el tècnic que d'aquí a un mes es pregunti on han anat les seves regles.
     # Neix `open` (default del model) i el tanca qui hagi comprovat que la graduació nova és bona.
-    n_residents, per_origen = residents_abans
+    n_residents, per_origen = residents_perdudes
     if n_residents:
         from fhort.models_app.models import Watchpoint
         _perfil = getattr(request.user, 'profile', None)
         _detall = ' · '.join(f'{n} {o}' for o, n in sorted(per_origen.items()))
-        Watchpoint.objects.create(
-            model=model, task=None, created_by=_perfil,
-            text=(f"Assignat el joc de regles «{model.grading_rule_set.nom}» "
-                  f"(#{model.grading_rule_set_id}) esborrant {n_residents} regles pròpies "
-                  f"del model ({_detall}). Verifica la graduació abans d'entregar."),
-            dades={
+        if motiu_watchpoint == 'desacoblat_graduacio':
+            # La segona porta deixa el MATEIX rastre que la primera: el tècnic que d'aquí a un
+            # mes es pregunti on han anat les seves regles ha de trobar la resposta al model,
+            # tant si les va matar un canvi de joc com si les va matar un «Sense graduació».
+            _text = (f"Desacoblada la graduació del model (joc #{grs_abans}), esborrant "
+                     f"{n_residents} regles pròpies ({_detall}). El model queda SENSE "
+                     f"graduació. Verifica-ho abans d'entregar.")
+            _dades = {
+                'tipus': 'desacoblat_graduacio',
+                'grading_rule_set_id': grs_abans,
+                'residents': n_residents,
+                'per_origen': per_origen,
+                'imported': per_origen.get('IMPORTED', 0),
+            }
+        else:
+            _text = (f"Assignat el joc de regles «{model.grading_rule_set.nom}» "
+                     f"(#{model.grading_rule_set_id}) esborrant {n_residents} regles pròpies "
+                     f"del model ({_detall}). Verifica la graduació abans d'entregar.")
+            _dades = {
                 'tipus': 'esborrat_residents',
                 'grading_rule_set_id': model.grading_rule_set_id,
                 'grading_rule_set_nom': model.grading_rule_set.nom,
@@ -1110,8 +1175,9 @@ def update_model_step2(request, model_id):
                 'per_origen': per_origen,
                 'imported': per_origen.get('IMPORTED', 0),
                 'regles_materialitzades': n_regles,
-            },
-        )
+            }
+        Watchpoint.objects.create(model=model, task=None, created_by=_perfil,
+                                  text=_text, dades=_dades)
 
     return Response({
         'id': model.id,

@@ -1382,3 +1382,186 @@ class EsborratResidentsD314Test(_BaseSembraTest):
 
         self.assertIsNone(_validar_ruleset_assignable(
             self.rs, size_system_id=self.ss.id, customer_id=self.client_a.id))
+
+
+class PermisIDestruccioMirenElMateixTest(_BaseSembraTest):
+    """F1-bis (06/08) — D-31.4 demanava permís mirant una cosa i el codi en destruïa una altra.
+
+    ── EL DEFECTE ─────────────────────────────────────────────────────────────────────────
+    Dos predicats per al mateix acte:
+      · el 409 que demana permís mirava el PAYLOAD          → `d.get('grading_rule_set_id')`
+      · el wipe-and-recreate que destrueix mirava el MODEL  → `model.grading_rule_set_id`
+    El destructiu era el més AMPLE. Conseqüència viva: QUALSEVOL `update-step2` sobre un model
+    amb joc assignat —canviar la talla base, la construcció, el run: coses que no parlen de
+    graduació— reescrivia totes les residents i es menjava les `origen='MANUAL'` sense 409,
+    sense Watchpoint i sense que la resposta ho digués. El camí mut més fàcil d'encertar:
+    editar el model al wizard fins que el joc hidratat deixi de casar (`ModelWizard.jsx:405`
+    posa `gradingRuleSetId=null` → `skeletonPayload` ja no envia la clau) i desar.
+
+    ── LA LLEI ────────────────────────────────────────────────────────────────────────────
+    PERMÍS I DESTRUCCIÓ MIREN EL MATEIX. Un sol predicat, `canvia_joc`: la clau entra al
+    payload **i** el valor és un altre. Si no canvia, no es toca cap regla. I les DUES portes
+    destructives —canviar de joc i desacoblar-lo («Sense graduació»)— demanen el mateix permís
+    i deixen el mateix rastre: desacoblar no pot sortir més barat que canviar.
+
+    El motor de materialització NO es toca; només QUAN es crida.
+    """
+
+    PREFIX = 'F1B'
+
+    def setUp(self):
+        super().setUp()
+        self.item = self._item()
+        self.pom = self._pom('A')
+        GarmentPOMMap.objects.create(garment_type_item=self.item, pom=self.pom, ordre=0)
+        self.ss = self._size_system('SS_F1B')
+        self.cli = Customer.objects.create(codi='F1A', nom='Client F1-bis')
+        self.model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
+                                 size_system=self.ss, size_run_model='S·M·L',
+                                 base_size_label='M', customer=self.cli)
+        self.joc_a = self._joc('JOC_A')
+        self.joc_b = self._joc('JOC_B')
+        # ESTAT DE PARTIDA: el model ja té el joc A (i, per tant, les seves residents).
+        self.assertEqual(
+            self._step2(self.model, {'grading_rule_set_id': self.joc_a.id}).status_code, 200)
+        self.model.refresh_from_db()
+
+    def _joc(self, nom):
+        # `origen=CLIENT_RUN` EXPLÍCIT i no per defecte: un ruleset sense origen classificat
+        # materialitza les seves residents com a 'MANUAL' (`origen_mgr_des_de_ruleset`), i
+        # llavors «el que ve del joc» i «el que ha escrit el tècnic» es dirien igual —
+        # justament la distinció que aquests tests han de poder fer.
+        rs = GradingRuleSet.objects.create(nom=self._codi(nom), size_system=self.ss,
+                                           customer=self.cli,
+                                           origen=GradingRuleSet.ORIGEN_CLIENT_RUN)
+        GradingRule.objects.create(
+            rule_set=rs, pom=self.pom, talla_base=self.ss.talles.get(etiqueta='M'),
+            logica=GradingRule.LOGICA_LINEAR, increment='1.00', actiu=True)
+        return rs
+
+    def _manual(self, codi):
+        """Una regla escrita A MÀ pel tècnic — el que la pantalla nova de Graduació crea."""
+        return ModelGradingRule.objects.create(
+            model=self.model, pom=self._pom(codi),
+            logica=GradingRule.LOGICA_LINEAR, increment='2.00', origen='MANUAL', actiu=True)
+
+    def _regles(self):
+        return ModelGradingRule.objects.filter(model=self.model)
+
+    def _watchpoints(self):
+        from fhort.models_app.models import Watchpoint
+        return Watchpoint.objects.filter(model=self.model)
+
+    # ── (a) el cas que mossegava ──────────────────────────────────────────────
+
+    def test_un_patch_que_no_parla_de_graduacio_no_toca_cap_regla(self):
+        """🔴 EL CAS. Un PATCH sense `grading_rule_set_id` sobre un model amb joc."""
+        self._manual('MAN1')
+        self._manual('MAN2')
+        ids_abans = sorted(r.id for r in self._regles())
+
+        resp = self._step2(self.model, {'size_run': 'S·M', 'base_size': 'M'})
+
+        self.assertEqual(resp.status_code, 200)
+        # Ni una regla tocada: els MATEIXOS ids, no només el mateix recompte —un
+        # wipe-and-recreate deixaria el mateix nombre de files amb ids nous.
+        self.assertEqual(sorted(r.id for r in self._regles()), ids_abans)
+        self.assertEqual(self._regles().filter(origen='MANUAL').count(), 2)
+        self.assertIsNone(resp.data['regles_materialitzades'])
+        self.assertFalse(self._watchpoints().exists())
+        # I el PATCH sí que ha fet la seva feina.
+        self.model.refresh_from_db()
+        self.assertEqual(self.model.size_run_model, 'S·M')
+        self.assertEqual(self.model.grading_rule_set_id, self.joc_a.id)
+
+    # ── (b) i (c) · canviar de joc segueix demanant permís i deixant rastre ───
+
+    def test_canviar_de_joc_amb_MANUAL_vives_avisa_amb_recompte(self):
+        self._manual('MAN1')
+
+        resp = self._step2(self.model, {'grading_rule_set_id': self.joc_b.id})
+
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data['tipus'], 'esborrat_residents')
+        self.assertEqual(resp.data['residents'], 2)          # la MANUAL + la del joc A
+        self.assertEqual(resp.data['per_origen'].get('MANUAL'), 1)
+        self.assertEqual(self._regles().filter(origen='MANUAL').count(), 1)
+        self.model.refresh_from_db()
+        self.assertEqual(self.model.grading_rule_set_id, self.joc_a.id)
+
+    def test_canvi_de_joc_confirmat_esborra_i_deixa_watchpoint(self):
+        self._manual('MAN1')
+
+        resp = self._step2(self.model, {'grading_rule_set_id': self.joc_b.id,
+                                        'confirmar_esborrat_residents': True})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['residents_esborrades'], 2)
+        self.model.refresh_from_db()
+        self.assertEqual(self.model.grading_rule_set_id, self.joc_b.id)
+        self.assertEqual([r.pom_id for r in self._regles()], [self.pom.id])
+        wp = self._watchpoints().get()
+        self.assertEqual(wp.dades['tipus'], 'esborrat_residents')
+        self.assertEqual(wp.dades['per_origen'].get('MANUAL'), 1)
+
+    # ── (d) reenviar el mateix joc és un NO-OP ────────────────────────────────
+
+    def test_reenviar_el_mateix_joc_no_toca_res_ni_rebota(self):
+        """Desar dues vegades seguides la mateixa pantalla no és canviar de joc. Abans
+        d'aquest fix rebotava amb 409 o —confirmat— destruïa les MANUAL sense motiu."""
+        self._manual('MAN1')
+        ids_abans = sorted(r.id for r in self._regles())
+
+        resp = self._step2(self.model, {'grading_rule_set_id': self.joc_a.id})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(sorted(r.id for r in self._regles()), ids_abans)
+        self.assertIsNone(resp.data['regles_materialitzades'])
+        self.assertEqual(resp.data['residents_esborrades'], 0)
+        self.assertFalse(self._watchpoints().exists())
+
+    # ── la SEGONA porta · «Sense graduació» (Agus, 06/08 vespre) ──────────────
+
+    def test_desacoblar_amb_residents_demana_permis(self):
+        """«Sense graduació» diu que desacobla el JOC; no diu que s'endugui les regles escrites
+        a mà. Com que les mata, ha de demanar permís amb el recompte davant."""
+        self._manual('MAN1')
+
+        resp = self._step2(self.model, {'grading_rule_set_id': None})
+
+        self.assertEqual(resp.status_code, 409)
+        # MATEIX `tipus` que l'altra porta a posta: el fet és el mateix i el front ja el sap
+        # gestionar (`useConfirmacioRuleset.FLAG_PER_TIPUS`). La causa viu al `message`.
+        self.assertEqual(resp.data['tipus'], 'esborrat_residents')
+        self.assertEqual(resp.data['residents'], 2)
+        self.assertIn('sense graduació', resp.data['message'].lower())
+        self.assertEqual(self._regles().count(), 2)
+        self.model.refresh_from_db()
+        self.assertEqual(self.model.grading_rule_set_id, self.joc_a.id)
+
+    def test_desacoblar_confirmat_esborra_i_deixa_el_seu_rastre(self):
+        self._manual('MAN1')
+
+        resp = self._step2(self.model, {'grading_rule_set_id': None,
+                                        'confirmar_esborrat_residents': True})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['residents_esborrades'], 2)
+        self.model.refresh_from_db()
+        self.assertIsNone(self.model.grading_rule_set_id)
+        self.assertEqual(self._regles().count(), 0)
+        wp = self._watchpoints().get()
+        self.assertEqual(wp.dades['tipus'], 'desacoblat_graduacio')
+        self.assertEqual(wp.dades['grading_rule_set_id'], self.joc_a.id)
+        self.assertEqual(wp.dades['residents'], 2)
+        self.assertEqual(wp.estat, 'open')
+
+    def test_desacoblar_un_model_sense_residents_no_frega(self):
+        self._regles().delete()
+
+        resp = self._step2(self.model, {'grading_rule_set_id': None})
+
+        self.assertEqual(resp.status_code, 200)
+        self.model.refresh_from_db()
+        self.assertIsNone(self.model.grading_rule_set_id)
+        self.assertFalse(self._watchpoints().exists())
