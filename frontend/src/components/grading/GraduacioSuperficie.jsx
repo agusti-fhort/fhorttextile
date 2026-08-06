@@ -292,21 +292,34 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
           {!regla.logica ? '' : delJoc ? t('graduacio.superficie.origen_joc') : t('graduacio.superficie.origen_model')}
         </td>
         <td style={tdS}>
+          {/* El desplegable de règim ha de CABRE a l'amplada de la família (`AMPLADES.regim`):
+              amb l'encoixinat de l'input hi demanava 4px de més i la columna es desquadrava de
+              la consulta. El que es retalla és l'aire dels costats, no el text. */}
           <select value={regla.logica || ''} onChange={e => canvia(row, 'logica', e.target.value || null)}
-            style={{ ...inputStyle(ko), textAlign: 'left', cursor: 'pointer' }}>
+            style={{ ...inputStyle(ko), padding: '2px 2px', textAlign: 'left', cursor: 'pointer' }}>
             <option value="">—</option>
             {regims.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
         </td>
         <td style={tdS}>
-          <input type="text" inputMode="decimal" disabled={!deltes}
+          {/* Q2 — `size={4}`: un `<input>` amb `width:100%` conserva l'amplada INTRÍNSECA del
+              seu `size` per defecte (20 caràcters), i en una taula d'amplada de contingut és
+              aquesta la que mana: la columna del delta demanava 202px per a un «1.5», el doble
+              que a la consulta. Amb `size` curt, la columna la decideix el `minWidth` de la
+              capçalera, que és el de la família. */}
+          <input type="text" inputMode="decimal" size={4} disabled={!deltes}
             value={buit(regla.increment_base) ? '' : regla.increment_base}
             onChange={e => canvia(row, 'increment_base', e.target.value)}
             title={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
             style={{ ...inputStyle(ko), opacity: deltes ? 1 : 0.4 }} />
         </td>
         <td style={tdS}>
-          <input type="text" inputMode="decimal" disabled={!deltes}
+          {/* Q2 — `size={4}`: un `<input>` amb `width:100%` conserva l'amplada INTRÍNSECA del
+              seu `size` per defecte (20 caràcters), i en una taula d'amplada de contingut és
+              aquesta la que mana: la columna del delta demanava 202px per a un «1.5», el doble
+              que a la consulta. Amb `size` curt, la columna la decideix el `minWidth` de la
+              capçalera, que és el de la família. */}
+          <input type="text" inputMode="decimal" size={4} disabled={!deltes}
             value={buit(regla.increment_break) ? '' : regla.increment_break}
             onChange={e => canvia(row, 'increment_break', e.target.value)}
             title={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
