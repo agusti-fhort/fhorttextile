@@ -969,6 +969,8 @@
     "season_required": "Selecciona una temporada",
     "created_ok": "Modelo creado.",
     "no_item_warn": "Sin prenda (ítem) asignada: el esqueleto no activará el motor de tiempos hasta que asignes una.",
+    "next_needs_customer": "Elige un cliente para continuar",
+    "next_needs_season": "Elige una temporada para continuar",
     "canonical": "Canónico",
     "client_run": "Run de cliente",
     "season_SS": "Spring/Summer",
@@ -1170,6 +1172,15 @@
     "required": "Código y nombre obligatorios.",
     "code_locked": "El código no se puede cambiar (se usa como identificador).",
     "order_hint": "Afecta al orden de las tareas en la planificación."
+  },
+  "cascade_finder": {
+    "col_group": "Grupo",
+    "col_family": "Familia",
+    "col_item": "Item",
+    "pick_group": "Elige un grupo",
+    "pick_family": "Elige una familia",
+    "no_items": "Esta familia todavía no tiene prendas",
+    "poms_n": "{{n}} POMs"
   },
   "garment_types": {
     "files_title": "Archivos",

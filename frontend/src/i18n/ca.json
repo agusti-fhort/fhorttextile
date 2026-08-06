@@ -969,6 +969,8 @@
     "season_required": "Selecciona una temporada",
     "created_ok": "Model creat.",
     "no_item_warn": "Sense peça (ítem) assignada: l'esquelet no activarà el motor de temps fins que n'assignis una.",
+    "next_needs_customer": "Tria un client per continuar",
+    "next_needs_season": "Tria una temporada per continuar",
     "canonical": "Canònic",
     "client_run": "Run de client",
     "season_SS": "Spring/Summer",
@@ -1170,6 +1172,15 @@
     "required": "Codi i nom obligatoris.",
     "code_locked": "El codi no es pot canviar (s'usa com a identificador arreu).",
     "order_hint": "Afecta l'ordre de les tasques a la planificació."
+  },
+  "cascade_finder": {
+    "col_group": "Grup",
+    "col_family": "Família",
+    "col_item": "Item",
+    "pick_group": "Tria un grup",
+    "pick_family": "Tria una família",
+    "no_items": "Aquesta família encara no té peces",
+    "poms_n": "{{n}} POMs"
   },
   "garment_types": {
     "files_title": "Fitxers",

@@ -460,6 +460,14 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
   // (CLIENT + ANY + TEMPORADA → referència interna generada en conseqüència).
   const block1Resolved = !!(customerId && year && season)
 
+  // El gate no canvia; el que canvia és que ara es pot EXPLICAR. Es diu quin camp falta,
+  // no un genèric: l'any ja ve informat per defecte, així que els dos que poden faltar de
+  // debò són el client i la temporada, i dir-ho malament seria tan inútil com no dir res.
+  const nextBlocat = block === 1 && !block1Resolved
+  const motiuBlocat = !customerId
+    ? t('model_wizard.next_needs_customer')
+    : (!season ? t('model_wizard.next_needs_season') : '')
+
   return (
     <div style={encastat ? {} : { maxWidth: 820, margin: '0 auto', padding: '2rem 1rem' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
@@ -674,6 +682,15 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
                 editable: derivar no és decidir per l'usuari, és no fer-li repetir el que la
                 peça ja declara. */}
             {family?.id && !target && <DerivaTarget familyId={family.id} onDeriva={setTarget} />}
+
+            {/* L'avís de l'ítem viu AQUÍ, al pas on es tria la peça. Fins ara es pintava fora de
+                tots els blocs i sortia a TOTS els passos —també al pas 1, on encara no has
+                arribat a triar-ne cap i el missatge no vol dir res (Agus, 06/08). */}
+            {!item && (
+              <div style={{ ...errBox, background: 'var(--warn-bg)', color: 'var(--warn)', border: '0.5px solid var(--warn)' }}>
+                {t('model_wizard.no_item_warn')}
+              </div>
+            )}
           </div>
         )}
 
@@ -786,13 +803,6 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
         )}
       </div>
 
-      {/* Avís si no hi ha ítem */}
-      {!item && (
-        <div style={{ ...errBox, background: 'var(--warn-bg)', color: 'var(--warn)', border: '0.5px solid var(--warn)' }}>
-          {t('model_wizard.no_item_warn')}
-        </div>
-      )}
-
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 18 }}>
         <button type="button" disabled={block === 1} onClick={() => setBlock(b => Math.max(1, b - 1))}
@@ -802,9 +812,17 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
             dient «Següent» sense portar enlloc — el model no es podia crear. El límit el mana la
             llista de passos, que és qui sap quants n'hi ha. */}
         {block < BLOCKS.length ? (
-          <button type="button" disabled={block === 1 && !block1Resolved}
-            onClick={() => { if (!(block === 1 && !block1Resolved)) setBlock(b => Math.min(BLOCKS.length, b + 1)) }}
-            style={primaryBtn(block === 1 && !block1Resolved)}>{t('model_wizard.next')} →</button>
+          /* EL GATE ES QUEDA (04/06: el client mana el prefix del codi i l'abast de la
+             seqüència; un model de Brownie no pot néixer amb prefix FTT-). El que es
+             corregeix és que NO ES COMUNICAVA: el botó desactivat es pintava blanc sobre
+             --gray-l (#f0f0f0) amb opacity 0.6, o sigui invisible, i no deia mai per què
+             no funcionava. Ara diu QUÈ falta, al costat i al tooltip (Agus, 06/08). */
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {nextBlocat && <span style={hintStyle}>{motiuBlocat}</span>}
+            <button type="button" disabled={nextBlocat} title={nextBlocat ? motiuBlocat : undefined}
+              onClick={() => { if (!nextBlocat) setBlock(b => Math.min(BLOCKS.length, b + 1)) }}
+              style={primaryBtn(nextBlocat)}>{t('model_wizard.next')} →</button>
+          </div>
         ) : (
           <button type="button" disabled={saving || baseSizeInvalid} onClick={isEditMode ? handleSaveEdit : handleCreate} style={primaryBtn(saving || baseSizeInvalid)}>
             {saving ? (isEditMode ? t('model_wizard.saving') : t('model_wizard.creating'))
@@ -825,7 +843,21 @@ const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, 
 const summaryBox = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 16px', borderRadius: 8, border: '0.5px solid var(--gray-l)', background: 'var(--warn-bg)' }
 const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
 const ghostBtn = { background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)', borderRadius: 6, padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
-const primaryBtn = (disabled) => ({ background: disabled ? 'var(--gray-l)' : 'var(--warn)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-h3)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, fontFamily: MONO })
+// El motiu pel qual «Següent» no es pot prémer, al costat del botó.
+const hintStyle = { fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--gray)' }
+
+// DESACTIVAT ≠ INVISIBLE. Abans: fons --gray-l (#f0f0f0) amb text --white a sobre i, per
+// rematar-ho, opacity 0.6 — blanc sobre quasi-blanc, esvaït. El botó no havia perdut la
+// caixa: la caixa no es veia, i el text tampoc. Ara el desactivat conserva la caixa, agafa
+// tinta llegible (--gray) i una vora (--border) que el separa del fons; l'opacity se'n va,
+// que era qui acabava d'esborrar el poc contrast que quedava.
+const primaryBtn = (disabled) => ({
+  background: disabled ? 'var(--gray-l)' : 'var(--warn)',
+  color: disabled ? 'var(--gray)' : 'var(--white)',
+  border: disabled ? '0.5px solid var(--border)' : 'none',
+  borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-h3)', fontWeight: 500,
+  cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: MONO,
+})
 
 // LA TARGETA DE SEMBRA (C5-UI/P6) — el contracte de la peça, dit abans de triar-la.
 //

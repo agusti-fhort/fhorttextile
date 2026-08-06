@@ -969,6 +969,8 @@
     "season_required": "Select a season",
     "created_ok": "Model created.",
     "no_item_warn": "No item assigned: the skeleton will not enable the time engine until you assign one.",
+    "next_needs_customer": "Pick a client to continue",
+    "next_needs_season": "Pick a season to continue",
     "canonical": "Canonical",
     "client_run": "Client run",
     "season_SS": "Spring/Summer",
@@ -1170,6 +1172,15 @@
     "required": "Code and name are required.",
     "code_locked": "The code cannot be changed (used as identifier).",
     "order_hint": "Affects the order of tasks in planning."
+  },
+  "cascade_finder": {
+    "col_group": "Group",
+    "col_family": "Family",
+    "col_item": "Item",
+    "pick_group": "Pick a group",
+    "pick_family": "Pick a family",
+    "no_items": "This family has no garments yet",
+    "poms_n": "{{n}} POMs"
   },
   "garment_types": {
     "files_title": "Files",
