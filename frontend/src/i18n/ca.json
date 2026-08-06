@@ -4364,7 +4364,12 @@
     "modal_complementaria": "Crear també la complementària ({{nom}})",
     "modal_proposta": "Codi proposat: {{codis}}",
     "modal_ja_hi_es": "Aquesta combinació ja existeix a la taula.",
-    "modal_crear": "Crear"
+    "modal_crear": "Crear",
+    "tip_desfa": "{{nom}} — desfés: retira la germana i torna a la identitat base",
+    "desfa_titol": "Desfer la instància",
+    "desfa_avis": "Es retirarà {{count}} germana amb valor pres. La fila torna a la identitat base i el POM del model no es toca.",
+    "desfa_avis_plural": "Es retiraran {{count}} germanes amb valor pres. La fila torna a la identitat base i el POM del model no es toca.",
+    "desfa_confirma": "Retirar la germana"
   },
   "obrir_tasca": {
     "conflicte_titol": "Aquesta tasca la té oberta {{tecnic}}",

@@ -42,13 +42,29 @@ import { baseMeasurements, poms } from '../../api/endpoints'
 // LES QUATRE COLUMNES DE LA REGLA (P0.5b). Es declaren un sol cop —capçalera i cel·la surten
 // d'aquí— perquè afegir-ne o treure'n una no vulgui dir tocar dos llocs i que ballin.
 // El valor es llegeix de la FILA; `null` vol dir «no ho diu» i es pinta `—`, mai un zero.
+// Q2 (06/08) — LES AMPLADES DE LA FAMÍLIA, EN UN SOL LLOC I EXPORTADES.
+//
+// La Graduació (`GraduacioSuperficie`) és la MATEIXA taula amb altres columnes, i tenia les
+// amplades escrites a mà: `W_NOM` clonat per còpia i la resta inventades (110/90/100/100 contra
+// 96/84/96/96 d'aquí). Amb una taula a `width:100%` i totes les columnes fixades menys la
+// primera, el sobrant se n'anava tot a la columna `#` — el forat de la captura de les 13:04.
+// Ara els números viuen aquí i les dues pantalles els llegeixen; el `#` no en té cap a posta,
+// perquè s'ha d'encongir al seu contingut a totes dues.
+export const AMPLADES = {
+  capa: 104, codi: 90, nom: 236, base: 100,
+  regim: 96, delta: 84, delta_break: 96, talla_break: 96,
+}
+
+// LES QUATRE COLUMNES DE LA REGLA (P0.5b). Es declaren un sol cop —capçalera i cel·la surten
+// d'aquí— perquè afegir-ne o treure'n una no vulgui dir tocar dos llocs i que ballin.
+// El valor es llegeix de la FILA; `null` vol dir «no ho diu» i es pinta `—`, mai un zero.
 const COLS_GRADING = [
-  { clau: 'regim', i18n: 'fitting.grid.regime', ample: 96, valor: r => r.logica || null },
-  { clau: 'delta', i18n: 'editable_table.col.delta', ample: 84,
+  { clau: 'regim', i18n: 'fitting.grid.regime', ample: AMPLADES.regim, valor: r => r.logica || null },
+  { clau: 'delta', i18n: 'editable_table.col.delta', ample: AMPLADES.delta,
     valor: r => (r.increment_base == null ? null : r.increment_base) },
-  { clau: 'delta_break', i18n: 'editable_table.col.delta_break', ample: 96,
+  { clau: 'delta_break', i18n: 'editable_table.col.delta_break', ample: AMPLADES.delta_break,
     valor: r => (r.increment_break == null ? null : r.increment_break) },
-  { clau: 'talla_break', i18n: 'editable_table.col.talla_break', ample: 96,
+  { clau: 'talla_break', i18n: 'editable_table.col.talla_break', ample: AMPLADES.talla_break,
     valor: r => r.talla_break_label || null },
 ]
 
@@ -525,6 +541,75 @@ export default function EditableTable({
 
   const parteix = (row, opt) => aplicaInstancia(row, [opt], true)
 
+  // ── Q1 (06/08) · EL TOGGLE HONEST DE LA PÍNDOLA ────────────────────────────────────────────
+  //
+  // 🔴 EL DEFECTE: prémer una píndola PARTIA el POM a l'acte i no hi havia camí de tornada. La
+  // píndola encesa quedava DESHABILITADA («repartir dues vegades pel mateix eix no vol dir res»)
+  // i desfer-ho volia dir anar a treure la germana amb la ✕ i tornar a batejar la mare a mà: un
+  // gest de dos passos per desdir-se'n d'un de sol. Una píndola que s'encén i no s'apaga no és
+  // un interruptor, és una porta d'un sol sentit.
+  //
+  // LA LLEI: prémer una píndola NO seleccionada parteix (com sempre); prémer la JA SELECCIONADA
+  // DESFÀ. I el POM base no es toca mai en cap dels dos sentits: desfer RETIRA LA GERMANA i
+  // torna la fila premuda a la identitat base — la mesura del model sobreviu sempre.
+  //
+  // ⚠️ SI LA GERMANA TÉ VALOR ENTRAT, ES PREGUNTA. «Cap valor entrat» vol dir el carril buit
+  // (a la presa, la xifra que s'hi ha pres; a l'autoria, el valor base): una germana que ningú
+  // ha omplert es retira en silenci, i una amb número no s'esborra sense dir-ho. Les files que
+  // encara no han arribat a la BD (`tmp-…`) es retiren sempre en silenci: no hi ha res a perdre.
+  const [desfent, setDesfent] = useState(null)   // {row, eix, germanes} pendent de confirmació
+
+  const teValor = (r) => r.base_value_cm != null && r.base_value_cm !== ''
+  const trasDe = (r, eix) => tramsInstancia(dicc, r.instancia).filter(s => eixDe(dicc, s) !== eix)
+  const clauResta = (r, eix) => [...trasDe(r, eix)].sort().join('|')
+
+  // LES GERMANES QUE VAN NÉIXER D'AQUESTA PARTICIÓ: mateixa família (POM + capa), amb un tram
+  // d'aquest eix, i amb LA RESTA D'EIXOS IGUAL que la fila premuda. L'última condició importa el
+  // dia que una família estigui partida per dos eixos: desfent la POSICIÓ de `left-relaxed` s'ha
+  // de retirar `right-relaxed`, i no `left-extended`, que és una altra mesura.
+  const germanesDeLEix = (row, eix) => {
+    const capa = row.capa || 'exterior'
+    const resta = clauResta(row, eix)
+    return localRows.filter(x => x.id !== row.id
+      && x.pom_id === row.pom_id && (x.capa || 'exterior') === capa
+      && tramsInstancia(dicc, x.instancia).some(s => eixDe(dicc, s) === eix)
+      && clauResta(x, eix) === resta)
+  }
+
+  // La identitat de la fila SENSE aquest eix: el slug es recompon amb els trams que queden i el
+  // codi torna al seu base (`AHL` → `AH`), pel mateix camí que el va compondre.
+  const identitatSenseEix = (row, eix) => {
+    const meus = tramsInstancia(dicc, row.instancia)
+    const resta = meus.filter(s => eixDe(dicc, s) !== eix)
+    const base = codiBase(dicc, row.nom_fitxa || row.client_code || row.pom_code || '', meus)
+    return {
+      instancia: composaInstancia(dicc, resta),
+      nom_fitxa: resta.length ? (codiProposat(dicc, base, resta) || base) : base,
+    }
+  }
+
+  const aplicaDesfer = (row, eix, germanes) => {
+    const ident = identitatSenseEix(row, eix)
+    setDesfent(null)
+    if (esPresa) {
+      marcaDesat(presa.onDesfaInstancia(row, ident, germanes)).catch(() => {})
+      return
+    }
+    const fora = new Set(germanes.map(g => g.id))
+    setLocalRows(prev => prev
+      .filter(r => !fora.has(r.id))
+      .map(r => (r.id === row.id ? { ...r, ...ident, clau: undefined } : r)))
+    setDirty(true)
+  }
+
+  const desfaInstancia = (row, eix) => {
+    if (!dicc) return
+    const germanes = germanesDeLEix(row, eix)
+    const ambValor = germanes.filter(g => teValor(g) && !String(g.id).startsWith('tmp-'))
+    if (ambValor.length) { setDesfent({ row, eix, germanes, ambValor }); return }
+    aplicaDesfer(row, eix, germanes)
+  }
+
   const buildPayload = () => {
     const measurements = localRows
       .filter(r => r.base_value_cm != null && r.base_value_cm !== '')
@@ -637,9 +722,7 @@ export default function EditableTable({
   // germanes vives (el mateix POM a l'exterior i al folre, la sisa esquerra i la dreta) el nom
   // sol ja no diu quina fila és cadascuna, i és justament la columna que ha de quedar visible
   // mentre s'escruta la taula cap a la dreta.
-  const W_CAPA = 104
-  const W_CODI = 90
-  const W_NOM = 236
+  const { capa: W_CAPA, codi: W_CODI, nom: W_NOM } = AMPLADES
   // Quantes files es desaran i quantes cauran. La llei del carril («buit = es descarta») és
   // muda si el descart només es veu fila a fila: aquí es llegeix el total abans de desar.
   const nInformades = localRows.filter(r => r.base_value_cm != null && r.base_value_cm !== '').length
@@ -757,7 +840,7 @@ export default function EditableTable({
                     prometre una talla que ningú ha declarat.
                     v8.1 `th.baseh` — el carril va ACOTAT pels dos costats amb `--line`: és una
                     columna sencera de fons `--sel` i, sense filets, es vessa sobre les veïnes. */}
-                <th rowSpan={2} style={{ ...thS, textAlign: 'right', minWidth: 100, background: 'var(--gold-pale)',
+                <th rowSpan={2} style={{ ...thS, textAlign: 'right', minWidth: AMPLADES.base, background: 'var(--gold-pale)',
                                          borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
                   {displaySize ? (
                     <>
@@ -820,6 +903,7 @@ export default function EditableTable({
                     esPresa={esPresa}
                     dimState={dimState}
                     onParteix={parteix}
+                    onDesfa={desfaInstancia}
                     onMesInstancia={() => setPosicionsDe(row)}
                     onGermanaCapa={() => germanaCapaRapida(row)}
                     capesLliures={capesLliuresDe(row)}
@@ -864,6 +948,53 @@ export default function EditableTable({
             && (r.capa || 'exterior') === (posicionsDe.capa || 'exterior'))}
           onCancel={() => setPosicionsDe(null)}
           onAplica={(trams, ambComp) => { aplicaInstancia(posicionsDe, trams, ambComp); setPosicionsDe(null) }} />
+      )}
+
+      {/* Q1 — LA CONFIRMACIÓ DE DESFER. NOMÉS surt quan hi ha una xifra a perdre: desfer una
+          partició que ningú ha omplert no ha de costar una pregunta. La fila premuda no hi
+          surt perquè no se'n va enlloc — torna a la seva identitat base. */}
+      {desfent && (
+        <div onClick={() => setDesfent(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.28)',
+                   display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--white)', borderRadius: 10, padding: '1.25rem 1.4rem',
+                     width: 'min(460px, 92vw)', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: 'var(--fs-h3)', fontWeight: 600,
+                         display: 'flex', alignItems: 'center', gap: 8 }}>
+              <i className="ti ti-alert-triangle" style={{ color: 'var(--warn)' }} aria-hidden="true" />
+              {t('instancia.desfa_titol')}
+            </h3>
+            <p style={{ margin: '0 0 12px', fontSize: 'var(--fs-body)', lineHeight: 1.5,
+                        color: 'var(--text-main)' }}>
+              {t('instancia.desfa_avis', { count: desfent.ambValor.length })}
+            </p>
+            <ul style={{ margin: '0 0 16px', paddingLeft: 18, fontSize: 'var(--fs-body)',
+                         color: 'var(--text-muted)' }}>
+              {desfent.ambValor.map(g => (
+                <li key={g.id}>
+                  {g.nom_fitxa || g.client_code || g.pom_code} · {etiquetaInstancia(g.instancia, dicc)}
+                  {' · '}{g.base_value_cm}
+                </li>
+              ))}
+            </ul>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => setDesfent(null)}
+                style={{ padding: '6px 14px', borderRadius: 6, border: '0.5px solid var(--border)',
+                         background: 'var(--white)', color: 'var(--text-main)', font: 'inherit',
+                         fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
+                {t('common.cancel')}
+              </button>
+              <button type="button"
+                onClick={() => aplicaDesfer(desfent.row, desfent.eix, desfent.germanes)}
+                style={{ padding: '6px 14px', borderRadius: 6, border: 'none',
+                         background: 'var(--err)', color: 'var(--white)', font: 'inherit',
+                         fontSize: 'var(--fs-body)', fontWeight: 500, cursor: 'pointer' }}>
+                {t('instancia.desfa_confirma')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* El POM neix i s'afegeix a la taula en el MATEIX gest: qui l'ha hagut de crear és perquè
@@ -927,7 +1058,7 @@ export default function EditableTable({
 
 function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete,
                        onBateig, widths, registerVal, onNav, esPresa,
-                       dicc, dims, dimState, onParteix, onMesInstancia, onGermanaCapa,
+                       dicc, dims, dimState, onParteix, onDesfa, onMesInstancia, onGermanaCapa,
                        capesLliures, onCapa, mostraGrading = false }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -1118,10 +1249,11 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
         return (
           <td key={d.clau} style={{ ...tdS, textAlign: 'center', padding: '4px 8px',
                                     borderLeft: k === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
+            {/* Q1 — LA MATEIXA PÍNDOLA, ELS DOS SENTITS: encesa desfà, apagada parteix. */}
             {visibles.map(o => (
               <PindolaInstancia key={o.slug} fila={o}
                 encesa={st.mine === o.slug} repartida={st.repartida} altra={st.mine} dicc={dicc}
-                onTria={() => onParteix(row, o.slug)} />
+                onTria={() => (st.mine === o.slug ? onDesfa(row, d.clau) : onParteix(row, o.slug))} />
             ))}
           </td>
         )
@@ -1166,7 +1298,7 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           // dues columnes que s'editen mentre es prenen mesures, sense passar per Tab ni ratolí.
           onTeclaCapa={onGermanaCapa}
           onTeclaInstancia={() => {
-            const p = document.querySelector(`[data-fila="${row.id}"] button[data-pindola]:not(:disabled)`)
+            const p = document.querySelector(`[data-fila="${row.id}"] button[data-pindola="1"]:not(:disabled)`)
             p?.focus()
           }}
           onTeclaNomen={() => document.querySelector(`[data-fila="${row.id}"] input[data-nomen]`)?.focus()}
@@ -1222,13 +1354,19 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
 function PindolaInstancia({ fila, dicc, encesa, repartida, altra, onTria }) {
   const { t } = useTranslation()
   const nom = etiquetaInstancia(fila.slug, dicc)
-  const tip = encesa ? t('instancia.tip_aquesta', { nom })
+  // Q1 — LA PÍNDOLA ENCESA JA NO ÉS INERT: és el gest per DESFER. El seu tooltip ho ha de dir,
+  // perquè fins avui deia «aquesta és la instància d'aquesta fila» i semblava una etiqueta.
+  const tip = encesa ? t('instancia.tip_desfa', { nom })
     : repartida ? t('instancia.tip_repartida', {
       nom: etiquetaInstancia(altra && altra !== fila.slug ? altra : fila.slug, dicc) })
       : t('instancia.tip_parteix', { nom })
+  // La píndola de DESFER es marca a part (`data-pindola="desfa"`): la tecla `I` —saltar a la
+  // primera píndola lliure— busca una de PARTIR, i amb un sol marcador hi podria caure la de
+  // desfer i retirar una germana amb un Enter que ningú havia demanat. Les fletxes segueixen
+  // recorrent-les totes.
   return (
-    <button type="button" disabled={repartida} onClick={onTria} title={tip} aria-label={tip}
-      aria-pressed={encesa} data-pindola="1"
+    <button type="button" disabled={repartida && !encesa} onClick={onTria} title={tip} aria-label={tip}
+      aria-pressed={encesa} data-pindola={encesa ? 'desfa' : '1'}
       // v8.1 :350-357 — un cop dins dels grups (tecla `I`), les fletxes els recorren i `Esc`
       // torna al carril. Sense això, `I` seria una porta d'entrada sense sortida.
       onKeyDown={e => {
@@ -1246,7 +1384,7 @@ function PindolaInstancia({ fila, dicc, encesa, repartida, altra, onTria }) {
       }}
       style={{
         font: 'inherit', fontSize: 'var(--fs-label)', borderRadius: 999, padding: '2px 10px',
-        margin: '0 2px', cursor: repartida ? 'default' : 'pointer',
+        margin: '0 2px', cursor: repartida && !encesa ? 'default' : 'pointer',
         border: `1px solid ${encesa ? 'var(--gold)' : 'var(--border)'}`,
         background: encesa ? 'var(--gold-pale)' : 'var(--white)',
         color: encesa ? 'var(--gold)' : 'var(--text-main)',

@@ -4364,7 +4364,12 @@
     "modal_complementaria": "Also create the complementary one ({{nom}})",
     "modal_proposta": "Proposed code: {{codis}}",
     "modal_ja_hi_es": "That combination is already in the table.",
-    "modal_crear": "Create"
+    "modal_crear": "Create",
+    "tip_desfa": "{{nom}} — undo: withdraw the sister and return to the base identity",
+    "desfa_titol": "Undo the instance",
+    "desfa_avis": "{{count}} sister with a measured value will be withdrawn. The row returns to its base identity and the model's POM is not touched.",
+    "desfa_avis_plural": "{{count}} sisters with measured values will be withdrawn. The row returns to its base identity and the model's POM is not touched.",
+    "desfa_confirma": "Withdraw the sister"
   },
   "obrir_tasca": {
     "conflicte_titol": "{{tecnic}} has this task open",

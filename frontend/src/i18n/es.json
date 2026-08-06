@@ -4364,7 +4364,12 @@
     "modal_complementaria": "Crear también la complementaria ({{nom}})",
     "modal_proposta": "Código propuesto: {{codis}}",
     "modal_ja_hi_es": "Esa combinación ya existe en la tabla.",
-    "modal_crear": "Crear"
+    "modal_crear": "Crear",
+    "tip_desfa": "{{nom}} — deshacer: retira la hermana y vuelve a la identidad base",
+    "desfa_titol": "Deshacer la instancia",
+    "desfa_avis": "Se retirará {{count}} hermana con valor tomado. La fila vuelve a la identidad base y el POM del modelo no se toca.",
+    "desfa_avis_plural": "Se retirarán {{count}} hermanas con valor tomado. La fila vuelve a la identidad base y el POM del modelo no se toca.",
+    "desfa_confirma": "Retirar la hermana"
   },
   "obrir_tasca": {
     "conflicte_titol": "Esta tarea la tiene abierta {{tecnic}}",

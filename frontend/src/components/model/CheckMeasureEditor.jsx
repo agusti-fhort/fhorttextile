@@ -617,6 +617,18 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
         }) : null))
         .then(() => load())
     },
+    // Q1 — DESFER una instància des de la presa: el revers exacte d'`onParteix`. Primer es
+    // RETIREN les germanes (poda tova, amb registre) i només llavors es torna la MARE a la seva
+    // identitat base: fer-ho al revés podria xocar amb la clau única `(model, pom, capa,
+    // instancia)` si alguna germana ja ocupés la identitat de destí.
+    //
+    // La mare NO s'esborra mai: és la mesura del model, i desfer una partició no és treure una
+    // mesura de la fitxa. Per això aquí hi ha un `update` i no un `desactivarPom`.
+    onDesfaInstancia: (row, ident, germanes) =>
+      Promise.all((germanes || []).map(g => models.desactivarPom(
+        model.id, g.pom_id, undefined, { capa: g.capa, instancia: g.instancia })))
+        .then(() => baseMeasurements.update(row.id, ident))
+        .then(() => load()),
     onNova: (pom, eixos) => baseMeasurements.create({
       model: model.id, pom: pom.id, capa: eixos.capa || 'exterior',
       instancia: eixos.instancia || '', nom_fitxa: eixos.nom_fitxa || '',
