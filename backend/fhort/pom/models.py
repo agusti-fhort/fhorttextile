@@ -475,9 +475,18 @@ class CustomerPOMAlias(models.Model):
     opening vs H.16 cuff opening) → unicitat (customer, client_code), NO (customer, pom).
     El matcher el consumeix com a estratègia (a) prioritària de find_pom_master (N3 fet,
     models_app/extraction_views.py:543)."""
+    # `MODEL` (06/08) — l'àlies neix perquè un model necessitava una mesura que el catàleg del
+    # client no tenia, i algú la va crear des del cercador de Definició POM («Crear POM propi del
+    # model»). NO és un àlies de menys categoria: entra a l'espai de nomenclatura del client com
+    # qualsevol altre, la validació de col·lisió el veu, i un altre model del mateix client el pot
+    # reutilitzar pel cercador. Això és coneixement del client acumulant-se, que és el que ha de
+    # passar (decisió d'Agus, 06/08).
+    #
+    # El que marca és la PROVINENÇA: d'on va sortir aquest codi. Serveix per saber què s'ha
+    # d'ensenyar al diccionari com a pendent de consolidar i què ve d'un document oficial.
     ORIGEN_CHOICES = [
         ('IMPORT', 'Import'), ('MANUAL', 'Manual'), ('MIGRACIO', 'Migració'),
-        ('DICCIONARI', 'Diccionari'),
+        ('DICCIONARI', 'Diccionari'), ('MODEL', 'Nascut d\'un model'),
     ]
     # db_constraint=False: `pom` és SHARED+TENANT però `tasks.Customer` és tenant-only → la FK
     # creua schemas (mateix patró que GarmentPOMMap). PROTECT a nivell ORM, sense constraint de BD.

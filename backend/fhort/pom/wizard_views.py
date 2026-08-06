@@ -122,17 +122,57 @@ def search_poms_view(request):
         return Response({'results': []})
 
     try:
-        from fhort.pom.models import POMMaster
+        from fhort.pom.models import CustomerPOMAlias, POMMaster
         from django.db.models import Q
 
-        poms = POMMaster.objects.filter(
-            actiu=True
-        ).filter(
-            Q(codi_client__icontains=q) |
-            Q(nom_client__icontains=q) |
-            Q(pom_global__nom_ca__icontains=q) |
-            Q(pom_global__nom_en__icontains=q)
-        ).select_related('pom_global', 'categoria')[:20]
+        # ─────────────────────────────────────────────────────────────────────────────────
+        # ELS POMS ES VAN A BUSCAR AL CATÀLEG DEL CLIENT. ENLLOC MÉS. (Agus, 06/08)
+        # ─────────────────────────────────────────────────────────────────────────────────
+        #
+        # Aquesta vista cercava per `POMMaster.codi_client`, i aquell camp **es diu "client"
+        # però és el codi de la CASA**. El codi DEL CLIENT viu només a
+        # `CustomerPOMAlias.client_code`. Conseqüència mesurada al schema `fhort`: un model de
+        # Brownie veia els 393 POMs del tenant —inclosos els 240 de Losan— i, buscant «U1», se
+        # li oferien `U1 JETTING WIDTH` (de LOS) i `U1 Height sequins piece` (un orfe creat per
+        # un import), però NO `BTN SP Button spacing`, que és el que Brownie anomena U1.
+        #
+        # Amb `?model=` (el cas del cercador de Definició POM) la cerca passa a resoldre contra
+        # els àlies del client D'AQUEST MODEL: el seu codi, la seva descripció internacional i
+        # la seva descripció local. Això no és un filtre a sobre del catàleg de la casa —és una
+        # altra pregunta: «quines mesures coneix aquest client?».
+        #
+        # Sense `?model=` es manté el comportament de sempre (catàleg del tenant): hi ha
+        # superfícies que cerquen sense model al davant i no tenen client de qui parlar.
+        model_id = request.query_params.get('model')
+        customer_id = None
+        if model_id:
+            from fhort.models_app.models import Model as ModelPeça
+            customer_id = (ModelPeça.objects.filter(pk=model_id)
+                           .values_list('customer_id', flat=True).first())
+
+        if customer_id:
+            # Els POMs que aquest client anomena d'alguna manera que casa amb `q`. Un client pot
+            # tenir diversos codis per al mateix POM (la unicitat és (customer, client_code)),
+            # així que es dedupliquen per `pom_id` conservant l'ordre d'aparició.
+            alias_hits = (CustomerPOMAlias.objects
+                          .filter(customer_id=customer_id, pom__isnull=False)
+                          .filter(Q(client_code__icontains=q) |
+                                  Q(description_en__icontains=q) |
+                                  Q(description_local__icontains=q))
+                          .order_by('pendent_revisio', 'client_code')
+                          .values_list('pom_id', flat=True))
+            ids = list(dict.fromkeys(alias_hits))[:20]
+            poms = list(POMMaster.objects.filter(id__in=ids, actiu=True)
+                        .select_related('pom_global', 'categoria'))
+        else:
+            poms = list(POMMaster.objects.filter(
+                actiu=True
+            ).filter(
+                Q(codi_client__icontains=q) |
+                Q(nom_client__icontains=q) |
+                Q(pom_global__nom_ca__icontains=q) |
+                Q(pom_global__nom_en__icontains=q)
+            ).select_related('pom_global', 'categoria')[:20])
 
         # EL NIVELL DE PROXIMITAT (v8.1 · cercador agrupat). Amb `?model=`, cada resultat diu si
         # el POM ve de l'ITEM d'aquest model, de la seva FAMÍLIA (un altre item del mateix
@@ -142,9 +182,7 @@ def search_poms_view(request):
         # Es resol amb DUES consultes de `pom_id` i no per resultat: vint resultats × dues
         # comprovacions serien quaranta viatges a la BD per pintar una llista desplegable.
         ids_item, ids_familia = set(), set()
-        model_id = request.query_params.get('model')
         if model_id:
-            from fhort.models_app.models import Model as ModelPeça
             from fhort.pom.models import GarmentPOMMap
             m = (ModelPeça.objects
                  .filter(pk=model_id)
@@ -167,6 +205,14 @@ def search_poms_view(request):
                 return 'type'
             return 'cataleg'
 
+        # LA NOMENCLATURA QUE ES PINTA ÉS LA DEL CLIENT. El cercador ensenyava `codi_client` de
+        # `POMMaster` sota el rètol «del catàleg del client», i és el codi de la CASA: el tècnic
+        # de Brownie veia «CH» on el seu document diu «A». Els tres camps d'àlies els resol el
+        # mateix `alies_per_pom`/`camps_de` que la resta de superfícies —una sola font— i queden
+        # buits si el POM no té àlies d'aquest client (llavors mana el catàleg, com sempre).
+        from fhort.pom.nomenclatura import alies_per_pom, camps_de
+        alias_by_pom = alies_per_pom(customer_id)
+
         data = [{
             'id': p.id,
             'codi_client': p.codi_client,
@@ -175,6 +221,7 @@ def search_poms_view(request):
             'nom_en': p.pom_global.nom_en if p.pom_global_id else '',
             'categoria_nom': p.categoria.nom_ca if p.categoria_id else '',
             'nivell': _nivell(p.id),
+            **camps_de(alias_by_pom, p.id),
         } for p in poms]
 
         # L'ordre és el de PROXIMITAT: el que l'item ja declara primer. Qui busca «C» a la taula
