@@ -380,3 +380,101 @@ paraula surt el sufix del codi). No és un defecte de traducció.
 | `662d4ec9` | 26 · el llapis d'identitat · nom i nomenclatura s'obren junts |
 | `555e0cdd` | 27 · la ⓘ de traducció ja respon · hover, clic i teclat |
 | `45f7fec2` | 28 · el fum cobreix la identitat de la fila |
+
+---
+
+# TRAM P0.5 · el contenidor de graduació i les columnes de la regla
+
+| Punt | Estat |
+|---|---|
+| **P0.5a** · contenidor central, pertinença ordena | ✅ `ff7585d0` |
+| **P0.5b** · columnes de la regla a Definició POM | ✅ `4dcf18a1` (en LECTURA) |
+| **P0.5c** · guard D-31.4 amb consentiment | ✅ **ja existia** — i **no arribava a la pantalla**; arreglat a `ff7585d0` |
+
+## P0.5a · per què el panell antic no deixava triar
+
+`GraduacioPanel` és el **pas 4 del wizard**, i hi porta les portes del wizard:
+
+- sense `size_system` no ensenya res (`grading_needs_system`);
+- demana un **FIT** abans d'obrir el picker;
+- el picker corre en mode **estricte** (`matchingRuleSetsStrict`), que exigeix els cinc eixos i
+  **exclou** tot el que no casi.
+
+Amb un model real al davant això acaba en «falta la construcció» i una llista buida: es veu què
+falta i no es pot triar **res** — quan el que es venia a fer era assignar un joc que ja existeix.
+
+Ara és un contenidor **central** i la pertinença **ordena** en comptes d'excloure — la mateixa
+llei del pas 3 del wizard (sistemes de talles) i de C5 al catàleg de peces (D-31.3): primer els
+jocs del **client del model**, després la resta; els que no encaixen surten **atenuats amb el
+motiu** i es poden triar igualment.
+
+**No s'ha fet cap picker nou.** `RuleSetPicker` ja tenia el mode `eliminatiu` (C5) que fa
+exactament això i ja pinta nom, recompte de regles i el joc seleccionat. El que faltava era que
+algú el cridés sense el mode estricte. **`GraduacioPanel` no s'ha tocat**: segueix sent el pas 4.
+
+## 🔴 P0.5c ja existia — i el seu diàleg no es pintava mai
+
+El brief demanava construir l'avís de D-31.4. **Ja hi era**: `useConfirmacioRuleset` porta els dos
+avisos conscients (D1 · client aliè · D-31.4 · esborrat de residents), amb el recompte i el
+desglossament per origen (IMPORTED separat), i el backend ja els retorna com a 409 amb un flag per
+cas. No s'ha duplicat res.
+
+**El que fallava era que el diàleg no arribava a la pantalla.** `{dialegRuleset}` estava escrit al
+final de **`TabAIAnalysis`** — un altre component, 1.400 línies més avall — on la variable ni tan
+sols és a l'abast. O sigui: el guard existia, el backend tornava el seu 409, i la confirmació no
+es pintava **mai**. Assignar un joc que havia d'esborrar regles pròpies es quedava en un botó que
+no responia.
+
+Ho vaig trobar perquè `eslint` deia alhora dues coses contradictòries sobre la mateixa variable:
+«assignada i no feta servir» (:518) i «no definida» (:2418). **Totes dues d'abans d'aquest tram.**
+Ara es pinta on viu el hook que el crea.
+
+## P0.5b · les columnes, i on m'he aturat
+
+Els quatre camps **ja viatjaven** a cada fila de `taula-mesures` (`logica`, `increment_base`,
+`increment_break`, `talla_break_label`): no calia cap petició nova, només pintar-los quan hi ha
+graduació de què parlar.
+
+- **joc assignat** → columnes plenes;
+- **sense cap tria** → no hi són (l'estat que vas fixar el 05/08);
+- `null` es pinta `—`, mai zero: un règim sense delta no és un delta de zero.
+
+⚠️ **EN LECTURA, i és una frontera deliberada.** Fer-les editables vol dir tornar a enviar `rules`
+des d'aquesta taula, i això **es va retirar el 31/07 precisament perquè feia mal**: enviava una
+entrada per **cada** fila amb `logica: 'LINEAR'` i acabava creant regles residents a models que
+ningú havia graduat (i, amb la proposta del catàleg pintada a sobre, materialitzava la regla d'un
+altre). Reobrir aquell camí demana decidir abans **quines files hi entren i quan**. No ho he fet a
+corre-cuita.
+
+## 🚩 «Entrada manual» — el que el domini no té
+
+L'opció hi és al contenidor, però **no escriu res**, i cal saber-ho:
+
+Al domini **no hi ha cap camp «aquest model es gradua a mà»**. `update-step2` només sap assignar
+un joc o desacoblar-lo. El que sí que existeix és que un model **amb regles residents i sense
+joc** ja **és** un model graduat a mà — és l'estat que deixa la importació.
+
+Conseqüència honesta: mentre no s'hi hagi escrit **cap** regla, la intenció «vull graduar a mà»
+viu només a la pantalla i **un F5 la perd**. En escriure la primera regla, l'estat es manté sol.
+Tancar-ho de debò vol dir **un camp nou i una migració** (i, per tant, restart) — o acceptar que
+l'entrada manual comença en el moment que s'escriu la primera regla. **És decisió teva.**
+
+## Verificació
+
+```
+model 1302 · joc 115 · fila0: LINEAR · Δ2.0 · Δbreak 3.0 · break XS
+✓ les quatre columnes surten a la capçalera i amb valors
+✓ després d'F5 hi segueixen
+✓ el mateix model SENSE joc assignat no n'ensenya cap
+✓ cap error de pàgina
+```
+
+Build net i `eslint` **0 errors** a `ModelSheet.jsx` — HEAD en tenia **2**, que eren justament els
+del diàleg que no es pintava.
+
+## Anotat, no tocat
+
+- Les columnes de la regla **no són editables** (v. la frontera de dalt).
+- El **modal de posicions segueix sense tancar-se amb `Esc`** (ve del tram anterior).
+- `GraduacioPanel` queda viu per al wizard. Quan el contenidor central hagi rodat, val la pena
+  decidir si el pas 4 del wizard ha de fer servir el mateix, i llavors el panell es jubila.
