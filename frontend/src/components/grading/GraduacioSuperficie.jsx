@@ -232,9 +232,17 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     const candidat = row.nom_traduit_model || row.nom_ca || ''
     const traduit = candidat && candidat !== nomVisible ? candidat : ''
     const deltes = acceptaDeltes(regla.logica)
-    // D'on ve el que es veu. `regla_origen` MANUAL = algú l'ha escrita al model; qualsevol altre
-    // origen = ve del joc (materialitzada en assignar-lo); null = fila sense regla.
-    const delJoc = regla.logica && row.regla_origen && row.regla_origen !== 'MANUAL'
+    // D'ON VE EL QUE ES VEU. Això ho decidia `regla_origen` tot sol, i mentia: la regla del
+    // JOC (`pom.GradingRule`) no té camp `origen`, o sigui que quan el model gradua de debò pel
+    // joc arribava `null` i aquí es llegia «no és MANUAL... doncs del model». Just al revés.
+    //
+    // Ara mana `regla_es_resident`, que diu de quina TAULA ha sortit la regla, i `origen` només
+    // desempata dins de les residents:
+    //   · no resident        → del JOC en directe (el model no té cap regla pròpia)
+    //   · resident + MANUAL  → del MODEL (algú l'ha escrita, aquí o a Gravar POM)
+    //   · resident + la resta→ del JOC (còpia materialitzada en assignar-lo)
+    const delJoc = !!regla.logica
+      && (row.regla_es_resident === false || (row.regla_es_resident && row.regla_origen !== 'MANUAL'))
     const regims = REGIMS.includes(row.logica) || !row.logica ? REGIMS : [...REGIMS, row.logica]
     return (
       <tr key={row.id} style={{ background: tocat ? 'var(--fila-activa)' : 'transparent' }}>

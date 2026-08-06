@@ -1798,6 +1798,9 @@ def measurements_table_view(request, model_id):
         rules_by_pom = _load_grading_rules(model)
     except Exception:
         rules_by_pom = {}
+    # P0.5d — per poder dir si la regla que serveix cada fila viu al MODEL o al JOC. El
+    # resolutor torna l'una o l'altra classe i aquí és l'únic lloc on encara se sap.
+    from fhort.models_app.models import ModelGradingRule
 
     # LES REGLES QUE AQUESTA TAULA DIU SÓN LES DEL MODEL, I NOMÉS LES SEVES (31/07).
     #
@@ -1865,16 +1868,24 @@ def measurements_table_view(request, model_id):
             'talla_break_label': getattr(rule, 'talla_break_label', None) if rule else None,
             # P0.5d — D'ON VE LA REGLA, perquè la superfície de Graduació ho ha de poder dir.
             #
-            # `logica` no basta: una fila plena pot venir del joc que el model té assignat o
-            # d'una edició que algú ha fet AQUÍ, i les dues s'han de poder distingir a ull. El
-            # senyal honest és `origen` de la regla, que ja existeix i que els dos escriptors
-            # (`set_pom_regim_view` i `gravar_pom_view`) posen a 'MANUAL' en editar:
-            #   · CANONICAL · CLIENT_RUN · IMPORTED · FEDERAT → ve del JOC (materialitzada)
-            #   · MANUAL                                      → l'ha escrita algú al MODEL
-            # `None` = fila sense regla (les «—»), que és on viu l'entrada manual des de zero.
+            # CALEN ELS DOS CAMPS, i el primer cop només en vaig posar un. `origen` sol MENTIA
+            # al cas de fallback: `pom.GradingRule` —la regla del JOC— **no té camp `origen`**
+            # (verificat a `pom/models.py:1230`), o sigui que quan el model gradua de debò pel
+            # joc, `getattr` retorna `None`, i el front llegia «no és MANUAL... doncs del model».
+            # Just al revés. Provocat en transacció sobre el model 169: 13 files resoltes pel
+            # joc, totes retornant `regla_origen=None` i pintant «del model».
             #
-            # Camp NOU i additiu: cap consumidor existent el llegeix i cap camp canvia de valor.
+            # El senyal fiable és DE QUINA TAULA ha sortit la regla, que és una cosa que aquest
+            # codi sap del cert perquè `_load_grading_rules` retorna l'una o l'altra:
+            #   · `regla_es_resident=False` → ve del JOC en directe (fallback, cap resident)
+            #   · `regla_es_resident=True`  → viu al MODEL, i llavors `regla_origen` diu si
+            #                                 l'ha escrita algú (MANUAL) o si és una còpia
+            #                                 materialitzada del joc (CLIENT_RUN/CANONICAL/…)
+            #   · `None` a tots dos          → fila sense regla (les «—»)
+            #
+            # Camps additius: cap consumidor existent els llegeix i cap camp canvia de valor.
             'regla_origen': getattr(rule, 'origen', None) if rule else None,
+            'regla_es_resident': isinstance(rule, ModelGradingRule) if rule else None,
         })
 
     base_size = model.base_size_label
