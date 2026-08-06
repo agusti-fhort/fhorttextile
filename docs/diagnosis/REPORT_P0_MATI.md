@@ -18,9 +18,15 @@
 
 ## P0.2 · les columnes d'instància — RESOLT
 
-**No era el backend, ni el desplegament.** Tots dos estaven bé i ho vaig comprovar abans de
-tocar res: `GET /api/v1/mesures/diccionari/` torna 200 amb els dos eixos (POSICIÓ 8 · ESTAT 2),
-la ruta hi és, i el bundle desplegat conté la crida.
+> ⚠️ **RECTIFICAT per l'ADDENDA del final.** Aquesta secció deia que el backend estava bé. El
+> CODI ho estava; el **procés desplegat, no** —servia una versió anterior a la ruta i responia
+> 404. Ho vaig donar per bo perquè l'`APIClient` de DRF carrega el codi del disc, no el del
+> gunicorn viu. La millora que hi ha aquí sota (avís + Reintenta) segueix sent bona i necessària,
+> però **no era això el que bloquejava l'Agus**. Vegeu l'addenda.
+
+El que vaig comprovar abans de tocar res: `GET /api/v1/mesures/diccionari/` tornava 200 **contra
+el codi del disc** amb els dos eixos (POSICIÓ 8 · ESTAT 2), la ruta hi és, i el bundle desplegat
+conté la crida.
 
 Prova A/B al navegador sobre el bundle real (`ops/qa/qa_p02_definicio_pom.py`):
 
