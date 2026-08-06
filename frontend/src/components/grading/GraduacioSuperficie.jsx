@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import client from '../../api/client'
 import { models } from '../../api/endpoints'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
+import { InfoTraduccio } from '../EditableTable/EditableTable'
 
 // LA GRADUACIÓ ÉS UNA SUPERFÍCIE PRÒPIA (P0.5d · Agus, 06/08, a pantalla).
 //
@@ -220,11 +221,16 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   const nomDe = (row) => row.nom_canonic_model
     || row.client_name_en || row.nom_en || row.nom_ca || row.pom_code || ''
 
-  const cos = () => files.map((row) => {
+  const cos = () => files.map((row, i) => {
+    const n = i + 1
     const regla = reglaDe(row)
     const tocat = edicions.has(row.pom_id)
     const ko = degenerades.has(row.pom_id)
     const inst = etiquetaInstancia(row.instancia)
+    // Mateixa regla que la consulta: la traducció només surt si NO repeteix el nom visible.
+    const nomVisible = nomDe(row)
+    const candidat = row.nom_traduit_model || row.nom_ca || ''
+    const traduit = candidat && candidat !== nomVisible ? candidat : ''
     const deltes = acceptaDeltes(regla.logica)
     // D'on ve el que es veu. `regla_origen` MANUAL = algú l'ha escrita al model; qualsevol altre
     // origen = ve del joc (materialitzada en assignar-lo); null = fila sense regla.
@@ -232,11 +238,24 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     const regims = REGIMS.includes(row.logica) || !row.logica ? REGIMS : [...REGIMS, row.logica]
     return (
       <tr key={row.id} style={{ background: tocat ? 'var(--fila-activa)' : 'transparent' }}>
+        {/* # — el número de fila, com a la consulta (mateix to i cos). */}
+        <td style={{ ...tdS, color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>{n}</td>
         <td style={{ ...tdS, color: 'var(--text-muted)' }}>{etiquetaCapa(row.capa || 'exterior', t)}</td>
-        <td style={{ ...tdS, whiteSpace: 'nowrap' }}>{row.pom_code || ''}</td>
+        {/* EL CODI EN `--gold` I L'ESTRELLA DELS KEY, com a la consulta: el codi és el que el
+            tècnic busca amb l'ull, i el ☆ diu quines mesures manen sense llegir-ne cap. */}
+        <td style={{ ...tdS, whiteSpace: 'nowrap', color: 'var(--gold)' }}>
+          {row.nom_fitxa || row.client_code || row.pom_code || ''}
+          {row.is_key && (
+            <i className="ti ti-star" title="KEY"
+              style={{ fontSize: 9, marginLeft: 5, color: 'var(--gold)', verticalAlign: 'middle' }} />
+          )}
+        </td>
         <td style={tdS}>
           <span>{nomDe(row)}</span>
           {inst && <span style={{ fontWeight: 500 }}>{` · ${inst}`}</span>}
+          {/* LA ⓘ DE LA TRADUCCIÓ — el MATEIX component de la consulta (exportat, no copiat).
+              Només quan diu una cosa diferent del nom visible: repetir-lo no és informació. */}
+          {traduit && <InfoTraduccio text={traduit} />}
         </td>
         {/* EL VALOR DE TALLA BASE, COLUMNA PRÒPIA — el mateix carril que la consulta (`--sel`
             acotat pels dos costats), en LECTURA: aquí no es canvien mesures, es decideix com
@@ -333,6 +352,10 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead>
                 <tr>
+                  {/* ORDRE DE LA FAMÍLIA (Agus, 06/08): # · CAPA · POM · NOM · TALLA BASE ·
+                      VE DE · RÈGIM · Δ · Δ BREAK · TALLA BREAK. El valor va enganxat a la
+                      identitat i les regles tanquen la fila. */}
+                  <th style={thS}>#</th>
                   <th style={{ ...thS, width: 104 }}>{t('capa.col')}</th>
                   <th style={{ ...thS, width: 90 }}>{t('measuregrid.col_pom')}</th>
                   <th style={thS}>{t('measuregrid.col_nom')}</th>
@@ -363,7 +386,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
               </thead>
               <tbody>
                 {files.length === 0
-                  ? <tr><td colSpan={9} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
+                  ? <tr><td colSpan={10} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
                       {t('graduacio.superficie.buit')}
                     </td></tr>
                   : cos()}

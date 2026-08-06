@@ -1411,7 +1411,9 @@ function NomCanonic({ value, placeholder, instancia, traduccio, marca = '', edit
 // Va per PORTAL, i no és cosmètic: la cel·la del nom viu dins del contenidor `overflow-x:auto`
 // de la taula, i qualsevol cosa posicionada que en surti queda RETALLADA — la mateixa trampa que
 // es va pagar amb el desplegable del cercador (P0.2b).
-function InfoTraduccio({ text }) {
+// EXPORTADA (06/08): la Graduació ha de dur la MATEIXA ⓘ, no una que se li assembli. Copiar-la
+// hauria estat el segon tooltip del sistema amb la seva pròpia manera de posicionar-se.
+export function InfoTraduccio({ text }) {
   const [hover, setHover] = useState(false)
   const [fixat, setFixat] = useState(false)
   const [pos, setPos] = useState(null)
