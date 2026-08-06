@@ -95,10 +95,26 @@ export function etiquetaInstancia(slug, dicc = null) {
 function nomDelDiccionari(dicc, tram) {
   for (const files of Object.values(dicc?.instancies || {})) {
     const f = files.find(x => x.slug === tram)
-    if (f) return f.nom_en || ''
+    if (f) return curta(f.nom_en || '')
   }
   return ''
 }
+
+/**
+ * L'ETIQUETA CURTA d'una instància: el primer terme, sense els sinònims.
+ *
+ * El catàleg porta `nom_en = 'Extended / stretched'` i a la píndola i dins del nom de la fila
+ * això és soroll: dues paraules per a un sol concepte, en una cel·la que ja va justa. Es presenta
+ * «Extended» (Agus, 06/08).
+ *
+ * ⚠️ **NOMÉS PRESENTACIÓ.** El nom canònic de la BD NO es toca des d'aquí: és el que viatja al
+ * sufix i el que altres superfícies comparen. Si el que s'ha de canviar és el nom del catàleg,
+ * es fa al catàleg i amb qui el mana — v. el PENDENT del report (revisar-ho amb la Montse).
+ *
+ * La regla és el separador, no una llista de casos: qualsevol fila que porti sinònims darrere
+ * d'una barra es presenta pel primer terme, i el dia que n'aparegui una altra ja hi va.
+ */
+export const curta = (nom) => String(nom || '').split('/')[0].trim() || String(nom || '')
 
 /** `true` si la fila parla d'una capa que no és l'exterior (per si cal marcar-la). */
 export const esGermanaDeCapa = (slug) => !!slug && slug !== 'exterior'

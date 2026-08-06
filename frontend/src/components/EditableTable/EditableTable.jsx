@@ -1010,12 +1010,21 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           dins, totes les opcions d'aquella dimensió pel seu ordre de presentació. Amb el
           diccionari encara en vol no hi ha cap columna: la taula no espera cap GET per pintar-se
           i les columnes apareixen quan el vocabulari arriba. */}
+      {/* LES PÍNDOLES SÓN LES DUES PRIMERES DE CADA EIX; la resta, pel `＋` (Agus, 06/08).
+          La posició té VUIT opcions al diccionari i totes vuit a la fila feien una cel·la
+          il·legible per oferir sempre les dues que es fan servir cada dia (Left · Right).
+          CRITERI: **les dues primeres per `display_order` del diccionari** — no hi ha cap slug
+          escrit al codi. Avui l'ordre del catàleg dona left(1) · right(2), que és exactament el
+          que la decisió demana; si el catàleg reordena, la fila el segueix sense tocar res.
+          Cap opció es perd: el modal del `＋` recorre TOTS els eixos amb TOTES les opcions, i a
+          més és l'únic lloc que pot creuar-los (`left` i `relaxed` alhora). */}
       {!readOnly && dims.map((d, k) => {
         const st = dimState(row, d.clau)
+        const visibles = d.opcions.slice(0, 2)
         return (
           <td key={d.clau} style={{ ...tdS, textAlign: 'center', padding: '4px 8px',
                                     borderLeft: k === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
-            {d.opcions.map(o => (
+            {visibles.map(o => (
               <PindolaInstancia key={o.slug} fila={o}
                 encesa={st.mine === o.slug} repartida={st.repartida} altra={st.mine} dicc={dicc}
                 onTria={() => onParteix(row, o.slug)} />
