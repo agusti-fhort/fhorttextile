@@ -283,6 +283,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // dos transition→Paused sobre la mateixa tasca → la 2a era Paused→Paused, que ALLOWED rebutja amb 400
   // (services_c.py). Nul = res a pausar (≈ task.status !== 'InProgress').
   const activeTaskRef = useRef(null)
+  // EL TAB D'ON ES VE. L'omple `obreDeDebo` (el punt comú de les quatre portes del tab i de les
+  // entrades per URL) amb el tab on l'usuari ERA en obrir la superfície, i el modal d'acabar/
+  // pausar hi torna. Ref i no estat: no ha de repintar res, només recordar-ho.
+  const tabDeRetornRef = useRef(null)
   const pauseActiveTask = useCallback(() => {
     const tid = activeTaskRef.current
     if (tid == null) return                 // ja pausada o cap tasca En curs → no demanem transició (evita 400)
@@ -310,6 +314,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // El pas final d'obrir: el que enterEdit feia sempre, ara reutilitzable des del modal.
   const obreDeDebo = useCallback((tab, code) => {
     setOpeningTask(true)
+    // D'ON VENIM, abans d'obrir res: el tab on l'usuari és ARA. Les quatre portes del tab Mesures
+    // hi passen totes, i també les entrades per URL (`?mode=entry`, `?task_id=`), que arriben
+    // aquí per `enterEdit`. El modal d'acabar/pausar hi tornarà.
+    tabDeRetornRef.current = activeTab
     models.openTask(parseInt(id), code)
       .then(res => {
         setEditTaskId(res.data.task_id)
@@ -350,7 +358,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         else setFeedback({ type: 'err', text: motiuOpenTask(e, t) })
       })
       .finally(() => setOpeningTask(false))
-  }, [id, t, reloadTasks, tascaVigentDe, setSp])
+  }, [activeTab, id, t, reloadTasks, tascaVigentDe, setSp])
 
   // F2.2 · D-1 — LA PORTA DE LA FITXA. Era el forat original de tota aquesta feina: «Modificar»
   // navegava sense `task_id`, l'editor autodesava cada 2 s i el temps d'editar la fitxa no
@@ -465,13 +473,45 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // La transició la fa el modal; aquí només queda deixar-ho tot al seu lloc. `activeTaskRef` es
   // buida perquè el cleanup de desmuntatge no torni a demanar una pausa ja feta (el 400 de la
   // PEÇA 2), i la reposició va al panell de Tasques del model — el Kanban no existeix.
+  // ON ES CAU EN TANCAR LA TASCA: D'ON VENIES (Agus, 06/08).
+  //
+  // Anava sempre a Tasques, i això contradiu la pantalla d'on se surt: Graduació declara la seva
+  // sortida natural amb «Tornar a Mesures», i el modal no la pot desmentir. El panell de Tasques
+  // és destinació quan s'hi va expressament, o quan no hi ha context de retorn.
+  //
+  // El context el desa `obreDeDebo` (el punt comú per on passen les QUATRE portes del tab, i
+  // també les entrades per URL): el tab on l'usuari ERA quan va obrir la superfície.
   const acabatOPausat = useCallback(() => {
     activeTaskRef.current = null
     setAcabant(null)
     netejaEdicio()
     reloadTasks(); reloadModel()
-    setActiveTab('Tasques')
+    setActiveTab(tabDeRetornRef.current || 'Tasques')
+    tabDeRetornRef.current = null
   }, [netejaEdicio, reloadTasks, reloadModel])
+  // ENTRAR AL TAB MESURES ÉS ENTRAR A LA CONSULTA. SEMPRE. (Contracte d'Agus, 06/08.)
+  //
+  // L'edició només s'obre pels quatre botons, per una URL amb mode explícit o per una tasca
+  // entrant. Navegar-hi amb el tab, mai.
+  //
+  // EL DEFECTE QUE TANCA: en marxar de Mesures, l'efecte de sortida crida `exitEdit`, i si la
+  // tasca era En curs això OBRE EL MODAL i deixa la neteja per a quan l'usuari respongui —
+  // `mesuresEntry` es queda a `true`. En tornar a Mesures, el `sortia` d'aquell efecte ja no es
+  // compleix (`activeTab === 'Mesures'`), ningú neteja res, i el panell d'edició reviu: clicar
+  // el tab obria Definició POM amb píndoles i «Gravar POM» en comptes de la consulta.
+  //
+  // ES RESETEJA NOMÉS L'ESTAT DE MESURES, no `editing` sencer: si es ve d'editar Escalat, buidar
+  // `editing` aquí li robaria el `sortia` a l'efecte de sortida i la tasca d'Escalat es quedaria
+  // oberta sense modal ni pausa. Cada superfície tanca la seva en marxar-ne.
+  const triaTab = useCallback((tab) => {
+    if (tab === 'Mesures') {
+      setMesuresEntry(false)
+      setMesuresIntent(null)
+      setGraduacioObert(false)
+      setEditing(prev => (prev === 'Mesures' ? null : prev))
+    }
+    setActiveTab(tab)
+  }, [])
   const finishPomEntry = useCallback(() => {
     activeTaskRef.current = null
     // Aquí es repetia el cos de `netejaEdicio` línia per línia. Ara el crida: aquest és EL camí
@@ -832,7 +872,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       }}>
         {TABS.map(tab => (
           <button key={tab} type="button"
-            onClick={() => setActiveTab(tab)}
+            onClick={() => triaTab(tab)}
             style={{
               padding: '6px 16px', borderRadius: 6, border: 'none',
               background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
