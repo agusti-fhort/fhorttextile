@@ -626,7 +626,7 @@ def create_model_pom_view(request, model_id):
         return Response({'error': 'nom i nomenclatura són obligatoris',
                          'codi': 'CAMPS_OBLIGATORIS'}, status=400)
 
-    model = Model.objects.filter(pk=model_id).values('id', 'customer_id').first()
+    model = Model.objects.filter(pk=model_id).values('id', 'customer_id', 'codi_intern').first()
     if not model:
         return Response({'error': 'Model no trobat'}, status=404)
     customer_id = model['customer_id']
@@ -668,7 +668,21 @@ def create_model_pom_view(request, model_id):
             # Neix PENDENT DE REVISIÓ a posta: l'ha creat un tècnic amb un model al davant, no
             # el responsable del catàleg. És bo per treballar i encara no està consolidat.
             pendent_revisio=True,
-            notes=f'Creat des del model {model_id} (POM propi del model).',
+            # LA REFERÈNCIA D'ORIGEN VA A `origen_import`, NO A `notes` (Agus, 06/08).
+            #
+            # Són dos senyals amb dos lectors, i cadascun al seu camp:
+            #   · `CustomerPOMAlias.origen='MODEL'` = PROVINENÇA, permanent. La llegeix el
+            #     cercador i qui pregunti d'on va sortir aquest àlies. Es queda per sempre.
+            #   · `POMMaster.pendent_revisio` = ESTAT DE REVISIÓ, transitori. El neteja la
+            #     Montse quan revisa, i llavors `origen='MODEL'` es queda com a història.
+            #
+            # `origen_import` és el camp fet per a això —el seu `help_text` diu literalment
+            # «Referència del model/fitxa des d'on s'ha creat aquest POM»— i és el que l'import
+            # ja omple (`extraction_views.py:1879`, amb el token de la sessió). Amb la referència
+            # a `notes` la cua de la Montse hauria de distingir «nascut d'un import» de «nascut
+            # d'un model» fent cerca de text lliure; amb el camp, mira UN lloc i sap quin és quin.
+            origen_import=f'model:{model["codi_intern"] or model_id}',
+            notes='',
             actiu=True,
         )
         CustomerPOMAlias.objects.create(
