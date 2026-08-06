@@ -2589,7 +2589,7 @@
     "grup_regla": "Regla de graduación",
     "grup_mesures": "Medidas por talla",
     "regla_delta": "Δ",
-    "regla_delta_break": "Δ break",
+    "regla_delta_break": "Δ ruptura",
     "regla_talla_break": "Talla de ruptura"
   },
   "sizecheck": {
@@ -3271,9 +3271,9 @@
       "base_size_label": "Talla base",
       "regime": "Régimen",
       "delta": "Delta",
-      "break_delta": "Delta break",
+      "break_delta": "Delta de ruptura",
       "break_size": "Talla de ruptura",
-      "delta_break": "Delta break",
+      "delta_break": "Delta de ruptura",
       "talla_break": "Talla de ruptura"
     },
     "row_discarded": "Sin valor: esta fila se descartará al guardar.",
@@ -3517,7 +3517,7 @@
     "size_system_label": "Size System: ",
     "rules_count": "{{count}} reglas",
     "rules_count_filtered": "{{count}}/{{total}} reglas",
-    "with_break": "{{count}} con break",
+    "with_break": "{{count}} con ruptura",
     "suggested_by_profile": "Sugerido por el catálogo",
     "system": "Sistema",
     "custom": "Personalizado",
@@ -3546,7 +3546,7 @@
       "pom_name": "Nombre POM",
       "logic": "Lógica",
       "delta_size": "Δ/talla",
-      "delta_break": "Δ break",
+      "delta_break": "Δ ruptura",
       "base_size": "Talla base",
       "base_value": "Valor base"
     },
