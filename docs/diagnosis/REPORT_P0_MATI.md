@@ -152,3 +152,106 @@ Tots verds. `npm run build` net i `eslint` sense errors a cada commit.
   taula (`EditableTable`), que és on el brief l'ha demanada.
 - La causa de fons de P0.2 —**per què** la petició del diccionari falla al navegador de l'Agus—
   segueix oberta. L'avís i el reintenta tapen el forat; no el tanquen.
+
+---
+
+# ADDENDA · el 404 del diccionari (09:28) — RESOLT
+
+## No eren dues rutes. N'hi ha UNA.
+
+El brief demanava trobar «les dues rutes» i unificar-les. **No existeixen.** El cens complet:
+
+| On | Ruta |
+|---|---|
+| Backend | `backend/fhort/pom/urls.py:95` → `mesures/diccionari/` |
+| Frontend | `frontend/src/api/endpoints.js:231` → `/api/v1/mesures/diccionari/` |
+
+**Coincideixen exactament**, i és l'ÚNICA crida del frontend (els altres tres encerts del `grep`
+són comentaris i un test). No hi havia res a unificar, i canviar la ruta del frontend hauria
+trencat l'única crida correcta que hi havia. Per això no ho vaig fer i ho vaig preguntar abans.
+
+## El que passava de debò: el codi del disc ≠ el codi que corria
+
+```
+gunicorn viu, arrencat        2026-08-05 10:17:53
+la ruta es va crear a         2026-08-05 19:02:49   (ec0e9730)
+```
+
+El procés que serveix **portava nou hores de retard sobre la ruta**: no l'havia carregada mai.
+D'aquí que tot semblés correcte des de dins —codi al disc amb la ruta, `manage.py check` net,
+`resolve()` la troba— i que l'Agus rebés 404 a cada intent des de fora.
+
+Prova que ho separa sense ambigüitat (sense credencial, contra el procés viu):
+
+```
+ABANS          404  /api/v1/mesures/diccionari/     ← el procés no la té
+               401  /api/v1/models/                 ← ruta viva, només li falta auth
+DESPRÉS        401  /api/v1/mesures/diccionari/     ← viva
+```
+
+També explica per què la meva verificació anterior deia 200: l'`APIClient` de DRF carrega el codi
+del **disc**, no el del procés desplegat. Les dues coses eren certes alhora, i és exactament la
+distinció que el fum no feia.
+
+## Fet
+
+**Reinici del servei** (autoritzat per l'Agus, opció «reinicia i queda't mirant»). Carregava 19
+commits de backend que aquell procés no havia corregut mai; **0 migracions pendents** i
+`manage.py check` net abans de tocar-lo.
+
+Comprovacions després del reinici:
+
+```
+✓ /api/v1/mesures/diccionari/  404 → 401 (directe i via nginx)
+✓ cap 404 als endpoints que fa servir la pantalla (models · taula-mesures · poms/cerca · items)
+✓ cicle de model (crear · llistar · esborrar)      verd
+✓ P0.1 · el camí d'un valor + F5                   verd
+✓ cap error al journal del servei
+```
+
+⚠️ Una línia al log en arrencar, **benigna i no nova**: `Control server error: [Errno 13]
+Permission denied: '/var/www/.gunicorn'`. És el socket de control de gunicorn, no el servei
+d'HTTP — l'aplicació respon amb normalitat. Anotat, no tocat.
+
+## Per què el fum no ho va caçar (i què s'ha fet)
+
+El fum de P0.2 **estubejava la crida del diccionari**: provava la pantalla contra una API
+imaginària i donava verd mentre l'usuari rebia 404. Ara, **abans d'obrir cap navegador**,
+pregunta al backend DESPLEGAT si la ruta hi és: sense credencial, **401 = viva · 404 = el procés
+no la té**. Verificat que el guard discrimina (ruta real 401 · ruta inventada 404).
+
+S'hi han afegit les altres dues coses que la consola ensenyava i el fum no mirava: **F5 × 3** (la
+cache del diccionari és de mòdul i una recàrrega la buida) i **cap 404 a la consola**.
+
+```
+✓ 0 · la ruta és VIVA al backend desplegat (HTTP 401 sense credencial)
+✓ A · amb diccionari SA hi són les columnes d'instància: ['Posició', 'Estat']
+✓ A · F5 × 3 · les columnes hi segueixen a cada recàrrega
+✓ A · consola sense cap 404
+· B · amb diccionari CAIGUT · cap columna, PERÒ avís + Reintenta
+```
+
+## La millora de P0.2 es queda, i ara sí que serveix
+
+L'avís + Reintenta + cache es mantenen. Abans picaven una porta tapiada; **ara protegeixen del
+cas transitori de debò** (una petició que surt abans que la sessió estigui a punt), que era el
+que estaven pensats per cobrir.
+
+## 🚩 El que segueix obert
+
+- **La verificació amb la teva sessió al navegador la fas tu.** Els tokens encunyats des del
+  shell segueixen donant 401 fins i tot després del reinici, o sigui que la teoria del
+  SECRET_KEY desfasat no era la bona i el clic real segueix sense poder-se automatitzar.
+  **Obre Definició POM al MILEY i mira que surtin POSICIÓ i ESTAT.**
+- **La lliçó operativa:** un `npm run build` desplega el frontend a l'instant, però **el backend
+  no es desplega sol**. Cap dels controls del mètode (build, check, tests) mira si el procés que
+  serveix porta el codi que hem escrit. Val la pena decidir si el reinici entra al ritual de
+  desplegament — avui aquesta divergència va costar un matí.
+
+## Commit
+
+| Hash | Què |
+|---|---|
+| `133b846b` | 21 · el fum del diccionari pica la RUTA REAL, no la que ell mateix estubejava |
+
+(El reinici del servei no és un commit: és una acció d'infra sobre staging.)
