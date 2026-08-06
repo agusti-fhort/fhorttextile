@@ -110,6 +110,26 @@ const btnSecondary = {
   display: 'flex', alignItems: 'center', gap: 4,
 }
 
+/**
+ * LES ACCIONS PRINCIPALS D'UN TAB — fons BLANC amb la vora de la casa (Agus, 06/08).
+ *
+ * `btnSecondary` va `background:'transparent'`, i sobre el crema de la pàgina (`--bg-muted`) els
+ * botons es fonien amb el fons: semblaven text amb una vora, no accions. Aquestes quatre són el
+ * gest principal del tab i han de tenir cos.
+ *
+ * El blanc és `--white`: **`--panel` no existeix en aquest design system** (és el nom que fa
+ * servir la maqueta v8.1, no un token del `index.css`), i inventar-lo aquí crearia un token
+ * fantasma que ningú manté.
+ */
+const btnAccio = (deshabilitat = false) => ({
+  ...btnSecondary,
+  background: 'var(--white)',
+  borderColor: 'var(--gold)',
+  color: 'var(--gold)',
+  opacity: deshabilitat ? 0.6 : 1,
+  cursor: deshabilitat ? 'default' : 'pointer',
+})
+
 const taskListFromResponse = (data) => data?.results || (Array.isArray(data) ? data : [])
 
 // EL MOTIU D'UN `open-task` REBUTJAT, en paraules.
@@ -270,6 +290,14 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // Declarat ABANS d'`obreDeDebo`, que el referencia dins d'un useCallback: en aquest fitxer
   // ja hi ha hagut una TDZ que cap gate va veure, i l'ordre de declaració no és cosmètic.
   const [dialeg, setDialeg] = useState(null)   // {cara, tab, code, tasca} | null
+  // EL GEST DE GRADUAR viu a MESURES (correcció de rumb, Agus 31/07): el calaix lateral sobre la
+  // taula, i Escalat torna a ser la seva pestanya de sempre.
+  //
+  // PUJAT AQUÍ pel mateix motiu que `dialeg`: des que Graduació passa pel circuit de tasca,
+  // `obreDeDebo` l'obre, i `obreDeDebo` és un `useCallback` declarat just a sota. Deixar-lo on
+  // era (200 línies més avall) el posava dins la zona morta temporal — que és exactament la
+  // petada del 31/07 que `ops/qa/qa_mount_modelsheet.py` vigila.
+  const [graduacioObert, setGraduacioObert] = useState(false)
 
   // El pas final d'obrir: el que enterEdit feia sempre, ara reutilitzable des del modal.
   const obreDeDebo = useCallback((tab, code) => {
@@ -279,8 +307,15 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         setEditTaskId(res.data.task_id)
         activeTaskRef.current = res.data.task_id   // open-task la deixa En curs → viva per pausar després
         // PUNT COMÚ: una tasca 'pom' obre el tab Mesures en mode ENTRADA (wizard), no edició de graella.
-        // (size_check ve per URL i passa per editing='Mesures'; grading → tab Escalat.)
+        // `size_check` sobre Mesures passa per `editing='Mesures'` → la superfície de PRESA
+        // (`CheckMeasureEditor` editable). Hi arribava només per URL; des del 06/08 també pel
+        // botó ③ «Mesurar prenda», pel mateix camí i sense mecanisme nou.
         if (tab === 'Mesures' && code === 'pom') setMesuresEntry(true)
+        // GRADUACIÓ DES DE MESURES: la tasca és `grading` però la superfície és el CALAIX, no el
+        // tab Escalat. Sense aquesta branca el `setEditing('Mesures')` de sota obriria la presa
+        // —una superfície que no té res a veure amb triar un joc de regles— amb el rellotge de
+        // graduació corrent al damunt.
+        else if (tab === 'Mesures' && code === 'grading') setGraduacioObert(true)
         else setEditing(tab)
         reloadTasks()
       })
@@ -545,10 +580,6 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [propagating, setPropagating] = useState(false)
   const [propStatus, setPropStatus] = useState(null)   // {te_dades_propagades, segellada, version_number}
   const [propStep, setPropStep] = useState(0)           // 0 cap modal · 1 avís adaptat · 2 confirmació final
-  // EL GEST DE GRADUAR viu a MESURES (correcció de rumb, Agus 31/07). El botó «Graduació»
-  // obre EL WIZARD D'EDITAR MODEL al pas 4, com a calaix lateral sobre la taula. Escalat
-  // torna a ser la seva pestanya de sempre.
-  const [graduacioObert, setGraduacioObert] = useState(false)
   const [propagarEnCua, setPropagarEnCua] = useState(false)
   const [usantJoc, setUsantJoc] = useState(false)
   // D1 + D-31.4 — el mateix component de confirmació que fa servir el wizard (v. `onUsarJoc`).
@@ -596,6 +627,21 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   //      toast: queda EN CUA i s'obre el pas de Graduació. El backend ja barra el pas; el que
   //      guanya aquí és el camí bo en lloc del 400 mut.
   //   2. Hi ha propagació prèvia? → avís de 2 passos (pas 1 segons gravetat; pas 2 universal).
+  // ④ PROPAGAR I LA TASCA — quin criteri hi ha, i quin s'aplica.
+  //
+  // EL QUE HI HA AL CIRCUIT: ni `onPropagarClick` ni `execPropagar` han cridat mai `openTask`.
+  // Propagar només crida `generarGrading` i, en sortir bé, fa `setActiveTab('Escalat')`. Aquest
+  // canvi de tab dispara el salt de superfície (`saltDeSuperficie`, D-1), i com que
+  // `CODE_PER_TAB.Escalat === 'grading'`, la sessió SALTA a la tasca de graduació **si ja
+  // existeix i és lliure** — en silenci, sense crear-ne cap.
+  //
+  // EL QUE S'APLICA: es manté. Propagar és un acte DINS de la graduació, no una feina a part, i
+  // ara el camí natural el precedeix —②, que sí que obre la tasca de graduació. Si el tècnic
+  // propaga sense haver graduat abans, el salt de D-1 el posa sota la tasca de graduació vigent
+  // si n'hi ha, i si no n'hi ha cap no s'inventa feina.
+  //
+  // 🚩 A CONFIRMAR AMB L'AGUS: no hi ha cap decisió escrita que digui què ha de fer propagar amb
+  // el temps. Això és el criteri que el circuit ja practicava, no una decisió presa aquí.
   const onPropagarClick = () => {
     if (propagating) return
     models.gradingStatus(parseInt(id))
@@ -874,40 +920,60 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                   ))}
                 </div>
               )}
+              {/* LES QUATRE ACCIONS DEL TAB, EN ORDRE DE FLUX DE TREBALL (Agus, 06/08):
+                  ① Editar POM · ② Graduació · ③ Mesurar prenda · ④ Propagar.
+                  Primer es defineix QUÈ es mesura, després COM s'escala, després es MESURA la
+                  peça, i al final es PROPAGA. L'ordre és el que fa el tècnic, no l'ordre en què
+                  els botons van néixer.
+
+                  El tab és de CONSULTA i aquests quatre són les vies d'entrada a les seves
+                  superfícies. Cadascun passa pel circuit de tasca existent (`enterEdit` →
+                  `caraObrirTasca` → `obreDeDebo`/modal de tres cares): obre-si-cal, modal NOMÉS
+                  si hi ha conflicte, i el rellotge corrent. Cap mecànica nova. */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {/* Commuta consulta↔edició DINS la tab (no navega): manté tot el context. */}
                 {editing === 'Mesures' ? (
-                  <button type="button" onClick={exitEdit}
-                    style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+                  <button type="button" onClick={exitEdit} style={btnAccio()}>
                     <i className="ti ti-eye" style={{ fontSize: 14 }} />
                     {t('model_sheet.back_to_consult')}
                   </button>
                 ) : (
+                  /* ① EDITAR POM — Definició de POMs i talla base. «Importar taula» hi viu a
+                     dins com a via d'entrada (`MeasuresEntryPanel`), no aquí. */
                   <button type="button" disabled={openingTask}
-                    onClick={() => enterEdit('Mesures', 'pom')}
-                    style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
-                             opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
+                    onClick={() => enterEdit('Mesures', 'pom')} style={btnAccio(openingTask)}>
                     <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
                     {t('model_sheet.edit_pom')}
                   </button>
                 )}
-                {/* GRADUACIÓ — obre el WIZARD D'EDITAR MODEL al pas 4, en calaix lateral, amb
-                    els quatre passos navegables. En triar un joc, les regles passen a ser del
-                    model i les columnes de Regla de la taula queden plenes. */}
+                {/* ② GRADUACIÓ — el calaix lateral sobre la taula (P11). Ara ENTRA PEL CIRCUIT:
+                    `enterEdit('Mesures','grading')` obre la tasca de graduació i el seu rellotge,
+                    i `obreDeDebo` reconeix la parella (Mesures + grading) per obrir el calaix en
+                    comptes de saltar al tab Escalat. Abans cridava `obreGraduacio` directament i
+                    es graduava SENSE tasca ni temps.
+                    Quan la pantalla nova de P0.5d existeixi, el que canvia és on porta —no com
+                    s'hi entra. */}
                 <button type="button" disabled={openingTask}
-                  onClick={obreGraduacio}
-                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
-                           opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
+                  onClick={() => enterEdit('Mesures', 'grading')} style={btnAccio(openingTask)}>
                   <i className="ti ti-chart-arrows-vertical" style={{ fontSize: 14 }} />
                   {t('graduacio.button')}
                 </button>
-                {/* Propagar a grading (origen): inicia fase nova sobre llenç net i porta a Escalat.
-                    Mira abans i adverteix (2 passos) si ja hi ha propagació. */}
+                {/* ③ MESURAR PRENDA — NOU. La superfície ja existia (`CheckMeasureEditor` en mode
+                    presa, maqueta v3) però només s'hi arribava per URL des del WorkPlan o d'un
+                    redirect de fitting: des del full del model no hi havia porta. El codi de
+                    tasca és `size_check`, i `obreDeDebo` ja el porta a `editing='Mesures'`, que
+                    és exactament la presa. Si el model ve amb `?fitting_session=`, la sessió ja
+                    resolta mana i la presa s'hi lliga sola (font `fitting`). */}
+                <button type="button" disabled={openingTask}
+                  onClick={() => enterEdit('Mesures', 'size_check')} style={btnAccio(openingTask)}>
+                  <i className="ti ti-ruler-measure" style={{ fontSize: 14 }} />
+                  {t('presa.titol')}
+                </button>
+                {/* ④ PROPAGAR a grading (origen): inicia fase nova sobre llenç net i porta a
+                    Escalat. Mira abans i adverteix (2 passos) si ja hi ha propagació.
+                    NO OBRE TASCA PRÒPIA, i és deliberat: v. la nota de `onPropagarClick`. */}
                 <button type="button" disabled={openingTask || propagating}
-                  onClick={onPropagarClick}
-                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
-                           opacity: (openingTask || propagating) ? 0.6 : 1,
-                           cursor: (openingTask || propagating) ? 'default' : 'pointer' }}>
+                  onClick={onPropagarClick} style={btnAccio(openingTask || propagating)}>
                   <i className="ti ti-git-branch" style={{ fontSize: 14 }} />
                   {propagating ? t('grading_propagate.running') : t('grading_propagate.button')}
                 </button>
