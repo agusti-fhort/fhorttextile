@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import client from '../../api/client'
 import { models } from '../../api/endpoints'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
-import { InfoTraduccio } from '../EditableTable/EditableTable'
+import { InfoTraduccio, AMPLADES } from '../EditableTable/EditableTable'
 
 // LA GRADUACIÓ ÉS UNA SUPERFÍCIE PRÒPIA (P0.5d · Agus, 06/08, a pantalla).
 //
@@ -60,9 +60,10 @@ const thS = {
 }
 const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: FS_VAL }
 
-// L'amplada de la columna NOM, la mateixa que `EditableTable` (`W_NOM`). Es declara aquí amb el
-// mateix nom perquè el dia que allà canviï, la recerca la trobi als dos llocs.
-const W_NOM = 236
+// Q2 (06/08) — LES AMPLADES SÓN LES DE LA CONSULTA, IMPORTADES. Aquí hi havia `W_NOM = 236`
+// copiat a mà «perquè la recerca el trobés als dos llocs», i la resta de columnes amb números
+// propis (110/90/100/100 contra 96/84/96/96). Copiar no és compartir: es va bifurcar el mateix
+// dia. Ara venen d'`EditableTable.AMPLADES`, que és l'única declaració.
 
 const btnPrimary = (disabled) => ({
   background: disabled ? 'var(--bg-muted)' : 'var(--gold)',
@@ -367,23 +368,30 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
       {!carregant && !err && (
         <>
           <div style={{ overflowX: 'auto', border: '0.5px solid var(--border)', borderRadius: 8 }}>
-            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            {/* Q2 — LA TAULA NO VA AL 100%. Anava-hi, i com que totes les columnes menys `#`
+                tenien amplada fixada, el sobrant de la pantalla se n'anava sencer a la primera:
+                el forat entre `#` i CAPA de la captura de les 13:04. La consulta no ha fet mai
+                això —taula d'amplada de contingut dins d'un `overflowX:auto`— i aquesta és la
+                mateixa taula. Clonat literal d'`EditableTable`. */}
+            <table style={{ borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
               <thead>
                 <tr>
                   {/* ORDRE DE LA FAMÍLIA (Agus, 06/08): # · CAPA · POM · NOM · TALLA BASE ·
                       VE DE · RÈGIM · Δ · Δ BREAK · TALLA BREAK. El valor va enganxat a la
                       identitat i les regles tanquen la fila. */}
+                  {/* El `#` NO porta amplada, com a la consulta: s'encongeix al seu contingut. */}
                   <th style={thS}>#</th>
-                  <th style={{ ...thS, width: 104 }}>{t('capa.col')}</th>
-                  <th style={{ ...thS, width: 90 }}>{t('measuregrid.col_pom')}</th>
-                  {/* MATEIXA AMPLADA que la consulta (`W_NOM = 236`): és el que fa que el nom
-                      embolica al mateix punt i que les dues taules tinguin la mateixa alçada. */}
-                  <th style={{ ...thS, width: W_NOM }}>{t('measuregrid.col_nom')}</th>
+                  {/* El bloc d'IDENTITAT amb les amplades de la consulta (`width` + `minWidth`,
+                      com hi van allà): és el que fa que el nom embolica al mateix punt i que les
+                      dues taules tinguin la mateixa alçada de fila. */}
+                  <th style={{ ...thS, width: AMPLADES.capa, minWidth: AMPLADES.capa }}>{t('capa.col')}</th>
+                  <th style={{ ...thS, width: AMPLADES.codi, minWidth: AMPLADES.codi }}>{t('measuregrid.col_pom')}</th>
+                  <th style={{ ...thS, width: AMPLADES.nom, minWidth: AMPLADES.nom }}>{t('measuregrid.col_nom')}</th>
                   {/* v8.1 `th.baseh` — CLONAT de la consulta, no reinventat: l'etiqueta petita
                       nomena la columna i la talla va en cos gran, que és el que la fa trobar
                       sense llegir. Sense talla base declarada es queda el literal de sempre;
                       inventar-hi una «Talla base» prometria una talla que ningú ha dit. */}
-                  <th style={{ ...thS, width: 100, textAlign: 'right', background: 'var(--gold-pale)',
+                  <th style={{ ...thS, minWidth: AMPLADES.base, textAlign: 'right', background: 'var(--gold-pale)',
                                borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
                     {data?.base_size ? (
                       <>
@@ -397,11 +405,16 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
                       </>
                     ) : t('editable_table.col.base_value')}
                   </th>
-                  <th style={{ ...thS, width: 90 }}>{t('graduacio.superficie.col_origen')}</th>
-                  <th style={{ ...thS, width: 110, borderLeft: '1px solid var(--border)' }}>{t('fitting.grid.regime')}</th>
-                  <th style={{ ...thS, width: 90, textAlign: 'right' }}>{t('editable_table.col.delta')}</th>
-                  <th style={{ ...thS, width: 100, textAlign: 'right' }}>{t('editable_table.col.delta_break')}</th>
-                  <th style={{ ...thS, width: 100 }}>{t('editable_table.col.talla_break')}</th>
+                  {/* «VE DE» és columna PRÒPIA d'aquesta pantalla (la consulta no la té): no hi ha
+                      cap amplada de la família a clonar-hi, i per això declara la seva. */}
+                  <th style={{ ...thS, minWidth: 90 }}>{t('graduacio.superficie.col_origen')}</th>
+                  {/* Les QUATRE de la regla, amb les amplades de la consulta. Aquí són editables i
+                      allà de lectura, però la columna ha de caure al mateix lloc: és la mateixa
+                      taula mirada de dues maneres. */}
+                  <th style={{ ...thS, minWidth: AMPLADES.regim, borderLeft: '1px solid var(--border)' }}>{t('fitting.grid.regime')}</th>
+                  <th style={{ ...thS, minWidth: AMPLADES.delta, textAlign: 'right' }}>{t('editable_table.col.delta')}</th>
+                  <th style={{ ...thS, minWidth: AMPLADES.delta_break, textAlign: 'right' }}>{t('editable_table.col.delta_break')}</th>
+                  <th style={{ ...thS, minWidth: AMPLADES.talla_break }}>{t('editable_table.col.talla_break')}</th>
                 </tr>
               </thead>
               <tbody>
