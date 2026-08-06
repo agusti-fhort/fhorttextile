@@ -11,6 +11,7 @@ import { buildFittingGroups, buildFittingRows, regimeLeadCol } from '../componen
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from './fittingShared'
 import { orderedSizes } from '../utils/sizeRun'
 import { identitatMesura } from '../utils/identitatMesura'
+import { etiquetaInstancia } from '../utils/capaInstancia'
 
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
 
@@ -18,6 +19,19 @@ const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
 function useSessionField(sessionId, field) {
   const persist = useCallback((raw) => fittingSessions.update(sessionId, { [field]: raw }), [sessionId, field])
   return useDebouncedSave(persist)
+}
+
+// Q4 — el mateix camp, en LECTURA: una acta no s'edita ni per la capçalera. La persona provada
+// i el lloc són part del que es va gravar aquell dia.
+function ContextField({ sessionId, field, label, value, readOnly }) {
+  if (readOnly) {
+    return (
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+        {label}: <span style={{ color: 'var(--text-main)' }}>{value || '—'}</span>
+      </span>
+    )
+  }
+  return <EditableContextField sessionId={sessionId} field={field} label={label} value={value} />
 }
 
 function EditableContextField({ sessionId, field, label, value }) {
@@ -124,7 +138,17 @@ function changedRows(grid) {
   for (const l of lines) {
     // C4/BLOC 1-BIS — s'agrupa per la MESURA, no pel POM: dues germanes són dues files.
     const ident = identitatMesura(l)
-    if (!pomMap.has(ident)) pomMap.set(ident, { pom_id: l.pom_id, capa: l.capa, instancia: l.instancia, codi: l.codi, nom: l.nom, is_key: l.is_key, cells: {} })
+    // Q4 — ELS CODIS I ELS NOMS SÓN ELS DEL MODEL D'AVUI, com a totes les altres taules
+    // (llei de `nomenclaturaPom.js` i de `fittingGridAdapter:142`: `nom_fitxa` primer). Aquí la
+    // columna POM pintava el codi del CATÀLEG i la columna NOM hi tornava a pintar la
+    // nomenclatura: el full de canvis parlava una llengua que el model no fa servir, i dues
+    // germanes hi sortien amb el mateix rètol.
+    if (!pomMap.has(ident)) pomMap.set(ident, {
+      pom_id: l.pom_id, capa: l.capa, instancia: l.instancia,
+      codi: l.nom_fitxa || l.codi,
+      nom: l.nom_en || l.nom_local || l.nom,
+      is_key: l.is_key, cells: {},
+    })
     pomMap.get(ident).cells[l.size_label] = l
   }
   const baseOf = (l) => l?.evolucio?.[0]?.valor_cm ?? null
@@ -300,7 +324,13 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
         <button onClick={onBack} disabled={busy} style={{
           background: 'none', border: 'none', color: 'var(--text-muted)', cursor: busy ? 'default' : 'pointer', fontSize: 'var(--fs-body)', padding: 0, marginRight: 12,
         }}>← {t('fitting.save.back')}</button>
-        <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, color: 'var(--text-main)' }}>{t('fitting.save.title')}</span>
+        {/* Q4 (06/08) — UNA ACTA NO PORTA TÍTOL D'ACCIÓ. La capçalera deia «Gravar el fitting»
+            sobre una sessió que el badge de dalt declarava «Tancada · només lectura»: dos estats
+            a la mateixa vista, i el que manava era el que no es podia fer. La fitxa d'una sessió
+            tancada diu què és —la fitxa— i prou. */}
+        <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, color: 'var(--text-main)' }}>
+          {t(readOnly ? 'fitting.save.title_acta' : 'fitting.save.title')}
+        </span>
       </div>
 
       {grids === null ? (
@@ -355,11 +385,20 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
                         {rows.map((row, i) => {
                           const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-card)'
                           return (
-                            <tr key={row.pom_id} style={{ background: rowBg }}>
+                            // La clau és la MESURA sencera: amb dues germanes, `pom_id` sol es
+                            // repetia i React en descartava una fila en silenci.
+                            <tr key={identitatMesura(row)} style={{ background: rowBg }}>
                               <td style={{ padding: '5px 10px', borderBottom: '0.5px solid var(--border)', fontWeight: 500, color: 'var(--gold)', whiteSpace: 'nowrap' }}>
                                 {row.codi}{row.is_key && <i className="ti ti-star-filled" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} />}
                               </td>
-                              <td style={{ padding: '5px 10px', borderBottom: '0.5px solid var(--border)', color: 'var(--text-muted)' }}>{row.nom}</td>
+                              <td style={{ padding: '5px 10px', borderBottom: '0.5px solid var(--border)', color: 'var(--text-muted)' }}>
+                                {row.nom}
+                                {etiquetaInstancia(row.instancia) && (
+                                  <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>
+                                    {` · ${etiquetaInstancia(row.instancia)}`}
+                                  </span>
+                                )}
+                              </td>
                               {sizeLabels.map(s => {
                                 const line = row.cells[s]
                                 const mod = isMod(line)
@@ -385,31 +424,44 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
             })()}
           </Card>
 
-          {/* b) OBSERVACIONS — session.notes (editable, autosave on blur) */}
+          {/* b) OBSERVACIONS — session.notes.
+              Q4 — EN UNA ACTA VAN EN TEXT PLA. El `textarea` amb autosave seguia obert sobre una
+              sessió tancada: es podia reescriure el que es va dir aquell dia, i el desat passava
+              sense que cap guard del backend hi digués res (el guard de segellat cobreix les
+              LÍNIES, no `session.notes`). */}
           <Card title={t('fitting.save.observations')} style={{ marginBottom: '1.25rem' }}>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              onBlur={saveNotes}
-              placeholder={t('fitting.save.no_observations')}
-              style={{
-                width: '100%', minHeight: 80, padding: '8px 10px', fontSize: 'var(--fs-body)',
-                border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)',
-                color: 'var(--text-main)', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit',
-              }}
-            />
+            {readOnly ? (
+              <div style={{ fontSize: 'var(--fs-body)', color: notes ? 'var(--text-main)' : 'var(--text-muted)',
+                            whiteSpace: 'pre-wrap', fontStyle: notes ? 'normal' : 'italic' }}>
+                {notes || t('fitting.save.no_observations')}
+              </div>
+            ) : (
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                onBlur={saveNotes}
+                placeholder={t('fitting.save.no_observations')}
+                style={{
+                  width: '100%', minHeight: 80, padding: '8px 10px', fontSize: 'var(--fs-body)',
+                  border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)',
+                  color: 'var(--text-main)', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit',
+                }}
+              />
+            )}
           </Card>
 
-          {/* c) IMATGES — pujada (multipart a /fitting-photos/) + miniatures */}
+          {/* c) IMATGES — miniatures sempre; la PUJADA només amb la sessió viva (Q4). */}
           <Card title={t('fitting.save.images')} style={{ marginBottom: '1.25rem' }}>
-            <label style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 10,
-              cursor: uploading ? 'default' : 'pointer', fontSize: 'var(--fs-body)', color: 'var(--gold)',
-            }}>
-              <input type="file" accept="image/*" multiple onChange={onUpload} disabled={uploading} style={{ display: 'none' }} />
-              <i className="ti ti-upload" style={{ fontSize: 14 }} />
-              {uploading ? t('fitting.save.uploading') : t('fitting.save.add_images')}
-            </label>
+            {!readOnly && (
+              <label style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 10,
+                cursor: uploading ? 'default' : 'pointer', fontSize: 'var(--fs-body)', color: 'var(--gold)',
+              }}>
+                <input type="file" accept="image/*" multiple onChange={onUpload} disabled={uploading} style={{ display: 'none' }} />
+                <i className="ti ti-upload" style={{ fontSize: 14 }} />
+                {uploading ? t('fitting.save.uploading') : t('fitting.save.add_images')}
+              </label>
+            )}
             {photos.length === 0 ? (
               <div style={muted}>{t('fitting.save.no_images')}</div>
             ) : (
@@ -437,8 +489,9 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
 
           {/* ACCIONS */}
           {readOnly ? (
+            // Q4 — cap botó: el que queda és la nota de què és aquesta pàgina.
             <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', paddingTop: 4 }}>
-              {t('fitting.save.read_only')}
+              {t('fitting.save.acta_hint')}
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, flexWrap: 'wrap' }}>
@@ -642,9 +695,9 @@ export default function FittingDetail() {
               <Badge variant={estatVariant[session.estat] || 'gray'}>{session.estat_display || session.estat}</Badge>
               {collection && <span>{t('fitting.id.collection')}: {collection}</span>}
               {clientRef && <span>{t('fitting.id.client_ref')}: {clientRef}</span>}
-              <EditableContextField sessionId={session.id} field="model_persona" label={t('fitting.id.persona')} value={session.model_persona} />
+              <ContextField sessionId={session.id} field="model_persona" label={t('fitting.id.persona')} value={session.model_persona} readOnly={readOnly} />
               <span>{t('fitting.id.responsible')}: {session.responsable_nom || '—'}</span>
-              <EditableContextField sessionId={session.id} field="lloc" label={t('fitting.id.location')} value={session.lloc} />
+              <ContextField sessionId={session.id} field="lloc" label={t('fitting.id.location')} value={session.lloc} readOnly={readOnly} />
               {/* Icona Info cablada al panell de fitxers (B1); ti-photo/ti-note stub fins a B2 */}
               <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
                 {[

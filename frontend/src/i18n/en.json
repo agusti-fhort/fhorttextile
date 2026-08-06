@@ -2365,7 +2365,9 @@
       "uploading": "Uploading…",
       "view_measures": "View / edit table",
       "partial_close": "Saved {{done}} of {{total}} pieces. The session was not closed: review it before leaving.",
-      "not_sealed": "The session could not be closed: some pieces are unresolved. Resolve them and save again."
+      "not_sealed": "The session could not be closed: some pieces are unresolved. Resolve them and save again.",
+      "title_acta": "Fitting record",
+      "acta_hint": "Session closed — a record of what was measured that day. Read only."
     },
     "convocatoria": "Fitting call",
     "group": {

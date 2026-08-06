@@ -2365,7 +2365,9 @@
       "uploading": "Pujant…",
       "view_measures": "Veure / editar taula",
       "partial_close": "S'han gravat {{done}} de {{total}} peces. La sessió no s'ha tancat: revisa-la abans de sortir.",
-      "not_sealed": "La sessió no s'ha pogut tancar: queden peces sense resoldre. Resol-les i torna a gravar."
+      "not_sealed": "La sessió no s'ha pogut tancar: queden peces sense resoldre. Resol-les i torna a gravar.",
+      "title_acta": "Fitxa del fitting",
+      "acta_hint": "Sessió tancada — acta de què es va mesurar aquell dia. Només lectura."
     },
     "convocatoria": "Convocatòria",
     "group": {
