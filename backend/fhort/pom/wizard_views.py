@@ -591,6 +591,111 @@ def create_tenant_pom_view(request):
         return Response({'error': str(e)}, status=500)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_model_pom_view(request, model_id):
+    """POST /api/v1/models/<model_id>/pom-propi/ — CREAR POM PROPI DEL MODEL.
+
+    Body: {nom, nomenclatura, categoria_id?, descripcio_local?}
+
+    EL GEST QUE FALTAVA. La llei diu que els POMs es van a buscar al catàleg del client i que no
+    s'encunyen codis lliures — però un model pot necessitar una mesura que el catàleg encara no
+    té («Height sequins piece», el cas real del MILEY). Sense una porta explícita, aquesta
+    necessitat es colava per on podia: l'import agafava el codi del document tal qual i creava un
+    POM orfe, i així va néixer el POM 440 amb `codi_client='U1'` quan Brownie ja tenia
+    `U1 → 342 Button spacing`. La feina d'aquesta vista és que aquell camí ja no calgui i que el
+    que abans passava en silenci ara passi amb nom, nomenclatura i validació.
+
+    EL POM NEIX AL CATÀLEG DEL CLIENT, no en un limbe (decisió d'Agus, 06/08). Es crea el
+    `POMMaster` i, sobretot, el `CustomerPOMAlias` amb `origen='MODEL'`: és el que el fa
+    EXISTIR per al client. Conseqüència volguda i acceptada — la validació de col·lisió el veurà
+    a partir d'ara, i un altre model del mateix client el podrà reutilitzar des del cercador.
+    Això és coneixement del client acumulant-se, que és el que ha de passar.
+
+    NO es toca `POMMaster`: cap camp nou, cap FK a una app SHARED. «Del model» és la provinença
+    de l'àlies, no una columna del catàleg de la casa.
+    """
+    from django.db import transaction
+    from fhort.models_app.models import Model
+    from fhort.pom.models import CustomerPOMAlias, POMMaster
+    from fhort.pom.nomenclatura import colisio_de_codi
+
+    nom = (request.data.get('nom') or '').strip()
+    codi = (request.data.get('nomenclatura') or '').strip()
+    if not nom or not codi:
+        return Response({'error': 'nom i nomenclatura són obligatoris',
+                         'codi': 'CAMPS_OBLIGATORIS'}, status=400)
+
+    model = Model.objects.filter(pk=model_id).values('id', 'customer_id').first()
+    if not model:
+        return Response({'error': 'Model no trobat'}, status=404)
+    customer_id = model['customer_id']
+    if not customer_id:
+        # Sense client no hi ha catàleg de client on posar-lo, i inventar-ne un seria tornar al
+        # POM orfe que aquesta vista existeix per evitar.
+        return Response({'error': 'Aquest model no té client assignat',
+                         'codi': 'MODEL_SENSE_CLIENT'}, status=400)
+
+    # ── LA VALIDACIÓ DE COL·LISIÓ ──────────────────────────────────────────────────────────
+    # «U1 hauria estat rebutjat: U1 és BUTTON SPACING al catàleg Brownie». 409 i no 400 perquè
+    # no és un camp mal escrit: és un conflicte amb una dada que ja hi és, i el que la persona
+    # necessita saber és AMB QUÈ xoca per triar un altre codi.
+    xoc, etiqueta = colisio_de_codi(customer_id, codi)
+    if xoc is not None:
+        return Response({
+            'codi': 'NOMENCLATURA_OCUPADA',
+            'nomenclatura': codi,
+            'pom_id': xoc.pk,
+            'pom_nom': etiqueta,
+            'message': f'«{codi}» ja és {etiqueta} al catàleg d\'aquest client.',
+        }, status=409)
+
+    # El codi de la CASA no és el del client, i copiar-hi el del client és exactament el que va
+    # fabricar els 12 duplicats de `POMMaster.codi_client` que hi ha avui. S'hi posa el codi del
+    # client si a la casa és lliure i, si no, es qualifica amb el del customer perquè es pugui
+    # llegir d'on ve. La nomenclatura del client viu a l'àlies i no depèn d'aquesta tria.
+    codi_casa = codi[:30]
+    if POMMaster.objects.filter(codi_client__iexact=codi_casa).exists():
+        from fhort.tasks.models import Customer
+        cust = Customer.objects.filter(pk=customer_id).values_list('codi', flat=True).first()
+        codi_casa = f'{cust}-{codi}'[:30] if cust else f'M{model_id}-{codi}'[:30]
+
+    with transaction.atomic():
+        pom = POMMaster.objects.create(
+            codi_client=codi_casa,
+            nom_client=nom,
+            categoria_id=request.data.get('categoria_id'),
+            # Neix PENDENT DE REVISIÓ a posta: l'ha creat un tècnic amb un model al davant, no
+            # el responsable del catàleg. És bo per treballar i encara no està consolidat.
+            pendent_revisio=True,
+            notes=f'Creat des del model {model_id} (POM propi del model).',
+            actiu=True,
+        )
+        CustomerPOMAlias.objects.create(
+            customer_id=customer_id,
+            pom=pom,
+            client_code=codi,
+            description_en=nom,
+            description_local=(request.data.get('descripcio_local') or '').strip(),
+            origen='MODEL',
+            pendent_revisio=True,
+        )
+
+    # Mateixa forma que un resultat de `poms/cerca/`: qui l'ha creat el vol afegir a la taula tot
+    # seguit, i hauria de poder-ho fer sense una segona petició ni una segona forma de dada.
+    return Response({
+        'id': pom.id,
+        'codi_client': pom.codi_client,
+        'nom_client': pom.nom_client,
+        'nom_ca': '', 'nom_en': '',
+        'categoria_nom': pom.categoria.nom_ca if pom.categoria_id else '',
+        'nivell': 'model',
+        'client_code': codi,
+        'client_name_en': nom,
+        'client_name_local': (request.data.get('descripcio_local') or '').strip(),
+    }, status=201)
+
+
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def edit_pom_nomenclature_view(request, pom_id):

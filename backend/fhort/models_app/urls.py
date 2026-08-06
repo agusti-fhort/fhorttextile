@@ -109,6 +109,7 @@ try:
         save_base_size_view,
         confirm_base_size_view,
         base_measurements_view,
+        create_model_pom_view,
     )
     _sprint7_model_paths = [
         path('models/<int:model_id>/aprovar-design-freeze/', approve_design_freeze_view),
@@ -116,6 +117,10 @@ try:
         # D5 — `confirmar-talla-base/` JUBILADA (cap consumidor a frontend/src; resta del
         # wizard vell). La vista es conserva importable per a test_g6_segell (camí 6 del segell).
         path('models/<int:model_id>/base-measurements/',     base_measurements_view),
+        # POM PROPI DEL MODEL — la porta explícita per a la mesura que el catàleg del client
+        # encara no té. Va sota `models/` perquè el client (i per tant el catàleg on neix
+        # l'àlies) el diu el MODEL; la vista viu amb les seves germanes a `pom/wizard_views`.
+        path('models/<int:model_id>/pom-propi/',             create_model_pom_view),
     ]
 except Exception:
     _sprint7_model_paths = []
