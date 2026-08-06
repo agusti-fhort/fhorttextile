@@ -101,6 +101,11 @@ export default function EditableTable({
   //   {baseLabel, onValor(row,val), onIdentitat(row,camps), onParteix(row,filles),
   //    onNova(pom,eixos), onTreu(row), onReordena(ids)}
   presa = null,
+  // P0.5b — LES COLUMNES DE GRADUACIÓ. `true` quan el model ja gradua (joc assignat o regles
+  // pròpies) o quan s'acaba de triar ENTRADA MANUAL. Sense tria no hi són: una taula que
+  // ensenya «Règim · Δ · Δ break · Talla break» a un model sense graduació promet quatre
+  // columnes que no es poden omplir (i és el que l'Agus va fer retirar el 05/08).
+  mostraGrading = false,
 }) {
   const esPresa = !!presa
   const { t, i18n } = useTranslation()
@@ -601,7 +606,7 @@ export default function EditableTable({
   // de grups d'instància el decideix la BD, i un literal aquí tornaria a ser el segon lloc que
   // creu saber quantes dimensions hi ha.
   const colCount = (readOnly ? 0 : 1) + 4 + (readOnly ? 0 : dims.length + 1)
-    + (esPresa ? 1 : 0) + 1 + (readOnly ? 0 : 1)
+    + (esPresa ? 1 : 0) + (mostraGrading ? COLS_GRADING.length : 0) + 1 + (readOnly ? 0 : 1)
   const stickyHd = (left, w) => ({ ...thS, position: 'sticky', left, zIndex: 3, width: w, minWidth: w, background: 'var(--bg-muted)' })
   // Bloc d'IDENTITAT de la fila, congelat a l'esquerra: Capa · nomenclatura · nom. Amb dues
   // germanes vives (el mateix POM a l'exterior i al folre, la sisa esquerra i la dreta) el nom
@@ -710,6 +715,17 @@ export default function EditableTable({
                     {presa.baseLabel || t('presa.col_base_vigent')}
                   </th>
                 )}
+                {/* P0.5b — LA REGLA, en LECTURA. Els quatre camps ja viatgen a cada fila de
+                    `taula-mesures` (`logica`, `increment_base`, `increment_break`,
+                    `talla_break_label`): no hi ha cap petició nova, només es pinten quan hi ha
+                    graduació de què parlar. */}
+                {mostraGrading && COLS_GRADING.map((c, i) => (
+                  <th key={c.clau} rowSpan={2}
+                      style={{ ...thS, textAlign: 'right', minWidth: c.ample,
+                               borderLeft: i === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
+                    {t(c.i18n)}
+                  </th>
+                ))}
                 {/* v8.1 — LA CAPÇALERA DEL CARRIL DIU DE QUINA TALLA SÓN AQUESTES XIFRES.
                     Era el literal de la talla sol, amb el cos de versaleta de la resta de
                     capçaleres: una «S» de 9,5 px perduda entre «RÈGIM» i «DELTA BREAK». És
@@ -773,6 +789,7 @@ export default function EditableTable({
                     dicc={dicc}
                     dims={dims}
                     esPresa={esPresa}
+                    mostraGrading={mostraGrading}
                     dimState={dimState}
                     onParteix={parteix}
                     onMesInstancia={() => setPosicionsDe(row)}
@@ -869,7 +886,7 @@ export default function EditableTable({
 function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete,
                        onBateig, widths, registerVal, onNav, esPresa,
                        dicc, dims, dimState, onParteix, onMesInstancia, onGermanaCapa,
-                       capesLliures, onCapa }) {
+                       capesLliures, onCapa, mostraGrading = false }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -1090,6 +1107,16 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
             : row.base_vigent}
         </td>
       )}
+      {/* P0.5b — la regla d'aquesta mesura, en LECTURA. `—` quan el camp no diu res: una
+          cel·la buida es llegiria com un zero, i un règim sense delta no és un delta de zero. */}
+      {mostraGrading && COLS_GRADING.map((c, i) => (
+        <td key={c.clau}
+            style={{ ...tdS, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
+                     color: 'var(--text-main)',
+                     borderLeft: i === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
+          {c.valor(row) ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
+        </td>
+      ))}
       {/* v8.1 `td.valcell` — EL CARRIL, acotat pels dos costats amb `--line` sobre `--sel`. */}
       <td style={{ ...tdS, textAlign: 'right', background: 'var(--gold-pale)',
                    borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
@@ -1524,6 +1551,20 @@ function NomenInput({ value, placeholder, readOnly, onCommit }) {
     />
   )
 }
+
+// LES QUATRE COLUMNES DE LA REGLA (P0.5b). Es declaren un sol cop —capçalera i cel·la surten
+// d'aquí— perquè afegir-ne o treure'n una no vulgui dir tocar dos llocs i que ballin.
+// El valor es llegeix de la FILA tal com `taula-mesures` la serveix; `null` vol dir «no ho diu»
+// i es pinta `—`, mai un zero.
+const COLS_GRADING = [
+  { clau: 'regim', i18n: 'fitting.grid.regime', ample: 96, valor: r => r.logica || null },
+  { clau: 'delta', i18n: 'editable_table.col.delta', ample: 84,
+    valor: r => (r.increment_base == null ? null : r.increment_base) },
+  { clau: 'delta_break', i18n: 'editable_table.col.delta_break', ample: 96,
+    valor: r => (r.increment_break == null ? null : r.increment_break) },
+  { clau: 'talla_break', i18n: 'editable_table.col.talla_break', ample: 96,
+    valor: r => r.talla_break_label || null },
+]
 
 // ── B3 · EL CERCADOR DEL PEU DE TAULA (v8.1 · `tr.newrow` :272-277 · `.finder` :119) ─────────
 //

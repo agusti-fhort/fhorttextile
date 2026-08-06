@@ -3243,7 +3243,9 @@
       "regime": "Règim",
       "delta": "Delta",
       "break_delta": "Delta break",
-      "break_size": "Talla break"
+      "break_size": "Talla break",
+      "delta_break": "Delta break",
+      "talla_break": "Talla break"
     },
     "row_discarded": "Sense valor: aquesta fila es descartarà en desar.",
     "save_saving": "desant…",

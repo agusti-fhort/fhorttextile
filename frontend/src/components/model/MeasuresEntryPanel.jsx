@@ -24,7 +24,7 @@ const COPY_FLAGS = ['copy_values', 'copy_run', 'copy_grading', 'copy_files']
 // NO inclou el camí 'size_check' (CheckMeasureEditor): això és el flux de TREBALL del tab, no la
 // genesi (es reapuntarà a J1b). Quan la base queda materialitzada, crida onMaterialized() perquè el
 // tab rellegeixi taula-mesures i passi a la superfície de consulta/treball (CheckMeasureEditor).
-export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, entryMode = false, intent = null, onGraduacio = null }) {
+export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, entryMode = false, intent = null, onGraduacio = null, graduacioManual = false }) {
   const { t } = useTranslation()
   const id = model?.id
   const token = localStorage.getItem('access_token')
@@ -465,6 +465,10 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
             isImport={false}
             saveLabel={savingPom ? t('common.saving') : t('model_measurements.save_pom')}
             onPomSave={savePom}
+            /* P0.5b — les columnes de la regla surten quan hi ha graduació de què parlar: un
+               joc assignat al model, o l'ENTRADA MANUAL que s'acaba de triar. Sense cap de les
+               dues no hi són, que és l'estat que l'Agus va deixar fixat el 05/08. */
+            mostraGrading={!!model?.grading_rule_set || graduacioManual}
             onSaved={(newRows) => setTaulaRows(newRows)}
           />
 
