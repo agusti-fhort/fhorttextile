@@ -7,8 +7,15 @@ import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 // LA GRADUACIÓ ÉS UNA SUPERFÍCIE PRÒPIA (P0.5d · Agus, 06/08, a pantalla).
 //
 // No és la taula de Gravar POM amb quatre columnes més. Triar joc al contenidor (P0.5a) no porta
-// a Definició POM: porta AQUÍ. I aquí ja no es toquen mesures — el valor de talla base hi és
-// ENGANXAT AL NOM, en lectura, perquè graduar és decidir com creix una mesura, no quina és.
+// a Definició POM: porta AQUÍ. I aquí ja no es toquen mesures — el valor de talla base hi és en
+// LECTURA, perquè graduar és decidir com creix una mesura, no quina és.
+//
+// …PERÒ EN COLUMNA PRÒPIA, no enganxat al nom (Agus, 06/08). Aquesta pantalla és de la MATEIXA
+// FAMÍLIA que Definició POM i la consulta (v8.1): mateixes versaletes, mateixa densitat, mateix
+// carril de valor amb `--sel` acotat pels dos costats i la talla en cos gran a la capçalera.
+// Amb el valor dins la cel·la del nom les xifres no formaven columna i es perdia la lectura
+// VERTICAL de les mesures, que és com es mira una taula d'aquestes. El que es clona és
+// l'estructura, no s'inventa un aire nou: `EditableTable` és la referència.
 //
 // ── QUÈ HI HA A CADA FILA, I QUÈ SE'N DESA ──────────────────────────────────────────────────
 // La fila que el joc resol es pinta PLENA; la que ningú resol es pinta «—» i és editable des de
@@ -227,15 +234,20 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
       <tr key={row.id} style={{ background: tocat ? 'var(--fila-activa)' : 'transparent' }}>
         <td style={{ ...tdS, color: 'var(--text-muted)' }}>{etiquetaCapa(row.capa || 'exterior', t)}</td>
         <td style={{ ...tdS, whiteSpace: 'nowrap' }}>{row.pom_code || ''}</td>
-        {/* EL NOM AMB EL VALOR DE TALLA BASE ENGANXAT — lectura. Aquí no es canvien mesures. */}
         <td style={tdS}>
           <span>{nomDe(row)}</span>
           {inst && <span style={{ fontWeight: 500 }}>{` · ${inst}`}</span>}
-          <span style={{ color: 'var(--gold)', fontVariantNumeric: 'tabular-nums', marginLeft: 8 }}>
-            {row.base_value_cm === null || row.base_value_cm === undefined
-              ? <span style={{ color: 'var(--text-muted)' }}>—</span>
-              : `${row.base_value_cm} cm`}
-          </span>
+        </td>
+        {/* EL VALOR DE TALLA BASE, COLUMNA PRÒPIA — el mateix carril que la consulta (`--sel`
+            acotat pels dos costats), en LECTURA: aquí no es canvien mesures, es decideix com
+            creixen. Anava enganxat al nom amb un `marginLeft`, i així les xifres no formaven
+            columna: no es podien llegir en vertical, que és com es mira una taula de mesures. */}
+        <td style={{ ...tdS, textAlign: 'right', background: 'var(--gold-pale)',
+                     borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)',
+                     fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+          {row.base_value_cm === null || row.base_value_cm === undefined
+            ? <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>—</span>
+            : row.base_value_cm}
         </td>
         {/* Procedència: què mira la persona quan es pregunta «d'on surt això». */}
         <td style={{ ...tdS, fontSize: FS_HEAD, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
@@ -324,6 +336,24 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
                   <th style={{ ...thS, width: 104 }}>{t('capa.col')}</th>
                   <th style={{ ...thS, width: 90 }}>{t('measuregrid.col_pom')}</th>
                   <th style={thS}>{t('measuregrid.col_nom')}</th>
+                  {/* v8.1 `th.baseh` — CLONAT de la consulta, no reinventat: l'etiqueta petita
+                      nomena la columna i la talla va en cos gran, que és el que la fa trobar
+                      sense llegir. Sense talla base declarada es queda el literal de sempre;
+                      inventar-hi una «Talla base» prometria una talla que ningú ha dit. */}
+                  <th style={{ ...thS, width: 100, textAlign: 'right', background: 'var(--gold-pale)',
+                               borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
+                    {data?.base_size ? (
+                      <>
+                        <span style={{ display: 'block', fontWeight: 600, color: 'var(--gold)' }}>
+                          {t('editable_table.col.base_size_label')}
+                        </span>
+                        <span style={{ display: 'block', fontSize: 15, fontWeight: 600, lineHeight: 1.1,
+                                       letterSpacing: 'normal', textTransform: 'none', color: 'var(--text-main)' }}>
+                          {data.base_size}
+                        </span>
+                      </>
+                    ) : t('editable_table.col.base_value')}
+                  </th>
                   <th style={{ ...thS, width: 90 }}>{t('graduacio.superficie.col_origen')}</th>
                   <th style={{ ...thS, width: 110, borderLeft: '1px solid var(--border)' }}>{t('fitting.grid.regime')}</th>
                   <th style={{ ...thS, width: 90, textAlign: 'right' }}>{t('editable_table.col.delta')}</th>
@@ -333,7 +363,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
               </thead>
               <tbody>
                 {files.length === 0
-                  ? <tr><td colSpan={8} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
+                  ? <tr><td colSpan={9} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
                       {t('graduacio.superficie.buit')}
                     </td></tr>
                   : cos()}
