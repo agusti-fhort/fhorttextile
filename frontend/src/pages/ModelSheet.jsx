@@ -11,6 +11,7 @@ import ComprovacioPanel from '../components/model/ComprovacioPanel'
 import FittingRepasPanel from '../components/model/FittingRepasPanel'
 import PropagatedEditor from './PropagatedEditor'
 import GraduacioContenidor from '../components/grading/GraduacioContenidor'
+import GraduacioSuperficie from '../components/grading/GraduacioSuperficie'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
 import { MaduresaBadge, EncarrecDelClient } from '../components/model/FederacioBadge'
@@ -43,12 +44,15 @@ const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Patró', 'Fitxa tècn
 // ELS PARÀMETRES QUE OBREN UNA SUPERFÍCIE DE TREBALL, i que per tant s'han de netejar en sortir-ne
 // (v. `netejaEdicio`). Els tres diuen «entra a treballar», no «mira aquesta pantalla»:
 //   · `mode=entry`        → Definició POM (`entryMode` → `enterEdit('Mesures','pom')`)
+//   · `mode=graduacio`    → LA GRADUACIÓ (P0.5d): superfície pròpia, no la taula de Gravar POM
 //   · `task_id`           → la presa lligada a una tasca ja En curs (J1b, «Mesurar prenda»)
 //   · `fitting_session`   → la sessió de fitting (obre la tasca `size_check` si no ve amb task_id)
 // `tab` NO hi és a posta: diu quina pantalla es mira, i és exactament el que l'F5 ha de conservar.
 //
-// La GRADUACIÓ no hi és perquè **no té paràmetre d'URL**: `graduacioObert` és estat local del
-// component i un F5 ja tanca el calaix tot sol. El dia que en tingui un, va aquí i prou.
+// LA GRADUACIÓ JA EN TÉ UN (P0.5d · 06/08). Aquí hi deia que no en tenia perquè era un calaix
+// d'estat local que l'F5 tancava tot sol; en passar a ser una SUPERFÍCIE PRÒPIA li calia adreça:
+// per a l'F5, i perquè la tasca de graduació hi pugui portar quan P0.4 connecti els botons.
+// Reusa `mode` en comptes d'estrenar un paràmetre — és la mateixa pregunta («a què véns»).
 const PARAMS_DE_TREBALL = ['mode', 'task_id', 'fitting_session']
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
@@ -166,6 +170,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // ?mode=entry → "Definició POM" via URL: obre el tab Mesures en mode ENTRADA (genesi/wizard) encara
   // que el model JA tingui mesures (l'usuari ve a definir/afegir POMs, no a consultar).
   const entryMode = sp.get('mode') === 'entry'
+  // ?mode=graduacio → LA GRADUACIÓ (P0.5d): superfície pròpia dins del tab Mesures. És l'adreça
+  // que li faltava —per a l'F5 i perquè la tasca de graduació hi porti— i la font de veritat de
+  // si s'hi és: aquí no hi ha estat local paral·lel que se'n pugui desdir.
+  const graduacioMode = sp.get('mode') === 'graduacio'
   const [model, setModel] = useState(null)
   const [activeTab, setActiveTab] = useState(TABS.includes(tabParam) ? tabParam : defaultTab)
   const [taulaRows, setTaulaRows] = useState([])
@@ -311,11 +319,21 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         // (`CheckMeasureEditor` editable). Hi arribava només per URL; des del 06/08 també pel
         // botó ③ «Mesurar prenda», pel mateix camí i sense mecanisme nou.
         if (tab === 'Mesures' && code === 'pom') setMesuresEntry(true)
-        // GRADUACIÓ DES DE MESURES: la tasca és `grading` però la superfície és el CALAIX, no el
-        // tab Escalat. Sense aquesta branca el `setEditing('Mesures')` de sota obriria la presa
-        // —una superfície que no té res a veure amb triar un joc de regles— amb el rellotge de
-        // graduació corrent al damunt.
-        else if (tab === 'Mesures' && code === 'grading') setGraduacioObert(true)
+        // GRADUACIÓ DES DE MESURES: la tasca és `grading` però la superfície NO és el tab
+        // Escalat. Sense aquesta branca el `setEditing('Mesures')` de sota obriria la presa —una
+        // superfície que no té res a veure amb graduar— amb el rellotge de graduació al damunt.
+        //
+        // P0.5d — ON PORTA, que és l'únic que canvia (com s'hi entra ja era això). Abans obria el
+        // CONTENIDOR de tria de joc; ara porta a la SUPERFÍCIE DE GRADUACIÓ, i el contenidor
+        // s'obre des d'allà si el model no té joc o se'n vol canviar. Triar joc era només el
+        // primer pas de graduar, i era l'únic que tenia pantalla.
+        else if (tab === 'Mesures' && code === 'grading') {
+          setSp(prev => {
+            const net = new URLSearchParams(prev)
+            net.set('mode', 'graduacio')
+            return net
+          }, { replace: true })
+        }
         else setEditing(tab)
         reloadTasks()
       })
@@ -332,7 +350,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         else setFeedback({ type: 'err', text: motiuOpenTask(e, t) })
       })
       .finally(() => setOpeningTask(false))
-  }, [id, t, reloadTasks, tascaVigentDe])
+  }, [id, t, reloadTasks, tascaVigentDe, setSp])
 
   // F2.2 · D-1 — LA PORTA DE LA FITXA. Era el forat original de tota aquesta feina: «Modificar»
   // navegava sense `task_id`, l'editor autodesava cada 2 s i el temps d'editar la fitxa no
@@ -594,7 +612,27 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // seves dues portes (triar fit abans del picker · no ensenyar res sense sistema de talles), i
   // el contenidor central no en té cap. Si algun dia tornen, tornen amb qui les demana.
 
+  // El CONTENIDOR de tria de joc (P0.5a). Des de P0.5d ja no és la porta d'entrada a graduar:
+  // s'obre DES DE la superfície de graduació, quan el model no té joc o se'n vol canviar.
   const obreGraduacio = useCallback(() => setGraduacioObert(true), [])
+
+  // Porta a la SUPERFÍCIE de graduació sense passar pel circuit de tasca. La fan servir els
+  // camins que ja hi són a dins (l'entrada manual del contenidor) o els que hi han d'anar a
+  // parar sense obrir feina nova (propagar sense regles).
+  const vesAGraduacio = useCallback(() => {
+    setActiveTab('Mesures')
+    setSp(prev => {
+      const net = new URLSearchParams(prev)
+      net.set('mode', 'graduacio')
+      return net
+    }, { replace: true })
+  }, [setSp])
+
+  // Rellegir la superfície quan el joc canvia sota seu: assignar-ne un altre canvia TOTES les
+  // files resoltes, i la pantalla ha de tornar a demanar la taula. Es fa amb `key` (remuntatge)
+  // i no amb un efecte perquè també ha de descartar les edicions a mig fer: amb un joc nou al
+  // damunt, el que s'havia teclejat contra l'anterior ja no vol dir el mateix.
+  const [graduacioKey, setGraduacioKey] = useState(0)
 
   // Tancar SENSE triar. Si hi havia una propagació en cua, s'avorta sencera: cap estat a
   // mitges. Tancar no ha escrit res —«Usar aquest joc» és l'únic que escriu—, o sigui que
@@ -607,20 +645,18 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
 
   // ENTRADA MANUAL (P0.5a) — graduar aquest model a mà, sense joc de regles.
   //
-  // ⚠️ NO ESCRIU RES, i és deliberat: al domini no hi ha cap camp «aquest model es gradua a
-  // mà». El que hi ha és que un model amb REGLES RESIDENTS i sense ruleset ja ÉS un model
-  // graduat a mà —és l'estat que deixa la importació i el que `gravar-pom` escriu amb `rules`—.
-  // Inventar-ne un altre voldria dir un camp nou i una migració per dir el que les dades ja
-  // diuen.
+  // P0.5d — JA NO S'AMAGA. Abans encenia una bandera de sessió (`graduacioManual`) que només
+  // servia per fer sortir quatre columnes buides a Definició POM, i que un F5 perdia perquè al
+  // domini no hi ha cap camp «aquest model es gradua a mà». Ara no li cal cap bandera: porta a
+  // la superfície de graduació SENSE joc assignat, on totes les files ja són editables des de
+  // zero. Que no hi hagi joc és exactament el que vol dir «a mà», i això sí que sobreviu l'F5.
   //
-  // Conseqüència honesta, anotada al report: mentre no s'hi hagi escrit CAP regla, la intenció
-  // «vull graduar a mà» viu només en aquesta pantalla i un F5 la perd. En escriure la primera
-  // regla, l'estat es manté sol.
-  const [graduacioManual, setGraduacioManual] = useState(false)
+  // Segueix sense escriure res, i segueix sent deliberat: un model amb REGLES RESIDENTS i sense
+  // ruleset ja ÉS un model graduat a mà. L'estat es manté sol en escriure la primera regla.
   const onGraduacioManual = useCallback(() => {
-    setGraduacioManual(true)
     setGraduacioObert(false)
-  }, [])
+    vesAGraduacio()
+  }, [vesAGraduacio])
 
   // MIRA ABANS d'executar. Dues preguntes, en aquest ordre:
   //   1. Hi ha REGLA? Sense regla no es propaga MAI. Si no n'hi ha, el gest no mor amb un
@@ -647,7 +683,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     models.gradingStatus(parseInt(id))
       .then(res => {
         const st = res.data
-        if (!st.te_regles) { setPropagarEnCua(true); setGraduacioObert(true); return }
+        // P0.5d — sense regla no es propaga, i el gest no mor amb un toast: queda EN CUA i porta
+        // a GRADUAR. Ara això vol dir la superfície (i, a sobre, el contenidor: sense regles el
+        // primer que cal decidir és si es gradua per joc o a mà), no només el contenidor.
+        if (!st.te_regles) { setPropagarEnCua(true); vesAGraduacio(); setGraduacioObert(true); return }
         if (!st.te_dades_propagades) execPropagar(false)   // llenç ja net → directe
         else { setPropStatus(st); setPropStep(1) }
       })
@@ -675,6 +714,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       .then(() => {
         setGraduacioObert(false)
         reloadModel(); reloadTaula()
+        // P0.5d — el joc nou canvia totes les files resoltes de la superfície que hi ha a sota:
+        // se li demana la taula un altre cop (v. `graduacioKey`).
+        setGraduacioKey(k => k + 1)
         if (propagarEnCua) { setPropagarEnCua(false); onPropagarClick() }
       })
       .catch(e => setFeedback({
@@ -853,13 +895,22 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           </div>
         )}
         {activeTab === 'Mesures' && (
-          mesuresEntry && editing !== 'Mesures' ? (
+          /* P0.5d — LA GRADUACIÓ, PRIMER DE TOT. És una superfície pròpia i pren el tab sencer,
+             igual que Definició POM: qui ve a graduar no ve a mirar la taula de mesures amb un
+             calaix a sobre. Va davant de `mesuresEntry` perquè les dues són superfícies de
+             treball i no poden conviure — `?mode=` només en pot dir una. */
+          graduacioMode ? (
+            <GraduacioSuperficie
+              key={graduacioKey}
+              model={model}
+              onTancar={exitEdit}
+              onObrirContenidor={obreGraduacio}
+              onGravat={() => { reloadTaula(); reloadModel() }}
+            />
+          ) : mesuresEntry && editing !== 'Mesures' ? (
             <MeasuresEntryPanel model={model} entryMode={mesuresEntry} intent={mesuresIntent}
               onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }}
               onGraduacio={obreGraduacio}
-              /* P0.5b — les columnes de graduació surten si el model ja gradua (joc assignat o
-                 regles pròpies) o si s'acaba de triar ENTRADA MANUAL en aquesta sessió. */
-              graduacioManual={graduacioManual}
               onPomSaved={finishPomEntry} />
           ) : (!taskParam && editing !== 'Mesures' && !pomReady) ? (
             <div style={{

@@ -1,0 +1,360 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import client from '../../api/client'
+import { models } from '../../api/endpoints'
+import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
+
+// LA GRADUACIÓ ÉS UNA SUPERFÍCIE PRÒPIA (P0.5d · Agus, 06/08, a pantalla).
+//
+// No és la taula de Gravar POM amb quatre columnes més. Triar joc al contenidor (P0.5a) no porta
+// a Definició POM: porta AQUÍ. I aquí ja no es toquen mesures — el valor de talla base hi és
+// ENGANXAT AL NOM, en lectura, perquè graduar és decidir com creix una mesura, no quina és.
+//
+// ── QUÈ HI HA A CADA FILA, I QUÈ SE'N DESA ──────────────────────────────────────────────────
+// La fila que el joc resol es pinta PLENA; la que ningú resol es pinta «—» i és editable des de
+// zero (aquí viu l'ENTRADA MANUAL). Editar-ne una i l'altra acaben al MATEIX lloc —la regla
+// resident del model— per la MATEIXA porta que ja existia: `set_pom_regim_view`
+// (`POST /models/<id>/pom/<pom_id>/regim/`, upsert amb actualització selectiva per presència de
+// camp). No s'hi ha creat cap circuit d'escriptura nou; el que faltava era la pantalla.
+//
+// ── 🔴 LA LLIÇÓ DEL 31/07, QUE AQUEST FITXER NO POT TORNAR A TRENCAR ─────────────────────────
+// «Gravar Graduació» envia NOMÉS les files que l'usuari ha tocat. MAI sembra LINEAR per defecte
+// a les no tocades.
+//
+// El mecanisme és `edicions`: un Map que neix BUIT i on només hi entra el que un gest humà ha
+// canviat, camp a camp. El que es desa és literalment el contingut del Map — no es deriva mai
+// del que la taula pinta. Aquesta és la diferència exacta amb el bug del model 1302: allà el
+// payload es construïa recorrent les FILES (i una fila pintada amb la regla d'un altre es
+// materialitzava sola); aquí es construeix recorrent les EDICIONS, i una fila que ningú ha
+// tocat no té entrada al Map i per tant no genera cap crida.
+//
+// ⚠️ EL QUE AQUESTA PANTALLA NO POT PROMETRE, i convé saber-ho llegint-la: que després de
+// gravar només hi hagi tantes regles residents com files tocades. Assignar un joc ja en
+// materialitza una per regla del joc (`update-step2` → `materialize_model_grading_rules`,
+// wipe-and-recreate), i això passa ABANS que aquesta pantalla existeixi per a l'usuari. El que
+// SÍ que promet, i és el que la llei demana, és que aquesta pantalla no n'afegeix ni en toca cap
+// que l'usuari no hagi tocat: es comprova amb `origen`, no amb un recompte.
+//
+// ── LA REGLA ÉS DEL POM, NO DE LA FILA ──────────────────────────────────────────────────────
+// `ModelGradingRule` no porta capa ni instància (decisió de domini amb acta: mateix POM, mateix
+// increment a totes les capes i instàncies). Les germanes hi surten com a files —amb el seu nom
+// compost, que és com se les reconeix— però COMPARTEIXEN regla: editar-ne una les mou totes, i
+// se n'envia UNA sola crida per `pom_id`. El gest d'instància (píndoles, ＋) NO viu aquí.
+const FS_HEAD = '9.5px'
+const FS_VAL = '12.5px'
+// Tipografia de la v8.1, la mateixa família que `EditableTable` (v. la nota d'allà: cap graó
+// `--fs-*` cau sobre 9,5/12,5 px). Els COLORS segueixen sent tokens, sempre.
+const thS = {
+  padding: '4px 10px', textAlign: 'left', fontSize: FS_HEAD,
+  fontWeight: 500, whiteSpace: 'nowrap',
+  textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)',
+  borderBottom: '1px solid var(--border)',
+}
+const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: FS_VAL }
+
+const btnPrimary = (disabled) => ({
+  background: disabled ? 'var(--bg-muted)' : 'var(--gold)',
+  color: disabled ? 'var(--text-muted)' : 'var(--white)',
+  border: 'none', borderRadius: 6, padding: '7px 18px',
+  fontSize: 'var(--fs-body)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
+})
+const btnSecondary = {
+  background: 'transparent', color: 'var(--text-muted)',
+  border: '0.5px solid var(--border)',
+  borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer',
+}
+
+// Règims oferts a l'autoria, mirall de `GradingRule.LOGICA_CHOICES`. ZERO i EXCEPTION NO
+// s'ofereixen com a tria nova (ZERO = nínxol «sempre 0»; EXCEPTION = tipus que el motor APLICA
+// per cel·la, no un règim de POM), però si una fila ja en porta un es manté a la llista perquè el
+// valor real no s'emmascari. Valors de DADA: no es tradueixen.
+const REGIMS = ['LINEAR', 'STEP', 'FIXED']
+
+// Els deltes només volen dir alguna cosa sota LINEAR. Sota FIXED/ZERO la mesura no creix, i sota
+// STEP el creixement viu a `valors_step` (una llista per talla que aquesta pantalla no edita).
+const acceptaDeltes = (logica) => logica === 'LINEAR' || !logica
+
+const buit = (v) => v === null || v === undefined || v === ''
+
+// Mirall EXACTE de `es_linear_degenerada` (backend `pom/grading_regime.py`): LINEAR amb delta 0 i
+// sense trencament no gradua res i el backend el rebutja amb 400 LINEAR_INCREMENT_ZERO. Es mira
+// aquí perquè la persona ho vegi a la fila i no en un toast després d'haver premut Gravar.
+function esLinearDegenerada(r) {
+  if (r.logica !== 'LINEAR') return false
+  const teBreak = !buit(r.talla_break_label)
+    || (!buit(r.increment_break) && Number(r.increment_break) !== 0)
+  if (teBreak) return false
+  return buit(r.increment_base) || Number(r.increment_base) === 0
+}
+
+/** Text lliure → número o null. Accepta la coma decimal, que és com s'escriu aquí. */
+function num(v) {
+  if (buit(v)) return null
+  const n = Number(String(v).replace(',', '.'))
+  return Number.isFinite(n) ? n : null
+}
+
+export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor, onGravat }) {
+  const { t } = useTranslation()
+  const modelId = model?.id
+  const [data, setData] = useState(null)
+  const [carregant, setCarregant] = useState(true)
+  const [err, setErr] = useState('')
+  const [gravant, setGravant] = useState(false)
+  const [feedback, setFeedback] = useState(null)   // {type:'ok'|'err', text}
+  // 🔴 EL MAP DE LA LLEI. Neix buit i només hi entra el que un gest humà canvia.
+  // Map<pom_id, {logica?, increment_base?, increment_break?, talla_break_label?}>
+  const [edicions, setEdicions] = useState(new Map())
+
+  const carrega = useCallback(() => {
+    if (!modelId) return
+    setCarregant(true)
+    client.get(`/api/v1/models/${modelId}/taula-mesures/`)
+      .then(res => { setData(res.data); setErr('') })
+      .catch(() => setErr(t('graduacio.superficie.load_err')))
+      .finally(() => setCarregant(false))
+  }, [modelId, t])
+
+  useEffect(() => { carrega() }, [carrega])
+
+  const files = useMemo(() => data?.rows ?? [], [data])
+  const sizeRun = useMemo(() => data?.size_run ?? [], [data])
+
+  // El valor VIGENT d'un camp: l'edició si n'hi ha (encara que sigui null: esborrar és una
+  // decisió), i si no, el que va arribar del servidor.
+  const valor = useCallback((row, camp) => {
+    const ed = edicions.get(row.pom_id)
+    if (ed && camp in ed) return ed[camp]
+    return row[camp]
+  }, [edicions])
+
+  // La regla VIGENT d'una fila (servidor + edicions a sobre), que és la que es valida i es desa.
+  const reglaDe = useCallback((row) => ({
+    logica: valor(row, 'logica'),
+    increment_base: valor(row, 'increment_base'),
+    increment_break: valor(row, 'increment_break'),
+    talla_break_label: valor(row, 'talla_break_label'),
+  }), [valor])
+
+  const canvia = useCallback((row, camp, v) => {
+    setFeedback(null)
+    setEdicions(prev => {
+      const next = new Map(prev)
+      const cur = { ...(next.get(row.pom_id) || {}) }
+      cur[camp] = v
+      // Escriure un delta sobre una fila que no té CAP regla vol dir LINEAR, i val més que la
+      // pantalla ho digui que no pas que el backend ho decideixi en silenci: el desplegable
+      // passa a LINEAR a la vista i entra a l'edició com un canvi explícit i visible, que la
+      // persona pot canviar tot seguit. (Això NO és sembrar: la fila l'acaba de tocar algú.)
+      if (camp !== 'logica' && !row.logica && !('logica' in cur) && !buit(v)) cur.logica = 'LINEAR'
+      next.set(row.pom_id, cur)
+      return next
+    })
+  }, [])
+
+  // Les files que l'usuari ha tocat, i les que a més queden en LINEAR degenerada (que el backend
+  // rebutjaria). Es compten per POM, que és la unitat de la regla.
+  const pomsTocats = useMemo(() => [...edicions.keys()], [edicions])
+  const degenerades = useMemo(() => {
+    const out = new Set()
+    files.forEach(r => {
+      if (!edicions.has(r.pom_id)) return
+      if (esLinearDegenerada(reglaDe(r))) out.add(r.pom_id)
+    })
+    return out
+  }, [files, edicions, reglaDe])
+
+  // 🔴 EL PAYLOAD SURT DE `edicions`, NO DE `files`. Una crida per POM tocat, i dins de cada
+  // crida NOMÉS els camps que s'han canviat: `set_pom_regim_view` actualitza per presència de
+  // clau, o sigui que el que no s'envia no es toca.
+  const grava = useCallback(async () => {
+    if (!pomsTocats.length || gravant) return
+    if (degenerades.size) {
+      setFeedback({ type: 'err', text: t('graduacio.superficie.err_linear_zero') })
+      return
+    }
+    setGravant(true)
+    setFeedback(null)
+    const fallits = []
+    for (const pomId of pomsTocats) {
+      const camps = edicions.get(pomId) || {}
+      const payload = {}
+      if ('logica' in camps) payload.logica = camps.logica || null
+      if ('increment_base' in camps) payload.increment_base = num(camps.increment_base)
+      if ('increment_break' in camps) payload.increment_break = num(camps.increment_break)
+      if ('talla_break_label' in camps) payload.talla_break_label = camps.talla_break_label || null
+      if (!Object.keys(payload).length) continue
+      try {
+        await models.setPomRule(modelId, pomId, payload)
+      } catch (e) {
+        const fila = files.find(r => r.pom_id === pomId)
+        fallits.push(`${fila?.pom_code || pomId}: ${e?.response?.data?.detail || t('graduacio.superficie.err_generic')}`)
+      }
+    }
+    setGravant(false)
+    if (fallits.length) {
+      setFeedback({ type: 'err', text: fallits.join(' · ') })
+      return
+    }
+    setEdicions(new Map())
+    setFeedback({ type: 'ok', text: t('graduacio.superficie.gravat', { count: pomsTocats.length }) })
+    carrega()
+    onGravat?.()
+  }, [pomsTocats, gravant, degenerades, edicions, modelId, files, t, carrega, onGravat])
+
+  // ── Cel·les ────────────────────────────────────────────────────────────────────────────────
+  const inputStyle = (ko) => ({
+    width: '100%', boxSizing: 'border-box', textAlign: 'right',
+    border: `0.5px solid ${ko ? 'var(--danger, #b3261e)' : 'var(--border)'}`,
+    borderRadius: 4, padding: '2px 6px', fontSize: FS_VAL, font: 'inherit',
+    fontVariantNumeric: 'tabular-nums', background: 'var(--white)', color: 'var(--text-main)',
+  })
+
+  const nomDe = (row) => row.nom_canonic_model
+    || row.client_name_en || row.nom_en || row.nom_ca || row.pom_code || ''
+
+  const cos = () => files.map((row) => {
+    const regla = reglaDe(row)
+    const tocat = edicions.has(row.pom_id)
+    const ko = degenerades.has(row.pom_id)
+    const inst = etiquetaInstancia(row.instancia)
+    const deltes = acceptaDeltes(regla.logica)
+    // D'on ve el que es veu. `regla_origen` MANUAL = algú l'ha escrita al model; qualsevol altre
+    // origen = ve del joc (materialitzada en assignar-lo); null = fila sense regla.
+    const delJoc = regla.logica && row.regla_origen && row.regla_origen !== 'MANUAL'
+    const regims = REGIMS.includes(row.logica) || !row.logica ? REGIMS : [...REGIMS, row.logica]
+    return (
+      <tr key={row.id} style={{ background: tocat ? 'var(--fila-activa)' : 'transparent' }}>
+        <td style={{ ...tdS, color: 'var(--text-muted)' }}>{etiquetaCapa(row.capa || 'exterior', t)}</td>
+        <td style={{ ...tdS, whiteSpace: 'nowrap' }}>{row.pom_code || ''}</td>
+        {/* EL NOM AMB EL VALOR DE TALLA BASE ENGANXAT — lectura. Aquí no es canvien mesures. */}
+        <td style={tdS}>
+          <span>{nomDe(row)}</span>
+          {inst && <span style={{ fontWeight: 500 }}>{` · ${inst}`}</span>}
+          <span style={{ color: 'var(--gold)', fontVariantNumeric: 'tabular-nums', marginLeft: 8 }}>
+            {row.base_value_cm === null || row.base_value_cm === undefined
+              ? <span style={{ color: 'var(--text-muted)' }}>—</span>
+              : `${row.base_value_cm} cm`}
+          </span>
+        </td>
+        {/* Procedència: què mira la persona quan es pregunta «d'on surt això». */}
+        <td style={{ ...tdS, fontSize: FS_HEAD, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+          {!regla.logica ? '' : delJoc ? t('graduacio.superficie.origen_joc') : t('graduacio.superficie.origen_model')}
+        </td>
+        <td style={tdS}>
+          <select value={regla.logica || ''} onChange={e => canvia(row, 'logica', e.target.value || null)}
+            style={{ ...inputStyle(ko), textAlign: 'left', cursor: 'pointer' }}>
+            <option value="">—</option>
+            {regims.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </td>
+        <td style={tdS}>
+          <input type="text" inputMode="decimal" disabled={!deltes}
+            value={buit(regla.increment_base) ? '' : regla.increment_base}
+            onChange={e => canvia(row, 'increment_base', e.target.value)}
+            title={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
+            style={{ ...inputStyle(ko), opacity: deltes ? 1 : 0.4 }} />
+        </td>
+        <td style={tdS}>
+          <input type="text" inputMode="decimal" disabled={!deltes}
+            value={buit(regla.increment_break) ? '' : regla.increment_break}
+            onChange={e => canvia(row, 'increment_break', e.target.value)}
+            title={deltes ? '' : t('graduacio.superficie.delta_na', { regim: regla.logica })}
+            style={{ ...inputStyle(ko), opacity: deltes ? 1 : 0.4 }} />
+        </td>
+        <td style={tdS}>
+          <select value={regla.talla_break_label || ''} disabled={!deltes}
+            onChange={e => canvia(row, 'talla_break_label', e.target.value || null)}
+            style={{ ...inputStyle(ko), textAlign: 'left', cursor: deltes ? 'pointer' : 'default',
+                     opacity: deltes ? 1 : 0.4 }}>
+            <option value="">—</option>
+            {sizeRun.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </td>
+      </tr>
+    )
+  })
+
+  // ── Capçalera de context ───────────────────────────────────────────────────────────────────
+  const joc = model?.grading_rule_set_nom || model?.grading_rule_set_detall?.nom || null
+  const dada = (etiqueta, v) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span style={{ fontSize: FS_HEAD, textTransform: 'uppercase', letterSpacing: '0.05em',
+                     color: 'var(--text-muted)' }}>{etiqueta}</span>
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
+        {v || <span style={{ color: 'var(--text-muted)' }}>—</span>}
+      </span>
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20,
+        flexWrap: 'wrap', border: '0.5px solid var(--border)', borderRadius: 8,
+        background: 'var(--bg-muted)', padding: '12px 16px', marginBottom: 14,
+      }}>
+        <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          {dada(t('graduacio.superficie.model'), model?.codi_intern)}
+          {dada(t('graduacio.superficie.joc'), joc || t('graduacio.superficie.sense_joc'))}
+          {dada(t('graduacio.superficie.talla_base'), data?.base_size)}
+          {dada(t('graduacio.superficie.run'), sizeRun.join(' · '))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" onClick={onObrirContenidor} style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+            <i className="ti ti-adjustments" style={{ fontSize: 14 }} aria-hidden="true" />
+            {' '}{joc ? t('graduacio.superficie.canviar_joc') : t('graduacio.superficie.triar_joc')}
+          </button>
+          <button type="button" onClick={onTancar} style={btnSecondary}>
+            <i className="ti ti-arrow-left" style={{ fontSize: 14 }} aria-hidden="true" />
+            {' '}{t('graduacio.superficie.tornar')}
+          </button>
+        </div>
+      </div>
+
+      {err && <p style={{ color: 'var(--danger, #b3261e)', fontSize: 'var(--fs-body)' }}>{err}</p>}
+      {carregant && <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</p>}
+
+      {!carregant && !err && (
+        <>
+          <div style={{ overflowX: 'auto', border: '0.5px solid var(--border)', borderRadius: 8 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <thead>
+                <tr>
+                  <th style={{ ...thS, width: 104 }}>{t('capa.col')}</th>
+                  <th style={{ ...thS, width: 90 }}>{t('measuregrid.col_pom')}</th>
+                  <th style={thS}>{t('measuregrid.col_nom')}</th>
+                  <th style={{ ...thS, width: 90 }}>{t('graduacio.superficie.col_origen')}</th>
+                  <th style={{ ...thS, width: 110, borderLeft: '1px solid var(--border)' }}>{t('fitting.grid.regime')}</th>
+                  <th style={{ ...thS, width: 90, textAlign: 'right' }}>{t('editable_table.col.delta')}</th>
+                  <th style={{ ...thS, width: 100, textAlign: 'right' }}>{t('editable_table.col.delta_break')}</th>
+                  <th style={{ ...thS, width: 100 }}>{t('editable_table.col.talla_break')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {files.length === 0
+                  ? <tr><td colSpan={8} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
+                      {t('graduacio.superficie.buit')}
+                    </td></tr>
+                  : cos()}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 'var(--fs-body)', color: feedback?.type === 'err' ? 'var(--danger, #b3261e)' : 'var(--text-muted)' }}>
+              {feedback?.text || (pomsTocats.length
+                ? t('graduacio.superficie.tocades', { count: pomsTocats.length })
+                : t('graduacio.superficie.res_tocat'))}
+            </span>
+            <button type="button" onClick={grava} disabled={!pomsTocats.length || gravant}
+              style={btnPrimary(!pomsTocats.length || gravant)}>
+              {gravant ? t('common.saving') : t('graduacio.superficie.gravar')}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
