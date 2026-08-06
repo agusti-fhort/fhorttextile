@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -1485,6 +1486,47 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt }) {
     .map(n => [n, results.filter(r => (r.nivell || 'cataleg') === n)])
     .filter(([, files]) => files.length > 0)
 
+  // P0.2b — LA LLISTA SORTIA TALLADA. Anava `position:absolute` dins del cercador, i el
+  // cercador viu dins del `<div style={{overflowX:'auto'}}>` que fa scrollar la taula. Un
+  // avantpassat amb overflow diferent de `visible` RETALLA els fills posicionats encara que
+  // vagin amb z-index 40: no és un problema d'apilament, és de clipping, i pujar el z-index no
+  // ho podia arreglar mai.
+  //
+  // Es porta al `body` amb un portal i es posiciona en coordenades de finestra. De passada es
+  // decideix cada cop cap on s'obre: amunt si hi cap (que és el gest natural d'un cercador al
+  // PEU de la taula) i avall si no —a prop del final de la finestra, obrir-se amunt deixava la
+  // llista mig fora—. L'alçada màxima es retalla a l'espai real i la llista es fa scrollable
+  // dins seu, que és el que la fa completa quan hi ha molts resultats.
+  const posicioLlista = () => {
+    const r = inputRef.current?.getBoundingClientRect()
+    if (!r) return null
+    const MARGE = 8
+    const sobre = r.top - MARGE
+    const sota = window.innerHeight - r.bottom - MARGE
+    const amunt = sobre >= Math.min(290, sota) || sobre >= 180
+    return {
+      left: r.left,
+      maxHeight: Math.max(120, Math.min(290, amunt ? sobre : sota)),
+      ...(amunt ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
+    }
+  }
+  // Es recalcula mentre és oberta: la finestra es pot redimensionar i la pàgina scrollar sota
+  // una llista que ja no seria on toca. `capture` per enxampar també el scroll del contenidor
+  // de la taula, que no bombolla.
+  const [pos, setPos] = useState(null)
+  useEffect(() => {
+    if (!obert) { setPos(null); return undefined }
+    const recalcula = () => setPos(posicioLlista())
+    recalcula()
+    window.addEventListener('resize', recalcula)
+    window.addEventListener('scroll', recalcula, true)
+    return () => {
+      window.removeEventListener('resize', recalcula)
+      window.removeEventListener('scroll', recalcula, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [obert, results.length])
+
   return (
     <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
       <input
@@ -1519,11 +1561,12 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt }) {
           : t('editable_table.finder_hint')}
       </span>
 
-      {obert && (
+      {obert && pos && createPortal(
         <div style={{
-          position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, zIndex: 40,
+          position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, zIndex: 1200,
           background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 7,
-          boxShadow: '0 -8px 24px rgba(0,0,0,0.12)', minWidth: 410, maxHeight: 290, overflow: 'auto',
+          boxShadow: '0 -8px 24px rgba(0,0,0,0.12)', minWidth: 410,
+          maxHeight: pos.maxHeight, overflowY: 'auto',
         }}>
           {perNivell.map(([nivell, files]) => (
             <div key={nivell}>
@@ -1559,7 +1602,8 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt }) {
               {t('editable_table.no_pom_found', { query: cerca })}
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
