@@ -39,6 +39,19 @@ import { baseMeasurements, poms } from '../../api/endpoints'
 // la maqueta aprovada demana 9,5px a la capçalera i 12,5px al valor, i cap dels graons del
 // sistema (--fs-caption 8 · --fs-label 10 · --fs-body 12) hi cau a sobre. Es declaren aquí, amb
 // nom, en comptes d'escampar-los per les cel·les — i els COLORS segueixen sent tokens, sempre.
+// LES QUATRE COLUMNES DE LA REGLA (P0.5b). Es declaren un sol cop —capçalera i cel·la surten
+// d'aquí— perquè afegir-ne o treure'n una no vulgui dir tocar dos llocs i que ballin.
+// El valor es llegeix de la FILA; `null` vol dir «no ho diu» i es pinta `—`, mai un zero.
+const COLS_GRADING = [
+  { clau: 'regim', i18n: 'fitting.grid.regime', ample: 96, valor: r => r.logica || null },
+  { clau: 'delta', i18n: 'editable_table.col.delta', ample: 84,
+    valor: r => (r.increment_base == null ? null : r.increment_base) },
+  { clau: 'delta_break', i18n: 'editable_table.col.delta_break', ample: 96,
+    valor: r => (r.increment_break == null ? null : r.increment_break) },
+  { clau: 'talla_break', i18n: 'editable_table.col.talla_break', ample: 96,
+    valor: r => r.talla_break_label || null },
+]
+
 const FS_HEAD = '9.5px'   // capçaleres, versaletes
 const FS_VAL = '12.5px'   // valors i noms de fila
 
@@ -107,6 +120,15 @@ export default function EditableTable({
   //   {baseLabel, onValor(row,val), onIdentitat(row,camps), onParteix(row,filles),
   //    onNova(pom,eixos), onTreu(row), onReordena(ids)}
   presa = null,
+  // P0.5b, tornada a la CONSULTA (Agus, 06/08). `true` quan el model ja gradua —joc assignat o
+  // regles pròpies—; sense això no hi són, perquè una taula que ensenya «Règim · Δ · Δ break ·
+  // Talla break» a un model sense graduació promet quatre columnes que no es poden omplir.
+  //
+  // ⚠️ P0.5b només ho va cablejar a Definició POM, i P0.5d.4 les hi va treure (cada superfície
+  // la seva feina: editar la regla és de `GraduacioSuperficie`). A la CONSULTA no hi han estat
+  // mai, tot i que el comentari de dalt d'aquest fitxer ho donava per fet. Aquí hi tornen NOMÉS
+  // en lectura: la consulta ensenya tot el que el model sap i no en deixa tocar res.
+  mostraGrading = false,
 }) {
   const esPresa = !!presa
   const { t, i18n } = useTranslation()
@@ -607,7 +629,7 @@ export default function EditableTable({
   // de grups d'instància el decideix la BD, i un literal aquí tornaria a ser el segon lloc que
   // creu saber quantes dimensions hi ha.
   const colCount = (readOnly ? 0 : 1) + 4 + (readOnly ? 0 : dims.length + 1)
-    + (esPresa && !readOnly ? 1 : 0) + 1 + (readOnly ? 0 : 1)
+    + (esPresa && !readOnly ? 1 : 0) + (mostraGrading ? COLS_GRADING.length : 0) + 1 + (readOnly ? 0 : 1)
   const stickyHd = (left, w) => ({ ...thS, position: 'sticky', left, zIndex: 3, width: w, minWidth: w, background: 'var(--bg-muted)' })
   // Bloc d'IDENTITAT de la fila, congelat a l'esquerra: Capa · nomenclatura · nom. Amb dues
   // germanes vives (el mateix POM a l'exterior i al folre, la sisa esquerra i la dreta) el nom
@@ -747,6 +769,15 @@ export default function EditableTable({
                     </>
                   ) : t('editable_table.col.base_value')}
                 </th>
+                {/* P0.5b — LA REGLA, en LECTURA, DESPRÉS de la talla base. Els quatre camps
+                    viatgen a la fila; aquí només es pinten quan hi ha graduació de què parlar. */}
+                {mostraGrading && COLS_GRADING.map((c, i) => (
+                  <th key={c.clau} rowSpan={2}
+                      style={{ ...thS, textAlign: 'right', minWidth: c.ample,
+                               borderLeft: i === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
+                    {t(c.i18n)}
+                  </th>
+                ))}
                 {!readOnly && <th rowSpan={2} style={thS}></th>}
               </tr>
               {/* v8.1 `tr.r2` — la segona línia de la capçalera NOMENA CADA DIMENSIÓ. Els noms
@@ -790,6 +821,7 @@ export default function EditableTable({
                     onMesInstancia={() => setPosicionsDe(row)}
                     onGermanaCapa={() => germanaCapaRapida(row)}
                     capesLliures={capesLliuresDe(row)}
+                    mostraGrading={mostraGrading}
                     onCapa={handleCapa}
                     onCellChange={handleCellChange}
                     onDelete={handleDeleteRow}
@@ -881,7 +913,7 @@ export default function EditableTable({
 function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete,
                        onBateig, widths, registerVal, onNav, esPresa,
                        dicc, dims, dimState, onParteix, onMesInstancia, onGermanaCapa,
-                       capesLliures, onCapa }) {
+                       capesLliures, onCapa, mostraGrading = false }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
@@ -1127,6 +1159,16 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           onDesenfoca={() => onActiva?.(prev => (prev === row.id ? null : prev))}
           hint={buida ? t(esPresa ? 'presa.row_pending' : 'editable_table.row_discarded') : undefined} />
       </td>
+      {/* P0.5b — la regla d'aquesta mesura, en LECTURA. `—` quan el camp no diu res: una cel·la
+          buida es llegiria com un zero, i un règim sense delta no és un delta de zero. */}
+      {mostraGrading && COLS_GRADING.map((c, i) => (
+        <td key={c.clau}
+            style={{ ...tdS, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
+                     color: 'var(--text-main)',
+                     borderLeft: i === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
+          {c.valor(row) ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
+        </td>
+      ))}
       {!readOnly && (
         <td style={{ ...tdS, whiteSpace: 'nowrap' }}>
           {/* v8.1 `.del` — TREURE EL POM, i prou. El botó de germana que hi havia al costat era

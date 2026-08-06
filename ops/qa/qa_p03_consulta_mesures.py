@@ -94,6 +94,12 @@ def main():
     esperats = sorted(r['base_value_cm'] for r in bs['rows']
                       if r.get('base_value_cm') is not None)
     n_files = len(bs['rows'])
+    tm = DADES.get(f'/api/v1/models/{MID}/taula-mesures/', {})
+    regla_files = [r for r in tm.get('rows', []) if r.get('logica')]
+    regims = sorted({r['logica'] for r in regla_files})
+    joc = DADES.get(f'/api/v1/models/{MID}/', {}).get('grading_rule_set')
+    print(f'· joc del model: {joc} · files amb règim: {len(regla_files)} {regims}')
+
     checks = DADES.get('/api/v1/size-checks/', BUIT)
     n_checks = checks.get('count', 0)
     print(f'· model {MID} · base_size={bs.get("base_size")!r} · files={n_files} '
@@ -156,6 +162,21 @@ def main():
                 # dalt («hi és el valor») ja és tota la promesa que aquesta pantalla fa.
                 print(f'  ✓ {etiqueta} · {n_files} files · TALLA BASE amb els '
                       f'{len(esperats)} valors del model')
+
+                # LES COLUMNES DE GRADUACIÓ, en LECTURA (P0.5b, tornades a la consulta el 06/08).
+                # Surten quan el model gradua; el MILEY té joc (BRW-CATALEG-v3) i 7 de 12 files
+                # amb règim. Es mira la CAPÇALERA —que és el contracte— i que el règim hi surti.
+                caps = page.inner_text('table thead').upper()
+                falten_cols = [c for c in ('RÈGIM', 'DELTA', 'TALLA BREAK') if c not in caps]
+                if regla_files and falten_cols:
+                    fallides.append(f'{etiqueta} · el model gradua i FALTEN columnes: {falten_cols}')
+                elif regla_files:
+                    cos = page.inner_text('table tbody')
+                    if not any(r in cos for r in regims):
+                        fallides.append(f'{etiqueta} · hi ha les columnes però cap règim ({regims})')
+                    else:
+                        print(f'  ✓ {etiqueta} · graduació en lectura · {len(regla_files)} files '
+                              f'amb règim {sorted(regims)}')
 
         if errors:
             fallides.append(f'error de pàgina: {errors[0][:160]}')

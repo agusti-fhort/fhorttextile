@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import client from '../../api/client'
 import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines } from '../../api/endpoints'
 import { effectiveRegime } from '../../utils/gradingRegime'
 import { finestraHistoric } from './fittingGridAdapter'
@@ -202,10 +203,19 @@ const checkSource = {
           .then(r => { const rows = r.data?.results ?? r.data ?? []; return rows.length ? sizeChecks.get(rows[0].id).then(x => x.data) : null })
           .catch(() => null)
       : sizeChecks.open(model.id).then(r => r.data).catch(() => null)
-    return Promise.all([models.baseStages(model.id).then(r => r.data).catch(() => null), checkP])
-      .then(([stages, chk]) => {
+    // LA REGLA DE CADA FILA — nomes per a la CONSULTA (P0.5b, tornada el 06/08).
+    //
+    // `base-stages` NO porta la regla: serveix identitat, estadis i el valor base. Els quatre
+    // camps (`logica`, `increment_base`, `increment_break`, `talla_break_label`) viatgen a
+    // `taula-mesures`, que es la mateixa font que fa servir `GraduacioSuperficie`. Es demana
+    // NOMES en lectura: en treball no es pinten aquestes columnes i seria una peticio de mes.
+    const reglesP = ctx.readOnly
+      ? client.get(`/api/v1/models/${model.id}/taula-mesures/`).then(r => r.data).catch(() => null)
+      : Promise.resolve(null)
+    return Promise.all([models.baseStages(model.id).then(r => r.data).catch(() => null), checkP, reglesP])
+      .then(([stages, chk, regles]) => {
         if (!chk && !ctx.readOnly) ctx.onFeedback?.({ type: 'err', text: ctx.t('sizecheck.open_error') })
-        return { baseData: stages, check: chk }
+        return { baseData: stages, check: chk, regles }
       })
   },
 
@@ -527,6 +537,17 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   // QUÈ HI HA DEIXAT DE SORTIR, i per què: el RÈGIM, la Δ, el break i «a partir de» (prendre una
   // mesura no és editar la regla de graduació), la TOLERÀNCIA, i el vocabulari de fitting —«REAL
   // (PROTO)» i «DECISIÓ · NOTA»—, que és d'una altra eina. Ordre d'Agus, 05/08.
+  // La regla per POM, de `taula-mesures` (nomes en consulta: v. `checkSource.load`).
+  const reglaPerPom = new Map(
+    ((raw?.regles?.rows) || []).map(x => [x.pom_id, {
+      logica: x.logica, increment_base: x.increment_base,
+      increment_break: x.increment_break, talla_break_label: x.talla_break_label,
+    }]))
+  // LES COLUMNES DE GRADUACIO surten quan el model GRADUA: joc assignat o alguna regla propia.
+  // Amb joc pero sense regla resolta, la fila diu `—`, que es informacio i no un forat.
+  const graduaAlgunaCosa = !!model?.grading_rule_set
+    || [...reglaPerPom.values()].some(x => x.logica)
+
   const esPresa = src.kind === 'check'
   const rowsPresa = !esPresa ? [] : (raw?.baseData?.rows || []).map(r => {
     const line = (raw?.check?.lines || []).find(
@@ -562,6 +583,11 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       // base vigent segueix sent el `valor_teoric` que el check va congelar en obrir-se — que és
       // el que la presa ha de comparar, i no s'ha de moure mentre es pren.
       base_value_cm: readOnly ? (r.base_value_cm ?? null) : (line?.valor_real ?? null),
+      // LA REGLA, per a les quatre columnes de lectura de la consulta. Es creua per `pom_id` i
+      // no pels eixos a posta: `ModelGradingRule` no porta capa ni instancia (decisio de domini
+      // amb acta —mateix POM, mateix increment a totes les cares—), o sigui que dues germanes
+      // COMPARTEIXEN regla i han de sortir amb la mateixa. Creuar per la fila donaria buit.
+      ...(reglaPerPom.get(r.pom_id) || {}),
       // …i al costat, la base VIGENT, que és contra el que es mesura.
       base_vigent: readOnly ? (r.base_value_cm ?? null) : (line?.valor_teoric ?? null),
     }
@@ -660,6 +686,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           modelId={model.id}
           readOnly={readOnly}
           presa={presaPortes}
+          mostraGrading={readOnly && graduaAlgunaCosa}
         />
       ) : (
       <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
