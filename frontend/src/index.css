@@ -92,3 +92,10 @@ body {
 /* Qui ha demanat menys moviment al sistema no el rep: la fila apareix i prou (la posició ja la
    diu, perquè neix enganxada a la mare). */
 @media (prefers-reduced-motion: reduce) { .ftt-fila-neix > td { animation: none; } }
+
+/* LA NOMENCLATURA DEL POM VA EN DAURAT PLE, també quan és la del catàleg (maqueta v8.1).
+   El codi (A · B · E1 · AC FR…) es pinta com a PLACEHOLDER de l'input mentre el model no té
+   nomenclatura pròpia —que és el cas normal—, i el navegador els esvaeix per defecte. Per això
+   es veia apagat: no era una decisió de disseny, era el gris que posa el navegador.
+   És IDENTITAT, no decoració: el codi és com es demana aquesta mesura al fabricant. */
+input[data-nomen]::placeholder { color: var(--gold); opacity: 1; }
