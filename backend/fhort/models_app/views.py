@@ -1863,6 +1863,18 @@ def measurements_table_view(request, model_id):
             'increment_base': _flt(getattr(rule, 'increment_base', None)) if rule else None,
             'increment_break': _flt(getattr(rule, 'increment_break', None)) if rule else None,
             'talla_break_label': getattr(rule, 'talla_break_label', None) if rule else None,
+            # P0.5d — D'ON VE LA REGLA, perquè la superfície de Graduació ho ha de poder dir.
+            #
+            # `logica` no basta: una fila plena pot venir del joc que el model té assignat o
+            # d'una edició que algú ha fet AQUÍ, i les dues s'han de poder distingir a ull. El
+            # senyal honest és `origen` de la regla, que ja existeix i que els dos escriptors
+            # (`set_pom_regim_view` i `gravar_pom_view`) posen a 'MANUAL' en editar:
+            #   · CANONICAL · CLIENT_RUN · IMPORTED · FEDERAT → ve del JOC (materialitzada)
+            #   · MANUAL                                      → l'ha escrita algú al MODEL
+            # `None` = fila sense regla (les «—»), que és on viu l'entrada manual des de zero.
+            #
+            # Camp NOU i additiu: cap consumidor existent el llegeix i cap camp canvia de valor.
+            'regla_origen': getattr(rule, 'origen', None) if rule else None,
         })
 
     base_size = model.base_size_label
