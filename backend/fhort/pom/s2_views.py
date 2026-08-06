@@ -76,7 +76,13 @@ def sizing_profiles_view(request):
 
         qs = SizingProfile.objects.select_related(
             'target', 'construction', 'fit_type',
-            'size_system', 'size_system__parent', 'grading_rule_set', 'customer'
+            'size_system', 'size_system__parent', 'size_system__customer',
+            'grading_rule_set', 'customer'
+        ).prefetch_related(
+            # N1 — les 4 capes del run les recorre el serializer per fila; sense prefetch
+            # són 4 queries per perfil (mateix motiu que el prefetch de `targets` al ViewSet).
+            'size_system__targets', 'size_system__construccions',
+            'size_system__fits', 'size_system__grups',
         )
 
         target_codi = request.query_params.get('target')

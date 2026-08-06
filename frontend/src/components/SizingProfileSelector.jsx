@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { SizeSetCard } from "./SizeSetCard"
 import { constructionTypes, fitTypes, sizingProfiles } from "../api/endpoints"
-import { TARGETS } from "./grading/gradingAxes"
+import { TARGETS, groupLabel } from "./grading/gradingAxes"
 import TargetLabel from "./grading/TargetLabel"
 
 // TARGETS: vocabulari ÚNIC (ordre + etiquetes) de gradingAxes — fora la còpia TARGET_ORDER + la crida
@@ -62,7 +62,7 @@ export function SizingProfileSelector({
   onClone,
   onSelectionChange,
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [constructions, setConstructions] = useState([])
   const [allFitTypes, setAllFitTypes] = useState([])
   const [profiles, setProfiles] = useState([])
@@ -71,6 +71,9 @@ export function SizingProfileSelector({
   const [selectedTarget, setSelectedTarget] = useState(initialTarget)
   const [selectedConstruction, setSelectedConstruction] = useState(null)
   const [selectedFit, setSelectedFit] = useState(null)
+  // N2 — filtres que llegeixen les etiquetes del RUN (N1), no els eixos del perfil.
+  const [selectedEscala, setSelectedEscala] = useState(null)
+  const [selectedGrup, setSelectedGrup] = useState(null)
 
   const [lookupsError, setLookupsError] = useState(false)
   const [profilesError, setProfilesError] = useState(false)
@@ -121,9 +124,27 @@ export function SizingProfileSelector({
     if (selectedFit && !activeFitCodis.has(selectedFit)) setSelectedFit(null)
   }, [profiles])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const visibleProfiles = selectedFit
+  // N2 — filtres del RUN (no del perfil): tipus d'escala i grup de peça. Client-side pel mateix
+  // motiu que el de Fit: filtrar-los al servidor trencaria el faceting i faria desaparèixer els
+  // altres chips. Els vocabularis són els mateixos de sempre; només canvia d'on surt el valor.
+  const perfilsAmbFit = selectedFit
     ? profiles.filter(p => p.fit_type_codi === selectedFit)
     : profiles
+
+  const escalesDisponibles = [...new Set(
+    perfilsAmbFit.map(p => p.size_system?.tipus_escala).filter(Boolean))].sort()
+  const grupsDisponibles = [...new Set(
+    perfilsAmbFit.flatMap(p => p.size_system?.grup_codis || []))].sort()
+
+  // Si el valor triat deixa d'existir per a la combinació, s'ignora. DERIVAT, no un reset dins
+  // d'un efecte: el que val és el valor viu, i un `setState` en efecte només hi afegiria un
+  // render en cascada per arribar al mateix lloc.
+  const escalaActiva = escalesDisponibles.includes(selectedEscala) ? selectedEscala : null
+  const grupActiu = grupsDisponibles.includes(selectedGrup) ? selectedGrup : null
+
+  const visibleProfiles = perfilsAmbFit
+    .filter(p => !escalaActiva || p.size_system?.tipus_escala === escalaActiva)
+    .filter(p => !grupActiu || (p.size_system?.grup_codis || []).includes(grupActiu))
 
   const pickTarget = (codi) => {
     setSelectedTarget(codi === selectedTarget ? null : codi)
@@ -272,6 +293,55 @@ export function SizingProfileSelector({
           <div style={{ fontSize: 'var(--fs-caption)', color: "var(--text-muted)", marginBottom: 12, textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
             {t("size_library.sizesets_help")}
           </div>
+
+          {/* N2 — filtres del RUN. Només surten les capes que els runs d'aquesta combinació
+              declaren: una fila de filtres amb un sol valor no filtra res i seria soroll. */}
+          {(escalesDisponibles.length > 1 || grupsDisponibles.length > 1) && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 14 }}>
+              {escalesDisponibles.length > 1 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 'var(--fs-caption)', color: "var(--text-muted)", textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
+                    {t("size_library.filter_scale")}
+                  </span>
+                  {escalesDisponibles.map(e => (
+                    <button
+                      key={e}
+                      onClick={() => setSelectedEscala(escalaActiva === e ? null : e)}
+                      style={{
+                        ...chipBase, padding: "4px 10px", fontSize: 'var(--fs-label)',
+                        background: escalaActiva === e ? "#f5e6d0" : "var(--white)",
+                        color: escalaActiva === e ? "var(--gold)" : "var(--text-main)",
+                        border: `1px solid ${escalaActiva === e ? "var(--gold)" : "var(--border)"}`,
+                      }}
+                    >
+                      {t(`size_library.scale_${e}`, e)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {grupsDisponibles.length > 1 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 'var(--fs-caption)', color: "var(--text-muted)", textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
+                    {t("size_library.filter_group")}
+                  </span>
+                  {grupsDisponibles.map(g => (
+                    <button
+                      key={g}
+                      onClick={() => setSelectedGrup(grupActiu === g ? null : g)}
+                      style={{
+                        ...chipBase, padding: "4px 10px", fontSize: 'var(--fs-label)',
+                        background: grupActiu === g ? "#f5e6d0" : "var(--white)",
+                        color: grupActiu === g ? "var(--gold)" : "var(--text-main)",
+                        border: `1px solid ${grupActiu === g ? "var(--gold)" : "var(--border)"}`,
+                      }}
+                    >
+                      {groupLabel(g, i18n.language) || g}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {profilesError ? (
             <LoadError onRetry={loadProfiles} label={t("size_library.load_error_sizesets")} />

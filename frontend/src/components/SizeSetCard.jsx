@@ -1,15 +1,16 @@
 
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import { RunRestrictionTags, ScaleBadge, RunCustomerBadge } from "./RunRestrictionTags"
 
 
 export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false }) {
   const { t } = useTranslation()
   const [cloning, setCloning] = useState(false)
 
-  const sysName = profile?.size_system?.nom || "—"
+  const run = profile?.size_system
+  const sysName = run?.nom || "—"
   const sizes = profile?.size_definitions || []
-  const rules = profile?.grading_rules_preview || []
   const isCustom = profile?.is_custom
   // FIX 2 — el badge "Estàndard ISO" només per a rulesets canònics de debò (is_system_default).
   // is_custom (= parent_profile) no captura els derivats de client (p.ex. run LOSAN).
@@ -44,7 +45,12 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
             </div>
           )}
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexWrap: "wrap",
+                      justifyContent: "flex-end" }}>
+          {/* N2 — el que la targeta ha de dir del RUN: de quina escala és i de qui és.
+              Tots dos surten del run, no del perfil, i tots dos desapareixen si no consten. */}
+          <ScaleBadge tipus={run?.tipus_escala} />
+          <RunCustomerBadge codi={profile?.size_system_customer_codi} nom={run?.customer_nom} />
           {!isCanonicalISO ? (
             <span style={{
               padding: "2px 8px", borderRadius: 3, fontSize: 'var(--fs-label)',
@@ -78,21 +84,10 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
         </div>
       )}
 
-      {/* Preview grading */}
-      {!compact && rules.length > 0 && (
-        <div style={{
-          fontSize: 'var(--fs-label)', color: "var(--text-muted)", marginBottom: 12,
-          padding: "6px 8px", background: "#fdf9f5", borderRadius: 4,
-          border: "1px solid #f0e8d8", lineHeight: 1.8,
-        }}>
-          {rules.map((r, i) => (
-            <span key={i}>
-              {r.pom_codi} <span style={{ color: "var(--gold)" }}>+{r.increment}cm</span>
-              {i < rules.length - 1 ? " · " : ""}
-            </span>
-          ))}
-        </div>
-      )}
+      {/* N2 — les 4 capes de restricció del RUN, on abans hi havia el bloc d'increments de POM.
+          La graduació ja no viu en aquesta pantalla: aquí es tria una ESCALA, i el que la
+          targeta ha de dir és a qui s'assembla, no quant creix cada mesura. */}
+      {!compact && <RunRestrictionTags run={run} />}
 
       {/* Botons */}
       <div style={{ display: "flex", gap: 6 }}>

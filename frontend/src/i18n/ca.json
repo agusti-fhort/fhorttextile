@@ -3490,7 +3490,13 @@
     "custom": "Personalitzat",
     "standard_iso": "Estàndard ISO",
     "use": "Usar",
-    "detail": "Detall"
+    "detail": "Detall",
+    "scale_ALPHA": "Alfa",
+    "scale_NUM": "Numèrica",
+    "scale_MESOS": "Mesos i edat",
+    "scale_ALTURA": "Alçada (cm)",
+    "filter_scale": "Escala:",
+    "filter_group": "Grup:"
   },
   "grading": {
     "summary": "{{sets}} conjunts de regles · {{rules}} regles totals",

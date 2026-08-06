@@ -41,6 +41,30 @@ class SizeSystemLightSerializer(serializers.Serializer):
     nom = serializers.CharField()
     base_unit = serializers.CharField()
     norma_ref = serializers.CharField()
+    # N1 (2026-08-06 nit) — el run ja es descriu a si mateix. La Size Library ho pinta com a
+    # tags, i el pas 3 del wizard ho llegeix per ordenar per proximitat. Llista de CODIS (mai
+    # ids ni text traduït): el consumidor tradueix pel seu compte, com ja fa amb `target_codis`.
+    tipus_escala = serializers.CharField(allow_blank=True, required=False)
+    target_codis = serializers.SerializerMethodField()
+    construccio_codis = serializers.SerializerMethodField()
+    fit_codis = serializers.SerializerMethodField()
+    grup_codis = serializers.SerializerMethodField()
+    customer_nom = serializers.SerializerMethodField()
+
+    def get_target_codis(self, obj):
+        return [t.codi for t in obj.targets.all()]
+
+    def get_construccio_codis(self, obj):
+        return [c.codi for c in obj.construccions.all()]
+
+    def get_fit_codis(self, obj):
+        return [f.codi for f in obj.fits.all()]
+
+    def get_grup_codis(self, obj):
+        return [g.codi for g in obj.grups.all()]
+
+    def get_customer_nom(self, obj):
+        return obj.customer.nom if obj.customer_id else ''
 
 
 class SizeDefinitionLightSerializer(serializers.Serializer):

@@ -3490,7 +3490,13 @@
     "custom": "Personalizado",
     "standard_iso": "Estándar ISO",
     "use": "Usar",
-    "detail": "Detalle"
+    "detail": "Detalle",
+    "scale_ALPHA": "Alfa",
+    "scale_NUM": "Numérica",
+    "scale_MESOS": "Meses y edad",
+    "scale_ALTURA": "Altura (cm)",
+    "filter_scale": "Escala:",
+    "filter_group": "Grupo:"
   },
   "grading": {
     "summary": "{{sets}} conjuntos de reglas · {{rules}} reglas totales",
