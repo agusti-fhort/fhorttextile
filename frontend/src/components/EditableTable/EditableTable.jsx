@@ -1338,12 +1338,90 @@ function NomCanonic({ value, placeholder, instancia, traduccio, marca = '', edit
       {marca && (
         <span style={{ fontSize: 10, fontStyle: 'italic', color: 'var(--text-muted)' }}>{`  ${marca}`}</span>
       )}
-      {traduccio && (
-        <i className="ti ti-info-circle" title={traduccio} aria-label={traduccio}
-          onClick={e => e.stopPropagation()}
-          style={{ fontSize: 12, marginLeft: 6, color: 'var(--text-muted)', cursor: 'help' }} />
-      )}
+      {traduccio && <InfoTraduccio text={traduccio} />}
     </div>
+  )
+}
+
+// LA ⓘ DE LA TRADUCCIÓ — el nom en la llengua de qui llegeix, a demanda.
+//
+// PER QUÈ NO FUNCIONAVA (06/08). La dada hi era i l'atribut també: la ⓘ es pintava amb un
+// `title` natiu i el text correcte a dins. El que fallava era el MECANISME — el tooltip del
+// navegador només surt passant-hi per sobre i esperant-se un segon llarg, no respon al clic, i
+// damunt d'una icona de 12px la meitat de les vegades no arriba a sortir. Es demanava una
+// traducció i semblava que la ⓘ no fes res.
+//
+// Ara respon a les tres coses: HOVER, CLIC (que la deixa fixada, per poder-la llegir amb calma)
+// i FOCUS de teclat. `Esc` i un clic a fora la tanquen.
+//
+// Va per PORTAL, i no és cosmètic: la cel·la del nom viu dins del contenidor `overflow-x:auto`
+// de la taula, i qualsevol cosa posicionada que en surti queda RETALLADA — la mateixa trampa que
+// es va pagar amb el desplegable del cercador (P0.2b).
+function InfoTraduccio({ text }) {
+  const [hover, setHover] = useState(false)
+  const [fixat, setFixat] = useState(false)
+  const [pos, setPos] = useState(null)
+  const ref = useRef(null)
+  const obert = hover || fixat
+
+  useEffect(() => {
+    if (!obert) { setPos(null); return undefined }
+    const situa = () => {
+      const r = ref.current?.getBoundingClientRect()
+      if (r) setPos({ left: Math.min(r.left, window.innerWidth - 260), top: r.bottom + 6 })
+    }
+    situa()
+    window.addEventListener('scroll', situa, true)
+    window.addEventListener('resize', situa)
+    return () => {
+      window.removeEventListener('scroll', situa, true)
+      window.removeEventListener('resize', situa)
+    }
+  }, [obert])
+
+  useEffect(() => {
+    if (!fixat) return undefined
+    const fora = (e) => { if (!ref.current?.contains(e.target)) setFixat(false) }
+    const esc = (e) => { if (e.key === 'Escape') setFixat(false) }
+    document.addEventListener('mousedown', fora)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('mousedown', fora)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [fixat])
+
+  return (
+    <>
+      <button
+        ref={ref} type="button" data-info-traduccio="1"
+        aria-label={text} aria-expanded={obert}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        onFocus={() => setHover(true)} onBlur={() => setHover(false)}
+        // `stopPropagation` encara que el text ja no s'editi per clic: la ⓘ viu dins d'una
+        // cel·la que participa del recorregut de la taula i no ha d'arrossegar-hi res.
+        onClick={(e) => { e.stopPropagation(); setFixat(v => !v) }}
+        // MIDA PRÒPIA, no la del glif: si la font d'icones no carrega, l'`<i>` es queda a zero
+        // i el botó seria un objectiu de 0×0 —impossible de clicar i sense manera de saber per
+        // què—. Amb la caixa declarada aquí, la ⓘ es pot demanar encara que el glif no hi sigui.
+        style={{
+          background: 'none', border: 'none', padding: 0, marginLeft: 6, lineHeight: 1,
+          width: 16, height: 16, display: 'inline-flex',
+          alignItems: 'center', justifyContent: 'center', verticalAlign: 'middle',
+          color: obert ? 'var(--gold)' : 'var(--text-muted)', cursor: 'help',
+        }}>
+        <i className="ti ti-info-circle" style={{ fontSize: 12 }} aria-hidden="true" />
+      </button>
+      {obert && pos && createPortal(
+        <div role="tooltip" style={{
+          position: 'fixed', left: pos.left, top: pos.top, zIndex: 1300, maxWidth: 250,
+          background: 'var(--white)', border: '1px solid var(--gold)', borderRadius: 6,
+          padding: '5px 10px', fontSize: 'var(--fs-body)', color: 'var(--text-main)',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.12)', pointerEvents: 'none',
+        }}>{text}</div>,
+        document.body,
+      )}
+    </>
   )
 }
 
