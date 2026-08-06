@@ -43,6 +43,10 @@ def main():
             (f'/api/v1/models/{mid}/taula-mesures/', {}),
             (f'/api/v1/models/{mid}/base-stages/', {}),
             ('/api/v1/size-checks/', {'model': mid, 'ordering': '-created_at', 'page_size': 1}),
+            # LES TASQUES DEL MODEL. Sense elles no es pot reproduir el defecte del 06/08: n'hi
+            # havia prou que la `pom` estigués En curs o Paused perquè una càrrega FREDA de
+            # `?tab=Mesures` obrís l'edició. Un fum amb la llista de tasques buida mai el veurà.
+            ('/api/v1/model-task-items/', {'model': mid}),
         ]
         fixture = {}
         for path, params in crides:
