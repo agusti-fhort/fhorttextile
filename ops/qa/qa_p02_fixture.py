@@ -36,6 +36,7 @@ def main():
         (f'/api/v1/models/{mid}/poms-suggerits/', {}),
         (f'/api/v1/models/{mid}/taula-mesures/', {}),
         (f'/api/v1/models/{mid}/grading-status/', {}),
+        (f'/api/v1/models/{mid}/base-stages/', {}),
     ]
     with schema_context('fhort'):
         u = get_user_model().objects.filter(is_superuser=True).first()

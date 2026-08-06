@@ -606,7 +606,7 @@ export default function EditableTable({
   // de grups d'instància el decideix la BD, i un literal aquí tornaria a ser el segon lloc que
   // creu saber quantes dimensions hi ha.
   const colCount = (readOnly ? 0 : 1) + 4 + (readOnly ? 0 : dims.length + 1)
-    + (esPresa ? 1 : 0) + (mostraGrading ? COLS_GRADING.length : 0) + 1 + (readOnly ? 0 : 1)
+    + (esPresa && !readOnly ? 1 : 0) + (mostraGrading ? COLS_GRADING.length : 0) + 1 + (readOnly ? 0 : 1)
   const stickyHd = (left, w) => ({ ...thS, position: 'sticky', left, zIndex: 3, width: w, minWidth: w, background: 'var(--bg-muted)' })
   // Bloc d'IDENTITAT de la fila, congelat a l'esquerra: Capa · nomenclatura · nom. Amb dues
   // germanes vives (el mateix POM a l'exterior i al folre, la sisa esquerra i la dreta) el nom
@@ -704,12 +704,18 @@ export default function EditableTable({
                     {t('instancia.grup')}
                   </th>
                 )}
-                {/* LA BASE VIGENT — la columna que la v8.1 NO té, i que la presa necessita.
+                {/* LA BASE VIGENT — la columna que la v8.1 NO té, i que LA PRESA necessita.
                     «Mesurar contra» vol dir comparar la xifra que s'acaba de prendre amb la que
                     el model ja tenia; sense aquesta columna el carril seria un número sol i la
-                    comparació s'hauria de fer de memòria. En LECTURA sempre: la base no la mou
-                    una presa, la mou resoldre el check. */}
-                {esPresa && (
+                    comparació s'hauria de fer de memòria.
+
+                    NOMÉS A LA PRESA, però. En CONSULTA les dues columnes diuen EL MATEIX número
+                    —la base del model— des que la consulta llegeix `BaseMeasurement` en comptes
+                    d'un check que pot no existir (`e6958b28`): allà «Talla base» i «Base vigent»
+                    són la mateixa cosa escrita dues vegades, i una taula que repeteix una xifra
+                    fa dubtar de si són dues xifres diferents. Es queda la que respon la pregunta
+                    de la consulta: la TALLA BASE. */}
+                {esPresa && !readOnly && (
                   <th rowSpan={2} style={{ ...thS, textAlign: 'right', minWidth: 96,
                                            borderLeft: '1px solid var(--border)' }}>
                     {presa.baseLabel || t('presa.col_base_vigent')}
@@ -1097,9 +1103,9 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
                      color: 'var(--text-main)', cursor: 'pointer' }}>＋</button>
         </td>
       )}
-      {/* LA BASE VIGENT, en lectura. `—` quan el model encara no en té cap: una fila que s'està
-          prenent per primera vegada no ment dient zero. */}
-      {esPresa && (
+      {/* LA BASE VIGENT, en lectura i NOMÉS a la presa (v. la capçalera). `—` quan el model
+          encara no en té cap: una fila que s'està prenent per primera vegada no ment dient zero. */}
+      {esPresa && !readOnly && (
         <td style={{ ...tdS, textAlign: 'right', borderLeft: '1px solid var(--border)',
                      fontVariantNumeric: 'tabular-nums', color: 'var(--text-main)' }}>
           {row.base_vigent == null || row.base_vigent === ''
