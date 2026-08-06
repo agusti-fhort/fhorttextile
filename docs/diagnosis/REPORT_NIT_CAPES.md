@@ -434,7 +434,21 @@ Les tres decisions, a `DIAGNOSI_VOCABULARIS.md` §2.6:
    **només** canvia el nom de la test-DB). `DECISIONS.md` té 1.130 línies sense commitar d'una
    altra sessió: **no s'ha tocat** (i CLAUDE.md diu que no es commita mai).
 
-11. 🟡 **Un `until ! pgrep -f "settings_n4"` per esperar-se es bloqueja a si mateix**: la pròpia
+11. 🔴 **HI HA DOS COMMITS NUMERATS «86».** Mentre corria aquesta nit, l'altra sessió va commitar
+    `8dd6d9f3` («86 · el segell del tram V») **entre** el meu 85 i el meu 86 (`f8dd7eb7`). El
+    numerador de commits és un comptador compartit i no hi ha manera de coordinar-lo entre
+    sessions concurrents. **No he renumerat res**: reescriure història d'una branca on hi
+    treballa algú altre costa més del que val un número. El seu commit toca **només**
+    `REPORT_VESPRE_FORATS.md` — **zero codi** —, o sigui que els verds d'aquesta nit no en
+    depenen. Si l'Agus vol la sèrie neta, la manera barata és renumerar en fred demà.
+
+12. 🟢 **I una confirmació independent que va caure sola.** Aquell segell del tram V va córrer
+    les suites senceres (**1.100 verds**, `fhort.pom` 218 inclòs) sobre un disc que **ja portava
+    N1-N3**, i el seu propi missatge ho diu: *«Django prova el DISC, no el HEAD»*. O sigui que
+    N1 i N3 tenen, a més dels seus tests, una passada d'app sencera feta per una altra mà. El
+    que aquella passada **no** cobreix és N4: és de les 20:39 i N4 es va escriure després.
+
+13. 🟡 **Un `until ! pgrep -f "settings_n4"` per esperar-se es bloqueja a si mateix**: la pròpia
     línia de comanda del bucle conté `settings_n4` i, per tant, `pgrep` sempre s'hi troba. Dos
     esperadors encadenats es van quedar penjats mirant-se. No té conseqüències al repo, però és
     una trampa que val la pena no repetir.
