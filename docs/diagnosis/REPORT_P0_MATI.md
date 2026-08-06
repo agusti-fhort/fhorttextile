@@ -261,3 +261,122 @@ que estaven pensats per cobrir.
 | `133b846b` | 21 · el fum del diccionari pica la RUTA REAL, no la que ell mateix estubejava |
 
 (El reinici del servei no és un commit: és una acció d'infra sobre staging.)
+
+---
+
+# TRAM · la identitat de la fila (06/08, tarda) — els 5 punts, fets
+
+> Commits petits i build per commit, amb l'Agus entrant mesures a la mateixa pantalla.
+> **Cap canvi al desat de valors ni al carril.** Verificat sobre el model de prova, mai el MILEY.
+
+| # | Punt | Estat |
+|---|---|---|
+| 1 | POSICIÓ: només Left/Right + el ＋ | ✅ `666ba2ec` |
+| 2 | ESTAT: «Extended» sense el sinònim | ✅ `666ba2ec` |
+| 3 | El llapis d'identitat (i fora l'edició per clic) | ✅ `662d4ec9` |
+| 4 | La nomenclatura, en daurat ple | ✅ `2d876e5e` |
+| 5 | La ⓘ de traducció | ✅ `555e0cdd` |
+
+## 1 · Quin criteri s'ha fet servir per a les píndoles
+
+**Les dues primeres de cada eix per `display_order` del diccionari.** Cap slug escrit al codi.
+
+El catàleg dona avui `POSICIO`: left(1) · right(2) · top(3) · bottom(4) · cf(5) · cb(6) ·
+side(7) · waistband_seam(8). Les dues primeres per ordre són, exactament, **Left i Right** — que
+és el que la decisió demana, però arribat pel camí del diccionari i no per una llista. Si el
+catàleg reordena, la fila el segueix sense tocar codi.
+
+La regla s'aplica **per eix**, no només a la posició: `ESTAT` només en té dues i queda igual.
+Cap opció es perd — el modal del `＋` recorre TOTS els eixos amb TOTES les opcions, i a més és
+l'únic lloc que pot creuar-los (`left` i `relaxed` alhora). Verificat: les 6 posicions restants
+hi són.
+
+⚠️ **Un cas que val la pena saber:** si una fila ja té una posició que ara no es pinta (p. ex.
+`top`), les píndoles surten totes apagades. La posició **no es perd ni s'amaga** — es llegeix al
+nom de la fila (`… · Top`) i s'edita pel `＋`. Ho deixo així perquè el brief demana explícitament
+només dues píndoles; si vols que la fila ensenyi també la seva, és una línia.
+
+## 2 · «Extended» — i el que queda per decidir amb la Montse
+
+El catàleg porta **`nom_en = 'Extended / stretched'`** a `MeasurementInstance`. S'ha escurçat
+**només la PRESENTACIÓ** (es pren el primer terme abans de la barra); **la BD no s'ha tocat**.
+
+La regla és el separador i no una llista de casos: qualsevol fila que porti sinònims darrere
+d'una barra es presentarà pel primer terme.
+
+🚩 **PENDENT amb la Montse:** decidir si el nom del catàleg ha de ser «Extended» a seques. Mentre
+digui `Extended / stretched`, el nom llarg segueix sent el canònic a la BD i és el que veurà
+qualsevol superfície que no passi per aquesta funció de presentació.
+
+## 3 · El llapis · què s'ha retirat
+
+El text del nom **ja no s'edita clicant-hi**: en repòs és estàtic, sense cursor de text ni
+subratllat en passar-hi per sobre. L'única porta és el llapis, i obre **NOM + NOMENCLATURA
+alhora**. L'estat viu a la FILA, no dins de cada camp: són la mateixa resposta a «quina mesura és
+aquesta», i editar-los per separat era el que feia que se'n canviés un i l'altre es quedés dient
+una altra cosa.
+
+**No s'ha tocat cap porta de desat**: el nom segueix anant per `baseMeasurements.setNoms` i la
+nomenclatura pel buffer de la taula. Només canvia **quan** es veuen els camps.
+
+## 4 · Per què es veia apagada la nomenclatura
+
+No era una decisió de disseny. El codi (A · B · E1 · AC FR…) es pinta com a **placeholder** de
+l'input mentre el model no té nomenclatura pròpia —que és el cas normal: a staging `nom_fitxa`
+és buit a **totes** les files— i **el navegador esvaeix els placeholders per defecte**. Una regla
+`input[data-nomen]::placeholder { color: var(--gold); opacity: 1 }` sobre el hook que ja hi era.
+
+## 5 · La ⓘ · la dada hi era; fallava el mecanisme
+
+**No falta cap traducció al catàleg.** Les files porten `nom_ca` ple («Chest width» → «Ample de
+pit») i la ⓘ ja es pintava amb el `title` correcte a dins. El que fallava:
+
+- el **`title` natiu** només surt passant-hi per sobre i esperant-se un segon llarg;
+- **no respon al clic**;
+- damunt d'una icona de 12px, la meitat de les vegades no arriba a sortir.
+
+Ara respon a **hover**, **clic** (que la fixa, per llegir-la amb calma) i **focus de teclat**;
+`Esc` i un clic a fora la tanquen. Va per **portal**: la cel·la del nom viu dins del contenidor
+`overflow-x:auto` i qualsevol cosa posicionada que en surti queda retallada — la mateixa trampa
+del desplegable del cercador (P0.2b).
+
+També s'hi ha declarat la **caixa del botó (16×16)** en comptes d'heretar la del glif: ho vaig
+veure al fum, on la font d'icones no carrega i el botó era un objectiu de 0×0. Amb la font
+caiguda, la ⓘ seria impossible de clicar i sense manera de saber per què.
+
+## Verificació
+
+```
+✓ 0 · la ruta és VIVA al backend desplegat (HTTP 401 sense credencial)
+✓ A · columnes d'instància: ['Posició', 'Estat']
+✓ A · F5 × 3 · hi segueixen a cada recàrrega
+✓ A · píndoles: ['Extended', 'Left', 'Relaxed', 'Right'] (la resta, al ＋)
+✓ A · llapis ×6 · obre nom i nomenclatura alhora · el text no s'edita per clic
+✓ A · el ＋ porta les 6 posicions restants
+✓ A · ⓘ · hover i clic ensenyen la traducció ('Ample de pit')
+✓ A · consola sense cap 404
+· B · amb diccionari CAIGUT · cap columna, PERÒ avís + Reintenta
+✓ C · ca / es / en · píndoles correctes · consola neta
+```
+
+Les píndoles van en **anglès canònic als tres idiomes**: és la decisió del 05/08 (d'aquesta
+paraula surt el sufix del codi). No és un defecte de traducció.
+
+## Anotat pel camí (fora d'abast, no tocat)
+
+- **El modal de posicions no es tanca amb `Esc`** i el seu vel es queda interceptant els clics.
+  El fum ho esquiva recarregant. Val la pena arreglar-ho: `Esc` és el gest que tothom prova.
+- L'**`aria-label` d'un botó sobreescriu el nom accessible** — el `＋` no es troba amb
+  `get_by_role(name='＋')`. No és un defecte, però convé saber-ho per als fums.
+- `MeasureGrid.jsx` i `ComprovacioPanel.jsx` segueixen amb el hook antic del diccionari: si els
+  falla, callen. La regla de l'avís només s'ha aplicat a `EditableTable`.
+
+## Commits
+
+| Hash | Què |
+|---|---|
+| `666ba2ec` | 24 · les píndoles, a dues per eix · i «Extended» sense el sinònim |
+| `2d876e5e` | 25 · la nomenclatura del POM, en daurat ple |
+| `662d4ec9` | 26 · el llapis d'identitat · nom i nomenclatura s'obren junts |
+| `555e0cdd` | 27 · la ⓘ de traducció ja respon · hover, clic i teclat |
+| `45f7fec2` | 28 · el fum cobreix la identitat de la fila |
