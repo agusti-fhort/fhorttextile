@@ -545,9 +545,26 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       nom_traduit_model: r.nom_traduit_model || '',
       is_key: r.is_key,
       // EL CARRIL PORTA LA PRESA, no la base: és el número que la modista escriu avui.
-      base_value_cm: line?.valor_real ?? null,
+      //
+      // …PERÒ EN CONSULTA NO HI HA PRESA. La «Taula de mesures» és una pantalla de LECTURA del
+      // model: la pregunta que ve a respondre és quina base té la fitxa, no què s'està mesurant
+      // avui. Llegint `line.valor_real`/`line.valor_teoric` també aquí, la consulta depenia d'un
+      // SizeCheck obert: un model amb els valors gravats a Definició POM i sense cap check
+      // (MILEY, BRW-SS26-0003 — 12 files MANUAL amb valor i zero SizeCheck) ensenyava les files
+      // correctes i les dues columnes a «—». Les files arribaven perquè vénen de `base_stages`;
+      // els valors no, perquè venien de l'altra banda.
+      //
+      // La font primària és `BaseMeasurement`, i `base_stages_view` ja la serveix a
+      // `base_value_cm` (`models_app/views.py:3517`); el seu propi docstring fixa la semàntica:
+      // «l'últim estadi coincideix amb la base vigent (BaseMeasurement)» (`:3418`). O sigui que
+      // en consulta les dues columnes són la MATEIXA cosa, i és aquesta.
+      //
+      // El mode presa NO canvia: amb `readOnly=false` el carril segueix portant `valor_real` i la
+      // base vigent segueix sent el `valor_teoric` que el check va congelar en obrir-se — que és
+      // el que la presa ha de comparar, i no s'ha de moure mentre es pren.
+      base_value_cm: readOnly ? (r.base_value_cm ?? null) : (line?.valor_real ?? null),
       // …i al costat, la base VIGENT, que és contra el que es mesura.
-      base_vigent: line?.valor_teoric ?? null,
+      base_vigent: readOnly ? (r.base_value_cm ?? null) : (line?.valor_teoric ?? null),
     }
   })
 
