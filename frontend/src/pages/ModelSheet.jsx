@@ -223,14 +223,16 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     .finally(() => setLoading(false))
   }, [id])
 
-  const pomTask = modelTaskRows.find(task => task.task_type_code === 'pom')
+  // (`pomTask` també se'n va: el seu únic lector era `pomGenesisOpen`.)
   const hasBaseValue = taulaRows.some(r => r.base_value_cm != null)
   // El gate de Mesures llegeix l'estat de la feina de POM del MODEL, no de la llista de
   // tasques: aquella va escopada per `view_team_tasks`, i qui no tenia la capability veia
   // «Mesures encara no disponibles» amb la tasca Done i la taula plena. Un permís sobre
   // quines tasques veus no pot decidir si el model té mesures.
   const pomDone = !!model?.pom_task_done
-  const pomGenesisOpen = pomTask && ['InProgress', 'Paused'].includes(pomTask.status)
+  // (Aquí hi havia `pomGenesisOpen` — «la tasca pom està En curs o Paused». Era l'única cosa que
+  //  l'usava el gate d'entrada al tab, i obria l'edició sense que ningú l'hagués demanada; v. la
+  //  nota de l'efecte de més avall. Sense consumidors, el càlcul se'n va amb ell.)
   const pomReady = pomDone || hasBaseValue
 
   // POM-genesi surt del tab Mesures lliure: Mesures és treballable si el model està DEFINIT
@@ -252,10 +254,24 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     // ref a 'Mesures' durant la càrrega i la genesi no s'avaluaria mai en acabar de carregar).
     if (loading) return
     if (activeTab === 'Mesures' && prevTabRef.current !== 'Mesures') {
-      setMesuresEntry((entryMode || pomGenesisOpen) && !taskParam)
+      // EL DEFECTE DEL TAB MESURES ÉS SEMPRE LA CONSULTA (contracte d'Agus, 06/08): amb dades,
+      // sense, carregant o amb error. L'edició NOMÉS per gest explícit — el botó ①, `?mode=entry`
+      // a la URL, o una tasca entrant (`?task_id=`).
+      //
+      // AQUÍ HI HAVIA `pomGenesisOpen`, i era el defecte que l'Agus veia: n'hi havia prou que la
+      // tasca `pom` del model estigués En curs o PAUSADA perquè una càrrega freda de
+      // `/models/<id>?tab=Mesures` —sense cap paràmetre— obrís Definició POM amb píndoles i
+      // «Gravar POM». Al MILEY (1308) la `pom` està Paused des d'abans-d'ahir, i per tant el tab
+      // no s'havia pogut consultar mai més. Una tasca oberta diu que hi ha feina EN CURS, no que
+      // qui obre el full la vulgui reprendre ARA: reprendre-la és el gest del botó.
+      //
+      // El `triaTab` de `c5e130de` tapava el GEST de canviar de tab; això és L'ENTRADA, que és
+      // un altre camí i el que l'Agus fa de debò. Les dues calen: aquesta mata l'origen, i
+      // `triaTab` cobreix el cas del modal pendent, on l'estat sobreviu al canvi de pestanya.
+      setMesuresEntry(entryMode && !taskParam)
     }
     prevTabRef.current = activeTab
-  }, [activeTab, loading, entryMode, taskParam, pomGenesisOpen])
+  }, [activeTab, loading, entryMode, taskParam])
 
   // Porta-menú: obre (crea-si-falta + auto-assign + En curs) la tasca `code` i navega a l'eina amb el
   // task_id. Reusa el servei open-task; el botó funciona encara que el model no tingui la tasca creada.
@@ -312,14 +328,62 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [graduacioObert, setGraduacioObert] = useState(false)
 
   // El pas final d'obrir: el que enterEdit feia sempre, ara reutilitzable des del modal.
+  // ③ «MESURAR PRENDA» VOL UNA SESSIÓ DE FITTING, no només la tasca.
+  //
+  // Sense sessió, `source={fittingSession ? fittingSource : null}` cau a la font `check` i
+  // s'obria la taula de PRESA DE BASE (l'EditableTable amb el carril), que és la de Definició
+  // POM i no la pantalla de fitting. La vista de la maqueta v3 —historial paginat, columna REAL,
+  // veredictes, nota i PDF— és `fittingSource`, i el seu `load` exigeix `ctx.fittingSession`.
+  //
+  // Es reutilitza el circuit existent, sense mecanisme nou:
+  //   1. una sessió OBERTA del model → s'hi enganxa;
+  //   2. si no, una de PROGRAMADA → també (`open-task` amb `fitting_session_id` la passa a
+  //      Oberta, que és la baula Y1 que ja existia per a l'entrada per URL);
+  //   3. si no n'hi ha cap → la crea amb «Fitting aquí i ara» (`schedule-now`, C4).
+  // El conflicte suau es tracta EXACTAMENT com a `FittingSessionList` (confirmar i reintentar
+  // amb `force`): mateix acte, mateixa pregunta, mateixos literals.
+  //
+  // La PEÇA no es resol aquí: `fittingSource.load` ja la crea o la recupera (`resolvePieceFitting`,
+  // amb el seu 409 `piece_exists`). Aquí només cal la sessió.
+  const sessioDeFitting = useCallback(async (force = false) => {
+    for (const estat of ['Oberta', 'Programada']) {
+      const r = await fittingSessions.list({ model: id, estat, page_size: 1 })
+      const files = r.data?.results ?? r.data ?? []
+      if (files.length) return files[0]
+    }
+    const r = await fittingSessions.scheduleNow({
+      model_id: parseInt(id), ...(force ? { force: true } : {}) })
+    if (r.data?.requires_confirmation) {
+      // Conflicte suau: es demana, no es força en silenci. Si diu que no, no s'entra.
+      if (!window.confirm(r.data.warning || t('fitting.now.soft_conflict'))) return null
+      return sessioDeFitting(true)
+    }
+    return r.data
+  }, [id, t])
+
   const obreDeDebo = useCallback((tab, code) => {
     setOpeningTask(true)
     // D'ON VENIM, abans d'obrir res: el tab on l'usuari és ARA. Les quatre portes del tab Mesures
     // hi passen totes, i també les entrades per URL (`?mode=entry`, `?task_id=`), que arriben
     // aquí per `enterEdit`. El modal d'acabar/pausar hi tornarà.
     tabDeRetornRef.current = activeTab
-    models.openTask(parseInt(id), code)
+    // ③ vol la SESSIÓ ABANS que la tasca: `open-task` la rep per `fitting_session_id` i, si era
+    // Programada, la passa a Oberta (la baula Y1 que ja feia servir l'entrada per URL). Per a la
+    // resta de codis no hi ha sessió i el flux és el de sempre, intacte.
+    const volSessio = tab === 'Mesures' && code === 'size_check'
+    ;(volSessio ? sessioDeFitting() : Promise.resolve(null))
+      .then(sessio => {
+        if (volSessio && !sessio) {
+          // Sense sessió no hi ha pantalla de fitting. Val més no entrar que entrar a una ALTRA
+          // taula que se li assembla —que és exactament el defecte que això tanca.
+          setOpeningTask(false)
+          return null
+        }
+        if (sessio) setFittingSession(sessio)
+        return models.openTask(parseInt(id), code, sessio?.id ?? null)
+      })
       .then(res => {
+        if (!res) return
         setEditTaskId(res.data.task_id)
         activeTaskRef.current = res.data.task_id   // open-task la deixa En curs → viva per pausar després
         // PUNT COMÚ: una tasca 'pom' obre el tab Mesures en mode ENTRADA (wizard), no edició de graella.
@@ -358,7 +422,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         else setFeedback({ type: 'err', text: motiuOpenTask(e, t) })
       })
       .finally(() => setOpeningTask(false))
-  }, [activeTab, id, t, reloadTasks, tascaVigentDe, setSp])
+  }, [activeTab, id, t, reloadTasks, tascaVigentDe, setSp, sessioDeFitting])
 
   // F2.2 · D-1 — LA PORTA DE LA FITXA. Era el forat original de tota aquesta feina: «Modificar»
   // navegava sense `task_id`, l'editor autodesava cada 2 s i el temps d'editar la fitxa no

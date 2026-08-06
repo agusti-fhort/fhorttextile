@@ -11,7 +11,6 @@ import DependencyPanel from './DependencyPanel'
 import WatchpointsPanel from './WatchpointsPanel'
 import SessionPanel from './SessionPanel'
 import SessionActions from './SessionActions'
-import PromoteToItemButton from './PromoteToItemButton'
 
 // CHECK sobre l'editor únic MeasureGrid (substitueix SizeCheckWork): UNA graella amb l'historial
 // d'estadis (base-stages, read-only) com a columnes + la columna activa 'Real' (valor_real) + el
@@ -621,14 +620,16 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       <DependencyPanel model={model} />
       {/* Sprint Y — en mode sessió (font fitting), el panell de la sessió: context + Canvis/Observacions/Imatges. */}
       {ctx.fittingSession && <SessionPanel session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} grid={raw?.grid} modelId={model.id} />}
-      {/* P0 — la PROMOCIÓ viu aquí, sobre la taula de mesures del model: és el material que
-          promou i el lloc on el tècnic ja hi és. Acte separat i explícit, mai un pas d'un flux
-          (llei D-PROM). El component s'auto-amaga sense capability CONFIGURE o sense item. */}
-      {src.kind === 'check' && !readOnly && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-          <PromoteToItemButton model={model} onFeedback={onFeedback} />
-        </div>
-      )}
+      {/* AQUÍ HI HAVIA «Promoure com a estàndard de l'item» (Agus, 06/08: FORA).
+          Promoure és un acte de CATÀLEG —escriu a `GarmentTypeItem`, que és patrimoni de la casa
+          i no d'aquest model— i estava penjat de les superfícies de PRESA i de CONSULTA del
+          model, que són de mesurar. Que hi visqués perquè «el tècnic ja hi és» és el mateix
+          argument que faria caber-hi qualsevol cosa.
+          🚩 ON HAURIA DE VIURE: no s'ha decidit i no es decideix aquí. El candidat natural és la
+          fitxa de l'ITEM (`ItemAuthoring`), que és l'única pantalla que ja edita el catàleg i que
+          avui només s'obre des de `GarmentTypes`; l'altre és una acció del menú del model, fora
+          de la taula. `PromoteToItemButton` queda VIU i sense consumidors a posta: el gest existeix
+          i el que falta és el lloc. V. el report. */}
       {/* «MESURAR PRENDA» ÉS L'EINA `mesures`, EN MODE `presa` (05/08) — la MATEIXA taula que
           «Definició POM», no una pantalla que se li assembli. Per això aquí hi ha `EditableTable`
           i no la graella de consulta: la identitat de la fila, els grups d'instància, el carril,
