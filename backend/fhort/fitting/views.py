@@ -517,6 +517,24 @@ class PieceFittingViewSet(mixins.RetrieveModelMixin,
             return PieceFittingSummarySerializer
         return PieceFittingGridSerializer
 
+    def retrieve(self, request, *args, **kwargs):
+        """Q3 — OBRIR LA PRESA ÉS RECONCILIAR-LA.
+
+        Aquesta és la porta per on la pantalla de presa i el full imprès demanen la graella:
+        el `GET` d'aquí és l'acte d'obrir. Amb la sessió VIVA (Programada/Oberta) les línies es
+        posen al dia amb els BaseMeasurement actius del model abans de servir-les; amb la sessió
+        segellada, `reconcilia_linies` no toca res i l'acta es llegeix tal com es va gravar.
+
+        La reconciliació no pot fer caure la lectura: si peta, es registra i es serveix la
+        graella igualment (val més la d'ahir que cap).
+        """
+        pf = self.get_object()
+        try:
+            services.reconcilia_linies(pf)
+        except Exception:
+            logger.exception('reconcilia_linies ha fallat per a la peça %s', pf.pk)
+        return Response(self.get_serializer(pf).data)
+
     @action(detail=True, methods=['post'], url_path='set-gate')
     def set_gate(self, request, pk=None):
         resultat = request.data.get('resultat')

@@ -315,7 +315,18 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 })
             pom = line.pom
             r = rules.get(line.pom_id)
-            ordres.append(ordre_map.get(clau_bm, 10 ** 9))
+            # Q3 (06/08) — L'ORDRE DE LA PRESA (i del full imprès) ÉS L'ORDRE DEL MODEL, amb el
+            # MATEIX desempat que la consulta. `BaseMeasurement.ordre` sol no és una ordenació:
+            # les mesures entrades de cop comparteixen `ordre=0` (12 de 12 al MILEY), i llavors
+            # qui decidia era l'ordenació per defecte de `PieceFittingLine` (per `pom_id`),
+            # mentre que la taula del model desempata per codi de client
+            # (`base_stages_view`/`taula-mesures`: `order_by('ordre', 'pom__codi_client', …)`).
+            # Dues pantalles amb el mateix «#» i files en ordre diferent.
+            ordres.append((
+                ordre_map.get(clau_bm, 10 ** 9),
+                (pom.codi_client or '') if pom else '',
+                line.capa or '', line.instancia or '',
+            ))
             out.append({
                 'id': line.id,
                 'pom_id': line.pom_id,
@@ -365,8 +376,10 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
         # FIX 4B — ordena les files per l'ordre de la fitxa (BaseMeasurement.ordre del model;
         # POMMaster no té 'ordre'). ordre_map ja s'ha construït a dalt amb la mateixa query.
         # C2/Onada 1 — l'ordre viatja a `ordres`, paral·lel a `out`, perquè la clau porta capa
-        # i la fila del payload no en tenia. `sorted` és estable i la clau és només el número:
-        # els empats conserven l'ordre d'inserció, igual que el `list.sort` d'abans.
+        # i la fila del payload no en tenia.
+        # Q3 — la clau ja no és només el número: és la MATEIXA tupla que ordena la taula del
+        # model (ordre · codi de client · capa · instància), i per això els empats ja no depenen
+        # de l'ordre d'inserció de les línies.
         # C4/BLOC 1-BIS: la fila ja porta els eixos i això es podria fer sobre `out`; no es
         # canvia aquí perquè seria una refosa sense defecte que la justifiqui.
         out = [fila for _ordre, fila in sorted(zip(ordres, out), key=lambda t: t[0])]

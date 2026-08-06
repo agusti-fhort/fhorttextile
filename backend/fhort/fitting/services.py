@@ -347,8 +347,113 @@ def create_piece_fitting(session_id: int, model_id: int, *, created_by_id: int |
         )
         n += 1
 
+    # Q3 — i tot seguit es reconcilia amb el model VIU. La sembra ve de l'spec, que és una foto
+    # de l'últim grading generat: un POM entrat al model després d'aquella generació no hi és, i
+    # un d'esborrat hi segueix sent. La peça neix, doncs, ja quadrada amb el model.
+    reconcilia_linies(pf)
+    n = pf.linies.count()
+
     logger.info(f"PieceFitting {pf.pk} created for model {model_id}: {n} lines")
     return pf, n
+
+
+# ── Q3 (06/08) — LA PRESA ES RECONCILIA AMB EL MODEL EN OBRIR-LA ─────────────────────────────
+#
+# 🔴 EL DEFECTE: `create_piece_fitting` SEMBRA les línies de l'spec en CREAR la peça, i mai més
+# se les torna a mirar. Amb el MILEY (06/08), l'Agus va esborrar els POMs del model i en va
+# entrar dotze de nous una hora abans del fitting: la presa i el PDF seguien portant els VELLS
+# (SK L, A.2, CF L TOT, CH, HI, SK SW) — un model que ja no existeix, imprès i portat a la sala.
+#
+# LA REGLA: en OBRIR una presa (sessió Programada/Oberta) les línies es reconcilien amb els
+# BaseMeasurement ACTIUS del model EN AQUELL MOMENT. POM nou al model → línia nova a la presa;
+# POM esborrat del model → la línia no es pinta.
+#
+# ⚠️ LES SESSIONS TANCADES NO ES RECONCILIEN MAI. Una sessió segellada és ACTA: diu què es va
+# mesurar aquell dia, i el model d'avui no la pot reescriure. Per això el primer que fa la
+# funció és mirar l'estat i tornar sense tocar res.
+#
+# PER QUÈ ES BORREN les línies sobreres i no es filtren a la lectura: perquè el que es GRAVA ha
+# de ser l'estat reconciliat (Q4). Si la línia visqués amagada, en segellar la sessió tornaria a
+# sortir a l'acta i al PDF —congelada— una mesura que el model ja no té. La reconciliació passa
+# sempre amb la sessió VIVA, o sigui que no toca cap acta.
+#
+# EL LLINDAR D'UNA MESURA MESURABLE és el mateix que ja aplica el size check
+# (`services_size_check._materialize_lines`): `is_active=True` i `base_value_cm` informat. Una
+# mesura sense valor base no té contra què comparar-se, i `valor_teoric` no admet NULL.
+SESSIONS_VIVES = ('Programada', 'Oberta')
+
+
+def reconcilia_linies(pf) -> dict:
+    """Posa les línies d'una PieceFitting al dia amb els BaseMeasurement actius del model.
+
+    Retorna {'creades', 'retirades', 'congelada'}. Amb la sessió segellada no toca res i
+    torna `congelada=True`.
+    """
+    from fhort.fitting.models import GradedSpec, PieceFittingLine
+    from fhort.models_app.models import BaseMeasurement
+
+    if pf.session.estat not in SESSIONS_VIVES:
+        return {'creades': 0, 'retirades': 0, 'congelada': True}
+
+    model = pf.model
+    base_size = (model.base_size_label or '').strip()
+
+    actives = {
+        (bm.pom_id, bm.capa, bm.instancia): bm
+        for bm in BaseMeasurement.objects.filter(
+            model=model, is_active=True, base_value_cm__isnull=False)
+    }
+
+    linies = list(PieceFittingLine.objects.filter(piece_fitting=pf))
+    sobreres = [l.pk for l in linies if (l.pom_id, l.capa, l.instancia) not in actives]
+    if sobreres:
+        PieceFittingLine.objects.filter(pk__in=sobreres).delete()
+
+    fora = set(sobreres)
+    ja_hi_son = {(l.pom_id, l.capa, l.instancia) for l in linies if l.pk not in fora}
+    a_crear = [clau for clau in actives if clau not in ja_hi_son]
+
+    creades = 0
+    if a_crear:
+        # El teòric d'una mesura nova: l'spec de la versió activa si n'hi ha (llavors la línia
+        # neix amb totes les seves talles, com les seves germanes) i, si no, la base del model a
+        # la talla base — que és l'única talla que la presa i el full pinten.
+        specs = {}
+        for s in GradedSpec.objects.filter(
+                grading_version=pf.grading_version, is_active=True).values(
+                'pom_id', 'capa', 'instancia', 'size_label', 'graded_value_cm'):
+            clau = (s['pom_id'], s['capa'], s['instancia'])
+            specs.setdefault(clau, {})[s['size_label']] = s['graded_value_cm']
+
+        for clau in a_crear:
+            bm = actives[clau]
+            per_talla = specs.get(clau)
+            if not per_talla:
+                if not base_size:
+                    logger.warning(
+                        'reconcilia_linies: %s sense talla base ni spec per %s — no es crea línia',
+                        pf.pk, clau)
+                    continue
+                per_talla = {base_size: bm.base_value_cm}
+            for size_label, valor in per_talla.items():
+                PieceFittingLine.objects.create(
+                    piece_fitting=pf,
+                    pom_id=bm.pom_id,
+                    size_label=size_label,
+                    capa=bm.capa,
+                    instancia=bm.instancia,
+                    valor_teoric=valor,
+                    # Mateix criteri que la sembra (`create_piece_fitting`): el real neix com a
+                    # còpia del teòric i és editable. Canviar-lo aquí faria que dues línies de
+                    # la mateixa presa es comportessin diferent segons quan van néixer.
+                    valor_real=valor,
+                )
+                creades += 1
+
+    if sobreres or creades:
+        logger.info('PieceFitting %s reconciliada: +%s línies, -%s línies',
+                    pf.pk, creades, len(sobreres))
+    return {'creades': creades, 'retirades': len(sobreres), 'congelada': False}
 
 
 def consolidate_base_from_fitting(pf, *, auth_user=None):
@@ -460,6 +565,12 @@ def close_piece_fitting(piece_fitting_id: int, *, user_profile_id: int | None = 
     # MeasurementChangeLog i el Welford junts: cap escriptura residual. El ValueError propaga
     # fora del `with` (rollback) i la view el converteix en 400. Cap reordenació interna.
     with transaction.atomic():
+        # Q3/Q4 — EL QUE ES GRAVA ÉS L'ESTAT RECONCILIAT. La sessió encara és viva (el segell ve
+        # al final d'aquesta mateixa transacció), o sigui que aquesta és l'última finestra per
+        # quadrar-la amb el model abans que l'acta es congeli. Sense això, l'acta i el PDF d'una
+        # sessió tancada podrien portar mesures que el model ja no té.
+        reconcilia_linies(pf)
+
         # PEÇA 4 / B3: la consolidació de la talla base a BaseMeasurement viu al helper
         # consolidate_base_from_fitting (compartit amb la propagació conscient). Les talles
         # no-base s'ignoren (els breaks per talla van per ModelGradingOverride). Welford i el
