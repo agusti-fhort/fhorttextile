@@ -108,6 +108,11 @@
       "continuar": "Continue",
       "residents_total": "Own rules that will be deleted",
       "imported_avis": "{{n}} come from the customer document (IMPORTED): they can be imported again, but they will be lost now."
+    },
+    "contenidor": {
+      "intro": "Choose the rule set this model will be graded with. The customer’s come first; none are left out of the list.",
+      "manual": "Manual entry",
+      "manual_hint": "Grade this model by hand, with no rule set: the columns appear empty for you to fill in."
     }
   },
   "size_map_title": "Size systems",

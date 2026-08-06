@@ -10,7 +10,7 @@ import MeasuresEntryPanel from '../components/model/MeasuresEntryPanel'
 import ComprovacioPanel from '../components/model/ComprovacioPanel'
 import FittingRepasPanel from '../components/model/FittingRepasPanel'
 import PropagatedEditor from './PropagatedEditor'
-import GraduacioPanel from '../components/grading/GraduacioPanel'
+import GraduacioContenidor from '../components/grading/GraduacioContenidor'
 import Modal from '../components/ui/Modal'
 import RuleSetCard from '../components/model/RuleSetCard'
 import { MaduresaBadge, EncarrecDelClient } from '../components/model/FederacioBadge'
@@ -517,26 +517,14 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // D1 + D-31.4 — el mateix component de confirmació que fa servir el wizard (v. `onUsarJoc`).
   const { executa: executaAmbConfirmacio, dialeg: dialegRuleset } = useConfirmacioRuleset()
   // P11 — l'estat que el pas de Graduació necessita i que abans posava el wizard.
-  // `fitTriat` és el fit que s'està mirant (null = encara cap tria explícita, i llavors mana el
-  // del model); `jocVist` és el joc seleccionat en aquesta obertura, perquè el picker el marqui
-  // abans que `reloadModel` torni. Tots dos es netegen en tancar: el calaix no recorda tries que
-  // no s'han arribat a aplicar.
-  const [fitTriat, setFitTriat] = useState(null)
+  // `jocVist` és el joc seleccionat en aquesta obertura, perquè el picker el marqui abans que
+  // `reloadModel` torni. Es neteja en tancar: el contenidor no recorda tries que no s'han
+  // arribat a aplicar. (`fitTriat` se'n va amb el pas de fit del panell antic.)
   const [jocVist, setJocVist] = useState(null)
 
-  // EL FIT VIGENT DEL MODEL. Amb graduació, mana el del RULESET (és el que el model gradua de
-  // debò); sense, se sembra del `fit_type` del propi model — la mateixa cadena que feia el
-  // wizard (`ModelWizard.jsx:305-317`). `grading_fit_nom` és el `nom_en` del fit del ruleset i
-  // els codis de `FITS` són exactament el seu majúscula, o sigui que la conversió és exacta.
-  const fitDelModel = (model?.grading_fit_nom || model?.fit_type || '').trim()
-  const fitGraduacio = fitTriat ?? (fitDelModel ? fitDelModel.toUpperCase() : null)
-
-  // Què falta del costat de les TALLES per poder graduar, amb el mateix ordre de precedència que
-  // el wizard: primer el sistema, després el run, després la talla base. El panell en fa la frase.
-  const sizingMissing = !model?.size_system ? 'system'
-    : !(model?.size_run_model || '').trim() ? 'run'
-      : !(model?.base_size_label || '').trim() ? 'base'
-        : null
+  // El FIT VIGENT i el «què falta de les talles» se'n van amb el `GraduacioPanel`: eren les
+  // seves dues portes (triar fit abans del picker · no ensenyar res sense sistema de talles), i
+  // el contenidor central no en té cap. Si algun dia tornen, tornen amb qui les demana.
 
   const obreGraduacio = useCallback(() => setGraduacioObert(true), [])
 
@@ -546,8 +534,24 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const cancelaGraduacio = useCallback(() => {
     setGraduacioObert(false)
     setPropagarEnCua(false)
-    setFitTriat(null)
     setJocVist(null)
+  }, [])
+
+  // ENTRADA MANUAL (P0.5a) — graduar aquest model a mà, sense joc de regles.
+  //
+  // ⚠️ NO ESCRIU RES, i és deliberat: al domini no hi ha cap camp «aquest model es gradua a
+  // mà». El que hi ha és que un model amb REGLES RESIDENTS i sense ruleset ja ÉS un model
+  // graduat a mà —és l'estat que deixa la importació i el que `gravar-pom` escriu amb `rules`—.
+  // Inventar-ne un altre voldria dir un camp nou i una migració per dir el que les dades ja
+  // diuen.
+  //
+  // Conseqüència honesta, anotada al report: mentre no s'hi hagi escrit CAP regla, la intenció
+  // «vull graduar a mà» viu només en aquesta pantalla i un F5 la perd. En escriure la primera
+  // regla, l'estat es manté sol.
+  const [graduacioManual, setGraduacioManual] = useState(false)
+  const onGraduacioManual = useCallback(() => {
+    setGraduacioManual(true)
+    setGraduacioObert(false)
   }, [])
 
   // MIRA ABANS d'executar. Dues preguntes, en aquest ordre:
@@ -767,6 +771,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             <MeasuresEntryPanel model={model} entryMode={mesuresEntry} intent={mesuresIntent}
               onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }}
               onGraduacio={obreGraduacio}
+              /* P0.5b — les columnes de graduació surten si el model ja gradua (joc assignat o
+                 regles pròpies) o si s'acaba de triar ENTRADA MANUAL en aquesta sessió. */
+              graduacioManual={graduacioManual}
               onPomSaved={finishPomEntry} />
           ) : (!taskParam && editing !== 'Mesures' && !pomReady) ? (
             <div style={{
@@ -929,60 +936,50 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             LATERAL i sense enfosquir: la taula de Mesures ha de quedar VISIBLE i llegible a
             sota mentre es decideix. Qui vulgui entrar la graduació a mà tanca el calaix i es
             troba les columnes de Regla buides, allà mateix, per treballar-les. */}
+        {/* P0.5a — EL CONTENIDOR CENTRAL. Era un calaix lateral amb el pas 4 del wizard
+            (`GraduacioPanel`), i aquell pas porta les portes del wizard: sense `size_system` no
+            ensenya res, demana un FIT abans d'obrir el picker, i el picker corre en mode
+            ESTRICTE. Amb un model real al davant això acabava en «falta la construcció» i una
+            llista buida — el tècnic veia que li faltava alguna cosa i no podia triar RES.
+            Ara la pertinença ORDENA i no exclou, i el gest central és el que és: triar un joc.
+            El `GraduacioPanel` NO es toca: segueix sent el pas 4 del wizard. */}
         {graduacioObert && model && (
-          <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(760px, 92vw)',
-                        zIndex: 60, background: 'var(--white)', overflowY: 'auto',
-                        padding: '1.25rem 1.5rem 2rem',
-                        boxShadow: '-8px 0 28px rgba(0,0,0,0.16)',
-                        borderLeft: '0.5px solid var(--border)' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-                          gap: 12, marginBottom: 14 }}>
-              <h2 style={{ margin: 0, fontSize: 'var(--fs-h2)', fontWeight: 500 }}>
-                {t('graduacio.button')}
-              </h2>
-              <div style={{ display: 'flex', gap: 8 }}>
+          <div
+            role="dialog" aria-modal="true" aria-label={t('graduacio.button')}
+            onMouseDown={(e) => { if (e.target === e.currentTarget) cancelaGraduacio() }}
+            style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex',
+                     alignItems: 'flex-start', justifyContent: 'center',
+                     background: 'rgba(0,0,0,0.28)', padding: '4vh 16px', overflowY: 'auto' }}>
+            <div style={{ width: 'min(720px, 100%)', background: 'var(--white)',
+                          borderRadius: 12, padding: '1.25rem 1.5rem 1.5rem',
+                          boxShadow: '0 12px 40px rgba(0,0,0,0.2)',
+                          border: '0.5px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                            gap: 12, marginBottom: 14 }}>
+                <h2 style={{ margin: 0, fontSize: 'var(--fs-h2)', fontWeight: 500 }}>
+                  {t('graduacio.button')}
+                </h2>
                 <button type="button" onClick={() => navigate(`/models/${id}/editar`)}
                   style={{ ...btnSecondary, fontSize: 'var(--fs-body)' }}>
                   <i className="ti ti-edit" style={{ fontSize: 14 }} aria-hidden="true" />
                   {t('graduacio.editar_model')}
                 </button>
-                <button type="button" onClick={cancelaGraduacio}
-                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
-                  {t('app.close')}
-                </button>
               </div>
+              {propagarEnCua && (
+                <p style={{ margin: '0 0 12px', padding: '8px 12px', borderRadius: 6,
+                            border: '0.5px solid var(--gold)', background: 'var(--gold-pale)',
+                            fontSize: 'var(--fs-body)' }}>
+                  {t('graduacio.cua_propagar')}
+                </p>
+              )}
+              <GraduacioContenidor
+                model={model}
+                gradingRuleSetId={jocVist ?? model.grading_rule_set ?? null}
+                onUsar={(rs) => { setJocVist(rs.id); onUsarJoc(rs) }}
+                onManual={onGraduacioManual}
+                onTanca={cancelaGraduacio}
+              />
             </div>
-            {propagarEnCua && (
-              <p style={{ margin: '0 0 12px', padding: '8px 12px', borderRadius: 6,
-                          border: '0.5px solid var(--gold)', background: 'var(--gold-pale)',
-                          fontSize: 'var(--fs-body)' }}>
-                {t('graduacio.cua_propagar')}
-              </p>
-            )}
-            <GraduacioPanel
-              axes={{
-                target: model.target || null,
-                construction: model.construction || null,
-                // El grup CANÒNIC surt de `garment_type.grup`, que hi és sempre — a diferència
-                // del FK `garment_group`, buit als models importats (v. serializers.py:219-222).
-                garmentGroupCodi: model.garment_type_grup || null,
-                garmentTypeId: model.garment_type || null,
-                garmentTypeItemId: model.garment_type_item || null,
-              }}
-              sizing={model.size_system ? {
-                size_system_id: model.size_system,
-                size_system_nom: model.size_system_nom,
-              } : null}
-              sizingMissing={sizingMissing}
-              fit={fitGraduacio}
-              /* Canviar de fit invalida el joc triat: el ruleset pertany a un fit, i deixar-lo
-                 seleccionat mentre es mira un altre fit ensenyaria una tria que ja no s'aplica. */
-              onFit={(codi) => { setFitTriat(codi); setJocVist(null) }}
-              gradingRuleSetId={jocVist ?? model.grading_rule_set ?? null}
-              onUsar={(rs) => { setJocVist(rs.id); onUsarJoc(rs) }}
-              /* Sense «Sense graduació»: qui obre aquest calaix ve expressament a informar-la, i
-                 tancar-lo ja és la manera de no fer-ho (llei del propi panell). */
-            />
           </div>
         )}
         {propStatus && propStep === 1 && (
@@ -1022,6 +1019,15 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         {activeTab === 'Anàlisi IA' && <TabAIAnalysis modelId={parseInt(id)} />}
         {activeTab === "Registre d'activitat" && <RegistreActivitatTab modelId={id} />}
       </div>
+
+      {/* 🔴 EL DIÀLEG DELS AVISOS CONSCIENTS (D1 · client aliè · D-31.4 · esborrat de regles
+          residents) ES PINTA AQUÍ, que és on viu el `useConfirmacioRuleset` que el crea.
+          Estava escrit al final de `TabAIAnalysis` —un altre component, 1.400 línies més avall—,
+          on `dialegRuleset` ni tan sols és a l'abast. O sigui que el guard existia, el backend
+          tornava el seu 409 i la confirmació no arribava MAI a la pantalla: assignar un joc que
+          havia d'esborrar regles pròpies es quedava en un botó que no responia. Trobat mirant
+          per què eslint deia alhora «assignada i no feta servir» (:518) i «no definida» (:2418). */}
+      {dialegRuleset}
     </div>
   )
 }
@@ -2407,8 +2413,6 @@ function TabAIAnalysis({ modelId }) {
           )}
         </div>
       )}
-
-      {dialegRuleset}
     </div>
   )
 }

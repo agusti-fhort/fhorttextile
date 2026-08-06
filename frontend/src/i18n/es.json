@@ -108,6 +108,11 @@
       "continuar": "Continuar",
       "residents_total": "Reglas propias que se borrarán",
       "imported_avis": "{{n}} vienen del documento del cliente (IMPORTED): se pueden volver a importar, pero se perderán ahora."
+    },
+    "contenidor": {
+      "intro": "Elige el juego de reglas con el que se graduará este modelo. Los del cliente van primero; ninguno queda fuera de la lista.",
+      "manual": "Entrada manual",
+      "manual_hint": "Gradúa este modelo a mano, sin juego de reglas: las columnas salen vacías y las rellenas tú."
     }
   },
   "size_map_title": "Sistemas de tallas",

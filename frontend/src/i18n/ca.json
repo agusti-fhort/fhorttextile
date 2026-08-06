@@ -108,6 +108,11 @@
       "continuar": "Continuar",
       "residents_total": "Regles pròpies que s’esborraran",
       "imported_avis": "{{n}} vénen del document del client (IMPORTED): es poden tornar a importar, però es perdran ara."
+    },
+    "contenidor": {
+      "intro": "Tria el joc de regles amb què es graduarà aquest model. Els del client van primer; cap no queda fora de la llista.",
+      "manual": "Entrada manual",
+      "manual_hint": "Gradua aquest model a mà, sense joc de regles: les columnes surten buides i les omples tu."
     }
   },
   "size_map_title": "Sistemes de talles",
