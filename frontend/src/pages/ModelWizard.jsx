@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
+import CascadeFinder from '../components/CascadeSelector/CascadeFinder'
 import CustomerSelector from '../components/CustomerSelector'
 import { matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS, FITS } from '../components/grading/gradingAxes'
 // Els àtoms de UI i el PAS DE GRADUACIÓ viuen fora des del 31/07: el pas s'obre també com a
@@ -11,7 +11,7 @@ import { Chip, Field, labelStyle, MONO } from '../components/grading/wizardUI'
 import TargetLabel from '../components/grading/TargetLabel'
 import useConfirmacioRuleset from '../components/model/useConfirmacioRuleset'
 import useAuthStore from '../store/auth'
-import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, garmentTypeItems, itemBaseMeasurements, sizingProfiles } from '../api/endpoints'
+import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, garmentTypeItems, itemBaseMeasurements, sizingProfiles, customers } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
 // Crea el Model amb identificació + garment def (família→ITEM = baula del motor) + talles + GRADUACIÓ.
@@ -87,10 +87,20 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
   // servir el `nom_peca` que la composició del catàleg ja declara.
   const [setNoms, setSetNoms] = useState({})
   // El ruleset que el CATÀLEG proposa per a la combinació (SizingProfile). Només SUGGEREIX: es
-  const [picking, setPicking] = useState(false)
-  // Navegació controlada del picker de peça (CascadeSelector single, grup→ítem). Es sembra des de
-  // family/item en reobrir; onConfirm (triar ítem) commita a family/item i tanca.
+  // Navegació del navegador de peça (CascadeFinder, grup›família›ítem). El finder és SEMPRE
+  // visible: la maqueta no té cap mode d'obrir i tancar el picker, ni cap botó «Canviar» —la
+  // tria es veu a les columnes mateixes—, i per això la navegació ja no porta estat d'obertura.
   const [pickAxes, setPickAxes] = useState({})
+  // W2.1 — cerca de peça per nom o codi. Acota la població que el finder compta i llista.
+  const [cerca, setCerca] = useState('')
+  // W2.2 — el CODI del client del model. El selector de client dona l'id, i els SizeSystem porten
+  // `customer_codi`: sense aquesta baula no es pot saber quins runs són d'AQUEST client i la
+  // proximitat del pas 3 no sabria per on començar.
+  // El resultat va LLIGAT a l'id que el va demanar (mateix patró que els fitxers de Garment
+  // Types): mentre no casen, encara carreguem → null. Així no s'ordena mai la llista de talles
+  // amb el codi del client anterior, i no cal cap `setState` síncron per netejar-lo.
+  const [customerCodiRes, setCustomerCodiRes] = useState({ id: null, codi: null })
+  const customerCodi = customerCodiRes.id === customerId ? customerCodiRes.codi : null
   const [construction, setConstruction] = useState(null)
   // Bloc 3 — talles (LLEI 5 CAPES: ESCALA PURA — SizeSystem, sense fit ni graduació)
   const [systems, setSystems] = useState([])
@@ -156,9 +166,24 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
     garmentTypes.list({ target: codi, actiu: 'true', page_size: 500 })
       .then(r => {
         const fams = r.data?.results ?? r.data ?? []
-        if (!fams.some(f => f.id === family.id)) { setFamily(null); setItem(null); resetGrading() }
+        // La navegació del finder també torna a zero: si la peça ha deixat de ser vàlida, deixar
+        // les columnes obertes per la seva branca seria assenyalar el que s'acaba de retirar.
+        if (!fams.some(f => f.id === family.id)) { setFamily(null); setItem(null); setPickAxes({}); resetGrading() }
       })
       .catch(() => {})
+  }
+
+  // El finder arrenca ON JA ÉS EL MODEL: si hi ha peça triada (edició, o simplement tornant al
+  // pas 2), les columnes s'obren per la seva branca en comptes de buides. Es DERIVA, no es sembra
+  // amb un effect: sincronitzar dos estats que diuen el mateix és el que provoca les renderitzades
+  // en cascada, i aquí no cal —`pickAxes` buit ja vol dir «l'usuari encara no ha navegat».
+  // El sentinella és la PRESÈNCIA de la clau, no el seu valor: un cop s'ha navegat, `garmentTypeId`
+  // hi és encara que sigui null (pujar al nivell de grup), i llavors mana la navegació. Amb `??`
+  // sobre el valor, tornar amunt ressuscitaria la família anterior.
+  const finderValue = 'garmentTypeId' in pickAxes ? pickAxes : {
+    garmentGroup: family?.grup ?? null,
+    garmentTypeId: family?.id ?? null,
+    garmentTypeItemId: item?.id ?? null,
   }
 
   // Un cop hi ha sistema i run, la talla base és obligatòria i ha de ser DINS el run. Abans això
@@ -204,26 +229,47 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
     return () => { alive = false }
   }, [id, isEditMode])
 
+  // El codi del client, per a la proximitat del pas 3. Es demana pel client TRIAT, no per la
+  // llista sencera: el selector ja la carrega ell i duplicar-la aquí seria pagar dos cops el
+  // mateix per llegir-ne un sol camp.
+  useEffect(() => {
+    if (!customerId) return undefined
+    let alive = true
+    customers.get(customerId)
+      .then(r => { if (alive) setCustomerCodiRes({ id: customerId, codi: r.data?.codi ?? null }) })
+      .catch(() => { if (alive) setCustomerCodiRes({ id: customerId, codi: null }) })
+    return () => { alive = false }
+  }, [customerId])
+
   // Bloc 3 (LLEI 5 CAPES) — carrega SizeSystems PURS quan hi ha target i estem al bloc 3.
-  // Filtra pel target de la peça (target_codis, buit = universal) i descarta systems sense talles.
   // Escala pura: SENSE fit, SENSE construcció, SENSE graduació. Pre-selecciona el primer en creació.
   // F1.1 — també al pas 4: entrant per «Canviar graduació» (?block=4) els sistemes no es carregaven
   // mai i la rehidratació no tenia de què estirar (DIAGNOSI_MODEL_174, risc #7).
+  //
+  // W2.2 — LA PROXIMITAT ORDENA, NO EXCLOU (maqueta v1: «ordenats per proximitat, cap amagat»).
+  // Fins ara el target ERA UN FILTRE: un sistema que no el portés als seus `target_codis`
+  // desapareixia, i la tècnica es quedava mirant una llista buida sense saber que existien. Ara
+  // el target és la primera clau d'ordre i tots els sistemes segueixen a la llista. És la mateixa
+  // D1 que ja regeix a dues línies d'aquí: les eines s'ofereixen senceres i s'acoten amb
+  // informació, no amb ocultació.
+  //
+  // El que SÍ que segueix filtrant és `talles.length > 0`: un sistema sense talles no és un
+  // sistema llunyà, és un sistema buit — no hi ha res a triar-hi.
   useEffect(() => {
     if (!target || (block !== 3 && block !== 4)) return
     let alive = true
     sizeSystems.list({ actiu: true, page_size: 100 })
       .then(r => {
         if (!alive) return
-        const rows = (r.data?.results ?? r.data ?? []).filter(s =>
-          (s.talles || []).length > 0 &&
-          (!s.target_codis || s.target_codis.length === 0 || s.target_codis.includes(target)))
+        const rows = ordenaPerProximitat(
+          (r.data?.results ?? r.data ?? []).filter(s => (s.talles || []).length > 0),
+          target, customerCodi)
         setSystems(rows)
         if (rows.length && !selSystem && !isEditMode) setSelSystem(rows[0])
       })
       .catch(() => { if (alive) setSystems([]) })
     return () => { alive = false }
-  }, [target, block])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [target, block, customerCodi])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // F1.1 — REHIDRATACIÓ del pas 3 en edició: el que el model ja té desat (size_system + run + base)
   // torna a ser la selecció viva. Sense això `sizingResult` era null i tot el pas 4 naixia cec.
@@ -562,118 +608,125 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
                 el veredicte de compatibilitat el calcula el backend per FAMÍLIA (SizingProfile) i
                 «sense perfil» hi compta com a incompatible → v. el PENDENT anotat al commit. El
                 que sí que es compleix ja: res queda BLOQUEJAT, tot segueix sent triable. */}
-            <div style={{ ...summaryBox, alignItems: 'flex-start', flexDirection: 'column',
-                          gap: 12, background: 'var(--white)' }}>
-              <div style={{ ...labelStyle, marginBottom: 0 }}>{t('model_wizard.axes_filter')}</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {TARGETS.map(tg => (
-                  <Chip key={tg.codi} active={target === tg.codi}
-                    onClick={() => onPickTarget(target === tg.codi ? '' : tg.codi)}>
-                    <TargetLabel
-                      codi={tg.codi}
-                      nomFallback={tg.nom_en}
-                      franjaColor={target === tg.codi ? 'var(--white)' : 'var(--text-muted)'}
-                    />
-                  </Chip>
-                ))}
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {CONSTRUCTIONS.map(c => (
-                  <Chip key={c.codi} active={construction === c.codi}
-                    onClick={() => {
-                      const nou = construction === c.codi ? '' : c.codi
-                      if (construction !== nou) { resetSizing(); resetGradingIFit() }
-                      setConstruction(nou)
-                    }}>{t(`model_wizard.construction_${c.codi}`)}</Chip>
-                ))}
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {FITS.map(f => (
-                  <Chip key={f.codi} active={fit === f.codi}
-                    onClick={() => {
-                      const nou = fit === f.codi ? '' : f.codi
-                      if (fit !== nou) setGradingRuleSetId(null)
-                      setFit(nou)
-                    }}>
-                    {t(`model_wizard.fit_${f.codi}`, f.nom_en)}
-                  </Chip>
-                ))}
-              </div>
-              <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                {t('model_wizard.axes_filter_hint')}
-              </div>
-            </div>
-
-            {(
-              <Field label={t('model_wizard.garment')}>
-                {item && !picking ? (
-                  <div style={summaryBox}>
-                    <div>
-                      <div style={{ ...labelStyle, fontSize: 'var(--fs-caption)' }}>{t('model_wizard.selected_item')}</div>
-                      <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>
-                        {(family?.nom_en || '—')} · {item.name}
-                      </div>
+            {/* W2.1 — LA BARRA DE FILTRES ÉS LA CAPÇALERA DEL FINDER, no una caixa a part. Els
+                filtres i el que acoten són la mateixa cosa: separar-los deixava el comptador
+                parlant d'una llista que no tenia al costat. Va per `renderHeader` (render prop,
+                durant el render) i no per un callback amb effect, que seria un bucle esperant
+                una excusa per passar. */}
+            <Field label={t('model_wizard.garment')}>
+              <CascadeFinder
+                target={target}
+                compat={{ construction, fit }}
+                query={cerca}
+                value={finderValue}
+                onChange={setPickAxes}
+                onPickItem={({ family: fam, item: it }) => { setFamily(fam); setItem(it); resetGrading() }}
+                renderHeader={({ total, matching, filtrant }) => (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                    <div style={{ ...labelStyle, marginBottom: 0 }}>{t('model_wizard.filter_discard')}</div>
+                    <FiltreFila etiqueta={t('model_wizard.axis_target')}>
+                      <Chip active={!target} onClick={() => onPickTarget('')}>{t('model_wizard.filter_all')}</Chip>
+                      {TARGETS.map(tg => (
+                        <Chip key={tg.codi} active={target === tg.codi}
+                          onClick={() => onPickTarget(target === tg.codi ? '' : tg.codi)}>
+                          <TargetLabel
+                            codi={tg.codi}
+                            nomFallback={tg.nom_en}
+                            franjaColor={target === tg.codi ? 'var(--white)' : 'var(--text-muted)'}
+                          />
+                        </Chip>
+                      ))}
+                    </FiltreFila>
+                    <FiltreFila etiqueta={t('model_wizard.axis_fit')}>
+                      <Chip active={!fit} onClick={() => { if (fit) { setFit(null); setGradingRuleSetId(null) } }}>
+                        {t('model_wizard.filter_all')}
+                      </Chip>
+                      {FITS.map(f => (
+                        <Chip key={f.codi} active={fit === f.codi}
+                          onClick={() => {
+                            const nou = fit === f.codi ? '' : f.codi
+                            if (fit !== nou) setGradingRuleSetId(null)
+                            setFit(nou)
+                          }}>
+                          {t(`model_wizard.fit_${f.codi}`, f.nom_en)}
+                        </Chip>
+                      ))}
+                      <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 'var(--fs-caption)',
+                                     color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {filtrant
+                          ? t('model_wizard.pieces_match', { n: matching, total })
+                          : t('model_wizard.pieces_total', { total })}
+                      </span>
+                    </FiltreFila>
+                    {/* LA CONSTRUCCIÓ ES QUEDA, i la maqueta no la té. Motiu: `construction` VIATJA
+                        AL PAYLOAD del model i aquestes píndoles són l'únic lloc que l'escriu —
+                        treure-les sense construir abans la fila d'eixos DERIVATS de la maqueta
+                        («derivats de la peça · editables») no seria seguir la maqueta, seria
+                        perdre un camp pel camí. Divergència anotada al report; decisió d'Agus. */}
+                    <FiltreFila etiqueta={t('model_wizard.axis_construction')}>
+                      <Chip active={!construction}
+                        onClick={() => { if (construction) { resetSizing(); resetGradingIFit(); setConstruction(null) } }}>
+                        {t('model_wizard.filter_all')}
+                      </Chip>
+                      {CONSTRUCTIONS.map(c => (
+                        <Chip key={c.codi} active={construction === c.codi}
+                          onClick={() => {
+                            const nou = construction === c.codi ? '' : c.codi
+                            if (construction !== nou) { resetSizing(); resetGradingIFit() }
+                            setConstruction(nou)
+                          }}>{t(`model_wizard.construction_${c.codi}`)}</Chip>
+                      ))}
+                    </FiltreFila>
+                    <input
+                      value={cerca}
+                      onChange={e => setCerca(e.target.value)}
+                      placeholder={t('model_wizard.search_garment')}
+                      style={{ ...inputStyle, width: 260, marginTop: 4 }} />
+                    <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      {t('model_wizard.axes_filter_hint')}
                     </div>
-                    <button type="button" onClick={() => {
-                      setPickAxes({ target, garmentGroup: family?.grup ?? null, garmentTypeId: family?.id ?? null, garmentTypeItemId: item?.id ?? null })
-                      setPicking(true)
-                    }} style={ghostBtn}>{t('model_wizard.change')}</button>
-                  </div>
-                ) : null}
-                {/* SET-1 · A4 — si l'item triat és un CONJUNT, la composició es diu AQUÍ, en
-                    LECTURA: és el catàleg qui la declara (decisió 3) i el wizard no la
-                    negocia. L'únic editable és el nom de cada peça, i és opcional: buit ⇒ el
-                    backend fa servir el `nom_peca` de la composició. */}
-                {item?.is_set && !picking ? (
-                  <div style={{ border: '0.5px solid var(--gold)', borderRadius: 8, padding: 14,
-                                background: 'var(--gold-pale)', display: 'flex',
-                                flexDirection: 'column', gap: 10 }}>
-                    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 600 }}>
-                      {t('model_wizard.set_title', { total: (item.parts || []).length })}
-                    </div>
-                    <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
-                      {t('model_wizard.set_hint')}
-                    </div>
-                    {(item.parts || []).map((p, i) => (
-                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)',
-                                       color: 'var(--gold)', minWidth: 28 }}>
-                          {String(p.ordre || i + 1).padStart(2, '0')}
-                        </span>
-                        <span style={{ fontSize: 'var(--fs-body)', minWidth: 160 }}>
-                          {p.part_item_name || p.part_item_code}
-                        </span>
-                        <input
-                          value={setNoms[p.id] ?? ''}
-                          onChange={e => setSetNoms(prev => ({ ...prev, [p.id]: e.target.value }))}
-                          placeholder={p.nom_peca || t('model_wizard.set_piece_name_ph')}
-                          style={{ ...inputStyle, flex: 1 }} />
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {item && !picking ? null : (
-                  <div style={{ maxHeight: 460, border: '0.5px solid var(--gray-l)', borderRadius: 8, overflowY: 'auto', padding: 14 }}>
-                    <CascadeSelector
-                      mode="single"
-                      minLevel="group"
-                      maxLevel="item"
-                      stopPolicy="require-item"
-                      target={target}
-                      compat={{ construction, fit }}
-                      value={pickAxes}
-                      onChange={setPickAxes}
-                      onConfirm={({ family: fam, item: it }) => { setFamily(fam); setItem(it); setPicking(false); resetGrading() }}
-                    />
                   </div>
                 )}
-              </Field>
-            )}
+              />
+            </Field>
+
+            {/* SET-1 · A4 — si l'item triat és un CONJUNT, la composició es diu AQUÍ, en
+                LECTURA: és el catàleg qui la declara (decisió 3) i el wizard no la
+                negocia. L'únic editable és el nom de cada peça, i és opcional: buit ⇒ el
+                backend fa servir el `nom_peca` de la composició. */}
+            {item?.is_set ? (
+              <div style={{ border: '0.5px solid var(--gold)', borderRadius: 8, padding: 14,
+                            background: 'var(--gold-pale)', display: 'flex',
+                            flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 600 }}>
+                  {t('model_wizard.set_title', { total: (item.parts || []).length })}
+                </div>
+                <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+                  {t('model_wizard.set_hint')}
+                </div>
+                {(item.parts || []).map((p, i) => (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)',
+                                   color: 'var(--gold)', minWidth: 28 }}>
+                      {String(p.ordre || i + 1).padStart(2, '0')}
+                    </span>
+                    <span style={{ fontSize: 'var(--fs-body)', minWidth: 160 }}>
+                      {p.part_item_name || p.part_item_code}
+                    </span>
+                    <input
+                      value={setNoms[p.id] ?? ''}
+                      onChange={e => setSetNoms(prev => ({ ...prev, [p.id]: e.target.value }))}
+                      placeholder={p.nom_peca || t('model_wizard.set_piece_name_ph')}
+                      style={{ ...inputStyle, flex: 1 }} />
+                  </div>
+                ))}
+              </div>
+            ) : null}
 
             {/* LA TARGETA DE SEMBRA — què rebrà el model d'aquesta peça, abans de triar-la. Un
                 desplegable no ho pot dir: «Blusa» no diu si el model naixerà amb 47 POMs buits o
                 amb 47 mesurats. I diu també què NO rebrà: la graduació. */}
-            {item?.id && !picking && <TargetaDeSembra itemId={item.id} t={t} />}
+            {item?.id && <TargetaDeSembra itemId={item.id} t={t} />}
 
             {/* EL TARGET ES DERIVA DE LA PEÇA quan no s'ha filtrat per ell. Amb el target
                 convertit en filtre opcional, es podia arribar al pas de Talles sense cap —i
@@ -700,6 +753,10 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
               <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>
             ) : (
               <>
+                {/* W2.3 — el títol de la maqueta diu la LLEI del pas, no només de què va: els
+                    sistemes s'ordenen, i cap no s'amaga. És el contracte que el filtre de target
+                    incomplia (v. `ordenaPerProximitat`). */}
+                <div style={{ ...labelStyle, marginBottom: 0 }}>{t('model_wizard.size_systems_label')}</div>
                 <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: 0 }}>
                   {t('model_wizard.sizes_for')} {t(`model_wizard.target_${target}`)}
                 </p>
@@ -839,8 +896,53 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
 // ── UI atoms (tokens) ─────────────────────────────────────────────────────────
 const inputStyle = { width: '100%', padding: '8px 10px', borderRadius: 4, border: '0.5px solid var(--gray-l)', fontFamily: MONO, fontSize: 'var(--fs-body)', background: 'var(--white)', boxSizing: 'border-box' }
 const refBox = { background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8, padding: '8px 14px', fontFamily: MONO, fontSize: 'var(--fs-h3)', color: 'var(--warn)', fontWeight: 500, minHeight: 36, display: 'flex', alignItems: 'center' }
+// W2.2 · LA PROXIMITAT — què vol dir «a prop» per a un sistema de talles, en dues claus:
+//
+//   1r · EL TARGET de la peça. Un sistema que el declara als seus `target_codis` és més a prop
+//        que un que no. Un sistema SENSE cap target declarat no és universal per contracte
+//        (v. el comentari del serializer): no és tan a prop com un que el diu, però tampoc tan
+//        lluny com un que en declara un altre — queda al mig.
+//   2n · DE QUI ÉS. El run d'AQUEST client primer; els canònics després; i els runs d'ALTRES
+//        clients al final. L'ordre d'aquesta segona clau és el de la maqueta, i el darrer graó
+//        és el parany del model 174: el run d'un altre client no s'amaga, però no es pot oferir
+//        com si fos teu.
+//
+// Cap sistema cau de la llista. `nom`/`codi` desempaten perquè l'ordre sigui estable entre
+// càrregues (dos sistemes igual de propers no poden ballar de posició a cada F5).
+const PROP_TARGET = { SI: 0, SENSE: 1, ALTRE: 2 }
+
+function proximitatTarget(s, target) {
+  if (!s.target_codis || s.target_codis.length === 0) return PROP_TARGET.SENSE
+  return s.target_codis.includes(target) ? PROP_TARGET.SI : PROP_TARGET.ALTRE
+}
+
+function proximitatOrigen(s, customerCodi) {
+  if (!s.customer_codi) return 1                                  // canònic
+  return s.customer_codi === customerCodi ? 0 : 2                 // meu · d'un altre
+}
+
+function ordenaPerProximitat(rows, target, customerCodi) {
+  return [...rows].sort((a, b) =>
+    proximitatTarget(a, target) - proximitatTarget(b, target) ||
+    proximitatOrigen(a, customerCodi) - proximitatOrigen(b, customerCodi) ||
+    (a.nom || a.codi || '').localeCompare(b.nom || b.codi || ''))
+}
+
+// Una fila de la barra de filtres per descarte: l'etiqueta de l'eix a l'esquerra, en columna fixa
+// perquè les píndoles de totes les files comencin al mateix lloc, i el que li pengi a la dreta.
+function FiltreFila({ etiqueta, children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+                     width: 64, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+        {etiqueta}
+      </span>
+      {children}
+    </div>
+  )
+}
+
 const errBox = { background: '#fee', border: '1px solid #fcc', borderRadius: 8, padding: '0.6rem 1rem', margin: '12px 0 0', fontSize: 'var(--fs-body)', color: '#c00', fontFamily: MONO }
-const summaryBox = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 16px', borderRadius: 8, border: '0.5px solid var(--gray-l)', background: 'var(--warn-bg)' }
 const linkBtn = { background: 'none', border: 'none', padding: 0, color: 'var(--gray)', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
 const ghostBtn = { background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)', borderRadius: 6, padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer', fontFamily: MONO }
 // El motiu pel qual «Següent» no es pot prémer, al costat del botó.

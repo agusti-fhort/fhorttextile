@@ -56,7 +56,10 @@ export default function CascadeFinder({
   const [items, setItems] = useState([])
   useEffect(() => {
     let alive = true
-    garmentTypeItems.list({ active: 'true', page_size: 1000, ordering: 'complexity_order' })
+    // Sense `ordering`: aquest ViewSet no porta OrderingFilter i el paràmetre s'ignoraria en
+    // silenci. L'ordre ja ve del queryset (garment_type · complexity_order · code), que és
+    // exactament el que la columna d'ítems vol.
+    garmentTypeItems.list({ active: 'true', page_size: 1000 })
       .then(r => { if (alive) setItems(r.data?.results ?? (Array.isArray(r.data) ? r.data : [])) })
       .catch(() => { if (alive) setItems([]) })
     return () => { alive = false }
