@@ -323,17 +323,54 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // trobar la píndola flotant de F2.3. Ara, en desar i sortir d'una superfície de treball, el
   // modal central pregunta el que la persona ja està pensant: ho has acabat o hi seguiràs?
   // Sense tram viu (res obert) no hi ha res a decidir i la sortida és neta com abans.
-  const [acabant, setAcabant] = useState(null)   // {taskId, code} | null
+  // {taskId, tasca} | null — `tasca` és la fila FRESCA del servidor, no la de `modelTaskRows`:
+  // el modal ensenya temps i decideix opcions, i totes dues coses van amb l'estat d'ara.
+  const [acabant, setAcabant] = useState(null)
   const netejaEdicio = useCallback(() => {
     setEditTaskId(null)
     setEditing(null)
     setMesuresEntry(false)
     setMesuresIntent(null)
   }, [])
+  // Q1·Q2·Q3 (06/08) — LA SORTIDA PREGUNTA AL SERVIDOR ABANS DE PREGUNTAR A LA PERSONA.
+  //
+  // Aquí hi havia tres defectes encadenats, i tots tres sortien de decidir amb `modelTaskRows`,
+  // que és una FOTO del moment de carregar la pàgina:
+  //
+  //  · **«total de la tasca: 0h 00m»** sobre una sessió de mitja hora (el cas de la captura).
+  //    La foto es va fer en entrar, quan la tasca encara no havia acumulat res; ni el camí
+  //    `?task_id=` ni el pas del temps la refresquen. El modal no mentia sobre el rellotge del
+  //    servidor: llegia un altre moment.
+  //  · **«Transició no permesa: Paused → Paused»**. El guard de tasca oblidada pausa sol als 30
+  //    minuts; la persona segueix a la pantalla, surt, i el modal li ofereix pausar una cosa que
+  //    ja està pausada. L'usuari no pot veure MAI un error de la nostra màquina d'estats.
+  //  · **el modal sortia sense sessió**: n'hi havia prou d'entrar per `?task_id=` i tornar a
+  //    sortir sense tocar res.
+  //
+  // LA REGLA, ara: es demana la tasca FRESCA i el modal només surt si segueix `InProgress` —
+  // que és l'únic estat on hi ha alguna cosa a decidir, i l'únic des del qual les dues opcions
+  // del modal són legals. Si el guard (o un altre gest) ja l'ha tancada, sortir és sortir.
+  //
+  // ⚠️ EL CRITERI NO ÉS LA DURADA. «No hi ha hagut sessió» no vol dir «ha durat poc»: una
+  // sessió de dos minuts amb la tasca oberta ensenya el modal igual que una de dues hores
+  // (decisió d'Agus). El que el fa callar és que no hi hagi res obert.
   const exitEdit = useCallback(() => {
     const tid = activeTaskRef.current
     if (tid == null) { netejaEdicio(); return }
-    setAcabant({ taskId: tid })
+    modelTasks.get(tid)
+      .then(res => {
+        const tasca = res.data
+        if (tasca?.status !== 'InProgress') {
+          // Res obert: cap decisió a prendre i cap transició a demanar.
+          activeTaskRef.current = null
+          netejaEdicio()
+          return
+        }
+        setAcabant({ taskId: tid, tasca })
+      })
+      // Sense resposta no s'inventa un modal: val més sortir net que preguntar sobre un estat
+      // que no sabem. El guard de tasca oblidada segueix cobrint la tasca que quedi oberta.
+      .catch(() => { activeTaskRef.current = null; netejaEdicio() })
   }, [netejaEdicio])
   // La transició la fa el modal; aquí només queda deixar-ho tot al seu lloc. `activeTaskRef` es
   // buida perquè el cleanup de desmuntatge no torni a demanar una pausa ja feta (el 400 de la
@@ -637,9 +674,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       {acabant && (
         <ModalAcabarTasca
           taskId={acabant.taskId}
-          nomTasca={(modelTaskRows.find(r => r.id === acabant.taskId)?.task_type_name) || ''}
-          minutsSessio={minutsDeSessio(modelTaskRows.find(r => r.id === acabant.taskId))}
-          minutsTotal={modelTaskRows.find(r => r.id === acabant.taskId)?.temps_consumit_min ?? 0}
+          nomTasca={acabant.tasca?.task_type_name || ''}
+          minutsSessio={minutsDeSessio(acabant.tasca)}
+          minutsTotal={acabant.tasca?.temps_consumit_min ?? 0}
           onFet={acabatOPausat}
           onCancel={() => setAcabant(null)} />
       )}

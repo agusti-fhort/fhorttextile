@@ -31,12 +31,35 @@ export default function ModalAcabarTasca({
   const [enviant, setEnviant] = useState(false)
   const [error, setError] = useState(null)
 
+  // Q1 (06/08) — **AQUÍ NO S'ENSENYA MAI UN ERROR DE TRANSICIÓ.**
+  //
+  // La captura d'Agus deia «Transició no permesa: Paused → Paused»: el guard de tasca oblidada
+  // havia pausat la tasca sola als 30 minuts, la persona seguia a la pantalla, i en sortir el
+  // modal li oferia pausar una cosa que ja estava pausada. Un error que parla de la nostra
+  // màquina d'estats i no de la seva feina.
+  //
+  // Es tanca per DOS costats, i els dos calen:
+  //  1. `ModelSheet` ja no obre aquest modal si la tasca no és `InProgress` (allà hi ha
+  //     l'argument sencer). Per construcció, les dues opcions són legals quan s'hi arriba.
+  //  2. I si tot i així la carrera es perd —el guard pausa entre que es demana l'estat i es
+  //     prem el botó, que són segons però existeixen— el rebuig es tracta com el que és:
+  //     **l'estat que la persona demanava ja hi és**. Es tanca com un èxit i no es diu res.
+  //     Insistir-hi seria demanar-li que resolgui una discrepància nostra.
+  //
+  // La resta d'errors (xarxa, permisos) sí que es diuen, amb el missatge de la casa i mai amb
+  // el text cru del servidor.
   const confirma = () => {
     setEnviant(true); setError(null)
-    modelTasks.transition(taskId, { to_status: tria === ACABAR ? 'Done' : 'Paused' })
+    const desti = tria === ACABAR ? 'Done' : 'Paused'
+    modelTasks.transition(taskId, { to_status: desti })
       .then(() => onFet?.(tria))
       .catch(e => {
-        setError(e?.response?.data?.error || t('acabar_tasca.err_servidor'))
+        const estat = e?.response?.status
+        const missatge = e?.response?.data?.error || ''
+        // 400 amb «Transició no permesa» = la tasca ja no és on la vam llegir. Si el que la
+        // persona demanava és pausar i ja està pausada, la seva intenció ja és certa.
+        if (estat === 400 && /transici/i.test(missatge)) { onFet?.(tria); return }
+        setError(t('acabar_tasca.err_servidor'))
         setEnviant(false)
       })
   }
