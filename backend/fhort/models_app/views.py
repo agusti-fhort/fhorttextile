@@ -2089,6 +2089,8 @@ def gravar_pom_view(request, model_id):
         run = [s.strip() for s in model.size_run_model.replace(';', '·').split('·') if s.strip()]
         return run.index(label) if label in run else None
 
+    from fhort.pom.nomenclatura import colisio_de_codi
+
     errors = []
     fora_rang = []
     prepared = []
@@ -2123,6 +2125,26 @@ def gravar_pom_view(request, model_id):
             )
             continue
         identitats.add(ident)
+
+        # LA NOMENCLATURA PASSA LA MATEIXA VALIDACIÓ QUE CREAR UN POM PROPI (Agus, 06/08).
+        #
+        # El NOM del model és lliure —sobirania: el client li diu com vol— però la NOMENCLATURA
+        # és un codi, i un codi que ja significa una altra cosa al catàleg d'aquest client no és
+        # una tria d'estil, és una col·lisió. Mateix resolutor i mateix missatge que
+        # `create_model_pom_view`: la persona ha de llegir el mateix vingui d'on vingui.
+        #
+        # `excloent_pom_id` és el que fa que rebatejar una fila amb un codi que ja és el SEU
+        # propi àlies no rebori: no xoca amb ningú, xoca amb ella mateixa.
+        nomen = (m.get('nom_fitxa') or '').strip()
+        if nomen and model.customer_id:
+            _xoc, _etiqueta = colisio_de_codi(model.customer_id, nomen,
+                                              excloent_pom_id=int(pom_id))
+            if _xoc is not None:
+                errors.append(
+                    f'POM {pom_id}: la nomenclatura «{nomen}» ja és {_etiqueta} al catàleg '
+                    f'd\'aquest client'
+                )
+                continue
         prepared.append((m, value, capa, instancia))
 
     # El rang físic té resposta pròpia (422) i mai es barreja amb els errors de forma (400):
