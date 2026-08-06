@@ -253,11 +253,31 @@ amb les seves línies, i un document incoherent és pitjor que un enllaç a NULL
 línies cauen per CASCADE des d'ells). `WorkOrder.model` també és PROTECT, però les 5 files el tenen
 a NULL: no bloquejava.
 
-### 5.5 · Còpia de seguretat
+### 5.5 · Còpia de seguretat — **l'única foto dels 46 models amb el seu corpus**
 
-`pg_dump -Fc -n fhort` del schema sencer **abans** d'esborrar res (944 KB), al directori de treball
-de la sessió: `…/scratchpad/fhort_abans_v4_20260806.dump`. **No és un backup de llarga durada** —
-si es vol conservar, cal moure'l fora del scratchpad.
+```
+/root/backups/ftt_staging_fhort_pre_V4_20260806_175759.dump   (944 KB, 0400)
+```
+
+`pg_dump -Fc -n fhort` del schema sencer **abans** d'esborrar res. Viu a `/root/backups/`, que és
+on la casa ja guarda aquest tipus de foto (`ftt_staging_pre_S03a_20260709_165935.dump`, 09/07) —
+i **no** dins de `ftt-staging/`, que és arbre de git: un binari de 944 KB allà dins acabaria
+brut al `git status` i a un `git add` distret.
+
+**Verificat abans i després de moure'l** (md5 idèntic, `45a429dd…`): 1.342 entrades d'arxiu ·
+124 `TABLE DATA` · i la dada hi és de debò, comptada dins del propi dump sense tocar cap BD —
+**46 `models_app_model` · 253 `tasks_timerentrada` · 4.783 `models_app_modelgradingrule` ·
+691 `models_app_basemeasurement`**, que és exactament el que deia el cens.
+
+> ⚠️ **PER RESTAURAR-LO CAL EL BINARI 18.** El clúster és PostgreSQL 18.4 (port 5433) però el
+> `pg_restore` del `PATH` és el 16.14: `/usr/bin/pg_dump` és el `pg_wrapper` de Debian, que tria
+> la versió segons el clúster de destí — i sobre un FITXER solt no té clúster d'on deduir-la, o
+> sigui que cau al 16 i diu `unsupported version (1.16) in file header`. **No vol dir que el dump
+> estigui malament.** Cal invocar-lo explícitament:
+> ```
+> /usr/lib/postgresql/18/bin/pg_restore -l <dump>          # llistar
+> /usr/lib/postgresql/18/bin/pg_restore -a -t <taula> -f - <dump>   # treure'n una taula
+> ```
 
 ---
 
