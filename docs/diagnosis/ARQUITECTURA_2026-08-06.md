@@ -13,6 +13,29 @@
 
 ---
 
+> ## ⏱ ACTUALITZAT LA NIT DEL 06/08 (tram V1-V6)
+> Aquest document és de la tarda. La nit del mateix dia se'n van tancar peces; el detall i
+> l'auditoria SQL viuen a [`REPORT_VESPRE_FORATS.md`](REPORT_VESPRE_FORATS.md). Estat per punt:
+>
+> | punt | estat aquesta nit |
+> |---|---|
+> | §2.1 · F1-bis i el wipe de graduació | ✅ **TANCAT per `update-step2`** (commit 72) — ⚠️ queden 3 camins de wipe més (§2.1-bis) |
+> | §2.1 · «Sense graduació» mut | ✅ **TANCAT** (commit 72): mateix 409 i Watchpoint propi |
+> | §2.2 · el blur de la regla | ✅ tancat a la tarda (commit 67) |
+> | §2.5 · el relleu sense exclusió | ✅ **TANCAT** (commit 73) |
+> | §2.7 · `DerivaTarget` → KID_BOY | ✅ **TANCAT** (commit 76) · el `TGIRL-EU-HEIGHT` segueix obert |
+> | §2.9 · 9 `SizingProfile` incoherents | ✅ **TANCAT** (commit 78) — cap validació encara: 🟡 obert |
+> | §3.1-6 · «Δ break» al castellà | ✅ **TANCAT** (commit 75) |
+> | §4.1 · les 4 MANUAL del MILEY | ✅ **RESOLT PER V4**: el model 1308 ja no existeix |
+> | §2.3 · el camí d'import | 🔴 **OBERT** — sessió de matcher amb l'Agus |
+> | §2.4 · el pla dels 93 orfes | 🔴 **OBERT** — mateixa sessió |
+> | §2.6 · `destiTasca` (2 de ~20) | 🔴 obert |
+> | §2.8 · `los` sense eixos | 🔴 obert (i `los` no s'ha tocat, per ordre) |
+> | §1 · el mapa de nodes penjats | sense canvis, tret dels marcats |
+>
+> **I un fet nou que reescriu la meitat d'aquest document:** el tenant `fhort` **ja no té cap
+> model** (V4, decisió d'Agus). Tots els números de models d'aquí són l'acta del que hi havia.
+
 ## 0 · EL TITULAR
 
 **Hi ha una bomba armada i és de la pantalla que es va estrenar ahir.** La superfície nova de
@@ -106,6 +129,25 @@ Variant equivalent: marcar «Sense graduació» → `views.py:1041-1043` esborra
 **Cap dels dos guards que caldrien existeix:** ni filtre d'`origen` al delete, ni guard de segell a
 l'escriptura de regla (editar la regla d'un model amb `GradingVersion.aprovada=True` retorna **200**
 i la deixa divergint del segell).
+
+### 2.1-bis · ✅ QUÈ SE'N VA TANCAR LA NIT DEL 06/08 — i què no
+
+**TANCAT (commit 72).** `update_model_step2` té ara un predicat ÚNIC, `canvia_joc` = la clau entra
+al payload **i** el valor és un altre. Un PATCH que no parla de graduació no toca cap regla. I la
+segona porta —«Sense graduació», `grading_rule_set_id: null`— demana el mateix 409 i deixa el seu
+Watchpoint (`tipus='desacoblat_graduacio'`). 7 tests nous a `tests_sembra_grading.py`.
+
+**🔴 SEGUEIX OBERT: el wipe sense filtre d'`origen` viu a tres camins més**, que V1 no tocava
+perquè el fix era del predicat, no del motor:
+| camí | línia | consentiment |
+|---|---|---|
+| `copiar_de_model` | `models_app/views.py:1650` | cap |
+| reimport W5 | `models_app/extraction_views.py:2737` | cap |
+| `migra_brownie_ruleset` (command) | `.../migra_brownie_ruleset.py:179` | és una migració, amb el seu guard propi |
+
+I **`materialize_model_grading_rules` segueix sense filtrar `origen`** (`services.py:266`): protegir
+les MANUAL de debò és la decisió 6.1, que segueix oberta. Avui el radi és zero perquè `fhort` no té
+cap model, però el codi és el mateix.
 
 ### 2.2 · 🔴 EL BLUR DE LA REGLA FABRICAVA AUTORIA HUMANA — **tancat avui (commit 67)**
 
