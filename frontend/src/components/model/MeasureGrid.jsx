@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import BateigInput from './BateigInput'
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from '../../pages/fittingShared'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
-import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
+import { useDiccionariMesures, useEstatDiccionari } from '../../utils/diccionariMesuresFont'
+import AvisDiccionari from '../ui/AvisDiccionari'
 
 // MeasureGrid — editor únic de mesures (un component, dos modes treball/consulta) que serveix els
 // DOS eixos via SLOTS, reusant l'esquelet del fitting editor (MeasureTable):
@@ -395,6 +396,11 @@ export default function MeasureGrid({
 }) {
   const { t } = useTranslation()
   const unit = useUnit()                       // unitat del tenant (CM|INCH) → format de presentació
+  // EL VOCABULARI, A NIVELL DE GRAELLA. Qui el consumeix és `NomCell` (una cel·la per fila), i una
+  // cel·la no és el lloc d'anunciar una fallada de xarxa: la graella pregunta per l'ESTAT i, si no
+  // ha arribat, ho diu una vegada a dalt. La cel·la segueix amb `useDiccionariMesures` — la font
+  // memoritza la resposta a nivell de mòdul, o sigui que no és una segona petició.
+  const { error: diccError, reintenta: reintentaDicc } = useEstatDiccionari()
   const [vals, setVals] = useState({})        // buffer local lineId -> string
   const [edited, setEdited] = useState(() => new Set())  // ancoratge (editat a mà)
   const focusRef = useRef(null)
@@ -511,6 +517,10 @@ export default function MeasureGrid({
   const identitatHd = (left, w) => stickyHd(left, w)     // POM/Nom: mai del bloc de regla
 
   return (
+    <>
+      {diccError && (
+        <AvisDiccionari hint={t('dicc.error_hint_noms')} onReintenta={reintentaDicc} />
+      )}
     <div style={{ overflow: 'auto', maxHeight: '70vh', width: '100%' }}>
       <table style={{ borderCollapse: 'collapse', fontSize: 'var(--fs-body)' }}>
         <thead>
@@ -680,5 +690,6 @@ export default function MeasureGrid({
         </tbody>
       </table>
     </div>
+    </>
   )
 }

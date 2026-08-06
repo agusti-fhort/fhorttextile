@@ -17,6 +17,7 @@ import {
   codiProposat, codiBase,
 } from '../../utils/diccionariMesures'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
+import AvisDiccionari from '../ui/AvisDiccionari'
 import BateigInput from '../model/BateigInput'
 import { baseMeasurements, poms } from '../../api/endpoints'
 
@@ -757,26 +758,7 @@ export default function EditableTable({
           Va amb REINTENTA perquè la fallada típica és transitòria (la petició surt abans que
           la sessió estigui a punt): recarregar la pàgina no hauria de ser l'única sortida. */}
       {!readOnly && diccError && (
-        <div style={{
-          background: 'var(--warn-bg)', border: '1px solid var(--warn)',
-          borderRadius: 8, padding: '10px 16px', marginBottom: 12,
-          fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <i className="ti ti-alert-triangle" style={{ color: 'var(--warn)', fontSize: 16 }} aria-hidden="true" />
-          <span style={{ flex: 1 }}>
-            <strong>{t('editable_table.dicc_error_title')}</strong>{' '}
-            {t('editable_table.dicc_error_hint')}
-          </span>
-          <button type="button" onClick={reintentaDicc}
-            style={{
-              background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)',
-              borderRadius: 6, padding: '5px 12px', fontFamily: 'inherit',
-              fontSize: 'var(--fs-body)', cursor: 'pointer', whiteSpace: 'nowrap',
-            }}>
-            <i className="ti ti-refresh" style={{ fontSize: 13 }} aria-hidden="true" />{' '}
-            {t('editable_table.dicc_error_retry')}
-          </button>
-        </div>
+        <AvisDiccionari hint={t('dicc.error_hint_taula')} onReintenta={reintentaDicc} />
       )}
       {isImport && (
         <div style={{

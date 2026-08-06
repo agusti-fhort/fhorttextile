@@ -3246,12 +3246,15 @@
     "load_error": "No s'han pogut carregar les mides base de l'item.",
     "save_error": "No s'han pogut desar les mides base de l'item."
   },
+  "dicc": {
+    "error_title": "No s'ha pogut carregar el vocabulari de mesures.",
+    "error_retry": "Reintenta",
+    "error_hint_taula": "Les columnes de Posició i Estat no hi són, i per això ara no pots crear germanes. La resta de la taula funciona.",
+    "error_hint_noms": "Les germanes surten amb el codi cru en comptes del seu nom (Esquerra, Dreta…). Els números són correctes."
+  },
   "editable_table": {
     "plaus_delta": "{{camp}} {{valor}} sembla una mesura, no un increment (base {{base}}). Desar igualment?",
     "plaus_desa": "Desar igualment",
-    "dicc_error_title": "No s'ha pogut carregar el vocabulari de mesures.",
-    "dicc_error_hint": "Les columnes de Posició i Estat no hi són, i per això ara no pots crear germanes. La resta de la taula funciona.",
-    "dicc_error_retry": "Reintenta",
     "import_title": "Taula importada per IA.",
     "import_hint": "Revisa cada fila abans de confirmar — la IA pot cometre errors. Edita, afegeix o elimina files si cal.",
     "discard": "Descartar canvis",

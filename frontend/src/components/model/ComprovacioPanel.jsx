@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 
 import { models } from '../../api/endpoints'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
-import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
+import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
+import AvisDiccionari from '../ui/AvisDiccionari'
 
 // LA COMPROVACIÓ (D-31.17 · maqueta_comprovacio_v2) — què falta i què s'ha de mirar abans que
 // la fitxa surti cap al fabricant.
@@ -109,7 +110,10 @@ function Identitat({ p, dicc }) {
 
 export default function ComprovacioPanel({ model, onVeureFila = null }) {
   const { t } = useTranslation()
-  const dicc = useDiccionariMesures()
+  // Sense el vocabulari, `Identitat` pinta la germana amb el codi cru (`etiquetaInstancia` fa
+  // fallback): els punts de la comprovació segueixen sent correctes, però dues germanes del
+  // mateix POM es llegeixen igual. Es demana l'ESTAT, no només el diccionari, per poder-ho DIR.
+  const { dicc, error: diccError, reintenta: reintentaDicc } = useEstatDiccionari()
   const [dades, setDades] = useState(null)
   const [error, setError] = useState('')
   const [tancades, setTancades] = useState(() => new Set())
@@ -216,6 +220,9 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
 
   return (
     <div style={{ maxWidth: 1060 }}>
+      {diccError && (
+        <AvisDiccionari hint={t('dicc.error_hint_noms')} onReintenta={reintentaDicc} />
+      )}
       <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 600, margin: '0 0 4px' }}>
         {t('comprovacio.titol')}
       </h2>
