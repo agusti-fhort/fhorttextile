@@ -12,6 +12,7 @@ import TargetLabel from '../components/grading/TargetLabel'
 import useConfirmacioRuleset from '../components/model/useConfirmacioRuleset'
 import useAuthStore from '../store/auth'
 import { targetDerivable } from '../utils/derivaTarget'
+import { ordenaPerProximitat } from '../utils/proximitatRun'
 import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, garmentTypeItems, itemBaseMeasurements, sizingProfiles, customers } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
@@ -192,6 +193,14 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
   // quedar cec sense dir-ho. Ara la condició és la real, valgui per a creació o edició.
   const baseSizeInvalid = !!(selSystem && selectedSizes.length > 0 && (!baseSize || !selectedSizes.includes(baseSize)))
 
+  // El grup canònic de la peça (eix fix del matching del bloc 4 i 5a clau de proximitat del
+  // bloc 3). Prové de l'ITEM (arbre únic): family.grup en creació; garment_type.grup del model
+  // en edició. Mai es re-tria a mà.
+  // N3 — DECLARAT AQUÍ DALT a posta: l'efecte de càrrega de sistemes del bloc 3 el porta a la
+  // seva llista de dependències, i una llista de dependències s'avalua DURANT el render. Amb la
+  // declaració 70 línies més avall, això era un ReferenceError de TDZ en obrir el wizard.
+  const garmentGroupCodi = family?.grup ?? modelGarmentGrup ?? null
+
   // Preview de referència (només create). El prefix surt del customer triat (fallback self-customer).
   useEffect(() => {
     if (isEditMode || !year || !season) return
@@ -264,13 +273,16 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
         if (!alive) return
         const rows = ordenaPerProximitat(
           (r.data?.results ?? r.data ?? []).filter(s => (s.talles || []).length > 0),
-          target, customerCodi)
+          // N3 — els 4 eixos del model en curs, contra les 4 capes del run. Construcció i fit
+          // ja estan triats al pas 2; el grup el mana l'item (arbre únic), mai es re-tria.
+          { target, construction, fit, grup: garmentGroupCodi },
+          customerCodi)
         setSystems(rows)
         if (rows.length && !selSystem && !isEditMode) setSelSystem(rows[0])
       })
       .catch(() => { if (alive) setSystems([]) })
     return () => { alive = false }
-  }, [target, block, customerCodi])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [target, block, customerCodi, construction, fit, garmentGroupCodi])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // F1.1 — REHIDRATACIÓ del pas 3 en edició: el que el model ja té desat (size_system + run + base)
   // torna a ser la selecció viva. Sense això `sizingResult` era null i tot el pas 4 naixia cec.
@@ -319,10 +331,6 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
       && !window.confirm(t('model_wizard.size_run_replace_confirm', { from: selectedSizes.length, to: labels.length, sistema: s.nom || s.codi }))) return
     setSelSystem(s)
   }
-
-  // Bloc 4 — el grup canònic de la peça (eix fix del matching). Prové de l'ITEM (arbre únic):
-  // family.grup en creació; garment_type.grup del model en edició. Mai es re-tria a mà.
-  const garmentGroupCodi = family?.grup ?? modelGarmentGrup ?? null
 
   // F1.3 — quina de les tres peces del pas 3 falta (l'ordre és el del flux: sistema → run → base).
   const sizingMissing = !selSystem ? 'system'
@@ -902,37 +910,9 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
 // ── UI atoms (tokens) ─────────────────────────────────────────────────────────
 const inputStyle = { width: '100%', padding: '8px 10px', borderRadius: 4, border: '0.5px solid var(--gray-l)', fontFamily: MONO, fontSize: 'var(--fs-body)', background: 'var(--white)', boxSizing: 'border-box' }
 const refBox = { background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', borderRadius: 8, padding: '8px 14px', fontFamily: MONO, fontSize: 'var(--fs-h3)', color: 'var(--warn)', fontWeight: 500, minHeight: 36, display: 'flex', alignItems: 'center' }
-// W2.2 · LA PROXIMITAT — què vol dir «a prop» per a un sistema de talles, en dues claus:
-//
-//   1r · EL TARGET de la peça. Un sistema que el declara als seus `target_codis` és més a prop
-//        que un que no. Un sistema SENSE cap target declarat no és universal per contracte
-//        (v. el comentari del serializer): no és tan a prop com un que el diu, però tampoc tan
-//        lluny com un que en declara un altre — queda al mig.
-//   2n · DE QUI ÉS. El run d'AQUEST client primer; els canònics després; i els runs d'ALTRES
-//        clients al final. L'ordre d'aquesta segona clau és el de la maqueta, i el darrer graó
-//        és el parany del model 174: el run d'un altre client no s'amaga, però no es pot oferir
-//        com si fos teu.
-//
-// Cap sistema cau de la llista. `nom`/`codi` desempaten perquè l'ordre sigui estable entre
-// càrregues (dos sistemes igual de propers no poden ballar de posició a cada F5).
-const PROP_TARGET = { SI: 0, SENSE: 1, ALTRE: 2 }
-
-function proximitatTarget(s, target) {
-  if (!s.target_codis || s.target_codis.length === 0) return PROP_TARGET.SENSE
-  return s.target_codis.includes(target) ? PROP_TARGET.SI : PROP_TARGET.ALTRE
-}
-
-function proximitatOrigen(s, customerCodi) {
-  if (!s.customer_codi) return 1                                  // canònic
-  return s.customer_codi === customerCodi ? 0 : 2                 // meu · d'un altre
-}
-
-function ordenaPerProximitat(rows, target, customerCodi) {
-  return [...rows].sort((a, b) =>
-    proximitatTarget(a, target) - proximitatTarget(b, target) ||
-    proximitatOrigen(a, customerCodi) - proximitatOrigen(b, customerCodi) ||
-    (a.nom || a.codi || '').localeCompare(b.nom || b.codi || ''))
-}
+// W2.2 · LA PROXIMITAT viu a `utils/proximitatRun.js` (N3, 2026-08-06 nit): mateixa regla
+// —ordena, mai amaga— i font nova, les 4 capes que N1 va donar al run. Es va extreure per
+// poder-la provar sense muntar el wizard sencer (`proximitatRun.test.js`).
 
 // Una fila de la barra de filtres per descarte: l'etiqueta de l'eix a l'esquerra, en columna fixa
 // perquè les píndoles de totes les files comencin al mateix lloc, i el que li pengi a la dreta.
