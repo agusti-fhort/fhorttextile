@@ -15,7 +15,7 @@ import {
   tramsInstancia, composaInstancia,
   codiProposat, codiBase,
 } from '../../utils/diccionariMesures'
-import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
+import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import BateigInput from '../model/BateigInput'
 import { baseMeasurements, poms } from '../../api/endpoints'
 
@@ -109,7 +109,7 @@ export default function EditableTable({
   // El vocabulari d'identitat (capes + instàncies + regla de composició). Amb `null` —mentre
   // no ha arribat, o si la petició falla— les píndoles surten inertes i la taula es veu igual:
   // la superfície de mesures no pot dependre d'un GET per pintar-se.
-  const dicc = useDiccionariMesures()
+  const { dicc, error: diccError, reintenta: reintentaDicc } = useEstatDiccionari()
   // LES COLUMNES D'INSTÀNCIA I LES OPCIONS DE CADA UNA SÓN LES DE LA BD (D-31.26 · ordre d'Agus
   // 05/08). Un grup per EIX i, dins, totes les files d'aquell eix pel seu `display_order`: avui
   // vuit posicions i dos estats. Abans n'hi havia quatre escrites a mà al front —les de la
@@ -632,6 +632,34 @@ export default function EditableTable({
               una mesura que encara no s'ha pres — no es descarta res. */}
           {' · '}{t(esPresa ? 'presa.kbd_buit' : 'editable_table.kbd_buit')}
         </p>
+      )}
+      {/* P0.2 — EL VOCABULARI QUE NO ARRIBA ES DIU. Sense això, un GET fallat es veia
+          exactament igual que un catàleg sense instàncies: les columnes de POSICIÓ i ESTAT
+          desapareixien i la pantalla callava. El 06/08, amb el MILEY, això va deixar l'Agus
+          sense poder crear germanes i sense cap pista del motiu.
+          Va amb REINTENTA perquè la fallada típica és transitòria (la petició surt abans que
+          la sessió estigui a punt): recarregar la pàgina no hauria de ser l'única sortida. */}
+      {!readOnly && diccError && (
+        <div style={{
+          background: 'var(--warn-bg)', border: '1px solid var(--warn)',
+          borderRadius: 8, padding: '10px 16px', marginBottom: 12,
+          fontSize: 'var(--fs-body)', display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <i className="ti ti-alert-triangle" style={{ color: 'var(--warn)', fontSize: 16 }} aria-hidden="true" />
+          <span style={{ flex: 1 }}>
+            <strong>{t('editable_table.dicc_error_title')}</strong>{' '}
+            {t('editable_table.dicc_error_hint')}
+          </span>
+          <button type="button" onClick={reintentaDicc}
+            style={{
+              background: 'var(--white)', color: 'var(--warn)', border: '0.5px solid var(--warn)',
+              borderRadius: 6, padding: '5px 12px', fontFamily: 'inherit',
+              fontSize: 'var(--fs-body)', cursor: 'pointer', whiteSpace: 'nowrap',
+            }}>
+            <i className="ti ti-refresh" style={{ fontSize: 13 }} aria-hidden="true" />{' '}
+            {t('editable_table.dicc_error_retry')}
+          </button>
+        </div>
       )}
       {isImport && (
         <div style={{

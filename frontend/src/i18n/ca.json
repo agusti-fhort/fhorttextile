@@ -3218,6 +3218,9 @@
   "editable_table": {
     "plaus_delta": "{{camp}} {{valor}} sembla una mesura, no un increment (base {{base}}). Desar igualment?",
     "plaus_desa": "Desar igualment",
+    "dicc_error_title": "No s'ha pogut carregar el vocabulari de mesures.",
+    "dicc_error_hint": "Les columnes de Posició i Estat no hi són, i per això ara no pots crear germanes. La resta de la taula funciona.",
+    "dicc_error_retry": "Reintenta",
     "import_title": "Taula importada per IA.",
     "import_hint": "Revisa cada fila abans de confirmar — la IA pot cometre errors. Edita, afegeix o elimina files si cal.",
     "discard": "Descartar canvis",

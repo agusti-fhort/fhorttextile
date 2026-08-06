@@ -11,7 +11,7 @@
 // MATEIXA petició en comptes de disparar-ne dues. Si falla, es descarta perquè el proper muntatge
 // ho torni a provar — un error de xarxa no pot deixar la sessió sense vocabulari per sempre.
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { diccionariMesures } from '../api/endpoints'
 
 let cache = null
@@ -30,17 +30,44 @@ export function carregaDiccionari() {
 }
 
 /**
- * El diccionari, o `null` mentre no ha arribat. **Cap pantalla ha d'esperar-lo per pintar-se**:
- * amb `null` els gestos que en depenen queden inerts i la taula es veu igual. Un vocabulari que
- * triga no pot ser una pantalla en blanc.
+ * L'ESTAT del vocabulari: `{dicc, error, reintenta}`.
+ *
+ * **`error` existeix perquè «encara no ha arribat» i «no arribarà» no són el mateix**, i fins ara
+ * es deien igual —`null` totes dues— amb un `.catch(() => {})` al mig. La conseqüència es va
+ * veure el 06/08 amb el MILEY: el GET del diccionari va fallar, les columnes d'INSTÀNCIA van
+ * desaparèixer de «Definició POM» **sense dir res**, i des de la pantalla allò no es distingia
+ * d'un catàleg que no en tingués. No es podien crear germanes i no hi havia cap pista de per què.
+ *
+ * `reintenta` hi és perquè el mode de fallada típic és transitori (una petició que surt abans que
+ * la sessió estigui a punt). Sense ell, l'única sortida era recarregar la pàgina i perdre el que
+ * s'estava escrivint.
+ *
+ * Segueix valent la llei de sempre: **cap pantalla no l'ha d'esperar per pintar-se**. Amb `dicc`
+ * a `null` la taula es veu igual; el que canvia és que si és per un error, es DIU.
  */
-export function useDiccionariMesures() {
-  const [dicc, setDicc] = useState(cache)
+export function useEstatDiccionari() {
+  const [estat, setEstat] = useState(() => ({ dicc: cache, error: false }))
+  const [intent, setIntent] = useState(0)
   useEffect(() => {
-    if (cache) { setDicc(cache); return }
     let viu = true
-    carregaDiccionari().then(d => { if (viu) setDicc(d) }).catch(() => {})
+    // Sense drecera per a `cache`: `carregaDiccionari()` ja resol immediat quan la té, i així
+    // no hi ha cap `setState` síncron dins de l'efecte (renderitzades en cascada).
+    carregaDiccionari()
+      .then(d => { if (viu) setEstat({ dicc: d, error: false }) })
+      .catch(() => { if (viu) setEstat({ dicc: null, error: true }) })
     return () => { viu = false }
+  }, [intent])
+  // `oblidaDiccionari()` abans de reintentar: si no, la promesa fallada ja s'ha descartat però
+  // una `cache` a mitges es podria donar per bona.
+  const reintenta = useCallback(() => {
+    oblidaDiccionari()
+    setEstat({ dicc: null, error: false })
+    setIntent(n => n + 1)
   }, [])
-  return dicc
+  return { ...estat, reintenta }
+}
+
+/** El diccionari i prou, per a qui no ha de dir res quan falla. */
+export function useDiccionariMesures() {
+  return useEstatDiccionari().dicc
 }

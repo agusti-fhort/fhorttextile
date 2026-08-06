@@ -3218,6 +3218,9 @@
   "editable_table": {
     "plaus_delta": "{{camp}} {{valor}} looks like a measurement, not an increment (base {{base}}). Save anyway?",
     "plaus_desa": "Save anyway",
+    "dicc_error_title": "The measurement vocabulary could not be loaded.",
+    "dicc_error_hint": "The Position and State columns are missing, so you cannot create siblings right now. The rest of the table works.",
+    "dicc_error_retry": "Retry",
     "import_title": "AI-imported table.",
     "import_hint": "Review each row before confirming — AI can make mistakes. Edit, add or remove rows if needed.",
     "discard": "Discard changes",

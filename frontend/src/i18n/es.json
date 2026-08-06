@@ -3218,6 +3218,9 @@
   "editable_table": {
     "plaus_delta": "{{camp}} {{valor}} parece una medida, no un incremento (base {{base}}). ¿Guardar igualmente?",
     "plaus_desa": "Guardar igualmente",
+    "dicc_error_title": "No se ha podido cargar el vocabulario de medidas.",
+    "dicc_error_hint": "Las columnas de Posición y Estado no están, y por eso ahora no puedes crear hermanas. El resto de la tabla funciona.",
+    "dicc_error_retry": "Reintentar",
     "import_title": "Tabla importada por IA.",
     "import_hint": "Revisa cada fila antes de confirmar — la IA puede cometer errores. Edita, añade o elimina filas si hace falta.",
     "discard": "Descartar cambios",
