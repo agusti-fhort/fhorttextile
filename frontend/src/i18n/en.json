@@ -982,6 +982,7 @@
     "sizes": "Size system",
     "sizes_for": "Size system available for",
     "no_sizes": "No system available for this combination.",
+    "no_target": "Target missing (who the garment is for): choose it in the previous step and the size systems will appear here.",
     "pick_run": "Select the run sizes:",
     "base_size": "Base size:",
     "selected_item": "Selected item",

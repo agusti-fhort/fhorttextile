@@ -11,6 +11,7 @@ import { Chip, Field, labelStyle, MONO } from '../components/grading/wizardUI'
 import TargetLabel from '../components/grading/TargetLabel'
 import useConfirmacioRuleset from '../components/model/useConfirmacioRuleset'
 import useAuthStore from '../store/auth'
+import { targetDerivable } from '../utils/derivaTarget'
 import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, garmentTypeItems, itemBaseMeasurements, sizingProfiles, customers } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
@@ -749,8 +750,13 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
 
         {block === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* SENSE TARGET NO ÉS «no hi ha sistemes»: és que encara no s'ha dit per a qui és la
+                peça, i el target és qui tria el sistema. Les dues branques deien el MATEIX
+                («Cap sistema disponible per aquesta combinació»), que era fals aquí i deixava
+                l'usuari mirant una pantalla buida sense saber què li falta. Amb el target
+                derivat només quan és unívoc (V2), aquesta branca passa a veure's sovint. */}
             {(!target) ? (
-              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_sizes')}</p>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{t('model_wizard.no_target')}</p>
             ) : (
               <>
                 {/* W2.3 — el títol de la maqueta diu la LLEI del pas, no només de què va: els
@@ -1031,17 +1037,26 @@ function TargetaDeSembra({ itemId, t }) {
 }
 
 // Deriva el TARGET de la peça triada (SizingProfile de la família) quan l'usuari no n'ha filtrat
-// cap. No pinta res: només omple el buit que el filtre ha deixat d'omplir per força. Si la família
-// en té més d'un, mana el primer que el catàleg declara — i l'usuari el pot canviar als filtres,
-// que és on viu la decisió.
+// cap. No pinta res: només omple el buit que el filtre ha deixat d'omplir per força.
+//
+// 🔴 NOMÉS QUAN ÉS UNÍVOC (V2, 06/08 vespre). Abans agafava «el primer que el catàleg declara»,
+// i el catàleg no els ordena per res que tingui a veure amb aquest model: la consulta va sense
+// `customer_codi` i l'ordre acaba sortint del nom del sistema de talles. Amb dades vives això
+// donava `KID_BOY` a `JERSEY_TOPS` i a `TAILORED_PANTS` —dues famílies que també serveixen MAN i
+// WOMAN—, i el pas 3 hi preseleccionava un run de nen amb talla base 6 o 7. És l'origen del
+// model 1307: el wizard no es va inventar el target, el va DERIVAR, i ningú ho va veure perquè
+// derivar no pinta res.
+//
+// Una família que serveix diversos públics no té «el seu» target: qui el sap és la persona, i
+// ja té on dir-ho (el filtre del pas 2). Derivar és estalviar-li repetir el que la peça declara
+// sense ambigüitat; endevinar-ho quan n'hi ha més d'un no és estalviar, és decidir per ella.
 function DerivaTarget({ familyId, onDeriva }) {
   useEffect(() => {
     let viu = true
     sizingProfiles.list({ garment_type: familyId, page_size: 50 })
       .then(r => {
         if (!viu) return
-        const perfils = r.data?.results ?? r.data ?? []
-        const codi = perfils.map(p => p.target?.codi).find(Boolean)
+        const codi = targetDerivable(r.data?.results ?? r.data ?? [])
         if (codi) onDeriva(codi)
       })
       .catch(() => {})

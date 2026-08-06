@@ -982,6 +982,7 @@
     "sizes": "Sistema de tallas",
     "sizes_for": "Sistema de tallas disponible para",
     "no_sizes": "Ningún sistema disponible para esta combinación.",
+    "no_target": "Falta el Target (para quién es la prenda): elígelo en el paso anterior y aquí aparecerán los sistemas de tallas.",
     "pick_run": "Selecciona las tallas del run:",
     "base_size": "Talla base:",
     "selected_item": "Prenda seleccionada",

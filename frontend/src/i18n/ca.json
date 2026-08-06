@@ -982,6 +982,7 @@
     "sizes": "Sistema de talles",
     "sizes_for": "Sistema de talles disponible per",
     "no_sizes": "Cap sistema disponible per aquesta combinació.",
+    "no_target": "Falta el Target (per a qui és la peça): tria'l al pas anterior i aquí hi sortiran els sistemes de talles.",
     "pick_run": "Selecciona les talles del run:",
     "base_size": "Talla base:",
     "selected_item": "Peça seleccionada",
