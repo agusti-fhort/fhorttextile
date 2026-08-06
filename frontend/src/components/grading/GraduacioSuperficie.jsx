@@ -60,6 +60,10 @@ const thS = {
 }
 const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: FS_VAL }
 
+// L'amplada de la columna NOM, la mateixa que `EditableTable` (`W_NOM`). Es declara aquí amb el
+// mateix nom perquè el dia que allà canviï, la recerca la trobi als dos llocs.
+const W_NOM = 236
+
 const btnPrimary = (disabled) => ({
   background: disabled ? 'var(--bg-muted)' : 'var(--gold)',
   color: disabled ? 'var(--text-muted)' : 'var(--white)',
@@ -258,12 +262,18 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
               style={{ fontSize: 9, marginLeft: 5, color: 'var(--gold)', verticalAlign: 'middle' }} />
           )}
         </td>
+        {/* EL NOM EMBOLICA, com a la consulta: mateix `whiteSpace:'normal'` dins d'una columna
+            de la mateixa amplada (`W_NOM`). Anava en una sola línia, i era d'aquí que sortia
+            l'única diferència d'alçada de fila entre les dues taules —14px— quan padding, cossos
+            i capçalera ja eren idèntics: no era densitat, era que aquí el nom no embolicava. */}
         <td style={tdS}>
-          <span>{nomDe(row)}</span>
-          {inst && <span style={{ fontWeight: 500 }}>{` · ${inst}`}</span>}
-          {/* LA ⓘ DE LA TRADUCCIÓ — el MATEIX component de la consulta (exportat, no copiat).
-              Només quan diu una cosa diferent del nom visible: repetir-lo no és informació. */}
-          {traduit && <InfoTraduccio text={traduit} />}
+          <div style={{ fontSize: FS_VAL, color: 'var(--text-main)', whiteSpace: 'normal' }}>
+            {nomDe(row)}
+            {inst && <span style={{ fontWeight: 500 }}>{` · ${inst}`}</span>}
+            {/* LA ⓘ DE LA TRADUCCIÓ — el MATEIX component de la consulta (exportat, no copiat).
+                Només quan diu una cosa diferent del nom visible: repetir-lo no és informació. */}
+            {traduit && <InfoTraduccio text={traduit} />}
+          </div>
         </td>
         {/* EL VALOR DE TALLA BASE, COLUMNA PRÒPIA — el mateix carril que la consulta (`--sel`
             acotat pels dos costats), en LECTURA: aquí no es canvien mesures, es decideix com
@@ -366,7 +376,9 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
                   <th style={thS}>#</th>
                   <th style={{ ...thS, width: 104 }}>{t('capa.col')}</th>
                   <th style={{ ...thS, width: 90 }}>{t('measuregrid.col_pom')}</th>
-                  <th style={thS}>{t('measuregrid.col_nom')}</th>
+                  {/* MATEIXA AMPLADA que la consulta (`W_NOM = 236`): és el que fa que el nom
+                      embolica al mateix punt i que les dues taules tinguin la mateixa alçada. */}
+                  <th style={{ ...thS, width: W_NOM }}>{t('measuregrid.col_nom')}</th>
                   {/* v8.1 `th.baseh` — CLONAT de la consulta, no reinventat: l'etiqueta petita
                       nomena la columna i la talla va en cos gran, que és el que la fa trobar
                       sense llegir. Sense talla base declarada es queda el literal de sempre;
