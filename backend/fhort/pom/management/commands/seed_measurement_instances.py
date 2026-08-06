@@ -49,10 +49,18 @@ POSICIONS = [
 ]
 
 ESTATS = [
-    ('relaxed',  '', 'Relaxed',              'Relaxada', 'Relajada'),
-    # «Stretched out» dels documents de Brownie = extended. El nom canònic és un de sol; el
-    # vocabulari del client hi arriba per àlies, no duplicant la fila del diccionari.
-    ('extended', '', 'Extended / stretched',  'Estirada', 'Estirada'),
+    ('relaxed',  '', 'Relaxed',  'Relaxada', 'Relajada'),
+    # «Stretched» i «stretched out» dels documents de Brownie SÓN aquest mateix estat (decisió
+    # d'Agus, reiterada). El nom canònic és un de sol i va NET: la barra el convertia en dos
+    # noms dins d'un, i sortia així a la píndola i al modal de la identitat de la fila.
+    #
+    # El vocabulari del client hi arriba pel seu camí —el codi oficial al `nom_fitxa` de la fila
+    # (B1 = «stretched waist width») o el `CustomerPomAlias`—, no duplicant-lo dins del nom del
+    # diccionari ni afegint una segona fila per al mateix estat.
+    #
+    # Les dades ja sembrades les neteja `pom/0060_extended_net.py`. Les dues bandes han d'anar
+    # juntes: sense aquesta línia, la propera passada d'aquesta sembra tornaria a posar la barra.
+    ('extended', '', 'Extended', 'Estirada', 'Estirada'),
 ]
 
 INSTANCIES = [(I.EIX_POSICIO, POSICIONS), (I.EIX_ESTAT, ESTATS)]

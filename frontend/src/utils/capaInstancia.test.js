@@ -76,7 +76,10 @@ test('LA PARAULA D\'INSTÀNCIA NO ES TRADUEIX: anglès canònic sempre', () => {
   // a la fitxa que va al fabricant, perquè el sufix del codi (`L`) surt d'aquesta paraula.
   assert.equal(etiquetaInstancia('left'), 'Left')
   assert.equal(etiquetaInstancia('waistband_seam'), 'Waistband seam')
-  assert.equal(etiquetaInstancia('extended'), 'Extended / stretched')
+  // NET, sense sinònim: `extended` i `stretched`/`stretched out` són el mateix estat i el nom
+  // canònic és un de sol (Agus, 06/08). Aquest camí és el del MIRALL —sense diccionari— i no
+  // passa per `curta()`, o sigui que el que hi hagi escrit a `NOM_INSTANCIA` és el que es veurà.
+  assert.equal(etiquetaInstancia('extended'), 'Extended')
   // CF/CB són acrònims del sector i no es desmunten ni es capitalitzen.
   assert.equal(etiquetaInstancia('cf'), 'CF')
 })

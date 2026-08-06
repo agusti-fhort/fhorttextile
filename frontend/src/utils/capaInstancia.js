@@ -55,7 +55,12 @@ export const CAPES = ['exterior', 'folre', 'entretela', 'farciment', 'reforc', '
 export const NOM_INSTANCIA = {
   left: 'Left', right: 'Right', top: 'Top', bottom: 'Bottom',
   cf: 'CF', cb: 'CB', side: 'Side seam', waistband_seam: 'Waistband seam',
-  relaxed: 'Relaxed', extended: 'Extended / stretched',
+  // `extended` va NET (Agus, 06/08): «stretched» i «stretched out» són aquest mateix estat, no
+  // un sinònim que calgui arrossegar al nom. Aquest mapa és el MIRALL de la sembra i la sembra ja
+  // diu 'Extended' — i, a diferència del camí del diccionari, aquest NO passa per `curta()`: si
+  // aquí hi quedés la barra, sortiria sencera a tota superfície que etiqueti una fila abans que
+  // el diccionari arribi.
+  relaxed: 'Relaxed', extended: 'Extended',
 }
 
 /** Els slugs que el diccionari sembra (D-31.26): vuit posicions i dos estats. */
@@ -103,16 +108,22 @@ function nomDelDiccionari(dicc, tram) {
 /**
  * L'ETIQUETA CURTA d'una instància: el primer terme, sense els sinònims.
  *
- * El catàleg porta `nom_en = 'Extended / stretched'` i a la píndola i dins del nom de la fila
- * això és soroll: dues paraules per a un sol concepte, en una cel·la que ja va justa. Es presenta
- * «Extended» (Agus, 06/08).
+ * NEIXIA per a un cas concret: el catàleg deia `nom_en = 'Extended / stretched'` i a la píndola i
+ * dins del nom de la fila això era soroll —dues paraules per a un sol concepte, en una cel·la que
+ * ja va justa—, o sigui que es presentava «Extended» (Agus, 06/08).
  *
- * ⚠️ **NOMÉS PRESENTACIÓ.** El nom canònic de la BD NO es toca des d'aquí: és el que viatja al
- * sufix i el que altres superfícies comparen. Si el que s'ha de canviar és el nom del catàleg,
- * es fa al catàleg i amb qui el mana — v. el PENDENT del report (revisar-ho amb la Montse).
+ * **AQUELL CAS JA NO EXISTEIX.** L'Agus va decidir que `extended` i `stretched`/`stretched out`
+ * són el mateix estat i que el nom canònic va net; `pom/0060_extended_net.py` ho va aplicar als
+ * tres schemes (`public`, `fhort`, `los`) i `seed_measurement_instances.py` ja no torna a posar
+ * la barra. El PENDENT de revisar-ho amb la Montse queda tancat per aquella decisió.
  *
- * La regla és el separador, no una llista de casos: qualsevol fila que porti sinònims darrere
- * d'una barra es presenta pel primer terme, i el dia que n'aparegui una altra ja hi va.
+ * **I LA FUNCIÓ ES QUEDA IGUALMENT** (Agus, 06/08). Ara no retalla res —no hi ha cap nom amb
+ * barra al diccionari— i precisament per això és barata: és la xarxa per al dia que un tenant o
+ * una sembra futura en torni a introduir un. La regla és el separador, no una llista de casos.
+ *
+ * ⚠️ Segueix sent **NOMÉS PRESENTACIÓ**: el nom canònic de la BD no es toca des d'aquí. Si el que
+ * s'ha de canviar és el nom del catàleg, es fa al catàleg —sembra + migració de dades, les dues
+ * bandes alhora—, com es va fer amb aquest.
  */
 export const curta = (nom) => String(nom || '').split('/')[0].trim() || String(nom || '')
 
