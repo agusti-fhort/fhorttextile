@@ -3290,7 +3290,15 @@
     "kbd_nomen": "nomenclature",
     "kbd_finder": "last row ↓ = finder",
     "kbd_buit": "blank = discarded",
-    "edita_identitat": "Edit name and nomenclature"
+    "edita_identitat": "Edit name and nomenclature",
+    "crear_pom_propi": "Create model-owned POM",
+    "pom_propi_intro": "This measurement is not in this customer's catalogue. Give it a name and a code; the code is checked against the catalogue.",
+    "pom_propi_nom": "Name",
+    "pom_propi_nom_hint": "Free: whatever the customer calls it.",
+    "pom_propi_codi": "Nomenclature",
+    "pom_propi_codi_hint": "The customer's code. It cannot be one that already means something else.",
+    "pom_propi_err": "The POM could not be created.",
+    "finder_nivell_model": "created from a model"
   },
   "dashboard": {
     "tab_home": "Home",

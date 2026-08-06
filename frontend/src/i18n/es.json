@@ -3290,7 +3290,15 @@
     "kbd_nomen": "nomenclatura",
     "kbd_finder": "última fila ↓ = buscador",
     "kbd_buit": "vacío = se descarta",
-    "edita_identitat": "Editar el nombre y la nomenclatura"
+    "edita_identitat": "Editar el nombre y la nomenclatura",
+    "crear_pom_propi": "Crear POM propio del modelo",
+    "pom_propi_intro": "Esta medida no está en el catálogo de este cliente. Dile cómo se llama y qué código tendrá; el código se comprueba contra el catálogo.",
+    "pom_propi_nom": "Nombre",
+    "pom_propi_nom_hint": "Libre: como lo llama el cliente.",
+    "pom_propi_codi": "Nomenclatura",
+    "pom_propi_codi_hint": "El código del cliente. No puede ser uno que ya signifique otra cosa.",
+    "pom_propi_err": "No se ha podido crear el POM.",
+    "finder_nivell_model": "creados desde un modelo"
   },
   "dashboard": {
     "tab_home": "Inicio",

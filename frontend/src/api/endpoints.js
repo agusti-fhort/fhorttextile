@@ -222,6 +222,12 @@ export const poms = {
   list: (params) => client.get('/api/v1/poms/', { params }),
   cerca: (params) => client.get('/api/v1/poms/cerca/', { params }),          // ?q & page_size
   crearTenant: (data) => client.post('/api/v1/poms/crear-tenant/', data),    // POM tenant-only nou
+  // POM PROPI DEL MODEL (06/08) — el que el catàleg del client encara no té. Neix AL catàleg
+  // del client (POMMaster + CustomerPOMAlias origen='MODEL') i valida que la nomenclatura no
+  // xoqui amb cap àlies d'aquell client. 409 amb el motiu quan xoca.
+  // body: {nom, nomenclatura, categoria_id?, descripcio_local?}
+  crearPropiDelModel: (modelId, data) =>
+    client.post(`/api/v1/models/${modelId}/pom-propi/`, data),
 }
 
 // El VOCABULARI D'IDENTITAT d'una mesura: capes (D-31.22) + instàncies (D-31.26) + la regla

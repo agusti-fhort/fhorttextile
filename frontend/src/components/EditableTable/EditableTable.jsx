@@ -133,6 +133,8 @@ export default function EditableTable({
   const esPresa = !!presa
   const { t, i18n } = useTranslation()
   const [localRows, setLocalRows] = useState(rows)
+  // Crear POM propi del model: {nomInicial} mentre el formulari és obert, null si no.
+  const [pomPropi, setPomPropi] = useState(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   // El vocabulari d'identitat (capes + instàncies + regla de composició). Amb `null` —mentre
@@ -838,6 +840,7 @@ export default function EditableTable({
                 <tr>
                   <td colSpan={colCount} style={{ padding: '8px 12px' }}>
                     <CercadorPOM dicc={dicc} modelId={modelId} onAdd={handleAddRow}
+                      onCrearPropi={nom => setPomPropi({ nomInicial: nom })}
                       registerFinder={el => { finderRef.current = el }}
                       onSurt={() => {
                         const ultima = rowsRef.current[rowsRef.current.length - 1]
@@ -861,6 +864,18 @@ export default function EditableTable({
             && (r.capa || 'exterior') === (posicionsDe.capa || 'exterior'))}
           onCancel={() => setPosicionsDe(null)}
           onAplica={(trams, ambComp) => { aplicaInstancia(posicionsDe, trams, ambComp); setPosicionsDe(null) }} />
+      )}
+
+      {/* El POM neix i s'afegeix a la taula en el MATEIX gest: qui l'ha hagut de crear és perquè
+          el vol posar en aquesta fila, i obligar-lo a tornar a cercar-lo seria fer-li dir dues
+          vegades el que ja ha dit. `handleAddRow` rep la mateixa forma que un resultat de cerca,
+          que és per això que el backend la retorna igual. */}
+      {pomPropi && modelId && (
+        <ModalPomPropi
+          modelId={modelId}
+          nomInicial={pomPropi.nomInicial}
+          onTanca={() => setPomPropi(null)}
+          onFet={(pom) => { setPomPropi(null); handleAddRow(pom, {}) }} />
       )}
 
       {/* v8.1 · `.statusbar` :140-144 — LA BARRA D'ESTAT VA FIXA AL PEU DE LA FINESTRA i no
@@ -1620,9 +1635,91 @@ function resolSufix(dicc, cua) {
   return null
 }
 
-const NIVELLS = ['item', 'type', 'cataleg']
+// El 4t nivell, 'model', és per als POMs nascuts d'aquest client des d'un model (àlies amb
+// `origen='MODEL'`). Va l'últim perquè la proximitat mana: primer el que l'item ja declara.
+// ── CREAR POM PROPI DEL MODEL ────────────────────────────────────────────────────────────────
+//
+// La llei diu que els POMs es van a buscar al catàleg del client i que no s'encunyen codis
+// lliures. Però un model pot necessitar una mesura que el catàleg encara no té —«Height sequins
+// piece», el cas real del MILEY— i, sense una porta explícita, aquella necessitat se'n va per on
+// pot: l'import agafava el codi del document tal qual i creava un POM orfe. Així va néixer el
+// POM 440 amb `codi_client='U1'` quan Brownie ja tenia `U1 → Button spacing`.
+//
+// Per això aquí NO hi ha cap «crear "{query}"» que es fabriqui el codi del text cercat. Hi ha un
+// formulari que demana les dues coses per separat —el NOM, que és lliure, i la NOMENCLATURA, que
+// és un codi— i que deixa que el backend digui si el codi ja significa una altra cosa. El 409 no
+// es tradueix: el missatge del servidor porta AMB QUÈ xoca, que és l'única cosa útil.
+function ModalPomPropi({ modelId, nomInicial, onFet, onTanca }) {
+  const { t } = useTranslation()
+  const [nom, setNom] = useState(nomInicial || '')
+  const [codi, setCodi] = useState('')
+  const [err, setErr] = useState('')
+  const [desant, setDesant] = useState(false)
 
-function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt }) {
+  const desa = () => {
+    if (!nom.trim() || !codi.trim() || desant) return
+    setDesant(true); setErr('')
+    poms.crearPropiDelModel(modelId, { nom: nom.trim(), nomenclatura: codi.trim() })
+      .then(r => { onFet(r.data) })
+      .catch(e => setErr(e?.response?.data?.message || e?.response?.data?.error
+                         || t('editable_table.pom_propi_err')))
+      .finally(() => setDesant(false))
+  }
+
+  const camp = (etiqueta, valor, set, ajuda, autoFocus) => (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span style={{ fontSize: FS_HEAD, textTransform: 'uppercase', letterSpacing: '0.05em',
+                     color: 'var(--text-muted)' }}>{etiqueta}</span>
+      <input value={valor} autoFocus={autoFocus}
+        onChange={e => { set(e.target.value); setErr('') }}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); desa() } }}
+        style={{ font: 'inherit', fontSize: FS_VAL, padding: '6px 10px', borderRadius: 5,
+                 border: '1px solid var(--border)', background: 'var(--white)' }} />
+      <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>{ajuda}</span>
+    </label>
+  )
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label={t('editable_table.crear_pom_propi')}
+      onMouseDown={e => { if (e.target === e.currentTarget) onTanca() }}
+      style={{ position: 'fixed', inset: 0, zIndex: 1300, display: 'flex',
+               alignItems: 'flex-start', justifyContent: 'center',
+               background: 'rgba(0,0,0,0.28)', padding: '12vh 16px' }}>
+      <div style={{ width: 'min(460px, 100%)', background: 'var(--white)', borderRadius: 12,
+                    border: '0.5px solid var(--border)', padding: '1.1rem 1.3rem 1.3rem',
+                    boxShadow: '0 12px 40px rgba(0,0,0,0.2)' }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 'var(--fs-h3)', fontWeight: 500 }}>
+          {t('editable_table.crear_pom_propi')}
+        </h3>
+        <p style={{ margin: '0 0 14px', fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+          {t('editable_table.pom_propi_intro')}
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {camp(t('editable_table.pom_propi_nom'), nom, setNom,
+                t('editable_table.pom_propi_nom_hint'), true)}
+          {camp(t('editable_table.pom_propi_codi'), codi, setCodi,
+                t('editable_table.pom_propi_codi_hint'), false)}
+        </div>
+        {err && (
+          <p style={{ margin: '12px 0 0', padding: '7px 10px', borderRadius: 6,
+                      border: '0.5px solid var(--danger, #b3261e)',
+                      color: 'var(--danger, #b3261e)', fontSize: 'var(--fs-body)' }}>{err}</p>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+          <button type="button" onClick={onTanca} style={btnSecondary}>{t('app.cancel')}</button>
+          <button type="button" onClick={desa} disabled={!nom.trim() || !codi.trim() || desant}
+            style={btnPrimary(!nom.trim() || !codi.trim() || desant)}>
+            {desant ? t('common.saving') : t('app.create')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const NIVELLS = ['item', 'type', 'cataleg', 'model']
+
+function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearPropi }) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
@@ -1755,8 +1852,14 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt }) {
                     style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px',
                              cursor: 'pointer', fontSize: 'var(--fs-body)',
                              background: k === sel ? 'var(--gold-pale)' : 'transparent' }}>
-                    <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 56 }}>{p.codi_client}</span>
-                    <span>{p.nom_client || p.nom_en || p.nom_ca}</span>
+                    {/* EL CODI QUE ES PINTA ÉS EL DEL CLIENT. Abans hi anava `codi_client` de
+                        `POMMaster`, que es diu «client» però és el codi de la CASA: el tècnic de
+                        Brownie llegia «CH» sota el rètol «del catàleg del client» quan el seu
+                        document diu «A». El backend ja serveix els tres camps d'àlies. */}
+                    <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 56 }}>
+                      {p.client_code || p.codi_client}
+                    </span>
+                    <span>{p.client_name_en || p.nom_client || p.nom_en || p.nom_ca}</span>
                     {eixos && (
                       <span style={{ background: 'var(--gold-pale)', color: 'var(--gold)',
                                      border: '1px solid var(--border)', borderRadius: 999,
@@ -1772,6 +1875,20 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt }) {
           {results.length === 0 && (
             <div style={{ padding: '8px 12px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
               {t('editable_table.no_pom_found', { query: cerca })}
+            </div>
+          )}
+          {/* CAP RESULTAT NO VOL DIR CAP CAMÍ PER ENCUNYAR UN CODI (Agus, 06/08). El que hi ha
+              aquí és un gest EXPLÍCIT que demana nom i nomenclatura i els valida contra el
+              catàleg del client — no un «crear "{query}"» que es fabriqui el codi del text
+              cercat, que és exactament com va néixer el POM 440 amb el codi d'un altre. */}
+          {results.length === 0 && modelId && onCrearPropi && (
+            <div
+              onMouseDown={e => { e.preventDefault(); onCrearPropi(cerca); setObert(false) }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                       cursor: 'pointer', fontSize: 'var(--fs-body)', color: 'var(--gold)',
+                       borderTop: '1px solid var(--border)' }}>
+              <i className="ti ti-plus" style={{ fontSize: 14 }} aria-hidden="true" />
+              {t('editable_table.crear_pom_propi')}
             </div>
           )}
         </div>,
