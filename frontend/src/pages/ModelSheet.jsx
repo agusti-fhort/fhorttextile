@@ -39,6 +39,17 @@ const API = import.meta.env.VITE_API_URL || ''
 // 'Patró' va entre Escalat i Fitxa tècnica: és una etapa del flux tècnic (el patró es
 // digitalitza i s'escala), no un annex documental.
 const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Patró', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Tasques']
+
+// ELS PARÀMETRES QUE OBREN UNA SUPERFÍCIE DE TREBALL, i que per tant s'han de netejar en sortir-ne
+// (v. `netejaEdicio`). Els tres diuen «entra a treballar», no «mira aquesta pantalla»:
+//   · `mode=entry`        → Definició POM (`entryMode` → `enterEdit('Mesures','pom')`)
+//   · `task_id`           → la presa lligada a una tasca ja En curs (J1b, «Mesurar prenda»)
+//   · `fitting_session`   → la sessió de fitting (obre la tasca `size_check` si no ve amb task_id)
+// `tab` NO hi és a posta: diu quina pantalla es mira, i és exactament el que l'F5 ha de conservar.
+//
+// La GRADUACIÓ no hi és perquè **no té paràmetre d'URL**: `graduacioObert` és estat local del
+// component i un F5 ja tanca el calaix tot sol. El dia que en tingui un, va aquí i prou.
+const PARAMS_DE_TREBALL = ['mode', 'task_id', 'fitting_session']
 // L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
 const TAB_LABELS = {
   'Dashboard': 'model_sheet.tab_dashboard',
@@ -123,7 +134,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   const { t } = useTranslation()
-  const [sp] = useSearchParams()
+  const [sp, setSp] = useSearchParams()
   // ?tab= permet obrir el full directament en una pestanya concreta (p.ex. ModelFabric → tab Mesures).
   // El task_id/session entrants (J1b) es plomaran a sobre d'aquest mateix mecanisme més endavant.
   const tabParam = sp.get('tab')
@@ -326,12 +337,38 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // {taskId, tasca} | null — `tasca` és la fila FRESCA del servidor, no la de `modelTaskRows`:
   // el modal ensenya temps i decideix opcions, i totes dues coses van amb l'estat d'ara.
   const [acabant, setAcabant] = useState(null)
+  // …I LA URL TAMBÉ ÉS ESTAT. Sortir de l'edició deixava els paràmetres que hi havien FET entrar
+  // enganxats a la barra d'adreces, i com que qui els consumeix són efectes d'UN SOL COP
+  // (`entryEditRef`, `autoTaskRef`, `autoSessionRef`), dins d'aquest muntatge no es notava: la
+  // pantalla es quedava a la consulta i tot semblava correcte. **Fins a l'F5.** En remuntar, els
+  // refs neixen a zero, la URL encara diu `mode=entry` i el full tornava a obrir la tasca i a
+  // entrar en edició — l'usuari premia F5 des de la consulta i es trobava editant.
+  //
+  // La regla: l'F5 restaura la vista on l'usuari ÉS, no la que la URL arrossega. Els tres
+  // paràmetres que obren una superfície de TREBALL es netegen en sortir; `tab` es queda, que és
+  // justament la vista on l'usuari és.
+  //
+  // Va per `setSp(..., {replace:true})` i no per `history.replaceState` cru: el segon canviaria la
+  // barra d'adreces sense que el router se n'assabentés, i `sp` seguiria dient `mode=entry` la
+  // resta del muntatge. Substitueix l'entrada de l'historial en comptes d'afegir-n'hi una, o sigui
+  // que la fletxa Enrere segueix portant d'on es venia i no a un pas intermedi d'aquesta mateixa
+  // pantalla.
   const netejaEdicio = useCallback(() => {
     setEditTaskId(null)
     setEditing(null)
     setMesuresEntry(false)
     setMesuresIntent(null)
-  }, [])
+    setSp(prev => {
+      const net = new URLSearchParams(prev)
+      let tocat = false
+      for (const clau of PARAMS_DE_TREBALL) {
+        if (net.has(clau)) { net.delete(clau); tocat = true }
+      }
+      // Sense res a treure no s'escriu: una crida per cada sortida neta embrutaria l'historial
+      // (i `exitEdit` es crida també quan no hi havia cap mode obert).
+      return tocat ? net : prev
+    }, { replace: true })
+  }, [setSp])
   // Q1·Q2·Q3 (06/08) — LA SORTIDA PREGUNTA AL SERVIDOR ABANS DE PREGUNTAR A LA PERSONA.
   //
   // Aquí hi havia tres defectes encadenats, i tots tres sortien de decidir amb `modelTaskRows`,
@@ -384,10 +421,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   }, [netejaEdicio, reloadTasks, reloadModel])
   const finishPomEntry = useCallback(() => {
     activeTaskRef.current = null
-    setEditTaskId(null)
-    setEditing(null)
-    setMesuresEntry(false)
-    setMesuresIntent(null)
+    // Aquí es repetia el cos de `netejaEdicio` línia per línia. Ara el crida: aquest és EL camí
+    // normal de sortida de Definició POM —prémer Gravar—, i amb la còpia inline es quedava fora
+    // de la neteja de la URL, que és justament on més falta feia (s'hi entra per `?mode=entry`).
+    netejaEdicio()
     // F1.2 — AQUÍ s'escrivia `status:'Done'` a la fila i `pom_task_done:true` al model, en local.
     // Desar ja no tanca la tasca (D-2), de manera que aquell optimisme ara MENTIRIA: pintaria
     // Done i el `reloadModel()` de tres línies més avall el desmentiria tot seguit.
@@ -397,7 +434,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     reloadModel()
     reloadTasks()
     setWpVersion(v => v + 1)
-  }, [reloadModel, reloadTaula, reloadTasks, setModel])
+  }, [netejaEdicio, reloadModel, reloadTaula, reloadTasks, setModel])
   // Sortir de mode edició/entrada en canviar de tab (pausa la tasca si n'hi havia).
   //
   // F2.4 · D-1 — I SALTAR, si el tab nou també és una superfície de treball. El tècnic que passa
@@ -640,7 +677,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     if (!d) return
     // CONSULTAR: el tab i prou. Sense `enterEdit` no hi ha `open-task`, i sense open-task no
     // hi ha ni rellotge ni reassignació — que és exactament el que promet la nota del botó.
-    if (accio === 'consultar') { setEditing(null); setMesuresEntry(false); setActiveTab(d.tab); return }
+    // `netejaEdicio` i no dos `set` solts: qui tria CONSULTAR pot haver arribat per `?mode=entry`
+    // (el menú «Definició POM»), i deixar-hi el paràmetre faria que l'F5 el tornés a ficar a
+    // editar just després d'haver dit que no hi volia entrar.
+    if (accio === 'consultar') { netejaEdicio(); setActiveTab(d.tab); return }
     if (accio === 'treballar') {
       if (d.fitxerId) { obreFitxa(d.fitxerId); return }   // la fitxa té la seva pròpia navegació
       obreDeDebo(d.tab, d.code); return
@@ -660,7 +700,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         text: e?.response?.data?.error || t('obrir_tasca.ronda_error'),
       }))
       .finally(() => setOpeningTask(false))
-  }, [dialeg, obreDeDebo, obreFitxa, id, reloadTasks, reloadModel, t])
+  }, [dialeg, netejaEdicio, obreDeDebo, obreFitxa, id, reloadTasks, reloadModel, t])
 
   // ——— A partir d'aquí, RETORNS. Cap hook per sota. ———
   if (loading) {
