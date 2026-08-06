@@ -149,16 +149,13 @@ def main():
             if falten:
                 fallides.append(f'{etiqueta} · NO surten a la taula els valors {falten}')
             else:
-                # BASE VIGENT + TALLA BASE porten el mateix número en consulta → cada valor
-                # ha de sortir com a mínim DUES vegades. Si només hi és un cop, una de les
-                # dues columnes segueix a «—».
-                un_sol_cop = [v for v in esperats if vistos.count(v) < 2]
-                if un_sol_cop:
-                    fallides.append(f'{etiqueta} · només UNA de les dues columnes porta '
-                                    f'valor per a {un_sol_cop}')
-                else:
-                    print(f'  ✓ {etiqueta} · {n_files} files · TALLA BASE i BASE VIGENT amb '
-                          f'els {len(esperats)} valors del model')
+                # UNA columna, no dues. Aquí s'exigia que cada valor sortís DUES vegades, perquè
+                # en consulta TALLA BASE i BASE VIGENT deien el mateix número. `5cb3f39a` va
+                # treure la BASE VIGENT d'aquesta vista precisament per això —una taula que
+                # repeteix una xifra fa dubtar de si en són dues—, o sigui que la comprovació de
+                # dalt («hi és el valor») ja és tota la promesa que aquesta pantalla fa.
+                print(f'  ✓ {etiqueta} · {n_files} files · TALLA BASE amb els '
+                      f'{len(esperats)} valors del model')
 
         if errors:
             fallides.append(f'error de pàgina: {errors[0][:160]}')
