@@ -22,7 +22,7 @@ el servidor ja està verificat contra la BD dins d'un `atomic` que es desfà (co
 provar-lo aquí exigiria una credencial real al navegador. Sí que es comprova que la ruta
 existeix al backend DESPLEGAT (401 sense credencial = viva), que és la lliçó del 06/08.
 
-    backend/venv/bin/python ../ops/qa/qa_p02_fixture.py 169
+    backend/venv/bin/python ../ops/qa/qa_p02_fixture.py 169 ../ops/qa/qa_p08_fixture.json
     /tmp/qa-venv/bin/python  ops/qa/qa_p08_pom_propi.py
 """
 import json
@@ -36,12 +36,15 @@ from playwright.sync_api import sync_playwright
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 DIST = REPO / 'frontend' / 'dist'
-FIXTURE = pathlib.Path(__file__).resolve().parent / 'qa_p02_fixture.json'
+# FIXTURE PROPI: P0.2 i P0.6 esperen el 1302 i aquest fum el 169. Compartir-lo els
+# deixava en vermell cada cop que es regenerava per a l'altre.
+FIXTURE = pathlib.Path(__file__).resolve().parent / 'qa_p08_fixture.json'
 BASE = 'https://staging.fhorttextile.tech'
 BACKEND_VIU = 'http://127.0.0.1:8001'
 
 if not FIXTURE.is_file():
-    sys.exit(f'✗ falta {FIXTURE.name} — genera\'l amb qa_p02_fixture.py 169')
+    sys.exit(f'✗ falta {FIXTURE.name} — genera\'l amb '
+         f'`qa_p02_fixture.py 169 ops/qa/qa_p08_fixture.json`')
 DADES = json.loads(FIXTURE.read_text())
 MID = DADES['_model_id']
 if MID == 1308:
@@ -69,6 +72,12 @@ ETIQUETES = {
     'es': {'crear': 'Crear POM propio', 'cap': 'Ningún resultado', 'manual': 'Introducir manualmente'},
     'en': {'crear': 'Create model-owned POM', 'cap': 'No results', 'manual': 'Enter manually'},
 }
+
+
+def t_instancia(lang):
+    """El títol del modal de posicions, per idioma (`instancia.modal_titol`)."""
+    return {'ca': 'Posició i combinacions', 'es': 'Posición y combinaciones',
+            'en': 'Position and combinations'}.get(lang, 'Posició i combinacions')
 
 
 def fes_handler(estat):
@@ -178,8 +187,20 @@ def main():
             print(f'  ✓ 1 · {lang} · 0 resultats · avís={te_cap} · l\'acció hi és')
 
             # ── 2 · s'obre i porta el text cercat ──────────────────────────────
-            accio.first.click()
+            # ── 1b · PER TECLAT: `↓` marca l'acció i `Enter` la dispara (cua post-QA).
+            # Era un `div` amb `onMouseDown`: només ratolí. Es prova amb el teclat i prou —si
+            # el camí de teclat no hi és, el fum cau aquí i no pel clic.
+            page.keyboard.press('ArrowDown')
+            page.wait_for_timeout(300)
+            marcada = page.locator('button[aria-selected="true"]')
+            if marcada.count() == 0:
+                fallides.append(f'{lang} · `↓` no marca l\'acció de crear')
+            page.keyboard.press('Enter')
             page.wait_for_timeout(900)
+            if page.locator('[role="dialog"]').count() == 0:
+                fallides.append(f'{lang} · `Enter` no obre el gest de crear (només ratolí)')
+            else:
+                print(f'  ✓ 1b · {lang} · ↓ marca i Enter obre · sense ratolí')
             valors = page.eval_on_selector_all(
                 'input', "els => els.map(e => e.value).filter(Boolean)")
             if not any(CERCA in (v or '').lower() for v in valors):
@@ -213,6 +234,17 @@ def main():
             else:
                 enviats = [p.get('nomenclatura') for p in estat['posts']]
                 print(f'  ✓ 4 · {lang} · confirmat · POSTs enviats: {enviats}')
+
+            # ── 4b · ESC tanca el modal de POSICIONS (mateixa cua) ────────────
+            mes = page.locator('button:has-text("＋")')
+            if mes.count():
+                mes.first.click(); page.wait_for_timeout(700)
+                obert_abans = page.locator('text=' + t_instancia(lang)).count() > 0
+                page.keyboard.press('Escape'); page.wait_for_timeout(600)
+                if obert_abans and page.locator('text=' + t_instancia(lang)).count() > 0:
+                    fallides.append(f'{lang} · `Esc` NO tanca el modal de posicions')
+                else:
+                    print(f'  ✓ 4b · {lang} · Esc tanca el modal de posicions')
 
             # ── 5 · F5 i consola ───────────────────────────────────────────────
             page.reload(wait_until='networkidle')

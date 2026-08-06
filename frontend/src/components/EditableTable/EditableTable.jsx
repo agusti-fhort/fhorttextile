@@ -1275,6 +1275,16 @@ function ModalPosicions({ mare, dicc, existents, onCancel, onAplica }) {
   const [tria, setTria] = useState({})
   const [ambComp, setAmbComp] = useState(true)
 
+  // ESC TANCA (cua post-QA, 06/08). El vel es tancava només amb clic a fora, i el fum de la
+  // identitat de la fila ja ho va anotar el 05/08: qui l'obria sense voler s'hi quedava
+  // atrapat —el vel és `position:fixed inset:0` i intercepta tots els clics de sota—. Cap
+  // modal de la casa pot ser un cul-de-sac de teclat.
+  useEffect(() => {
+    const esc = (e) => { if (e.key === 'Escape') { e.preventDefault(); onCancel() } }
+    document.addEventListener('keydown', esc)
+    return () => document.removeEventListener('keydown', esc)
+  }, [onCancel])
+
   const dims = dimensionsDe(dicc)
   const principal = eixPrincipal(dicc)
   // L'ordre dels trams és el dels EIXOS (posició abans que estat), que és el mateix que
@@ -1725,6 +1735,13 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
   const [results, setResults] = useState([])
   const [sel, setSel] = useState(0)
   const [obert, setObert] = useState(false)
+  // L'ACCIÓ DE CREAR TAMBÉ ÉS SELECCIÓ. Amb zero resultats el desplegable no és buit: hi ha
+  // exactament UNA cosa a triar, i havia de ser amb el ratolí. `↓` la marca i `Enter` la
+  // dispara, com faria amb un resultat — el ritme del carril no es trenca per canviar de mà.
+  const [creaSel, setCreaSel] = useState(false)
+  // Hi ha acció de crear? Mateixa condició que la que la pinta, en un sol lloc perquè el teclat
+  // i el render no puguin discrepar.
+  const potCrear = !!(modelId && onCrearPropi)
   const inputRef = useRef(null)
 
   // El text es parteix en «què busco» i «com el vull»: `C.f` → busca `C`, capa `folre`.
@@ -1738,7 +1755,7 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
       poms.cerca({ q: cerca, page_size: 10, ...(modelId ? { model: modelId } : {}) })
         .then(r => {
           setResults(r.data?.results || [])
-          setSel(0); setObert(true)
+          setSel(0); setObert(true); setCreaSel(false)
         })
         .catch(() => { setResults([]); setObert(false) })
     }, 300)
@@ -1806,13 +1823,19 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
           if (e.key === 'ArrowDown') {
             e.preventDefault()
             if (results.length) setSel(s => Math.min(s + 1, results.length - 1))
+            else if (potCrear) setCreaSel(true)
           } else if (e.key === 'ArrowUp') {
             e.preventDefault()
             // A dalt de tot de la llista (o sense llista) la fletxa TORNA AL CARRIL: el cercador
             // és el final del recorregut, no un cul-de-sac.
-            if (sel === 0 || !obert) { setObert(false); onSurt?.() } else setSel(s => s - 1)
+            if (creaSel) setCreaSel(false)
+            else if (sel === 0 || !obert) { setObert(false); onSurt?.() } else setSel(s => s - 1)
           } else if (e.key === 'Enter') {
-            e.preventDefault(); tria(results[sel])
+            e.preventDefault()
+            // Sense resultats, Enter dispara l'ÚNICA cosa que hi ha. No cal haver premut `↓`
+            // abans: exigir-ho seria demanar un pas per a una llista d'un sol element.
+            if (!results.length && potCrear) { onCrearPropi(cerca); setObert(false); setCreaSel(false) }
+            else tria(results[sel])
           } else if (e.key === 'Escape') {
             e.preventDefault(); setQuery(''); setObert(false); onSurt?.()
           }
@@ -1881,15 +1904,20 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
               aquí és un gest EXPLÍCIT que demana nom i nomenclatura i els valida contra el
               catàleg del client — no un «crear "{query}"» que es fabriqui el codi del text
               cercat, que és exactament com va néixer el POM 440 amb el codi d'un altre. */}
-          {results.length === 0 && modelId && onCrearPropi && (
-            <div
-              onMouseDown={e => { e.preventDefault(); onCrearPropi(cerca); setObert(false) }}
+          {results.length === 0 && potCrear && (
+            /* BOTÓ, no un `div`: és una acció, i com a botó el navegador ja li dona el rol i el
+               nom accessible. `onMouseDown` amb `preventDefault` es queda perquè el `blur` de
+               l'input tancaria el desplegable abans que el clic hi arribés. */
+            <button type="button" aria-selected={creaSel}
+              onMouseDown={e => { e.preventDefault(); onCrearPropi(cerca); setObert(false); setCreaSel(false) }}
               style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
                        cursor: 'pointer', fontSize: 'var(--fs-body)', color: 'var(--gold)',
-                       borderTop: '1px solid var(--border)' }}>
+                       borderTop: '1px solid var(--border)', border: 'none', width: '100%',
+                       textAlign: 'left', font: 'inherit',
+                       background: creaSel ? 'var(--gold-pale)' : 'transparent' }}>
               <i className="ti ti-plus" style={{ fontSize: 14 }} aria-hidden="true" />
               {t('editable_table.crear_pom_propi')}
-            </div>
+            </button>
           )}
         </div>,
         document.body,

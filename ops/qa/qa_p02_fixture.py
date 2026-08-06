@@ -21,12 +21,16 @@ from django.contrib.auth import get_user_model    # noqa: E402
 from django_tenants.utils import schema_context   # noqa: E402
 from rest_framework.test import APIClient         # noqa: E402
 
-SORTIDA = pathlib.Path(__file__).resolve().parent / 'qa_p02_fixture.json'
 MILEY = 1308
+# ON ES DESA. Segon argument opcional, i no és cosmètic: tres fums compartien aquest fitxer i
+# cadascun espera un model DIFERENT (P0.2 i P0.6 volen el 1302; P0.8, el 169). Regenerar-lo per
+# a un d'ells deixava els altres dos en vermell sense que ningú hagués tocat producte.
+SORTIDA_DEF = pathlib.Path(__file__).resolve().parent / 'qa_p02_fixture.json'
 
 
 def main():
     mid = int(sys.argv[1]) if len(sys.argv) > 1 else 1302
+    sortida = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else SORTIDA_DEF
     if mid == MILEY:
         print('✗ el MILEY (1308) no es toca: és el model que l\'Agus està entrant'); return 1
 
@@ -51,9 +55,9 @@ def main():
             fixture[path] = r.json()
             print(f'  · {path:44} HTTP 200')
         fixture['_model_id'] = mid
-        SORTIDA.write_text(json.dumps(fixture, ensure_ascii=False))
+        sortida.write_text(json.dumps(fixture, ensure_ascii=False))
         d = fixture.get('/api/v1/mesures/diccionari/', {})
-        print(f'→ {SORTIDA.name} · eixos={[e["clau"] for e in d.get("eixos", [])]} '
+        print(f'→ {sortida.name} · eixos={[e["clau"] for e in d.get("eixos", [])]} '
               f'· files taula-mesures={len(fixture.get(f"/api/v1/models/{mid}/taula-mesures/", {}).get("rows", []))}')
     return 0
 
