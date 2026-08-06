@@ -57,7 +57,13 @@ def main():
         from fhort.fitting.models import PieceFittingLine
         from fhort.pom.models import POMMaster
 
-        model = Model.objects.get(pk=mid)
+        # 06/08 vespre — V4 va buidar `fhort` de models. Sense aquest guard, el fum moria amb un
+        # `Model.DoesNotExist` pelat i qui el trobés demà hauria de sortir a investigar per què.
+        model = Model.objects.filter(pk=mid).first()
+        if model is None:
+            print(f'✗ el model {mid} no existeix. Aquest fum corre contra dades VIVES: '
+                  f'passa-li l\'id d\'un model de QA nou (`qa_q34_presa_reconciliada.py <id>`).')
+            return 1
         u = get_user_model().objects.filter(is_superuser=True).first()
         c = APIClient()
         c.force_authenticate(user=u)

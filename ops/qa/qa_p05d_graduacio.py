@@ -50,9 +50,11 @@ PERFIL = {'id': 1, 'username': 'qa', 'nom_complet': 'QA', 'rol_nom': 'admin',
 
 #: Capçaleres de les quatre columnes de regla, per idioma. Literals de `i18n/{ca,en,es}.json`:
 #: `fitting.grid.regime` · `editable_table.col.{delta,delta_break,talla_break}`.
+#: 06/08 vespre — el castellà va deixar de dir «break»: A5 va posar «Talla de ruptura» i V5b hi
+#: va acabar el delta. La casa ja traduïa el concepte a `fitting.grid.break` = «ruptura».
 COLS = {
     'ca': ['RÈGIM', 'DELTA', 'DELTA BREAK', 'TALLA BREAK'],
-    'es': ['RÉGIMEN', 'DELTA', 'DELTA BREAK', 'TALLA BREAK'],
+    'es': ['RÉGIMEN', 'DELTA', 'DELTA DE RUPTURA', 'TALLA DE RUPTURA'],
     'en': ['REGIME', 'DELTA', 'DELTA BREAK', 'BREAK SIZE'],
 }
 #: `graduacio.superficie.gravar`

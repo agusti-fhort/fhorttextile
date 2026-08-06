@@ -54,6 +54,13 @@ def main():
                 continue
             fixture[path] = r.json()
             print(f'  · {path:44} HTTP 200')
+        # 06/08 vespre — V4 va buidar `fhort` de models. Un fixture escrit contra un model que ja
+        # no existeix són 404s desats damunt d'un fixture BO, i deixa tots els fums que en viuen
+        # en vermell per un motiu que no s'endevina mirant-los. Si el model no hi és, no s'escriu.
+        if f'/api/v1/models/{mid}/' not in fixture:
+            print(f'✗ el model {mid} no existeix (o no respon): NO s\'escriu {sortida.name}. '
+                  f'El fixture anterior es queda tal com estava.')
+            return 1
         fixture['_model_id'] = mid
         sortida.write_text(json.dumps(fixture, ensure_ascii=False))
         d = fixture.get('/api/v1/mesures/diccionari/', {})

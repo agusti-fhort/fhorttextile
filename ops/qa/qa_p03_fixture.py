@@ -57,6 +57,12 @@ def main():
             fixture[path] = r.json()
             print(f'  · {path:44} HTTP 200')
 
+        # 06/08 vespre — v. la nota de `qa_p02_fixture.py`: sense model, no s'escriu res (un
+        # fixture de 404s damunt d'un de bo deixa tots els fums en vermell sense pista).
+        if f'/api/v1/models/{mid}/' not in fixture:
+            print(f'✗ el model {mid} no existeix (o no respon): NO s\'escriu {SORTIDA.name}. '
+                  f'El fixture anterior es queda tal com estava.')
+            return 1
         fixture['_model_id'] = mid
         SORTIDA.write_text(json.dumps(fixture, ensure_ascii=False))
 
