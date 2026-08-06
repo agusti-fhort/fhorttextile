@@ -158,6 +158,77 @@ def main():
         if not any('F5' in f for f in fallides):
             print('  ✓ A · F5 × 3 · les columnes hi segueixen a cada recàrrega')
 
+        # A2b · LA IDENTITAT DE LA FILA (06/08) — píndoles, llapis i ⓘ.
+        pind = page.locator('button[data-pindola]')
+        noms_pind = sorted({pind.nth(i).inner_text().strip() for i in range(pind.count())})
+        # Dues per eix (POSICIO: Left·Right · ESTAT: Relaxed·Extended), la resta al ＋.
+        if sorted(noms_pind) != ['Extended', 'Left', 'Relaxed', 'Right']:
+            fallides.append(f'A · les píndoles visibles no són les esperades: {noms_pind}')
+        else:
+            print(f'  ✓ A · píndoles: {noms_pind} (la resta, al ＋)')
+        if any('stretched' in n for n in noms_pind):
+            fallides.append('A · «Extended» encara arrossega el sinònim «/ stretched»')
+
+        # El llapis: única porta a l'edició; el text ja no s'edita per clic.
+        llapis = page.locator('button[data-llapis]')
+        if llapis.count() == 0:
+            fallides.append('A · no hi ha cap llapis d\'identitat')
+        else:
+            abans = page.locator('input[data-nomen]').count()
+            page.locator('td').filter(has=page.locator('button[data-llapis]')).first.click(
+                position={'x': 10, 'y': 10})
+            page.wait_for_timeout(300)
+            if page.locator('input[data-nomen]').count() != abans:
+                fallides.append('A · clicar el text encara obre l\'edició (havia de ser estàtic)')
+            llapis.first.click()
+            page.wait_for_timeout(400)
+            if page.locator('input[data-nomen]').count() != abans + 1:
+                fallides.append('A · el llapis no obre la NOMENCLATURA')
+            elif page.locator('input[title]').count() == 0:
+                fallides.append('A · el llapis no obre el NOM')
+            else:
+                print(f'  ✓ A · llapis ×{llapis.count()} · obre nom i nomenclatura alhora · '
+                      f'el text no s\'edita per clic')
+            llapis.first.click(); page.wait_for_timeout(300)
+
+        # El ＋ ha de portar les 6 posicions que la fila ja no ensenya. L'`aria-label` del botó
+        # sobreescriu el nom accessible, així que es localitza pel text.
+        RESTA = ['Top', 'Bottom', 'CF', 'CB', 'Side seam', 'Waistband seam']
+        mes = page.locator('button').filter(has_text='＋')
+        if mes.count() == 0:
+            fallides.append('A · no hi ha el botó ＋')
+        else:
+            mes.first.click(); page.wait_for_timeout(600)
+            cos_modal = page.inner_text('body')
+            falten = [r for r in RESTA if r not in cos_modal]
+            if falten:
+                fallides.append(f'A · al modal del ＋ falten posicions: {falten}')
+            else:
+                print(f'  ✓ A · el ＋ porta les {len(RESTA)} posicions restants')
+            # El modal no es tanca amb `Esc` i el seu vel es queda interceptant els clics: es
+            # recarrega, que deixa la pantalla en un estat conegut per a la comprovació següent.
+            page.reload(wait_until='networkidle'); page.wait_for_timeout(1500)
+
+        # La ⓘ: hover i clic.
+        info = page.locator('button[data-info-traduccio]')
+        tip = page.locator('[role=tooltip]')
+        if info.count() == 0:
+            fallides.append('A · no hi ha cap ⓘ de traducció')
+        else:
+            info.first.hover(); page.wait_for_timeout(300)
+            per_hover = tip.count() and tip.first.inner_text().strip()
+            page.mouse.move(0, 0); page.wait_for_timeout(300)
+            info.first.click(); page.wait_for_timeout(300)
+            page.mouse.move(0, 0); page.wait_for_timeout(300)
+            per_clic = tip.count() and tip.first.inner_text().strip()
+            if not per_hover:
+                fallides.append('A · la ⓘ no ensenya res en passar-hi per sobre')
+            elif not per_clic:
+                fallides.append('A · la ⓘ no es queda fixada en clicar-la')
+            else:
+                print(f'  ✓ A · ⓘ · hover i clic ensenyen la traducció ({per_hover!r})')
+            page.keyboard.press('Escape'); page.wait_for_timeout(250)
+
         # A3 · cap 404 a la consola. És el que l'Agus veia i el fum no mirava.
         quatre04 = [c for c in cons if '404' in c]
         if quatre04:
@@ -187,6 +258,27 @@ def main():
         if errs:
             fallides.append(f'B · error de pàgina: {errs[0][:140]}')
         page.close()
+
+        # ── C · ELS TRES IDIOMES ───────────────────────────────────────────
+        # Les píndoles d'instància van en ANGLÈS CANÒNIC als tres (decisió del 05/08: d'aquesta
+        # paraula surt el sufix del codi). El que es comprova és que la pantalla es MUNTA i que
+        # les píndoles hi són, no que es tradueixin.
+        for idioma in ('ca', 'es', 'en'):
+            pg, errs_i, cons_i = obre(ctx, dicc_ok=True)
+            pg.evaluate(f"() => localStorage.setItem('fhort.lang','{idioma}')")
+            pg.reload(wait_until='networkidle'); pg.wait_for_timeout(1500)
+            pind_i = pg.locator('button[data-pindola]')
+            noms_i = sorted({pind_i.nth(i).inner_text().strip() for i in range(pind_i.count())})
+            if noms_i != ['Extended', 'Left', 'Relaxed', 'Right']:
+                fallides.append(f'C · {idioma}: píndoles inesperades {noms_i}')
+            elif cons_i:
+                fallides.append(f'C · {idioma}: consola bruta → {cons_i[0][:110]}')
+            elif errs_i:
+                fallides.append(f'C · {idioma}: error de pàgina → {errs_i[0][:110]}')
+            else:
+                print(f'  ✓ C · {idioma} · píndoles {noms_i} · consola neta')
+            pg.close()
+
         b.close()
 
     print()
