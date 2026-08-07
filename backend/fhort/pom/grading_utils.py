@@ -744,7 +744,12 @@ def rule_to_spec(r):
     client) no en porten, i és correcte: no surten de cap joc.
     """
     return {
-        'rule_set_id': r.rule_set_id,
+        # `getattr` i no accés directe, pel motiu que el docstring d'aquí sobre ja diu: les
+        # regles de la DETECCIÓ **no surten de cap joc** i, per tant, no porten `rule_set_id`.
+        # Amb accés directe, aquest camí peta amb AttributeError per a un cas que la mateixa
+        # funció declara legítim (3 vermells a `test_d3_reclassificacio`). Mateixa forma
+        # defensiva que `pom`, just aquí al costat.
+        'rule_set_id': getattr(r, 'rule_set_id', None),
         'pom_id': r.pom_id, 'pom': getattr(r, 'pom', None), 'talla_base_id': r.talla_base_id,
         'logica': r.logica, 'increment': r.increment, 'valors_step': r.valors_step,
         'increment_base': r.increment_base, 'increment_break': r.increment_break,
