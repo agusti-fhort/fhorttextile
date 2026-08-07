@@ -725,3 +725,116 @@ Left/Right/Relaxed/Extended vénen del diccionari de la BD (llei d'Agus, 05/08).
 | `node --test "src/**/*.test.js"` | 🟢 **218/218** |
 | Fum 3 idiomes contra el DESPLEGAT | 🟢 cap error de consola, cap literal absent, 9 captures |
 | `migrate_schemas` + auditoria SQL | 🟢 `fhort` i `los`; `public` N/A per disseny |
+
+---
+---
+
+# PART III · CORRECCIÓ CONTRA LA CAPTURA D'AGUS (07/08, 19:35)
+
+> Commit `779a1b3b`. **L'evidència primària és la captura d'Agus, no el fum del tram anterior.**
+
+## 12 · PER QUÈ LA CHECKLIST DE 44 ✓ ERA FALSA
+
+No era falsa per un error de lectura: era falsa **per construcció**. La vaig recórrer en **una sola
+direcció** —maqueta → pantalla— i aquesta direcció **no pot trobar una invenció per definició**:
+només comprova que no falti res. Tot el que la pantalla té de més hi passa invisible.
+
+La direcció que faltava, i que aquesta part fa, és **pantalla → maqueta**. Ha tret **10 elements**
+que la maqueta no demana, dels quals **3 eren defectes reals** (els d'Agus) i **2 més els he trobat
+jo pel camí**.
+
+## 13 · ELS TRES D'AGUS
+
+### 13.1 · L'etiqueta de tenant — FORA
+Pintava «FHORT Management» al costat del títol. **Fet exacte, per al registre:** la v4 **sí** que
+porta un `.chip` a l'`h1` (línia 162: `<span class="chip">Brownie</span>`). Però Agus mira la
+pantalla real i la treu, i és la seva decisió: qui llegeix el catàleg ja sap de quina casa és.
+**Retirada.**
+
+### 13.2 · Les mides — el defecte era d'ESCALA, i era meu
+L'escala de la casa és `--fs-caption: 8px` · `--fs-label: 10px` · `--fs-body: 12px`. **Havia fet
+servir `--fs-caption` (8px) per a text de lectura**: subtítol, comptadors de columna, la línia
+d'acumulació, els hints, els noms de fitxer, les píndoles d'instància i la línia de tecles. Models
+fa servir `--fs-body` (12px) per a tot això.
+
+| Element | Abans | Ara | Referència |
+|---|---|---|---|
+| `h1` de pàgina | `--fs-h2` pes 600 | `--fs-h2` **pes 500** | `Models.jsx:234`, idèntic |
+| Subtítol | `--fs-caption` (8px) | `--fs-body` (12px) | `Models.jsx:235` |
+| Molla de pa | `--fs-caption` | `--fs-body` | — |
+| Capçalera de columna | `--fs-label` (10px) | `--fs-body` versaletes | — |
+| Comptadors i acumulació | `--fs-caption`/`--fs-label` | `--fs-body` | `Models.jsx:470-483` |
+| Capçalera de la taula | `--fs-label` | `--fs-body` | — |
+| Píndoles · tecles · finder | `--fs-caption` | `--fs-body` | — |
+| Llista de fitxers | `--fs-caption`/`--fs-label` | `--fs-body` | — |
+
+> **Un judici que he hagut de fer i que declaro**: el **codi** sota el nom a les llistes es queda a
+> `--fs-label` (10px). Models **no té files de dues línies** per copiar; els dos precedents de la
+> casa per a aquesta forma exacta —`GarmentTypes.jsx` i `CascadeFinder`— fan tots dos nom a
+> `--fs-body` i codi a `--fs-label`. Si Agus el vol a 12px, és un token.
+
+### 13.3 · El crema — FORA de panells i capçaleres
+`--gold-pale` (#f5e6d0) i `--bg-muted` (#f5f0e8) surten de: capçaleres de les 3 columnes · peu
+d'alta · capçalera de la pantalla d'item · barra de run i talla base · capçalera de la taula (i les
+dues destacades, que conserven **la tinta d'or sobre blanc**) · peu de la taula · fons ratllat del
+visor. **Tot a `--white`**, que és el que Models fa amb les seves targetes sobre el gris de pàgina.
+
+**On es queda el crema, i per què** (cap dels tres és fons de panell ni de capçalera):
+
+| On | Precedent |
+|---|---|
+| Fila/tab/píndola **seleccionats** | `CascadeFinder` fa exactament això per a la fila seleccionada |
+| **Badge** d'extensió de fitxer | `Models.jsx:433` — badge = `gold-pale` + or + vora d'or |
+| Columna **«Mesura de partida»** | La v4 la declara així (`.mes{background:var(--sel)}`) **i** `EditableTable:1295` pinta la mateixa cel·la igual |
+
+🚩 **Si Agus també vol fora el crema d'aquests tres, són tres línies** — però anirien contra la v4 i
+contra la taula del model alhora, i per això no ho he decidit jo.
+
+## 14 · AUDITORIA BIDIRECCIONAL (b) — TOT EL QUE LA PANTALLA TÉ
+
+Recorregut de la **pantalla**, element per element. **10 trobats.**
+
+| # | Què hi ha a la pantalla | A la maqueta? | Decisió |
+|---|---|---|---|
+| 1 | Etiqueta de tenant al títol | (hi és, però Agus la treu) | ✅ **RETIRADA** aquest tram |
+| 2 | `tipus` al 3r nus del visor de fitxers | ❌ la v4 hi vol una **descripció**, i `ItemFitxer` **no en té camp** | ✅ **RETIRAT** — omplir el buit amb un vocabulari de ROL era inventar-me'l |
+| 3 | «Tornar» feia `history.back()` | ❌ la v4 fa `tanca()` → al catàleg | ✅ **CORREGIT** |
+| 4 | **Formulari d'alta** (Codi + Nom) darrere els 3 «＋ Nou» | ❌ **la v4 ensenya els botons i mai el que obren** | 🚩 **PREGUNTAR.** Es conserva: treure'l deixaria 3 botons morts |
+| 5 | **Gate de permisos** (`canEdit` amaga «＋ Nou», «Pujar», «Esborrar» i inhabilita el run i les talles) | ❌ la v4 els ensenya sempre | 🚩 **PREGUNTAR.** És llei de la casa i el backend ja hi posa `CONFIGURE`; però és comportament que la v4 no mostra |
+| 6 | **Confirmació** en esborrar un fitxer | ❌ la v4 té «Esborrar» a pèl | 🚩 **PREGUNTAR.** Patró de la casa (`GarmentTypes`), i l'esborrat destrueix bytes |
+| 7 | «— sense run proposat» + «sense proposta» | ❌ no a la v4 | ✅ **AUTORITZAT PER R3** («Buits = la capçalera ho diu, no s'inventa cap valor») |
+| 8 | `dup_identitat` i `sense_capa_lliure` | ❌ no a la v4 | 🚩 **PREGUNTAR.** Impedeixen escriure damunt d'una germana viva en silenci — la lliçó de C1 |
+| 9 | Càrrega · error · desat · 404 (`Center`/`Feedback`) | ❌ no a la v4 | ✅ **EXCEPCIÓ APROVADA** (bastiment de la casa) |
+| 10 | «Aquest item no té fitxers» | ❌ la v4 no dibuixa cap buit | ✅ **EXCEPCIÓ APROVADA** — mateixa família que 9 |
+
+> **Els 4 punts amb 🚩 no els he tocat**: tots quatre **afegeixen protecció o fan funcionar un botó
+> que la v4 dibuixa**, i treure'ls seria destruir funció, no netejar una invenció decorativa. Però
+> **cap dels quatre és a la maqueta**, i per la Regla Zero això els fa decisió d'Agus, no meva.
+
+**També comprovat i net:** cap clau i18n morta (les 5 de capçalera s'usen via literal de plantilla,
+que el grep no veu) · cap clau usada sense definir · cap `hex` (tots els colors són tokens) · cap
+icona `-filled` · IBM Plex Mono a tot arreu.
+
+## 15 · VERIFICACIÓ D'AQUEST TRAM
+
+| Control | |
+|---|---|
+| `npm run build` | 🟢 |
+| `eslint` (porta) | 🟢 **0 errors** · 4 avisos (patró de tota la casa) |
+| Fum 3 idiomes contra el DESPLEGAT | 🟢 «FUM NET: cap error, cap literal absent» |
+| Captures comparatives | `tres/1_maqueta_v4.png` · `tres/2_cataleg_corregit.png` · `tres/3_models_referencia.png` |
+| Captures de la pantalla | `u2/A_cataleg_{ca,es,en}.png` · `u2/B_poms_{ca,es,en}.png` · `u2/B_fitxers_{ca,es,en}.png` |
+
+> ⚠️ **`Models` es veu BUIDA a la captura de referència** i no és un defecte de la captura: el
+> tenant `fhort` **no té cap model** (46 esborrats en un tram anterior). La comparació d'escala
+> tipogràfica es fa igualment amb el títol, el subtítol i la barra de filtres, que sí que hi són.
+
+## 16 · LA LLIÇÓ DE MÈTODE
+
+**Una checklist d'una sola direcció no és una verificació, és un inventari de mancances.** La
+direcció maqueta → pantalla només pot trobar el que falta; per trobar el que sobra cal recórrer la
+**pantalla**. Les tres coses que Agus va veure d'un cop d'ull eren totes de la segona direcció, i cap
+d'elles podia sortir de la primera.
+
+👉 **A partir d'ara, tota checklist contra una maqueta és bidireccional**, i la segona direcció es
+recorre sobre la pantalla desplegada, no sobre el codi.
