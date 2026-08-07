@@ -367,10 +367,18 @@ l'aritmètica del 409 queda consistent) · el retorn de `motiu_no_preserva` **no
 
 ## 6 · NOTES D'EXECUCIÓ
 
-- **Col·lisió de numeració, un altre cop.** La sessió FIX-CLIENTS va commitar `8f45fd6b`
-  («90 · fix(clients)…») entre el meu 89 i el meu 90: hi ha **dos commits numerats 90**. Mateix
-  criteri que el 88 de la nit — **no renumero**, que reescriure història d'una branca compartida
-  costa més del que val un número. El seu commit és frontend; els meus, backend.
+- **Col·lisió de numeració, un altre cop — i ara triple.** El numerador és un comptador compartit
+  entre sessions i no es pot coordinar. Han quedat duplicats els números **90, 93 i 94**:
+
+  | Nº | Aquesta sessió (M-FI, backend) | L'altra sessió |
+  |---|---|---|
+  | 90 | `42932ce9` M1-bis | `8f45fd6b` fix(clients), frontend |
+  | 93 | `ae1b0f66` revisor-diff | `ea855527` C1 · TODDLER_EU |
+  | 94 | `5b28f649` cronologia | `0c793378` C2 · BABY_MONTHS |
+
+  Mateix criteri que el 88 de la nit: **no renumero**. Reescriure història d'una branca on hi
+  treballa algú altre costa més del que val un número. **Els meus són `60b2307d`, `42932ce9`,
+  `f92b56cd`, `2673b5ea`, `ae1b0f66`, `5b28f649`** — pels hashos no hi ha ambigüitat.
 - **Cap push, cap deploy de frontend.** El `restart` del backend és meu i s'ha fet amb els meus
   tres commits ja a l'arbre.
 
