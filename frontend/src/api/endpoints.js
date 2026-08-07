@@ -216,6 +216,10 @@ export const itemFitxers = {
   // Cicle ①: crea una CÒPIA al model (derivat_de_item), no toca l'ItemFitxer.
   usarAlModel: (id, modelId) =>
     client.post(`/api/v1/item-fitxers/${id}/usar-al-model/`, { model_id: modelId }),
+  // U2 — l'«Esborrar» del tab Fitxers. El ViewSet ja porta `DestroyModelMixin` gated CONFIGURE i
+  // el seu `perform_destroy` esborra els BYTES abans de la fila (si no, quedarien orfes al disc):
+  // aquí no hi havia porta de client, i prou.
+  remove: (id) => client.delete(`/api/v1/item-fitxers/${id}/`),
 }
 
 export const poms = {
