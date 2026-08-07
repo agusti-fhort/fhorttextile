@@ -1060,6 +1060,33 @@ class ModelGradingRule(models.Model):
     talla_break_pos = models.IntegerField(null=True, blank=True)  # cache opcional (run del model)
 
     origen = models.CharField(max_length=20, default='CANONICAL', choices=ORIGEN_CHOICES)
+    # ── M3 (2026-08-07) · LA TRAÇABILITAT: DE QUIN JOC VE AQUESTA FILA ────────────────────────
+    # L'arrel del parany de la decisió 6.1. `origen` diu «algú hi ha tocat», NO «aquest valor és
+    # seu»: els dos escriptors de pantalla estampen `MANUAL` encara que la regla sigui una còpia
+    # literal de la del joc, i `origen_mgr_des_de_ruleset` també estampa `MANUAL` a tot el que
+    # surt d'un `GradingRuleSet` sense classificar. Amb això, «autoria» i «còpia» es deien igual
+    # i el wipe només podia INFERIR-HO mirant l'estat del joc ANTERIOR del model sencer.
+    # Aquest camp ho deixa dit per FILA, i a la font: qui la materialitza sap d'on la treu.
+    #
+    #   informat  → la fila VE d'aquest joc (encara que després l'hagin editada a mà).
+    #   NULL      → no ve de cap joc, o no se sap. Autoria de pantalla des de zero, federació
+    #               (el joc d'origen viu a l'altra casa i el seu id aquí no vol dir res) i
+    #               TOTES les files anteriors a M3: **no hi ha backfill, i és a posta** —
+    #               d'on venien no es pot saber, i inventar-ho seria tornar a mentir.
+    #
+    # NO canvia cap política: 6.1 i M1 segueixen decidint com ahir. És senyal, no llei; la
+    # política que el llegeixi vindrà quan hi hagi dades (v. `poms_manual_a_preservar`).
+    #
+    # db_constraint=False i SET_NULL pel mateix motiu que `pom` (sobre): 'pom' és app SHARED
+    # (taula també a 'public') i aquest model és tenant-only. Esborrar un joc del catàleg no ha
+    # d'endur-se la regla resident del model —el patrimoni és del model—, només el rastre d'on
+    # va néixer.
+    derivat_de_rule_set = models.ForeignKey(
+        'pom.GradingRuleSet', on_delete=models.SET_NULL, null=True, blank=True,
+        db_constraint=False, related_name='regles_residents_derivades',
+        help_text="Joc del qual es va materialitzar aquesta fila. NULL = autoria de pantalla, "
+                  "federació, o fila anterior a M3 (sense backfill: no es pot saber).",
+    )
     actiu = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

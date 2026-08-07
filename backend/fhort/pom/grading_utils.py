@@ -736,8 +736,15 @@ def resolve_grading_container(customer, size_system, target, construction, fit_t
 
 
 def rule_to_spec(r):
-    """Normalitza una GradingRule (regla de contenidor) al mateix SPEC dict que la detecció."""
+    """Normalitza una GradingRule (regla de contenidor) al mateix SPEC dict que la detecció.
+
+    M3 — hi viatja `rule_set_id`: és l'ÚNIC punt del camí dels specs on encara se sap de quin
+    joc surt la regla, i `materialize_model_grading_rules_from_specs` el desa a
+    `ModelGradingRule.derivat_de_rule_set`. Els specs de la DETECCIÓ (els del document del
+    client) no en porten, i és correcte: no surten de cap joc.
+    """
     return {
+        'rule_set_id': r.rule_set_id,
         'pom_id': r.pom_id, 'pom': getattr(r, 'pom', None), 'talla_base_id': r.talla_base_id,
         'logica': r.logica, 'increment': r.increment, 'valors_step': r.valors_step,
         'increment_base': r.increment_base, 'increment_break': r.increment_break,

@@ -356,6 +356,11 @@ def materialize_model_grading_rules(model, source_rules, origen,
             increment=r.increment, valors_step=r.valors_step,
             increment_base=r.increment_base, increment_break=r.increment_break,
             talla_break_label=r.talla_break_label, talla_break_pos=r.talla_break_pos,
+            # M3 — la traçabilitat, presa a la FONT: aquesta fila ve d'aquesta regla, i aquesta
+            # regla ve d'aquest joc. Ho sap el `GradingRule` d'origen, ningú més ho tornarà a
+            # saber després. `getattr` perquè algun caller passa regles no desades (specs
+            # convertits a objecte) i un `rule_set_id` absent és NULL, no un error.
+            derivat_de_rule_set_id=getattr(r, 'rule_set_id', None),
             origen=origen, actiu=True,
         )
         for r in source_rules
@@ -389,6 +394,11 @@ def materialize_model_grading_rules_from_specs(model, specs, origen,
             increment=s.get('increment'), valors_step=s.get('valors_step'),
             increment_base=s.get('increment_base'), increment_break=s.get('increment_break'),
             talla_break_label=s.get('talla_break_label'), talla_break_pos=s.get('talla_break_pos'),
+            # M3 — igual que la germana, però aquí el camí és MIXT a posta: els specs que vénen
+            # d'una regla de contenidor el porten (`grading_utils.rule_to_spec`) i els que vénen
+            # del DOCUMENT del client no (no surten de cap joc). NULL, doncs, no és una pèrdua:
+            # és la resposta correcta per a la meitat d'aquest camí.
+            derivat_de_rule_set_id=s.get('rule_set_id'),
             origen=origen, actiu=True,
         )
         for s in specs

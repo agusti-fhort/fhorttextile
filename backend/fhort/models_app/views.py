@@ -2372,6 +2372,10 @@ def gravar_pom_view(request, model_id):
                         increment_break=(src.increment_break if src else None),
                         talla_break_label=(src.talla_break_label if src else None),
                         talla_break_pos=(src.talla_break_pos if src else None),
+                        # M3 — mateix criteri que `set_pom_regim_view` (vegeu-hi la nota): la
+                        # fila que neix del fallback del catàleg ve d'aquell joc; la que neix
+                        # de zero, de ningú. Una fila que ja existia no es re-etiqueta.
+                        derivat_de_rule_set_id=(src.rule_set_id if src else None),
                     )
                 if logica is not None:
                     rule.logica = logica
@@ -4811,7 +4815,14 @@ def set_pom_regim_view(request, model_id, pom_id):
                 increment_break=(src.increment_break if src else None),
                 talla_break_label=(src.talla_break_label if src else None),
                 talla_break_pos=(src.talla_break_pos if src else None),
+                # M3 — el criteri d'aquest upsert, i el sap ell mateix: si la fila NEIX del
+                # fallback del catàleg (`src`), ve d'aquell joc, per molt que el `MANUAL` de
+                # sota li digui el contrari —és exactament la mentida que M3 desfà. Si neix
+                # sense `src`, és autoria de zero i el camp es queda NULL.
+                derivat_de_rule_set_id=(src.rule_set_id if src else None),
             )
+        # Si la fila JA EXISTIA no es toca `derivat_de_rule_set`: editar-la no canvia d'on va
+        # néixer. El camp diu la PROCEDÈNCIA, no qui l'ha tocada l'últim (això és `origen`).
 
         if logica is not None:
             rule.logica = logica

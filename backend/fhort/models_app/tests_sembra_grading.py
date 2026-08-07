@@ -1865,3 +1865,174 @@ class Decisio61PreservaManualTest(_BaseSembraTest):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(self._regles().count(), 0)
         self.assertEqual(resp.data['residents_preservades'], 0)
+
+
+class M3DerivatDeRuleSetTest(_BaseSembraTest):
+    """M3 (2026-08-07) — `ModelGradingRule.derivat_de_rule_set`: de quin joc ve cada fila.
+
+    ── PER QUÈ EXISTEIX ───────────────────────────────────────────────────────────────────
+    És l'arrel del parany que la decisió 6.1 no podia tancar. `origen` diu «algú hi ha tocat»,
+    no «aquest valor és seu»: els escriptors de pantalla estampen `MANUAL` encara que la regla
+    sigui una còpia literal de la del joc, i `origen_mgr_des_de_ruleset` també estampa `MANUAL`
+    a tot el que surt d'un joc sense classificar. Amb aquesta sola informació, el wipe només
+    podia INFERIR l'autoria mirant l'estat del joc anterior del model sencer.
+
+    ── QUÈ ÉS I QUÈ NO ÉS ─────────────────────────────────────────────────────────────────
+    És SENYAL, no llei: M3 no canvia cap política de preservació (l'últim test d'aquesta classe
+    ho fixa). D'ara endavant s'omple a la font; les files velles es queden NULL i **no hi ha
+    backfill** perquè d'on venien no es pot saber.
+    """
+
+    PREFIX = 'M3'
+
+    def setUp(self):
+        super().setUp()
+        self.item = self._item()
+        self.pom = self._pom('A')
+        GarmentPOMMap.objects.create(garment_type_item=self.item, pom=self.pom, ordre=0)
+        self.ss = self._size_system('SS_M3')
+        self.cli = Customer.objects.create(codi='M3A', nom='Client M3')
+        self.model = self._model(garment_type_item=self.item, garment_type=self.item.garment_type,
+                                 size_system=self.ss, size_run_model='S·M·L',
+                                 base_size_label='M', customer=self.cli)
+
+    # ── fixtures ──────────────────────────────────────────────────────────────
+
+    def _joc(self, nom, origen=GradingRuleSet.ORIGEN_CLIENT_RUN, pom=None):
+        rs = GradingRuleSet.objects.create(nom=self._codi(nom), size_system=self.ss,
+                                           customer=self.cli, origen=origen)
+        GradingRule.objects.create(
+            rule_set=rs, pom=(pom or self.pom), talla_base=self.ss.talles.get(etiqueta='M'),
+            logica=GradingRule.LOGICA_LINEAR, increment='1.00', increment_base='1.00', actiu=True)
+        return rs
+
+    def _regles(self):
+        return ModelGradingRule.objects.filter(model=self.model)
+
+    def _set_regim(self, pom_id, payload):
+        from fhort.models_app.views import set_pom_regim_view
+        req = APIRequestFactory().post(
+            f'/api/v1/models/{self.model.id}/poms/{pom_id}/regim/', payload, format='json')
+        force_authenticate(req, user=self.user)
+        return set_pom_regim_view(req, self.model.id, pom_id)
+
+    # ── materialitzar OMPLE la FK ─────────────────────────────────────────────
+
+    def test_materialitzar_des_del_joc_omple_la_traçabilitat(self):
+        joc = self._joc('OMPLE')
+        self.assertEqual(self._step2(self.model, {'grading_rule_set_id': joc.id}).status_code, 200)
+
+        regla = self._regles().get(pom_id=self.pom.id)
+        self.assertEqual(regla.derivat_de_rule_set_id, joc.id)
+
+    def test_canviar_de_joc_reescriu_la_traçabilitat_al_joc_NOU(self):
+        """El camp segueix la fila, i la fila es torna a materialitzar: ha de dir el joc VIU."""
+        joc_a, joc_b = self._joc('A'), self._joc('B')
+        self.assertEqual(self._step2(self.model, {'grading_rule_set_id': joc_a.id}).status_code, 200)
+        self.assertEqual(self._regles().get(pom_id=self.pom.id).derivat_de_rule_set_id, joc_a.id)
+
+        resp = self._step2(self.model, {'grading_rule_set_id': joc_b.id,
+                                        'confirmar_esborrat_residents': True})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self._regles().get(pom_id=self.pom.id).derivat_de_rule_set_id, joc_b.id)
+
+    def test_el_cami_dels_SPECS_distingeix_el_contenidor_del_document(self):
+        """El camí de W5 és MIXT a posta: el que ve del contenidor porta el joc, el que ve del
+        document del client no en porta cap —perquè no en ve de cap."""
+        from fhort.models_app.services import materialize_model_grading_rules_from_specs
+        from fhort.pom.grading_utils import rule_to_spec
+        joc = self._joc('SPECS')
+        pom_doc = self._pom('DOC')
+        spec_contenidor = rule_to_spec(joc.regles.get())
+        spec_document = {'pom_id': pom_doc.id, 'logica': 'LINEAR', 'increment': '3.00',
+                         'increment_base': '3.00'}
+
+        materialize_model_grading_rules_from_specs(
+            self.model, [spec_contenidor, spec_document], origen='IMPORTED')
+
+        self.assertEqual(self._regles().get(pom_id=self.pom.id).derivat_de_rule_set_id, joc.id)
+        self.assertIsNone(self._regles().get(pom_id=pom_doc.id).derivat_de_rule_set_id)
+
+    # ── les MANUAL de pantalla ────────────────────────────────────────────────
+
+    def test_pantalla_regla_nova_SENSE_joc_al_model_deixa_la_FK_NULL(self):
+        """Autoria de zero: no hi ha cap joc darrere d'aquesta fila, i el camp ho ha de dir."""
+        self.assertIsNone(self.model.grading_rule_set_id)
+
+        resp = self._set_regim(self.pom.id, {'logica': 'LINEAR', 'increment_base': 4})
+
+        self.assertEqual(resp.status_code, 200)
+        regla = self._regles().get(pom_id=self.pom.id)
+        self.assertEqual(regla.origen, 'MANUAL')
+        self.assertIsNone(regla.derivat_de_rule_set_id)
+
+    def test_pantalla_regla_nova_SEMBRADA_del_fallback_del_cataleg_HERETA_el_joc(self):
+        """🔴 La mentida que M3 desfà. La fila neix copiant la regla del joc i se li estampa
+        `MANUAL` igualment: `origen` diu «algú hi ha tocat», i la FK diu d'on ve de debò."""
+        joc = self._joc('FALLBACK')
+        self.model.grading_rule_set = joc
+        self.model.save(update_fields=['grading_rule_set'])
+        pom_nou = self._pom('NOU')
+        GradingRule.objects.create(
+            rule_set=joc, pom=pom_nou, talla_base=self.ss.talles.get(etiqueta='M'),
+            logica=GradingRule.LOGICA_LINEAR, increment='1.00', increment_base='1.00', actiu=True)
+
+        resp = self._set_regim(pom_nou.id, {'logica': 'LINEAR', 'increment_base': 4})
+
+        self.assertEqual(resp.status_code, 200)
+        regla = self._regles().get(pom_id=pom_nou.id)
+        self.assertEqual(regla.origen, 'MANUAL')
+        self.assertEqual(regla.derivat_de_rule_set_id, joc.id)
+
+    def test_pantalla_editar_una_fila_existent_NO_li_canvia_la_procedencia(self):
+        """El camp diu d'on va NÉIXER la fila, no qui l'ha tocada l'últim (això és `origen`)."""
+        joc = self._joc('EDIT')
+        self.assertEqual(self._step2(self.model, {'grading_rule_set_id': joc.id}).status_code, 200)
+        self.assertEqual(self._regles().get(pom_id=self.pom.id).derivat_de_rule_set_id, joc.id)
+
+        resp = self._set_regim(self.pom.id, {'logica': 'LINEAR', 'increment_base': 7})
+
+        self.assertEqual(resp.status_code, 200)
+        regla = self._regles().get(pom_id=self.pom.id)
+        self.assertEqual(regla.origen, 'MANUAL')            # ara sí que hi ha tocat algú
+        self.assertEqual(str(regla.increment_base), '7.00')
+        self.assertEqual(regla.derivat_de_rule_set_id, joc.id)   # però d'on ve no ha canviat
+
+    # ── NO-REGRESSIÓ: el senyal existeix, però encara no mana ─────────────────
+
+    def test_el_wipe_amb_la_FK_informada_es_comporta_EXACTAMENT_com_ahir(self):
+        """M3 afegeix senyal, no política. Qui decideix la preservació segueix essent l'estat
+        del JOC ANTERIOR (6.1 + M1), no aquest camp — encara que ara el camp digui la veritat.
+
+        Les dues meitats, al mateix test perquè el contrast és el que fixa la llei:
+          · joc anterior CLASSIFICAT     → la MANUAL sobreviu (com ahir).
+          · joc anterior SENSE classificar → la MANUAL cau, tot i que la FK ja diu que ve
+            d'aquell joc. Si algun dia això canvia, serà una decisió, i aquest test la veurà.
+        """
+        from fhort.models_app.services import poms_manual_a_preservar
+        joc_mut = self._joc('MUT', origen='')
+        joc_ok = self._joc('OK')
+        self.assertEqual(self._step2(self.model, {'grading_rule_set_id': joc_mut.id}).status_code, 200)
+        regla = self._regles().get(pom_id=self.pom.id)
+        self.assertEqual(regla.origen, 'MANUAL')                  # el parany, materialitzat
+        self.assertEqual(regla.derivat_de_rule_set_id, joc_mut.id)  # i ara SABEM que és còpia
+        # ...i tot i saber-ho, la política no el mira: joc anterior sense classificar → no preserva.
+        self.assertEqual(poms_manual_a_preservar(self.model, joc_mut), set())
+
+        resp = self._step2(self.model, {'grading_rule_set_id': joc_ok.id,
+                                        'confirmar_esborrat_residents': True})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['residents_preservades'], 0)
+
+        # L'ALTRA MEITAT. Ara el model penja d'un joc CLASSIFICAT i el tècnic li toca la regla
+        # (la fila es queda amb la seva FK: ve de `joc_ok`, i editar-la no ho canvia). El
+        # predicat, amb el mateix camp informat que abans, ara SÍ que preserva — perquè el que
+        # mira és el joc anterior, no la FK.
+        self.assertEqual(self._set_regim(self.pom.id, {'logica': 'LINEAR',
+                                                       'increment_base': 5}).status_code, 200)
+        tocada = self._regles().get(pom_id=self.pom.id)
+        self.assertEqual(tocada.origen, 'MANUAL')
+        self.assertEqual(tocada.derivat_de_rule_set_id, joc_ok.id)
+        self.assertEqual(poms_manual_a_preservar(self.model, joc_ok), {self.pom.id})
