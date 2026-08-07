@@ -278,16 +278,20 @@ def poms_manual_a_preservar(model, joc_anterior):
     residents estava CLASSIFICAT. Llavors les seves regles porten el seu origen real
     (CANONICAL/CLIENT_RUN/IMPORTED) i una `MANUAL` no en pot venir — o sigui que és autoria.
 
+    ── M1 (Agus, 2026-08-07 matí) · I EL MODEL **SENSE CAP JOC** TAMBÉ PRESERVA ──────────────
+    `joc_anterior is None` vol dir «el model no en tenia cap», i llavors una `MANUAL` no pot
+    ser còpia: no hi ha joc del qual hagi pogut sortir, i «Sense graduació» —l'únic gest que
+    deixa un model sense joc havent-ne tingut— ja esborra TOTES les residents abans. El que
+    hi hagi després, doncs, s'ha escrit a mà. Deixava de ser deducció i era política; l'Agus
+    l'ha presa amb el cens de 7.2 al davant.
+
     Tota la resta es comporta com abans de 6.1 i **s'ANOTA** (`motiu_no_preserva`):
 
       · `no_informat` — el caller no diu de quin joc venien. Els camins que encara no han
         adoptat 6.1 no canvien de comportament.
-      · `sense_joc` — el model no tenia cap joc. Aquí les `MANUAL` **probablement SÍ que són
-        autoria** (sense joc no hi ha joc-sense-classificar del qual puguin sortir), però
-        eixamplar la preservació a aquest cas és **política, i la política és de l'Agus**. Es
-        deixa anotat perquè demà es pugui decidir amb el cens al davant.
       · `joc_sense_classificar` — el parany conegut: `origen_mgr_des_de_ruleset` materialitza
         `MANUAL` per als jocs amb `origen` NULL, i llavors autoria i còpia es diuen igual.
+        L'extingeix el backfill (`manage.py set_grading_origen`, M2), no un filtre més ample.
 
     La preservació no és gratuïta: `ModelGradingRule` té `unique_together('model','pom')`, i el
     `bulk_create` de sota no porta conflict-handling. Per això la materialització SALTA les
@@ -303,13 +307,17 @@ def motiu_no_preserva(joc_anterior):
     """Per què aquest wipe NO preserva les `MANUAL`, com a codi curt, o `None` si sí que ho fa.
 
     Serveix perquè els camins destructius ho puguin deixar escrit (Watchpoint, resposta, log):
-    la decisió 6.1 tanca el cas net i deixa dos casos oberts, i els oberts s'han de poder
-    comptar abans de decidir-ne la política.
+    la decisió 6.1 tancava el cas net i en deixava dos d'oberts; M1 (07/08) tanca `sense_joc`
+    —un model sense joc preserva—, i queda obert només `joc_sense_classificar`, que no es tanca
+    amb un filtre sinó classificant els jocs (M2, `manage.py set_grading_origen`).
+
+    ⚠️ El codi `'sense_joc'` ja NO existeix: `joc_anterior is None` retorna `None` (preserva).
+    Qui el busqui a un log vell, era això.
     """
     if joc_anterior is JOC_ANTERIOR_NO_INFORMAT:
         return 'no_informat'
     if joc_anterior is None:
-        return 'sense_joc'
+        return None
     if not joc_classificat(joc_anterior):
         return 'joc_sense_classificar'
     return None

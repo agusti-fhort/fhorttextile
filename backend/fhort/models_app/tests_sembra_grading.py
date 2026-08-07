@@ -1641,10 +1641,11 @@ class Decisio61PreservaManualTest(_BaseSembraTest):
 
     # ── el predicat, aïllat ───────────────────────────────────────────────────
 
-    def test_el_motiu_de_no_preservar_es_explicit_i_distingeix_els_tres_casos(self):
+    def test_el_motiu_de_no_preservar_es_explicit_i_distingeix_els_casos(self):
         from fhort.models_app.services import (JOC_ANTERIOR_NO_INFORMAT, motiu_no_preserva)
         self.assertEqual(motiu_no_preserva(JOC_ANTERIOR_NO_INFORMAT), 'no_informat')
-        self.assertEqual(motiu_no_preserva(None), 'sense_joc')
+        # M1 (07/08) — «el model no tenia cap joc» JA NO és un motiu de no preservar.
+        self.assertIsNone(motiu_no_preserva(None))
         self.assertEqual(motiu_no_preserva(self._joc('SENSE_ORIG', origen='')),
                          'joc_sense_classificar')
         self.assertIsNone(motiu_no_preserva(self._joc('CLASSIFICAT')))
@@ -1737,6 +1738,47 @@ class Decisio61PreservaManualTest(_BaseSembraTest):
         # aquí no n'ha anat cap enlloc.
         from fhort.models_app.models import Watchpoint
         self.assertFalse(Watchpoint.objects.filter(model=self.model).exists())
+
+    # ── M1 (Agus, 07/08) · el model SENSE CAP JOC també preserva ──────────────
+
+    def test_M1_model_sense_joc_conserva_les_MANUAL_en_rebre_el_PRIMER_joc(self):
+        """El cas que 6.1 deixava obert i que l'Agus ha tancat el 07/08.
+
+        Un model sense cap joc amb regles `MANUAL`: aquelles NOMÉS poden ser autoria. No hi ha
+        joc del qual hagin pogut sortir com a còpia, i «Sense graduació» —l'únic gest que deixa
+        un model sense joc havent-ne tingut— ja esborra totes les residents abans. Assignar-li
+        el primer joc no se les pot endur.
+        """
+        pom_manual = self._pom('M1MAN')
+        self._manual('M1MAN', pom=pom_manual)
+        self.assertIsNone(self.model.grading_rule_set_id)     # sense cap joc: la premissa
+        joc = self._joc('M1_PRIMER')
+
+        resp = self._step2(self.model, {'grading_rule_set_id': joc.id,
+                                        'confirmar_esborrat_residents': True})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['residents_preservades'], 1)
+        viva = self._regles().get(pom_id=pom_manual.id)
+        self.assertEqual(viva.origen, 'MANUAL')
+        self.assertEqual(str(viva.increment), '2.00')
+        # I la del joc també hi és: cauen sobre POMs diferents, no competeixen.
+        self.assertEqual(self._regles().count(), 2)
+
+    def test_M1_la_MANUAL_del_model_sense_joc_MANA_sobre_la_del_joc_al_mateix_POM(self):
+        """La segona meitat de la mateixa llei: al POM compartit, qui mana és el tècnic."""
+        self._manual('M1SAME', pom=self.pom)      # el MATEIX POM que portarà el joc
+        joc = self._joc('M1_XOC')
+
+        resp = self._step2(self.model, {'grading_rule_set_id': joc.id,
+                                        'confirmar_esborrat_residents': True})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self._regles().count(), 1)
+        viva = self._regles().get()
+        self.assertEqual(viva.pom_id, self.pom.id)
+        self.assertEqual(viva.origen, 'MANUAL')
+        self.assertEqual(str(viva.increment), '2.00')         # el valor del tècnic, no l'1.00 del joc
 
     # ── PORTA 2 · copiar d'un altre model ─────────────────────────────────────
 
