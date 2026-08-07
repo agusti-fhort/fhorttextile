@@ -373,3 +373,20 @@ l'aritmètica del 409 queda consistent) · el retorn de `motiu_no_preserva` **no
   costa més del que val un número. El seu commit és frontend; els meus, backend.
 - **Cap push, cap deploy de frontend.** El `restart` del backend és meu i s'ha fet amb els meus
   tres commits ja a l'arbre.
+
+- **⏱️ La cronologia amb la sessió concurrent, perquè el restart és un desplegament compartit.**
+  L'he verificada amb `django_migrations` i els `mtime`, no de memòria:
+
+  | UTC | Qui | Què |
+  |---|---|---|
+  | 05:15:57 | jo | `models_app.0079` aplicada |
+  | **05:36:03** | **jo** | **`systemctl restart ftt-staging`** — el disc només portava els meus canvis |
+  | 05:38:06 | l'altra sessió | `pom.0064` · `0065` · `0066` aplicades |
+  | 05:43–05:44 | l'altra sessió | edita `pom/models.py`, `pom/serializers.py` · aplica `pom.0067` |
+
+  **El meu restart no ha desplegat res seu** (els seus fitxers són 7 minuts posteriors), i les
+  seves migracions no van entrar per la meva correguda. 🚩 **Però ara staging té un desfasament
+  viu que no és meu de tancar:** el gunicorn en marxa és el de les 05:36 i **no coneix** els
+  models de `pom.0064-0067`, que sí que estan aplicats a la BD. Es tanca sol quan aquella sessió
+  faci el seu restart; ho deixo dit perquè el darrer restart el vaig fer jo i, si algú mira
+  l'hora del procés, la conclusió fàcil seria equivocada.
