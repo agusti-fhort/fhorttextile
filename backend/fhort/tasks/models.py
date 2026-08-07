@@ -456,6 +456,31 @@ class GarmentTypeItem(models.Model):
         help_text="Context de grading de l'Item (un sol ruleset). Mutable; obligatori a la pàgina "
                   "(Fase B). Constreny base_size_definition al seu size_system.")
 
+    # ── U2/R3 (2026-08-07) · LA PROPOSTA DE RUN I DE TALLA BASE ─────────────────────────────
+    # «El GTI proposa, el model disposa.» El catàleg de peces ensenya UN run i UNA talla base
+    # per item, i fins avui no hi havia on desar-los: el que existia eren dues coses que diuen
+    # una altra cosa i que aquest tram NO toca —el `size_system` del joc de regles (que és del
+    # MODEL, no de l'item: llei C1) i `ItemBaseSet` (que en té N per item, un per món, i que
+    # declara la seva talla base en NÉIXER i no la re-tria)—. Aquests dos camps són la PROPOSTA
+    # de l'item i prou: no manen sobre cap dels dos, no els llegeixen i no els escriuen.
+    #
+    # Tots dos són TOUS a posta: un item sense proposta és un estat normal (la pantalla ho diu,
+    # no ho omple), i esborrar un sistema de talles del catàleg no pot bloquejar-se perquè un
+    # item el «proposava» — per això SET_NULL i no PROTECT, al contrari de `grading_rule_set`.
+    proposed_size_system = models.ForeignKey(
+        'pom.SizeSystem', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='proposed_by_items',
+        help_text="Run de talles que aquest item PROPOSA (suggeriment del catàleg). No mana "
+                  "sobre el size_system del joc de regles ni sobre cap ItemBaseSet.")
+
+    # ETIQUETA, no fila. És la mateixa llei que el motor de graduació: les regles ancoren per
+    # `base_size_label` i la fila de `SizeDefinition` és mer metadata del seed (CAT2.1). Guardar
+    # aquí un FK tornaria a lligar la proposta a una fila concreta d'un catàleg que es reordena.
+    proposed_base_size_label = models.CharField(
+        max_length=30, blank=True, default='',
+        help_text="Etiqueta de la talla base proposada (p.ex. 'M'), dins de proposed_size_system. "
+                  "Etiqueta i no FK: les regles ancoren per etiqueta (CAT2.1).")
+
     class Meta:
         ordering = ['garment_type', 'complexity_order', 'code']
         unique_together = [('garment_type', 'code')]
@@ -474,6 +499,21 @@ class GarmentTypeItem(models.Model):
                     'base_size_definition': (
                         "La talla base ha de pertànyer al mateix sistema de talles que el "
                         "grading rule set de l'Item.")
+                })
+
+        # U2/R3 — la MATEIXA llei per a la proposta: una etiqueta que el run proposat no conté
+        # seria un valor inventat, i el catàleg no n'inventa cap. SKIP quan en falta algun dels
+        # dos, que és l'estat normal d'un item sense proposta. Canviar el run i deixar-hi
+        # l'etiqueta vella cau aquí a posta: la pantalla envia sempre els dos camps junts,
+        # perquè triar un altre run és tornar a triar la talla base (ho fa la mateixa maqueta).
+        if self.proposed_size_system_id and self.proposed_base_size_label:
+            te_etiqueta = self.proposed_size_system.talles.filter(
+                etiqueta=self.proposed_base_size_label).exists()
+            if not te_etiqueta:
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    'proposed_base_size_label': (
+                        "La talla base proposada ha de ser una etiqueta del run proposat.")
                 })
 
     def __str__(self):

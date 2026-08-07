@@ -243,6 +243,9 @@ class GarmentTypeItemSerializer(serializers.ModelSerializer):
     # GarmentTypeItemPartSerializer). `is_set` sí és escrivible pel PATCH genèric: és un camp
     # concret de la taula, i és la declaració que la decisió 3 posa a mans de l'autoria.
     parts = GarmentTypeItemPartSerializer(many=True, read_only=True)
+    # U2/R3 — el nom del run PROPOSAT, per a la columna «Run de talles» de la llista del catàleg.
+    # Read-only i amb el mateix patró que `grading_rule_set_nom`: el que s'escriu és el FK.
+    proposed_size_system_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = GarmentTypeItem
@@ -251,10 +254,16 @@ class GarmentTypeItemSerializer(serializers.ModelSerializer):
         fields = ['id', 'garment_type', 'code', 'name', 'complexity_order', 'active',
                   'is_set', 'parts',
                   'grading_rule_set', 'base_size_definition',
-                  'grading_rule_set_nom', 'base_size_label', 'poms_count', 'fitxers_count']
+                  'grading_rule_set_nom', 'base_size_label', 'poms_count', 'fitxers_count',
+                  # U2/R3 — la PROPOSTA de l'item: run i talla base. Escrivibles per la pantalla
+                  # del catàleg; no manen sobre el joc de regles ni sobre cap ItemBaseSet.
+                  'proposed_size_system', 'proposed_base_size_label', 'proposed_size_system_nom']
 
     def get_grading_rule_set_nom(self, obj):
         return obj.grading_rule_set.nom if obj.grading_rule_set_id else None
+
+    def get_proposed_size_system_nom(self, obj):
+        return obj.proposed_size_system.nom if obj.proposed_size_system_id else None
 
     def get_base_size_label(self, obj):
         return obj.base_size_definition.etiqueta if obj.base_size_definition_id else None
@@ -267,7 +276,15 @@ class GarmentTypeItemSerializer(serializers.ModelSerializer):
         from django.core.exceptions import ValidationError as DjangoValidationError
         grs = attrs.get('grading_rule_set', getattr(self.instance, 'grading_rule_set', None))
         bsd = attrs.get('base_size_definition', getattr(self.instance, 'base_size_definition', None))
-        probe = GarmentTypeItem(grading_rule_set=grs, base_size_definition=bsd)
+        # U2/R3 — el probe ha de portar TAMBÉ la proposta: si no, la seva branca del clean()
+        # veuria sempre els camps buits i la validació no s'executaria mai per API. Mateixa
+        # fusió (attrs sobre instància) perquè el PATCH parcial es validi contra el que ja hi ha.
+        pss = attrs.get('proposed_size_system',
+                        getattr(self.instance, 'proposed_size_system', None))
+        pbl = attrs.get('proposed_base_size_label',
+                        getattr(self.instance, 'proposed_base_size_label', '') or '')
+        probe = GarmentTypeItem(grading_rule_set=grs, base_size_definition=bsd,
+                                proposed_size_system=pss, proposed_base_size_label=pbl)
         try:
             probe.clean()
         except DjangoValidationError as e:
