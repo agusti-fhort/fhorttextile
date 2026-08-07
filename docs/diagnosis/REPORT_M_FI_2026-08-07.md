@@ -294,6 +294,62 @@ viva al procés; 404 = el procés no la té:
 
 ---
 
+## 4.3 · El pas del `revisor-diff` (efectes col·laterals)
+
+Sense blocadors. Els 6 punts de risc, comprovats un a un contra el codi real:
+
+- ✅ **La clau nova de `rule_to_spec`** no trenca res: cap `**spec` al backend, cap comparació de
+  dict sencer (`spec_forms_match` mira 3 claus per nom), i el que va a JSON són specs de fitxa
+  que no la porten. 🔵 *Efecte lateral honest:* avui la branca `s.get('rule_set_id')` de
+  `..._from_specs` **no s'exerceix en producció** — a W5 `resident_specs` són sempre specs de
+  detecció; el «camí mixt» que documento a §3.2 existeix al codi i al test, però encara no té
+  cap productor viu. Queda llest per al dia que `cls['sembra']` s'hi sembri.
+- ✅ **`'sense_joc'`** no tenia cap consumidor a tot el repo, `frontend/` inclòs (l'únic hit és
+  una clau i18n homònima, `graduacio.superficie.sense_joc`, que és el fallback del nom del joc).
+- ✅ **Cap serialitzador de `ModelGradingRule`** (no n'hi ha cap), cap `.values()` sense arguments,
+  i la federació llegeix camp a camp: la columna nova **no s'escapa** al paquet entre cases.
+- ✅ **`_load_grading_rules` tot-o-res**: cap camí on preservar una regla deixi el model graduant
+  a mitges — la preservació sempre va amb la materialització completa del joc nou.
+- ✅ **La migració** és additiva de veritat, reversible, i `unique_together('model','pom')` queda
+  intacte.
+
+### 🚩 I dues coses que M1 fa aparèixer i s'han de dir
+
+**(a) La premissa de M1 té una SEGONA PORTA que no vigila ningú.** M1 es justifica dient que
+«Sense graduació» és l'única manera de quedar-se sense joc havent-ne tingut, i que aquell gest
+ja esborra totes les residents (`views.py:1118`). **No és tota la veritat.** Esborrar el JOC des
+del catàleg (`pom/views.py:283-287`) també deixa el model sense joc: `Model.grading_rule_set` és
+`SET_NULL` (`models_app/models.py:234-238`) i **les residents es queden** —el propi codi ho diu
+al comentari: `instance.delete()  # CASCADE: GradingRule; Model → SET_NULL`.
+
+Conseqüència: si el joc esborrat **no estava classificat**, les seves residents duien `MANUAL`
+estampat per `origen_mgr_des_de_ruleset`, i M1 les preservarà en assignar el joc següent —
+saltant-se les regles del joc nou per a aquells POMs. **És el parany de 6.1 entrant per una
+altra porta.** No destrueix res: fa graduar amb la còpia d'un joc mort, sense avís.
+
+**Per què no invalida M1, i què el tanca de debò:** el forat necessita **un joc sense
+classificar**, que és exactament el que M2 existeix per extingir. Exposició viva avui: **zero**
+(0 models a `fhort`). I la porta ja demana confirmació explícita (409 «deixarà els models sense
+grading derivat»). 👉 Decisió per a l'Agus: es dóna per tancat amb M2, o el gest d'esborrar un
+joc ha d'esborrar també les residents que en venien (que és el que `derivat_de_rule_set` ara
+permetria fer amb precisió… si no fos pel punt (b)).
+
+**(b) `SET_NULL` esborra la traça de M3 justament quan més falta.** El moment en què s'esborra un
+joc és exactament el moment en què «això és autoria o còpia?» esdevé irrespondible per sempre —
+i és el moment en què `derivat_de_rule_set` es posa a NULL. `SET_NULL` és el que el brief
+demanava i és coherent amb el patró de la casa (el patrimoni és del model), però si el camp ha
+de ser **forense** hi ha una tensió real. Alternativa, si es vol: enter sense FK, o `SET_NULL`
+amb fotografia del nom del joc al costat. **No s'ha tocat: era una instrucció explícita.**
+
+🔵 *Menors anotats:* els dos escriptors de pantalla busquen el `src` del catàleg **sense filtrar
+`actiu=True`** (`views.py:2361` i `:4806`) — preexistent per als valors, i ara M3 hi afegeix
+també el segell de procedència · `poms_manual_a_preservar` no filtra `actiu` (avui inofensiu:
+cap codi desactiva un `ModelGradingRule`, i `comptar_regles_residents` tampoc filtra, o sigui que
+l'aritmètica del 409 queda consistent) · el retorn de `motiu_no_preserva` **no s'escriu enlloc**
+—ni log, ni resposta, ni Watchpoint— contra el que promet la seva pròpia docstring.
+
+---
+
 ## 5 · EL QUE QUEDA A LA TAULA DE L'AGUS
 
 | # | Decisió | On |
@@ -303,6 +359,9 @@ viva al procés; 404 = el procés no la té:
 | 🚩 3 | Els **14 de `public`**: inerts i fora de l'abast del wipe. Es queden NULL o es netegen? | §1.4 |
 | 🚩 4 | `set_grading_origen --list --tenant public` **peta**. Fix d'una línia. | §1.5 |
 | 🚩 5 | El **text** del Watchpoint llista regles preservades dins del recompte d'esborrades. Fix d'una línia. | §2.4 |
+| 🚩 6 | **La segona porta de M1**: esborrar el joc del catàleg deixa el model «sense joc» amb les residents vives. Es dóna per tancat amb M2, o l'esborrat del joc s'ha d'endur les seves residents? | §4.3a |
+| 🚩 7 | **`SET_NULL` vs. traça forense** a `derivat_de_rule_set`: el camp s'esborra just quan la pregunta esdevé irrespondible. | §4.3b |
+| 🚩 8 | **W5 preserva en silenci**: cap avís ni Watchpoint quan la `MANUAL` del tècnic descarta la regla del document. I el `manual_choice='sobreescriure'` del wizard **només governa les mesures**, no les regles — el tècnic respon una cosa i en passa una altra. | §4.3 |
 
 ---
 
