@@ -646,6 +646,38 @@ class SizeSystem(models.Model):
     def __str__(self):
         return self.codi
 
+    # ── C4 (2026-08-07) · el deute §7.4.3, pagat en CODI ──────────────────────────────
+    # N1 va posar l'algorisme (`size_labels`) i el va fer servir una vegada, a la data
+    # migration. Faltava la porta: res no impedia tornar a escriure un `base_unit` que
+    # contradiu les etiquetes, que és exactament com havia arribat `TODDLER_EU` a dir
+    # `AGE_YEARS` amb unes talles en cm. Amb C1 aplicat, ara mateix no hi ha CAP run en
+    # conflicte als tres schemes — o sigui que aquesta validació neix amb el terra net.
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        from fhort.pom.size_labels import _tipus_de_les_etiquetes, BASE_UNIT_A_TIPUS
+
+        super().clean()
+        if not self.pk:
+            return                     # sense pk no hi ha talles: no hi ha res a contrastar
+        etiquetes = list(self.talles.values_list('etiqueta', flat=True))
+        segons_etiquetes = _tipus_de_les_etiquetes(etiquetes)
+        if not segons_etiquetes:
+            return                     # les etiquetes no donen veredicte: `base_unit` mana
+
+        errors = {}
+        segons_base = BASE_UNIT_A_TIPUS.get((self.base_unit or '').strip().upper())
+        if segons_base and segons_base != segons_etiquetes:
+            errors['base_unit'] = (
+                f"«{self.base_unit}» contradiu les etiquetes del run, que són de tipus "
+                f"{segons_etiquetes}. L'etiqueta mana: v. DIAGNOSI_VOCABULARIS §T3."
+            )
+        if self.tipus_escala and self.tipus_escala != segons_etiquetes:
+            errors['tipus_escala'] = (
+                f"«{self.tipus_escala}» contradiu les etiquetes, que són {segons_etiquetes}."
+            )
+        if errors:
+            raise ValidationError(errors)
+
 
 class SizeDefinition(models.Model):
     size_system = models.ForeignKey(SizeSystem, on_delete=models.CASCADE, related_name='talles')
@@ -675,7 +707,12 @@ class SizeDefinition(models.Model):
         verbose_name = 'Talla'
         verbose_name_plural = 'Talles'
         ordering = ['size_system', 'ordre']
-        unique_together = [('size_system', 'etiqueta')]
+        # C4 (2026-08-07) · deute §7.4.4. `ordering` ordena per `ordre`, i si dos `ordre`
+        # empaten l'ordre real el decideix Postgres — o sigui que el run es llegeix diferent
+        # segons el dia. **Un run desordenat és un grading incorrecte**: el motor compta per
+        # POSICIÓ. La unicitat és el que converteix `ordre` en una seqüència de debò, i de
+        # passada DRF en fabrica sol un UniqueTogetherValidator per a l'API.
+        unique_together = [('size_system', 'etiqueta'), ('size_system', 'ordre')]
 
     def __str__(self):
         return f'{self.size_system.codi} · {self.etiqueta}'
@@ -709,6 +746,22 @@ class GarmentType(models.Model):
     codi_client = models.CharField(max_length=60)
     nom_client = models.CharField(max_length=120)
     grup = models.CharField(max_length=40)
+    # ── C6 · PAS 1 (2026-08-07) · l'amo del vocabulari de grup és la BD ───────────────
+    # Decisió 1 de DIAGNOSI_VOCABULARIS §2.6. La FK i el string CONVIUEN a posta: el pas 2
+    # (retirar el string) està ATURAT, i no per prudència genèrica sinó per una dada
+    # concreta — el tenant `los` té un `GarmentType` amb `grup='TOPS'` i la taula
+    # `GarmentGroup` BUIDA, o sigui que allà el backfill no pot resoldre res i retirar el
+    # string perdria l'única informació de grup que hi ha. V. REPORT_CATALEG_TALLES.md §C6.
+    #
+    # Mentre convisquin, la font de veritat segueix sent `grup` (tots els lectors del cens hi
+    # continuen apuntant, i cap contracte d'API canvia). `save()` manté la FK alineada perquè
+    # no neixi rància: una FK que ningú escriu és pitjor que no tenir-la.
+    grup_ref = models.ForeignKey(
+        GarmentGroup, on_delete=models.PROTECT,
+        null=True, blank=True, related_name='garment_types',
+        verbose_name='Grup (FK)',
+        help_text='Pas 1 de C6: conviu amb `grup`. NULL = el codi no existeix a GarmentGroup.',
+    )
     actiu = models.BooleanField(default=True)
 
     # Sprint S13-A — multilanguage + system flag
@@ -727,6 +780,23 @@ class GarmentType(models.Model):
     # Fi Sprint S1
     # Pas previ 5 — descripció de família (construcció)
     descripcio = models.TextField(blank=True, default='')
+
+    def save(self, *args, **kwargs):
+        # C6 · pas 1 — la FK segueix el string, no al revés. Mentre `grup` sigui la font de
+        # veritat (que ho és fins que el pas 2 es pugui fer), qualsevol escriptura del string
+        # ha de reflectir-se aquí o la FK naixeria rància el primer dia. Si el codi no existeix
+        # a `GarmentGroup` es deixa NULL: inventar-hi un grup seria exactament el que aquesta
+        # migració vol acabar. `update_fields` es respecta perquè un save parcial que no toca
+        # `grup` no ha de disparar cap query de més.
+        camps = kwargs.get('update_fields')
+        if camps is None or 'grup' in camps:
+            codi = (self.grup or '').strip()
+            actual = GarmentGroup.objects.filter(codi=codi).first() if codi else None
+            if (actual.pk if actual else None) != self.grup_ref_id:
+                self.grup_ref = actual
+                if camps is not None:
+                    kwargs['update_fields'] = list(camps) + ['grup_ref']
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = 'Tipus garment (tenant)'
@@ -1579,10 +1649,42 @@ class SizingProfile(models.Model):
 
     class Meta:
         ordering = ['target__display_order', 'garment_type__nom_client']
+        # 🚩 C4 (2026-08-07) · deute §7.4.2 — el `unique_together` que aquí HAURIA d'anar
+        # NO s'hi pot posar encara. La clau natural és
+        #     ('target', 'garment_type', 'construction', 'fit_type', 'size_system', 'customer')
+        # i a `fhort` hi ha 5 files vives que la violen en 2 grups (539·540·541 i 288·510):
+        # comparteixen àmbit i només canvien de ruleset. Afegir la constraint peta la migració,
+        # i resoldre-ho vol dir fusionar o esborrar perfils — decisió d'Agus, no d'un agent.
+        # Mentrestant el fre viu a `clean()`, aquí sota. V. REPORT_CATALEG_TALLES.md §C4.
+
+    #: Els camps que fan que dos perfils siguin EL MATEIX àmbit.
+    CLAU_NATURAL = ('target_id', 'garment_type_id', 'construction_id',
+                    'fit_type_id', 'size_system_id', 'customer_id')
 
     def __str__(self):
         return (f"{self.target.nom_en} | {self.garment_type.nom_en} | "
                 f"{self.construction.nom_en} | {self.fit_type.nom_en}")
+
+    def clean(self):
+        """Frena la proliferació sense tocar les 5 files que ja hi són.
+
+        Un perfil és una declaració d'ÀMBIT. Dos perfils amb el mateix àmbit no diuen dues
+        coses: diuen la mateixa dues vegades, i llavors «quin mana?» no té resposta. Això
+        bloqueja els NOUS; els que ja existeixen es queden fins que l'Agus decideixi.
+        """
+        from django.core.exceptions import ValidationError
+
+        super().clean()
+        clau = {c: getattr(self, c) for c in self.CLAU_NATURAL}
+        germans = SizingProfile.objects.filter(**clau)
+        if self.pk:
+            germans = germans.exclude(pk=self.pk)
+        if germans.exists():
+            raise ValidationError(
+                'Ja hi ha un perfil per a aquest àmbit (mateix target, família, construcció, '
+                f'fit, sistema de talles i client): id {germans.first().pk}. Edita aquell en '
+                'comptes de duplicar-lo.'
+            )
 
 
 class GradingRuleHistory(models.Model):

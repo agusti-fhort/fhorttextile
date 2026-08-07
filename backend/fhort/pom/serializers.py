@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from .size_labels import _tipus_de_les_etiquetes
+
 from .models import (
     ConstructionType,
     CustomerPOMAlias,
@@ -141,6 +143,25 @@ class SizeSystemSerializer(serializers.ModelSerializer):
         fields = ('id', 'codi', 'nom', 'descripcio', 'actiu', 'talles', 'target_codis',
                   'customer_codi', 'tipus_escala', 'construccio_codis', 'fit_codis',
                   'grup_codis', 'customer', 'customer_alias')
+
+    def validate_tipus_escala(self, value):
+        """C4 · el tipus d'escala no pot contradir les etiquetes del run (deute §7.4.3).
+
+        `base_unit` no és escrivible per aquí, però `tipus_escala` sí — i és la mateixa
+        mentida per una altra porta. La llei de N1 és que **l'etiqueta mana**: si les talles
+        diuen una cosa, el camp no en pot dir una altra. Buit sempre s'accepta (és «no
+        deduït», que és honest), i un run sense talles tampoc té amb què contradir-se.
+        """
+        if not value or self.instance is None:
+            return value
+        etiquetes = list(self.instance.talles.values_list('etiqueta', flat=True))
+        segons_etiquetes = _tipus_de_les_etiquetes(etiquetes)
+        if segons_etiquetes and value != segons_etiquetes:
+            raise serializers.ValidationError(
+                f'Les talles d\'aquest run són de tipus {segons_etiquetes}; «{value}» les '
+                'contradiu. Canvia les etiquetes o deixa el camp buit.'
+            )
+        return value
 
 
 class GarmentTypeSerializer(serializers.ModelSerializer):
