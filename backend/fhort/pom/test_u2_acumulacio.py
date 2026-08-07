@@ -276,7 +276,7 @@ class POMUsIEsborratTest(TenantTestCase):
         from fhort.tasks.models import Customer
         pom = self._pom_tenant('AMB_ALIES')
         cli = Customer.objects.create(codi='U1C', nom='Client U1')
-        CustomerPOMAlias.objects.create(customer=cli, pom=pom, codi_client='XX')
+        CustomerPOMAlias.objects.create(customer=cli, pom=pom, client_code='XX')
 
         r = self._us(pom)
 
