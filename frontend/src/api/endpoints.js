@@ -222,6 +222,13 @@ export const poms = {
   list: (params) => client.get('/api/v1/poms/', { params }),
   cerca: (params) => client.get('/api/v1/poms/cerca/', { params }),          // ?q & page_size
   crearTenant: (data) => client.post('/api/v1/poms/crear-tenant/', data),    // POM tenant-only nou
+  get: (id) => client.get(`/api/v1/poms/${id}/`),
+  update: (id, data) => client.patch(`/api/v1/poms/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/poms/${id}/`),
+  // U1 — ON S'USA: el recompte que habilita o bloqueja el botó d'esborrar. El calcula el
+  // backend recorrent `_meta.related_objects` (la lliçó de TGIRL: information_schema no veu
+  // les FK amb db_constraint=False). Porta també l'ús OBSERVAT de capes i instàncies.
+  us: (id) => client.get(`/api/v1/poms/${id}/us/`),
   // POM PROPI DEL MODEL (06/08) — el que el catàleg del client encara no té. Neix AL catàleg
   // del client (POMMaster + CustomerPOMAlias origen='MODEL') i valida que la nomenclatura no
   // xoqui amb cap àlies d'aquell client. 409 amb el motiu quan xoca.
@@ -238,6 +245,11 @@ export const diccionariMesures = {
 }
 
 // CRUD complet (GarmentTypeViewSet és ModelViewSet). S'usa al tram 7 (finder 3 columnes).
+// U1 — les categories del catàleg (la «família de lletra» de la fitxa).
+export const pomCategories = {
+  list: (params) => client.get('/api/v1/pom-categories/', { params }),
+}
+
 export const garmentTypes = {
   list: (params) => client.get('/api/v1/garment-types/', { params }),
   get: (id) => client.get(`/api/v1/garment-types/${id}/`),
@@ -248,6 +260,25 @@ export const garmentTypes = {
 
 export const garmentGroups = {
   list: (params) => client.get('/api/v1/garment-groups/', { params }),
+  // U2 — la porta d'escriptura del «＋ Nou grup». NO hi ha `remove`: `GarmentType.grup_ref`
+  // apunta aquí amb PROTECT i el string `grup` encara hi conviu (C6 pas 1). V. el ViewSet.
+  create: (data) => client.post('/api/v1/garment-groups/', data),
+  update: (id, data) => client.patch(`/api/v1/garment-groups/${id}/`, data),
+}
+
+// U2 · l'acumulació — les dues pertinences de nivell superior. La de l'item és
+// `garmentPomMaps` (més avall); aquestes dues tenen el mateix contracte amb una àncora diferent.
+export const garmentTypePomMaps = {
+  list: (params) => client.get('/api/v1/garment-type-pom-maps/', { params }),   // ?garment_type
+  create: (data) => client.post('/api/v1/garment-type-pom-maps/', data),
+  update: (id, data) => client.patch(`/api/v1/garment-type-pom-maps/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/garment-type-pom-maps/${id}/`),
+}
+export const garmentGroupPomMaps = {
+  list: (params) => client.get('/api/v1/garment-group-pom-maps/', { params }),  // ?garment_group
+  create: (data) => client.post('/api/v1/garment-group-pom-maps/', data),
+  update: (id, data) => client.patch(`/api/v1/garment-group-pom-maps/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/garment-group-pom-maps/${id}/`),
 }
 
 export const sizeSystems = {
@@ -487,6 +518,8 @@ export const garmentTypeItems = {
   create: (data) => client.post('/api/v1/garment-type-items/', data),
   update: (id, data) => client.patch(`/api/v1/garment-type-items/${id}/`, data),
   remove: (id) => client.delete(`/api/v1/garment-type-items/${id}/`),
+  // U2 — el catàleg de POMs ACUMULAT (grup + família + item), amb el «Ve de» de cada fila.
+  acumulacio: (id) => client.get(`/api/v1/garment-type-items/${id}/acumulacio/`),
 }
 
 // Mòdul Comercial Studio (B1) — mestre d'articles. Escriptura gated CONFIGURE.
