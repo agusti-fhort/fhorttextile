@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { TARGETS, CONSTRUCTIONS, FITS, groupLabel } from "./grading/gradingAxes"
+import { Chip } from "./grading/wizardUI"
 import { sizeSystems, garmentGroups } from "../api/endpoints"
 
 // RunRestrictionEditor (C5 · 2026-08-07) — editar a mà les 4 capes de restricció d'un RUN.
@@ -15,14 +16,9 @@ import { sizeSystems, garmentGroups } from "../api/endpoints"
 // sense capes surt igualment — només que sense res a dir sobre a qui s'assembla. El text de sota
 // de cada capa ho diu amb aquestes paraules per no deixar-ho a la intuïció de qui edita.
 
-const chip = (actiu) => ({
-  padding: "3px 10px", borderRadius: 3, fontSize: 'var(--fs-label)',
-  fontFamily: "IBM Plex Mono, monospace", cursor: "pointer",
-  background: actiu ? "#f5e6d0" : "var(--white)",
-  color: actiu ? "var(--gold)" : "var(--text-muted)",
-  border: `1px solid ${actiu ? "var(--gold)" : "var(--border)"}`,
-})
-
+// El chip és el de la casa (`grading/wizardUI.jsx`), el MATEIX que tria el target al wizard i el
+// fit a Graduació. Aquí hi havia una factoria d'estil pròpia (S37 · vet del guardia-ui): mateixa
+// capa, quart aspecte, i l'estat «triat» amb 2.8:1 de contrast quan el color n'era l'únic senyal.
 function Capa({ titol, opcions, triats, onToggle, buida }) {
   return (
     <div style={{ marginBottom: 12 }}>
@@ -32,10 +28,9 @@ function Capa({ titol, opcions, triats, onToggle, buida }) {
       }}>{titol}</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
         {opcions.map(o => (
-          <button key={o.codi} type="button" onClick={() => onToggle(o.codi)}
-                  style={chip(triats.includes(o.codi))}>
+          <Chip key={o.codi} active={triats.includes(o.codi)} onClick={() => onToggle(o.codi)}>
             {o.etiqueta}
-          </button>
+          </Chip>
         ))}
       </div>
       {triats.length === 0 && (
@@ -123,13 +118,13 @@ export default function RunRestrictionEditor({ run, onSaved, onCancel }) {
             buida={t('size_library.layer_empty')} />
 
       {error && (
-        <div style={{ fontSize: 'var(--fs-label)', color: "#a32d2d", marginBottom: 8 }}>{error}</div>
+        <div style={{ fontSize: 'var(--fs-label)', color: "var(--err)", marginBottom: 8 }}>{error}</div>
       )}
       <div style={{ display: "flex", gap: 6 }}>
         <button type="button" onClick={desa} disabled={desant} style={{
           padding: "5px 12px", borderRadius: 4, fontSize: 'var(--fs-body)',
           fontFamily: "IBM Plex Mono, monospace",
-          background: "#f5e6d0", color: "var(--gold)", border: "1px solid var(--gold)",
+          background: "var(--gold-pale)", color: "var(--gold)", border: "1px solid var(--gold)",
           cursor: desant ? "not-allowed" : "pointer", opacity: desant ? .6 : 1,
         }}>{desant ? '…' : t('size_library.restrictions_save')}</button>
         <button type="button" onClick={onCancel} style={{

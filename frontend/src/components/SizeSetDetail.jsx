@@ -166,7 +166,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
               title={t('size_library.restrictions_title')}
               style={{
                 padding: '2px 8px', borderRadius: 3, fontSize: 'var(--fs-label)',
-                background: editRestriccions ? '#f5e6d0' : 'var(--white)',
+                background: editRestriccions ? 'var(--gold-pale)' : 'var(--white)',
                 color: 'var(--gold)', border: '1px solid #e0c8a0', cursor: 'pointer',
               }}
             >
