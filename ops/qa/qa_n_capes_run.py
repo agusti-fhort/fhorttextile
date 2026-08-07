@@ -34,7 +34,10 @@ from rest_framework.test import APIClient         # noqa: E402
 
 HOST = {'HTTP_HOST': 'staging.fhorttextile.tech'}
 CANONICS = ['ALPHA_EU_W', 'ALPHA_EU_M', 'NUMERIC_EU_W', 'BABY_EU_CM']
-BRW_RUN_01 = 'WOMAN_BRW_01'
+# C3 (07/08) — `WOMAN_BRW_01` ja no hi és. L'Agus va resoldre D2: era la resta d'un experiment
+# («Prova BRW ALPHA UE»), i el grading BRW de debò penja del canònic ALPHA_EU_W retallat pel
+# model. El fum comprovava que amb client BRW el seu run propi sortís PRIMER; ara la prova és
+# la que queda quan el client no en té cap de propi — que l'ordre no s'inventi res i no amagui.
 TIPUS_VALIDS = {'ALPHA', 'NUM', 'MESOS', 'ALTURA'}
 
 
@@ -122,23 +125,26 @@ def main():
             print(f'N2 · GET sizing-profiles/?target=WOMAN 200 · {len(perfils)} perfils · '
                   f'el run hi porta les seves capes')
 
-        # ── N3 · la proximitat, contra els 4 canònics + BRW Run 01 ───────────────────────
+        # ── N3 · la proximitat, contra els 4 canònics ────────────────────────────────────
         # Es reprodueix aquí la funció d'ordre del pas 3 (`utils/proximitatRun.js`) i es
         # comprova contra les dades REALS. Si el JS i això divergeixen, un dels dos menteix.
-        cinc = [r for r in runs if r.codi in CANONICS + [BRW_RUN_01]]
-        if len(cinc) != 5:
-            problemes.append(f'N3 · no hi són els 5 runs de referència: '
-                             f'trobats {[r.codi for r in cinc]}')
+        refs = [r for r in runs if r.codi in CANONICS]
+        if len(refs) != len(CANONICS):
+            problemes.append(f'N3 · no hi són els {len(CANONICS)} canònics de referència: '
+                             f'trobats {[r.codi for r in refs]}')
         else:
-            ordenats = _ordena(cinc, target='WOMAN', customer_codi='BRW')
-            if ordenats[0].codi != BRW_RUN_01:
-                problemes.append(f'N3 · amb client BRW i target WOMAN, el primer hauria de ser '
-                                 f'{BRW_RUN_01} i és {ordenats[0].codi}')
-            if len(ordenats) != 5:
+            # Un client SENSE run propi no ha de fer desaparèixer res ni guanyar-se cap
+            # primer lloc regalat: l'eix de client només desempata quan n'hi ha un que hi casa.
+            ordenats = _ordena(refs, target='WOMAN', customer_codi='BRW')
+            if len(ordenats) != len(CANONICS):
                 problemes.append('N3 · la proximitat ha AMAGAT algun run (ha d\'ordenar, mai amagar)')
+            if ordenats[0].codi != 'ALPHA_EU_W':
+                problemes.append(f'N3 · amb client BRW (que ja no té run propi) i target WOMAN, '
+                                 f'el primer hauria de ser el canònic ALPHA_EU_W i és '
+                                 f'{ordenats[0].codi}')
             print('N3 · ordre amb client BRW · target WOMAN: '
                   + ' › '.join(r.codi for r in ordenats))
-            sense_client = _ordena(cinc, target='WOMAN', customer_codi=None)
+            sense_client = _ordena(refs, target='WOMAN', customer_codi=None)
             if sense_client[0].codi != 'ALPHA_EU_W':
                 problemes.append(f'N3 · sense client, el primer hauria de ser el canònic '
                                  f'ALPHA_EU_W i és {sense_client[0].codi}')
