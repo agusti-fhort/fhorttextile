@@ -1,7 +1,7 @@
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -12,7 +12,9 @@ from fhort.accounts.capabilities import HasCapability, CONFIGURE
 from .models import (
     CustomerPOMAlias,
     GarmentGroup,
+    GarmentGroupPOMMap,
     GarmentPOMMap,
+    GarmentTypePOMMap,
     GarmentType,
     GradingRule,
     GradingRuleSet,
@@ -28,7 +30,9 @@ from .models import (
 from .serializers import (
     CustomerPOMAliasSerializer,
     GarmentGroupSerializer,
+    GarmentGroupPOMMapSerializer,
     GarmentPOMMapSerializer,
+    GarmentTypePOMMapSerializer,
     GarmentTypeSerializer,
     GradingRuleSerializer,
     GradingRuleSetSerializer,
@@ -179,14 +183,31 @@ class GarmentTypeViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
-class GarmentGroupViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsAuthenticated]
+class GarmentGroupViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin,
+                          viewsets.ReadOnlyModelViewSet):
+    """U2 — el catàleg de peces vol crear grups («＋ Nou grup»), i fins avui això era
+    `ReadOnlyModelViewSet`: el vocabulari de grup només es podia sembrar per migració.
+
+    ⚠️ **S'obre CREATE i UPDATE, però NO DELETE, i és a posta.** `GarmentType.grup_ref` apunta
+    aquí amb `on_delete=PROTECT` (C6 pas 1): esborrar un grup referenciat petaria amb un 500 en
+    comptes d'un missatge, i mentre el string `grup` i la FK conviuen, esborrar el grup deixaria
+    a més el string orfe sense que res ho detecti. Quan C6 faci el pas 2 i el string desaparegui,
+    obrir el `destroy` serà una línia —i llavors amb el seu propi guard de recompte, com el del
+    catàleg de POMs.
+
+    Escriptura gated CONFIGURE, com la resta del domini de talles i peces.
+    """
     serializer_class = GarmentGroupSerializer
     queryset = GarmentGroup.objects.all()
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['actiu']
     search_fields = ['codi', 'nom']
     ordering = ['codi']
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update'):
+            return [_ConfigureWrite()]
+        return [IsAuthenticated()]
 
 
 class POMCategoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -386,6 +407,42 @@ class GarmentPOMMapViewSet(viewsets.ModelViewSet):
     }
     ordering_fields = ['ordre', 'id', 'garment_type_item']
     ordering = ['garment_type_item', 'ordre']
+
+
+class _POMMapNivellViewSet(viewsets.ModelViewSet):
+    """El motlle compartit de les dues pertinences noves (U2): mateixos permisos que la germana
+    de l'item —lectura autenticada, escriptura gated CONFIGURE— i el mateix ordre."""
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        perm = HasCapability(); self.required_capability = CONFIGURE
+        return [perm]
+
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    ordering_fields = ['ordre', 'id']
+
+
+class GarmentTypePOMMapViewSet(_POMMapNivellViewSet):
+    """U2 — POMs que aporta una FAMÍLIA."""
+    serializer_class = GarmentTypePOMMapSerializer
+    queryset = (GarmentTypePOMMap.objects
+                .select_related('garment_type', 'pom', 'pom__pom_global', 'pom__categoria')
+                .all())
+    filterset_fields = {'garment_type': ['exact'], 'pom': ['exact'], 'is_key': ['exact'],
+                        'obligatori': ['exact'], 'pendent_revisio': ['exact']}
+    ordering = ['garment_type', 'ordre']
+
+
+class GarmentGroupPOMMapViewSet(_POMMapNivellViewSet):
+    """U2 — POMs que aporta un GRUP."""
+    serializer_class = GarmentGroupPOMMapSerializer
+    queryset = (GarmentGroupPOMMap.objects
+                .select_related('garment_group', 'pom', 'pom__pom_global', 'pom__categoria')
+                .all())
+    filterset_fields = {'garment_group': ['exact'], 'pom': ['exact'], 'is_key': ['exact'],
+                        'obligatori': ['exact'], 'pendent_revisio': ['exact']}
+    ordering = ['garment_group', 'ordre']
 
 
 class ItemBaseSetViewSet(viewsets.ModelViewSet):

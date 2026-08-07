@@ -4,7 +4,9 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CustomerPOMAliasViewSet,
     GarmentGroupViewSet,
+    GarmentGroupPOMMapViewSet,
     GarmentPOMMapViewSet,
+    GarmentTypePOMMapViewSet,
     GarmentTypeViewSet,
     GradingRuleSetViewSet,
     GradingRuleViewSet,
@@ -26,6 +28,10 @@ router.register('garment-types', GarmentTypeViewSet, basename='garment-type')
 router.register('grading-rule-sets', GradingRuleSetViewSet, basename='grading-rule-set')
 router.register('grading-rules', GradingRuleViewSet, basename='grading-rule')
 router.register('garment-pom-maps', GarmentPOMMapViewSet, basename='garment-pom-map')
+# U2 — les dues germanes de l'acumulació. Mateix contracte que la de l'item; el que canvia és
+# l'àncora (`?garment_type=` · `?garment_group=`). L'acumulació de les tres és un endpoint a part.
+router.register('garment-type-pom-maps', GarmentTypePOMMapViewSet, basename='garment-type-pom-map')
+router.register('garment-group-pom-maps', GarmentGroupPOMMapViewSet, basename='garment-group-pom-map')
 router.register('item-base-measurements', ItemBaseMeasurementViewSet, basename='item-base-measurement')
 router.register('item-base-sets', ItemBaseSetViewSet, basename='item-base-set')
 router.register('customer-pom-aliases', CustomerPOMAliasViewSet, basename='customer-pom-alias')
@@ -87,6 +93,17 @@ try:
 except Exception:
     _dictionary_paths = []
 
+# U1/U2 — les dues preguntes del catàleg. Abans del router pel mateix motiu que el wizard:
+# `poms/<id>/us/` xocaria amb el detall de POMMasterViewSet.
+try:
+    from .cataleg_views import item_acumulacio_view, pom_us_view
+    _cataleg_paths = [
+        path('poms/<int:pom_id>/us/', pom_us_view),
+        path('garment-type-items/<int:item_id>/acumulacio/', item_acumulacio_view),
+    ]
+except Exception:
+    _cataleg_paths = []
+
 # El VOCABULARI D'IDENTITAT d'una mesura (capes + instàncies). Un sol GET perquè les dues
 # taules es miren sempre juntes. NO és el diccionari de nomenclatura del client (a sobre).
 try:
@@ -97,4 +114,5 @@ try:
 except Exception:
     _identity_paths = []
 
-urlpatterns = _sprint7_pom_paths + _size_map_paths + _dictionary_paths + _identity_paths + router.urls
+urlpatterns = (_sprint7_pom_paths + _size_map_paths + _dictionary_paths
+               + _cataleg_paths + _identity_paths + router.urls)

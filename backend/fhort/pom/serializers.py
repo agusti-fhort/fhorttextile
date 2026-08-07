@@ -7,7 +7,9 @@ from .models import (
     CustomerPOMAlias,
     FitType,
     GarmentGroup,
+    GarmentGroupPOMMap,
     GarmentPOMMap,
+    GarmentTypePOMMap,
     GarmentType,
     GarmentTypeGlobal,
     GradingRule,
@@ -448,6 +450,77 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
             'body_measure_iso_codi', 'body_measure_iso_nom',
             'is_key', 'obligatori', 'ordre', 'pendent_revisio',
         )
+
+
+class _POMDisplayMixin(serializers.Serializer):
+    """Els camps de display d'un POM, amb el FALLBACK de sempre: `pom_global` si n'hi ha, i si
+    no (tenant-only, els importats per IA) el que digui `POMMaster`.
+
+    U2 — viu en un mixin perquè les DUES pertinences noves (família i grup) l'han de dir igual
+    que la de l'item. `GarmentPOMMapSerializer` **no s'ha tocat**: convergir-lo aquí és una
+    millora òbvia però toca un serializer viu amb 103 lectors, i aquest sprint no ho demanava.
+    ANOTAT al report com a deute.
+    """
+    pom_code = serializers.SerializerMethodField()
+    name_en = serializers.SerializerMethodField()
+    name_cat = serializers.SerializerMethodField()
+    abbreviation = serializers.SerializerMethodField()
+    categoria = serializers.SerializerMethodField()
+    unitat = serializers.CharField(source='pom.pom_global.unitat', read_only=True)
+
+    #: Els camps que el mixin aporta, per no repetir-los a cada `Meta.fields`.
+    CAMPS = ('pom_code', 'name_en', 'name_cat', 'abbreviation', 'categoria', 'unitat')
+
+    def get_pom_code(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.codi if pg else None) or obj.pom.codi_client
+
+    def get_name_en(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.nom_en if pg else None) or obj.pom.nom_client
+
+    def get_name_cat(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.nom_ca if pg else None) or obj.pom.nom_client
+
+    def get_abbreviation(self, obj):
+        pg = obj.pom.pom_global
+        return (pg.abbreviation if pg else None) or obj.pom.codi_client
+
+    def get_categoria(self, obj):
+        pg = obj.pom.pom_global
+        if pg and pg.categoria:
+            return pg.categoria
+        cat = obj.pom.categoria
+        return (cat.nom_ca or cat.nom_en) if cat else ''
+
+
+class GarmentTypePOMMapSerializer(_POMDisplayMixin, serializers.ModelSerializer):
+    """U2 — els POMs que aporta una FAMÍLIA. Germà del de l'item, mateixa forma."""
+
+    garment_type_codi = serializers.CharField(source='garment_type.codi_client', read_only=True)
+    garment_type_nom = serializers.CharField(source='garment_type.nom_client', read_only=True)
+
+    class Meta:
+        model = GarmentTypePOMMap
+        fields = (('id', 'garment_type', 'garment_type_codi', 'garment_type_nom', 'pom')
+                  + _POMDisplayMixin.CAMPS
+                  + ('is_key', 'obligatori', 'nivell', 'ordre', 'pendent_revisio',
+                     'capa', 'instancia'))
+
+
+class GarmentGroupPOMMapSerializer(_POMDisplayMixin, serializers.ModelSerializer):
+    """U2 — els POMs que aporta un GRUP, el nivell més bast de l'acumulació."""
+
+    garment_group_codi = serializers.CharField(source='garment_group.codi', read_only=True)
+    garment_group_nom = serializers.CharField(source='garment_group.nom', read_only=True)
+
+    class Meta:
+        model = GarmentGroupPOMMap
+        fields = (('id', 'garment_group', 'garment_group_codi', 'garment_group_nom', 'pom')
+                  + _POMDisplayMixin.CAMPS
+                  + ('is_key', 'obligatori', 'nivell', 'ordre', 'pendent_revisio',
+                     'capa', 'instancia'))
 
 
 class ItemBaseSetSerializer(serializers.ModelSerializer):
