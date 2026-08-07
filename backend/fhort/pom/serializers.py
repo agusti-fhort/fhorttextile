@@ -371,6 +371,22 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
 
 
 class GarmentPOMMapSerializer(serializers.ModelSerializer):
+    # U2/R2 (07/08) — `capa` i `instancia` SURTEN PER L'API. Eren al model des de C1/C1-ins i són
+    # part de la CLAU ÚNICA, però no eren a `Meta.fields`: existien a la BD i eren invisibles per
+    # a qualsevol lector d'API. La pantalla del catàleg en fa quatre columnes (Capa + el bloc
+    # Instància), i sense això els seus desplegables i píndoles no tindrien on escriure.
+    #
+    # ⚠️ EL `default` NO ÉS DECORATIU, ÉS EL QUE EVITA UNA REGRESSIÓ. En completar-se la tupla de
+    # la `unique_together`, DRF hi afegeix sol un `UniqueTogetherValidator` — que és justament el
+    # que volem (un 400 net en comptes de l'`IntegrityError`/500 d'abans). Però el seu
+    # `enforce_required_fields` exigeix TOTS els camps de la clau al `create`, i un camp de model
+    # amb `default` només arriba a DRF com a `required=False`, SENSE default de serializer. Sense
+    # aquests dos `default` explícits, tota crida que ja existeix —`MeasurementBaseGrid` crea amb
+    # `{garment_type_item, pom, ordre}`— passaria a rebre un 400 «This field is required».
+    # En PATCH parcial DRF salta els defaults i el validador omple des de la instància: `update`
+    # amb només `{ordre}` segueix sense tocar ni la capa ni la instància.
+    capa = serializers.CharField(max_length=20, default='exterior')
+    instancia = serializers.CharField(max_length=60, default='', allow_blank=True)
     # Display fields amb FALLBACK a POMMaster (tenant-only, pom_global=None → els 19 importats per IA
     # no han de sortir buits): si no hi ha pom_global, caure a codi_client / nom_client / categoria FK.
     pom_code = serializers.SerializerMethodField()
@@ -449,6 +465,8 @@ class GarmentPOMMapSerializer(serializers.ModelSerializer):
             'descripcio_en', 'descripcio_ca',
             'body_measure_iso_codi', 'body_measure_iso_nom',
             'is_key', 'obligatori', 'ordre', 'pendent_revisio',
+            # U2/R2 — la identitat de la pertinença, que ja era clau única a la BD.
+            'capa', 'instancia',
         )
 
 
