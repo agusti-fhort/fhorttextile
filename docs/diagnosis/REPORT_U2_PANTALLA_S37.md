@@ -774,6 +774,13 @@ fa servir `--fs-body` (12px) per a tot això.
 > `--fs-body` i codi a `--fs-label`. Si Agus el vol a 12px, és un token.
 
 ### 13.3 · El crema — FORA de panells i capçaleres
+
+> 📌 **PER AL REGISTRE, perquè una sessió futura no ho «restauri» citant la Regla Zero: la maqueta
+> v4 SÍ que porta crema a les capçaleres** (`--head:#f5efe4` a `.colhead`, `.irowhead`, `.shead` i
+> `th`). **Treure'l és una ordre d'Agus que passa PER SOBRE de la maqueta**, presa mirant la
+> pantalla real dins del producte — on el crema sobre el gris de pàgina no s'assembla a cap altra
+> superfície. Mateix cas que l'etiqueta de tenant (§13.1). **La v4 mana en tot menys en això.**
+
 `--gold-pale` (#f5e6d0) i `--bg-muted` (#f5f0e8) surten de: capçaleres de les 3 columnes · peu
 d'alta · capçalera de la pantalla d'item · barra de run i talla base · capçalera de la taula (i les
 dues destacades, que conserven **la tinta d'or sobre blanc**) · peu de la taula · fons ratllat del
