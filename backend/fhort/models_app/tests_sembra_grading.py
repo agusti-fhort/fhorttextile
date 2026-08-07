@@ -1281,6 +1281,9 @@ class EsborratResidentsD314Test(_BaseSembraTest):
     # ── B1 · l'avís ───────────────────────────────────────────────────────────
 
     def test_amb_residents_i_sense_flag_avisa_i_no_esborra_res(self):
+        # M1 (07/08) — aquest model no té cap joc, o sigui que la seva MANUAL és autoria i es
+        # PRESERVA. El permís, doncs, ja no la pot comptar: es demana pel que cau de debò (la
+        # IMPORTED), que és la llei F1-bis. Abans de M1 aquí s'esperaven 2 i {MANUAL:1, IMPORTED:1}.
         self._resident('MANUAL')
         self._resident('IMPORTED')
 
@@ -1289,8 +1292,9 @@ class EsborratResidentsD314Test(_BaseSembraTest):
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.data['tipus'], 'esborrat_residents')
         self.assertEqual(resp.data['codi'], 'GRADING_RESIDENTS_WIPE')
-        self.assertEqual(resp.data['residents'], 2)
-        self.assertEqual(resp.data['per_origen'], {'MANUAL': 1, 'IMPORTED': 1})
+        self.assertEqual(resp.data['residents'], 1)
+        self.assertEqual(resp.data['per_origen'], {'IMPORTED': 1})
+        self.assertEqual(resp.data['preservades'], 1)
         # RES ESBORRAT, i el ruleset TAMPOC assignat: un avís que ja hagués desat a mitges
         # seria pitjor que no avisar.
         self.assertEqual(ModelGradingRule.objects.filter(model=self.model).count(), 2)
@@ -1310,13 +1314,21 @@ class EsborratResidentsD314Test(_BaseSembraTest):
 
         self.assertEqual(resp.data['imported'], 2)
         self.assertIn('IMPORTED', resp.data['message'])
-        self.assertIn('3', resp.data['message'])
+        # M1 — de les 3 residents només en cauen 2: la MANUAL d'un model sense joc és autoria i
+        # es conserva. El que s'ensenya és el que cau (abans: 3), i que la salvada es diu.
+        self.assertEqual(resp.data['residents'], 2)
+        self.assertEqual(resp.data['preservades'], 1)
+        self.assertIn('es conserven', resp.data['message'])
 
     def test_els_dos_flags_no_es_presten_el_consentiment(self):
         """El motiu de tenir-ne dos i no un: confirmar que fas servir el grading d'un altre
         client no pot autoritzar que se t'esborrin les regles pròpies. Amb un sol flag, un
         consentiment n'arrossegaria l'altre EN SILENCI — el defecte que D-31.4 tanca."""
-        self._resident('MANUAL')
+        # M1 — la resident ha de ser una que CAIGUI de debò, si no el que es prova aquí
+        # desapareix: la MANUAL d'un model sense joc ara es preserva, no hi hauria res a
+        # destruir i per tant tampoc cap segon consentiment a demanar (F1-bis). El subjecte del
+        # test és la SEPARACIÓ DELS DOS FLAGS, i amb una IMPORTED es prova igual de bé.
+        self._resident('IMPORTED')
 
         resp = self._step2(self.model, {'grading_rule_set_id': self.rs.id,
                                         'confirmar_altre_client': True})
@@ -1328,28 +1340,42 @@ class EsborratResidentsD314Test(_BaseSembraTest):
     # ── B2 · el rastre ────────────────────────────────────────────────────────
 
     def test_amb_flag_esborra_i_deixa_watchpoint_obert(self):
-        self._resident('MANUAL')
+        manual = self._resident('MANUAL')
         self._resident('IMPORTED')
 
         resp = self._step2(self.model, {'grading_rule_set_id': self.rs.id,
                                         'confirmar_esborrat_residents': True})
 
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['residents_esborrades'], 2)
+        # M1 — cau la IMPORTED; la MANUAL d'un model sense joc és autoria i es queda.
+        self.assertEqual(resp.data['residents_esborrades'], 1)
+        self.assertEqual(resp.data['residents_preservades'], 1)
         self.model.refresh_from_db()
         self.assertEqual(self.model.grading_rule_set_id, self.rs.id)
-        # Wipe-and-recreate: les dues residents han caigut i hi ha la del ruleset.
+        # Wipe-and-recreate: hi ha la del ruleset i la MANUAL salvada; la IMPORTED ha caigut.
         residents = ModelGradingRule.objects.filter(model=self.model)
-        self.assertEqual([r.pom_id for r in residents], [self.pom.id])
+        self.assertEqual(sorted(r.pom_id for r in residents),
+                         sorted([self.pom.id, manual.pom_id]))
 
         wp = self._watchpoints().get()
         self.assertEqual(wp.estat, 'open')
         self.assertEqual(wp.created_by_id, self.user.profile.id)
+        # `residents` segueix essent l'acta d'ABANS (les que hi havia); el que n'ha passat va a
+        # `esborrades`/`preservades`. Aquesta distinció és de 6.1 i M1 no la toca.
         self.assertEqual(wp.dades['residents'], 2)
+        self.assertEqual(wp.dades['esborrades'], 1)
+        self.assertEqual(wp.dades['preservades'], 1)
         self.assertEqual(wp.dades['imported'], 1)
         self.assertEqual(wp.dades['per_origen'], {'MANUAL': 1, 'IMPORTED': 1})
         self.assertEqual(wp.dades['grading_rule_set_id'], self.rs.id)
-        self.assertIn('2 regles pròpies', wp.text)
+        # El text diu el que s'ha ESBORRAT (1), i que la MANUAL s'ha conservat.
+        self.assertIn('esborrant 1 regles pròpies', wp.text)
+        self.assertIn("1 escrites a mà (MANUAL) s'han conservat", wp.text)
+        # 🚩 NO s'afirma res sobre el desglossament entre parèntesis: avui hi surt el recompte
+        # d'ABANS («1 IMPORTED · 1 MANUAL») al costat d'un «esborrant 1», o sigui que hi llista
+        # una regla que NO ha caigut. És un llegat de 6.1 (el 409 sí que la resta, `views.py`
+        # :671-676; el Watchpoint no) que M1 fa molt més visible perquè ara la preservació és el
+        # cas normal. ANOTAT al report M-FI §M1; no es toca aquí perquè l'abast és tancat.
 
     def test_el_rastre_conta_les_d_ABANS_no_les_de_despres(self):
         """El recompte es pren abans del `save()`: si es prengués després, el wipe ja hauria
