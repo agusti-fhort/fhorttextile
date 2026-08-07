@@ -1368,6 +1368,24 @@ class GradingRule(models.Model):
     rule_set = models.ForeignKey(GradingRuleSet, on_delete=models.CASCADE, related_name='regles')
     pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT, related_name='regles_grading')
     talla_base = models.ForeignKey(SizeDefinition, on_delete=models.PROTECT, related_name='regles_base')
+    # ── CAT2.1 · PAS (a) · LA BASE, PER ETIQUETA ─────────────────────────────────────
+    # Decisió d'Agus (07/08): les regles referencien l'ETIQUETA de talla, no una FILA d'un run
+    # concret. Mateix patró que el creuament de POMs (per codi, mai per id) — i, sobretot,
+    # mateix patró que el seu propi germà `talla_break_label`, que la Peça A ja va passar a
+    # etiqueta amb el comentari «break ancorat per ETIQUETA, resolt al run de graduació».
+    #
+    # 🔑 El motor NO canvia, i això no és un descuit: `_apply_rule` ja ancora a
+    # `model.base_size_label` sobre el run del MODEL, i `grading_utils.py:72` ja deia en veu
+    # alta que `rule.talla_base` és «mer metadata del seed». La FK no calculava res — però
+    # PROTEGIA files d'un run, i això és el que va lligar 1.267 regles a runs que no són seus
+    # i el que va fer impossible esborrar «Alpha EU — Grading Reference».
+    #
+    # Conviu amb la FK fins que el backfill doni 100% (v. `0069`); el pas (b) la retira.
+    talla_base_label = models.CharField(
+        max_length=30, blank=True, default='',
+        verbose_name='Talla base (etiqueta)',
+        help_text="L'etiqueta, resolta contra el run del model. Buit = encara no backfillat.",
+    )
     logica = models.CharField(max_length=20, choices=LOGICA_CHOICES)
     # Sprint S16-A — decimals 4 → 2 (real precision for garment measurements in cm)
     # NOTA: el camp `valor_base` s'ha eliminat (Sprint Mesures Base per Item, P0). La talla base
@@ -1649,13 +1667,12 @@ class SizingProfile(models.Model):
 
     class Meta:
         ordering = ['target__display_order', 'garment_type__nom_client']
-        # 🚩 C4 (2026-08-07) · deute §7.4.2 — el `unique_together` que aquí HAURIA d'anar
-        # NO s'hi pot posar encara. La clau natural és
-        #     ('target', 'garment_type', 'construction', 'fit_type', 'size_system', 'customer')
-        # i a `fhort` hi ha 5 files vives que la violen en 2 grups (539·540·541 i 288·510):
-        # comparteixen àmbit i només canvien de ruleset. Afegir la constraint peta la migració,
-        # i resoldre-ho vol dir fusionar o esborrar perfils — decisió d'Agus, no d'un agent.
-        # Mentrestant el fre viu a `clean()`, aquí sota. V. REPORT_CATALEG_TALLES.md §C4.
+        # CAT2.3 (2026-08-07) · el deute §7.4.2, tancat. Les 5 files que la violaven es van
+        # esborrar a `0070` amb la decisió d'Agus (539 es queda del grup A; 288 del grup B).
+        # ⚠️ Conseqüència assumida: una VERSIÓ (`parent_profile`) del mateix àmbit ja no és
+        # possible sense canviar `customer` — el cas del 510 era exactament aquest.
+        unique_together = [('target', 'garment_type', 'construction', 'fit_type',
+                            'size_system', 'customer')]
 
     #: Els camps que fan que dos perfils siguin EL MATEIX àmbit.
     CLAU_NATURAL = ('target_id', 'garment_type_id', 'construction_id',
