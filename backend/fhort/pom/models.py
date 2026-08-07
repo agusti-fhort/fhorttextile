@@ -881,6 +881,97 @@ class GarmentPOMMap(models.Model):
         return f'{anchor} · {self.pom.codi_client}'
 
 
+# ── U2 · LA LLEI DE L'ACUMULACIÓ (decisió Agus, 2026-08-07) ───────────────────────────────────
+#
+# El catàleg de POMs **s'acumula per nivell i PROPOSA**: el grup aporta, la família suma, l'item
+# suma. Res exclou res, i un mateix POM pot ser a molts items. Fins avui la pertinença només
+# sabia viure a l'ITEM (`GarmentPOMMap`, 1.748 files), i els dos nivells de sobre no hi cabien.
+#
+# **PER QUÈ TRES TAULES GERMANES I NO UNA AMB FKs NULLABLES** (la decisió, amb el seu motiu):
+#   1. A Postgres els NULL **no comparen iguals**, o sigui que un `unique_together` sobre una FK
+#      nullable deixaria de protegir exactament els dos nivells nous. Un constraint que existeix
+#      i no protegeix és pitjor que cap.
+#   2. El «Ve de» de la pantalla ha de dir de QUIN nivell arriba cada POM. Amb tres taules la
+#      resposta és la taula mateixa; amb FKs nullables es respondria **per absència**, que és
+#      fràgil.
+#   3. Risc zero per a les 1.748 files vives i els 103 lectors de `GarmentPOMMap`, que no
+#      s'assabenten que existeixen aquestes dues.
+#
+# L'acumulació és, doncs, una **UNIÓ A LA LECTURA** (v. `acumula_poms_de_item`), no una jerarquia
+# a la BD. Cap fila existent es migra: el que avui és de l'item, de l'item es queda.
+#
+# ⚠️ Les FK d'aquestes dues van cap a `GarmentType` i `GarmentGroup`, que viuen a **la mateixa
+# app** (`pom`) — per això SÍ que porten constraint de BD real, a diferència de la germana de
+# l'item, que ha de creuar cap a `tasks` (tenant-only) amb `db_constraint=False`.
+
+class _POMMapBase(models.Model):
+    """El que les tres pertinences comparteixen: el POM, la seva capa, la seva instància i els
+    tres eixos de com de fort es reclama (`obligatori`/`is_key`/`nivell`).
+
+    Abstracta a posta: no crea taula i no toca `GarmentPOMMap`, que es queda tal com estava.
+    """
+
+    obligatori = models.BooleanField(default=False)
+    is_key = models.BooleanField(default=False)
+    nivell = models.CharField(
+        max_length=1, blank=True, default='O',
+        choices=[('K', 'Key'), ('M', 'Mandatory'), ('O', 'Optional'), ('D', 'Detail-dependent')],
+    )
+    ordre = models.PositiveIntegerField(default=0)
+    pendent_revisio = models.BooleanField(default=False)
+    # Mateixa declaració que a `GarmentPOMMap` i pel mateix motiu: la capa i la instància
+    # formen part de la IDENTITAT de la pertinença (el mateix POM a l'exterior i al folre són
+    # dues pertinences, i la sisa dreta i l'esquerra també). Per slug, mai per PK (llei G9).
+    capa = models.CharField(
+        max_length=20, default='exterior', db_index=True,
+        help_text="Capa de mesura: slug de pom.MeasurementLayer (per SLUG, mai per PK).",
+    )
+    instancia = models.CharField(
+        max_length=60, default='', db_index=True,
+        help_text="Instància del POM dins la capa: slug compost canònic. '' és la instància única.",
+    )
+
+    class Meta:
+        abstract = True
+
+
+class GarmentTypePOMMap(_POMMapBase):
+    """POMs que aporta una FAMÍLIA (`GarmentType`). Se sumen als del grup i als de l'item."""
+
+    garment_type = models.ForeignKey(
+        'pom.GarmentType', on_delete=models.CASCADE, related_name='pom_maps')
+    pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT,
+                            related_name='garment_type_maps')
+
+    class Meta:
+        verbose_name = 'Mapa família ↔ POM'
+        verbose_name_plural = 'Mapes família ↔ POM'
+        ordering = ['garment_type', 'ordre']
+        # La MATEIXA clau que la germana de l'item, amb el nivell com a primer element.
+        unique_together = [('garment_type', 'pom', 'capa', 'instancia')]
+
+    def __str__(self):
+        return f'{self.garment_type.codi_client} · {self.pom.codi_client}'
+
+
+class GarmentGroupPOMMap(_POMMapBase):
+    """POMs que aporta un GRUP (`GarmentGroup`), el nivell més bast de l'acumulació."""
+
+    garment_group = models.ForeignKey(
+        'pom.GarmentGroup', on_delete=models.CASCADE, related_name='pom_maps')
+    pom = models.ForeignKey(POMMaster, on_delete=models.PROTECT,
+                            related_name='garment_group_maps')
+
+    class Meta:
+        verbose_name = 'Mapa grup ↔ POM'
+        verbose_name_plural = 'Mapes grup ↔ POM'
+        ordering = ['garment_group', 'ordre']
+        unique_together = [('garment_group', 'pom', 'capa', 'instancia')]
+
+    def __str__(self):
+        return f'{self.garment_group.codi} · {self.pom.codi_client}'
+
+
 class ItemBaseSet(models.Model):
     """Sprint BaseSet condicionat (B1, 2026-07-25). Satèl·lit de mesures base de l'Item per MÓN.
 
