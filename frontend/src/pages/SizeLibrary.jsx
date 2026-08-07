@@ -95,7 +95,9 @@ export default function SizeLibrary() {
             <SizeSetDetail
               profileId={detailProfileId}
               onClose={() => setDetailProfileId(null)}
-              onRefresh={() => { setDetailProfileId(null); setSelectorKey(k => k + 1) }}
+              /* El refresc desmunta el detall: el missatge que hi neix el recull aquí el
+                 missatge global de dalt, que sobreviu (abans es perdia amb el component). */
+              onRefresh={(m) => { setDetailProfileId(null); setSelectorKey(k => k + 1); if (m) setMsg(m) }}
             />
           </div>
         )}

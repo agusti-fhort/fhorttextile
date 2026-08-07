@@ -189,7 +189,6 @@ const TABS_AMB_FLETXES = ['draw', 'editar']
 // Peça C: eines que mostren cursor de creu (dibuix + nodes). 'select' → fletxa; 'pan' → grab.
 const CROSSHAIR_TOOLS = [...RECT_TOOLS, ...LINE_TOOLS, ...PATH_TOOLS, 'draw', 'polygon', 'note', 'cota_pom']
 // S3b — dreceres de teclat de les eines (mostrades al tooltip de la paleta per a la descobribilitat).
-const TOOL_SHORTCUT = { select: 'V', node: 'A', text: 'T', rect: 'R', ellipse: 'E', line: 'L', pen: 'P' }
 // S8: tipus convertibles a Paper.js (objectToPaperPath) — únics vàlids per al pathfinder.
 const PATHFINDER_TYPES = ['path', 'rect', 'rect_round', 'ellipse']
 // S7c2: polígon regular de N costats inscrit al bbox de drag → punts (px de contingut).
@@ -2767,7 +2766,6 @@ export default function TechSheetEditor() {
   const trRef = useRef(null)
   const viewportRef = useRef(null)
   const wrapRef = useRef(null)
-  const fileRef = useRef(null)
   // E3: barra de menús en text (Fitxer/Edició/Objecte/Visualització) — mateix patró de tancar-per-clic-fora.
   const [menuOpen, setMenuOpen] = useState(null)   // 'file'|'edit'|'object'|'view'|null
   useEffect(() => {

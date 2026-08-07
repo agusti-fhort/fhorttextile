@@ -43,7 +43,6 @@ const PaperFlatEditor = forwardRef(function PaperFlatEditor({ flat, pageW, pageH
   const opsRef = useRef(null)                 // accions exposades al pare via run() (close/open/split/removeSelection…)
   const markDirtyRef = useRef(null)           // demana escriure la geometria al document (edició contínua)
   const emitRef = useRef(null)                // l'escriptura en si; viu a l'àmbit de render (llegeix `flat` viu)
-  const flatIdRef = useRef(null)
   const onNodeStateRef = useRef(onNodeState)  // callback per pujar {selCount} al pare
   const onEnterDirectRef = useRef(onEnterDirect)  // G1: demana al pare passar a selecció directa (doble-clic forma)
   // A1: demana al pare TANCAR l'edició. El fill no coneix `editingFlatId` i no ha de conèixer-lo:

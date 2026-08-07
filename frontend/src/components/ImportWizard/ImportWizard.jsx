@@ -76,27 +76,6 @@ function Stepper({ step }) {
   )
 }
 
-// ───────────────────────────── Talla chip ─────────────────────────────
-function TallaChip({ label, ok, onRemove }) {
-  const { t } = useTranslation()
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '4px 8px 4px 10px', borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 500,
-      background: ok ? '#f0f9f0' : '#fff0f0',
-      border: `1px solid ${ok ? '#c0dd97' : '#f0c0c0'}`,
-      color: ok ? '#3b6d11' : '#a32d2d',
-    }}>
-      {ok ? '✓' : '✗'} {label}
-      {onRemove && (
-        <button onClick={onRemove} title={t('import_wizard.remove_size')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit',
-                   fontSize: 'var(--fs-h3)', lineHeight: 1, padding: 0 }}>×</button>
-      )}
-    </span>
-  )
-}
-
 // ───────────────────────────── Picker del catàleg de POMs ─────────────────────────────
 // R3 · UN sol picker per als DOS llocs on el pas 2 tria un POM del catàleg: el botó
 // «+ Afegir POM del catàleg» del final de la llista i el panell de conflicte de fila. Abans
@@ -312,7 +291,6 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
   // i el re-POST ha de tornar a portar la tria anterior o el mateix gat es tornaria a disparar.
   const decisionsRef = useRef({})
 
-  const docLabels = cribratge?.run_talles_document || []
   // Columnes del document sense parella model → avís (no bloqueja, tret de la base).
   const senseParella = useMemo(() => tallesSel.filter(d => !mapping[d]), [tallesSel, mapping])
   // 1↔1: talles del model aparellades més d'un cop.

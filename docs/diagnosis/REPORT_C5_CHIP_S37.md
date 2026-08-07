@@ -456,3 +456,185 @@ només ha canviat colors i no ha regressat res. **S'anota, no es toca.**
   passat, stepper de 3 passos. Candidat de neteja, i **afecta el disseny futur de la
   pantalla de Grading Rules** (qui la dissenyi no pot donar per fet que Graduació
   s'obre des d'allà: avui no s'obre des d'enlloc).
+
+---
+---
+
+# ANNEX 2 · Micro-tram: toast fantasma, TallaChip mort i porta de lint
+
+> Decisió de l'Agus (Patró C, 07/08/2026): corregir el `primaryBtn` compartit ABANS de
+> pintar les 4 pantalles noves. **El pas 1 ha quedat ATURAT per la seva pròpia condició
+> d'aturada** (§11); els passos 2-4 estan fets i verds.
+
+## 11 · 🛑 El `primaryBtn` compartit: ATURAT, i per què
+
+El brief deia: «🛑 Si en aplicar-ho trobes que `--warn` s'usa també per a estats d'avís
+REALS i la col·lisió semàntica és visible en alguna pantalla, ATURA». **Les dues
+condicions es compleixen.**
+
+**(a) `--warn` NO és un color d'acció, és un token d'ESTAT.** `index.css:44` el declara
+sota `/* Estats (per badges puntuals — mantenir contrast) */`, al costat de `--ok` i
+`--err`. Té **122 usos** amb semàntica d'avís: `at_risk` (`Planning.jsx:405`), `Paused`
+(`OrderDetail.jsx:299`), `size_map_unmatched` i `g.warning` (`SizeMapSetup.jsx:619,842`),
+`msg.type==='warn'` (`GradingRuleSets.jsx:222-223`), rellotge d'alerta
+(`GuardTascaOblidada.jsx:273`), «avui» (`PlanningCalendar.jsx:468`).
+
+**(b) La col·lisió seria visible.** `SizeMapSetup.jsx:485-495`: una **caixa d'avís
+sencera** (`background: --warn-bg`, `border: --warn`, `color: --warn`) i **just a sota**
+un `primaryBtn`. Es repeteix a `:619`→`:630` i `:715/:781/:842`→`:941/:952`.
+
+> **El matís honest, que juga en contra de l'aturada:** aquesta col·lisió **ja existeix
+> avui** al wizard — `ModelWizard.jsx:842` pinta un avís en `--warn` i `:942` hi té el
+> botó primari local, també `--warn`. La pregunta real no és «apareix una col·lisió
+> nova» sinó «com de greu es fa en generalitzar-la a 58 botons de 26 fitxers».
+
+### 11.1 · Les opcions, amb els ràtios (text `--white`)
+
+| Candidat | Valor | Ràtio | Comentari |
+|---|---|---:|---|
+| `--gold` (avui) | `#c27a2a` | **3.44:1** ❌ | el defecte a corregir |
+| `--gold-l` | `#c68338` | 3.13:1 ❌ | pitjor |
+| `--warn` (proposat al brief) | `#854f0b` | **6.73:1** ✅ | passa AA, però és el token d'AVÍS |
+| **`#9b6222`** (proposta) | `#9b6222` | **5.04:1** ✅ | **el mateix to i saturació que `--gold`, al 80% de lluminositat**. Cap color nou de família: és `--gold` fosc. Deixaria `--warn` fent només d'avís |
+| `--grana` | `#8a1f3d` | 8.96:1 ✅ | compleix, però és **color de MARCA** (`index.css:18`; `--pdf-accent` hi penja) |
+
+**Recomanació:** batejar un token d'acció primària (`--gold-action: #9b6222` o similar) i
+apuntar-hi `primaryBtn`. És **Patró C**: la tria de color nou és de l'Agus, i el brief
+ho deia explícitament.
+
+### 11.2 · L'altra troballa del pas 1: els dos `primaryBtn` NO es podran fusionar
+
+El brief deia «si ara queda idèntic al compartit, elimina el local». **No quedaria
+idèntic ni igualant-ne els colors:**
+
+| | `ui/buttons.js:10` (compartit) | `ModelWizard.jsx:942` (local) |
+|---|---|---|
+| forma | objecte estàtic | **funció** `(disabled) => ({…})` |
+| padding | `7px 14px` | `8px 20px` |
+| mida | `--fs-body` (12px) | `--fs-h3` (14px) |
+| pes | `600` | `500` |
+| `disabled` | no en té — cada crida hi posa `opacity` | parella pròpia (`--gray-l` / `--gray`) |
+| layout | `display:flex`, `marginLeft:auto` | cap |
+
+Fusionar-los és una peça pròpia (unificar geometria + estat `disabled`), no un efecte
+automàtic d'igualar el color. **No s'ha tocat.**
+
+## 12 · El toast fantasma, arreglat
+
+**El defecte** (trobat pel fum del tram anterior, §9.3): `setMsg` seguit d'`onRefresh()`
+que desmunta el component → el missatge no arribava mai a pintar-se.
+
+**La via triada — la de menys codi, i sense cap llibreria de toasts:** el pare
+(`SizeLibrary`) **ja tenia** una caixa de missatge global que no es desmunta
+(`SizeLibrary.jsx:65-76`, usada per `handleClone` i pel drawer d'autoria). El missatge
+només havia de poder-hi arribar. 3 línies:
+
+- `SizeSetDetail.jsx:41` — ajudant `avisaIRefresca(m)`: si hi ha `onRefresh`, li passa el
+  missatge; si no, cau al `setMsg` local de sempre (el component segueix servint sol).
+- Usat als **dos** punts que el perdien: `handleRestore` (`:91`) i l'`onSaved` de les
+  restriccions (`:209`). **El de restaurar patia el mateix defecte i ningú l'havia vist.**
+- `SizeLibrary.jsx:100` — `onRefresh={(m) => { …; if (m) setMsg(m) }}`.
+
+Descartat: refrescar sense desmuntar (hauria calgut canviar la política de refresc del
+pare, molt més codi i més radi).
+
+### 12.1 · Fum del camí de desat
+
+| Comprovació | Resultat |
+|---|---|
+| PATCH 200 → **el missatge es veu** | ✅ «Restriccions del run desades» a la caixa global, **primera vista a t+50 ms, present en 39/40 mostres (~1950 ms)**, i viu encara a t+6 s |
+| No s'ha duplicat | ✅ la caixa LOCAL del detall queda a 0 ocurrències: el missatge ha MIGRAT |
+| La llista reflecteix el canvi | ✅ detall tancat i `SizingProfileSelector` remuntat (+1 `GET construction-types` i +1 `GET sizing-profiles`) |
+| Restaurar (↺, `handleRestore`) | ✅ `confirm()` acceptat, `POST …/restaurar/`, el `missatge` del servidor surt a la caixa global (39/40 mostres) |
+| Camí d'error (PATCH 400) | ✅ **intacte**: l'error es pinta DINS del panell, el panell NO es tanca, cap missatge global, cap remuntatge (no passa per `onRefresh`) |
+
+Captures: `1b_despres_desar_ca.png`, `1c_missatge_global_ca.png`,
+`2_despres_restaurar_ca.png`, `3_error_400_ca.png`.
+
+> Anotat, no tocat: `handleRestore` crida `reloadProfile()` just abans d'`avisaIRefresca`,
+> i aquell GET arriba a un component que es desmunta (el `setProfile` és un no-op). És
+> feina morta inofensiva. **S'ha conservat a posta**: treure-la seria un canvi de
+> comportament fora de l'abast d'aquest brief.
+
+## 13 · `TallaChip` mort i els 2 `no-unused-vars`
+
+**Cens ABANS d'esborrar** (`grep -rn` a `frontend/src` i `frontend-backoffice/src`):
+
+| Símbol | Ocurrències | Consumidors |
+|---|:-:|:-:|
+| `TallaChip` (`ImportWizard.jsx:80`) | **1** — la seva pròpia definició | **0** |
+| `docLabels` (`ImportWizard.jsx:315`) | **1** — la seva pròpia assignació | **0** |
+
+Esborrats tots dos (−22 línies). `TallaChip` era la **5a variant de chip** del sistema, i
+mai s'havia usat.
+
+### 13.1 · ⚠️ El grep dels «6 hex de TallaChip» NO pot donar zero — i no és un defecte
+
+El brief demanava «grep 0 ocurrències dels 6 hex de TallaChip». **No és assolible, i
+tampoc desitjable:** aquells 6 valors els fan servir components **vius** de tot el
+frontend, inclòs el mateix `ImportWizard.jsx`.
+
+| Hex | Usos a `src/` | Fitxers | Token exacte? |
+|---|:-:|:-:|---|
+| `#3b6d11` | 26 | 14 | **sí — `--ok`** |
+| `#a32d2d` | 22 | 13 | **sí — `--err`** |
+| `#f0f9f0` | 15 | 11 | no (proper a `--ok-bg` `#eaf3de`) |
+| `#fff0f0` | 10 | 7 | no (proper a `--err-bg` `#fcebeb`) |
+| `#c0dd97` | 10 | 7 | no |
+| `#f0c0c0` | 6 | 3 | no |
+
+**El que SÍ ha quedat a zero:** les 6 instàncies que vivien dins `TallaChip`. La resta
+són d'altres components i queden **fora de l'abast** (89 usos). 🚩 Dos d'ells (`#3b6d11`
+i `#a32d2d`, 48 usos) tenen token EXACTE i són candidats directes d'un tram de tokens.
+
+## 14 · 🟢 PORTA DE LINT VERDA — amb el recompte
+
+**`eslint` de tot `frontend/src`: 0 errors.** N'hi havia **6**.
+
+| Error | Fitxer:línia | Com s'ha tancat |
+|---|---|---|
+| `no-unused-vars` `TallaChip` | `ImportWizard.jsx:80` | component mort esborrat |
+| `no-unused-vars` `docLabels` | `ImportWizard.jsx:315` | assignació morta esborrada |
+| `no-unused-vars` `MONO` | `FittingSessionList.jsx:12` | constant morta esborrada |
+| `no-unused-vars` `flatIdRef` | `PaperFlatEditor.jsx:46` | ref morta esborrada |
+| `no-unused-vars` `TOOL_SHORTCUT` | `TechSheetEditor.jsx:192` | constant morta esborrada |
+| `no-unused-vars` `fileRef` | `TechSheetEditor.jsx:2770` | ref morta esborrada |
+| `no-undef` `Buffer` ×2 | `api/jwt.js:31` · `api/avisSessio.test.js:76` | **NO era codi trencat** — v. avall |
+
+Les 4 variables mortes de fora d'`ImportWizard` tenien **una sola ocurrència cadascuna**
+(la seva pròpia declaració): cens a zero abans d'esborrar. `TechSheetEditor.jsx` estava
+net de canvis de sessions concurrents abans de tocar-lo.
+
+**Els dos `Buffer`:** `api/jwt.js:31` hi cau **només** quan no existeix `atob`
+(`typeof atob === 'function' ? atob(…) : Buffer.from(…)`), o sigui a Node, als tests, i el
+test hi entra a posta. És codi de Node legítim dins d'un projecte de navegador.
+S'han **declarat els globals de Node només per a aquests dos fitxers**
+(`eslint.config.js`, bloc nou) en comptes d'apagar `no-undef` — aquella regla és la porta
+que W4/T5 va pagar amb una pantalla trencada, i el propi config demana no tocar-la.
+
+**Warnings: 258**, cap de nou. Tots són de la categoria `IDIOMA_I_DX` que
+`eslint.config.js:33-43` declara explícitament «s'anota, no atura»
+(`set-state-in-effect` 106, `only-export-components` 68, `exhaustive-deps` 29…).
+
+## 15 · Verificació global de l'annex 2
+
+| Control | Resultat |
+|---|---|
+| `npm run build` | ✅ verd — `✓ built in 913ms` |
+| `eslint` de tot `src/` | ✅ **0 errors** · 258 warnings preexistents |
+| Suite de tests | ✅ **218/218 passen**, 0 fallen |
+| Fum del toast (desar · restaurar · error) | ✅ §12.1 |
+| Cens de `TallaChip` a zero | ✅ §13 |
+
+### 15.1 · ⚠️ Correcció al brief: aquí no hi ha vitest
+
+El brief demanava «vitest (218)». **El projecte no té vitest** —ni la dependència ni cap
+script `test` a `package.json`— i els fitxers de test ho diuen a la capçalera: van amb el
+**runner natiu de Node**. El comandament correcte és:
+
+```
+cd frontend && node --test "src/**/*.test.js"     # → 218 tests, 218 pass, 0 fail
+```
+
+⚠️ Ull amb la forma: `node --test src/` (sense el glob) NO troba els tests i falla amb un
+únic error enganyós. El número 218 del brief és exacte; el nom del runner, no.

@@ -35,6 +35,11 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
       .catch(() => {})
   }
 
+  // Refrescar la llista DESMUNTA aquest component (el pare buida `detailProfileId`), o sigui que
+  // un `setMsg` local just abans no arriba mai a pintar-se: el missatge ha de viatjar AMB el
+  // refresc i el pinta qui sobreviu. Si ningú escolta el refresc, es queda aquí com sempre.
+  const avisaIRefresca = (m) => { if (onRefresh) onRefresh(m); else setMsg(m) }
+
   useEffect(() => {
     if (!profileId) return
     setLoading(true)
@@ -82,9 +87,8 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
     setRestoring(true)
     try {
       const { data: d } = await sizingProfiles.restore(profile.id)
-      setMsg({ type: 'ok', text: d?.missatge || t('size_library.restored_ok') })
       reloadProfile()
-      onRefresh && onRefresh()
+      avisaIRefresca({ type: 'ok', text: d?.missatge || t('size_library.restored_ok') })
     } catch (e) {
       if (e.response) {
         setMsg({ type: 'error', text: e.response.data?.error || t('size_library.err_restore') })
@@ -202,8 +206,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
           onSaved={(run) => {
             setEditRestriccions(false)
             setProfile(p => ({ ...p, size_system: { ...p.size_system, ...run } }))
-            setMsg({ type: 'ok', text: t('size_library.restrictions_saved') })
-            onRefresh && onRefresh()
+            avisaIRefresca({ type: 'ok', text: t('size_library.restrictions_saved') })
           }}
         />
       ) : (

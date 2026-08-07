@@ -9,7 +9,6 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Modal from '../components/ui/Modal'
 
-const MONO = 'IBM Plex Mono, monospace'
 
 // Backend enums (línia divisòria sagrada — valors en català, no es toquen).
 const FASES = ['', 'Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
