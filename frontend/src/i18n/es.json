@@ -3496,7 +3496,19 @@
     "scale_MESOS": "Meses y edad",
     "scale_ALTURA": "Altura (cm)",
     "filter_scale": "Escala:",
-    "filter_group": "Grupo:"
+    "filter_group": "Grupo:",
+    "restrictions": "Restricciones",
+    "restrictions_title": "Restricciones del run",
+    "restrictions_help": "A quién se parece este run. Multiselección por capa; no filtra a nadie, solo ordena por proximidad.",
+    "restrictions_save": "Guardar restricciones",
+    "restrictions_cancel": "Cancelar",
+    "restrictions_saved": "Restricciones del run guardadas",
+    "restrictions_error": "No se han podido guardar las restricciones",
+    "layer_target": "Target",
+    "layer_group": "Grupo de prenda",
+    "layer_construction": "Construcción",
+    "layer_fit": "Fit",
+    "layer_empty": "Capa no declarada — no excluye a nadie."
   },
   "grading": {
     "summary": "{{sets}} conjuntos de reglas · {{rules}} reglas totales",

@@ -6,6 +6,8 @@ import { GradingHistoryPanel } from "./GradingHistoryPanel"
 import { useUnit } from "./UnitToggle"
 import { ExportSizeSetCSV, ExportGradingCSV } from "./ExportButton"
 import SizeSystemDrawer from "./SizeSystem/SizeSystemDrawer"
+import RunRestrictionEditor from "./RunRestrictionEditor"
+import { RunRestrictionTags } from "./RunRestrictionTags"
 import useAuthStore from "../store/auth"
 import { sizingProfiles, gradingRuleSets } from "../api/endpoints"
 
@@ -22,6 +24,9 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
   const [restoring, setRestoring] = useState(false)
   // SIZE-2a — edició post-hoc de talles del sistema (CRUD reubicat des de /poms/sizes).
   const [editTalles, setEditTalles] = useState(false)
+  // C5 — edició de les 4 capes de restricció del RUN. Estat propi i no dins d'`editing`:
+  // `editing` és per als increments de graduació i es tanca cada cop que es desa una regla.
+  const [editRestriccions, setEditRestriccions] = useState(false)
 
   const reloadProfile = () => {
     if (!profileId) return
@@ -157,6 +162,19 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
           )}
           {canConfigure && profile.size_system?.id && (
             <button
+              onClick={() => setEditRestriccions(v => !v)}
+              title={t('size_library.restrictions_title')}
+              style={{
+                padding: '2px 8px', borderRadius: 3, fontSize: 'var(--fs-label)',
+                background: editRestriccions ? '#f5e6d0' : 'var(--white)',
+                color: 'var(--gold)', border: '1px solid #e0c8a0', cursor: 'pointer',
+              }}
+            >
+              ⚑ {t('size_library.restrictions')}
+            </button>
+          )}
+          {canConfigure && profile.size_system?.id && (
+            <button
               onClick={() => setEditTalles(true)}
               title={t('size_library.edit_sizes_title')}
               style={{
@@ -173,6 +191,24 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
           )}
         </div>
       </div>
+
+      {/* C5 — les 4 capes del RUN: en lectura sempre que n'hi hagi cap d'informada, i en
+          edició quan qui mira té CONFIGURE i ho demana. El mateix vocabulari i els mateixos
+          chips de N2 — aquí no neix cap llista nova. */}
+      {editRestriccions && profile.size_system?.id ? (
+        <RunRestrictionEditor
+          run={profile.size_system}
+          onCancel={() => setEditRestriccions(false)}
+          onSaved={(run) => {
+            setEditRestriccions(false)
+            setProfile(p => ({ ...p, size_system: { ...p.size_system, ...run } }))
+            setMsg({ type: 'ok', text: t('size_library.restrictions_saved') })
+            onRefresh && onRefresh()
+          }}
+        />
+      ) : (
+        <RunRestrictionTags run={profile.size_system} />
+      )}
 
       {/* Historial expandible */}
       {showHistory && profile.grading_rule_set?.id && (

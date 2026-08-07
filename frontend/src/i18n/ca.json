@@ -3496,7 +3496,19 @@
     "scale_MESOS": "Mesos i edat",
     "scale_ALTURA": "Alçada (cm)",
     "filter_scale": "Escala:",
-    "filter_group": "Grup:"
+    "filter_group": "Grup:",
+    "restrictions": "Restriccions",
+    "restrictions_title": "Restriccions del run",
+    "restrictions_help": "A qui s’assembla aquest run. Multiselecció per capa; no filtra ningú, només ordena per proximitat.",
+    "restrictions_save": "Desar restriccions",
+    "restrictions_cancel": "Cancel·lar",
+    "restrictions_saved": "Restriccions del run desades",
+    "restrictions_error": "No s’han pogut desar les restriccions",
+    "layer_target": "Target",
+    "layer_group": "Grup de peça",
+    "layer_construction": "Construcció",
+    "layer_fit": "Fit",
+    "layer_empty": "Capa no declarada — no exclou ningú."
   },
   "grading": {
     "summary": "{{sets}} conjunts de regles · {{rules}} regles totals",

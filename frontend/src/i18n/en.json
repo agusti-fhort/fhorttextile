@@ -3496,7 +3496,19 @@
     "scale_MESOS": "Months & age",
     "scale_ALTURA": "Height (cm)",
     "filter_scale": "Scale:",
-    "filter_group": "Group:"
+    "filter_group": "Group:",
+    "restrictions": "Restrictions",
+    "restrictions_title": "Run restrictions",
+    "restrictions_help": "Who this run resembles. Multi-select per layer; it excludes no one, it only orders by proximity.",
+    "restrictions_save": "Save restrictions",
+    "restrictions_cancel": "Cancel",
+    "restrictions_saved": "Run restrictions saved",
+    "restrictions_error": "Could not save the restrictions",
+    "layer_target": "Target",
+    "layer_group": "Garment group",
+    "layer_construction": "Construction",
+    "layer_fit": "Fit",
+    "layer_empty": "Layer not declared — it excludes no one."
   },
   "grading": {
     "summary": "{{sets}} rule sets · {{rules}} total rules",

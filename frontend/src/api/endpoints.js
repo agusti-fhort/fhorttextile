@@ -252,6 +252,10 @@ export const garmentGroups = {
 
 export const sizeSystems = {
   list: (params) => client.get('/api/v1/size-systems/', { params }),
+  // C5 — editar a mà les 4 capes de restricció del run (target/grup/construcció/fit). El
+  // ViewSet ja era un ModelViewSet amb escriptura gated CONFIGURE i el serializer ja tenia
+  // les quatre llistes escrivibles per CODI: aquí només faltava la porta del client.
+  update: (id, data) => client.patch(`/api/v1/size-systems/${id}/`, data),
 }
 
 export const sizeDefinitions = {
