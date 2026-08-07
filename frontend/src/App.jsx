@@ -16,6 +16,10 @@ const FittingPrintSheet = lazy(() => import('./pages/FittingPrintSheet'))
 const POMs = lazy(() => import('./pages/POMs'))
 const TaskTypes = lazy(() => import('./pages/TaskTypes'))
 const GarmentTypes = lazy(() => import('./pages/GarmentTypes'))
+// U2 — el Catàleg de peces (maqueta v4): la cascada grup › família › item i la pantalla d'item
+// amb dos tabs. Substitueix el mestre-detall de GarmentTypes i el stepper d'ItemAuthoring.
+const CatalegPeces = lazy(() => import('./pages/CatalegPeces'))
+const CatalegPecesItem = lazy(() => import('./pages/CatalegPecesItem'))
 const Suppliers = lazy(() => import('./pages/Suppliers'))
 // P7 — els RECURSOS del Brand (Studios amb pont obert). Ruta viva sempre; l'entrada de menú
 // la gateja isBrand() al Sidebar. Un Estudi que hi arribi per URL rep 403 del backend.
@@ -53,7 +57,10 @@ const TechSheetEditor = lazy(() => import('./pages/TechSheetEditor'))
 const TallerPatro = lazy(() => import('./pages/TallerPatro'))
 const TechSheetEntry = lazy(() => import('./pages/TechSheetEntry'))
 const DissenyPlaceholder = lazy(() => import('./pages/DissenyPlaceholder'))
-const ItemAuthoring = lazy(() => import('./pages/ItemAuthoring'))
+// U2 — `ItemAuthoring` retirat de rutes (la pantalla de l'item el substitueix). El FITXER es
+// conserva a posta: és l'únic consumidor de `BaseSetPanel`, que al seu torn és l'única UI dels
+// `ItemBaseSet` (els «mons» d'un item), i la maqueta v4 NO els cobreix. Esborrar-lo enterraria
+// aquella superfície sencera. Decisió pendent al report.
 const TimeTracking = lazy(() => import('./pages/TimeTracking'))
 const UsersRoles = lazy(() => import('./pages/UsersRoles'))
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
@@ -364,10 +371,12 @@ export default function App() {
               model-tasques/ inexistent → 404); deep-links cauen al catch-all *→/. */}
           <Route path="task-types" element={<TaskTypes />} />
           <Route path="garment-types" element={<GarmentTypes />} />
-          {/* Autoria d'Item (Llibreria d'Items B3): DINS el Shell (àrea de contingut).
-              Crear (des d'un garment type) i obrir-existent (un dels esquelets). */}
-          <Route path="garment-type-items/nou/:typeId" element={<ItemAuthoring />} />
-          <Route path="garment-type-items/:itemId/editar" element={<ItemAuthoring />} />
+          {/* U2 · CATÀLEG DE PECES (maqueta v4). La cascada de tres columnes i la pantalla de
+              l'item amb els dos tabs. `ItemAuthoring` s'ha RETIRAT de rutes: la seva feina
+              (identitat, talla base, graella de mesures) la fa ara la pantalla de l'item, i
+              tenir-hi les dues portes obertes eren dos sistemes per editar el mateix. */}
+          <Route path="cataleg-peces" element={<CatalegPeces />} />
+          <Route path="cataleg-peces/items/:itemId" element={<CatalegPecesItem />} />
           <Route path="suppliers" element={<Suppliers />} />
           <Route path="recursos" element={<Recursos />} />
           <Route path="encarrecs" element={<Encarrecs />} />

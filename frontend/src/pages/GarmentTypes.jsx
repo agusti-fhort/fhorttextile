@@ -233,7 +233,7 @@ export default function GarmentTypes() {
                     {/* gestió d'items: títol + Nou item */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                       <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('garment_types.items_title')} · {items.length}</span>
-                      {canEdit && <button onClick={() => navigate(`/garment-type-items/nou/${selected.id}`)} style={{ ...primaryBtn, marginLeft: 0 }}>
+                      {canEdit && <button onClick={() => navigate('/cataleg-peces')} style={{ ...primaryBtn, marginLeft: 0 }}>
                         <i className="ti ti-plus" style={{ fontSize: 13 }} />{t('garment_types.new_item')}
                       </button>}
                     </div>
@@ -243,7 +243,7 @@ export default function GarmentTypes() {
                       : items.length === 0 ? (
                         <div style={{ border: '0.5px dashed var(--gray-l)', borderRadius: 12, padding: '2rem', textAlign: 'center', color: 'var(--gray)' }}>
                           <div style={{ marginBottom: 12, fontSize: 'var(--fs-body)' }}>{t('garment_types.no_items')}</div>
-                          {canEdit && <button onClick={() => navigate(`/garment-type-items/nou/${selected.id}`)} style={{ ...primaryBtn, marginLeft: 0 }}>
+                          {canEdit && <button onClick={() => navigate('/cataleg-peces')} style={{ ...primaryBtn, marginLeft: 0 }}>
                             <i className="ti ti-plus" style={{ fontSize: 13 }} />{t('garment_types.new_item')}
                           </button>}
                         </div>
@@ -251,7 +251,7 @@ export default function GarmentTypes() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
                           {items.map(it => (
                             <ItemCard key={it.id} it={it} t={t} canEdit={canEdit}
-                              onEdit={() => navigate(`/garment-type-items/${it.id}/editar`)}
+                              onEdit={() => navigate(`/cataleg-peces/items/${it.id}`)}
                               onDelete={() => deleteItem(it)}
                               actiu={it.id === filesItemId}
                               onFiles={() => setFilesItemId(id => (id === it.id ? null : it.id))} />

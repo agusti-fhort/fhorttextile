@@ -33,7 +33,9 @@ const navGroups = [
     { to: '/fittings', labelKey: 'nav.fittings', icon: 'ti-ruler-2' },
   ]},
   { sectionKey: 'nav.section_config_tecnica', items: [
-    { to: '/garment-types', labelKey: 'nav.garment_types', icon: 'ti-shirt' },
+    // U2 — l'entrada apunta al Catàleg de peces (maqueta v4). `/garment-types` segueix VIVA per
+    // URL: encara és l'única superfície que edita i esborra famílies i items, que la v4 no cobreix.
+    { to: '/cataleg-peces', labelKey: 'nav.cataleg_peces', icon: 'ti-shirt' },
     { to: '/poms', labelKey: 'nav.poms_list', icon: 'ti-ruler-measure' },
     { to: '/size-library', labelKey: 'nav.size_library', icon: 'ti-books' },
     { to: '/poms/grading', labelKey: 'nav.grading', icon: 'ti-chart-dots' },
