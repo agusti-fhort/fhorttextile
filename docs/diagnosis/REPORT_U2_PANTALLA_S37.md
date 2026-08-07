@@ -720,6 +720,7 @@ Left/Right/Relaxed/Extended vénen del diccionari de la BD (llei d'Agus, 05/08).
 | `manage.py check` | 🟢 net |
 | `pom.test_u2_r2_capa_instancia_api` | 🟢 **7/7** |
 | `tasks.test_u2_r3_proposta_item` | 🟢 **10/10** |
+| **Suite `pom` + `tasks` + `models_app`** | 🟢 **1.066 tests · OK · 0 fallades** (69 min) |
 | `npm run build` | 🟢 |
 | `eslint` (porta) | 🟢 **0 errors** · 4 avisos `set-state-in-effect` (patró de tota la casa) |
 | `node --test "src/**/*.test.js"` | 🟢 **218/218** |
@@ -831,6 +832,7 @@ icona `-filled` · IBM Plex Mono a tot arreu.
 | Fum 3 idiomes contra el DESPLEGAT | 🟢 «FUM NET: cap error, cap literal absent» |
 | Captures comparatives | `tres/1_maqueta_v4.png` · `tres/2_cataleg_corregit.png` · `tres/3_models_referencia.png` |
 | Captures de la pantalla | `u2/A_cataleg_{ca,es,en}.png` · `u2/B_poms_{ca,es,en}.png` · `u2/B_fitxers_{ca,es,en}.png` |
+| **Suite `pom` + `tasks` + `models_app`** | 🟢 **1.066 tests · OK · 0 fallades** — la porta que el report anterior deixava oberta (§4 de `REPORT_UI_CATALEGS.md`) queda TANCADA. Confirma que R2 **no ha trencat cap dels 103 lectors** de `GarmentPOMMapSerializer`. Corregut contra `77dc0c29`, que és l'últim commit que toca `backend/`: cap canvi de backend posterior. |
 
 > ⚠️ **`Models` es veu BUIDA a la captura de referència** i no és un defecte de la captura: el
 > tenant `fhort` **no té cap model** (46 esborrats en un tram anterior). La comparació d'escala
