@@ -706,3 +706,175 @@ cd frontend && node --test "src/**/*.test.js"     # → 218 tests, 218 pass, 0 f
 
 ⚠️ Ull amb la forma: `node --test src/` (sense el glob) NO troba els tests i falla amb un
 únic error enganyós. El número 218 del brief és exacte; el nom del runner, no.
+
+---
+---
+
+# ANNEX 3 · La decisió final: `#c27a2a` es queda, la TINTA passa a fosca
+
+> **Decisió de l'Agus (Patró C, 07/08/2026):** el fons d'acció primària segueix sent
+> `--gold` (== `#c27a2a`, el color de marca). El que canvia és el **text**.
+> **`--gold-action` MOR com a proposta: no es crea cap token nou.**
+> Això tanca el 🛑 de §11 per una via que no s'havia considerat: en comptes de canviar
+> el fons perquè el text blanc hi passés, es canvia el text.
+
+## 16 · La tinta: `--text-main`, mesurada
+
+El token de text fosc canònic de la casa és **`--text-main` `#1d1d1b`** (`index.css:13`;
+`--charcoal` n'és un àlies del mateix valor).
+
+| Tinta sobre `--gold` `#c27a2a` | Ràtio | AA (4.5:1) |
+|---|---:|---|
+| `--white` `#ffffff` (la d'abans) | **3.44:1** | ✗ |
+| **`--text-main` `#1d1d1b`** | **4.91:1** | **✓ passa** |
+| negre pur `#000000` (referència del brief) | 6.11:1 | ✓ (però no és token de la casa) |
+| `--text-muted` `#868685` | 1.06:1 | ✗ |
+
+**No ha calgut cap 🛑:** el token canònic passa AA amb marge, i no s'ha triat cap fosc nou.
+
+## 17 · Aplicació: un sol lloc + el cens dels orfes
+
+### 17.1 · El component compartit (58 botons de 26 fitxers)
+
+`components/ui/buttons.js:10` — `primaryBtn.color`: `var(--white)` → `var(--text-main)`.
+**Una línia; els 58 botons l'hereten.**
+
+### 17.2 · Cens dels orfes — ⚠️ el «40» del brief era MEU, i era CURT
+
+El brief parlava de «40 orfes» perquè és la xifra que jo vaig donar a §11.0.1. **Era
+incompleta**: aquell cens buscava el literal `background: 'var(--gold)'` i, per tant,
+**es va deixar dues formes senceres**:
+
+1. **Els ternaris** — `background: actiu ? 'var(--gold)' : 'var(--bg-muted)'`. És el
+   patró de TOTES les pestanyes i toggles de l'app (`ModelSheet.jsx:952`,
+   `Planning.jsx:501`, `ModelFabric.jsx:221`, `EditableTable.jsx:87`…).
+2. **El CSS dins d'un bloc `<style>`** — `Login.jsx:286` i `:306`, o sigui **el botó
+   d'entrar i el selector d'idioma de `/login`**, que és una ruta VIVA (`App.jsx:301`).
+   El cens en JSX no hi arribava de cap manera.
+
+El fum ho va caçar: la primera passada va deixar `/login` **byte-idèntica**.
+
+**Xifra real, verificada amb un analitzador que separa el valor de `background` del de
+`color` (i que entén ternaris):**
+
+| | Nre. |
+|---|:-:|
+| Superfícies amb fons `--gold` que ara duen `--text-main` | **64** en **41 fitxers** |
+| De les quals, heretades del `primaryBtn` compartit | **58 botons en 26 fitxers** (1 sola línia) |
+| Migrada a consumir `primaryBtn` en comptes de duplicar-lo | **1** (`ActionsMenu.jsx:541`) |
+| Decoratives **sense text**, intactes a posta | **3** |
+| **Fons `--gold` amb tinta blanca que queden** | **0** ✅ |
+
+**Les 3 decoratives, intactes** (no tenen text, o sigui que no hi ha res a contrastar):
+`ModelSheet.jsx:2364` i `SizeMapSetup.jsx:616` (barres de progrés) · `SessioActiva.jsx:64`
+(punt de 7×7 px).
+
+> **Verificació mecànica final:** l'analitzador dona **0** superfícies amb fons `--gold`
+> i tinta blanca a tot `frontend/src`. I els **225 ghosts** (`color: var(--gold)` sobre
+> blanc) segueixen **intactes**: 225 abans, 225 després.
+
+### 17.3 · El dedup: `triggerBtn` era `primaryBtn`
+
+`components/model/ActionsMenu.jsx:541` declarava un `triggerBtn` **byte per byte igual
+que `primaryBtn`** llevat del `marginLeft:'auto'`. Ara és `{ ...primaryBtn, marginLeft: 0 }`
+i el fitxer ja importava d'`ui/buttons`. **Mateixa lliçó que el chip de C5**: la tinta
+d'acció es decideix ara en UN sol lloc.
+
+## 18 · Els ghosts: NO es toquen (decisió d'Agus) — inventari informatiu
+
+El daurat de marca es queda com a color de text dels ghosts. **Cap fitxer tocat.**
+Però l'inventari que demanava el brief dona un resultat que val la pena dir:
+
+**225 usos de `color: var(--gold)`** a `frontend/src`. Repartits per la mida declarada
+a prop:
+
+| Mida | px | Usos | Arriba a «text gran»? |
+|---|:-:|:-:|---|
+| `--fs-body` | 12 | 80 | no |
+| *(sense `fontSize` explícit)* | — | 76 | no determinable |
+| `--fs-label` | 10 | 25 | no |
+| `--fs-caption` | 8 | 23 | no |
+| `--fs-h3` | 14 | 16 | no |
+| `--fs-h1` | 22 | 4 | **no** — v. avall |
+| `--fs-title` | — | 1 | no |
+
+🚩 **Cap dels 225 arriba al llindar de «text gran».** WCAG el defineix com **≥24px**
+(18pt) o **≥18.66px (14pt) en NEGRETA**. L'escala de la casa s'atura a `--fs-h1` = **22px**,
+i els 4 usos que hi ha van a **`fontWeight: 500`** — que és mitjana, no negreta. O sigui
+que **el relleu del 3:1 no s'aplica a cap ghost**: com a TEXT, tots es queden a 3.44:1
+contra un llindar de 4.5:1.
+
+> **Matís honest:** aquests 225 inclouen text I icones. Per a icones i elements gràfics
+> mana WCAG **1.4.11**, que demana **3:1** — i **3.44:1 hi passa**. O sigui que els
+> ghosts que són icones compleixen; els que són text, no. No he separat els dos grups:
+> caldria mirar-los un per un i és fora de l'abast d'aquest brief.
+
+## 19 · El logotip duplicat, tancat
+
+`pages/Login.jsx` portava una **còpia inline** del wordmark amb `fill="#c27a2a"` i
+`fill="#1d1d1b"` **literals**, mentre `components/brand/FhortLogo.jsx` té el mateix
+wordmark amb `var(--gold)` i `var(--text-main)` — **els mateixos valors**. Ara `Login.jsx`
+consumeix el component compartit (−21 línies).
+
+> ⚠️ **El detall que evita el canvi de píxel:** `FhortLogo` posa el `width` **inline**, i
+> l'inline guanya contra la regla CSS `.login-screen .logo svg{width:100%}`
+> (`Login.jsx:296-297`). Per això se li passa **`width="100%"`** — sense això, el logotip
+> hauria passat de 340px a 130px. Verificat al fum (§20).
+
+## 20 · Verificació de l'annex 3
+
+| Control | Resultat |
+|---|---|
+| `npm run build` | ✅ verd — `✓ built in 802ms` |
+| `eslint` de tot `src/` | ✅ **0 errors** · 258 warnings preexistents |
+| Suite de tests | ✅ **218/218** |
+| `grep` de blanc sobre `--gold` | ✅ **0 ocurrències** |
+| Frontera amb la sessió U2 (`index.css`, `buttons.js`) | ✅ lliure — U2 no hi va escriure codi |
+| Fum visual + logotip sense moure's | _(§20.1)_ |
+
+### 20.1 · Fum visual
+
+Captures a [`captures-tinta-fosca-s37/`](captures-tinta-fosca-s37/), parells
+`_ABANS`/`_DESPRES`. L'ABANS es va obtenir **sense `git stash`**: injectant `color:#fff`
+a tota superfície amb fons `rgb(194,122,42)` (que és exactament l'estat de HEAD), i per al
+logotip amb `git show HEAD:…` + substitució de l'`innerHTML` en viu.
+
+| Pantalla | Botó | `color` | `background` | Ràtio |
+|---|---|---|---|---|
+| `/encarrecs` | Traspassar (2) | `rgb(29,29,27)` | `rgb(194,122,42)` | **4.91:1** ✅ |
+| `/models` | Accions (`triggerBtn`←`primaryBtn`) | `rgb(29,29,27)` | `rgb(194,122,42)` | **4.91:1** ✅ |
+| `/models` | badges PATRO·MESURES·TALLES (12px/600) | `rgb(29,29,27)` | `rgb(194,122,42)` | **4.91:1** ✅ |
+| `/entrar` | Entra (`submitBtn`) | `rgb(29,29,27)` | `rgb(194,122,42)` | **4.91:1** ✅ |
+| **`/login`** | **LOG IN** + xip d'idioma actiu | `rgb(29,29,27)` | `rgb(194,122,42)` | **4.91:1** ✅ |
+
+`pageerror` = 0 a totes les pantalles.
+
+### 20.2 · 🟢 El logotip: ZERO canvi de píxel
+
+| | x | y | amplada | alçada | fills |
+|---|---|---|---|---|---|
+| ABANS (SVG inline de HEAD) | 105 | 321.22 | **340** | **121.77** | `rgb(194,122,42)` / `rgb(29,29,27)` |
+| DESPRÉS (`FhortLogo width="100%"`) | 105 | 321.22 | **340** | **121.77** | `rgb(194,122,42)` / `rgb(29,29,27)` |
+
+Les dues captures són **el mateix fitxer PNG byte a byte** (0 píxels diferents en
+760×322 @2x). Estàticament: 15 `path`, els 15 `d` idèntics i en el mateix ordre, mateix
+`viewBox`. L'`style` inline que `FhortLogo` hi afegeix **duplica exactament** la regla
+CSS que ja hi havia. **La substitució del pas 5 és neta.**
+
+### 20.3 · Llegibilitat — judici del `guardia-ui`
+
+**Es llegeix millor que abans.** `#c27a2a` és un to mitjà: el blanc hi «vessava» i el
+text semblava mig esborrat; el charcoal hi té vora neta. El cas més exposat són els
+**badges de fase** de `Models.jsx:569` (12px, pes 600, píndola petita) i **passen bé** —
+a `5_badges_zoom_*.png` el «PATRO» fosc té més definició de traç que el blanc, que a 12px
+es dissolia.
+
+**Cap botó sembla deshabilitat:** el patró de deshabilitat de la casa baixa el **FONS**
+(`#ccc`, `--gray-l`, `--bg-muted`), no la tinta, i el daurat ple es manté saturat. El que
+es llegeix és «botó viu amb text fosc», no «botó apagat».
+
+🚩 **Anotació de coherència, no bloquejant:** `/models/nou` fa servir el `primaryBtn`
+**local** de `ModelWizard.jsx:942`, que és `--warn` + blanc. O sigui que **el to que es va
+descartar com a `--gold-action` ja és a producció** com a primari del wizard, i ara
+conviuen dos aspectes d'acció primària: daurat+tinta fosca (64 superfícies) i
+marró-warn+blanc (el wizard). Unificar-los és la peça pendent de §11.2.

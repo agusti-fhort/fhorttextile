@@ -13,7 +13,7 @@ const btn = (variant) => ({
   fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
   border: '0.5px solid var(--gray-l)',
   background: variant === 'err' ? 'var(--err)' : variant === 'plain' ? 'var(--white)' : 'var(--gold)',
-  color: variant === 'plain' ? 'var(--text-main)' : 'var(--white)', fontWeight: 500,
+  color: variant === 'plain' ? 'var(--text-main)' : 'var(--text-main)', fontWeight: 500,
 })
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
 const modalBox = { background: 'var(--white)', borderRadius: 8, padding: 24, maxWidth: 460, fontFamily: MONO, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }

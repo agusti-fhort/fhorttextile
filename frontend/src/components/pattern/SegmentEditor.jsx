@@ -20,7 +20,7 @@ export default function SegmentEditor({
 
   const chip = (actiu) => ({
     background: actiu ? 'var(--gold)' : 'var(--white)',
-    color: actiu ? 'var(--white)' : 'var(--text-main)',
+    color: actiu ? 'var(--text-main)' : 'var(--text-main)',
     border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
     borderRadius: 4, padding: '0.25rem 0.6rem', cursor: 'pointer',
     fontSize: 'var(--fs-caption)',

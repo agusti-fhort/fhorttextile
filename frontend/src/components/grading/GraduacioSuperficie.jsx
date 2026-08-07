@@ -67,7 +67,7 @@ const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: FS_VAL }
 
 const btnPrimary = (disabled) => ({
   background: disabled ? 'var(--bg-muted)' : 'var(--gold)',
-  color: disabled ? 'var(--text-muted)' : 'var(--white)',
+  color: disabled ? 'var(--text-muted)' : 'var(--text-main)',
   border: 'none', borderRadius: 6, padding: '7px 18px',
   fontSize: 'var(--fs-body)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
 })

@@ -318,7 +318,7 @@ export default function AssetNavigator({
           onClick={() => onPick?.(mode === 'models' ? modelDe(nav.modelId) : triat)}
           style={{
             border: 'none', borderRadius: 5, padding: '6px 14px', fontFamily: MONO,
-            fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--white)', background: 'var(--gold)',
+            fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-main)', background: 'var(--gold)',
             cursor: potConfirmar ? 'pointer' : 'default', opacity: potConfirmar ? 1 : 0.45,
           }}>
           {actionLabel || t('asset_navigator.use')}

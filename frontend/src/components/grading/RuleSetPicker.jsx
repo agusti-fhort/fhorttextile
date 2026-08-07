@@ -187,7 +187,7 @@ function PickCard({ rs, selected, suggested = false, motiu = null, actionLabel, 
           style={{
             fontSize: 'var(--fs-body)', padding: '6px 16px', borderRadius: 6, cursor: 'pointer',
             background: selected ? 'var(--white)' : 'var(--gold)',
-            color: selected ? 'var(--gold)' : 'var(--white)',
+            color: selected ? 'var(--gold)' : 'var(--text-main)',
             border: selected ? '1px solid var(--gold)' : 'none', fontWeight: 600,
           }}
         >

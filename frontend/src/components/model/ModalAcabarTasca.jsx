@@ -120,7 +120,7 @@ export default function ModalAcabarTasca({
           <button type="button" onClick={confirma} disabled={enviant} style={{
             fontFamily: 'inherit', fontSize: 'var(--fs-body)', fontWeight: 600,
             padding: '8px 16px', border: 'none', borderRadius: 6,
-            background: 'var(--gold)', color: 'var(--white)',
+            background: 'var(--gold)', color: 'var(--text-main)',
             cursor: enviant ? 'not-allowed' : 'pointer', opacity: enviant ? 0.5 : 1,
           }}>
             {t('acabar_tasca.confirmar')}

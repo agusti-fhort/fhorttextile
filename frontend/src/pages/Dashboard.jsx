@@ -480,7 +480,7 @@ export default function Dashboard() {
           </div>
           <span style={{
             padding: '6px 12px', borderRadius: 6, fontSize: 'var(--fs-body)',
-            background: 'var(--gold)', color: 'var(--white)', fontWeight: 500,
+            background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 500,
           }}>
             {t('dashboard.complete_setup')} →
           </span>

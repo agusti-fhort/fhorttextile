@@ -950,7 +950,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             style={{
               padding: '6px 16px', borderRadius: 6, border: 'none',
               background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
-              color: activeTab === tab ? 'var(--white)' : 'var(--text-muted)',
+              color: activeTab === tab ? 'var(--text-main)' : 'var(--text-muted)',
               cursor: 'pointer', fontSize: 'var(--fs-body)',
               fontWeight: activeTab === tab ? 500 : 400,
             }}>
@@ -1076,7 +1076,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                         padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
                         background: mesuresView === key ? 'var(--gold)' : 'var(--bg-muted)',
-                        color: mesuresView === key ? 'var(--white)' : 'var(--text-muted)',
+                        color: mesuresView === key ? 'var(--text-main)' : 'var(--text-muted)',
                         fontSize: 'var(--fs-body)', fontWeight: mesuresView === key ? 500 : 400,
                       }}>
                       <i className={`ti ${icon}`} aria-hidden="true" style={{ fontSize: 14 }} />
@@ -1572,7 +1572,7 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
         )}
         <span style={{
           fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 20, fontWeight: 600,
-          background: 'var(--gold)', color: 'var(--white)',
+          background: 'var(--gold)', color: 'var(--text-main)',
         }} title={t('model_sheet.phase')}>
           {model.fase_actual ? t(`model_sheet.dashboard.phase.${model.fase_actual}`, model.fase_actual) : '—'}
         </span>
@@ -1660,7 +1660,7 @@ function WatchpointTrigger({ modelId, onClosed }) {
         {count > 0 && (
           <span ref={badgeRef} style={{
             minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9,
-            background: 'var(--gold)', color: 'var(--white)',
+            background: 'var(--gold)', color: 'var(--text-main)',
             fontSize: 'var(--fs-label)', fontWeight: 600, lineHeight: '18px', textAlign: 'center',
           }}>{count}</span>
         )}
@@ -1748,7 +1748,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
         style={{ padding: '3px 6px', fontSize: 'var(--fs-body)', 
                  border: '1px solid var(--border)', borderRadius: 4 }} />
       <button type="button" onClick={saveDeadline} disabled={savingDeadline}
-        style={{ padding: '3px 10px', background: 'var(--gold)', color: 'var(--white)', border: 'none',
+        style={{ padding: '3px 10px', background: 'var(--gold)', color: 'var(--text-main)', border: 'none',
                  borderRadius: 4, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
         {savingDeadline ? '…' : '✓'}
       </button>
@@ -1866,7 +1866,7 @@ function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={handleSave} disabled={saving}
-              style={{ padding: '6px 16px', background: 'var(--gold)', color: 'var(--white)',
+              style={{ padding: '6px 16px', background: 'var(--gold)', color: 'var(--text-main)',
                        border: 'none', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
               {saving ? t('model_sheet.saving') : t('model_sheet.save')}
             </button>
@@ -2608,7 +2608,7 @@ function TabAIAnalysis({ modelId }) {
         <button type="button" onClick={handleAnalyze} disabled={loading}
           style={{
             padding: '8px 20px', background: loading ? '#ccc' : 'var(--gold)',
-            color: 'var(--white)', border: 'none', borderRadius: 6,
+            color: 'var(--text-main)', border: 'none', borderRadius: 6,
             fontSize: 'var(--fs-body)', fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer',
           }}>
           {loading ? (

@@ -499,7 +499,7 @@ export default function Planning() {
           <button key={tab} type="button" onClick={() => setActiveTab(tab)} style={{
             padding: '6px 16px', borderRadius: 6, border: 'none',
             background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
-            color: activeTab === tab ? 'var(--white)' : 'var(--text-muted)',
+            color: activeTab === tab ? 'var(--text-main)' : 'var(--text-muted)',
             cursor: 'pointer', fontSize: 'var(--fs-body)', fontFamily: MONO,
             fontWeight: activeTab === tab ? 500 : 400,
           }}>

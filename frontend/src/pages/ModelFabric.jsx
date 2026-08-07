@@ -219,7 +219,7 @@ export default function ModelFabric() {
               padding: '4px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
               border: 'none',
               background: biaxial ? 'var(--gold)' : 'var(--bg-muted)',
-              color: biaxial ? 'var(--white)' : 'var(--text-muted)',
+              color: biaxial ? 'var(--text-main)' : 'var(--text-muted)',
             }}>
             {t('model_fabric.mode_biaxial')}
           </button>
@@ -228,7 +228,7 @@ export default function ModelFabric() {
               padding: '4px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
               border: 'none',
               background: !biaxial ? 'var(--gold)' : 'var(--bg-muted)',
-              color: !biaxial ? 'var(--white)' : 'var(--text-muted)',
+              color: !biaxial ? 'var(--text-main)' : 'var(--text-muted)',
             }}>
             {t('model_fabric.mode_single')}
           </button>
@@ -296,7 +296,7 @@ export default function ModelFabric() {
           <button type="button" onClick={handleSave} disabled={saving}
             style={{
               padding: '8px 20px', background: saving ? '#ccc' : 'var(--gold)',
-              color: 'var(--white)', border: 'none', borderRadius: 6,
+              color: 'var(--text-main)', border: 'none', borderRadius: 6,
               fontSize: 'var(--fs-h3)', fontWeight: 500,
               cursor: saving ? 'not-allowed' : 'pointer',
             }}>

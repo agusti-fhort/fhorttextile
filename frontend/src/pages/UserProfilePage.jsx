@@ -86,7 +86,7 @@ export default function UserProfilePage() {
             width: 72, height: 72, borderRadius: '50%',
             background: profile.color_avatar || 'var(--gold)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'white', fontSize: 'var(--fs-h1)', fontWeight: 500,
+            color: 'var(--text-main)', fontSize: 'var(--fs-h1)', fontWeight: 500,
             flexShrink: 0,
           }}>
             {initials}
@@ -124,7 +124,7 @@ export default function UserProfilePage() {
           onClick={logout}
           style={{
             marginTop: '1.5rem', width: '100%',
-            background: 'var(--gold)', color: 'white',
+            background: 'var(--gold)', color: 'var(--text-main)',
             border: 'none', borderRadius: 8,
             padding: '10px 16px', fontSize: 'var(--fs-body)', fontWeight: 500,
             cursor: 'pointer',
@@ -160,7 +160,7 @@ export default function UserProfilePage() {
             }}>{pwMsg.text}</div>
           )}
           <button type="submit" disabled={pwSaving || !pw || !pw2} style={{
-            background: 'var(--gold)', color: 'white', border: 'none', borderRadius: 8,
+            background: 'var(--gold)', color: 'var(--text-main)', border: 'none', borderRadius: 8,
             padding: '10px 16px', fontSize: 'var(--fs-body)', fontWeight: 500,
             cursor: pwSaving ? 'default' : 'pointer', opacity: (pwSaving || !pw || !pw2) ? 0.6 : 1,
             alignSelf: 'flex-start',

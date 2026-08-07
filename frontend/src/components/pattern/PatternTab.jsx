@@ -382,7 +382,7 @@ function CampsPujada({ t, pujant, dxf, rul, setDxf, setRul, onTria, compacte = f
           onClick={onTria}
           disabled={pujant || !dxf}
           style={{
-            background: 'var(--gold)', color: 'var(--white)', border: 'none',
+            background: 'var(--gold)', color: 'var(--text-main)', border: 'none',
             borderRadius: 6, padding: '0.5rem 1.1rem',
             cursor: pujant ? 'wait' : (!dxf ? 'not-allowed' : 'pointer'),
             opacity: (!dxf && !pujant) ? 0.45 : 1,
@@ -522,7 +522,7 @@ function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxf, rul, setDxf, se
           onClick={onTaller}
           style={{
             display: 'flex', alignItems: 'center', gap: '0.35rem',
-            fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--white)',
+            fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-main)',
             border: 'none', borderRadius: 4, background: 'var(--gold)',
             padding: '0.35rem 0.9rem', cursor: 'pointer',
           }}

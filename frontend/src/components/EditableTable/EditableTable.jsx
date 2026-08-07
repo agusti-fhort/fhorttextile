@@ -84,7 +84,7 @@ const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: FS_VAL }
 // nova (ZERO = nínxol "sempre 0"; EXCEPTION = tipus APLICAT per cel·la pel motor —override/excepció—,
 // no un règim de POM); si una fila ja en porta un, es manté com a opció perquè el valor real no s'emmascari.
 const btnPrimary = (disabled) => ({
-  background: disabled ? 'var(--bg-muted)' : 'var(--gold)', color: disabled ? 'var(--text-muted)' : 'var(--white)',
+  background: disabled ? 'var(--bg-muted)' : 'var(--gold)', color: disabled ? 'var(--text-muted)' : 'var(--text-main)',
   border: 'none', borderRadius: 6, padding: '7px 18px',
   fontSize: 'var(--fs-body)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
 })

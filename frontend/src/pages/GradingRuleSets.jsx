@@ -965,7 +965,7 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
 }
 
 const btnPrimary = {
-  background: 'var(--gold)', color: 'var(--white)',
+  background: 'var(--gold)', color: 'var(--text-main)',
   border: 'none', borderRadius: 6,
   padding: '8px 14px', fontSize: 'var(--fs-body)', fontWeight: 600,
   cursor: 'pointer', 

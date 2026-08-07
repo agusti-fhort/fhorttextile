@@ -104,7 +104,7 @@ export default function CustomerDetail() {
           <button key={tab} onClick={() => setTab(tab)} style={{
             fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 14px', cursor: 'pointer', borderRadius: 8, border: 'none',
             background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
-            color: activeTab === tab ? 'var(--white)' : 'var(--text-muted)', fontWeight: activeTab === tab ? 500 : 400,
+            color: activeTab === tab ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: activeTab === tab ? 500 : 400,
           }}>{t(`clients.tab_${tab}`)}</button>
         ))}
       </div>

@@ -98,7 +98,7 @@ export default function ObrirTascaDialog({ cara, tasca, rondaOberta, onAccio, on
           disabled={enviant}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 6,
+            background: 'var(--gold)', color: 'var(--text-main)', border: 'none', borderRadius: 6,
             padding: '10px 14px', fontSize: 'var(--fs-body)', fontWeight: 600,
             fontFamily: 'inherit', cursor: enviant ? 'not-allowed' : 'pointer',
             opacity: enviant ? 0.5 : 1,

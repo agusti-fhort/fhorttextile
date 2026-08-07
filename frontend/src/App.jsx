@@ -271,7 +271,7 @@ class AppErrorBoundary extends React.Component {
               window.location.reload();
             }}
             style={{
-              background: 'var(--gold)', color: '#fff',
+              background: 'var(--gold)', color: 'var(--text-main)',
               border: 'none', borderRadius: 4,
               padding: '8px 20px', cursor: 'pointer',
               fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)'

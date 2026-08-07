@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan, commerce, recursos as recursosApi, encarrecs } from '../../api/endpoints'
 import useAuthStore from '../../store/auth'
 import Modal from '../ui/Modal'
-import { selS } from '../ui/buttons'
+import { selS, primaryBtn } from '../ui/buttons'
 import TaskAssignWizard from '../TaskAssignWizard'
 
 export const PHASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
@@ -538,7 +538,9 @@ function Row({ label, children }) {
   return <div style={{ marginBottom: 12 }}><div style={{ fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--gray)', marginBottom: 4, fontFamily: MONO }}>{label}</div>{children}</div>
 }
 
-const triggerBtn = { display: 'flex', alignItems: 'center', gap: 6, background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: MONO }
+// Era una còpia exacta del `primaryBtn` de la casa menys el `marginLeft:'auto'` (S37): el
+// consumeix en comptes de duplicar-lo, i així la tinta d'acció es decideix en UN sol lloc.
+const triggerBtn = { ...primaryBtn, marginLeft: 0 }
 const menuBox = { position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 41, background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 4, minWidth: 230 }
 const menuItem = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 10px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }
 const fullSel = { ...selS, width: '100%' }

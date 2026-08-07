@@ -174,7 +174,7 @@ function Stepper({ screen, t }) {
                 width: 22, height: 22, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600,
                 background: active ? 'var(--gold)' : done ? 'var(--gold-pale)' : 'var(--gray-l)',
-                color: active ? 'var(--white)' : done ? 'var(--gold)' : 'var(--gray)',
+                color: active ? 'var(--text-main)' : done ? 'var(--gold)' : 'var(--gray)',
               }}>{s.n}</span>
               <span style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: active ? 'var(--text-main)' : 'var(--gray)', fontWeight: active ? 600 : 400 }}>
                 {t(s.key, s.label)}

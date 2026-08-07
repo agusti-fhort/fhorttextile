@@ -496,7 +496,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, flexWrap: 'wrap' }}>
               <button onClick={doSave} disabled={busy} style={{
-                background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 8,
+                background: 'var(--gold)', color: 'var(--text-main)', border: 'none', borderRadius: 8,
                 padding: '8px 18px', fontSize: 'var(--fs-body)', fontWeight: 500, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
               }}>{t('fitting.save.save_and_back')}</button>
               {hasPieces && (

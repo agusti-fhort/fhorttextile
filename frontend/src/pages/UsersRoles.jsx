@@ -187,7 +187,7 @@ export default function UsersRoles() {
         {/* Botó "Nou usuari" (la pàgina ja està gated per manage_users). */}
         <button onClick={() => setNewUserOpen(true)} style={{
           marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
-          background: 'var(--gold)', color: 'var(--white)', border: 'none', borderRadius: 6,
+          background: 'var(--gold)', color: 'var(--text-main)', border: 'none', borderRadius: 6,
           padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', fontFamily: MONO,
         }}>
           <i className="ti ti-plus" style={{ fontSize: 14 }} />
@@ -338,7 +338,7 @@ export default function UsersRoles() {
                 ...inputS, cursor: 'pointer', border: '0.5px solid var(--gray-l)', color: 'var(--gray)',
               }}>{t('usersRoles.cancel')}</button>
               <button onClick={applyBulk} style={{
-                ...inputS, cursor: 'pointer', border: 'none', background: 'var(--gold)', color: 'var(--white)', fontWeight: 600,
+                ...inputS, cursor: 'pointer', border: 'none', background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600,
               }}>{t('usersRoles.confirm')}</button>
             </div>
           </div>
@@ -412,7 +412,7 @@ function ResetLinkModal({ t, data, onClose }) {
               }} />
               <button onClick={copy} style={{
                 fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 6,
-                border: 'none', background: 'var(--gold)', color: 'var(--white)', fontWeight: 600,
+                border: 'none', background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600,
                 cursor: 'pointer', whiteSpace: 'nowrap',
               }}>{copied ? t('usersRoles.rl_copied') : t('usersRoles.rl_copy')}</button>
             </div>
@@ -554,7 +554,7 @@ function NewUserModal({ t, roles, onClose, onCreated }) {
           <button onClick={submit} disabled={saving} style={{
             fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 6,
             cursor: saving ? 'default' : 'pointer', border: 'none',
-            background: 'var(--gold)', color: 'var(--white)', fontWeight: 600, opacity: saving ? 0.6 : 1,
+            background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600, opacity: saving ? 0.6 : 1,
           }}>{t('usersRoles.nu_create')}</button>
         </div>
       </div>
@@ -690,7 +690,7 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
           <button onClick={submit} disabled={saving} style={{
             fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 6,
             cursor: saving ? 'default' : 'pointer', border: 'none',
-            background: 'var(--gold)', color: 'var(--white)', fontWeight: 600, opacity: saving ? 0.6 : 1,
+            background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600, opacity: saving ? 0.6 : 1,
           }}>{saving ? t('usersRoles.ue_saving') : t('usersRoles.ue_save')}</button>
         </div>
       </div>

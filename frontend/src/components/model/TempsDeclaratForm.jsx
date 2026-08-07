@@ -46,7 +46,7 @@ export default function TempsDeclaratForm({ tasca, onFet, onCancel }) {
   const pestanya = (actiu) => ({
     ...selS, cursor: 'pointer', flex: 1,
     background: actiu ? 'var(--gold)' : 'var(--white)',
-    color: actiu ? 'var(--white)' : 'var(--text-main)',
+    color: actiu ? 'var(--text-main)' : 'var(--text-main)',
     fontWeight: actiu ? 600 : 400,
   })
 
@@ -116,7 +116,7 @@ export default function TempsDeclaratForm({ tasca, onFet, onCancel }) {
           <button onClick={desa} disabled={enviant} style={{
             fontFamily: 'inherit', fontSize: 'var(--fs-body)', fontWeight: 600,
             padding: '7px 14px', border: 'none', borderRadius: 6,
-            background: 'var(--gold)', color: 'var(--white)',
+            background: 'var(--gold)', color: 'var(--text-main)',
             cursor: enviant ? 'not-allowed' : 'pointer', opacity: enviant ? 0.5 : 1,
           }}>
             {t('temps_declarat.desa')}

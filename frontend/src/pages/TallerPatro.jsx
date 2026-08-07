@@ -1310,7 +1310,7 @@ const round2 = (v) => Math.round(v * 100) / 100
 function BarraEines({ t, mode, onMode, tascaId, errTasca, slotVisor }) {
   const boto = (actiu) => ({
     background: actiu ? 'var(--gold)' : 'var(--white)',
-    color: actiu ? 'var(--white)' : 'var(--text-main)',
+    color: actiu ? 'var(--text-main)' : 'var(--text-main)',
     border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
     cursor: tascaId ? 'pointer' : 'not-allowed',
     opacity: tascaId ? 1 : 0.5,

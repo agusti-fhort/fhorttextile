@@ -250,7 +250,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted, onTar
                       padding: '0.25rem 0.6rem', borderRadius: 999,
                       border: `1px solid ${on ? 'var(--gold)' : '#ddd'}`,
                       background: on ? 'var(--gold)' : 'var(--white)',
-                      color: on ? 'var(--white)' : '#666',
+                      color: on ? 'var(--text-main)' : '#666',
                       cursor: 'pointer', fontSize: '0.75rem',
                       fontWeight: on ? 600 : 400,
                     }}
@@ -273,7 +273,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted, onTar
                 disabled={savingTargets}
                 style={{
                   padding: '0.35rem 0.8rem', border: '1px solid var(--gold)',
-                  borderRadius: 6, background: 'var(--gold)', color: 'var(--white)',
+                  borderRadius: 6, background: 'var(--gold)', color: 'var(--text-main)',
                   cursor: savingTargets ? 'default' : 'pointer',
                   opacity: savingTargets ? 0.6 : 1,
                   fontSize: '0.8rem', fontWeight: 500,
@@ -351,7 +351,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted, onTar
                           <button onClick={handleSave}
                             style={{
                               fontSize: '0.7rem', padding: '0.15rem 0.4rem',
-                              background: 'var(--gold)', color: 'var(--white)', border: 'none',
+                              background: 'var(--gold)', color: 'var(--text-main)', border: 'none',
                               borderRadius: 3, cursor: 'pointer', marginRight: 4,
                             }}>
                             ✓

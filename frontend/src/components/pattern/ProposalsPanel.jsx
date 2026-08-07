@@ -188,7 +188,7 @@ function Proposta({ t, p, unit, marcat, onMarca, onConfirma, onRebutja, onRessal
           style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: '0.3rem', padding: '0.2rem 0.4rem',
-            background: 'var(--gold)', color: 'var(--white)',
+            background: 'var(--gold)', color: 'var(--text-main)',
             border: '1px solid var(--gold)', borderRadius: 4,
             cursor: ocupat ? 'wait' : 'pointer', fontSize: 'var(--fs-caption)',
           }}

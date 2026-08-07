@@ -370,7 +370,7 @@ export default function Models() {
             style={{ ...inp, cursor: 'pointer', color: 'var(--gray)' }}>{t('models_intent.cancel')}</button>
           <button onClick={confirmIntent} disabled={!selected.size}
             style={{ ...inp, cursor: selected.size ? 'pointer' : 'not-allowed', opacity: selected.size ? 1 : 0.5,
-              background: 'var(--gold)', color: 'var(--white)', border: '0.5px solid var(--gold)', fontWeight: 600 }}>
+              background: 'var(--gold)', color: 'var(--text-main)', border: '0.5px solid var(--gold)', fontWeight: 600 }}>
             {t('models_intent.confirm')}
           </button>
         </div>
@@ -566,6 +566,6 @@ function NewModelMenu({ open, setOpen, navigate, t }) {
 }
 
 const inp = { padding: '6px 10px', border: '0.5px solid var(--gray-l)', borderRadius: 6, fontSize: 'var(--fs-body)', fontFamily: MONO, background: 'var(--white)', color: 'var(--text-main)' }
-const faseBadge = { fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: 'var(--gold)', color: 'var(--white)', justifySelf: 'start' }
+const faseBadge = { fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: 'var(--gold)', color: 'var(--text-main)', justifySelf: 'start' }
 const delBtn = { fontSize: 'var(--fs-body)', color: '#C0392B', background: 'none', border: '0.5px solid #FADBD8', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', fontFamily: MONO }
 const menuItem = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 10px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)', cursor: 'pointer' }

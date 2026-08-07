@@ -90,7 +90,7 @@ const btn = (variant) => ({
   border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-main)',
   borderRadius: 6, padding: '6px 12px', fontFamily: 'inherit', fontSize: 'var(--fs-label)',
   cursor: 'pointer', whiteSpace: 'nowrap',
-  ...(variant === 'pri' ? { background: 'var(--gold)', borderColor: 'var(--gold)', color: 'var(--white)', fontWeight: 600 } : null),
+  ...(variant === 'pri' ? { background: 'var(--gold)', borderColor: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600 } : null),
   ...(variant === 'dang' ? { color: 'var(--err)', borderColor: 'var(--err)' } : null),
 })
 

@@ -100,7 +100,7 @@ export default function Topbar() {
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               background: 'var(--gold)',
-              color: 'white',
+              color: 'var(--text-main)',
               border: 'none',
               borderRadius: 8,
               padding: '0 0.9rem',

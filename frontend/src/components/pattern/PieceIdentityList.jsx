@@ -127,7 +127,7 @@ export default function PieceIdentityList({
         style={{
           cursor: ambRol.length === 0 ? 'not-allowed' : 'pointer',
           background: ambRol.length === 0 ? 'var(--bg-card)' : 'var(--gold)',
-          color: ambRol.length === 0 ? 'var(--text-muted)' : 'var(--white)',
+          color: ambRol.length === 0 ? 'var(--text-muted)' : 'var(--text-main)',
           border: '1px solid var(--border)', borderRadius: 6,
           padding: '0.5rem 0.8rem', fontSize: 'var(--fs-body)',
         }}
