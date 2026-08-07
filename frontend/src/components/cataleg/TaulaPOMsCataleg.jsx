@@ -88,7 +88,10 @@ export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, 
         nivell: p.nivell,
         pom_id: p.pom_id,
         pom_code: p.pom_code || '',
-        nom: p.name_cat || p.name_en || '',
+        // La v4 posa el nom ANGLÈS a la cel·la i deixa el CATALÀ darrere la ⓘ (el seu `title`
+        // diu literalment «nom en català»). És el nom que viatja a la fitxa del fabricant.
+        nom: p.name_en || p.name_cat || '',
+        nom_ca: p.name_cat || '',
         capa: p.capa || 'exterior',
         instancia: p.instancia || '',
         ordre: i,
@@ -328,7 +331,8 @@ function Fila({ r, i, t, dicc, dims, capes, refValor, onTecla, onCapa, onInstanc
       <td style={{ ...td, color: 'var(--gold)', fontWeight: 600 }}>{r.pom_code}</td>
       <td style={{ ...td, lineHeight: 1.4 }}>
         {r.nom}
-        <span style={{ ...iconaCel, marginLeft: 5, fontSize: 'var(--fs-caption)' }} title={t('cataleg_peces.title_name_ca')}>ⓘ</span>
+        <span style={{ ...iconaCel, marginLeft: 5, fontSize: 'var(--fs-caption)' }}
+          title={r.nom_ca ? `${t('cataleg_peces.title_name_ca')}: ${r.nom_ca}` : t('cataleg_peces.title_name_ca')}>ⓘ</span>
         <span style={{ ...iconaCel, marginLeft: 5, fontSize: 'var(--fs-caption)' }} title={t('cataleg_peces.title_edit_name')}>✎</span>
       </td>
       {/* Els dos primers eixos del diccionari són les dues columnes que la v4 dibuixa (Posició ·
