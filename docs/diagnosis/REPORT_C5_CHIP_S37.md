@@ -488,6 +488,56 @@ un `primaryBtn`. Es repeteix a `:619`→`:630` i `:715/:781/:842`→`:941/:952`.
 > botó primari local, també `--warn`. La pregunta real no és «apareix una col·lisió
 > nova» sinó «com de greu es fa en generalitzar-la a 58 botons de 26 fitxers».
 
+### 11.0 · La resposta, amb evidència visual
+
+**El creuament: 11 dels 26 fitxers ja pinten `--warn`, i 10 amb semàntica d'avís real.**
+Són **25 dels 58 botons (43%)** que viurien en una pantalla que ja fa servir el token:
+`SizeMapSetup` (12 usos de `--warn` · 7 botons), `TaskAssignWizard` (7·3),
+`DictionaryWizard` (5·2), `Encarrecs` (3·1), `Planning` (3·1), `GuardTascaOblidada` (2·1),
+`Recursos` (2·1), `CustomerDetail` (2·4), `GarmentTypes` (2·3), `DashboardGovPanel` (1·1),
+`OrderDetail` (1·1).
+
+Tres casos que ho ensenyen millor que cap xifra:
+
+- **`TaskAssignWizard.jsx:363-378` — el botó és FILL d'una caixa `--warn`.** La caixa té
+  `background: --warn-bg` + `border: --warn`, i el botó «Substituir» (`:375`) hi viu a
+  dins. Amb el canvi, el **farciment del botó és la mateixa tinta que la vora de la
+  caixa**: deixa de ser una acció DINS d'un avís i es llegeix com una peça de l'avís.
+- **`ui/Modal.jsx:21` — la col·lisió viu al COMPONENT COMPARTIT.** Qualsevol modal amb
+  un avís al cos la reprodueix; confirmat a `Encarrecs.jsx:203-217` i `Recursos.jsx:185-195`.
+- **`Encarrecs.jsx:148`+`:230` — el frame decisiu**
+  ([`F_encarrecs_parella_DESPRES.png`](captures-c5-chip-s37/F_encarrecs_parella_DESPRES.png)).
+  En 400px hi conviuen el primari «Traspassar (2)», el seu germà secundari «Tots els
+  pendents» (`ghostBtn`, `--gold`) i els badges «Pendent» (text `--warn`). Amb el canvi
+  **el primari deixa de coincidir amb el seu germà i passa a coincidir amb el badge
+  d'avís** — exactament al revés del que ha de fer.
+
+**I el wizard no demostra el que semblava.**
+[`E_modelwizard_VIU.png`](captures-c5-chip-s37/E_modelwizard_VIU.png) (captura real,
+sense cap injecció): el `ModelWizard` ja és tot `--warn` i **es veu bé**. Però a la
+mateixa pantalla hi conviuen tres blocs plens de `#854f0b` — el chip `2026`, el chip
+`SS Spring/Summer` i el botó `Següent →`: **l'acció primària és indistingible d'un
+toggle seleccionat**. El wizard no prova que `--warn` funcioni com a color d'acció;
+prova que funciona **quan és l'únic accent de la pantalla**. En 25 pantalles no ho serà.
+
+### 11.0.1 · 🚨 El fet que decideix: canviar `primaryBtn` NO arregla l'accessibilitat
+
+Hi ha **40 superfícies més amb `background: var(--gold)` i text blanc que NO són
+`primaryBtn`** (verificat amb grep), i es quedarien totes a **3.44:1**. Entre elles:
+
+| Superfície | Fitxer:línia |
+|---|---|
+| **El botó de LOGIN** | **`Entrar.jsx:198`** (`submitBtn`) |
+| Restablir contrasenya | `ResetPassword.jsx:75,100` |
+| Error boundary de l'app | `App.jsx:274` |
+| Tab actiu de Planificació | `Planning.jsx:501` |
+| `ModelSheet` ×4 · `FittingDetail.jsx:499` · `GradingRuleSets.jsx:968` · `Dashboard.jsx:483` | — |
+
+O sigui que el pas 1, sol, passaria de **98 superfícies amb un sol color** a **58 marrons
+foscos + 40 marrons clars, sense cap regla que ho expliqui** — i deixaria la pantalla
+d'entrada, la primera que veu tothom, incomplint AA. **Això no és una millora: és partir
+el llenguatge d'acció en dos.**
+
 ### 11.1 · Les opcions, amb els ràtios (text `--white`)
 
 | Candidat | Valor | Ràtio | Comentari |
@@ -495,12 +545,30 @@ un `primaryBtn`. Es repeteix a `:619`→`:630` i `:715/:781/:842`→`:941/:952`.
 | `--gold` (avui) | `#c27a2a` | **3.44:1** ❌ | el defecte a corregir |
 | `--gold-l` | `#c68338` | 3.13:1 ❌ | pitjor |
 | `--warn` (proposat al brief) | `#854f0b` | **6.73:1** ✅ | passa AA, però és el token d'AVÍS |
-| **`#9b6222`** (proposta) | `#9b6222` | **5.04:1** ✅ | **el mateix to i saturació que `--gold`, al 80% de lluminositat**. Cap color nou de família: és `--gold` fosc. Deixaria `--warn` fent només d'avís |
+| **`#9b6222`** (proposta) | `#9b6222` | **5.04:1** ✅ | **literalment `--gold` al 80% de lluminositat**. Deixaria `--warn` fent només d'avís |
 | `--grana` | `#8a1f3d` | 8.96:1 ✅ | compleix, però és **color de MARCA** (`index.css:18`; `--pdf-accent` hi penja) |
 
-**Recomanació:** batejar un token d'acció primària (`--gold-action: #9b6222` o similar) i
-apuntar-hi `primaryBtn`. És **Patró C**: la tria de color nou és de l'Agus, i el brief
-ho deia explícitament.
+🔑 **`--warn` NO és «un `--gold` fosc»** — és un marró **un 20% més saturat**, i d'un to
+diferent. `#9b6222` sí que ho és. En HSL:
+
+| | to | saturació | lluminositat |
+|---|---:|---:|---:|
+| `--gold` | 31.6° | **64.4%** | 46.3% |
+| `--warn` | 33.4° | **84.7%** | 28.2% |
+| `#9b6222` | 31.7° | **64.0%** | 37.1% |
+
+Per això `--warn` trenca la família i `#9b6222` no: el primari en seria «el germà fosc»,
+i el ghost, el tab actiu i els chips seguirien parlant el mateix idioma.
+
+**Recomanació: batejar `--gold-action: #9b6222`.**
+
+> 🚩 **Condició per fer-ho bé:** aplicar-lo NOMÉS a `primaryBtn` deixa viu el problema de
+> §11.0.1. La peça sencera és **un únic `--gold-action` als 58 botons I als 40 orfes** —
+> i el botó de login n'és el primer. Això ja no és el micro-tram que el brief descrivia:
+> és una peça de token de sistema, i la tria de color és **Patró C**.
+
+**`--grana` descartat:** 58 botons granats convertirien cada acció en una declaració
+d'identitat de marca, i en lectura ràpida s'acosta massa a `--err`.
 
 ### 11.2 · L'altra troballa del pas 1: els dos `primaryBtn` NO es podran fusionar
 
