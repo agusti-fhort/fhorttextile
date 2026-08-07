@@ -35,10 +35,12 @@ import { CAPES, etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstanci
 
 const MONO = 'IBM Plex Mono, monospace'
 
+// 2 i 3 (Agus 19:35) · la mida es la del cos (Models) i el fons es BLANC: el crema de
+// capcalera sobre el gris de pagina queda fora de tota la pantalla.
 const th = {
-  fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '.05em',
+  fontSize: 'var(--fs-body)', textTransform: 'uppercase', letterSpacing: '.05em',
   color: 'var(--text-muted)', fontWeight: 500, padding: '6px 10px',
-  background: 'var(--gold-pale)', borderBottom: '0.5px solid var(--gray-l)',
+  background: 'var(--white)', borderBottom: '0.5px solid var(--gray-l)',
   textAlign: 'left', verticalAlign: 'bottom', fontFamily: MONO,
 }
 const td = {
@@ -50,7 +52,7 @@ const pindola = (activa) => ({
   background: activa ? 'var(--gold-pale)' : 'var(--white)',
   color: activa ? 'var(--gold)' : 'var(--text-main)',
   fontWeight: activa ? 600 : 400,
-  borderRadius: 6, padding: '2px 9px', fontFamily: MONO, fontSize: 'var(--fs-caption)',
+  borderRadius: 6, padding: '2px 9px', fontFamily: MONO, fontSize: 'var(--fs-body)',
   cursor: 'pointer',
 })
 const iconaCel = {
@@ -61,7 +63,7 @@ const iconaCel = {
 // La identitat d'una fila, que és la clau única de `GarmentPOMMap`.
 const clau = (r) => `${r.pom_id}|${r.capa || 'exterior'}|${r.instancia || ''}`
 
-export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, onError }) {
+export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, onError, onTornar }) {
   const { t } = useTranslation()
   const { dicc } = useEstatDiccionari()
   const [files, setFiles] = useState([])
@@ -211,7 +213,7 @@ export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, 
     <div>
       <div style={{
         padding: '7px 14px', borderBottom: '0.5px solid var(--gray-l)',
-        fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontFamily: MONO,
+        fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontFamily: MONO,
       }}>
         <Kbd>↓</Kbd>/<Kbd>Enter</Kbd> {t('cataleg_peces.keys_next')} · <Kbd>↑</Kbd> {t('cataleg_peces.keys_prev')} ·{' '}
         <Kbd>L</Kbd> {t('cataleg_peces.keys_layer_sibling')} · <Kbd>I</Kbd> {t('cataleg_peces.keys_instance')} ·{' '}
@@ -229,10 +231,10 @@ export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, 
           <thead>
             <tr>
               <th style={th} colSpan={5} />
-              <th style={{ ...th, textAlign: 'center', background: 'var(--gold-pale)', color: 'var(--gold)', fontWeight: 600 }} colSpan={3}>
+              <th style={{ ...th, textAlign: 'center', color: 'var(--gold)', fontWeight: 600 }} colSpan={3}>
                 {t('cataleg_peces.th_instance')}
               </th>
-              <th style={{ ...th, background: 'var(--gold-pale)', textAlign: 'right', color: 'var(--gold)', fontWeight: 600 }} rowSpan={2}>
+              <th style={{ ...th, textAlign: 'right', color: 'var(--gold)', fontWeight: 600 }} rowSpan={2}>
                 {t('cataleg_peces.th_base_measure')}
                 <b style={{ display: 'block', fontSize: 'var(--fs-h3)' }}>{tallaBase || '—'}</b>
               </th>
@@ -244,9 +246,9 @@ export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, 
               <th style={th} />
               <th style={th}>{t('cataleg_peces.th_pom')}</th>
               <th style={th}>{t('cataleg_peces.th_name')}</th>
-              <th style={{ ...th, textAlign: 'center', background: 'var(--bg-muted)' }}>{t('cataleg_peces.th_position')}</th>
-              <th style={{ ...th, textAlign: 'center', background: 'var(--bg-muted)' }}>{t('cataleg_peces.th_state')}</th>
-              <th style={{ ...th, textAlign: 'center', background: 'var(--bg-muted)' }}>{t('cataleg_peces.th_more')}</th>
+              <th style={{ ...th, textAlign: 'center' }}>{t('cataleg_peces.th_position')}</th>
+              <th style={{ ...th, textAlign: 'center' }}>{t('cataleg_peces.th_state')}</th>
+              <th style={{ ...th, textAlign: 'center' }}>{t('cataleg_peces.th_more')}</th>
             </tr>
           </thead>
           <tbody>
@@ -267,15 +269,17 @@ export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, 
       <CercadorPOM t={t} dicc={dicc} onTria={afegeix} />
 
       <div style={{
-        padding: '10px 14px', borderTop: '0.5px solid var(--gray-l)', background: 'var(--bg-muted)',
+        padding: '10px 14px', borderTop: '0.5px solid var(--gray-l)', background: 'var(--white)',
         display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
       }}>
         <button style={btnPeu}>{t('cataleg_peces.import_from_sheet')}</button>
-        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontFamily: MONO }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontFamily: MONO }}>
           {t('cataleg_peces.seed_note')}
         </span>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button style={btnPeu} onClick={() => window.history.back()}>{t('cataleg_peces.back')}</button>
+          {/* El «Tornar» de la v4 va AL CATÀLEG (`tanca()`), no enrere a l'historial: entrant per
+              URL directa, un `history.back()` se'n duria l'usuari fora de l'aplicació. */}
+          <button style={btnPeu} onClick={onTornar}>{t('cataleg_peces.back')}</button>
           <button style={{ ...btnPeu, background: 'var(--gold)', borderColor: 'var(--gold)', color: 'var(--white)', fontWeight: 600 }}
             disabled={desant} onClick={desa}>{t('cataleg_peces.save')}</button>
         </span>
@@ -294,7 +298,7 @@ function Kbd({ children }) {
   return (
     <kbd style={{
       border: '0.5px solid var(--gray-l)', borderRadius: 3, padding: '1px 5px',
-      background: 'var(--white)', fontFamily: MONO, fontSize: 'var(--fs-label)',
+      background: 'var(--white)', fontFamily: MONO, fontSize: 'var(--fs-body)',
     }}>{children}</kbd>
   )
 }
@@ -318,7 +322,7 @@ function Fila({ r, i, t, dicc, dims, capes, refValor, onTecla, onCapa, onInstanc
       <td style={td}>
         <select value={r.capa || 'exterior'} onChange={e => onCapa(e.target.value)}
           style={{
-            fontFamily: MONO, fontSize: 'var(--fs-caption)', border: '0.5px solid var(--gray-l)',
+            fontFamily: MONO, fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)',
             borderRadius: 5, padding: '3px 6px', background: 'var(--white)', width: '100%',
             color: 'var(--text-main)',
           }}>
@@ -331,9 +335,9 @@ function Fila({ r, i, t, dicc, dims, capes, refValor, onTecla, onCapa, onInstanc
       <td style={{ ...td, color: 'var(--gold)', fontWeight: 600 }}>{r.pom_code}</td>
       <td style={{ ...td, lineHeight: 1.4 }}>
         {r.nom}
-        <span style={{ ...iconaCel, marginLeft: 5, fontSize: 'var(--fs-caption)' }}
+        <span style={{ ...iconaCel, marginLeft: 5, fontSize: 'var(--fs-body)' }}
           title={r.nom_ca ? `${t('cataleg_peces.title_name_ca')}: ${r.nom_ca}` : t('cataleg_peces.title_name_ca')}>ⓘ</span>
-        <span style={{ ...iconaCel, marginLeft: 5, fontSize: 'var(--fs-caption)' }} title={t('cataleg_peces.title_edit_name')}>✎</span>
+        <span style={{ ...iconaCel, marginLeft: 5, fontSize: 'var(--fs-body)' }} title={t('cataleg_peces.title_edit_name')}>✎</span>
       </td>
       {/* Els dos primers eixos del diccionari són les dues columnes que la v4 dibuixa (Posició ·
           Estat), i de cada eix se n'ensenyen les DUES PRIMERES opcions — exactament el que fa
@@ -403,11 +407,11 @@ function CercadorPOM({ t, dicc, onTria }) {
         }}
         placeholder={t('cataleg_peces.finder_placeholder')}
         style={{
-          width: 330, fontFamily: MONO, fontSize: 'var(--fs-caption)',
+          width: 330, fontFamily: MONO, fontSize: 'var(--fs-body)',
           border: '0.5px solid var(--gold)', borderRadius: 5, padding: '5px 9px',
           background: 'var(--white)', color: 'var(--text-main)',
         }} />
-      <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', marginLeft: 9, fontFamily: MONO }}>
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginLeft: 9, fontFamily: MONO }}>
         {t('cataleg_peces.finder_hint')}
       </span>
       {resultats.length > 0 && (

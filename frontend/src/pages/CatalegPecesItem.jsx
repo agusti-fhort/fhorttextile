@@ -128,10 +128,10 @@ export default function CatalegPecesItem() {
 
   return (
     <div style={{ minWidth: 0, maxWidth: 1600 }}>
-      <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-caption)', marginBottom: 8, fontFamily: MONO }}>
+      <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginBottom: 8, fontFamily: MONO }}>
         <button type="button" onClick={() => navigate('/cataleg-peces')} style={{
           background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer',
-          padding: 0, fontFamily: MONO, fontSize: 'var(--fs-caption)',
+          padding: 0, fontFamily: MONO, fontSize: 'var(--fs-body)',
         }}>{t('cataleg_peces.back_to_catalog')}</button>
         {' › '}<b style={{ color: 'var(--text-main)' }}>{familia?.nom_client || familia?.codi_client || '—'}</b>
         {' › '}<b style={{ color: 'var(--text-main)' }}>{item.name}</b>
@@ -144,12 +144,12 @@ export default function CatalegPecesItem() {
         overflow: 'hidden',
       }}>
         <div style={{
-          padding: '11px 14px', background: 'var(--gold-pale)',
+          padding: '11px 14px', background: 'var(--white)',
           borderBottom: '0.5px solid var(--gray-l)',
           display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
         }}>
           <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, fontFamily: MONO }}>{item.name}</span>
-          <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontFamily: MONO }}>{item.code}</span>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{item.code}</span>
           <span style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
             <button style={tabBtn(tab === 'poms')} onClick={() => setTab('poms')}>
               {t('cataleg_peces.tab_sizes_poms')}
@@ -164,7 +164,7 @@ export default function CatalegPecesItem() {
           <div>
             <div style={{
               padding: '10px 14px', borderBottom: '0.5px solid var(--gray-l)',
-              background: 'var(--bg-muted)',
+              background: 'var(--white)',
               display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
             }}>
               <span>
@@ -180,7 +180,7 @@ export default function CatalegPecesItem() {
                 <span style={etiquetaEix}>{t('cataleg_peces.base_size_label')}</span>
                 <span style={{ display: 'inline-flex', gap: 5, flexWrap: 'wrap', marginTop: 3 }}>
                   {tallesDelRun.length === 0
-                    ? <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontFamily: MONO }}>
+                    ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontFamily: MONO }}>
                       {t('cataleg_peces.no_proposal')}
                     </span>
                     : tallesDelRun.map(sd => {
@@ -202,7 +202,7 @@ export default function CatalegPecesItem() {
                 </span>
               </span>
               <span style={{
-                fontSize: 'var(--fs-caption)', color: 'var(--gray)', marginLeft: 'auto',
+                fontSize: 'var(--fs-body)', color: 'var(--gray)', marginLeft: 'auto',
                 fontFamily: MONO,
               }}>{t('cataleg_peces.base_hint')}</span>
             </div>
@@ -210,6 +210,7 @@ export default function CatalegPecesItem() {
             <TaulaPOMsCataleg
               itemId={Number(itemId)}
               tallaBase={item.proposed_base_size_label}
+              onTornar={() => navigate('/cataleg-peces')}
               onSaved={() => setFeedback({ type: 'ok', text: t('cataleg_peces.saved') })}
               onError={(text) => setFeedback({ type: 'err', text })}
             />
@@ -289,7 +290,7 @@ function TabFitxers({ itemId, t, canEdit, onError, onOk }) {
     <div style={{ display: 'grid', gridTemplateColumns: '290px 1fr', minHeight: 320 }}>
       <div style={{ borderRight: '0.5px solid var(--gray-l)' }}>
         {fitxers.length === 0
-          ? <div style={{ padding: '14px 13px', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 'var(--fs-caption)', fontStyle: 'italic' }}>
+          ? <div style={{ padding: '14px 13px', color: 'var(--text-muted)', fontFamily: MONO, fontSize: 'var(--fs-body)', fontStyle: 'italic' }}>
             {t('cataleg_peces.files_empty')}
           </div>
           : fitxers.map(f => {
@@ -303,15 +304,17 @@ function TabFitxers({ itemId, t, canEdit, onError, onOk }) {
                 boxShadow: actiu ? 'inset 3px 0 0 var(--gold)' : 'none',
               }}>
                 <span style={{
-                  fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: '.04em',
-                  borderRadius: 4, padding: '2px 6px', background: 'var(--bg-muted)',
-                  color: 'var(--gold)', flex: 'none',
+                  // Badge amb la forma que Models ja fa servir per als seus (gold-pale + or +
+                  // vora d'or). No es un fons de panell: es una etiqueta.
+                  fontSize: 'var(--fs-body)', fontWeight: 600, letterSpacing: '.04em',
+                  borderRadius: 4, padding: '2px 6px', background: 'var(--gold-pale)',
+                  color: 'var(--gold)', border: '0.5px solid var(--gold)', flex: 'none',
                 }}>{extensio(f.nom_fitxer) || '—'}</span>
                 <span style={{
-                  fontSize: 'var(--fs-caption)', flex: 1, overflow: 'hidden',
+                  fontSize: 'var(--fs-body)', flex: 1, overflow: 'hidden',
                   textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>{f.nom_fitxer}</span>
-                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>
                   {midaLlegible(f.mida_bytes)}
                 </span>
               </button>
@@ -322,9 +325,9 @@ function TabFitxers({ itemId, t, canEdit, onError, onOk }) {
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{
           flex: 1, minHeight: 240, border: '0.5px solid var(--gray-l)', borderRadius: 8,
-          background: 'repeating-linear-gradient(45deg, var(--bg-muted), var(--bg-muted) 9px, var(--bg-page) 9px, var(--bg-page) 18px)',
+          background: 'repeating-linear-gradient(45deg, var(--bg-page), var(--bg-page) 9px, var(--white) 9px, var(--white) 18px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--text-muted)', fontSize: 'var(--fs-caption)', fontFamily: MONO,
+          color: 'var(--text-muted)', fontSize: 'var(--fs-body)', fontFamily: MONO,
         }}>
           {!actual ? t('cataleg_peces.preview')
             : ext === 'DXF' ? t('cataleg_peces.preview_dxf')
@@ -333,12 +336,15 @@ function TabFitxers({ itemId, t, canEdit, onError, onOk }) {
         </div>
         {actual && (
           <div style={{
-            display: 'flex', gap: 14, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+            display: 'flex', gap: 14, fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
             flexWrap: 'wrap', fontFamily: MONO,
           }}>
             <span><b style={{ color: 'var(--text-main)' }}>{actual.nom_fitxer}</b></span>
             <span>{ext || '—'} · {midaLlegible(actual.mida_bytes)}</span>
-            <span>{actual.tipus || ''}</span>
+            {/* La v4 hi posa un TERCER nus amb una descripció («imatge de referència · frontal»),
+                però `ItemFitxer` NO té camp de descripció: aquell text és de demostració i no té
+                dada al darrere. Hi tenia `tipus` (SKETCH_SVG, PATRO…), que és un vocabulari de
+                ROL i NO és el que la maqueta hi diu — substituir-ho era omplir el buit jo. Fora. */}
           </div>
         )}
         <div style={{ display: 'flex', gap: 8 }}>

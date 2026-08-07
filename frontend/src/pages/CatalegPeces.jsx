@@ -40,28 +40,27 @@ const panel = {
   overflow: 'hidden',
 }
 const colhead = {
-  padding: '9px 13px', background: 'var(--gold-pale)',
+  padding: '9px 13px', background: 'var(--white)',
   borderBottom: '0.5px solid var(--gray-l)',
   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
 }
 const colheadT = {
-  fontSize: 'var(--fs-label)', letterSpacing: '.06em', textTransform: 'uppercase',
-  color: 'var(--text-muted)', fontWeight: 500, fontFamily: MONO,
+  fontSize: 'var(--fs-body)', letterSpacing: '.06em', textTransform: 'uppercase',
+  color: 'var(--text-muted)', fontWeight: 600, fontFamily: MONO,
 }
-const colheadN = { fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }
+const colheadN = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontFamily: MONO }
 const btn = {
   border: '0.5px solid var(--gray-l)', background: 'var(--white)', color: 'var(--text-main)',
   borderRadius: 6, padding: '6px 12px', fontFamily: MONO, fontSize: 'var(--fs-body)',
   cursor: 'pointer', whiteSpace: 'nowrap',
 }
-const btnSm = { ...btn, padding: '4px 11px', fontSize: 'var(--fs-caption)' }
+const btnSm = { ...btn, padding: '4px 11px', fontSize: 'var(--fs-body)' }
 
 export default function CatalegPeces() {
   const { t, i18n } = useTranslation()
   const lang = (i18n.language || 'ca').slice(0, 2)
   const navigate = useNavigate()
   const me = useAuthStore(s => s.user)
-  const tenant = useAuthStore(s => s.tenant)     // la CASA: {nom, codi_tenant, tipologia}
   const canEdit = !!me?.capabilities?.includes('configure')
 
   const grups = useGarmentGroups()
@@ -173,19 +172,16 @@ export default function CatalegPeces() {
 
   return (
     <div style={{ minWidth: 0, maxWidth: 1600 }}>
-      <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-caption)', marginBottom: 8, fontFamily: MONO }}>
+      <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginBottom: 8, fontFamily: MONO }}>
         {t('cataleg_peces.crumb_config')} › <b style={{ color: 'var(--text-main)' }}>{t('cataleg_peces.title')}</b>
       </div>
-      <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 600, margin: '0 0 3px', fontFamily: MONO }}>
+      {/* Sense etiqueta de tenant al costat del títol (Agus, 07/08 19:35). La v4 hi porta un
+          `.chip` amb «Brownie», però qui llegeix aquesta pantalla ja sap de quina casa és: no
+          cal repetir-l'hi a cada pàgina. Mateix pes que l'`h1` de Models: `--fs-h2`, 500. */}
+      <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '0 0 3px', fontFamily: MONO }}>
         {t('cataleg_peces.title')}
-        {tenant?.nom && (
-          <span style={{
-            background: 'var(--gold)', color: 'var(--white)', borderRadius: 999,
-            padding: '2px 11px', fontSize: 'var(--fs-caption)', marginLeft: 10, fontWeight: 400,
-          }}>{tenant.nom}</span>
-        )}
       </h1>
-      <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-caption)', margin: '0 0 14px', lineHeight: 1.65, fontFamily: MONO }}>
+      <p style={{ color: 'var(--gray)', fontSize: 'var(--fs-body)', margin: '0 0 14px', lineHeight: 1.65, fontFamily: MONO }}>
         {t('cataleg_peces.subtitle')}
       </p>
 
@@ -282,11 +278,11 @@ export default function CatalegPeces() {
           </div>
           <div style={{
             display: 'grid', gridTemplateColumns: COLS, gap: 12, padding: '7px 14px',
-            background: 'var(--gold-pale)', borderBottom: '0.5px solid var(--gray-l)',
+            background: 'var(--white)', borderBottom: '0.5px solid var(--gray-l)',
           }}>
             {['h_item', 'h_poms_proposed', 'h_run', 'h_base_size', 'h_files'].map(k => (
               <span key={k} style={{
-                fontSize: 'var(--fs-label)', letterSpacing: '.05em', textTransform: 'uppercase',
+                fontSize: 'var(--fs-body)', letterSpacing: '.05em', textTransform: 'uppercase',
                 color: 'var(--text-muted)', fontFamily: MONO,
               }}>{t(`cataleg_peces.${k}`)}</span>
             ))}
@@ -314,10 +310,10 @@ export default function CatalegPeces() {
 }
 
 const addrow = {
-  padding: '9px 13px', borderTop: '0.5px solid var(--gray-l)', background: 'var(--bg-muted)',
+  padding: '9px 13px', borderTop: '0.5px solid var(--gray-l)', background: 'var(--white)',
 }
-const ct = { fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontFamily: MONO }
-const pm = { fontSize: 'var(--fs-label)', color: 'var(--gold)', fontFamily: MONO, marginTop: 2 }
+const ct = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontFamily: MONO }
+const pm = { fontSize: 'var(--fs-body)', color: 'var(--gold)', fontFamily: MONO, marginTop: 2 }
 
 // La fila de les columnes 1 i 2: nom + codi a l'esquerra, dos comptadors a la dreta. L'estat
 // seleccionat és el de la maqueta: fons pàl·lid i barra d'or a l'esquerra.
@@ -384,11 +380,11 @@ function FilaItem({ it, t, recompte, exts, onEdit }) {
       </span>
 
       <span>
-        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
           {t('cataleg_peces.acc_group')} <b style={{ color: 'var(--text-main)' }}>{g}</b>
           {' · '}{t('cataleg_peces.acc_family')} <b style={{ color: 'var(--text-main)' }}>{f}</b>
           {' · '}{t('cataleg_peces.acc_item')} <b style={{ color: 'var(--text-main)' }}>{p}</b>
-          <span style={{ color: 'var(--gold)', fontWeight: 600, fontSize: 'var(--fs-body)', marginLeft: 5 }}>{tot}</span>
+          <span style={{ color: 'var(--gold)', fontWeight: 600, fontSize: 'var(--fs-h3)', marginLeft: 5 }}>{tot}</span>
         </span>
         <span style={{
           display: 'flex', height: 5, borderRadius: 3, overflow: 'hidden', marginTop: 5,
@@ -402,7 +398,7 @@ function FilaItem({ it, t, recompte, exts, onEdit }) {
 
       <span style={valorFila}>{it.proposed_size_system_nom || '—'}</span>
       <span style={valorFila}>{it.proposed_base_size_label || '—'}</span>
-      <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
         <b style={{ color: 'var(--text-main)' }}>{it.fitxers_count ?? 0}</b>
         {' · '}{exts?.length ? exts.join(' · ') : '—'}
       </span>
