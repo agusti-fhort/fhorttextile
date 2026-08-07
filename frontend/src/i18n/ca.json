@@ -3627,7 +3627,8 @@
       "hip": "Maluc",
       "age_min": "Edat min",
       "age_max": "Edat max"
-    }
+    },
+    "add_error": "No s’ha pogut afegir la talla"
   },
   "taskassign": {
     "needs_estimate_intro": "{{count}} tasca/tasques sense estimació de temps. Indica els minuts per desbloquejar la planificació.",

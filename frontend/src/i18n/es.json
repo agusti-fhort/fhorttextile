@@ -3627,7 +3627,8 @@
       "hip": "Cadera",
       "age_min": "Edad mín",
       "age_max": "Edad máx"
-    }
+    },
+    "add_error": "No se ha podido añadir la talla"
   },
   "taskassign": {
     "needs_estimate_intro": "{{count}} tarea(s) sin estimación de tiempo. Indica los minutos para desbloquear la planificación.",

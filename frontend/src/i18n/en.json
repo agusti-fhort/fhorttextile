@@ -3627,7 +3627,8 @@
       "hip": "Hip",
       "age_min": "Age min",
       "age_max": "Age max"
-    }
+    },
+    "add_error": "Could not add the size"
   },
   "taskassign": {
     "needs_estimate_intro": "{{count}} task(s) without a time estimate. Enter the minutes to unblock planning.",
