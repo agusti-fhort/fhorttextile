@@ -54,7 +54,7 @@ export function SizeSetCard({ profile, onUse, onDetail, onClone, compact = false
           {!isCanonicalISO ? (
             <span style={{
               padding: "2px 8px", borderRadius: 3, fontSize: 'var(--fs-label)',
-              background: "#f5e6d0", color: "var(--gold)", border: "1px solid #e0c8a0",
+              background: "#f5e6d0", color: "var(--gold)", border: "1px solid var(--gold-border)",
             }}>{t("size_library.custom")}</span>
           ) : (
             <span style={{

@@ -167,7 +167,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
               style={{
                 padding: '2px 8px', borderRadius: 3, fontSize: 'var(--fs-label)',
                 background: editRestriccions ? 'var(--gold-pale)' : 'var(--white)',
-                color: 'var(--gold)', border: '1px solid #e0c8a0', cursor: 'pointer',
+                color: 'var(--gold)', border: '1px solid var(--gold-border)', cursor: 'pointer',
               }}
             >
               ⚑ {t('size_library.restrictions')}
@@ -180,7 +180,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
               style={{
                 padding: '2px 8px', borderRadius: 3, fontSize: 'var(--fs-label)',
                 background: 'var(--white)', color: 'var(--gold)',
-                border: '1px solid #e0c8a0', cursor: 'pointer',
+                border: '1px solid var(--gold-border)', cursor: 'pointer',
               }}
             >
               ✎ {t('size_library.edit_sizes')}
@@ -228,7 +228,7 @@ export function SizeSetDetail({ profileId, onClose, onRefresh }) {
         <div style={{
           padding: "6px 10px", marginBottom: 12, borderRadius: 4, fontSize: 'var(--fs-body)',
           background: msg.type === 'ok' ? "#f0f9f0" : msg.type === 'warn' ? "#fff8f0" : "#fff0f0",
-          border: `1px solid ${msg.type === 'ok' ? "#c0dd97" : msg.type === 'warn' ? "#e0c8a0" : "#f09595"}`,
+          border: `1px solid ${msg.type === 'ok' ? "#c0dd97" : msg.type === 'warn' ? "var(--gold-border)" : "#f09595"}`,
           color: msg.type === 'ok' ? "#3b6d11" : msg.type === 'warn' ? "var(--gold)" : "#a32d2d",
         }}>
           {msg.text}

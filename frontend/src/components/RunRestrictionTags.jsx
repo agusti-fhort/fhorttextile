@@ -60,7 +60,7 @@ export function RunCustomerBadge({ codi, nom }) {
   return (
     <span title={nom || codi} style={{
       padding: "2px 8px", borderRadius: 3, fontSize: 'var(--fs-label)',
-      background: "#f5e6d0", color: "var(--gold)", border: "1px solid #e0c8a0",
+      background: "#f5e6d0", color: "var(--gold)", border: "1px solid var(--gold-border)",
     }}>
       {codi}
     </span>

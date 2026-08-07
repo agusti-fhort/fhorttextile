@@ -909,7 +909,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
         <div>
           {/* Avís multi-model (gating de cribratge, no bloqueja el pas de talles) */}
           {cribratge.num_models > 1 && (
-            <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: 'var(--gold)',
+            <div style={{ background: '#fdf6ee', border: '1px solid var(--gold-border)', color: 'var(--gold)',
                           borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
               ⚠ {t('import_wizard.multimodel_warn', { count: cribratge.num_models, names: (cribratge.model_detectat || []).map(m => m.nom).join(', ') })}
             </div>
@@ -1090,7 +1090,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
             <div>
               {/* Avisos d'extracció */}
               {(extraccioMeta?.avisos || []).length > 0 && (
-                <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: 'var(--gold)',
+                <div style={{ background: '#fdf6ee', border: '1px solid var(--gold-border)', color: 'var(--gold)',
                               borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
                   {extraccioMeta.avisos.map((a, i) => <div key={i}>⚠ {a}</div>)}
                 </div>
@@ -1277,7 +1277,7 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
           </div>
 
           {emptyCols.length > 0 && (
-            <div style={{ background: '#fdf6ee', border: '1px solid #e0c8a0', color: 'var(--gold)',
+            <div style={{ background: '#fdf6ee', border: '1px solid var(--gold-border)', color: 'var(--gold)',
                           borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 10,
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
               <span>{t('import_wizard.sizes_no_values')} <b>{emptyCols.join(', ')}</b>.</span>

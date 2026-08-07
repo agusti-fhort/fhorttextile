@@ -20,6 +20,9 @@
 | Fum de navegador ca/en/es | ✅ 2 pantalles de 3 · **Graduació és codi mort** (§5.3) |
 | **Veredicte del `guardia-ui`** (el mateix que va vetar) | ✅ **VET TANCAT** |
 
+> **ANNEX (micro-tram posterior, mateix dia).** L'Agus aprova els 2 tokens proposats a
+> §4 i el fix del botó anotat a §6. Executat a §7-§9. Els 🛑 de §4 queden **resolts**.
+
 ---
 
 ## 1 · El component duplicat: cens abans d'esborrar
@@ -292,3 +295,164 @@ CLAUDE.md: «Scope creep vist fora de scope → s'ANOTA al report, no es toca».
   sobre qualsevol fons clar. Informatiu.
 - `gap: 5` a la fila de chips (`RunRestrictionEditor.jsx:29`) queda just per a un chip
   de radi 6 i padding 14px; els germans van a `gap: 8`. Estètic, no trenca.
+
+---
+---
+
+# ANNEX · Micro-tram: 2 tokens nous + fix de contrast del botó primari
+
+> Decisió de l'Agus (Patró C, 07/08/2026): aprovats els dos tokens proposats a §4 i el
+> fix del botó anotat a §6. Abast tancat a aquestes 3 coses.
+
+## 7 · Els dos cremes, resolts
+
+### 7.1 · `--gold-border: #e0c8a0` — batejat i propagat
+
+Declarat a `frontend/src/index.css:22`, al costat de `--gold-pale`. **Valor idèntic al
+literal → zero canvi de píxel.** Els 13 usos censats a §4.1, migrats un per un:
+
+| Fitxer | Línia(es) | Usos | Què és |
+|---|---|:-:|---|
+| `components/RunRestrictionEditor.jsx` | 93 | 1 | vora del panell de restriccions |
+| `components/SizeSetDetail.jsx` | 170, 183, 231 | 3 | toggle ⚑, toggle ✎, vora del missatge `warn` |
+| `components/SizeSetCard.jsx` | 57 | 1 | vora del tag de restricció a la card |
+| `components/RunRestrictionTags.jsx` | 63 | 1 | vora del tag de LECTURA de les 4 capes |
+| `components/POMBrowser/POMBrowser.jsx` | 447, 489 | 2 | vora del POM clau · vora de la capçalera |
+| `components/ImportWizard/ImportWizard.jsx` | 912, 1093, 1280 | 3 | vores de les 3 caixes d'avís daurades |
+| `components/MeasurementBaseGrid/MeasurementBaseGrid.jsx` | 313 | 1 | vora de la cel·la daurada |
+| `pages/GradingRuleSets.jsx` | 516 | 1 | vora del badge |
+| **TOTAL** | | **13** | **en 8 fitxers** |
+
+### 7.2 · `#fdfaf6` → `#fdf9f5` — el crema accidental, col·lapsat
+
+L'ús únic (`RunRestrictionEditor.jsx`, fons del panell) passa al valor dels panells
+germans de la mateixa pantalla. **Segueix sent un literal**, com deia el brief: `#fdf9f5`
+no té token, i no se n'ha creat un tercer per a això.
+
+> 🚩 **Queda obert:** `#fdf9f5` són ara **10 usos en 6 fitxers** sense nom
+> (`SizeSetDetail`, `GradingRuleSets`, `SizeLibrary`, `GradingHistoryPanel`,
+> `POMBrowser`, i aquest). El bateig (`--bg-panel-warm` o similar) és la peça següent
+> d'aquesta neteja, no aquesta.
+
+## 8 · El botó «Desar restriccions»: 2.80:1 → 6.73:1
+
+### 8.1 · Hi havia DUES parelles primàries, i comparteixen nom
+
+Buscant el botó primari canònic apareix una col·lisió que val la pena saber:
+
+| On | Parella | Ràtio | Abast |
+|---|---|---:|---|
+| `components/ui/buttons.js:10` — `primaryBtn` **exportat** | `--white` sobre `--gold` `#c27a2a` | **3.44:1** ❌ | **58 botons en 26 fitxers** |
+| `pages/ModelWizard.jsx:942` — `primaryBtn` **local**, mateix nom | `--white` sobre `--warn` `#854f0b` | **6.73:1** ✅ | l'acció primària del wizard (Següent · Crear · Desar) |
+
+**Triada: `--white` sobre `--warn`.** És l'única de les dues que compleix AA, ja és la
+parella d'una acció primària de la casa, i és **la mateixa que el `Chip` triat** del
+mateix panell — o sigui que el panell queda amb una sola família de to. Precedent
+exacte: el wizard ja conviu amb chips `--warn` i botó primari `--warn`.
+
+Descartades per no complir AA (i per no inventar res): `--gold-l` (3.13:1),
+`--gold` (3.44:1). `--grana` compleix (8.96:1) però és **color de marca**, no d'acció.
+
+### 8.2 · El canvi
+
+`RunRestrictionEditor.jsx` — el botó passa de `--gold` sobre `--gold-pale` a `--white`
+sobre `--warn`, amb `fontWeight: 500` i `border: none` (la resta de la parella
+canònica). L'estat `desant` manté el tractament que ja tenia (`opacity: .6`,
+`cursor: not-allowed`); WCAG 1.4.3 exclou els controls inactius.
+
+| | Parella | Ràtio |
+|---|---|---:|
+| Abans | `--gold` `#c27a2a` sobre `--gold-pale` `#f5e6d0` | **2.80:1** ❌ |
+| Després | `--white` `#ffffff` sobre `--warn` `#854f0b` | **6.73:1** ✅ |
+
+## 9 · Verificació de l'annex
+
+| Control | Resultat |
+|---|---|
+| `npm run build` | ✅ verd — `✓ built in 832ms` |
+| `grep` final de `#e0c8a0` al codi font | ✅ **0 usos** (només la declaració del token a `index.css:22`) |
+| `grep` final de `#fdfaf6` | ✅ **0 usos** (només una menció dins un comentari) |
+| `eslint` dels 8 fitxers tocats | ⚠️ **0 errors introduïts**, però **2 de preexistents** — v. avall |
+| Fum del panell (el botó FUNCIONA) | ✅ PATCH real capturat, camí OK i camí d'error (§9.2) |
+| Zero píxels del token | ✅ `rgb(224,200,160)` en viu · 6/13 mesurats, 7/13 per prova estàtica |
+
+### 9.1 · ⚠️ El `eslint` d'aquest annex NO és «0 errors» — i el motiu
+
+El brief demanava `eslint` a 0 errors. Els 8 fitxers donen **2 errors**, tots dos a
+`ImportWizard.jsx` i tots dos **preexistents i idèntics a HEAD** (verificat linant la
+còpia de `git show HEAD:…`): `no-unused-vars` a `:80` (`TallaChip`) i `:315`
+(`docLabels`). **Aquest tram no n'introdueix cap**; a `ImportWizard.jsx` només hi ha
+tocat 3 literals de color. Esborrar-los seria una 4a cosa i el brief tanca l'abast a 3.
+
+> 🔴 **`TallaChip` (`ImportWizard.jsx:80`) és una 5a variant de chip, i és MORTA.** Mai
+> s'usa, i porta **6 hex crus** —`#f0f9f0`, `#fff0f0`, `#c0dd97`, `#f0c0c0`, `#3b6d11`,
+> `#a32d2d`—, dos dels quals tenen token EXACTE (`--ok` = `#3b6d11`, `--err` =
+> `#a32d2d`). Esborrar-la tanca l'error de lint i 6 hex de cop. Peça pròpia.
+
+### 9.2 · Fum del panell — el botó FUNCIONA, no només es pinta
+
+Contra el `dist` fresc, tot stubejat des d'un únic `page.route`. Captures a
+[`captures-c5-chip-s37/`](captures-c5-chip-s37/): `b_boto_abans_despres.png`,
+`a_panell_ca.png`, `a_error_400_ca.png`, `c_llista_badges_ca.png`.
+
+**Colors resolts en viu** (`getComputedStyle`): `background rgb(133,79,11)` (`--warn`) ·
+`color rgb(255,255,255)` (`--white`) · `fontWeight 500` · `border none`. Tot com toca.
+
+**El PATCH real capturat** (cos de la petició, no una suposició):
+```
+PATCH /api/v1/size-systems/7/
+{"target_codis":["WOMAN","MATERNITY","MAN"],"grup_codis":["TOPS","DRESSES","ZZ-ORFE-LEGACY"],
+ "construccio_codis":["WOVEN"],"fit_codis":["REGULAR"]}
+```
+Les 4 llistes hi són i **reflecteixen exactament els clics fets** (`MAN` afegit a target,
+`SLIM` tret de fit). El codi **orfe** `ZZ-ORFE-LEGACY` sobreviu al viatge.
+
+| Camí | Resultat |
+|---|---|
+| Toggle dels chips abans de desar | ✅ commuten als dos sentits (`rgba(0,0,0,0)` ⇄ `rgb(133,79,11)`) |
+| Resposta 200 | ✅ el panell es tanca (0 panells al DOM) |
+| Resposta 400 `{"detail":…}` | ✅ el text del servidor es pinta en `--err` (6.75:1), el panell **segueix obert**, el botó es re-habilita |
+| Errors de JS a consola | ✅ cap (només el del 400 provocat) |
+
+**Zero píxels al token:** `--gold-border` resol en viu a `rgb(224,200,160)` = `#e0c8a0`.
+Mesurats al DOM **6 dels 13 usos** (panell, toggle ⚑, botó ✎, badge de
+`RunRestrictionTags`, badge de `SizeSetCard`), tots idèntics. Els **7 restants**
+(`GradingRuleSets:516`, `POMBrowser:447,489`, `MeasurementBaseGrid:313`,
+`ImportWizard:912,1093,1280`) **no s'han mesurat en viu** —el `CascadeSelector` de
+`/poms/grading` no avança amb dades stubejades—, però queden coberts per prova
+estàtica: `dist/assets/*.css` emet `--gold-border:#e0c8a0`, i **cap chunk JS de `dist/`
+conté ja el literal `e0c8a0`**. És prova per construcció, no mesura de píxel; queda dit.
+
+### 9.3 · 🚩 Defecte PREEXISTENT trobat pel fum: el missatge de desat no apareix MAI
+
+En resposta OK no es pinta cap missatge (mostrejat cada 50 ms durant 2 s: cap).
+La causa, verificada al codi:
+
+- `SizeSetDetail.jsx:202-207` (`onSaved`) fa `setMsg({type:'ok', …})` i **tot seguit**
+  crida `onRefresh()`;
+- `SizeLibrary.jsx:98` defineix `onRefresh` com
+  `() => { setDetailProfileId(null); setSelectorKey(k => k + 1) }` — o sigui que
+  **desmunta el `SizeSetDetail` sencer** abans que el missatge arribi a pintar-se.
+
+Efecte col·lateral: qui desa **perd tot el context** — el detall es tanca i el selector
+de target es remunta buit. **Preexistent, idèntic a HEAD**, i `SizeLibrary.jsx` no s'ha
+tocat en cap dels dos trams (`git diff HEAD` buit per a aquell fitxer): aquest micro-tram
+només ha canviat colors i no ha regressat res. **S'anota, no es toca.**
+
+## 10 · Fora d'abast, anotat (no tocat)
+
+- 🔴 **El `primaryBtn` COMPARTIT falla AA a tot el mòdul comercial.**
+  `ui/buttons.js:10` és `--white` sobre `--gold` = **3.44:1**, i el fan servir **58
+  botons en 26 fitxers** (`ProductDetail`, `QuoteDetail`, `DeliveryNoteDetail`,
+  `Planning`, `GeneralConfig`, `Encarrecs`…). És el **mateix defecte que el vet va
+  obrir**, però multiplicat per 58 i al component compartit. Canviar-lo a `--warn`
+  ho arreglaria d'una sola línia — però és un canvi d'aspecte a mig producte:
+  **decisió de l'Agus, no d'un agent.**
+- **Dos `primaryBtn` amb el mateix nom** (l'exportat i el local de `ModelWizard.jsx:942`)
+  és la mateixa malaltia que el chip de C5: una variant local que ombreja el nom del
+  component compartit. El local és el que està BÉ; el compartit és el que falla.
+- `TallaChip` mort a `ImportWizard.jsx:80` (§9.1).
+- **`GraduacioPanel` confirmat codi mort** — ja recollit a §5.3: `initialBlock` mai
+  passat, stepper de 3 passos. Candidat de neteja, i **afecta el disseny futur de la
+  pantalla de Grading Rules** (qui la dissenyi no pot donar per fet que Graduació
+  s'obre des d'allà: avui no s'obre des d'enlloc).

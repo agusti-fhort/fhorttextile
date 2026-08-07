@@ -88,10 +88,14 @@ export default function RunRestrictionEditor({ run, onSaved, onCancel }) {
     .filter(c => !opcionsGrup.some(o => o.codi === c))
     .map(c => ({ codi: c, etiqueta: c }))
 
+  // El fons és `#fdf9f5`, el crema dels panells germans d'aquesta MATEIXA pantalla
+  // (`SizeSetDetail.jsx`: historial, zebra, calaixos). Aquí hi havia `#fdfaf6`, a ΔE 0.45 —
+  // un 4t crema accidental, no una decisió. Segueix sent literal perquè el valor encara no té
+  // token (10 usos en 6 fitxers esperen bateig); v. REPORT_C5_CHIP_S37 §7.
   return (
     <div style={{
-      border: "1px solid #e0c8a0", borderRadius: 6, padding: "12px 14px",
-      background: "#fdfaf6", marginBottom: 14,
+      border: "1px solid var(--gold-border)", borderRadius: 6, padding: "12px 14px",
+      background: "#fdf9f5", marginBottom: 14,
     }}>
       <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, marginBottom: 4 }}>
         {t('size_library.restrictions_title')}
@@ -121,10 +125,14 @@ export default function RunRestrictionEditor({ run, onSaved, onCancel }) {
         <div style={{ fontSize: 'var(--fs-label)', color: "var(--err)", marginBottom: 8 }}>{error}</div>
       )}
       <div style={{ display: "flex", gap: 6 }}>
+        {/* Acció primària: la parella de la casa `--warn` + `--white` (6.73:1), la mateixa que
+            el botó primari del wizard (`ModelWizard.jsx:942`) i que el `Chip` triat d'aquí
+            sobre. Abans era `--gold` sobre `--gold-pale` = 2.80:1, el mateix defecte que el
+            vet va mesurar al chip: tokenitzar-lo no el va arreglar. V. REPORT §8. */}
         <button type="button" onClick={desa} disabled={desant} style={{
           padding: "5px 12px", borderRadius: 4, fontSize: 'var(--fs-body)',
-          fontFamily: "IBM Plex Mono, monospace",
-          background: "var(--gold-pale)", color: "var(--gold)", border: "1px solid var(--gold)",
+          fontFamily: "IBM Plex Mono, monospace", fontWeight: 500,
+          background: "var(--warn)", color: "var(--white)", border: "none",
           cursor: desant ? "not-allowed" : "pointer", opacity: desant ? .6 : 1,
         }}>{desant ? '…' : t('size_library.restrictions_save')}</button>
         <button type="button" onClick={onCancel} style={{

@@ -310,7 +310,7 @@ function SortableRow({ row, readOnly, onCellChange, onDelete }) {
         {row.is_key && (
           <span style={{
             marginLeft: 5, fontSize: 'var(--fs-caption)', padding: '1px 4px', borderRadius: 3,
-            background: '#fdf6ee', color: 'var(--gold)', border: '0.5px solid #e0c8a0',
+            background: '#fdf6ee', color: 'var(--gold)', border: '0.5px solid var(--gold-border)',
             fontWeight: 600, letterSpacing: '.06em', verticalAlign: 'middle',
           }}>KEY</span>
         )}

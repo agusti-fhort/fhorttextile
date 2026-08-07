@@ -444,7 +444,7 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
       <button type="button" onClick={(e) => { e.stopPropagation(); onToggleKey() }}
         title={t('poms.toggle_key_hint')} style={{
           cursor: 'pointer', fontSize: 'var(--fs-caption)', padding: '2px 7px', borderRadius: 3, fontWeight: 600,
-          letterSpacing: '.06em', border: `0.5px solid ${pom.is_key ? '#e0c8a0' : 'var(--border)'}`,
+          letterSpacing: '.06em', border: `0.5px solid ${pom.is_key ? 'var(--gold-border)' : 'var(--border)'}`,
           background: pom.is_key ? '#fdf6ee' : 'var(--white)', color: pom.is_key ? 'var(--gold)' : '#b0b0ad',
         }}>KEY</button>
     </div>
@@ -486,7 +486,7 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
               background: '#fdf6ee', color: 'var(--gold)',
               fontSize: 'var(--fs-caption)', padding: '2px 6px', borderRadius: 3,
               fontWeight: 600, letterSpacing: '.08em',
-              border: '0.5px solid #e0c8a0',
+              border: '0.5px solid var(--gold-border)',
             }}>KEY</span>
           )}
           {mode === 'assign' && (

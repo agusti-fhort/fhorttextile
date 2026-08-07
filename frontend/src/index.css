@@ -15,6 +15,11 @@
   --gold:       #c27a2a;
   --gold-l:     #c68338;
   --gold-pale:  #f5e6d0;
+  /* Vora daurada de les superfícies i controls d'accent (chips de lectura, caixes d'avís
+     del wizard d'import, POMs clau, toggles daurats). Existia com a literal repetit a 13
+     punts de 8 fitxers SENSE nom; el bateja S37 amb el MATEIX valor (zero canvi de píxel).
+     NO és `--border`: aquella és crema neutra i no diu «daurat = accent». */
+  --gold-border: #e0c8a0;
   --grana:      #8a1f3d; /* grana (garnet) — color de marca */
   --pdf-accent: var(--grana); /* accent semàntic dels botons de document PDF (mateix color que grana) */
   --model-band: #f7efe1; /* cream — franja de capçalera de les cards d'entitat (mòdul comercial) */

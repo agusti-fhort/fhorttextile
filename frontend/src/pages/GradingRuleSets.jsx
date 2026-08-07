@@ -513,7 +513,7 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
                         <span style={{
                           marginLeft: 6, fontSize: 'var(--fs-caption)', padding: '2px 5px', borderRadius: 3,
                           background: '#fdf6ee', color: 'var(--gold)',
-                          border: '0.5px solid #e0c8a0', fontWeight: 600,
+                          border: '0.5px solid var(--gold-border)', fontWeight: 600,
                         }}>KEY</span>
                       )}
                       {traduccio && (
