@@ -38,6 +38,12 @@ PANTALLES = [
     ('A2 · Size Library', '/size-library'),
     ('A3 · Grading Rules', '/poms/grading'),
     ('A4 · Garment Types', '/garment-types'),
+    # ── BLOC B · el camí del model ────────────────────────────────────────────────────────
+    ('A5 · Models', '/models'),
+    ('A6 · Dashboard del model', '/models/1319'),
+    ('A7 · Resum · wizard partit', '/models/1319?tab=Resum'),
+    ('A8 · Mesures', '/models/1319?tab=Mesures'),
+    ('A10 · Comprovació', '/models/1319?tab=Mesures'),
 ]
 
 #: La paleta que la NORMA_LAYOUT §1 permet en una VORA, en rgb() tal com el navegador el computa.

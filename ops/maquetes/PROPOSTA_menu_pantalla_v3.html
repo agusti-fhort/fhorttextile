@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposta v3 · Dashboard del model · estil normat, estructura intacta</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbfaf8; --panel:#fff; --ink:#1d1d1b; --ink-soft:#6e6a64; --ink-faint:#98938b;
+    --line:#e8e5e0; --line-soft:#f0eeea;
+    --gold:#c27a2a; --gold-border:#e0c8a0; --sel:#f7f5f2;
+    --accio:#2b65c2;
+    --ok:#2e7d32; --ok-bg:#e9f3ea; --warn:#ff9942; --warn-bg:#ffedd9;
+    --err:#b42318; --err-bg:#fbebe9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;line-height:16px}
+  .mx{max-width:1400px;margin:0 auto;padding:0 24px}
+
+  /* 1 · TOP BAR */
+  .topbar{background:var(--panel);border-bottom:1px solid var(--line);
+          display:flex;align-items:center;gap:8px;padding:10px 24px}
+  .crumb{display:flex;align-items:center;gap:6px}
+  .crumb .tenant{font-weight:600}
+  .crumb a{color:var(--ink-soft);cursor:pointer}
+  .crumb .sep{color:var(--ink-faint)}
+  .crumb .here{font-weight:600}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:12px;
+                 font-size:11px;color:var(--ink-soft)}
+  .topbar .right b{color:var(--ink)}
+  .sw{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer}
+
+  /* 2 · MENÚ DE PANTALLA — SOBRE BLANC, filet a dalt i a baix */
+  .pmenu-bar{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .pmenu{max-width:1400px;margin:0 auto;padding:8px 24px;
+         display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .back{width:32px;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
+        display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+  .back:hover{background:var(--sel)}
+  .back svg{width:16px;height:16px;stroke:var(--ink-soft);fill:none;stroke-width:1.75;
+            stroke-linecap:round;stroke-linejoin:round}
+  .psep{width:1px;height:20px;background:var(--line);margin:0 6px}
+  .pill{border:1px solid transparent;border-radius:999px;background:none;padding:6px 14px;
+        font-family:inherit;font-size:12px;color:var(--ink-soft);cursor:pointer;line-height:16px}
+  .pill:hover{background:var(--sel);color:var(--ink)}
+  .pill.on{background:var(--sel);border-color:var(--gold-border);color:var(--ink);font-weight:600}
+  .pmenu .right{margin-left:auto}
+
+  /* 3 · IDENTITAT sobre fons */
+  .ident{display:flex;align-items:center;gap:12px;padding:16px 0;flex-wrap:wrap}
+  .ident .code{font-size:10px;color:var(--ink-faint);letter-spacing:.04em;display:block}
+  .ident .name{font-size:22px;line-height:28px;font-weight:500}
+  .ident .right{margin-left:auto;display:flex;gap:8px}
+  .b{font-size:10px;line-height:12px;font-weight:600;letter-spacing:.04em;
+     padding:3px 10px;border-radius:999px;white-space:nowrap}
+  .b.fase{background:var(--sel);color:var(--ink);border:1px solid var(--line)}
+  .b.ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+  .b.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn)}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--gold-border);
+       background:var(--panel);color:var(--ink);border-radius:6px;padding:8px 16px;
+       font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;line-height:16px}
+  .btn:hover{background:var(--sel)}
+  .btn.dang{color:var(--err);border-color:var(--err)}
+  .btn.sm{padding:6px 12px;font-size:11px}
+  .btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round}
+
+  /* 4 · DASHBOARD — mateixos components, estil normat */
+  .lblc{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);
+        font-weight:600;margin:0 0 8px}
+  .plagrid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:12px}
+  @media(max-width:1100px){.plagrid{grid-template-columns:repeat(2,1fr)}}
+  .tcard{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px}
+  .tcard.on{border-color:var(--gold-border);box-shadow:inset 3px 0 0 var(--gold)}
+  .tcard.dim{opacity:.6}
+  .tcard .t{font-weight:600;margin-bottom:6px;display:flex;gap:6px;align-items:center}
+  .tcard .t svg{width:14px;height:14px;stroke:var(--ink-soft);fill:none;stroke-width:1.5;flex:none}
+  .tcard .m{font-size:10px;color:var(--ink-soft);margin-bottom:2px}
+  .tcard .foot{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+  .tctl{display:inline-flex;gap:4px}
+  .tctl button{width:26px;height:26px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
+               cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+  .tctl button:hover{background:var(--sel)}
+  .tctl svg{width:11px;height:11px;stroke:var(--ink-soft);fill:none;stroke-width:1.75;stroke-linecap:round}
+  .progrow{display:flex;align-items:center;gap:12px;font-size:10px;color:var(--ink-soft);margin-bottom:24px}
+  .prog{flex:1;height:6px;border-radius:999px;background:var(--line-soft);overflow:hidden}
+  .prog i{display:block;height:100%;width:20%;background:var(--ok)}
+  .progrow b{color:var(--ink)}
+
+  .cols{display:grid;grid-template-columns:1fr 1.1fr;gap:24px;padding-bottom:48px}
+  @media(max-width:1000px){.cols{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:14px 16px;margin-bottom:12px}
+  .onsoc{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .onsoc .f{font-size:15px;font-weight:600}
+  .onsoc .time{margin-left:auto;font-size:15px;font-weight:600}
+  .emptybox{border:1px dashed var(--line);border-radius:12px;padding:12px 16px;
+            color:var(--ink-faint);font-style:italic;margin-bottom:12px;background:var(--panel)}
+  .rowlink{border:1px solid var(--line);border-radius:12px;background:var(--panel);
+           padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer}
+  .rowlink:hover{background:var(--bg)}
+  .rowlink svg{width:16px;height:16px;stroke:var(--ink-soft);fill:none;stroke-width:1.5;flex:none}
+  .rowlink .t{font-weight:600}
+  .rowlink .v{color:var(--ink-soft);font-size:11px}
+  .rowlink .chev{margin-left:auto;color:var(--ink-faint)}
+  .toggle{font-size:11px;color:var(--ink-soft);cursor:pointer;margin-top:4px}
+
+  .wphead{display:flex;align-items:center;gap:8px}
+  .wphead .t{font-weight:600}
+  .wphead .c{font-size:10px;color:var(--ink-faint)}
+  .wphead .r{margin-left:auto;font-size:10px;color:var(--ink-soft);cursor:pointer}
+  .wpres{margin-top:8px;font-size:11px;color:var(--ink-soft)}
+  .wpres .done{text-decoration:line-through}
+  .wpres .ok{color:var(--ok)}
+  .wpres .d{font-size:10px;color:var(--ink-faint)}
+
+  .tl{max-height:320px;overflow-y:auto}
+  .tl .day{font-weight:600;font-size:11px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .tlrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line-soft);font-size:11px}
+  .tlrow svg{width:13px;height:13px;stroke:var(--ink-soft);fill:none;stroke-width:1.5;flex:none}
+  .tlrow .who{margin-left:auto;color:var(--ink-faint);font-size:10px;white-space:nowrap}
+  .tlrow .tag{color:var(--ink-soft)}
+</style>
+</head>
+<body>
+
+<!-- 1 · TOP BAR -->
+<div class="topbar">
+  <span class="crumb">
+    <span class="tenant">Fhort Textile Tech</span>
+    <span class="sep">›</span><a>Models</a>
+    <span class="sep">›</span><span class="here">Dashboard</span>
+  </span>
+  <span class="right"><b>Agustí Devant</b> · Dissabte, 8 d'agost del 2026 · 07:51
+    <span class="sw">cm → inch</span><span class="sw">CA ▾</span><span class="sw">👤</span></span>
+</div>
+
+<!-- 2 · MENÚ DE PANTALLA sobre blanc, filets a dalt i baix -->
+<div class="pmenu-bar">
+  <div class="pmenu">
+    <button class="back" title="Tornar a Models"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></button>
+    <span class="psep"></span>
+    <button class="pill on">Dashboard</button>
+    <button class="pill">Resum</button>
+    <button class="pill">Mesures</button>
+    <button class="pill">Escalat</button>
+    <button class="pill">Patró</button>
+    <button class="pill">Fitxa tècnica</button>
+    <button class="pill">Fitxers</button>
+    <button class="pill">Registre d'activitat</button>
+    <button class="pill">Tasques</button>
+    <span class="right"><button class="btn sm"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/></svg>Watchpoints</button></span>
+  </div>
+</div>
+
+<!-- 3 · IDENTITAT sobre fons -->
+<div class="mx">
+  <div class="ident">
+    <span><span class="code">BRW-FW26-0014</span><span class="name">Blusa KAYCE</span></span>
+    <span class="b fase">Desenvolupament</span>
+    <span class="right">
+      <button class="btn">Accions ▾</button>
+      <button class="btn dang"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Eliminar</button>
+    </span>
+  </div>
+
+  <!-- 4 · DASHBOARD, components intactes -->
+  <div class="lblc">Pla de treball</div>
+  <div class="plagrid">
+    <div class="tcard dim">
+      <div class="t"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16zM13 5l3 3"/></svg>Patró CAD</div>
+      <div class="m">⏱ 0h 00m · ⟳ 0 obertures</div>
+      <div class="m">per Montse Bohils Moragas</div>
+      <div class="foot">
+        <span class="tctl">
+          <button><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></button>
+          <button><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+          <button><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/></svg></button>
+        </span>
+        <span class="b fase">Pendent</span>
+      </div>
+    </div>
+    <div class="tcard on">
+      <div class="t"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16z"/></svg>Definició POM</div>
+      <div class="m">⏱ 0h 18m · ⟳ 2 obertures</div>
+      <div class="m">&nbsp;</div>
+      <div class="foot">
+        <span class="tctl">
+          <button><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></button>
+          <button><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+          <button><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/></svg></button>
+        </span>
+        <span class="b ok">Feta</span>
+      </div>
+    </div>
+    <div class="tcard dim">
+      <div class="t"><svg viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg>Fitxa tècnica</div>
+      <div class="m">⏱ 0h 00m · ⟳ 0 obertures</div>
+      <div class="m">per Marta Clotet</div>
+      <div class="foot">
+        <span class="tctl">
+          <button><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></button>
+          <button><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+          <button><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/></svg></button>
+        </span>
+        <span class="b fase">Pendent</span>
+      </div>
+    </div>
+    <div class="tcard dim">
+      <div class="t"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 12h16M12 4v16"/></svg>Escalat CAD</div>
+      <div class="m">⏱ 0h 00m · ⟳ 0 obertures</div>
+      <div class="m">per Marta Clotet</div>
+      <div class="foot">
+        <span class="tctl">
+          <button><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></button>
+          <button><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+          <button><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/></svg></button>
+        </span>
+        <span class="b fase">Pendent</span>
+      </div>
+    </div>
+    <div class="tcard dim">
+      <div class="t"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>Auditoria de model</div>
+      <div class="m">⏱ 0h 00m · ⟳ 0 obertures</div>
+      <div class="m">per Marta Clotet</div>
+      <div class="foot">
+        <span class="tctl">
+          <button><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></button>
+          <button><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+          <button><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/></svg></button>
+        </span>
+        <span class="b fase">Pendent</span>
+      </div>
+    </div>
+  </div>
+  <div class="progrow">
+    <span><b>1/5 tasques fetes</b> · 20%</span>
+    <span class="prog"><i></i></span>
+    <span>Temps acumulat sobre el model: <b>0h 18m</b></span>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="lblc">On sóc</div>
+      <div class="card onsoc">
+        <span class="f">Desenvolupament</span>
+        <span class="b fase">Nou</span>
+        <span class="time">0h 18m</span>
+        <span style="flex-basis:100%"></span>
+        <span class="b fase">⏱ 4 tasques obertes</span>
+      </div>
+
+      <div class="lblc">Què tinc fet</div>
+      <div class="emptybox">Encara no hi ha fitxa</div>
+      <div class="rowlink">
+        <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 10h16M10 4v16"/></svg>
+        <span class="t">Taula graduada</span><span class="v">v1</span>
+        <span class="b warn">Esborrany</span>
+        <span class="chev">›</span>
+      </div>
+      <div class="rowlink">
+        <svg viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16zM13 5l3 3"/></svg>
+        <span class="t">Mesures base</span><span class="v">S</span>
+        <span class="b fase">30 mesures actives</span>
+        <span class="chev">›</span>
+      </div>
+
+      <div class="lblc" style="margin-top:16px">Properes fites</div>
+      <div class="emptybox" style="border-style:solid">Cap fita propera</div>
+      <div class="toggle">› Detall tècnic</div>
+    </div>
+
+    <div>
+      <div class="lblc">Avisos</div>
+      <div class="card">
+        <div class="wphead">
+          <svg width="14" height="14" viewBox="0 0 24 24" style="stroke:var(--gold);fill:none;stroke-width:1.75"><path d="M5 21V4l14 5-14 5"/></svg>
+          <span class="t">Watchpoints</span><span class="c">(0 obertes)</span>
+          <span class="r">Veure resoltes (1)</span>
+        </div>
+        <div class="wpres">
+          <span class="ok">✓</span> <span class="done">Configuració del model completa.</span><br>
+          <span class="d">— · 17/07/26 08:36</span>
+        </div>
+      </div>
+
+      <div class="lblc">Què ha canviat</div>
+      <div class="card tl">
+        <div class="day">2 d'ag. del 2026</div>
+        <div class="tlrow"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/></svg>Definició POM · <b>Feta</b><span class="who">fa 5 dies · per Agustí Devant</span></div>
+        <div class="tlrow"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/></svg>Definició POM · En curs<span class="who">fa 5 dies · per Agustí Devant</span></div>
+        <div class="tlrow"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/></svg>Definició POM · <b>Feta</b><span class="who">fa 5 dies · per Agustí Devant</span></div>
+        <div class="tlrow"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16z"/></svg>POM O · definit a <b>10.5</b> · <span class="tag">importació</span><span class="who">fa 5 dies</span></div>
+        <div class="tlrow"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16z"/></svg>POM L2 · definit a <b>36.5</b> · <span class="tag">importació</span><span class="who">fa 5 dies</span></div>
+        <div class="tlrow"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16z"/></svg>POM S.13 · definit a <b>14</b> · <span class="tag">importació</span><span class="who">fa 5 dies</span></div>
+        <div class="tlrow"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16z"/></svg>POM CUF H · definit a <b>0.7</b> · <span class="tag">importació</span><span class="who">fa 5 dies</span></div>
+        <div class="tlrow"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16z"/></svg>POM J2 · definit a <b>18</b> · <span class="tag">importació</span><span class="who">fa 5 dies</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

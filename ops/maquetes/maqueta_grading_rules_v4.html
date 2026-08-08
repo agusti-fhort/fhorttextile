@@ -68,7 +68,11 @@
   /* pantalla */
   .shead{padding:12px 16px;background:var(--white);border-bottom:1px solid var(--line);
          display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .shead .t{font-size:15px;line-height:20px;font-weight:600}
+  /* ESMENA (bloc A §10.2 · executada a la coda d'A5): 15px NO és a l'escala de la casa i el
+     token del subtítol és --fs-h3 = 14px. La NORMA §2 escrivia «h3 subtítol 15/20» i el codi
+     viu deia 14: es va tancar A FAVOR DEL TOKEN, i la pantalla ja anava a 14. Aquí quedava la
+     font que la tornaria a demanar a 15. */
+  .shead .t{font-size:14px;line-height:20px;font-weight:600}
   .shead .c{font-size:10px;color:var(--ink-soft)}
   /* NORMA: tabs germanes = subratllat d'or, no caixetes */
   .tabs{display:flex;gap:4px;margin-left:auto}
@@ -121,7 +125,9 @@
   .rblk .h em{font-style:normal;color:var(--ink-faint);letter-spacing:0;text-transform:none;
               font-size:10px;font-weight:400}
   .tags{display:flex;gap:6px;flex-wrap:wrap}
-  .tg{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;
+  /* ESMENA (bloc A §9e · executada a la coda d'A5): 11px no existeix a l'escala de la casa
+     (§2: 10·12·14·18·22·32). El xip de capa és cos, i el cos és 12. */
+  .tg{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;
       background:var(--panel);cursor:pointer;color:var(--ink)}
   .tg:hover{background:var(--sel)}
   .tg.on{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:600}  /* esmena Agus: inclòs = verd */

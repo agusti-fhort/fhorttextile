@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposta · Resum del model · el wizard partit en subespais</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbfaf8; --panel:#fff; --ink:#1d1d1b; --ink-soft:#6e6a64; --ink-faint:#98938b;
+    --line:#e8e5e0; --line-soft:#f0eeea;
+    --gold:#c27a2a; --gold-border:#e0c8a0; --sel:#f7f5f2;
+    --accio:#2b65c2;
+    --ok:#2e7d32; --ok-bg:#e9f3ea; --warn:#ff9942; --warn-bg:#ffedd9;
+    --err:#b42318; --err-bg:#fbebe9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;line-height:16px;
+       display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+  .side{background:var(--panel);border-right:1px solid var(--line);padding:16px 0}
+  .side .logo{padding:0 16px 16px;font-weight:600;color:var(--gold);font-size:14px}
+  .side .sec{padding:12px 16px 4px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+             color:var(--ink-soft);font-weight:600}
+  .side a{display:block;padding:7px 16px;color:var(--ink-soft);cursor:pointer;font-size:12px}
+  .side a.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold);color:var(--ink);font-weight:600}
+  .main{min-width:0;display:flex;flex-direction:column}
+
+  .topbar{background:var(--panel);border-bottom:1px solid var(--line);
+          display:flex;align-items:center;gap:8px;padding:10px 20px}
+  .crumb .tenant{font-weight:600} .crumb .sep{color:var(--ink-faint)}
+  .crumb a{color:var(--ink-soft);cursor:pointer} .crumb .here{font-weight:600}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px;
+                 font-size:11px;color:var(--ink-soft);white-space:nowrap}
+  .topbar .right b{color:var(--ink)}
+  .swi{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer}
+
+  .pmenu-bar{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .pmenu{padding:8px 20px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .back{width:32px;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
+        display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+  .back svg{width:16px;height:16px;stroke:var(--ink-soft);fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+  .psep{width:1px;height:20px;background:var(--line);margin:0 6px}
+  .pill{border:1px solid transparent;border-radius:999px;background:none;padding:6px 14px;
+        font-family:inherit;font-size:12px;color:var(--ink-soft);cursor:pointer;line-height:16px}
+  .pill:hover{background:var(--sel);color:var(--ink)}
+  .pill.on{background:var(--sel);border-color:var(--gold-border);color:var(--ink);font-weight:600}
+  .pmenu .right{margin-left:auto}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--gold-border);
+       background:var(--panel);color:var(--ink);border-radius:6px;padding:8px 16px;
+       font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;line-height:16px}
+  .btn:hover{background:var(--sel)}
+  .btn.pri{background:var(--accio);border-color:var(--accio);color:#fff}
+  .btn.dang{color:var(--err);border-color:var(--err)}
+  .btn.ter{border-color:transparent;background:none;color:var(--ink-soft)}
+  /* ESMENA (coda d'A7 · mateixa decisió que el bloc A §9e): 11px no existeix a l'escala de la
+     casa (§2: 10·12·14·18·22·32). El botó petit ho és pel PADDING, no per una mida de lletra
+     fora d'escala. */
+  .btn.sm{padding:6px 12px;font-size:12px}
+  .btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round}
+
+  .mx{padding:0 20px}
+  .ident{display:flex;align-items:center;gap:12px;padding:16px 0;flex-wrap:wrap}
+  .ident .code{font-size:10px;color:var(--ink-faint);letter-spacing:.04em;display:block}
+  .ident .name{font-size:22px;line-height:28px;font-weight:500}
+  .ident .right{margin-left:auto;display:flex;gap:8px}
+  .b{font-size:10px;line-height:12px;font-weight:600;letter-spacing:.04em;padding:3px 10px;border-radius:999px}
+  .b.fase{background:var(--sel);color:var(--ink);border:1px solid var(--line)}
+  .b.ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+  .b.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn)}
+  .b.sys{background:var(--sel);color:var(--ink);border:1px solid var(--gold-border)}
+
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;padding-bottom:40px}
+  @media(max-width:1180px){.cols2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .chead{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  /* ESMENA (coda d'A7 · mateixa decisió que el bloc A §10.2): el subtítol de la casa és
+     --fs-h3 = 14px. La NORMA §2 escrivia 15 i el token en deia 14; es va tancar A FAVOR DEL
+     TOKEN. Aquí quedava la font que el tornaria a demanar a 15. */
+  .chead .t{font-size:14px;line-height:20px;font-weight:600}
+  .chead .n{font-size:10px;color:var(--ink-faint);letter-spacing:.05em;text-transform:uppercase}
+  .chead .right{margin-left:auto;display:flex;gap:8px}
+  .cbody{padding:14px 16px}
+
+  .kv{display:grid;grid-template-columns:132px 1fr;gap:8px;padding:6px 0;
+      border-bottom:1px solid var(--line-soft);align-items:baseline}
+  .kv:last-child{border-bottom:none}
+  .kv .k{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+  .kv .v{font-size:12px}
+  .kv .v.buit{color:var(--ink-faint);font-style:italic}
+  .edit svg{width:12px;height:12px;stroke:var(--ink-soft);fill:none;stroke-width:1.5;vertical-align:-2px;cursor:pointer}
+
+  /* ══ SUBESPAIS del contenidor dret ══ */
+  .step{border-bottom:1px solid var(--line)}
+  .step:last-child{border-bottom:none}
+  .shead{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer}
+  .shead .num{width:20px;height:20px;border-radius:50%;border:1px solid currentColor;
+              display:inline-flex;align-items:center;justify-content:center;
+              font-size:10px;font-weight:700;flex:none}
+  .shead .t{font-weight:600}
+  .shead .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .step.done .shead{color:var(--ok)}
+  .step.done .shead .num{background:var(--ok);border-color:var(--ok);color:#fff}
+  .step.done .shead .t{color:var(--ink)}
+  .step.now .shead{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold)}
+  .step.now .shead .num{border-color:var(--gold);color:var(--gold)}
+  .step.todo .shead .num{border-color:var(--ink-soft);color:var(--ink-soft)}
+  .step.locked .shead{color:var(--ink-faint);cursor:not-allowed}
+  .step.locked .shead .num{border-color:var(--ink-faint);color:var(--ink-faint)}
+  .sbody{padding:0 16px 14px 46px}
+  .fixat{font-size:12px}
+  .fixat .lbl{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+  /* ESMENA (coda d'A7 · mateixa decisió que el bloc A §9e): 11px fora d'escala → cos, 12px. */
+  .chip{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;
+        background:var(--panel);cursor:pointer;color:var(--ink)}
+  .chip:hover{background:var(--sel)}
+  .chip.on{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:600}
+  .grp{margin-bottom:12px}
+  .grp .q{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:5px}
+  /* ESMENA (bidireccional d'A7): 8px no és cap dels tres radis del sistema (§3: control 6 ·
+     targeta 12 · píndola 999). Una fila de run és un CONTROL que es clica, no una targeta. */
+  .runrow{border:1px solid var(--line);border-radius:6px;padding:8px 12px;margin-bottom:6px;cursor:pointer}
+  .runrow:hover{background:var(--bg)}
+  .runrow.on{background:var(--ok-bg);border-color:var(--ok)}
+  .runrow .n{font-weight:600}
+  .runrow .c{font-size:10px;color:var(--ink-soft)}
+  .sfoot{display:flex;gap:8px;justify-content:flex-end;padding-top:10px}
+  .empty{color:var(--ink-faint);font-style:italic}
+  .foot-note{padding:8px 20px 40px;font-size:10px;color:var(--ink-soft);line-height:1.7;max-width:900px}
+</style>
+</head>
+<body>
+
+<div class="side">
+  <div class="logo">Fhort<br><span style="font-weight:400;color:var(--ink-soft);font-size:10px">Textile Tech</span></div>
+  <div class="sec">Projectes</div>
+  <a>Desenvolupament</a><a class="on">Models</a><a>Planificació</a><a>Fittings</a>
+  <div class="sec">Configuració tècnica</div>
+  <a>Garment Types</a><a>POM Systems</a><a>Size Library</a><a>Grading Rules</a>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <span class="crumb"><span class="tenant">Fhort Textile Tech</span>
+      <span class="sep">›</span><a>Models</a><span class="sep">›</span><span class="here">TOLEDO</span></span>
+    <span class="right"><b>Agustí Devant</b> · 08/08/26 · 08:41
+      <span class="swi">cm → inch</span><span class="swi">CA ▾</span><span class="swi">👤</span></span>
+  </div>
+
+  <div class="pmenu-bar">
+    <div class="pmenu">
+      <button class="back" title="Tornar a Models"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></button>
+      <span class="psep"></span>
+      <button class="pill">Dashboard</button>
+      <button class="pill on">Resum</button>
+      <button class="pill">Mesures</button>
+      <button class="pill">Escalat</button>
+      <button class="pill">Patró</button>
+      <button class="pill">Fitxa tècnica</button>
+      <button class="pill">Fitxers</button>
+      <button class="pill">Registre d'activitat</button>
+      <button class="pill">Tasques</button>
+      <span class="right"><button class="btn sm"><svg viewBox="0 0 24 24"><path d="M5 5h14v10H9l-4 4z"/></svg>Watchpoints</button></span>
+    </div>
+  </div>
+
+  <div class="mx">
+    <div class="ident">
+      <span><span class="code">BRW-SS27-0011 · Plana · Pant · TOLEDO · 3/8</span>
+        <span class="name">TOLEDO</span></span>
+      <span class="b fase">Pendent</span>
+      <span class="right">
+        <button class="btn">Accions ▾</button>
+        <button class="btn dang"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Eliminar</button>
+      </span>
+    </div>
+
+    <div class="cols2">
+
+      <!-- ══ ESQUERRA · pas 1 del wizard: IDENTIFICACIÓ ══ -->
+      <div class="card">
+        <div class="chead">
+          <span class="t">Informació</span>
+          <span class="n">1 · Identificació</span>
+          <span class="right"><button class="btn sm"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16zM13 5l3 3"/></svg>Editar</button></span>
+        </div>
+        <div class="cbody">
+          <div class="kv"><span class="k">Client</span><span class="v">BRW · Textiles y Confecciones Brownie SL</span></div>
+          <div class="kv"><span class="k">Ref. interna</span><span class="v">BRW-SS27-0011</span></div>
+          <div class="kv"><span class="k">Ref. client</span><span class="v">Plana · Pant · TOLEDO · 3/8</span></div>
+          <div class="kv"><span class="k">Any · Temporada</span><span class="v">2027 · SS <span style="color:var(--ink-soft)">Spring/Summer</span></span></div>
+          <div class="kv"><span class="k">Col·lecció</span><span class="v">3/8</span></div>
+          <div class="kv"><span class="k">Nom de la peça</span><span class="v">TOLEDO</span></div>
+          <div class="kv"><span class="k">Descripció</span><span class="v buit">—</span></div>
+          <div class="kv"><span class="k">Deadline</span><span class="v buit">Sense deadline
+            <span class="edit" title="Editar deadline"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16zM13 5l3 3"/></svg></span></span></div>
+          <div class="kv"><span class="k">Creat per</span><span class="v">Salvador Devant · 6 d'ag. 2026, 11:44</span></div>
+        </div>
+      </div>
+
+      <!-- ══ DRETA · la COLUMNA DE TREBALL: passos 2-3-4 com a subespais ══ -->
+      <div class="card">
+        <div class="chead">
+          <span class="t">Definició del model</span>
+          <span class="n">2 de 3 passos</span>
+        </div>
+
+        <!-- PAS 2 · PEÇA — fet, elecció fixada i visible -->
+        <div class="step done">
+          <div class="shead">
+            <span class="num">✓</span><span class="t">Peça</span>
+            <span class="right"><button class="btn sm">Canviar</button></span>
+          </div>
+          <div class="sbody">
+            <div class="fixat">
+              <span class="lbl">Target · Construcció · Fit</span>
+              <div class="chips">
+                <span class="chip on">Dona</span><span class="chip on">Teixit pla</span><span class="chip on">Regular</span>
+              </div>
+              <div style="margin-top:8px">
+                <span class="lbl">Tipus de peça</span><br>
+                <b>Tailored &amp; Rigid Pants</b> · Pantaló estructurat
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAS 3 · TALLES — actual, obert i editant-se dins del contenidor -->
+        <div class="step now">
+          <div class="shead">
+            <span class="num">3</span><span class="t">Talles</span>
+            <span class="right"><span class="b warn">Pendent</span></span>
+          </div>
+          <div class="sbody">
+            <div class="grp">
+              <div class="q">Sistema de talles disponible per a Dona</div>
+              <div class="runrow on">
+                <span class="n">Alpha EU — Women</span> <span class="b sys">Canònic</span>
+                <div class="c">ALPHA_EU_W</div>
+              </div>
+              <div class="runrow">
+                <span class="n">Numeric EU — Women</span> <span class="b sys">Canònic</span>
+                <div class="c">NUMERIC_EU_W</div>
+              </div>
+              <div class="runrow">
+                <span class="n">BRW WOMAN WOVEN ALPHA EU REGULAR XXS to L</span> <span class="b sys">Run de client · BRW</span>
+                <div class="c">WOMAN_BRW_01</div>
+              </div>
+            </div>
+            <div class="grp">
+              <div class="q">Talla base i run</div>
+              <div class="chips">
+                <span class="chip">XXS</span><span class="chip">XS</span>
+                <span class="chip on">S · base</span><span class="chip">M</span><span class="chip">L</span>
+              </div>
+            </div>
+            <div class="sfoot">
+              <button class="btn ter">Enrere</button>
+              <button class="btn pri">Desar talles</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAS 4 · GRADUACIÓ — bloquejat fins que hi hagi talles -->
+        <div class="step locked">
+          <div class="shead">
+            <span class="num">4</span><span class="t">Graduació</span>
+            <span class="right"><span style="font-size:10px">requereix talles</span></span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="foot-note">
+    <b>El wizard, partit (decisió Agus 08/08):</b>
+    · <b>Pas 1 · Identificació</b> = l'edició del contenidor ESQUERRE. «Editar» hi obre el formulari
+      d'identificació (client, any/temporada, refs, col·lecció, nom, descripció, deadline) en el mateix lloc
+      on després es llegeix — mai en una pantalla a part.
+    · <b>Passos 2 · Peça, 3 · Talles i 4 · Graduació</b> viuen al contenidor DRET com a <b>subespais separats</b>,
+      cadascun amb les seves accions dins del seu espai. El model no desapareix mai de la vista.
+    · <b>Les eleccions queden FIXADES i VISIBLES</b>: un pas fet ensenya el que s'hi va triar (chips verds
+      d'inclusió + el tipus de peça) i ofereix «Canviar» en secundari. Res s'amaga en tancar-se.
+    · <b>Estats del subespai</b> (llenguatge del stepper, ja normat): FET verd amb ✓ · ACTUAL --sel + filet d'or ·
+      BLOQUEJAT en tènue amb el motiu escrit («requereix talles»).
+    · <b>El blau és del pas actual</b>: «Desar talles». Quan el pas 3 es tanqui, el blau passarà al 4.
+      Cap altre blau a la pantalla.
+    · Els selectors de dins són els que ja hi ha (targets, construcció, fit, sistemes, talles): mateixos
+      components, vestits amb la norma — chips triats en VERD (inclusió), runs en files seleccionables.
+  </div>
+</div>
+
+</body>
+</html>

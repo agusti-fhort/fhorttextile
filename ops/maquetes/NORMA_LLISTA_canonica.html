@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposta v2 · Pantalla Models</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbfaf8; --panel:#fff; --ink:#1d1d1b; --ink-soft:#6e6a64; --ink-faint:#98938b;
+    --line:#e8e5e0; --line-soft:#f0eeea;
+    --gold:#c27a2a; --gold-border:#e0c8a0; --sel:#f7f5f2;
+    --accio:#2b65c2;
+    --ok:#2e7d32; --ok-bg:#e9f3ea; --warn:#ff9942; --warn-bg:#ffedd9;
+    --err:#b42318; --err-bg:#fbebe9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;line-height:16px;
+       display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+
+  /* MENÚ LATERAL (sistema — present per veure l'amplada real; NO ES TOCA) */
+  .side{background:var(--panel);border-right:1px solid var(--line);padding:16px 0}
+  .side .logo{padding:0 16px 16px;font-weight:600;color:var(--gold);font-size:14px}
+  .side .sec{padding:12px 16px 4px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+             color:var(--ink-soft);font-weight:600}
+  .side a{display:block;padding:7px 16px;color:var(--ink-soft);cursor:pointer;font-size:12px}
+  .side a:hover{background:var(--bg)}
+  .side a.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold);color:var(--ink);font-weight:600}
+
+  .main{display:flex;flex-direction:column;min-width:0}
+
+  /* 1 · TOP BAR */
+  .topbar{background:var(--panel);border-bottom:1px solid var(--line);
+          display:flex;align-items:center;gap:8px;padding:10px 20px}
+  .crumb .tenant{font-weight:600}
+  .crumb .sep{color:var(--ink-faint)}
+  .crumb .here{font-weight:600}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px;
+                 font-size:11px;color:var(--ink-soft);white-space:nowrap}
+  .topbar .right b{color:var(--ink)}
+  .swi{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer}
+
+  /* 2 · MENÚ DE PANTALLA — accions a l'ESQUERRA, amb estil de menú */
+  .pmenu-bar{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .pmenu{padding:8px 20px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  /* ESMENA (bidireccional d'A5, 08/08): un botó que NOMÉS porta una icona declara la MIDA i
+     la TINTA de la icona al botó, i la icona les hereta. Abans el <button> es quedava amb els
+     13.33px i el negre de l'agent d'usuari mentre l'svg pintava 16px en --ink-soft: el que es
+     veia era correcte i el que es mesurava, no. Zero canvi de píxel. */
+  .back{width:32px;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
+        font-size:16px;color:var(--ink-soft);
+        display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+  .back:hover{background:var(--sel)}
+  .back svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+  .psep{width:1px;height:20px;background:var(--line);margin:0 6px}
+  .mitem{border:1px solid transparent;border-radius:999px;background:none;padding:6px 14px;
+         font-family:inherit;font-size:12px;color:var(--ink-soft);cursor:pointer;line-height:16px;
+         display:inline-flex;align-items:center;gap:6px}
+  .mitem:hover{background:var(--sel);color:var(--ink)}
+  .mitem.on{background:var(--sel);border-color:var(--gold-border);color:var(--ink);font-weight:600}
+  .mitem svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round}
+
+  /* 3 · IDENTITAT: Models X/84 (KPI→selecció) + cerca a la mateixa línia */
+  .mx{padding:0 20px}
+  .headrow{display:flex;align-items:center;gap:16px;padding:16px 0;flex-wrap:wrap}
+  .headrow .kpi{font-size:22px;line-height:28px;font-weight:600;color:var(--ink);white-space:nowrap}
+  .headrow .kpi small{font-size:14px;font-weight:500;color:var(--ink-soft)}
+  .headrow .lab{font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+                color:var(--ink-soft);font-weight:600;white-space:nowrap;align-self:center}
+  /* ESMENA (bidireccional d'A5, 08/08): la TINTA es declara. Sense `color` un <input> es
+     queda amb el negre de l'agent d'usuari (rgb(0,0,0)) i la mesura hi troba un valor que
+     ningú ha decidit. El text d'un camp és --ink, com tot el text de la casa. */
+  .headrow input{flex:1;min-width:220px;font-family:inherit;font-size:12px;color:var(--ink);
+                 border:1px solid var(--line);
+                 border-radius:6px;padding:8px 12px;background:var(--panel)}
+  .headrow input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(194,122,42,.15)}
+  .headrow select{font-family:inherit;font-size:12px;border:1px solid var(--line);border-radius:6px;
+                  padding:8px 10px;background:var(--panel);color:var(--ink)}
+
+  /* 4 · TAULA: amplades mínimes PER CONTINGUT + ellipsis + hover */
+  .listbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+           overflow:auto;margin-bottom:16px}
+  table{border-collapse:collapse;width:100%}
+  th{font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--ink-soft);font-weight:600;text-align:left;white-space:nowrap;
+     padding:8px 10px;border-bottom:1px solid var(--line);background:var(--panel);
+     cursor:pointer;user-select:none}
+  th .ord{display:inline-block;vertical-align:-2px;margin-left:2px}
+  th .ord svg{width:12px;height:12px;stroke:var(--ink-faint);fill:none;stroke-width:1.75;
+              stroke-linecap:round;stroke-linejoin:round}
+  th:hover .ord svg{stroke:var(--ink-soft)}
+  th.sorted{color:var(--ink)}
+  th.sorted .ord svg{stroke:var(--gold);stroke-width:2}
+  td{padding:7px 10px;border-bottom:1px solid var(--line-soft);white-space:nowrap;
+     background:var(--panel);vertical-align:middle;overflow:hidden;text-overflow:ellipsis}
+  tr:hover td{background:var(--bg)}
+  tr.on td{background:var(--sel)}
+  tr.on td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
+  /* amplades mínimes per contingut — NO totes iguals */
+  .c-chk{width:30px;min-width:30px}
+  .c-refi{min-width:118px;max-width:130px}
+  .c-refc{min-width:64px;max-width:80px}
+  .c-nom{min-width:170px;max-width:260px}
+  .c-col{min-width:110px;max-width:150px}
+  .c-temp{min-width:70px;max-width:80px}
+  .c-dent{min-width:78px;max-width:86px}
+  .c-dead{min-width:78px;max-width:86px}
+  .c-fase{min-width:110px;max-width:130px}
+  .c-est{min-width:86px;max-width:100px}
+  .c-del{width:36px;min-width:36px}
+  td.c-refi,td.c-refc{font-size:11px;color:var(--ink-soft)}
+  td.c-nom{font-weight:600}
+  td.c-col,td.c-temp,td.c-dent,td.c-dead{font-size:11px;color:var(--ink-soft)}
+  td.c-fase{font-size:11px;color:var(--ink)}   /* FASE: NOMÉS TEXT */
+  .b{font-size:10px;line-height:12px;font-weight:600;letter-spacing:.04em;
+     padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-block}
+  .b.ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+  .b.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn)}
+  .b.neutral{background:var(--bg);color:var(--ink-soft);border:1px solid var(--line)}
+  .chk{width:14px;height:14px;accent-color:var(--gold)}
+  /* ESMENA (bidireccional d'A5, 08/08): mateixa raó que a `.back` — la paperera declara els
+     seus 14px i la seva tinta --err al botó; l'svg els hereta amb currentColor. */
+  .del{width:26px;height:26px;border:1px solid transparent;border-radius:6px;background:none;
+       font-size:14px;color:var(--err);
+       cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+  .del:hover{border-color:var(--err);background:var(--err-bg)}
+  .del svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round}
+  .note{padding:4px 20px 40px;font-size:10px;color:var(--ink-soft);line-height:1.7;max-width:880px}
+</style>
+</head>
+<body>
+
+<!-- MENÚ LATERAL (context real d'amplada) -->
+<div class="side">
+  <div class="logo">Fhort<br><span style="font-weight:400;color:var(--ink-soft);font-size:10px">Textile Tech</span></div>
+  <div class="sec">Projectes</div>
+  <a>Desenvolupament</a>
+  <a class="on">Models</a>
+  <a>Planificació</a>
+  <a>Fittings</a>
+  <div class="sec">Configuració tècnica</div>
+  <a>Garment Types</a>
+  <a>POM Systems</a>
+  <a>Size Library</a>
+  <a>Grading Rules</a>
+</div>
+
+<div class="main">
+  <!-- 1 · TOP BAR -->
+  <div class="topbar">
+    <span class="crumb"><span class="tenant">Fhort Textile Tech</span>
+      <span class="sep">›</span><span class="here">Models</span></span>
+    <span class="right"><b>Agustí Devant</b> · 08/08/26 · 08:15
+      <span class="swi">cm → inch</span><span class="swi">CA ▾</span><span class="swi">👤</span></span>
+  </div>
+
+  <!-- 2 · MENÚ: accions a l'ESQUERRA + filtres ràpids En curs / Acabats -->
+  <div class="pmenu-bar">
+    <div class="pmenu">
+      <button class="back" title="Tornar al Dashboard"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></button>
+      <span class="psep"></span>
+      <button class="mitem on">Models en curs</button>
+      <button class="mitem">Models acabats</button>
+      <span class="psep"></span>
+      <button class="mitem"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nou model ▾</button>
+      <button class="mitem"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Accions ▾</button>
+      <button class="mitem"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filtres</button>
+    </div>
+  </div>
+
+  <div class="mx">
+    <!-- 3 · Models X/84 (selecció, no KPI) + cerca a la mateixa línia -->
+    <div class="headrow">
+      <span class="kpi">12<small>/84</small></span>
+      <span class="lab">models</span>
+      <input placeholder="Cerca per codi, nom o client…">
+      <select><option>Totes les fases</option></select>
+      <select><option>Totes les temporades</option></select>
+    </div>
+
+    <!-- 4 · LLISTA: amplades per contingut, ellipsis + hover (title) -->
+    <div class="listbox">
+      <table>
+        <thead><tr>
+          <th class="c-chk"><input type="checkbox" class="chk"></th>
+          <th class="c-refi">Ref interna <span class="ord"><svg viewBox="0 0 24 24"><path d="M8 9l4-5 4 5M8 15l4 5 4-5"/></svg></span></th>
+          <th class="c-refc">Ref client <span class="ord"><svg viewBox="0 0 24 24"><path d="M8 9l4-5 4 5M8 15l4 5 4-5"/></svg></span></th>
+          <th class="c-nom sorted">Model <span class="ord"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></th>
+          <th class="c-col">Col·lecció <span class="ord"><svg viewBox="0 0 24 24"><path d="M8 9l4-5 4 5M8 15l4 5 4-5"/></svg></span></th>
+          <th class="c-temp">Temp. <span class="ord"><svg viewBox="0 0 24 24"><path d="M8 9l4-5 4 5M8 15l4 5 4-5"/></svg></span></th>
+          <th class="c-dent">Entrada <span class="ord"><svg viewBox="0 0 24 24"><path d="M8 9l4-5 4 5M8 15l4 5 4-5"/></svg></span></th>
+          <th class="c-dead">Deadline <span class="ord"><svg viewBox="0 0 24 24"><path d="M8 9l4-5 4 5M8 15l4 5 4-5"/></svg></span></th>
+          <th class="c-fase">Fase <span class="ord"><svg viewBox="0 0 24 24"><path d="M8 9l4-5 4 5M8 15l4 5 4-5"/></svg></span></th>
+          <th class="c-est">Estat <span class="ord"><svg viewBox="0 0 24 24"><path d="M8 9l4-5 4 5M8 15l4 5 4-5"/></svg></span></th>
+          <th class="c-del"></th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td class="c-chk"><input type="checkbox" class="chk"></td>
+            <td class="c-refi">BRW-FW26-0061</td>
+            <td class="c-refc">—</td>
+            <td class="c-nom" title="CAIRO">CAIRO</td>
+            <td class="c-col" title="Winter Basics">Winter Basics</td>
+            <td class="c-temp">FW 2026</td>
+            <td class="c-dent">12/05/26</td>
+            <td class="c-dead">30/09/26</td>
+            <td class="c-fase">Desenvolupament</td>
+            <td class="c-est"><span class="b warn">En curs</span></td>
+            <td class="c-del"><button class="del"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button></td>
+          </tr>
+          <tr class="on">
+            <td class="c-chk"><input type="checkbox" class="chk" checked></td>
+            <td class="c-refi">BRW-SS27-0005</td>
+            <td class="c-refc">30/7D</td>
+            <td class="c-nom" title="DENIM HELIO JACKET — el hover ensenya el nom sencer si l'ellipsis el retalla">DENIM HELIO JACKET</td>
+            <td class="c-col" title="Denim Capsule Primavera Llarga — exemple d'ellipsis">Denim Capsule Primavera Llarga</td>
+            <td class="c-temp">SS 2027</td>
+            <td class="c-dent">30/07/26</td>
+            <td class="c-dead">15/01/27</td>
+            <td class="c-fase">Pendent</td>
+            <td class="c-est"><span class="b neutral">Començat</span></td>
+            <td class="c-del"><button class="del"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button></td>
+          </tr>
+          <tr>
+            <td class="c-chk"><input type="checkbox" class="chk"></td>
+            <td class="c-refi">BRW-SS27-0010</td>
+            <td class="c-refc">30/7</td>
+            <td class="c-nom" title="DONNA">DONNA</td>
+            <td class="c-col" title="Summer Tailoring">Summer Tailoring</td>
+            <td class="c-temp">SS 2027</td>
+            <td class="c-dent">30/07/26</td>
+            <td class="c-dead">—</td>
+            <td class="c-fase">Pendent</td>
+            <td class="c-est">—</td>
+            <td class="c-del"><button class="del"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button></td>
+          </tr>
+          <tr>
+            <td class="c-chk"><input type="checkbox" class="chk"></td>
+            <td class="c-refi">BRW-FW26-0054</td>
+            <td class="c-refc">30/7</td>
+            <td class="c-nom" title="MILEY">MILEY</td>
+            <td class="c-col" title="Dresses">Dresses</td>
+            <td class="c-temp">FW 2026</td>
+            <td class="c-dent">30/07/26</td>
+            <td class="c-dead">15/09/26</td>
+            <td class="c-fase">Desenvolupament</td>
+            <td class="c-est"><span class="b warn">En curs</span></td>
+            <td class="c-del"><button class="del"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button></td>
+          </tr>
+          <tr>
+            <td class="c-chk"><input type="checkbox" class="chk"></td>
+            <td class="c-refi">BRW-SS26-0005</td>
+            <td class="c-refc">—</td>
+            <td class="c-nom" title="PALERMO">PALERMO</td>
+            <td class="c-col" title="Resort">Resort</td>
+            <td class="c-temp">SS 2026</td>
+            <td class="c-dent">02/03/26</td>
+            <td class="c-dead">30/08/26</td>
+            <td class="c-fase">Desenvolupament</td>
+            <td class="c-est"><span class="b ok">Acabat</span></td>
+            <td class="c-del"><button class="del"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Correccions d'aquesta v2:</b>
+    · MENÚ LATERAL PRESENT (l'amplada útil és la real).
+    · Accions del menú a l'ESQUERRA (després del ←) — al menú, el comportament és de menú.
+    · Dos filtres ràpids al menú: «Models en curs» (per defecte) · «Models acabats» — els acabats no embruten la cerca. El criteri de quan és un o altre, pendent (previsió d'estil).
+    · «Models 12/84»: selecció, no KPI — el primer valor s'actualitza amb el filtre; la cerca comença al costat.
+    · Columnes amb AMPLADA MÍNIMA PER CONTINGUT (no totes iguals): refs estretes, nom generós, dates fixes.
+    · OVERFLOW: ellipsis (…) + hover mostra el text sencer (title/tooltip) — mai salt de línia, mai scroll per columna. Mira la fila DENIM: la col·lecció llarga es retalla i el hover l'ensenya.
+    · FASE: només text (Pendent · Desenvolupament · Proto…). ESTAT: codi de colors (Començat neutre · En curs taronja · Acabat verd).
+    <br><br>
+    <b>ACTA D'ESMENA · 08/08/2026 · bidireccional d'A5 (`ops/qa/qa_bidireccional.py`):</b>
+    tres controls d'aquesta maqueta —la cerca, la fletxa d'enrere i la paperera de fila— no
+    declaraven ni <code>color</code> ni <code>font-size</code> i es quedaven amb els de l'agent
+    d'usuari (negre, 13.33px). El que es VEIA era correcte —l'svg portava la seva mida i el seu
+    traç—, però el que es MESURAVA era un valor que ningú havia decidit, i la comparació contra
+    la pantalla el donava com a desviació. Ara els tres el declaren i els fills l'hereten amb
+    <code>currentColor</code>. <b>Zero canvi de píxel</b>; el que canvia és que la maqueta diu el
+    que pinta.
+  </div>
+</div>
+
+</body>
+</html>

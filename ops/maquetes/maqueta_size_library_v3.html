@@ -86,7 +86,11 @@
   .kv{display:grid;grid-template-columns:132px 1fr;gap:8px;padding:4px 0;font-size:12px;align-items:baseline}
   .kv .k{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
   .kv .v{line-height:1.45}
-  .kv .v.buit{color:var(--ink-faint);font-style:italic}
+  /* ESMENA (bloc A §9b·#2 · executada a la coda d'A5): l'estat buit va a 10px, no al cos de
+     12. La segona passada de conformitat el va baixar a --fs-caption i el va deixar UN COP per
+     secció en comptes de repetit sota cada capa; aquí quedava la font que el tornaria a
+     demanar a 12. Tènue i cursiva, com ja deia. */
+  .kv .v.buit{font-size:10px;color:var(--ink-faint);font-style:italic}
   .tags{display:flex;gap:6px;flex-wrap:wrap}
   .tg{font-size:10px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;
       background:var(--panel);cursor:pointer}
