@@ -50,11 +50,20 @@ const cx = {
     fontWeight: 600, background: 'var(--panel)',
     borderBottom: '1px solid var(--line-soft)', position: 'sticky', top: 0, zIndex: 2,
   },
+  // 🔴 AQUÍ HI HAVIA UNA LÍNIA NEGRA DE 3px (mateix defecte que al catàleg de POMs).
+  //
+  // `borderBottom: '1px solid var(--line-soft)'` … i, més avall al mateix objecte,
+  // `border: 'none'` seguit de `borderBottomStyle: 'solid'`. Una SHORTHAND aplicada DESPRÉS
+  // de la seva pròpia longhand la reescriu sencera: `border: none` posa l'amplada a `medium`
+  // (3px) i el color a **`currentColor`** —que amb `color: 'inherit'` és `--text-main`—, i el
+  // `borderBottomStyle` de darrere tornava a fer visible AIXÒ. 3px de negre sota cada run.
+  // No es veu llegint el codi: es MESURA (§8d · `ops/qa/qa_auditoria_computats.py`).
   row: {
-    padding: '8px 16px', borderBottom: '1px solid var(--line-soft)', cursor: 'pointer',
+    padding: '8px 16px', cursor: 'pointer',
     display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
-    background: 'transparent', border: 'none', borderBottomStyle: 'solid', font: 'inherit',
-    color: 'inherit',
+    background: 'transparent', color: 'inherit', fontFamily: 'inherit',
+    border: 0,
+    borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--line-soft)',
   },
   rowOn: { background: 'var(--sel)', boxShadow: 'inset 3px 0 0 var(--gold)' },
   code: { fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gold)', width: 128, flex: 'none' },
@@ -143,7 +152,7 @@ function Capa({ titol, vocabulari, triats, onToggle, editable, t }) {
               <button key={v.codi} type="button" disabled={!editable}
                       onClick={() => onToggle(v.codi)} aria-pressed={on}
                       style={{
-                        ...cx.ab, cursor: editable ? 'pointer' : 'default', font: 'inherit',
+                        ...cx.ab, cursor: editable ? 'pointer' : 'default', fontFamily: 'inherit',
                         fontSize: 'var(--fs-label)',
                         ...(on ? { background: 'var(--sel)', borderColor: 'var(--gold-border)',
                                    color: 'var(--text-main)', fontWeight: 600 } : null),
@@ -301,7 +310,7 @@ export default function RunsCataleg({ onNou }) {
             {[true, false].map(v => (
               <button key={String(v)} type="button" onClick={() => setNomesActius(v)}
                       aria-pressed={nomesActius === v}
-                      style={{ ...cx.ab, cursor: 'pointer', font: 'inherit', fontSize: 'var(--fs-label)',
+                      style={{ ...cx.ab, cursor: 'pointer', fontFamily: 'inherit',
                                ...(nomesActius === v ? { background: 'var(--sel)',
                                  borderColor: 'var(--gold-border)', fontWeight: 600 } : null) }}>
                 {v ? t('size_library.tab_active') : t('size_library.tab_off')}

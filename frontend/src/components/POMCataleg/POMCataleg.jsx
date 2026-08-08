@@ -64,11 +64,29 @@ const cx = {
     fontWeight: 600, background: 'var(--panel)',
     borderBottom: '1px solid var(--line-soft)', position: 'sticky', top: 0, zIndex: 2,
   },
+  // 🔴 AQUÍ HI HAVIA UNA LÍNIA NEGRA DE 3px, i el codi semblava correcte.
+  //
+  // Deia `borderBottom: '1px solid var(--line-soft)'` … i més avall, al mateix objecte,
+  // `border: 'none'` (per matar la vora d'UA del `<button>`) seguit de
+  // `borderBottomStyle: 'solid'`. Les propietats s'apliquen en ORDRE DE CLAU, i una SHORTHAND
+  // aplicada DESPRÉS de la seva pròpia longhand la reescriu sencera: `border: none` posa
+  // l'amplada a `medium` (3px) i el color a **`currentColor`**, i el `borderBottomStyle`
+  // següent tornava a fer visible això —no la vora que la línia de dalt demanava—. Amb
+  // `color: 'inherit'`, `currentColor` és `--text-main`: 3px de NEGRE sota cada fila,
+  // en comptes d'un filet d'1px de `--line-soft`.
+  //
+  // El codi no ho delata: cal MESURAR-HO (`getComputedStyle`, §8d). Ho va veure l'Agus a
+  // pantalla i ho confirma `ops/qa/qa_auditoria_computats.py`.
+  //
+  // Fix: cap shorthand de vora ni de font. `border: 0` primer (mata la d'UA sense tocar cap
+  // color), després NOMÉS les longhands del filet que volem; i `fontFamily` en comptes de
+  // `font`, que és qui es menjava la mida.
   row: {
-    padding: '8px 16px', borderBottom: '1px solid var(--line-soft)', cursor: 'pointer',
+    padding: '8px 16px', cursor: 'pointer',
     display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
-    background: 'transparent', border: 'none', borderBottomStyle: 'solid', font: 'inherit',
-    color: 'inherit',
+    background: 'transparent', color: 'inherit', fontFamily: 'inherit',
+    border: 0,
+    borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--line-soft)',
   },
   rowOn: { background: 'var(--sel)', boxShadow: 'inset 3px 0 0 var(--gold)' },
   code: { fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gold)', width: 78, flex: 'none' },
