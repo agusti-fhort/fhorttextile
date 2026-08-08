@@ -2,7 +2,7 @@
 
 > 08/08/2026 · commits **182 → 189** (cap push) · build **desplegat** (`frontend/dist` és el que
 > staging serveix) · backend **reiniciat** després de tocar el serializer.
-> Les dues condicions de tancament, al §8. El que queda obert, al §7.
+> **Les dues condicions de tancament: ✅ i ✅** (§8). El que queda obert, al §7.
 
 ---
 
@@ -283,15 +283,28 @@ tocar `ModelListSerializer`: sense reinici el `gunicorn` hauria seguit servint e
 llei d'infra). `npx eslint src` → **0 errors**. Auditoria de computats a les 6 pantalles →
 **0 incompliments**. Bidireccional → **0 desviacions**.
 
-### (2) La suite — ⏳ **v. la nota**
+### (2) La suite — ✅ **913 tests · OK · 0 errors · 0 fallides**
 S'ha tocat **`ModelListSerializer`** (un camp read-only afegit) i **`ordering_fields`** del
-ViewSet, o sigui que la condició aplica. La correguda de tancament és
-`python manage.py test fhort.pom fhort.models_app fhort.fitting` (la **mateixa selecció d'apps**
-que el bloc A, per poder comparar el número). `node --test` → **218 · 0 fallides**.
+ViewSet, o sigui que la condició aplica. Correguda de tancament, amb la **mateixa selecció
+d'apps** que el bloc A per poder comparar el número:
 
-> ⚠️ **Sobre `--keepdb`**: una correguda amb `--keepdb` va donar 73 errors i **cap era real** —
-> tots eren `UniqueViolation` sobre `tenants_client.schema_name='test'`, deixat per una correguda
-> anterior interrompuda. Amb BD fresca desapareixen. **Anotat perquè no torni a espantar ningú.**
+```
+python manage.py test fhort.pom fhort.models_app fhort.fitting --noinput
+Ran 913 tests in 3564.974s
+OK
+```
+
+I `node --test "src/**/*.test.js"` → **218 · 0 fallides**.
+
+> ⏱️ **AQUESTA SUITE TRIGA UNA HORA** (3.565 s = 59 min; el gruix és muntar els esquemes de
+> tenant, no córrer les proves). Dues corregudes d'aquest bloc van morir per `timeout` abans
+> d'arribar al final —una es va menjar un `timeout 3000` sencer— i el silenci semblava un
+> penjat. **No la matis amb timeouts curts.** El «3.597 s» del report del bloc A és el MATEIX
+> ordre de magnitud amb el separador de milers llegit com a decimal: eren ~3.597 segons, no 3,6.
+>
+> ⚠️ **I `--keepdb` MENTEIX**: una correguda amb `--keepdb` va donar **73 errors i cap era real**
+> — tots `UniqueViolation` sobre `tenants_client.schema_name='test'`, residu d'una correguda
+> interrompuda. Amb BD fresca desapareixen tots. **Anotat perquè no torni a espantar ningú.**
 
 ---
 
@@ -304,7 +317,7 @@ que el bloc A, per poder comparar el número). `node --test` → **218 · 0 fall
 | A6 | `a6_01_dashboard` · `a6_02_molla_4_segments` · `a6_03_accions` |
 | A7 | `a7_01_resum` · `a7_02_info_editant` · `a7_03_talles_obert` · `a7_04_peca_obert` |
 | A7 · funcional | `a7_f1_talles_actual` · `a7_f2_talles_fet_nou` |
-| A8 · A10 | `a8_01_mesures` · `a10_01_comprovacio` · `a10_02_repas` |
+| A8 · A10 | `a8_01_mesures` · `a10_01_comprovacio` · `a10_02_repas` — ⚠️ **les tres ensenyen el GATE**, no la taula ni la Comprovació: el banc no té mesures (v. el límit de sota) |
 
 ⚠️ **Les icones surten buides a les captures i no és un defecte de la pantalla**: Tabler entra per
 webfont des d'un CDN i l'arnès intercepta `**/*`. Al navegador de debò hi són.
