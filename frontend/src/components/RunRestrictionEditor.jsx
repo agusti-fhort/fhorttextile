@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { TARGETS, CONSTRUCTIONS, FITS, groupLabel } from "./grading/gradingAxes"
+import { groupLabel } from "./grading/gradingAxes"
+import { useEixos } from "./grading/eixosFont"
 import { Chip } from "./grading/wizardUI"
 import { sizeSystems, garmentGroups } from "../api/endpoints"
 
@@ -44,6 +45,10 @@ function Capa({ titol, opcions, triats, onToggle, buida }) {
 
 export default function RunRestrictionEditor({ run, onSaved, onCancel }) {
   const { t, i18n } = useTranslation()
+  // Les altres TRES capes (target, construcció, fit) ara surten de la BD pel mateix motiu que la
+  // de grups ja n'hi sortia —el comentari de sota ho deia amb totes les lletres i valia igual per
+  // a les tres—: editar amb una llista curta fa desaparèixer en silenci el que el run ja porta.
+  const { targets, constructions, fits } = useEixos()
   const [triats, setTriats] = useState({
     target_codis: run?.target_codis || [],
     grup_codis: run?.grup_codis || [],
@@ -105,7 +110,7 @@ export default function RunRestrictionEditor({ run, onSaved, onCancel }) {
       </div>
 
       <Capa titol={t('size_library.layer_target')}
-            opcions={TARGETS.map(x => ({ codi: x.codi, etiqueta: t(`model_wizard.target_${x.codi}`, x.nom_en) }))}
+            opcions={(targets || []).map(x => ({ codi: x.codi, etiqueta: t(`model_wizard.target_${x.codi}`, x.nom_en) }))}
             triats={triats.target_codis} onToggle={c => toggle('target_codis', c)}
             buida={t('size_library.layer_empty')} />
       <Capa titol={t('size_library.layer_group')}
@@ -113,11 +118,11 @@ export default function RunRestrictionEditor({ run, onSaved, onCancel }) {
             triats={triats.grup_codis} onToggle={c => toggle('grup_codis', c)}
             buida={t('size_library.layer_empty')} />
       <Capa titol={t('size_library.layer_construction')}
-            opcions={CONSTRUCTIONS.map(x => ({ codi: x.codi, etiqueta: t(`model_wizard.construction_${x.codi}`, x.nom_en) }))}
+            opcions={(constructions || []).map(x => ({ codi: x.codi, etiqueta: t(`model_wizard.construction_${x.codi}`, x.nom_en) }))}
             triats={triats.construccio_codis} onToggle={c => toggle('construccio_codis', c)}
             buida={t('size_library.layer_empty')} />
       <Capa titol={t('size_library.layer_fit')}
-            opcions={FITS.map(x => ({ codi: x.codi, etiqueta: t(`model_wizard.fit_${x.codi}`, x.nom_en) }))}
+            opcions={(fits || []).map(x => ({ codi: x.codi, etiqueta: t(`model_wizard.fit_${x.codi}`, x.nom_en) }))}
             triats={triats.fit_codis} onToggle={c => toggle('fit_codis', c)}
             buida={t('size_library.layer_empty')} />
 

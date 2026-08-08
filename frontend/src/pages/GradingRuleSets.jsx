@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import CascadeSelector from '../components/CascadeSelector/CascadeSelector'
 import SizeAuthoringDrawer from '../components/SizeAuthoringDrawer'
-import { TARGETS, CONSTRUCTIONS, FITS, matchingRuleSets as matchingRuleSetsFn, matchingRuleSetsStrict } from '../components/grading/gradingAxes'
+import { matchingRuleSets as matchingRuleSetsFn, matchingRuleSetsStrict } from '../components/grading/gradingAxes'
+import { useEixos } from '../components/grading/eixosFont'
 import TargetLabel from '../components/grading/TargetLabel'
 import { effectiveRegime } from '../utils/gradingRegime'
 
@@ -700,9 +701,11 @@ function ActionBtn({ onClick, label, danger = false }) {
   )
 }
 
-// TargetPills — selecció MULTI de targets (M2M del ruleset). Vocabulari únic TARGETS (gradingAxes).
+// TargetPills — selecció MULTI de targets (M2M del ruleset). El catàleg és el de la BD
+// (`/targets/`); sense catàleg no s'ofereix cap pill, que és el que toca dir quan no en sabem cap.
 function TargetPills({ value, onToggle, disabled }) {
   const { t } = useTranslation()
+  const { targets } = useEixos()
   return (
     <div style={{ marginBottom: 12 }}>
       <label style={{
@@ -710,7 +713,7 @@ function TargetPills({ value, onToggle, disabled }) {
         display: 'block', marginBottom: 4,
       }}>{t('grading.field_target_ref')}</label>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {TARGETS.map(tg => {
+        {(targets || []).map(tg => {
           const on = value.includes(tg.codi)
           return (
             <button
@@ -743,7 +746,10 @@ function TargetPills({ value, onToggle, disabled }) {
 
 // ── RuleSetModal ────────────────────────────────────────────────────────────
 function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, authHeaders, onSave, onError, onClose }) {
+  // Construccions i fits del catàleg de la BD. Sense catàleg els dos selects van buits: el
+  // ruleset es podria desar sense eix, i això ja ho decideix el backend, no una llista d'aquí.
   const { t } = useTranslation()
+  const { constructions, fits } = useEixos()
   const isEdit = !!rs?.id
   const [form, setForm] = useState({
     nom:          rs?.nom          || '',
@@ -908,8 +914,8 @@ function RuleSetModal({ rs, defaultTarget, defaultConstruction, defaultFit, auth
               : [...f.target_codis, codi],
           }))}
         />
-        <F label={t('grading.field_construction_ref')} field="construction_codi_form" options={CONSTRUCTIONS} disabled={!axesEditable} />
-        <F label={t('grading.field_fit_ref')} field="fit_type_codi_form" options={FITS} disabled={!axesEditable} />
+        <F label={t('grading.field_construction_ref')} field="construction_codi_form" options={constructions || []} disabled={!axesEditable} />
+        <F label={t('grading.field_fit_ref')} field="fit_type_codi_form" options={fits || []} disabled={!axesEditable} />
         {axesEditable && (
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>

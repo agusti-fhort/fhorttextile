@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import CascadeFinder from '../components/CascadeSelector/CascadeFinder'
 import CustomerSelector from '../components/CustomerSelector'
-import { matchingRuleSetsStrict, TARGETS, CONSTRUCTIONS, FITS } from '../components/grading/gradingAxes'
+import { matchingRuleSetsStrict } from '../components/grading/gradingAxes'
+import { useEixos } from '../components/grading/eixosFont'
 // Els àtoms de UI i el PAS DE GRADUACIÓ viuen fora des del 31/07: el pas s'obre també com a
 // overlay sobre Mesures, i ha de ser el MATEIX component als dos llocs (mai una còpia).
 import GraduacioPanel from '../components/grading/GraduacioPanel'
@@ -41,8 +42,9 @@ const ordenaPelSistema = (run, labels) =>
     const ia = labels.indexOf(a), ib = labels.indexOf(b)
     return (ia < 0 ? Infinity : ia) - (ib < 0 ? Infinity : ib)
   })
-// TARGETS i CONSTRUCTIONS: vocabulari ÚNIC de gradingAxes (fora la còpia privada — Onada 1). Objectes
-// {codi, nom_*}; aquí només en fem servir el `codi` (l'etiqueta la resol t('model_wizard.*')).
+// Els tres eixos venen del CATÀLEG de la BD (`useEixos`), no de cap llista al client: n'usem el
+// `codi` (l'etiqueta la resol `t('model_wizard.*')`). Sense catàleg les tres files de píndoles es
+// queden només amb «Totes» —que segueix filtrant bé— en comptes d'oferir eixos inventats.
 
 // EL WIZARD, també ENCASTAT (31/07). El botó «Graduació» de Mesures obre AQUEST wizard —el
 // d'editar model, el que ja existeix i funciona— posicionat al pas 4, com a calaix lateral
@@ -63,6 +65,7 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
   const encastat = embedModelId != null
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { targets: catTargets, constructions: catConstructions, fits: catFits } = useEixos()
   const isEditMode = !!id
   const me = useAuthStore(s => s.user)
   const canConfigure = !!me?.capabilities?.includes('configure')
@@ -635,7 +638,7 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
                     <div style={{ ...labelStyle, marginBottom: 0 }}>{t('model_wizard.filter_discard')}</div>
                     <FiltreFila etiqueta={t('model_wizard.axis_target')}>
                       <Chip active={!target} onClick={() => onPickTarget('')}>{t('model_wizard.filter_all')}</Chip>
-                      {TARGETS.map(tg => (
+                      {(catTargets || []).map(tg => (
                         <Chip key={tg.codi} active={target === tg.codi}
                           onClick={() => onPickTarget(target === tg.codi ? '' : tg.codi)}>
                           <TargetLabel
@@ -650,7 +653,7 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
                       <Chip active={!fit} onClick={() => { if (fit) { setFit(null); setGradingRuleSetId(null) } }}>
                         {t('model_wizard.filter_all')}
                       </Chip>
-                      {FITS.map(f => (
+                      {(catFits || []).map(f => (
                         <Chip key={f.codi} active={fit === f.codi}
                           onClick={() => {
                             const nou = fit === f.codi ? '' : f.codi
@@ -677,7 +680,7 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
                         onClick={() => { if (construction) { resetSizing(); resetGradingIFit(); setConstruction(null) } }}>
                         {t('model_wizard.filter_all')}
                       </Chip>
-                      {CONSTRUCTIONS.map(c => (
+                      {(catConstructions || []).map(c => (
                         <Chip key={c.codi} active={construction === c.codi}
                           onClick={() => {
                             const nou = construction === c.codi ? '' : c.codi

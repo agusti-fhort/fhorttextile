@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { SizeSetCard } from "./SizeSetCard"
-import { constructionTypes, fitTypes, sizingProfiles } from "../api/endpoints"
-import { TARGETS, groupLabel } from "./grading/gradingAxes"
+import { sizingProfiles } from "../api/endpoints"
+import { groupLabel } from "./grading/gradingAxes"
+import { useEixos } from "./grading/eixosFont"
 import TargetLabel from "./grading/TargetLabel"
 
-// TARGETS: vocabulari ÚNIC (ordre + etiquetes) de gradingAxes — fora la còpia TARGET_ORDER + la crida
+// Els targets (ordre + etiquetes) surten del CATÀLEG de la BD (`/targets/`, ordenat per
+// `display_order`) — fora la còpia TARGET_ORDER + la crida
 // a targets/ (Onada 2). Les cerques de perfils van per CODI de target, no cal l'objecte de BD.
 
 function LoadError({ onRetry, label }) {
@@ -63,8 +65,14 @@ export function SizingProfileSelector({
   onSelectionChange,
 }) {
   const { t, i18n } = useTranslation()
-  const [constructions, setConstructions] = useState([])
-  const [allFitTypes, setAllFitTypes] = useState([])
+  // ELS TRES EIXOS, D'UNA SOLA FONT. Aquesta pantalla ja anava a buscar construccions i fits pel
+  // seu compte (dues peticions pròpies) i els targets se'ls escrivia amb una constant importada:
+  // tres camins per a tres taules germanes del mateix catàleg. Ara és `useEixos()`, que memoritza
+  // a nivell de mòdul — o sigui que això no afegeix cap petició, en treu dues.
+  const { targets, constructions: catConstructions, fits: catFits, error: lookupsError,
+          reintenta: recarregaEixos } = useEixos()
+  const constructions = catConstructions || []
+  const allFitTypes = catFits || []
   const [profiles, setProfiles] = useState([])
   const [loadingProfiles, setLoadingProfiles] = useState(false)
 
@@ -75,23 +83,7 @@ export function SizingProfileSelector({
   const [selectedEscala, setSelectedEscala] = useState(null)
   const [selectedGrup, setSelectedGrup] = useState(null)
 
-  const [lookupsError, setLookupsError] = useState(false)
   const [profilesError, setProfilesError] = useState(false)
-
-  // Carregar targets i construccions
-  const loadLookups = () => {
-    setLookupsError(false)
-    constructionTypes.list()
-      .then(({ data: d }) => setConstructions(Array.isArray(d) ? d : (d.results || [])))
-      .catch(() => setLookupsError(true))
-
-    // FitTypes del catàleg complet (no bloquejant: si falla, no hi ha chips Fit).
-    fitTypes.list()
-      .then(({ data: d }) => setAllFitTypes(Array.isArray(d) ? d : (d.results || [])))
-      .catch(() => {})
-  }
-
-  useEffect(() => { loadLookups() }, [])
 
   // Carrega perfils per target+construcció (SENSE fit: el filtre de Fit és client-side).
   const loadProfiles = () => {
@@ -173,7 +165,7 @@ export function SizingProfileSelector({
         </div>
         {/* Targets del vocabulari únic (estàtics): no depenen de cap càrrega. */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {TARGETS.map(tg => (
+          {(targets || []).map(tg => (
             <button
               key={tg.codi}
               onClick={() => pickTarget(tg.codi)}
@@ -202,7 +194,7 @@ export function SizingProfileSelector({
           <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", marginBottom: 10 }}>
             2 · {t("size_library.step_construction")}
           </div>
-          {lookupsError && <LoadError onRetry={loadLookups} label={t("size_library.load_error")} />}
+          {lookupsError && <LoadError onRetry={recarregaEixos} label={t("size_library.load_error")} />}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               onClick={() => pickConstruction(selectedConstruction)}
