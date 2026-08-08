@@ -31,13 +31,13 @@ export default function FittingRepasPanel({ model }) {
   }, [model.id])
 
   if (loading) {
-    return <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('common.loading')}</div>
+    return <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('common.loading')}</div>
   }
 
   const sessions = data?.sessions || []
   if (!sessions.length) {
     return (
-      <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-muted)', padding: '8px 0' }}>
+      <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-soft)', padding: '8px 0' }}>
         {t('fitting.repas.no_sessions')}
       </div>
     )
@@ -52,13 +52,13 @@ export default function FittingRepasPanel({ model }) {
         <h3 style={{ fontFamily: MONO, fontSize: 'var(--fs-h3)', fontWeight: 500, margin: 0 }}>
           {t('fitting.repas.title')}
         </h3>
-        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
           {t('fitting.repas.count', { n: sessions.length })}
           {data.talla && ` · ${t('fitting.repas.size', { talla: data.talla })}`}
         </span>
       </div>
       <MeasureGrid rows={rows} groups={groups} editable={false}
-        empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('fitting.repas.empty')}</p>} />
+        empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('fitting.repas.empty')}</p>} />
     </div>
   )
 }

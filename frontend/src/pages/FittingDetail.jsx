@@ -27,7 +27,7 @@ function useSessionField(sessionId, field) {
 function ContextField({ sessionId, field, label, value, readOnly }) {
   if (readOnly) {
     return (
-      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
         {label}: <span style={{ color: 'var(--text-main)' }}>{value || '—'}</span>
       </span>
     )
@@ -39,14 +39,14 @@ function EditableContextField({ sessionId, field, label, value }) {
   const [v, setV] = useState(value ?? '')
   const [state, schedule] = useSessionField(sessionId, field)
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
       {label}:&nbsp;
       <input
         value={v} onChange={e => { setV(e.target.value); schedule(e.target.value) }}
         placeholder="—"
         style={{
           width: 120, padding: '1px 2px', fontSize: 'var(--fs-body)', color: 'var(--text-main)',
-          border: 'none', borderBottom: '1px solid var(--border)', borderRadius: 0,
+          border: 'none', borderBottom: '1px solid var(--line)', borderRadius: 0,
           background: 'transparent', boxSizing: 'border-box',
         }}
       />
@@ -83,11 +83,11 @@ function ModelFilesPanel({ modelId }) {
 
   const renderGroup = (label, files) => (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 'var(--fs-label)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500, marginBottom: 6 }}>
+      <div style={{ fontSize: 'var(--fs-label)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-soft)', fontWeight: 500, marginBottom: 6 }}>
         {label}
       </div>
       {(!files || files.length === 0) ? (
-        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }}>{t('fitting.info.no_files')}</div>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontStyle: 'italic' }}>{t('fitting.info.no_files')}</div>
       ) : (
         files.map(f => {
           // D13: URL signada de curta vida. Un <a href> no pot portar Authorization.
@@ -112,7 +112,7 @@ function ModelFilesPanel({ modelId }) {
   return (
     <Card title={t('fitting.info.title')} icon="ti-info-circle" style={{ marginBottom: '1.5rem' }}>
       {groups === null ? (
-        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('app.loading')}</div>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('app.loading')}</div>
       ) : (
         <>
           {renderGroup(t('fitting.info.patterns'), groups.patterns)}
@@ -324,13 +324,13 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
       .finally(() => { setUploading(false); e.target.value = '' })
   }
 
-  const muted = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }
+  const muted = { fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontStyle: 'italic' }
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
         <button onClick={onBack} disabled={busy} style={{
-          background: 'none', border: 'none', color: 'var(--text-muted)', cursor: busy ? 'default' : 'pointer', fontSize: 'var(--fs-body)', padding: 0, marginRight: 12,
+          background: 'none', border: 'none', color: 'var(--text-soft)', cursor: busy ? 'default' : 'pointer', fontSize: 'var(--fs-body)', padding: 0, marginRight: 12,
         }}>← {t('fitting.save.back')}</button>
         {/* Q4 (06/08) — UNA ACTA NO PORTA TÍTOL D'ACCIÓ. La capçalera deia «Gravar el fitting»
             sobre una sessió que el badge de dalt declarava «Tancada · només lectura»: dos estats
@@ -342,7 +342,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
       </div>
 
       {grids === null ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
       ) : (
         <>
           {/* D3 — TAULA DE MESURES (opcional): registrar/veure mesures. No bloqueja la revisió. */}
@@ -355,7 +355,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
                 }}>{t('fitting.save.view_measures')}</button>
               ) : (
                 <>
-                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 8 }}>
                     {t('fitting.save.no_measures')}
                   </div>
                   <button onClick={registrarMesures} disabled={creatingPiece} style={{
@@ -385,21 +385,21 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
                           <th style={{ ...thStyle, textAlign: 'left' }}>{t('fitting.grid.pom')}</th>
                           <th style={{ ...thStyle, textAlign: 'left' }}>{t('fitting.grid.name')}</th>
                           {sizeLabels.map(s => (
-                            <th key={s} style={{ ...thStyle, textAlign: 'right', background: s === baseLabel ? 'var(--gold-pale)' : undefined }}>{s}</th>
+                            <th key={s} style={{ ...thStyle, textAlign: 'right', background: s === baseLabel ? 'var(--sel)' : undefined }}>{s}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {rows.map((row, i) => {
-                          const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-card)'
+                          const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-page)'
                           return (
                             // La clau és la MESURA sencera: amb dues germanes, `pom_id` sol es
                             // repetia i React en descartava una fila en silenci.
                             <tr key={identitatMesura(row)} style={{ background: rowBg }}>
-                              <td style={{ padding: '5px 10px', borderBottom: '0.5px solid var(--border)', fontWeight: 500, color: 'var(--gold)', whiteSpace: 'nowrap' }}>
-                                {row.codi}{row.is_key && <i className="ti ti-star-filled" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} />}
+                              <td style={{ padding: '5px 10px', borderBottom: '1px solid var(--line-soft)', fontWeight: 500, color: 'var(--gold)', whiteSpace: 'nowrap' }}>
+                                {row.codi}{row.is_key && <i className="ti ti-star" style={{ fontSize: 14, marginLeft: 3, color: 'var(--gold)' }} />}
                               </td>
-                              <td style={{ padding: '5px 10px', borderBottom: '0.5px solid var(--border)', color: 'var(--text-muted)' }}>
+                              <td style={{ padding: '5px 10px', borderBottom: '1px solid var(--line-soft)', color: 'var(--text-soft)' }}>
                                 {row.nom}
                                 {etiquetaInstancia(row.instancia) && (
                                   <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>
@@ -412,9 +412,9 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
                                 const mod = isMod(line)
                                 return (
                                   <td key={s} style={{
-                                    padding: '5px 10px', borderBottom: '0.5px solid var(--border)', textAlign: 'right',
+                                    padding: '5px 10px', borderBottom: '1px solid var(--line-soft)', textAlign: 'right',
                                     fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-                                    background: s === baseLabel ? 'var(--gold-pale)' : undefined,
+                                    background: s === baseLabel ? 'var(--sel)' : undefined,
                                     color: mod ? 'var(--err)' : 'var(--text-main)', fontWeight: mod ? 700 : 400,
                                   }}>
                                     {fmtMeasure(line?.valor_real, unit) ?? '—'}
@@ -439,7 +439,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
               LÍNIES, no `session.notes`). */}
           <Card title={t('fitting.save.observations')} style={{ marginBottom: '1.25rem' }}>
             {readOnly ? (
-              <div style={{ fontSize: 'var(--fs-body)', color: notes ? 'var(--text-main)' : 'var(--text-muted)',
+              <div style={{ fontSize: 'var(--fs-body)', color: notes ? 'var(--text-main)' : 'var(--text-soft)',
                             whiteSpace: 'pre-wrap', fontStyle: notes ? 'normal' : 'italic' }}>
                 {notes || t('fitting.save.no_observations')}
               </div>
@@ -451,7 +451,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
                 placeholder={t('fitting.save.no_observations')}
                 style={{
                   width: '100%', minHeight: 80, padding: '8px 10px', fontSize: 'var(--fs-body)',
-                  border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)',
+                  border: '1px solid var(--line)', borderRadius: 6, background: 'var(--white)',
                   color: 'var(--text-main)', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit',
                 }}
               />
@@ -476,7 +476,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {photos.map(f => (
                   <a key={f.id} href={f.fitxer} target="_blank" rel="noopener noreferrer"
-                    style={{ display: 'block', width: 160, height: 160, borderRadius: 8, overflow: 'hidden', border: '0.5px solid var(--border)' }}>
+                    style={{ display: 'block', width: 160, height: 160, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line-soft)' }}>
                     <img src={f.fitxer} alt={f.caption || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </a>
                 ))}
@@ -490,7 +490,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
             <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 12 }}>{error}</div>
           )}
           {progress && busy && (
-            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
+            <div style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
               {t('fitting.save.saving_progress', { done: progress.done, total: progress.total })}
             </div>
           )}
@@ -498,7 +498,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
           {/* ACCIONS */}
           {readOnly ? (
             // Q4 — cap botó: el que queda és la nota de què és aquesta pàgina.
-            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', paddingTop: 4 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', paddingTop: 4 }}>
               {t('fitting.save.acta_hint')}
             </div>
           ) : (
@@ -509,7 +509,7 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
               }}>{t('fitting.save.save_and_back')}</button>
               {hasPieces && (
                 <button onClick={doDiscard} disabled={busy} style={{
-                  background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
+                  background: 'var(--white)', color: 'var(--text-soft)', border: '1px solid var(--line-soft)', borderRadius: 8,
                   padding: '8px 18px', fontSize: 'var(--fs-body)', cursor: busy ? 'default' : 'pointer',
                 }}>{t('fitting.save.discard_changes')}</button>
               )}
@@ -523,13 +523,13 @@ function ReviewScreen({ session, pieces, onBack, onSaved, onDone, onShowGrid, on
                 <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                   <input type="text" value={discardMotiu} onChange={e => setDiscardMotiu(e.target.value)}
                     placeholder={t('fitting.save.discard_motiu_ph')}
-                    style={{ fontSize: 'var(--fs-body)', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, minWidth: 200 }} />
+                    style={{ fontSize: 'var(--fs-body)', padding: '6px 10px', border: '1px solid var(--line)', borderRadius: 6, minWidth: 200 }} />
                   <button onClick={doDiscardSession} disabled={busy} style={{
                     background: 'var(--err)', color: 'var(--white)', border: 'none', borderRadius: 8,
                     padding: '8px 14px', fontSize: 'var(--fs-body)', cursor: busy ? 'default' : 'pointer',
                   }}>{t('common.confirm')}</button>
                   <button onClick={() => { setDiscardOpen(false); setDiscardMotiu('') }} disabled={busy} style={{
-                    background: 'var(--white)', color: 'var(--text-muted)', border: '0.5px solid var(--border)', borderRadius: 8,
+                    background: 'var(--white)', color: 'var(--text-soft)', border: '1px solid var(--line-soft)', borderRadius: 8,
                     padding: '8px 14px', fontSize: 'var(--fs-body)', cursor: busy ? 'default' : 'pointer',
                   }}>{t('common.cancel')}</button>
                 </span>
@@ -613,7 +613,7 @@ export default function FittingDetail() {
   }
 
   if (loading) {
-    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
+    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('app.loading')}</div>
   }
   if (!session) return null
 
@@ -718,10 +718,10 @@ export default function FittingDetail() {
                     title={wired ? label : `${label} · (B2)`}
                     onClick={wired ? onClick : () => {}}
                     style={{
-                      background: active ? 'var(--gold-pale)' : 'transparent',
-                      border: `0.5px solid ${active ? 'var(--gold)' : 'var(--border)'}`, borderRadius: 8,
+                      background: active ? 'var(--sel)' : 'transparent',
+                      border: `0.5px solid ${active ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 8,
                       padding: '5px 9px', cursor: 'pointer',
-                      color: active ? 'var(--gold)' : 'var(--text-muted)',
+                      color: active ? 'var(--gold)' : 'var(--text-soft)',
                     }}><i className={`ti ${icon}`} style={{ fontSize: 14 }} /></button>
                 ))}
               </span>
@@ -756,7 +756,7 @@ export default function FittingDetail() {
           <div style={{ flex: '1 1 60%', minWidth: 0, overflow: 'auto', maxHeight: 'calc(100vh - 180px)' }}>
             {!activePieceId ? null
               : lines.length === 0
-                ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
+                ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('fitting.grid.empty')}</div>
                 : (
                   <MeasureGrid
                     key={activePieceId}

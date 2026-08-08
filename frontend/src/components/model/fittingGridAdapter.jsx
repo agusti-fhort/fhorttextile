@@ -29,13 +29,13 @@ function PaginadorHistoric({ from, total, onMove, t }) {
   const potEnrere = from > 0
   const potEndavant = from + HIST_FINESTRA < total
   const btn = (actiu) => ({
-    border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 4,
+    border: '1px solid var(--line)', background: 'var(--white)', borderRadius: 4,
     width: 19, height: 19, font: 'inherit', fontSize: 11, lineHeight: 1, padding: 0,
-    color: actiu ? 'var(--gold)' : 'var(--text-muted)', cursor: actiu ? 'pointer' : 'default',
+    color: actiu ? 'var(--gold)' : 'var(--text-soft)', cursor: actiu ? 'pointer' : 'default',
   })
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textTransform: 'none',
-                   letterSpacing: 0, fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+                   letterSpacing: 0, fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
       <button type="button" disabled={!potEnrere} onClick={() => onMove(-1)} style={btn(potEnrere)}
         title={t('fitting.grid.hist_prev')} aria-label={t('fitting.grid.hist_prev')}>‹</button>
       <span>{t('fitting.grid.hist_range', {
@@ -174,10 +174,13 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) 
 // VERDICTE_TO ES QUEDA: és crom —dos tokens de color per veredicte— indexat pel codi, no una
 // segona llista. Un veredicte que l'endpoint dugués i el mapa no tingués sortiria sense color,
 // però sortiria; per això la cel·la el llegeix amb `?.` i no amb accés directe.
+// A9 · §1b(d) — L'AJUSTAT ES PARTEIX EN DOS TOKENS. `--warn-state` (#ff9942) sobre el seu fons
+// dona 1.86:1 com a TEXT: inadmissible, i contrari al vet de C5. La marca (subratllat, vora) va
+// en `--warn-state`; la TINTA, en `--warn-ink` (5.32:1, AA). Els altres dos ja complien.
 const VERDICTE_TO = {
-  ACCEPTED: { col: 'var(--ok)', bg: 'var(--ok-bg)' },
-  ADJUSTED: { col: 'var(--warn)', bg: 'var(--warn-bg)' },
-  REJECTED: { col: 'var(--err)', bg: 'var(--err-bg)' },
+  ACCEPTED: { col: 'var(--ok)', marca: 'var(--ok)', bg: 'var(--ok-bg)' },
+  ADJUSTED: { col: 'var(--warn-ink)', marca: 'var(--warn-state)', bg: 'var(--warn-state-bg)' },
+  REJECTED: { col: 'var(--err)', marca: 'var(--err)', bg: 'var(--err-bg)' },
 }
 
 export function VerdicteCell({ valor, onTria }) {
@@ -190,8 +193,13 @@ export function VerdicteCell({ valor, onTria }) {
   // Va a `title` i a `aria-label`, o sigui que el que viatja al paper segueix sent el codi.
   const { t } = useTranslation()
   return (
-    <span style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 6,
-                   overflow: 'hidden', background: 'var(--white)' }}>
+    /* §7 · CONTROLS DE VEREDICTE: botons NEUTRES en repòs; el triat, `--sel` + SUBRATLLAT del
+       color del veredicte. El color PLE no és seu — és del RESULTAT (el número, que ja el porta
+       amb la seva tinta, el seu pes i el ratllat del rebuig). Abans el botó triat s'omplia del
+       fons del semàfor i competia amb la xifra que havia de manar. */
+    <span style={{ display: 'inline-flex', borderWidth: 1, borderStyle: 'solid',
+                   borderColor: 'var(--line)', borderRadius: 'var(--r-ctrl)',
+                   overflow: 'hidden', background: 'var(--panel)' }}>
       {VERDICTES.map((v, i) => {
         const on = valor === v
         const to = VERDICTE_TO[v] || {}
@@ -204,11 +212,16 @@ export function VerdicteCell({ valor, onTria }) {
             aria-label={t(`fitting.grid.verdicte.${v.toLowerCase()}`)}
             aria-pressed={on}
             style={{
-              border: 'none', borderRight: i < VERDICTES.length - 1 ? '1px solid var(--border)' : 'none',
-              background: on ? (to.bg || 'transparent') : 'transparent',
-              color: on ? (to.col || 'var(--text-main)') : 'var(--text-muted)',
-              fontWeight: on ? 600 : 400, font: 'inherit', fontSize: 'var(--fs-label)',
-              letterSpacing: '0.04em', padding: '2px 7px', cursor: 'pointer',
+              border: 'none',
+              borderRightWidth: i < VERDICTES.length - 1 ? 1 : 0,
+              borderRightStyle: 'solid', borderRightColor: 'var(--line)',
+              background: on ? 'var(--sel)' : 'transparent',
+              color: on ? (to.col || 'var(--text-main)') : 'var(--text-soft)',
+              // EL SUBRATLLAT és la marca del triat (§7). `box-shadow` i no `border-bottom`
+              // perquè no mogui res: la fila d'una graella no pot saltar 2px en decidir.
+              boxShadow: on ? `inset 0 -2px 0 ${to.marca || 'var(--text-main)'}` : undefined,
+              fontWeight: on ? 600 : 400, fontFamily: 'inherit', fontSize: 'var(--fs-label)',
+              letterSpacing: '0.04em', padding: '4px 9px', cursor: 'pointer',
             }}>{v}</button>
         )
       })}
@@ -233,7 +246,7 @@ export function NotaFittingCell({ lineId, valor, onDesa }) {
       onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
       style={{
         width: '100%', minWidth: 150, font: 'inherit', fontSize: 'var(--fs-body)',
-        color: 'var(--text-main)', border: '1px solid var(--border)', borderRadius: 5,
+        color: 'var(--text-main)', border: '1px solid var(--line)', borderRadius: 5,
         padding: '3px 8px', background: 'var(--white)', boxSizing: 'border-box',
       }}
     />
@@ -277,7 +290,7 @@ export function regimeLeadCol(t, onRegimChange, readOnly = false, { compacte = f
             onChange={e => onRegimChange(row, e.target.value)}
             style={{
               font: 'inherit', fontSize: 'var(--fs-label)', width: '100%', padding: '1px 2px',
-              border: '1px solid var(--border)', borderRadius: 4,
+              border: '1px solid var(--line)', borderRadius: 4,
               background: 'var(--white)', color: 'var(--text-main)', boxSizing: 'border-box',
             }}
           >
@@ -288,7 +301,7 @@ export function regimeLeadCol(t, onRegimChange, readOnly = false, { compacte = f
           </select>
         )}
         {!compacte && regleLabel(row, t) && (
-          <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginTop: 1 }}>
+          <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', whiteSpace: 'nowrap', marginTop: 1 }}>
             {regleLabel(row, t)}
           </div>
         )}
@@ -370,7 +383,7 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel) {
 // talla, planes amb la seva unitat. Cap cel·la de talla mostra mai un '+'.
 export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = 'CM') {
   const cap = { fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }
-  const buit = { fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }
+  const buit = { fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }
   // Un règim sense delta (FIXED, o STEP amb valors lliures) no té Δ que ensenyar: guió, no zero.
   const mostraDelta = (row) => effectiveRegime(row) === 'LINEAR'
   return [
