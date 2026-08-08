@@ -5,12 +5,21 @@
   --bg-main:    #ffffff;
   --bg-sidebar: #f0dfc0;
   --bg-card:    #fafafa;
-  /* --bg-page: fons de contenidor de pàgina (panells laterals de treball). S'usava a
-     App.jsx/Entrar.jsx/TallerPatro.jsx SENSE definició → var() invàlid i fons heretat.
-     Es defineix amb el MATEIX valor que --bg-card per no introduir cap salt visual. */
-  --bg-page:    #fafafa;
+  /* --bg-page: fons de PÀGINA (NORMA_LAYOUT §1). Neix a S37 com a pedaç: s'usava a
+     App.jsx/Entrar.jsx/TallerPatro.jsx/TechSheetEditor.jsx sense definició (var() invàlid) i
+     se li va donar el valor de --bg-card «per no introduir cap salt visual», explícitament
+     com a provisional. T0.1 el porta al valor de la norma: #fafafa (gris) → #fbfaf8 (blanc
+     càlid). Toca 7 usos en 5 fitxers i és el salt que aquell comentari ajornava. */
+  --bg-page:    #fbfaf8;
   --bg-muted:   #f5f0e8;
   --text-main:  #1d1d1b;
+  /* DEPRECAT (NORMA_LAYOUT §1b(c)) — l'escala de tintes de la norma és de TRES nivells:
+     --text-main / --text-soft / --text-faint. Aquest token queda VIU i sense aliar fins que
+     Agus decideixi a quin dels dos mapa; cada pantalla el canvia en passar la conformitat.
+     Mesurat per a aquella decisió: #868685 dóna 3.64:1 sobre blanc — per sota d'AA. En
+     distància RGB s'assembla més a --text-faint (23) que a --text-soft (49), però és
+     --text-soft (5.37:1) el que el posaria en norma; --text-faint (3.05:1) l'empitjoraria.
+     Són 849 usos en 138 fitxers: la tria no és cosmètica. */
   --text-muted: #868685;
   --gold:       #c27a2a;
   --gold-l:     #c68338;
@@ -24,6 +33,9 @@
   --pdf-accent: var(--grana); /* accent semàntic dels botons de document PDF (mateix color que grana) */
   --model-band: #f7efe1; /* cream — franja de capçalera de les cards d'entitat (mòdul comercial) */
   --intern-bg:  #edeff0; /* gris fred — columna/peu de cost intern (NOMÉS pantalla, mai al PDF) */
+  /* DEPRECAT (NORMA_LAYOUT §1b(b)) — la vora de la norma és --line (#e8e5e0). Aquest crema
+     NO s'àlia ni es migra en massa: cada pantalla el canvia per --line quan passa la seva
+     conformitat, mateixa política progressiva que --gold-pale. Són 432 usos en 93 fitxers. */
   --border:     #e0d5c5;
   --base-hairline: #e3cfa3; /* filet de la columna de talla base (graella fitting) */
   /* Taula de mesures (maqueta v8.1 · D-31.18). Dos cremes molt clars que NO són cap dels
@@ -35,6 +47,45 @@
      d'una altra matèria» sense fer-hi cap columna nova; amb el focus a sobre, la variant. */
   --fila-capa:        #fbf6ee;
   --fila-capa-activa: #f7efdf;
+
+  /* ═══ NORMA_LAYOUT v1 · tokens del sistema (T0.1, tanda 1) ═══════════════════════════
+     Llista TANCADA ratificada per Agus el 08/08. S'AFEGEIXEN: no substitueixen res ni
+     s'àlien amb els cremes existents (--border, --gold-pale, --text-muted), que segueixen
+     vius i deprecats fins que cada pantalla passi la seva conformitat. Mentre no hi hagi
+     cap pantalla conforme, aquests tokens no els consumeix ningú: això és volgut — la
+     norma diu que cap pantalla és conforme fins que els tokens hi siguin i es MESURIN
+     (§8d), i per això el fonament entra abans que cap pantalla. */
+
+  /* Acció · §1 i §5. Blau NOMÉS per al botó primari, un per pantalla. */
+  --accio:       #2b65c2;  /* 5.61:1 amb tinta blanca — AA */
+  --accio-hover: #245399;  /* 7.57:1 amb tinta blanca */
+
+  /* Superfícies · §1. --panel és TOT panell/targeta/capçalera; conviu amb --white (mateix
+     valor) perquè la norma li dona nom propi de rol, no de color. */
+  --panel:     #ffffff;
+  --sel:       #f7f5f2;  /* SELECCIÓ: fila/contenidor triat, sempre amb filet d'or 3px */
+  --line:      #e8e5e0;  /* vores i separadors */
+  --line-soft: #f0eeea;  /* filet intern de taula (més tènue que --line) */
+
+  /* Tintes · §1. Escala de TRES nivells; --text-main ja hi era i no es toca. */
+  --text-soft:  #6e6a64;  /* 5.37:1 s/blanc — secundari i icones en repòs */
+  --text-faint: #98938b;  /* 3.05:1 s/blanc — NOMÉS deshabilitat i estats buits */
+
+  /* Taronja · §1b(d). El token es PARTEIX perquè la forma del badge que Agus va ratificar
+     (fons clar + text taronja + filet fi del mateix to) es pugui llegir: #ff9942 sobre
+     #ffedd9 dóna 1.86:1, inadmissible com a text i contrari al vet de C5.
+       --warn-state → VORES, farciments i marques de dada
+       --warn-ink   → TEXT del badge. Mesurat: 5.32:1 sobre --warn-state-bg, AA.
+     Badge: background --warn-state-bg · color --warn-ink · border 1px --warn-state.
+     No confondre amb --warn/--warn-bg (badges antics), que segueixen vius i sense tocar. */
+  --warn-state:    #ff9942;
+  --warn-state-bg: #ffedd9;
+  --warn-ink:      #96500c;
+
+  /* Mètrica · §3. Amplada ÚNICA de columna de VALOR a les taules de mesures (les talles
+     juntes es llegeixen de cop). No surt a cap dels 3 HTML canònics perquè cap d'ells és
+     una taula de mesures; ve del §3 de la norma escrita. */
+  --col-talla: 60px;
 
   /* Aliases legacy (per components existents) */
   --charcoal:   #1d1d1b;
