@@ -30,10 +30,27 @@ const GROUP_POM_CATEGORIES = {
   ACCESSORIES: ['Placement', 'Closure / Detail'],
 }
 
+// A3 · EL CROM DEL RÈGIM, AMB ELS RÈGIMS QUE EXISTEIXEN DE DEBÒ.
+//
+// 🚨 Hi havia una clau `STEPPED` que **cap camí de codi pot produir**: els règims reals són
+// `LINEAR · STEP · FIXED · ZERO · EXCEPTION` (`GradingRule.LOGICA_CHOICES`, publicats a
+// `/vocabulari/` → `regims_graduacio`), i `effectiveRegime()` torna la lògica tal qual per a tot
+// el que no és LINEAR. Conseqüència real, no teòrica: una regla **STEP** no trobava entrada,
+// requeia al `|| LOGICA_COLORS.FIXED` i es pintava amb el gris de FIXED — l'etiqueta deia STEP i
+// el color deia una altra cosa. `ZERO` i `EXCEPTION` tenien el mateix problema.
+//
+// Aquest mapa és CROM, no vocabulari: la llista de règims viu a l'endpoint (F2.2) i aquí només
+// s'hi diu de quin color va cadascun. Per això el `label` desapareix —el que es pinta és el codi
+// que ve de la dada, no un text d'aquí— i per això un règim nou que arribés sense entrada
+// sortiria sense color però sortiria.
+//
+// I els hex se'n van: la llei de la casa és tokens (única excepció amb acta: `KONVA_COL`).
 const LOGICA_COLORS = {
-  LINEAR:  { bg: '#eef4fc', color: '#2a5a8a', label: 'LINEAR' },
-  FIXED:   { bg: '#f5f0ea', color: 'var(--text-muted)', label: 'FIXED' },
-  STEPPED: { bg: '#fdf6ee', color: 'var(--gold)', label: 'STEPPED' },
+  LINEAR:    { bg: 'var(--sel)', color: 'var(--gold)' },
+  STEP:      { bg: 'var(--warn-state-bg)', color: 'var(--warn-ink)' },
+  FIXED:     { bg: 'var(--bg-page)', color: 'var(--text-soft)' },
+  ZERO:      { bg: 'var(--bg-page)', color: 'var(--text-faint)' },
+  EXCEPTION: { bg: 'var(--err-bg)', color: 'var(--err)' },
 }
 
 export default function GradingRuleSets() {
@@ -475,7 +492,9 @@ function RuleSetCard({ rs, lang = 'ca', authHeaders, garmentGroup, onClone, onEd
               {visibleRules.map((r, i) => {
                 // Règim EFECTIU (LINEAR+0 sense break es presenta com a FIXED), no el desat.
                 const regim = effectiveRegime(r)
-                const logica = LOGICA_COLORS[regim] || LOGICA_COLORS.FIXED
+                // Sense entrada al mapa, el xip va net: mai amb el color d'un ALTRE règim.
+                const logica = LOGICA_COLORS[regim]
+                  || { bg: 'var(--bg-page)', color: 'var(--text-soft)' }
                 const aboveXl = r.valors_step?.above_xl
                 const isKey = r.increment > 0 && regim === 'LINEAR'
                 // La ⓘ només si la traducció DIU UNA ALTRA COSA. Un POM com A1, E2 o S2, que es
