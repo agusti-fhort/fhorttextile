@@ -113,6 +113,30 @@ class POMMasterSerializer(serializers.ModelSerializer):
         cat = obj.categoria
         return (cat.nom_ca or cat.nom_en) if cat else ''
 
+    def validate_codi_client(self, value):
+        """El codi és ÚNIC AL CATÀLEG i les majúscules no el distingeixen — dit amb un 400.
+
+        La constraint `uniq_pommaster_codi_client_ci` (migració `pom/0075`) ja ho impedeix a la
+        BD, però una constraint d'EXPRESSIÓ no la tradueix ningú: DRF només genera validadors
+        automàtics a partir d'`unique_together` i de `unique=True`, no de `UniqueConstraint` amb
+        `Upper(...)`. Sense això, aquest `ModelViewSet` —que és obert a l'escriptura— tornaria un
+        **500 amb un `IntegrityError`** en comptes de dir quin camp està malament.
+
+        La comprovació és `iexact` perquè ha de mirar el mateix que mira l'índex; i exclou la
+        pròpia fila perquè rebatejar un POM amb el codi que ja tenia no és cap col·lisió.
+        """
+        codi = (value or '').strip()
+        qs = POMMaster.objects.filter(codi_client__iexact=codi)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        xoc = qs.values('pk', 'nom_client').first()
+        if xoc:
+            raise serializers.ValidationError(
+                f"«{codi}» ja és al catàleg (POM {xoc['pk']} · {xoc['nom_client']}). "
+                f"Les majúscules no distingeixen un codi d'un altre."
+            )
+        return codi
+
     class Meta:
         model = POMMaster
         fields = '__all__'

@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Upper
 
 
 # ─────────────────────────────────────────────────────────────
@@ -417,6 +418,31 @@ class POMMaster(models.Model):
     class Meta:
         verbose_name = 'POM (tenant)'
         verbose_name_plural = 'POMs (tenant)'
+        constraints = [
+            # EL CODI DEL CATÀLEG ÉS ÚNIC PER TENANT, I LES MAJÚSCULES NO EL DISTINGEIXEN.
+            #
+            # Fins al 08/08 no hi havia cap unicitat i `fhort` va acumular 12 codis duplicats
+            # (24 files). La causa és coneguda i estava escrita al codi: `pom/wizard_views.py`
+            # ja deia que copiar el codi del client al codi de la casa «és exactament el que va
+            # fabricar els 12 duplicats». La validació hi era —`codi_client__iexact` al camí 4—;
+            # el que faltava era que la BD la fes complir, perquè una validació que només viu a
+            # una vista deixa fora l'import, l'admin i el shell, que són els qui els van fer.
+            #
+            # `Upper(...)` la fa d'EXPRESSIÓ (índex funcional únic a PostgreSQL): `u1` i `U1` són
+            # el mateix codi per a una patronista. SENSE `Trim`, a posta: retallar aquí faria que
+            # la BD acceptés desar `'U1 '` i el rebutgés com a duplicat d'ell mateix al desat
+            # següent; l'espai sobrant es neteja a l'ENTRADA, que és on ja es fa.
+            #
+            # PER TENANT = PER SCHEMA: `fhort.pom` és SHARED i TENANT alhora (`settings.py:55,68`),
+            # o sigui que l'índex existeix a cada schema i dos clients poden compartir codi.
+            models.UniqueConstraint(
+                Upper('codi_client'),
+                name='uniq_pommaster_codi_client_ci',
+                violation_error_message=(
+                    "Ja hi ha un POM al catàleg amb aquest codi (les majúscules no el distingeixen)."
+                ),
+            ),
+        ]
 
     def __str__(self):
         return f'{self.codi_client} · {self.nom_client}'
