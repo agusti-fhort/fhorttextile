@@ -115,7 +115,7 @@ seu propi fitxer: cap resultat). Va a F2.2 per esborrar-lo, no per corregir-lo.
 |---|---|
 | `manage.py check` | ✅ net a cada commit |
 | Suite `fhort.pom` | ✅ **exit 0** |
-| Suite `fhort.models_app` + `fhort.tasks` | v. addenda (corrent en tancar el report) |
+| Suite `fhort.models_app` + `fhort.tasks` | ✅ **824 tests · OK · exit 0** · 0 `FAIL`, 0 `ERROR` (790s) |
 | `sqlmigrate 0074` | ✅ `-- (no-op)` |
 | Auditoria SQL post-migració | ✅ columna intacta, 0 `LOOSE`, diferència CAP |
 | `systemctl restart ftt-staging` | ✅ `active` |
