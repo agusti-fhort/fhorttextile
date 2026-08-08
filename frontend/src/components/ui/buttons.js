@@ -7,11 +7,20 @@ export const selS = {
   border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)',
 }
 
-// L'acció primària és el daurat de la CASA (`--gold` == #c27a2a, el mateix valor que el logotip):
-// el fons no es toca. El que canvia (S37, decisió de l'Agus) és la TINTA: blanc sobre daurat dona
-// 3.44:1 i incompleix WCAG AA, i `--text-main` en dona 4.91:1. No hi ha cap token d'acció nou —
-// es va proposar un `--gold-action` més fosc i es va descartar: la marca es queda a tot arreu.
+// L'ACCIÓ PRIMÀRIA ÉS BLAVA (NORMA_LAYOUT §5, T0-bis.2). «Blau = el que has vingut a fer, UNA per
+// pantalla; vora daurada = accions i portes de la casa; gold = marca/selecció/base.» El daurat
+// deixa de ser acció perquè feia dues feines alhora: marcar la casa i cridar l'acció, i quan un
+// color diu dues coses no en diu cap.
+//
+// Substitueix la solució de S37, que era la bona MENTRE la primària fos daurada: aleshores el
+// problema era el contrast (blanc sobre daurat = 3.44:1, per sota d'AA) i es va resoldre canviant
+// la TINTA a `--text-main` (4.91:1) sense tocar la marca. Ara no canvia la tinta sinó el ROL: el
+// fons ja no és de marca, i sobre `--accio` el blanc dóna 5.61:1 — AA amb marge.
+//
+// Es reescriu D'UN COP i no pantalla per pantalla (ordre d'Agus): 66 usos en 28 fitxers. L'efecte
+// conegut i acceptat és que algunes pantalles ensenyaran més d'un blau alhora fins que passin la
+// seva conformitat; van llistades al report de T0-bis, no s'arreglen aquí.
 export const primaryBtn = {
-  display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', background: 'var(--gold)', color: 'var(--text-main)',
+  display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', background: 'var(--accio)', color: 'var(--white)',
   border: 'none', borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', fontFamily: MONO,
 }
