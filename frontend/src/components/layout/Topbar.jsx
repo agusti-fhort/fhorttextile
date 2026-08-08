@@ -25,7 +25,7 @@ function trobaMolla(pathname) {
       for (const c of candidats) {
         if (!c.to) continue
         const encaixa = c.to === '/' ? pathname === '/' : (pathname === c.to || pathname.startsWith(c.to + '/'))
-        if (encaixa && (!millor || c.to.length > millor.to.length)) millor = c
+        if (encaixa && (!millor || c.to.length > millor.c.to.length)) millor = { c, sectionKey: grup.sectionKey }
       }
     }
   }
@@ -77,14 +77,19 @@ export default function Topbar() {
       top: import.meta.env.VITE_STAGING === 'true' ? '28px' : '0',
       zIndex: 10,
     }}>
-      {/* El tenant obre sempre; la pantalla actual va en pes 600, com als canònics. El chevron
-          només apareix si hi ha segon element (a l'arrel no penja res de ningú). */}
+      {/* Tenant › SECCIÓ › pantalla (decisió Agus 08/08). La secció és la del menú lateral, o
+          sigui que el molla i el ressaltat del menú no poden dir coses diferents. Els segments
+          intermedis van en tinta suau i el darrer —on ets— en pes 600. El chevron només apareix
+          si hi ha element següent: a l'arrel no penja res de ningú.
+          El QUART segment (entitat › secció de l'entitat) arriba amb el dashboard del model. */}
       <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-soft)'}}>
         <span style={{fontWeight: 600, color: 'var(--text-main)'}}>{nomTenant}</span>
         {molla && (
           <>
             <span style={{color: 'var(--text-faint)'}}>›</span>
-            <span style={{color: 'var(--text-main)', fontWeight: 600}}>{t(molla.labelKey)}</span>
+            <span>{t(molla.sectionKey)}</span>
+            <span style={{color: 'var(--text-faint)'}}>›</span>
+            <span style={{color: 'var(--text-main)', fontWeight: 600}}>{t(molla.c.labelKey)}</span>
           </>
         )}
       </div>
