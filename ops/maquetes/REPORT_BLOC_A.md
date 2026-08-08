@@ -335,3 +335,56 @@ peça del wizard i el Navegador de POM Systems, i tampoc no en tenia.
 
 I un cas **no mesurat**: l'estat «cap capa declarada» d'A2 no és assolible amb les dades vives del
 run que l'arnès obre (totes les seves capes estan declarades). Anotat, no amagat.
+
+---
+
+## 10 · Tancament del bloc — les tres ordres
+
+### 1 · Maquetes: fora la descripció sota el comptador ✅ (commit 180)
+
+Corregida **la font**. Mentre la maqueta la demanés, el pròxim tram la tornaria a dibuixar i amb raó.
+
+| Fitxer | Línies tocades |
+|---|---|
+| `maqueta_size_library_v3.html` | **154** (regla CSS `.ident .desc`) · **190** (ús) |
+| `maqueta_grading_rules_v4.html` | **187** (regla CSS) · **225** (ús) |
+| `maqueta_cataleg_poms_v3.html` | **161** (regla CSS; **només la regla** — no la feia servir ningú) |
+| `maqueta_cataleg_peces_v4.html` | **cap canvi**: no en tenia ni regla ni ús |
+
+Al lloc de la regla hi queda escrit **per què** se'n va, i les dues maquetes amb acta d'esmena al
+peu en porten l'entrada. Verificat: cap `.desc` viu —ni regla ni ús— a cap de les quatre.
+
+🚩 **Divergència coneguda i NO tocada** (l'ordre no la demana): a les maquetes la **cerca** segueix
+a la capçalera de la llista, i a les pantalles ha pujat al costat del comptador (§8e: «la CERCA
+comença al costat, mateixa línia»). És l'únic que queda perquè maqueta i pantalla casin del tot.
+
+### 2 · h3 → mana el token (14px) ✅ — RESOLT, cap canvi de codi
+La pantalla ja fa servir `--fs-h3: 14px`. La NORMA del vault està esmenada; Agus la re-puja a
+`ops/maquetes/`. La desviació «maqueta 15px / pantalla 14px» de `qa_bidireccional.py` queda tancada
+com a **defecte de la maqueta**, no de la pantalla.
+
+### 3 · El guardià ✅ — `qa_bidireccional.py` és protocol
+El brief del vault ja porta la bidireccional **per computats** i la **re-execució sobre les
+pantalles tancades quan una norma s'esmena**; Agus el re-puja a `.claude/agents/`. A partir d'ara
+**tot report d'una pantalla ha de citar `ops/qa/qa_bidireccional.py`** amb el seu resultat, igual
+que ja cita `ops/qa/qa_auditoria_computats.py`.
+
+### 4 · «＋ Afegir POM» — 🛑 pendent de decisió d'Agus
+Queda **deshabilitat amb el motiu escrit al botó i al peu**. `GradingRuleSerializer` té `rule_set`
+com a read_only i `talla_base` és FK obligatòria: un `POST` a `/grading-rules/` no pot dir a quin
+joc va la regla nova. Les dues sortides són **coda backend** o **deshabilitat fins post-deadline**;
+cap de les dues s'ha pres.
+
+---
+
+## 11 · El protocol de verificació, tal com queda
+
+Tota pantalla que passi conformitat corre **les dues eines** i en posa el resultat al report:
+
+| Eina | Què respon |
+|---|---|
+| `ops/qa/qa_auditoria_computats.py` | «¿hi ha cap vora, cap badge o cap rètol que no sigui el que la NORMA mana?» — sobre les pantalles del bloc, contra el servei viu |
+| `ops/qa/qa_bidireccional.py` | «¿la pantalla i la seva maqueta pinten el mateix?» — computats de les dues bandes, element per element, amb els gestos que calen a cada costat |
+
+I cada desviació que quedi s'**explica**: defecte de pantalla, defecte de maqueta, o ordre d'Agus
+posterior a la maqueta. El silenci no és una resposta.
