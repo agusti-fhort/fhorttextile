@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import useToc, { anellFocus } from '../ui/toc'
 import { GARMENT_GROUPS, nomLocal } from '../grading/gradingAxes'
 
 // GroupPills — pestanyes/pills de GRUP de peça, patró visual ÚNIC (rectificació 2026-07-17). Abans
@@ -34,18 +35,33 @@ export function groupPillStyle(active) {
   }
 }
 
+// TRES ESTATS I CAP MÉS (repòs · triada · hover). L'anell de focus, NOMÉS amb teclat: en clicar
+// una pill amb el ratolí el botó conserva el focus, i l'anell de l'UA hi deixava una vora fosca
+// i gruixuda que no és cap dels tres estats. V. `ui/toc.js`.
+function Pill({ active, onClick, children }) {
+  const [toc, gestos] = useToc()
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active} {...gestos}
+            style={{
+              ...groupPillStyle(active), outline: 'none',
+              ...(toc.hover && !active ? { background: 'var(--sel)' } : null),
+              ...(toc.focus ? anellFocus : null),
+            }}>{children}</button>
+  )
+}
+
 export default function GroupPills({ groups = PECA_GRUPS, value, onChange, allLabel }) {
   const { i18n } = useTranslation()
   const lang = (i18n.language || 'ca').slice(0, 2)
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       {allLabel != null && (
-        <button type="button" onClick={() => onChange('')} style={groupPillStyle(!value)}>{allLabel}</button>
+        <Pill active={!value} onClick={() => onChange('')}>{allLabel}</Pill>
       )}
       {groups.map(g => (
-        <button key={g.codi} type="button" onClick={() => onChange(g.codi)} style={groupPillStyle(value === g.codi)}>
+        <Pill key={g.codi} active={value === g.codi} onClick={() => onChange(g.codi)}>
           {nomLocal(g, lang) || g.codi}
-        </button>
+        </Pill>
       ))}
     </div>
   )

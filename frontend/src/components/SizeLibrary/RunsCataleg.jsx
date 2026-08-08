@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { sizeSystems } from '../../api/endpoints'
 import { useEixos } from '../grading/eixosFont'
 import { useGarmentGroups } from '../grading/garmentCatalog'
+import useToc, { anellFocus } from '../ui/toc'
 
 // A2 · SIZE LIBRARY — la llista de RUNS i la seva fitxa (maqueta_size_library_v3).
 //
@@ -62,6 +63,10 @@ const cx = {
     padding: '8px 16px', cursor: 'pointer',
     display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
     background: 'transparent', color: 'inherit', fontFamily: 'inherit',
+    // La MIDA també s'hereta, i del document: sense això la fila computava 16px (mesurat
+    // contra `.pom.on`/`.run.on` de la maqueta, que són 12). Els fills posaven la seva i per
+    // això no es veia — fins que un text hi cau sense mida pròpia.
+    fontSize: 'var(--fs-body)',
     border: 0,
     borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--line-soft)',
   },
@@ -131,6 +136,44 @@ function Talles({ talles, buit }) {
 }
 
 /**
+ * Un xip de capa: TRES estats i cap més.
+ *
+ *   repòs        vora `--line` fina · fons `--panel`
+ *   seleccionat  fons `--ok-bg` · vora i tinta `--ok` · pes 600   ← INCLUSIÓ = VERD (§1)
+ *   hover        fons `--sel` (i NO trepitja el verd: un seleccionat sobre el qual passes
+ *                el ratolí segueix sent verd — el hover diu «es pot clicar», no «està triat»)
+ *
+ * ⚠️ **HI HAVIA UN QUART ESTAT, I ERA UN FANTASMA.** En desmarcar un xip es quedava amb una vora
+ * fosca i gruixuda: no era el toggle —desmarcava bé— sinó **l'anell de focus del navegador**, que
+ * el botó conserva després del clic. Es corregeix a `ui/toc.js`, que és compartit: l'anell només
+ * surt amb focus de TECLAT (`:focus-visible`), i la base porta `outline: 'none'` perquè el de
+ * l'UA no torni a entrar per la seva porta.
+ */
+function XipCapa({ on, disabled, onClick, children }) {
+  const [toc, gestos] = useToc()
+  return (
+    <button type="button" disabled={disabled} aria-pressed={on} onClick={onClick} {...gestos}
+            style={{
+              ...cx.ab, cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit',
+              fontSize: 'var(--fs-label)', padding: '3px 10px', outline: 'none',
+              // Repòs = tinta PRINCIPAL (mesurat: `.tg` de la maqueta és `--ink`). `cx.ab` és el
+              // xip de només-lectura i va en `--text-soft`; un xip que es pot triar no és una
+              // etiqueta apagada.
+              color: 'var(--text-main)',
+              ...(toc.hover && !disabled && !on ? { background: 'var(--sel)' } : null),
+              // INCLÒS = VERD. No és una tria d'aquesta pantalla: és la REGLA DE LES DUES
+              // SELECCIONS (NORMA §1, esmena Agus 08/08), i la maqueta la porta escrita al costat
+              // de `.tg.on` — «esmena Agus: inclòs = verd». Aquí hi havia la selecció de
+              // NAVEGACIÓ (--sel + daurat) fent de selecció d'INCLUSIÓ, i una capa marcada
+              // gairebé no es distingia d'una que no ho estava.
+              ...(on ? { background: 'var(--ok-bg)', borderColor: 'var(--ok)',
+                         color: 'var(--ok)', fontWeight: 600 } : null),
+              ...(toc.focus ? anellFocus : null),
+            }}>{children}</button>
+  )
+}
+
+/**
  * Una capa de restricció: multi-selecció sobre un vocabulari.
  *
  * ⚠️ **BUIT = «NO DECLARAT», NO «SERVEIX A TOTHOM».** És el que el backend té escrit
@@ -141,29 +184,21 @@ function Talles({ talles, buit }) {
 function Capa({ titol, vocabulari, triats, onToggle, editable, t }) {
   const sel = new Set(triats || [])
   return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ ...cx.k, marginBottom: 5 }}>{titol}</div>
-      {!vocabulari && <div style={cx.buit}>{t('size_library.vocab_loading')}</div>}
-      {!!vocabulari?.length && (
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-          {vocabulari.map(v => {
-            const on = sel.has(v.codi)
-            return (
-              <button key={v.codi} type="button" disabled={!editable}
-                      onClick={() => onToggle(v.codi)} aria-pressed={on}
-                      style={{
-                        ...cx.ab, cursor: editable ? 'pointer' : 'default', fontFamily: 'inherit',
-                        fontSize: 'var(--fs-label)',
-                        ...(on ? { background: 'var(--sel)', borderColor: 'var(--gold-border)',
-                                   color: 'var(--text-main)', fontWeight: 600 } : null),
-                      }}>{v.etiqueta}</button>
-            )
-          })}
-        </div>
-      )}
-      {!sel.size && !!vocabulari?.length && (
-        <div style={{ ...cx.buit, marginTop: 5 }}>{t('size_library.layer_undeclared')}</div>
-      )}
+    // Fila `.kv` de la maqueta: rètol de 132px a l'esquerra i els xips a la dreta, alineats a la
+    // línia base. El rètol anava a sobre i trencava l'alineació de les quatre capes entre elles.
+    <div style={cx.kv}>
+      <span style={cx.k}>{titol}</span>
+      <span>
+        {!vocabulari && <span style={cx.buit}>{t('size_library.vocab_loading')}</span>}
+        {!!vocabulari?.length && (
+          <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {vocabulari.map(v => (
+              <XipCapa key={v.codi} on={sel.has(v.codi)} disabled={!editable}
+                       onClick={() => onToggle(v.codi)}>{v.etiqueta}</XipCapa>
+            ))}
+          </span>
+        )}
+      </span>
     </div>
   )
 }
@@ -277,6 +312,9 @@ export default function RunsCataleg({ onNou }) {
   }
 
   const editable = true   // l'escriptura la gated el backend (CONFIGURE); aquí no es duplica
+  // «Cap capa declarada» és una propietat de la SECCIÓ, no de cada capa: la frase es diu un cop.
+  const capesBuides = !!sel && ![sel.target_codis, sel.construccio_codis, sel.fit_codis, sel.grup_codis]
+    .some(c => (c || []).length)
 
   return (
     <div style={cx.wrap}>
@@ -290,9 +328,6 @@ export default function RunsCataleg({ onNou }) {
                        color: 'var(--text-soft)', fontWeight: 600 }}>{t('size_library.runs')}</span>
         <input style={cx.cerca} value={q} onChange={e => setQ(e.target.value)}
                placeholder={t('size_library.search_ph')} aria-label={t('size_library.search_ph')} />
-        <span style={{ flexBasis: '100%', fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginTop: 2 }}>
-          {t('size_library.subtitle_runs')}
-        </span>
       </div>
 
       {error && (
@@ -400,8 +435,25 @@ export default function RunsCataleg({ onNou }) {
                 </section>
 
                 <section style={cx.sec}>
-                  <div style={cx.secH}>{t('size_library.sec_restrictions')}</div>
-                  <p style={{ ...cx.note, margin: '0 0 10px' }}>{t('size_library.restrictions_help')}</p>
+                  {/* La maqueta posa l'ESTAT al costat del títol de la secció (`.sec .h em`,
+                      10px, faint) i la frase de «no declarat» UNA sola vegada, quan CAP de les
+                      quatre capes té res. Anava repetida sota cadascuna de les quatre —quatre
+                      blocs de cos gran competint amb les dades— i és una EXPLICACIÓ D'ESTAT:
+                      caption, tènue, cursiva, i prou. */}
+                  <div style={{ ...cx.secH, display: 'flex', justifyContent: 'space-between',
+                                alignItems: 'baseline', gap: 12 }}>
+                    <span>{t('size_library.sec_restrictions')}</span>
+                    <em style={{ fontStyle: 'normal', color: 'var(--text-faint)', letterSpacing: 0,
+                                 textTransform: 'none', fontSize: 'var(--fs-label)', fontWeight: 400 }}>
+                      {capesBuides ? t('size_library.layers_none') : t('size_library.layers_order')}
+                    </em>
+                  </div>
+                  {capesBuides && (
+                    <p style={{ ...cx.buit, fontSize: 'var(--fs-label)', lineHeight: 1.5,
+                                margin: '0 0 10px' }}>
+                      {t('size_library.restrictions_help')}
+                    </p>
+                  )}
                   <Capa titol={t('size_library.layer_target')} vocabulari={vocabularis.target}
                         triats={sel.target_codis} editable={editable} t={t}
                         onToggle={c => commutaCapa('target_codis', c)} />

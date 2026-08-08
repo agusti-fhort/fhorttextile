@@ -3554,7 +3554,7 @@
     "filter_group": "Grupo:",
     "restrictions": "Restricciones",
     "restrictions_title": "Restricciones del run",
-    "restrictions_help": "Las cuatro capas ORDENAN la propuesta del wizard; nunca ocultan nada. Se pueden elegir varias de cada capa: las cuatro son M2M.",
+    "restrictions_help": "Vacío no quiere decir «sirve para todos»: quiere decir NO DECLARADO — nadie ha dicho todavía para quién es este run.",
     "restrictions_save": "Guardar restricciones",
     "restrictions_cancel": "Cancelar",
     "restrictions_saved": "Restricciones del run guardadas",
@@ -3566,7 +3566,6 @@
     "layer_empty": "Capa no declarada — no excluye a nadie.",
     "runs": "Runs",
     "search_ph": "busca por código, nombre o cliente…",
-    "subtitle_runs": "Escalas puras. Un run dice qué tallas hay y en qué orden — nada más. La graduación vive en los juegos de reglas; las restricciones ordenan la propuesta del wizard, nunca ocultan.",
     "tab_active": "Runs activos",
     "tab_off": "Desactivados",
     "new_run": "+ Nuevo run",
@@ -3582,7 +3581,6 @@
     "f_sizes": "Tallas y orden",
     "sec_restrictions": "Restricciones",
     "sec_usage": "Dónde se usa",
-    "layer_undeclared": "NO DECLARADO — vacío no quiere decir «sirve a todos»: quiere decir que esta capa todavía no se ha decidido.",
     "vocab_loading": "Cargando vocabulario…",
     "badge_active": "ACTIVO",
     "badge_off": "DESACTIVADO",
@@ -3601,7 +3599,9 @@
     "usage_loading": "Comprobando dónde se usa…",
     "confirm_delete": "¿Seguro que quieres borrar el run «{{codi}}»? Esta acción no se puede deshacer.",
     "save_error": "No se ha podido guardar el cambio.",
-    "delete_error": "No se ha podido borrar el run."
+    "delete_error": "No se ha podido borrar el run.",
+    "layers_none": "ninguna capa declarada",
+    "layers_order": "ordenan, nunca esconden"
   },
   "grading": {
     "summary": "{{sets}} conjuntos de reglas · {{rules}} reglas totales",

@@ -85,6 +85,10 @@ const cx = {
     padding: '8px 16px', cursor: 'pointer',
     display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
     background: 'transparent', color: 'inherit', fontFamily: 'inherit',
+    // La MIDA també s'hereta, i del document: sense això la fila computava 16px (mesurat
+    // contra `.pom.on`/`.run.on` de la maqueta, que són 12). Els fills posaven la seva i per
+    // això no es veia — fins que un text hi cau sense mida pròpia.
+    fontSize: 'var(--fs-body)',
     border: 0,
     borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--line-soft)',
   },
@@ -334,9 +338,10 @@ export default function POMCataleg() {
             a la capçalera de la llista hi havia un SEGON comptador dient el mateix número. */}
         <input style={cx.cerca} value={q} onChange={e => setQ(e.target.value)}
                placeholder={t('poms.cat.search_ph')} aria-label={t('poms.cat.search_ph')} />
-        <span style={{ flexBasis: '100%', fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginTop: 2 }}>
-          {t('poms.cat.subtitle')}
-        </span>
+      {/* ⚠️ SENSE DESCRIPCIÓ SOTA EL COMPTADOR (esmena §8e d'Agus, 08/08): «comptador + cerca i
+          prou». La línia hi era —i les maquetes v3/v4 encara la dibuixen (`.ident .desc`)— però
+          l'ordre és posterior a la maqueta i mana. 🚩 Les maquetes s'han d'esmenar, o el pròxim
+          tram la tornarà a pintar. */}
       </div>
 
       {error && (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { gradingRuleSets, gradingRules, sizeSystems } from '../../api/endpoints'
 import PageMenu from '../ui/PageMenu'
+import useToc, { anellFocus } from '../ui/toc'
 import { useEixos } from './eixosFont'
 import { useGarmentGroups } from './garmentCatalog'
 import { useElements } from '../../utils/vocabulariDominiFont'
@@ -50,7 +51,6 @@ const cx = {
     fontSize: 'var(--fs-label)', letterSpacing: '.08em', textTransform: 'uppercase',
     color: 'var(--text-soft)', fontWeight: 600,
   },
-  desc: { flexBasis: '100%', fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginTop: 4, lineHeight: 1.6 },
   box: {
     background: 'var(--panel)', border: '1px solid var(--line)',
     borderRadius: 'var(--r-card)', overflow: 'hidden',
@@ -148,21 +148,6 @@ const BADGE = {
 const ORIGEN = { CANONICAL: 'ok', CLIENT_RUN: 'casa', IMPORT: 'warn' }
 const badgeOrigen = (origen) => BADGE[ORIGEN[origen] || 'err']
 
-/**
- * Hover/focus amb estat de React, no amb CSS.
- *
- * Aquesta casa estila INLINE amb tokens; posar-hi classes obligaria a mantenir el CSS d'aquests
- * controls en un segon lloc. És el mateix patró —i el mateix motiu escrit— que `ui/PageMenu.jsx`.
- */
-function useToc() {
-  const [toc, setToc] = useState({ hover: false, focus: false })
-  return [toc, {
-    onMouseEnter: () => setToc(s => ({ ...s, hover: true })),
-    onMouseLeave: () => setToc(s => ({ ...s, hover: false })),
-    onFocus: () => setToc(s => ({ ...s, focus: true })),
-    onBlur: () => setToc(s => ({ ...s, focus: false })),
-  }]
-}
 
 /** Tanca amb `Esc` i amb un clic a fora. Un menú que només es tanca clicant-lo és una trampa. */
 function useTancaFora(obert, tanca) {
@@ -190,6 +175,7 @@ function Boto({ variant, disabled, style, children, ...props }) {
     borderRadius: 'var(--r-ctrl)', padding: variant === 'sm' ? '6px 12px' : '8px 16px',
     fontFamily: 'inherit', fontSize: 'var(--fs-body)', fontWeight: 500, cursor: 'pointer',
     whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6,
+    outline: 'none',
   }
   const pell = {
     pri: { background: toc.hover && !disabled ? 'var(--accio-hover)' : 'var(--accio)',
@@ -203,7 +189,7 @@ function Boto({ variant, disabled, style, children, ...props }) {
             style={{
               ...base, ...pell,
               ...(disabled ? off : null),
-              ...(toc.focus ? { outline: '2px solid var(--gold)', outlineOffset: 1 } : null),
+              ...(toc.focus ? anellFocus : null),
               ...style,
             }}>{children}</button>
   )
@@ -221,7 +207,7 @@ function Xip({ on, disabled, verd, style, children, ...props }) {
               // com que les claus duplicades de JS conserven la posició de la PRIMERA, acabava
               // aplicant-se DESPRÉS del `fontSize` d'aquest mateix objecte i li menjava la mida
               // (a la Size Library això posava tots els xips a 16px en comptes de 10).
-              fontFamily: 'inherit', cursor: disabled ? 'default' : 'pointer',
+              fontFamily: 'inherit', cursor: disabled ? 'default' : 'pointer', outline: 'none',
               ...(toc.hover && !disabled && !on ? { background: 'var(--sel)' } : null),
               // Esmena Agus 08/08 (NORMA §1): «INCLÒS en la definició» = VERD (marcar és
               // confirmar); «on soc» = --sel + filet d'or. Són dues seleccions diferents.
@@ -230,7 +216,7 @@ function Xip({ on, disabled, verd, style, children, ...props }) {
               ...(on && !verd ? { background: 'var(--sel)', borderColor: 'var(--gold-border)',
                                   color: 'var(--text-main)', fontWeight: 600 } : null),
               ...(disabled && !on ? { background: 'var(--bg-page)', color: 'var(--text-faint)' } : null),
-              ...(toc.focus ? { outline: '2px solid var(--gold)', outlineOffset: 1 } : null),
+              ...(toc.focus ? anellFocus : null),
               ...style,
             }}>{children}</button>
   )
@@ -244,7 +230,7 @@ function Camp({ style, ...props }) {
            style={{
              fontFamily: 'inherit', fontSize: 'var(--fs-body)', border: '1px solid var(--line)',
              borderRadius: 'var(--r-ctrl)', padding: '8px 12px', background: 'var(--panel)',
-             color: 'var(--text-main)',
+             color: 'var(--text-main)', outline: 'none',
              ...(toc.focus ? { outline: 'none', borderColor: 'var(--gold)',
                                boxShadow: '0 0 0 3px rgba(194,122,42,.15)' } : null),
              ...style,
@@ -271,8 +257,8 @@ function MenuDesplegable({ etiqueta, icona, items }) {
                 fontFamily: 'inherit', fontSize: 'var(--fs-body)', lineHeight: '16px',
                 color: obert || toc.hover ? 'var(--text-main)' : 'var(--text-soft)',
                 cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
-                whiteSpace: 'nowrap',
-                ...(toc.focus ? { outline: '2px solid var(--gold)', outlineOffset: 1 } : null),
+                whiteSpace: 'nowrap', outline: 'none',
+                ...(toc.focus ? anellFocus : null),
               }}>
         {icona && <i className={`ti ${icona}`} aria-hidden="true" style={{ fontSize: 14 }} />}
         {etiqueta}
@@ -626,7 +612,12 @@ function Joc({ joc, run, vocabularis, regimsAutorables, accions, onTanca, onCanv
                     aria-current={tab === k ? 'true' : undefined}
                     style={{
                       borderRadius: 0,
-                      borderBottom: `2px solid ${tab === k ? 'var(--gold)' : 'transparent'}`,
+                      // La tab NO porta vora als altres tres costats: el botó terciari en reserva
+                      // 1px transparent per no saltar al hover, i aquí això la fa 2px més ampla
+                      // que la de la maqueta. Mesurat amb `qa_bidireccional.py`.
+                      border: 0,
+                      borderBottomWidth: 2, borderBottomStyle: 'solid',
+                      borderBottomColor: tab === k ? 'var(--gold)' : 'transparent',
                       color: tab === k ? 'var(--text-main)' : 'var(--text-soft)',
                       fontWeight: tab === k ? 600 : 400,
                     }}>{txt}</Boto>
@@ -1061,7 +1052,10 @@ export default function JocsDeRegles({ onImportar }) {
             <Camp style={{ flex: 1, minWidth: 220, alignSelf: 'center' }} value={q}
                   onChange={e => setQ(e.target.value)}
                   placeholder={t('grading.jocs.search_ph')} aria-label={t('grading.jocs.search_ph')} />
-            <span style={cx.desc}>{t('grading.jocs.subtitle')}</span>
+            {/* ⚠️ SENSE DESCRIPCIÓ SOTA EL COMPTADOR (esmena §8e d'Agus, 08/08): «comptador + cerca i
+                prou». La línia hi era —i les maquetes v3/v4 encara la dibuixen (`.ident .desc`)— però
+                l'ordre és posterior a la maqueta i mana. 🚩 Les maquetes s'han d'esmenar, o el pròxim
+                tram la tornarà a pintar. */}
           </div>
 
           <div style={cx.box}>

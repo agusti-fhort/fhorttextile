@@ -3554,7 +3554,7 @@
     "filter_group": "Group:",
     "restrictions": "Restrictions",
     "restrictions_title": "Run restrictions",
-    "restrictions_help": "The four layers ORDER the wizard's proposal; they never hide anything. Several can be picked per layer: all four are M2M.",
+    "restrictions_help": "Empty does not mean “serves everyone”: it means NOT DECLARED — nobody has said yet who this run is for.",
     "restrictions_save": "Save restrictions",
     "restrictions_cancel": "Cancel",
     "restrictions_saved": "Run restrictions saved",
@@ -3566,7 +3566,6 @@
     "layer_empty": "Layer not declared — it excludes no one.",
     "runs": "Runs",
     "search_ph": "search by code, name or customer…",
-    "subtitle_runs": "Pure scales. A run says which sizes exist and in what order — nothing else. Grading lives in the rule sets; restrictions order the wizard's proposal, they never hide.",
     "tab_active": "Active runs",
     "tab_off": "Deactivated",
     "new_run": "+ New run",
@@ -3582,7 +3581,6 @@
     "f_sizes": "Sizes and order",
     "sec_restrictions": "Restrictions",
     "sec_usage": "Where it is used",
-    "layer_undeclared": "NOT DECLARED — empty does not mean “serves everyone”: it means this layer has not been decided yet.",
     "vocab_loading": "Loading vocabulary…",
     "badge_active": "ACTIVE",
     "badge_off": "DEACTIVATED",
@@ -3601,7 +3599,9 @@
     "usage_loading": "Checking where it is used…",
     "confirm_delete": "Delete run “{{codi}}”? This cannot be undone.",
     "save_error": "Could not save the change.",
-    "delete_error": "Could not delete the run."
+    "delete_error": "Could not delete the run.",
+    "layers_none": "no layer declared",
+    "layers_order": "they order, they never hide"
   },
   "grading": {
     "summary": "{{sets}} rule sets · {{rules}} total rules",

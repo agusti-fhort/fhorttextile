@@ -240,9 +240,10 @@ export default function GarmentTypes() {
         <input value={search} onChange={e => setSearch(e.target.value)}
                placeholder={t('garment_types.search')} aria-label={t('garment_types.search')}
                style={{ ...camp, flex: 1, minWidth: 220, alignSelf: 'center' }} />
-        <span style={{ flexBasis: '100%', fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginTop: 4, lineHeight: 1.6 }}>
-          {t('garment_types.subtitle')}
-        </span>
+      {/* ⚠️ SENSE DESCRIPCIÓ SOTA EL COMPTADOR (esmena §8e d'Agus, 08/08): «comptador + cerca i
+          prou». La línia hi era —i les maquetes v3/v4 encara la dibuixen (`.ident .desc`)— però
+          l'ordre és posterior a la maqueta i mana. 🚩 Les maquetes s'han d'esmenar, o el pròxim
+          tram la tornarà a pintar. */}
       </div>
 
       <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
