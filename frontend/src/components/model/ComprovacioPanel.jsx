@@ -29,28 +29,32 @@ const SECCIONS = [
   { id: 'descartades', badge: 'warn' },
   { id: 'tolerancia', badge: 'warn' },
 ]
-const COLOR_BADGE = { stop: 'var(--err)', warn: 'var(--warn)', ok: 'var(--ok)' }
+// §1b(d) — la marca de dada taronja és `--warn-state`; `--warn` era el token antic.
+const COLOR_BADGE = { stop: 'var(--err)', warn: 'var(--warn-state)', ok: 'var(--ok)' }
 
+// §3 · radi de TARGETA = 12 (`--r-card`). El 9 no és cap dels tres radis del sistema.
 const card = {
-  background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 9,
-  marginBottom: 14, overflow: 'hidden',
+  background: 'var(--panel)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+  borderRadius: 'var(--r-card)', marginBottom: 14, overflow: 'hidden',
 }
+// §2 · capçalera de llista: th 10px MAJÚSCULES amb tracking .08em «a tot arreu».
 const thS = {
-  fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '0.05em',
-  color: 'var(--text-muted)', fontWeight: 500, textAlign: 'left',
-  padding: '9px 10px 7px', whiteSpace: 'nowrap',
+  fontSize: 'var(--fs-label)', lineHeight: '12px', textTransform: 'uppercase',
+  letterSpacing: '.08em', color: 'var(--text-soft)', fontWeight: 600, textAlign: 'left',
+  padding: '8px 10px', whiteSpace: 'nowrap',
 }
-const tdS = { padding: '8px 10px', borderTop: '1px solid var(--border)', verticalAlign: 'middle' }
+const tdS = { padding: '7px 10px', borderTopWidth: 1, borderTopStyle: 'solid',
+              borderTopColor: 'var(--line-soft)', verticalAlign: 'middle' }
 const tdNum = { ...tdS, textAlign: 'right', fontWeight: 500, whiteSpace: 'nowrap',
                 fontVariantNumeric: 'tabular-nums' }
 const codiS = { color: 'var(--gold)', fontWeight: 600, whiteSpace: 'nowrap' }
-const perqueS = { fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }
+const perqueS = { fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }
 
 const xip = (buida) => ({
-  background: buida ? 'transparent' : 'var(--gold-pale)',
-  color: buida ? 'var(--text-muted)' : 'var(--gold)',
-  border: `1px solid ${buida ? 'var(--border)' : 'var(--border)'}`,
-  borderRadius: 999, padding: '2px 8px', fontSize: 'var(--fs-label)',
+  background: buida ? 'transparent' : 'var(--sel)',
+  color: buida ? 'var(--text-soft)' : 'var(--gold)',
+  border: `1px solid ${buida ? 'var(--line)' : 'var(--line)'}`,
+  borderRadius: 'var(--r-pill)', padding: '3px 10px', fontSize: 'var(--fs-caption)',
   marginRight: 3, whiteSpace: 'nowrap', display: 'inline-block',
 })
 
@@ -64,16 +68,18 @@ function Seccio({ titol, recompte, badge, obert, onGira, children }) {
       <button type="button" onClick={onGira} aria-expanded={obert}
         style={{
           display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-          padding: '11px 16px', background: 'var(--bg-muted)', border: 'none',
-          borderBottom: obert ? '1px solid var(--border)' : 'none',
+          padding: '11px 16px', background: 'var(--panel)', border: 'none',
+          borderBottom: obert ? '1px solid var(--line)' : 'none',
           cursor: 'pointer', font: 'inherit', textAlign: 'left',
         }}>
         <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%',
                                           flex: 'none', background: COLOR_BADGE[badge] }} />
         <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)' }}>{titol}</span>
-        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginLeft: 'auto' }}>{recompte}</span>
-        <span aria-hidden="true" style={{ color: 'var(--text-muted)', fontSize: 10,
-                                          transform: obert ? 'none' : 'rotate(-90deg)' }}>▼</span>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginLeft: 'auto' }}>{recompte}</span>
+        {/* §8 · ICONES TABLER, mai un caràcter de text: un ▼ tipogràfic no té ni la mida ni el
+            traç del sistema, i a 10px no es llegeix com una fletxa. */}
+        <i className={`ti ti-chevron-${obert ? 'down' : 'right'}`} aria-hidden="true"
+           style={{ fontSize: 16, color: 'var(--text-soft)', lineHeight: 1 }} />
       </button>
       {obert && <div style={{ padding: '4px 16px 14px' }}>{children}</div>}
     </div>
@@ -140,7 +146,7 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
     return <p style={{ fontSize: 'var(--fs-body)', color: 'var(--err)' }}>{error}</p>
   }
   if (!dades) {
-    return <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('common.loading')}</p>
+    return <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('common.loading')}</p>
   }
 
   const { veredicte, seccions, families, limitacions = [] } = dades
@@ -191,7 +197,7 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
         {punts.map((p, i) => (
           <tr key={`${p.pom_id}-${i}`}>
             <Identitat p={p} dicc={dicc} />
-            <td style={{ ...tdNum, textDecoration: 'line-through', color: 'var(--text-muted)' }}>
+            <td style={{ ...tdNum, textDecoration: 'line-through', color: 'var(--text-soft)' }}>
               {fmt(p.va_arribar)}
             </td>
             <td style={tdNum}>{fmt(p.vigent)}</td>
@@ -228,7 +234,7 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
       <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 600, margin: '0 0 4px' }}>
         {t('comprovacio.titol')}
       </h2>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 20px' }}>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', margin: '0 0 20px' }}>
         {t('comprovacio.subtitol')}
       </p>
 
@@ -236,7 +242,7 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
           qui obre aquesta pantalla és si la fitxa pot sortir o no. */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 14, background: 'var(--white)',
-        border: '1px solid var(--border)',
+        border: '1px solid var(--line)',
         borderLeft: `3px solid ${bloqueja ? 'var(--err)' : 'var(--ok)'}`,
         borderRadius: 9, padding: '15px 18px', marginBottom: 22,
       }}>
@@ -248,7 +254,7 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
           <b style={{ fontSize: 'var(--fs-h3)', display: 'block', marginBottom: 3 }}>
             {t(bloqueja ? 'comprovacio.veredicte_no' : 'comprovacio.veredicte_si')}
           </b>
-          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
             {t('comprovacio.veredicte_detall', {
               bloquegen: veredicte.bloquegen, revisar: veredicte.a_revisar })}
           </span>
@@ -258,7 +264,7 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
             ['a_revisar', veredicte.a_revisar, 'var(--warn)'],
             ['correctes', veredicte.correctes, 'var(--text-main)']].map(([clau, n, col]) => (
             <div key={clau} style={{ fontSize: 'var(--fs-label)', textTransform: 'uppercase',
-                                     letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                                     letterSpacing: '0.05em', color: 'var(--text-soft)' }}>
               <b style={{ display: 'block', fontSize: 17, fontWeight: 600, color: col,
                           marginBottom: 2 }}>{n}</b>
               {t(`comprovacio.compte_${clau}`)}
@@ -277,7 +283,7 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
             {punts.length
               ? cos[id](punts)
               : <p style={{ padding: '12px 10px', fontSize: 'var(--fs-body)',
-                            color: 'var(--text-muted)' }}>{t(`comprovacio.buit_${id}`)}</p>}
+                            color: 'var(--text-soft)' }}>{t(`comprovacio.buit_${id}`)}</p>}
           </Seccio>
         )
       })}
@@ -288,19 +294,19 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
         recompte={t('comprovacio.n_families', { count: families.length })}
         obert={!tancades.has('fam')} onGira={() => gira('fam')}>
         {families.map(f => (
-          <div key={f.pom_id} style={{ border: '1px solid var(--border)', borderRadius: 7,
+          <div key={f.pom_id} style={{ border: '1px solid var(--line)', borderRadius: 7,
                                        margin: '10px 0', overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 12px',
-                          background: 'var(--bg-card)', borderBottom: '1px solid var(--border)' }}>
+                          background: 'var(--bg-page)', borderBottom: '1px solid var(--line)' }}>
               <span style={codiS}>{f.codi}</span>
               <span style={{ fontSize: 'var(--fs-body)' }}>{f.nom}</span>
               {f.categoria && (
                 <span style={{ fontSize: 'var(--fs-label)', textTransform: 'uppercase',
-                               letterSpacing: '0.05em', color: 'var(--text-muted)',
-                               border: '1px solid var(--border)', borderRadius: 4,
+                               letterSpacing: '0.05em', color: 'var(--text-soft)',
+                               border: '1px solid var(--line)', borderRadius: 4,
                                padding: '1px 7px', background: 'var(--white)' }}>{f.categoria}</span>
               )}
-              <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+              <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
                 {f.folganca != null
                   ? t('comprovacio.folganca', { n: fmt(f.folganca) })
                   : t('comprovacio.n_cares', { count: f.files.length })}
@@ -318,7 +324,7 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
                       : <span style={xip(true)}>—</span>}
                   </td>
                   <td style={{ ...tdNum, ...(r.valor == null
-                    ? { color: 'var(--text-muted)', fontStyle: 'italic', fontWeight: 400 } : {}) }}>
+                    ? { color: 'var(--text-soft)', fontStyle: 'italic', fontWeight: 400 } : {}) }}>
                     {r.valor == null ? t('comprovacio.no_informada') : fmt(r.valor)}
                   </td>
                   <td style={{ ...tdS, ...perqueS }}>{r.origen}</td>
@@ -332,9 +338,9 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
       {/* EL QUE AQUESTA PANTALLA ENCARA NO POT DIR, dit aquí i no amagat. Una comprovació que
           calla sobre els seus propis límits convida a llegir-la com a completa. */}
       {limitacions.includes('buit_declarat_amb_motiu') && (
-        <p style={{ marginTop: 18, padding: '12px 16px', border: '1px dashed var(--border)',
-                    borderRadius: 8, background: 'var(--bg-card)',
-                    fontSize: 'var(--fs-label)', color: 'var(--text-muted)', lineHeight: 1.7 }}>
+        <p style={{ marginTop: 18, padding: '12px 16px', border: '1px dashed var(--line)',
+                    borderRadius: 8, background: 'var(--bg-page)',
+                    fontSize: 'var(--fs-label)', color: 'var(--text-soft)', lineHeight: 1.7 }}>
           {t('comprovacio.limitacio_buit_declarat')}
         </p>
       )}
