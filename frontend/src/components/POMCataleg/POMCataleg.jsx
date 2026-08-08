@@ -2,6 +2,22 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { poms, pomCategories, customerAliases } from '../../api/endpoints'
 
+// Segueix la paginació de DRF fins al final. `page_size: 1000` era un SOSTRE: amb un catàleg més
+// gran, la pantalla n'hauria pintat 1000 i el comptador n'hauria dit 1000, sense que res
+// indiqués que en faltaven. Un número que menteix és pitjor que una llista curta. Mateix patró
+// que `Planning.jsx:86` i `Dashboard.jsx:65`.
+async function totesLesPagines(apiFn, params = {}) {
+  const out = []
+  let page = 1
+  for (;;) {
+    const res = await apiFn({ ...params, page })
+    const d = res.data
+    out.push(...(d?.results ?? (Array.isArray(d) ? d : [])))
+    if (d?.next) page++
+    else return out
+  }
+}
+
 // U1 · CATÀLEG DE POMs — mitja i mitja: la llista no perd context i la fitxa té espai per
 // dir-ho tot (maqueta_cataleg_poms_v1). Substitueix les dues pestanyes de POM Systems: aquí
 // només hi ha catàleg. El `POMBrowser` no desapareix —el consumeixen 5 pantalles més—, però
@@ -33,8 +49,9 @@ const cx = {
     padding: '12px 16px', background: 'var(--panel)', borderBottom: '1px solid var(--line)',
     display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
   },
-  input: {
-    flex: 1, minWidth: 150, fontFamily: 'inherit', fontSize: 'var(--fs-body)',
+  // La cerca viu a la fila d'identitat, al costat del comptador (maqueta v3 `.ident .cerca`).
+  cerca: {
+    flex: 1, minWidth: 220, alignSelf: 'center', fontFamily: 'inherit', fontSize: 'var(--fs-body)',
     border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', padding: '8px 12px',
     background: 'var(--panel)', color: 'var(--text-main)',
   },
@@ -56,7 +73,6 @@ const cx = {
   rowOn: { background: 'var(--sel)', boxShadow: 'inset 3px 0 0 var(--gold)' },
   code: { fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gold)', width: 78, flex: 'none' },
   nm: { fontSize: 'var(--fs-body)', flex: 1, lineHeight: 1.35 },
-  loc: { color: 'var(--text-soft)', fontStyle: 'italic', fontSize: 'var(--fs-label)', marginLeft: 8 },
   ab: {
     fontSize: 'var(--fs-label)', letterSpacing: '.04em', border: '1px solid var(--line)',
     borderRadius: 'var(--r-pill)', padding: '2px 8px', color: 'var(--text-soft)',
@@ -112,6 +128,57 @@ const btn = (variant) => ({
   ...(variant === 'dang' ? { color: 'var(--err)', borderColor: 'var(--err)' } : null),
 })
 
+// ══ ELS TRES ESTATS DEL «COM ES MESURA» (A1 · Agus, 08/08) ═══════════════════════════════
+//
+// Un camp buit d'aquesta fitxa no vol dir una sola cosa, i pintar-hi un guió les confonia
+// totes tres en el mateix silenci. El «com es mesura» viu a `POMGlobal`, i per tant:
+//
+//   · DADA                     el POM està lligat i el camp té valor
+//   · «NO LLIGAT»              `pom_global` és `null` → no hi ha catàleg global on mirar-ho.
+//                              No és que falti la dada: és que aquest POM no en té cap font.
+//   · «LLIGAT SENSE INFORMAR»  `pom_global` hi és però el camp és `''` → la font existeix i
+//                              ningú l'ha omplerta. És una feina pendent d'algú, no un no-hi-ha.
+//
+// Les dues últimes són ACCIONS DIFERENTS per a qui llegeix: la primera es resol lligant el POM
+// al catàleg, la segona omplint-lo. Un «—» no permet saber quina de les dues toca.
+//
+// Això només és possible perquè F2.1a va fer que els 21 camps de `pom_global` s'emetin SEMPRE
+// (amb `null` quan no hi ha lligam) en comptes de desaparèixer de la resposta: sense allò, «no
+// lligat» i «camp inexistent» tenien la mateixa forma —la clau absent— i no es podien distingir.
+const LLIGAT = 'lligat'
+const NO_LLIGAT = 'no_lligat'
+const SENSE_INFORMAR = 'sense_informar'
+
+function estatCamp(sel, valor) {
+  if (sel?.pom_global == null) return NO_LLIGAT
+  const buit = valor === null || valor === undefined || String(valor).trim() === ''
+  return buit ? SENSE_INFORMAR : LLIGAT
+}
+
+/** El valor d'un camp del «com es mesura», o LA PARAULA que diu per què no hi és. Mai un guió. */
+function ValorGlobal({ sel, valor, t }) {
+  const estat = estatCamp(sel, valor)
+  if (estat === LLIGAT) return <span>{valor}</span>
+  return (
+    <span style={cx.buit}>
+      {t(estat === NO_LLIGAT ? 'poms.cat.state_unlinked' : 'poms.cat.state_uninformed')}
+    </span>
+  )
+}
+
+// EL CATÀLEG VA EN ANGLÈS I LA TRADUCCIÓ VIU DARRERE LA ⓘ (maqueta v3, decisió vigent). El nom
+// local deixa de competir amb el canònic a la mateixa línia; qui el necessiti l'hi troba. Va a
+// `title` I a `aria-label`: una icona que només parla amb el ratolí no diu res a qui no en té.
+function InfoLocal({ nom, t }) {
+  if (!nom) return null
+  const text = t('poms.cat.name_local_info', { nom })
+  return (
+    <span role="img" aria-label={text} title={text}
+          style={{ marginLeft: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-label)',
+                   cursor: 'help', flex: 'none' }}>ⓘ</span>
+  )
+}
+
 function Tags({ valors, buit }) {
   if (!valors?.length) return <span style={cx.buit}>{buit}</span>
   return (
@@ -122,8 +189,10 @@ function Tags({ valors, buit }) {
 }
 
 export default function POMCataleg() {
-  const { t, i18n } = useTranslation()
-  const lang = (i18n.language || 'ca').slice(0, 2)
+  // Sense `lang`: EL CATÀLEG VA EN ANGLÈS (maqueta v3). El nom canònic i el de la categoria
+  // surten de `nom_en`, i el local viu darrere la ⓘ — no hi ha cap text que depengui de l'idioma
+  // de qui mira, i per això aquesta pantalla ja no llegeix `i18n.language`.
+  const { t } = useTranslation()
 
   const [llista, setLlista] = useState([])
   const [cats, setCats] = useState([])
@@ -138,13 +207,12 @@ export default function POMCataleg() {
   const carrega = useCallback(() => {
     setCarregant(true); setError(null)
     Promise.all([
-      poms.list({ page_size: 1000, ordering: 'codi_client' }),
-      pomCategories.list({ page_size: 200 }),
+      totesLesPagines(poms.list, { page_size: 200, ordering: 'codi_client' }),
+      totesLesPagines(pomCategories.list, { page_size: 200 }),
     ])
-      .then(([p, c]) => {
-        const rows = p.data?.results ?? (Array.isArray(p.data) ? p.data : [])
+      .then(([rows, categories]) => {
         setLlista(rows)
-        setCats(c.data?.results ?? (Array.isArray(c.data) ? c.data : []))
+        setCats(categories)
         setSelId(prev => (prev && rows.some(r => r.id === prev)) ? prev : (rows[0]?.id ?? null))
       })
       .catch(() => setError(t('poms.cat.load_error')))
@@ -166,11 +234,20 @@ export default function POMCataleg() {
     return () => { viu = false }
   }, [selId])
 
-  const nomCat = useCallback((codi) => {
-    const c = cats.find(x => x.codi === codi || x.nom_en === codi || x.nom_ca === codi)
-    if (!c) return codi || t('poms.uncategorized')
-    return (lang === 'ca' ? c.nom_ca : c.nom_en) || c.nom_ca || c.nom_en || c.codi
-  }, [cats, lang, t])
+  // 🔑 LA CATEGORIA ÉS LA DEL CATÀLEG (`POMMaster.categoria`, un ID), NO `categoria_nom`.
+  //
+  // `categoria_nom` és un `SerializerMethodField` que barreja DOS vocabularis: si el POM està
+  // lligat, torna `POMGlobal.categoria` (un text lliure: «TORS», «MANIGA»); si no, el `nom_ca`
+  // de la `POMCategory` del tenant («Part inferior del cos»). Per això la llista mostrava
+  // capçaleres en dues llengües i dues convencions alhora. Aquí es resol per ID contra
+  // `/pom-categories/`, que és l'única taula que sap com es diu una categoria i en quin ordre va.
+  //
+  // EL CATÀLEG ÉS EN ANGLÈS (maqueta v3): `nom_en` mana i `nom_ca` només és el recanvi.
+  const catPerId = useMemo(() => new Map(cats.map(c => [c.id, c])), [cats])
+  const nomCat = useCallback((id) => {
+    const c = catPerId.get(id)
+    return c ? (c.nom_en || c.nom_ca || c.codi) : t('poms.uncategorized')
+  }, [catPerId, t])
 
   const filtrats = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -179,17 +256,26 @@ export default function POMCataleg() {
       .concat(`${p.name_en || ''} ${p.name_cat || ''} ${p.categoria || ''}`).toLowerCase().includes(s))
   }, [llista, q])
 
-  // Agrupats per categoria, respectant l'ordre que ja porta la llista.
+  // UN BLOC PER CATEGORIA REAL, i prou.
+  //
+  // Això agrupava TRAMS CONSECUTIUS: com que la llista ve ordenada per `codi_client`, les
+  // categories s'entrellacen i la mateixa capçalera sortia quatre vegades («MÀNIGA · 1 …
+  // TORS · 1 … MÀNIGA · 1 …»). No era agrupar: era detectar canvis de valor en una llista que
+  // no estava ordenada per aquell valor. Ara els blocs són tantes com categories REALS hi hagi
+  // amb POMs, en el `display_order` del catàleg, i els POMs sense categoria van a un bloc final
+  // —no barrejats, però tampoc amagats—.
   const grups = useMemo(() => {
-    const out = []
+    const perCat = new Map()
     for (const p of filtrats) {
-      const c = p.categoria_nom || p.categoria || ''
-      const ult = out[out.length - 1]
-      if (!ult || ult.cat !== c) out.push({ cat: c, items: [p] })
-      else ult.items.push(p)
+      const k = p.categoria ?? null
+      if (!perCat.has(k)) perCat.set(k, [])
+      perCat.get(k).push(p)
     }
-    return out
-  }, [filtrats])
+    const ordre = (id) => (id == null ? Infinity : (catPerId.get(id)?.display_order ?? Infinity - 1))
+    return [...perCat.entries()]
+      .sort((a, b) => ordre(a[0]) - ordre(b[0]) || String(nomCat(a[0])).localeCompare(String(nomCat(b[0]))))
+      .map(([id, items]) => ({ catId: id, cat: nomCat(id), items }))
+  }, [filtrats, catPerId, nomCat])
 
   const sel = useMemo(() => llista.find(p => p.id === selId) || null, [llista, selId])
 
@@ -224,6 +310,12 @@ export default function POMCataleg() {
         </span>
         <span style={{ fontSize: 'var(--fs-label)', letterSpacing: '.08em', textTransform: 'uppercase',
                        color: 'var(--text-soft)', fontWeight: 600 }}>{t('poms.cat.title')}</span>
+        {/* LA CERCA PUJA AL COSTAT DEL COMPTADOR (maqueta v3 `.ident`). No és col·locació: el
+            comptador diu «13/396» i el primer número ÉS EL RESULTAT DE LA CERCA. Tenir-los
+            separats obligava a mirar dalt per saber quants en queden i avall per canviar-ho, i
+            a la capçalera de la llista hi havia un SEGON comptador dient el mateix número. */}
+        <input style={cx.cerca} value={q} onChange={e => setQ(e.target.value)}
+               placeholder={t('poms.cat.search_ph')} aria-label={t('poms.cat.search_ph')} />
         <span style={{ flexBasis: '100%', fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginTop: 2 }}>
           {t('poms.cat.subtitle')}
         </span>
@@ -241,8 +333,6 @@ export default function POMCataleg() {
         {/* ── LLISTA ── */}
         <div style={cx.box}>
           <div style={cx.bhead}>
-            <input style={cx.input} value={q} onChange={e => setQ(e.target.value)}
-                   placeholder={t('poms.cat.search_ph')} aria-label={t('poms.cat.search_ph')} />
             <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>
               {t('poms.cat.count', { n: filtrats.length })}
             </span>
@@ -255,8 +345,8 @@ export default function POMCataleg() {
                 {t('poms.no_match')}</div>
             )}
             {grups.map(g => (
-              <div key={g.cat || '—'}>
-                <div style={cx.cat}>{nomCat(g.cat)}
+              <div key={g.catId ?? 'sense'}>
+                <div style={cx.cat}>{g.cat}
                   <span style={{ color: 'var(--text-faint)', letterSpacing: 0 }}> · {g.items.length}</span>
                 </div>
                 {g.items.map(p => (
@@ -271,7 +361,7 @@ export default function POMCataleg() {
                     <span style={cx.code}>{p.pom_code || p.codi_client}</span>
                     <span style={cx.nm}>
                       {p.name_en || p.nom_client}
-                      <span style={cx.loc}>{p.name_cat || p.nom_client}</span>
+                      <InfoLocal nom={p.name_cat !== p.name_en ? p.name_cat : null} t={t} />
                     </span>
                     {(p.abbreviation || p.codi_client) && (
                       <span style={cx.ab}>{p.abbreviation || p.codi_client}</span>)}
@@ -293,12 +383,11 @@ export default function POMCataleg() {
             <>
               <div style={{ padding: '16px', borderBottom: '1px solid var(--line)' }}>
                 <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', letterSpacing: '.04em' }}>
-                  {sel.pom_code || sel.codi_client} · {nomCat(sel.categoria_nom || sel.categoria)}
+                  {sel.pom_code || sel.codi_client} · {nomCat(sel.categoria)}
                 </div>
                 <div style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600, marginTop: 4 }}>
-                  {sel.name_en || sel.nom_client}</div>
-                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontStyle: 'italic', marginTop: 2 }}>
-                  {sel.name_cat || sel.nom_client}</div>
+                  {sel.name_en || sel.nom_client}
+                  <InfoLocal nom={sel.name_cat !== sel.name_en ? sel.name_cat : null} t={t} /></div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                   <span style={{
                     ...cx.badge,
@@ -325,31 +414,44 @@ export default function POMCataleg() {
               <div style={{ padding: '0 16px 14px', maxHeight: 560, overflowY: 'auto' }}>
                 <section style={cx.sec}>
                   <div style={cx.secH}>{t('poms.cat.sec_identity')}</div>
+                  {/* El NOM LOCAL ja no té fila pròpia: el catàleg va en anglès i la traducció
+                      viu darrere la ⓘ del nom canònic (maqueta v3, mateix patró a llista i fitxa). */}
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_name_en')}</span>
-                    <span>{sel.name_en || sel.nom_client}</span></div>
-                  <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_name_local')}</span>
-                    <span>{sel.name_cat || sel.nom_client}</span></div>
+                    <span>{sel.name_en || sel.nom_client}
+                      <InfoLocal nom={sel.name_cat !== sel.name_en ? sel.name_cat : null} t={t} /></span></div>
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_nomenclature')}</span>
                     <span>{sel.abbreviation || sel.codi_client}</span></div>
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_family')}</span>
-                    <span>{nomCat(sel.categoria_nom || sel.categoria) || <span style={cx.buit}>—</span>}</span></div>
+                    <span>{sel.categoria != null
+                      ? nomCat(sel.categoria)
+                      : <span style={cx.buit}>{t('poms.cat.no_category')}</span>}</span></div>
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_unit')}</span>
-                    <span>{sel.unitat || <span style={cx.buit}>—</span>}</span></div>
+                    <ValorGlobal sel={sel} valor={sel.unitat} t={t} /></div>
                 </section>
 
                 <section style={cx.sec}>
                   <div style={cx.secH}>{t('poms.cat.sec_howto')}</div>
+                  {/* La CAPÇALERA de la secció diu l'estat un sol cop quan afecta tota la secció:
+                      repetir cinc vegades «no lligat al catàleg global» seria cert i il·legible. */}
+                  {sel.pom_global == null && (
+                    <p style={{ ...cx.note, margin: '0 0 8px' }}>{t('poms.cat.howto_unlinked')}</p>
+                  )}
+                  {sel.pom_global != null && !sel.start_point && !sel.end_point
+                    && !sel.reference_point && !sel.scope && !sel.body_section && (
+                    <p style={{ ...cx.note, margin: '0 0 8px' }}>{t('poms.cat.howto_uninformed')}</p>
+                  )}
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_from')}</span>
-                    <span>{sel.start_point || <span style={cx.buit}>—</span>}</span></div>
+                    <ValorGlobal sel={sel} valor={sel.start_point} t={t} /></div>
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_to')}</span>
-                    <span>{sel.end_point || <span style={cx.buit}>—</span>}</span></div>
+                    <ValorGlobal sel={sel} valor={sel.end_point} t={t} /></div>
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_reference')}</span>
-                    <span>{sel.reference_point || <span style={cx.buit}>—</span>}</span></div>
+                    <ValorGlobal sel={sel} valor={sel.reference_point} t={t} /></div>
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_scope')}</span>
-                    <span>{[sel.scope, sel.orientation, sel.state, sel.line].filter(Boolean).join(' · ')
-                      || <span style={cx.buit}>—</span>}</span></div>
+                    <ValorGlobal sel={sel}
+                      valor={[sel.scope, sel.orientation, sel.state, sel.line].filter(Boolean).join(' · ')}
+                      t={t} /></div>
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_body')}</span>
-                    <span>{sel.body_section || <span style={cx.buit}>—</span>}</span></div>
+                    <ValorGlobal sel={sel} valor={sel.body_section} t={t} /></div>
                 </section>
 
                 {/* 🔑 ÚS OBSERVAT, no política declarada (decisió Agus 07/08). El model no té

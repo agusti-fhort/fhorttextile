@@ -591,7 +591,7 @@
     "perfil": "My profile",
     "logout": "Sign out",
     "models_list": "List",
-    "poms_list": "POM Systems",
+    "poms_list": "POM catalogue",
     "tasques_list": "List",
     "fitting_list": "List",
     "fittings_sessions": "Fitting sessions",
@@ -3380,7 +3380,7 @@
     }
   },
   "poms": {
-    "title": "POM Systems",
+    "title": "POM catalogue",
     "subtitle": "Catalogue of Points of Measure by garment type",
     "tab_browser": "Browser",
     "tab_catalogue": "Catalogue",
@@ -3490,7 +3490,13 @@
       "u_items": "items",
       "u_models": "live models",
       "u_rules": "grading rules",
-      "usage_loading": "Checking where it is used…"
+      "usage_loading": "Checking where it is used…",
+      "state_unlinked": "Not linked to the global catalogue",
+      "state_uninformed": "Linked to the global catalogue, not filled in",
+      "no_category": "No family",
+      "name_local_info": "Local name: {{nom}}",
+      "howto_unlinked": "This POM is not linked to any global catalogue POM, and that is where “how to measure” lives.",
+      "howto_uninformed": "Linked to the global catalogue, but it has not been filled in there yet."
     }
   },
   "size_map_screen_config": "Configuration",

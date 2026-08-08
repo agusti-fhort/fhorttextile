@@ -591,7 +591,7 @@
     "perfil": "El meu perfil",
     "logout": "Tancar sessió",
     "models_list": "Llistat",
-    "poms_list": "POM Systems",
+    "poms_list": "Catàleg de POMs",
     "tasques_list": "Llistat",
     "fitting_list": "Llistat",
     "fittings_sessions": "Sessions de fitting",
@@ -3380,7 +3380,7 @@
     }
   },
   "poms": {
-    "title": "POM Systems",
+    "title": "Catàleg de POMs",
     "subtitle": "Catàleg de Points of Measure per tipus de prenda",
     "tab_browser": "Navegador",
     "tab_catalogue": "Catàleg",
@@ -3490,7 +3490,13 @@
       "u_items": "items",
       "u_models": "models vius",
       "u_rules": "regles de graduació",
-      "usage_loading": "Comprovant on s'usa…"
+      "usage_loading": "Comprovant on s'usa…",
+      "state_unlinked": "No lligat al catàleg global",
+      "state_uninformed": "Lligat al catàleg global, sense informar",
+      "no_category": "Sense família",
+      "name_local_info": "Nom local: {{nom}}",
+      "howto_unlinked": "Aquest POM no està lligat a cap POM del catàleg global, i el «com es mesura» viu allà.",
+      "howto_uninformed": "Lligat al catàleg global, però allà encara no s’ha informat com es mesura."
     }
   },
   "size_map_screen_config": "Configuració",

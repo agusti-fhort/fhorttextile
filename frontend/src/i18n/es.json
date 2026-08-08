@@ -591,7 +591,7 @@
     "perfil": "Mi perfil",
     "logout": "Cerrar sesión",
     "models_list": "Listado",
-    "poms_list": "POM Systems",
+    "poms_list": "Catálogo de POMs",
     "tasques_list": "Listado",
     "fitting_list": "Listado",
     "fittings_sessions": "Sesiones de fitting",
@@ -3380,7 +3380,7 @@
     }
   },
   "poms": {
-    "title": "POM Systems",
+    "title": "Catálogo de POMs",
     "subtitle": "Catálogo de Points of Measure por tipo de prenda",
     "tab_browser": "Navegador",
     "tab_catalogue": "Catálogo",
@@ -3490,7 +3490,13 @@
       "u_items": "items",
       "u_models": "modelos vivos",
       "u_rules": "reglas de graduación",
-      "usage_loading": "Comprobando dónde se usa…"
+      "usage_loading": "Comprobando dónde se usa…",
+      "state_unlinked": "No vinculado al catálogo global",
+      "state_uninformed": "Vinculado al catálogo global, sin informar",
+      "no_category": "Sin familia",
+      "name_local_info": "Nombre local: {{nom}}",
+      "howto_unlinked": "Este POM no está vinculado a ningún POM del catálogo global, y ahí es donde vive el «cómo se mide».",
+      "howto_uninformed": "Vinculado al catálogo global, pero allí todavía no se ha informado cómo se mide."
     }
   },
   "size_map_screen_config": "Configuración",
