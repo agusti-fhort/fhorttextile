@@ -60,9 +60,10 @@ function isOutOfCharge(task) { return task?.off_recipe === true || task?.origen 
 
 const containerStyle = { background: 'transparent', width: '100%' }
 const cardsGrid = { display: 'flex', flexWrap: 'wrap', gap: 12 }
+// A6 · NOMÉS PELL. `.lblc` de la maqueta: 10px MAJÚSCULES amb tracking .08em i pes 600.
 const sectionTitle = {
-  fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
-  textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10,
+  fontSize: 'var(--fs-label)', lineHeight: '12px', color: 'var(--text-soft)', fontWeight: 600,
+  textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10,
 }
 const footerWrap = { width: '100%', marginTop: 14 }
 
@@ -76,13 +77,17 @@ function TransportBtn({ icon, active, title, onClick }) {
       }}
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        width: 28, height: 28, borderRadius: 6,
-        border: '0.5px solid var(--border)',
-        background: active ? 'var(--bg-muted)' : 'transparent',
-        color: active ? 'var(--text-main)' : 'var(--text-muted)',
-        cursor: active ? 'pointer' : 'not-allowed', opacity: active ? 1 : 0.4,
+        // `.tctl button` de la maqueta: 26×26, filet --line, radi de control i fons --panel.
+        // §5.7 — deshabilitat: BAIXA EL FONS, no la tinta; l'`opacity: .4` d'abans apagava
+        // també la icona i la deixava molt per sota d'AA.
+        width: 26, height: 26, borderRadius: 'var(--r-ctrl)',
+        borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+        background: active ? 'var(--panel)' : 'var(--bg-page)',
+        color: active ? 'var(--text-soft)' : 'var(--text-faint)',
+        cursor: active ? 'pointer' : 'not-allowed',
+        fontSize: 14,
       }}>
-      <i className={`ti ${icon}`} style={{ fontSize: 15 }} />
+      <i className={`ti ${icon}`} aria-hidden="true" style={{ fontSize: 'inherit', color: 'currentColor' }} />
     </button>
   )
 }
@@ -98,9 +103,12 @@ function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop, onDeclara
   return (
     <div style={{
       flex: '1 1 220px', maxWidth: 320, minWidth: 0,
-      border: out ? '1px solid var(--err)' : '0.5px solid var(--border)',
-      borderLeft: out ? '3px solid var(--err)' : '0.5px solid var(--border)',
-      borderRadius: 8, padding: '0.7rem 0.8rem', background: 'var(--white)',
+      // `.tcard`: filet --line i radi 12. El filet gruixut de l'esquerra quan la tasca és
+      // FORA D'ENCÀRREC es queda tal com és: és marca de dada (§1), no selecció.
+      borderWidth: 1, borderStyle: 'solid',
+      borderColor: out ? 'var(--err)' : 'var(--line)',
+      borderLeftWidth: out ? 3 : 1,
+      borderRadius: 'var(--r-card)', padding: '12px', background: 'var(--panel)',
       opacity: otherTech ? 0.55 : 1,
     }}>
       {/* Capçalera: icona + nom del tipus (truncat, mai desborda) */}
@@ -114,14 +122,14 @@ function TaskCard({ task, mine, hasToolRoute, onPlay, onPause, onStop, onDeclara
 
       {/* Cos: temps consumit (helper existent) + obertures */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8,
-                    fontFamily: 'var(--mono)', fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+                    fontFamily: 'var(--mono)', fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
         <span><i className="ti ti-clock" style={{ fontSize: 13, marginRight: 3 }} />{formatMinutes(task.temps_consumit_min ?? 0)}</span>
         <span><i className="ti ti-repeat" style={{ fontSize: 13, marginRight: 3 }} />{t('model_sheet.dashboard.workplan.openings', { n: task.obertures ?? 0 })}</span>
       </div>
 
       {/* d'altri: qui la duu */}
       {otherTech && task.assignee_nom && (
-        <div style={{ marginTop: 4, fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+        <div style={{ marginTop: 4, fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
           {t('model_sheet.dashboard.timeline.by', { label: task.assignee_nom })}
         </div>
       )}
@@ -345,9 +353,12 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
   return (
     <section style={containerStyle}>
       <div style={sectionTitle}>{t('model_sheet.dashboard.workplan.title')}</div>
+      {/* §8c — estat buit: frase en --text-faint CURSIVA, mai caixa buida muda. */}
       {list.length === 0 ? (
-        <div style={{ border: '0.5px dashed var(--border)', borderRadius: 8, padding: '0.7rem 0.9rem',
-                      background: 'var(--bg-muted)', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+        <div style={{ borderWidth: 1, borderStyle: 'dashed', borderColor: 'var(--line)',
+                      borderRadius: 'var(--r-card)', padding: '12px 16px',
+                      background: 'var(--panel)', color: 'var(--text-faint)',
+                      fontStyle: 'italic', fontSize: 'var(--fs-body)' }}>
           {t('model_sheet.dashboard.workplan.empty')}
         </div>
       ) : (
@@ -364,14 +375,16 @@ export default function WorkPlan({ tasques, modelId, onRefresh, onOpenTab }) {
       <div style={footerWrap}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
                       gap: 12, flexWrap: 'wrap', marginBottom: 6, fontSize: 'var(--fs-label)',
-                      color: 'var(--text-muted)' }}>
+                      color: 'var(--text-soft)' }}>
           <span>{t('model_sheet.dashboard.workplan.progress_label', { done, total })} · {pct}%</span>
           <span>{t('model_sheet.dashboard.workplan.time_total')}:{' '}
             <span style={{ fontFamily: 'var(--mono)', color: 'var(--text-main)' }}>{formatMinutes(totalMin)}</span>
           </span>
         </div>
-        <div style={{ height: 8, borderRadius: 6, background: 'var(--bg-muted)',
-                      border: '0.5px solid var(--border)', overflow: 'hidden' }}>
+        {/* `.prog` de la maqueta: 6px de canal en --line-soft, sense vora, píndola. El farciment
+            és --ok: la barra diu QUANT S'HA FET, i el fet és verd a tot el sistema. */}
+        <div style={{ height: 6, borderRadius: 'var(--r-pill)', background: 'var(--line-soft)',
+                      overflow: 'hidden' }}>
           <div style={{ width: `${pct}%`, height: '100%', background: 'var(--ok)',
                         transition: 'width 200ms' }} />
         </div>

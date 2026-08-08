@@ -24,28 +24,49 @@ const rightCol = { display: 'flex', flexDirection: 'column', gap: '1.5rem', flex
 // Marc ÚNIC compartit pels dos fils: el contenidor exterior és l'únic marc (vora + caixa) i porta el
 // scroll propi (maxHeight + overflowY). Els components interns (WatchpointsPanel, ModelTimeline) ja no
 // aporten ni caixa ni capçalera → cap caixa-dins-de-caixa. El títol va a FORA (sectionTitle).
+// ── A6 · NOMÉS PELL (NORMA_LAYOUT §8b·4 · evidència PROPOSTA_menu_pantalla_v3.html) ───────
+// Cap component d'aquest dashboard es mou, es treu ni canvia de lògica: el que canvia són
+// aquestes cinc constants d'estil. La vora crema `--border` passa a `--line` (§1b(b), política
+// progressiva: cada pantalla la canvia quan passa la seva conformitat), el radi de targeta
+// passa de 8 a 12 (`--r-card`, §3), les superfícies passen a `--panel` i la tinta secundària
+// de `--text-muted` (DEPRECAT, 3.64:1 — per sota d'AA) a `--text-soft` (5.37:1).
 const filScroll = {
   maxHeight: '40vh', overflowY: 'auto',
-  border: '0.5px solid var(--border)', borderRadius: 8, background: 'var(--bg-card)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+  borderRadius: 'var(--r-card)', background: 'var(--panel)',
   padding: '8px 12px',
 }
+// `.lblc` de la maqueta: 10px MAJÚSCULES amb tracking .08em i pes 600 — el mateix rètol que la
+// capçalera d'una llista, perquè fa la mateixa feina (dir de què va el bloc de sota).
 const sectionTitle = {
-  fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 500,
-  textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8,
+  fontSize: 'var(--fs-label)', lineHeight: '12px', color: 'var(--text-soft)', fontWeight: 600,
+  textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8,
 }
+// `.rowlink`: targeta blanca amb filet i radi 12, que NAVEGA (per això és un botó).
 const card = {
   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
   width: '100%', textAlign: 'left',
-  border: '0.5px solid var(--border)', borderRadius: 8, padding: '0.7rem 0.9rem',
-  background: 'var(--white)', cursor: 'pointer', color: 'var(--text-main)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+  borderRadius: 'var(--r-card)', padding: '12px 16px',
+  background: 'var(--panel)', cursor: 'pointer', color: 'var(--text-main)',
+  fontFamily: MONO, fontSize: 'var(--fs-body)',
 }
+// `.emptybox`: §8c — «estat buit = frase en --text-faint CURSIVA, mai caixa buida muda». El
+// fons crema (`--bg-muted`) se'n va: un buit no és una superfície diferent, és la mateixa
+// targeta sense res a dins, i el filet discontinu ja ho diu.
 const cardEmpty = {
-  border: '0.5px dashed var(--border)', borderRadius: 8, padding: '0.7rem 0.9rem',
-  background: 'var(--bg-muted)', color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
+  borderWidth: 1, borderStyle: 'dashed', borderColor: 'var(--line)',
+  borderRadius: 'var(--r-card)', padding: '12px 16px',
+  background: 'var(--panel)', color: 'var(--text-faint)', fontStyle: 'italic',
+  fontSize: 'var(--fs-body)',
 }
 const stateBox = {
-  border: '0.5px solid var(--border)', borderRadius: 8, padding: '1rem 1.1rem',
-  background: 'var(--bg-card)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+  borderRadius: 'var(--r-card)', padding: '14px 16px',
+  background: 'var(--panel)',
+  // La mida es declara al CONTENIDOR: sense això la targeta computa els 16px del document i
+  // qualsevol fill sense mida pròpia hi neix. Mateixa correcció que a `TaulaLlista`.
+  fontFamily: MONO, fontSize: 'var(--fs-body)',
 }
 
 export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion = 0 }) {
@@ -91,7 +112,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
   if (loading) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center',
-                    color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+                    color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>
         {t('model_sheet.loading')}
       </div>
     )
@@ -182,7 +203,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="ti ti-file-text" style={{ fontSize: 16, color: 'var(--gold)' }} />
                 {t('model_sheet.dashboard.artefact_fitxa')}
-                <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>
+                <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>
                   {t('model_sheet.dashboard.version_short', { n: fitxa.versio })}
                 </span>
                 {fitxa.estat && (
@@ -191,7 +212,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
                   </Badge>
                 )}
               </span>
-              <i className="ti ti-chevron-right" style={{ color: 'var(--text-muted)' }} />
+              <i className="ti ti-chevron-right" style={{ color: 'var(--text-soft)' }} />
             </button>
           ) : (
             <div style={cardEmpty}>{t('model_sheet.dashboard.empty_fitxa')}</div>
@@ -203,7 +224,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <i className="ti ti-table" style={{ fontSize: 16, color: 'var(--gold)' }} />
                 {t('model_sheet.dashboard.artefact_grading')}
-                <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>
+                <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>
                   {t('model_sheet.dashboard.version_short', { n: grading.version_number })}
                 </span>
                 <Badge variant={grading.aprovada ? 'ok' : 'gold'}>
@@ -212,7 +233,7 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
                     : t('model_sheet.dashboard.grading_draft')}
                 </Badge>
               </span>
-              <i className="ti ti-chevron-right" style={{ color: 'var(--text-muted)' }} />
+              <i className="ti ti-chevron-right" style={{ color: 'var(--text-soft)' }} />
             </button>
           ) : (
             <div style={cardEmpty}>{t('model_sheet.dashboard.empty_grading')}</div>
@@ -225,13 +246,13 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
                 <i className="ti ti-ruler-2" style={{ fontSize: 16, color: 'var(--gold)' }} />
                 {t('model_sheet.dashboard.artefact_base')}
                 {base.base_size_label && (
-                  <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{base.base_size_label}</span>
+                  <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>{base.base_size_label}</span>
                 )}
                 <Badge variant="gray">
                   {t('model_sheet.dashboard.base_active', { n: base.n_active ?? 0 })}
                 </Badge>
               </span>
-              <i className="ti ti-chevron-right" style={{ color: 'var(--text-muted)' }} />
+              <i className="ti ti-chevron-right" style={{ color: 'var(--text-soft)' }} />
             </button>
           ) : (
             <div style={cardEmpty}>{t('model_sheet.dashboard.empty_base')}</div>
@@ -249,13 +270,13 @@ export default function DashboardTab({ modelId, onOpenTab, navigate, wpVersion =
         <button type="button" onClick={() => setShowTech(s => !s)}
           style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none',
                    background: 'transparent', cursor: 'pointer', padding: 0,
-                   color: 'var(--text-muted)', fontSize: 'var(--fs-label)', fontWeight: 500 }}>
+                   color: 'var(--text-soft)', fontSize: 'var(--fs-label)', fontWeight: 500 }}>
           <i className={`ti ti-chevron-${showTech ? 'down' : 'right'}`} />
           {t('model_sheet.dashboard.section_technical')}
         </button>
         {showTech && (
           <div style={{ ...stateBox, marginTop: 8, fontFamily: MONO, fontSize: 'var(--fs-label)',
-                        color: 'var(--text-muted)', display: 'grid',
+                        color: 'var(--text-soft)', display: 'grid',
                         gridTemplateColumns: 'auto 1fr', gap: '4px 16px' }}>
             <span>{t('model_sheet.dashboard.tech_model_id')}</span><span>{data.model_id}</span>
             <span>{t('model_sheet.dashboard.tech_next_phase')}</span>

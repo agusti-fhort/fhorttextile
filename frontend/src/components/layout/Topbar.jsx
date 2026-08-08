@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import LanguageSwitcher from './LanguageSwitcher'
 import { UnitToggle } from '../UnitToggle'
 import useAuthStore from '../../store/auth'
+import useMolla from '../../store/molla'
 import { navGroups } from './navGroups'
 
 // BREADCRUMB DE NAVEGACIÓ (NORMA_LAYOUT §8b): «Tenant › secció › pantalla», el tenant SEMPRE
@@ -32,11 +33,28 @@ function trobaMolla(pathname) {
   return millor
 }
 
+// Un segment del molla. El darrer —on ets— va en pes 600 i no és clicable; els d'abans, en
+// tinta suau, i porten a on diuen si en saben el destí.
+function SegmentMolla({ text, to, darrer, navigate }) {
+  if (darrer || !to) {
+    return <span style={darrer ? {color: 'var(--text-main)', fontWeight: 600} : undefined}>{text}</span>
+  }
+  return (
+    <button type="button" onClick={() => navigate(to)}
+      style={{background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              fontFamily: 'inherit', fontSize: 'inherit', color: 'var(--text-soft)'}}>
+      {text}
+    </button>
+  )
+}
+
 export default function Topbar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const molla = trobaMolla(pathname)
+  // La cua que publica la pantalla (entitat + secció). Buida a tot arreu menys dins d'una fitxa.
+  const cua = useMolla(s => s.cua)
   // Pas 5B-fix: el botó "Nou model" surt de la barra global; baixarà a la llista de Models (5C).
   const showNewModel = false
 
@@ -81,15 +99,28 @@ export default function Topbar() {
           sigui que el molla i el ressaltat del menú no poden dir coses diferents. Els segments
           intermedis van en tinta suau i el darrer —on ets— en pes 600. El chevron només apareix
           si hi ha element següent: a l'arrel no penja res de ningú.
-          El QUART segment (entitat › secció de l'entitat) arriba amb el dashboard del model. */}
+          EL QUART SEGMENT (entitat › secció de l'entitat) arriba amb el dashboard del model:
+          la pantalla el publica a `store/molla` perquè la ruta sola no el pot dir. Quan n'hi
+          ha, el nom del GRUP en surt (v. la nota del store): Tenant › Models › NOM › Secció. */}
       <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-soft)'}}>
         <span style={{fontWeight: 600, color: 'var(--text-main)'}}>{nomTenant}</span>
         {molla && (
           <>
             <span style={{color: 'var(--text-faint)'}}>›</span>
-            <span>{t(molla.sectionKey)}</span>
-            <span style={{color: 'var(--text-faint)'}}>›</span>
-            <span style={{color: 'var(--text-main)', fontWeight: 600}}>{t(molla.c.labelKey)}</span>
+            {cua.length === 0 && (
+              <>
+                <span>{t(molla.sectionKey)}</span>
+                <span style={{color: 'var(--text-faint)'}}>›</span>
+              </>
+            )}
+            <SegmentMolla text={t(molla.c.labelKey)} to={cua.length ? molla.c.to : undefined}
+              darrer={cua.length === 0} navigate={navigate} />
+            {cua.map((seg, i) => (
+              <span key={`${seg.text}-${i}`} style={{display: 'contents'}}>
+                <span style={{color: 'var(--text-faint)'}}>›</span>
+                <SegmentMolla text={seg.text} to={seg.to} darrer={i === cua.length - 1} navigate={navigate} />
+              </span>
+            ))}
           </>
         )}
       </div>

@@ -15,23 +15,25 @@ const KIND_META = {
   measure_change:  { icon: 'ti-ruler-2',         color: 'var(--gold)' },
   gate_advance:    { icon: 'ti-arrow-up-circle', color: 'var(--ok)' },    // progrés
   gate_regress:    { icon: 'ti-arrow-back-up',   color: 'var(--warn)' },  // enrere
-  task_transition: { icon: 'ti-checkbox',        color: 'var(--text-muted)' },
+  task_transition: { icon: 'ti-checkbox',        color: 'var(--text-soft)' },
 }
 
+// §8c — «estat buit = frase en --text-faint CURSIVA, mai caixa buida muda».
 const cardEmpty = {
-  border: '0.5px dashed var(--border)', borderRadius: 8, padding: '0.7rem 0.9rem',
-  background: 'var(--bg-muted)', color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
+  border: '1px dashed var(--line)', borderRadius: 'var(--r-card)', padding: '12px 16px',
+  background: 'var(--panel)', color: 'var(--text-faint)', fontStyle: 'italic',
+  fontSize: 'var(--fs-body)',
 }
 const dayHeader = {
   fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-main)',
   margin: '14px 0 6px', position: 'sticky', top: 0, zIndex: 1,
-  background: 'var(--bg-main)', padding: '2px 0',
+  background: 'var(--panel)', padding: '2px 0',
 }
 // Fila en LÍNIA, sense capsa: ni border, ni fons, ni borderRadius. Només un separador fi (borderTop)
 // i densitat alta. El marc i el scroll viuen al contenidor exterior (DashboardTab).
 const eventLine = {
   display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap',
-  padding: '4px 0', borderTop: '0.5px solid var(--border)', fontSize: 'var(--fs-body)',
+  padding: '4px 0', borderTop: '1px solid var(--line)', fontSize: 'var(--fs-body)',
 }
 
 function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
@@ -102,7 +104,7 @@ export default function ModelTimeline({ modelId }) {
   let body
   if (loading) {
     body = (
-      <div style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+      <div style={{ padding: '1rem', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>
         {t('model_sheet.loading')}
       </div>
     )
@@ -133,7 +135,7 @@ export default function ModelTimeline({ modelId }) {
             <div style={dayHeader}>{g.label}</div>
             <div>
               {g.items.map((ev, i) => {
-                const meta = KIND_META[ev.kind] || { icon: 'ti-point', color: 'var(--text-muted)' }
+                const meta = KIND_META[ev.kind] || { icon: 'ti-point', color: 'var(--text-soft)' }
                 const p = ev.payload || {}
                 return (
                   <div key={i} style={eventLine}>
@@ -145,14 +147,14 @@ export default function ModelTimeline({ modelId }) {
                       </Badge>
                     )}
                     {ev.kind === 'measure_change' && p.context && (
-                      <span style={{ color: 'var(--text-muted)' }}>
+                      <span style={{ color: 'var(--text-soft)' }}>
                         · {t(`model_sheet.dashboard.timeline.context.${p.context}`, { defaultValue: p.context })}
                       </span>
                     )}
                     {ev.kind === 'measure_change' && p.motiu && (
-                      <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>· {p.motiu}</span>
+                      <span style={{ color: 'var(--text-soft)', fontStyle: 'italic' }}>· {p.motiu}</span>
                     )}
-                    <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: 'var(--fs-label)', whiteSpace: 'nowrap' }}>
+                    <span style={{ marginLeft: 'auto', color: 'var(--text-soft)', fontSize: 'var(--fs-label)', whiteSpace: 'nowrap' }}>
                       {relTime(ev.at)}{ev.actor ? ` · ${t('model_sheet.dashboard.timeline.by', { label: ev.actor.label })}` : ''}
                     </span>
                   </div>

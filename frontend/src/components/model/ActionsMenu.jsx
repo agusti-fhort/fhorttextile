@@ -25,7 +25,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10)
 // `selectionSet` (C2) = selecció de CONJUNT filtrat {filters, excludeIds, count}: no hi ha
 // llista d'objectes al client. En aquest mode NOMÉS "assignar tasques" s'escala (envia
 // filters+exclude_ids); la resta d'accions (runBulk per-element) queden deshabilitades.
-export default function ActionsMenu({ targets, model, selectionSet = null, onChanged, onFeedback, triggerLabel }) {
+export default function ActionsMenu({ targets, model, selectionSet = null, onChanged, onFeedback, triggerLabel, variant = 'boto' }) {
   const { t } = useTranslation()
   // Les fases del model són DADA (`Model.FASE_CHOICES`) i arriben de `/vocabulari/`. Mentre no
   // hi són, avançar i retrocedir de fase no s'ofereixen: `codiSeguent(null, …)` és `null` i
@@ -307,7 +307,20 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
   return (
     <div style={{ position: 'relative' }}>
       <button type="button" onClick={() => n && setOpen(o => !o)} disabled={!n}
-        style={{ ...triggerBtn, opacity: n ? 1 : 0.5, cursor: n ? 'pointer' : 'not-allowed' }}>
+        aria-haspopup="menu" aria-expanded={open}
+        style={{
+          ...(variant === 'menu' ? triggerMenu : triggerBtn),
+          // §5.7 — deshabilitat: BAIXA EL FONS, no la tinta. L'`opacity` d'abans apagava
+          // també el text i el deixava per sota d'AA.
+          //
+          // …PERÒ AL MENÚ NO HI HA FONS QUE BAIXAR: la píndola de la barra és transparent en
+          // repòs, i donar-li `--bg-page` la deixa a un pas de `--sel`, que en aquesta barra
+          // vol dir EXACTAMENT EL CONTRARI (píndola activa/hover). Allà mana la §1, que
+          // reserva `--text-faint` per a «només deshabilitat».
+          ...(n ? null : (variant === 'menu'
+            ? { color: 'var(--text-faint)', cursor: 'not-allowed' }
+            : { background: 'var(--bg-page)', cursor: 'not-allowed' })),
+        }}>
         {triggerLabel || t('model_sheet.actions')}{n > 1 ? ` (${n})` : ''}
         {/* §8: icona dins de botó = 14px i SEMPRE currentColor, perquè segueixi la tinta. */}
         <i className="ti ti-chevron-down" aria-hidden="true"
@@ -561,11 +574,26 @@ function Row({ label, children }) {
 // d'accions sortia blau a /models, al dashboard del model i al TaskAssignWizard.
 //
 // Es corregeix AQUÍ, un sol cop, i no a les tres pantalles: el disparador és compartit.
+// §8e — QUAN L'ACCIÓ PUJA AL MENÚ DE PANTALLA DEIXA DE SER UN BOTÓ: dins de la barra blanca
+// el llenguatge és el de la píndola de navegació, no el del botó secundari. Mateixa forma que
+// `PageMenu` i que el `BotoMenu` de la llista de Models; `variant="menu"` és opt-in, i el
+// consumidor de sempre (capçalera de la fitxa del model) no canvia gens.
+const triggerMenu = {
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'transparent',
+  borderRadius: 'var(--r-pill)', background: 'none',
+  padding: '6px 14px', fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px',
+  color: 'var(--text-soft)', cursor: 'pointer', whiteSpace: 'nowrap',
+}
+// §5.2 · SECUNDÀRIA: blanc + vora --gold-border + tinta fosca, **padding 8×16** i pes 500 —
+// les mides exactes que la norma escriu i que el `.btn` de la maqueta del §8b pinta. Abans
+// anava a 7×14 i pes 600, que és el pes d'un primari.
 const triggerBtn = {
-  display: 'flex', alignItems: 'center', gap: 6,
+  display: 'inline-flex', alignItems: 'center', gap: 6,
   background: 'var(--panel)', color: 'var(--text-main)',
-  border: '1px solid var(--gold-border)', borderRadius: 'var(--r-ctrl)',
-  padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600,
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)',
+  borderRadius: 'var(--r-ctrl)',
+  padding: '8px 16px', fontSize: 'var(--fs-body)', fontWeight: 500, lineHeight: '16px',
   cursor: 'pointer', fontFamily: MONO,
 }
 const menuBox = { position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 41, background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 4, minWidth: 230 }
