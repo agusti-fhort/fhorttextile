@@ -123,8 +123,22 @@
   --tram-sel:   #fb8500; /* el tram que s'assenyala — èmfasi, no identitat */
 
   /* Escala tipogràfica (Fase 2) — noms semàntics per rol, no per valor.
-     8·10·12·14·18·22·32. El 8 és el terra (= mínim 8pt de la fitxa tècnica). */
-  --fs-caption: 8px;   /* captions, hints, badges menors */
+     10·12·14·18·22·32.
+
+     EL TERRA PUJA DE 8 A 10 (NORMA_LAYOUT §2, T0-bis.1): «caption/TH — 10/12, MÍNIM ABSOLUT,
+     mai 8px llegible». El comentari que hi havia aquí deia que el 8 era «el terra (= mínim 8pt
+     de la fitxa tècnica)», i això lligava aquest token al PAPER. No hi està lligat, i s'ha
+     comprovat abans de tocar-lo: l'únic full que s'imprimeix (`FittingPrintSheet.jsx`, amb
+     @page i @media print) no consumeix --fs-caption enlloc —les seves mides són pt explícits
+     (6.8/7.5/8.5)—, ni el consumeixen ni `FttHeaderBand` ni els utils que el full importa; i el
+     PDF de la fitxa tècnica surt de `stage.toDataURL()`, ràster de Konva, on el CSS no arriba
+     mai (els 11 usos del TechSheetEditor són crom d'editor, no dibuix). Per això NO ha calgut
+     partir el token: el mínim de 8pt del paper el segueix guardant el paper.
+
+     CONSEQÜÈNCIA VOLGUDA: --fs-caption i --fs-label queden tots dos a 10px. La norma els vol
+     així (§2: caption/TH 10/12 · label 10); es mantenen com a dos noms perquè els rols són
+     diferents (el label va en majúscules amb tracking, el caption no) i cadascun pot evolucionar. */
+  --fs-caption: 10px;  /* captions, hints, badges menors — MÍNIM del sistema de pantalla */
   --fs-label:   10px;  /* labels bold / eyebrow (uppercase, letterSpacing) */
   --fs-body:    12px;  /* cos de text (rol majoritari) */
   --fs-h3:      14px;  /* títol de secció */
