@@ -4407,12 +4407,6 @@
     "session_logout": "Tancar sessió"
   },
   "capa": {
-    "exterior": "Exterior",
-    "folre": "Folre",
-    "entretela": "Entretela",
-    "farciment": "Farciment",
-    "reforc": "Reforç",
-    "fornitura": "Fornitura",
     "col": "Capa"
   },
   "instancia": {

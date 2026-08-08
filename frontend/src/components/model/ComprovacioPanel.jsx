@@ -109,7 +109,9 @@ function Identitat({ p, dicc }) {
 }
 
 export default function ComprovacioPanel({ model, onVeureFila = null }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // L'idioma per als literals del diccionari (les capes en porten tres). F2.2.
+  const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
   // Sense el vocabulari, `Identitat` pinta la germana amb el codi cru (`etiquetaInstancia` fa
   // fallback): els punts de la comprovació segueixen sent correctes, però dues germanes del
   // mateix POM es llegeixen igual. Es demana l'ESTAT, no només el diccionari, per poder-ho DIR.
@@ -309,7 +311,7 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
                               { txt: t('comprovacio.col_origen') }]}>
               {f.files.map(r => (
                 <tr key={r.bm_id} style={{ background: (r.capa !== 'exterior') ? 'var(--fila-capa)' : undefined }}>
-                  <td style={tdS}>{etiquetaCapa(r.capa, t)}</td>
+                  <td style={tdS}>{etiquetaCapa(r.capa, dicc, lang)}</td>
                   <td style={tdS}>
                     {r.instancia
                       ? <span style={xip(false)}>{etiquetaInstancia(r.instancia, dicc)}</span>

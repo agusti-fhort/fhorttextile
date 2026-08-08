@@ -10,7 +10,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-import { etiquetaCapa, etiquetaInstancia, esGermanaDeCapa, CAPES } from '../../utils/capaInstancia'
+import { etiquetaCapa, etiquetaInstancia, esGermanaDeCapa } from '../../utils/capaInstancia'
 import {
   dimensionsDe, eixPrincipal, nomEnIdioma, COMPLEMENTARIA, eixDe,
   tramsInstancia, composaInstancia,
@@ -164,9 +164,12 @@ export default function EditableTable({
   // DEMOSTRACIÓ de la maqueta—, i les altres sis posicions no arribaven mai a la fila.
   // Amb el diccionari en vol la llista és buida i la taula es pinta igual, sense píndoles.
   const dims = dimensionsDe(dicc)
-  // Les capes, també de la BD. `CAPES` és el mirall de la sembra i només serveix mentre el
-  // diccionari no ha arribat: un desplegable buit no seria «encara no ho sé», seria «no n'hi ha».
-  const capesDelDiccionari = dicc?.capes?.length ? dicc.capes.map(c => c.slug) : CAPES
+  // Les capes, de la BD i NOMÉS de la BD (F2.2). Abans hi havia una llista de reserva al
+  // client per si el diccionari trigava; la llei d'Agus no l'admet, i el motiu és el de sempre:
+  // el dia que el catàleg canviï, la reserva menteix i ningú se'n recorda. Sense diccionari la
+  // llista va buida i la píndola d'afegir capa no s'ofereix — que és el que toca dir quan no ho
+  // sabem, en comptes d'oferir sis opcions que potser ja no són les bones.
+  const capesDelDiccionari = dicc?.capes?.map(c => c.slug) || []
 
   useEffect(() => { setLocalRows(rows); setDirty(false) }, [rows])
 
@@ -1070,7 +1073,9 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
                        onBateig, widths, registerVal, onNav, esPresa,
                        dicc, dims, dimState, onParteix, onDesfa, onMesInstancia, onGermanaCapa,
                        capesLliures, onCapa, mostraGrading = false }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // Idioma per als literals del diccionari (les capes en porten tres). F2.2.
+  const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: row.id })
 
@@ -1138,7 +1143,7 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           DOS CONTROLS I DOS ACTES: el desplegable CANVIA la capa d'aquesta fila; el botó del
           costat (i la tecla `L` des del carril) en fa una SEGONA a la capa lliure següent. */}
       <td style={{ ...stickyTd(0, widths.capa), color: 'var(--text-main)', whiteSpace: 'normal' }}>
-        {readOnly ? etiquetaCapa(row.capa, t) : (
+        {readOnly ? etiquetaCapa(row.capa, dicc, lang) : (
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <select value={row.capa || 'exterior'} tabIndex={-1}
               aria-label={t('capa.col')}
@@ -1148,7 +1153,7 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
                 background: 'var(--white)', border: '1px solid var(--border)',
                 borderRadius: 5, padding: '2px 6px', minWidth: 90, maxWidth: '100%',
               }}>
-              {capesLliures.map(c => <option key={c} value={c}>{etiquetaCapa(c, t)}</option>)}
+              {capesLliures.map(c => <option key={c} value={c}>{etiquetaCapa(c, dicc, lang)}</option>)}
             </select>
             <button type="button" onClick={onGermanaCapa} tabIndex={-1}
               title={t('germana.capa_tecla')} aria-label={t('germana.capa_tecla')}
@@ -1878,7 +1883,9 @@ function ModalPomPropi({ modelId, nomInicial, onFet, onTanca }) {
 const NIVELLS = ['item', 'type', 'cataleg', 'model']
 
 function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearPropi }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // Idioma per als literals del diccionari (les capes en porten tres). F2.2.
+  const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [sel, setSel] = useState(0)
@@ -1996,7 +2003,7 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
       <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
         {eixos
           ? t('editable_table.finder_eix', {
-            eix: eixos.capa ? etiquetaCapa(eixos.capa, t) : etiquetaInstancia(eixos.instancia, t),
+            eix: eixos.capa ? etiquetaCapa(eixos.capa, dicc, lang) : etiquetaInstancia(eixos.instancia, dicc),
           })
           : t('editable_table.finder_hint')}
       </span>
@@ -2035,7 +2042,7 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
                       <span style={{ background: 'var(--gold-pale)', color: 'var(--gold)',
                                      border: '1px solid var(--border)', borderRadius: 999,
                                      padding: '1px 8px', fontSize: 'var(--fs-caption)' }}>
-                        {eixos.capa ? etiquetaCapa(eixos.capa, t) : etiquetaInstancia(eixos.instancia, t)}
+                        {eixos.capa ? etiquetaCapa(eixos.capa, dicc, lang) : etiquetaInstancia(eixos.instancia, dicc)}
                       </span>
                     )}
                   </div>

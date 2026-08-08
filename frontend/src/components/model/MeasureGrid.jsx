@@ -394,7 +394,10 @@ export default function MeasureGrid({
   onPodar = null,         // C1 — (row) => Promise: treu el POM del model (SOFT). null = cap columna d'acció
   empty = null,           // node quan no hi ha files
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // Les capes es diuen com el diccionari de la BD diu (F2.2), en l'idioma de qui llegeix.
+  const dicc = useDiccionariMesures()
+  const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
   const unit = useUnit()                       // unitat del tenant (CM|INCH) → format de presentació
   // EL VOCABULARI, A NIVELL DE GRAELLA. Qui el consumeix és `NomCell` (una cel·la per fila), i una
   // cel·la no és el lloc d'anunciar una fallada de xarxa: la graella pregunta per l'ESTAT i, si no
@@ -607,7 +610,7 @@ export default function MeasureGrid({
                     adaptador que encara no la serveixi deixa la columna muda. */}
                 <td style={{ ...stickyTd(0, COL_CAPA_W, rowBg), whiteSpace: 'normal',
                              color: 'var(--text-main)' }}>
-                  {etiquetaCapa(r.capa, t)}
+                  {etiquetaCapa(r.capa, dicc, lang)}
                 </td>
                 <CodiCell codi={r.codi} nomFitxa={r.nom_fitxa} pomCode={r.pom_code} bmId={r.bm_id}
                   isKey={r.is_key} editable={editable} editCodi={editCodi} onNomSave={onNomSave}

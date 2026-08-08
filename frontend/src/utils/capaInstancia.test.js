@@ -17,29 +17,37 @@ import { sufixIdentitat, etiquetaCapa, etiquetaInstancia } from './capaInstancia
 // troba literal. Prou per fixar QUINA clau es demana i en quin ordre — que és el contracte.
 const t = (clau) => clau
 
+// El diccionari, tal com el serveix `GET /api/v1/mesures/diccionari/`. Les capes ja no són cap
+// constant del client (F2.2): els seus literals vénen d'aquí, i per això les proves n'han de
+// portar un. Només les dues capes que els casos toquen.
+const dicc = { capes: [
+  { slug: 'exterior', nom_en: 'Shell', nom_ca: 'Exterior', nom_es: 'Exterior' },
+  { slug: 'folre', nom_en: 'Lining', nom_ca: 'Folre', nom_es: 'Forro' },
+] }
+
 test('la mesura única d\'exterior no porta sufix: la fila no canvia de forma', () => {
-  assert.equal(sufixIdentitat({ capa: 'exterior', instancia: '' }, t), '')
+  assert.equal(sufixIdentitat({ capa: 'exterior', instancia: '' }, dicc), '')
   // Sense eixos declarats és el mateix cas (C4: una mesura sense eixos és l'exterior únic).
-  assert.equal(sufixIdentitat({}, t), '')
-  assert.equal(sufixIdentitat({ capa: '', instancia: '' }, t), '')
+  assert.equal(sufixIdentitat({}, dicc), '')
+  assert.equal(sufixIdentitat({ capa: '', instancia: '' }, dicc), '')
 })
 
 test('la germana de CAPA porta la seva capa', () => {
-  assert.equal(sufixIdentitat({ capa: 'folre', instancia: '' }, t), ' · capa.folre')
+  assert.equal(sufixIdentitat({ capa: 'folre', instancia: '' }, dicc), ' · Folre')
 })
 
 test('la germana d\'INSTÀNCIA porta la seva instància, EN ANGLÈS CANÒNIC', () => {
   // No passa per `t()`: la paraula d'instància és la que allarga el nom del POM i de la qual
   // surt el sufix del codi (`AHL`). Traduir-la deixaria dues llengües a la mateixa línia.
-  assert.equal(sufixIdentitat({ capa: 'exterior', instancia: 'left' }, t), ' · Left')
-  assert.equal(sufixIdentitat({ capa: 'exterior', instancia: 'right' }, t), ' · Right')
+  assert.equal(sufixIdentitat({ capa: 'exterior', instancia: 'left' }, dicc), ' · Left')
+  assert.equal(sufixIdentitat({ capa: 'exterior', instancia: 'right' }, dicc), ' · Right')
 })
 
 test('amb els dos eixos: INSTÀNCIA primer, capa després', () => {
   // Es llegeix com es diu: la instància qualifica la mesura («la sisa esquerra») i la capa diu
   // de quina matèria parla («…al folre»). L'ordre invers no es llegeix.
-  assert.equal(sufixIdentitat({ capa: 'folre', instancia: 'left' }, t),
-    ' · Left · capa.folre')
+  assert.equal(sufixIdentitat({ capa: 'folre', instancia: 'left' }, dicc),
+    ' · Left · Folre')
 })
 
 test('una instància composta es desmunta pels guions, sense perdre cap tram', () => {
@@ -57,13 +65,13 @@ test('un slug desconegut es mostra CRU, mai desapareix', () => {
 
 test('res no peta amb una fila absent', () => {
   assert.equal(sufixIdentitat(null, t), '')
-  assert.equal(sufixIdentitat(undefined, t), '')
+  assert.equal(sufixIdentitat(undefined, dicc), '')
 })
 
 test('etiquetaCapa: el buit és l\'exterior, no «sense capa»', () => {
   // La columna és NOT NULL amb default; el buit vol dir «l'exterior de sempre».
-  assert.equal(etiquetaCapa('', t), 'capa.exterior')
-  assert.equal(etiquetaCapa(null, t), 'capa.exterior')
+  assert.equal(etiquetaCapa('', dicc), 'Exterior')
+  assert.equal(etiquetaCapa(null, dicc), 'Exterior')
 })
 
 test('etiquetaInstancia: la instància única torna buit, no un guió penjat', () => {

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { garmentTypeItems, garmentPomMaps, poms } from '../../api/endpoints'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { dimensionsDe, composaInstancia, tramsInstancia } from '../../utils/diccionariMesures'
-import { CAPES, etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
+import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 
 // U2/R1 · LA GERMANA DE PRESENTACIÓ · «Talles i POMs» del catàleg de peces.
 //
@@ -21,7 +21,7 @@ import { CAPES, etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstanci
 // ── QUÈ ES COMPARTEIX (i no es duplica) ──────────────────────────────────────────────────────
 // Tot el VOCABULARI, que ja vivia en mòduls purs de sprints anteriors — no ha calgut extreure
 // res, només consumir-los:
-//   · `utils/capaInstancia` → CAPES · etiquetaCapa · etiquetaInstancia
+//   · `utils/capaInstancia` → etiquetaCapa · etiquetaInstancia (les capes, del diccionari)
 //   · `utils/diccionariMesures` → dimensionsDe · composaInstancia
 //   · `utils/diccionariMesuresFont` → useEstatDiccionari (les capes i instàncies REALS de la BD)
 // Així les paraules d'aquesta taula i les de la del model surten del mateix lloc: si la Montse
@@ -64,7 +64,9 @@ const iconaCel = {
 const clau = (r) => `${r.pom_id}|${r.capa || 'exterior'}|${r.instancia || ''}`
 
 export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, onError, onTornar }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // L'idioma per als literals del diccionari (les capes en porten tres). F2.2.
+  const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
   const { dicc } = useEstatDiccionari()
   const [files, setFiles] = useState([])
   const [tretes, setTretes] = useState([])      // mapIds a esborrar en desar
@@ -73,7 +75,8 @@ export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, 
   const refsValor = useRef({})
 
   const dims = dimensionsDe(dicc)
-  const capesDelDiccionari = dicc?.capes?.length ? dicc.capes.map(c => c.slug) : CAPES
+  // Només de la BD (F2.2): sense diccionari, cap opció (v. EditableTable per al motiu).
+  const capesDelDiccionari = dicc?.capes?.map(c => c.slug) || []
 
   // La llista arriba de l'ACUMULACIÓ (grup + família + item): és el catàleg que l'item PROPOSA,
   // i cada fila ja diu de quin nivell ve. Les de nivell grup/família no tenen `map_id` d'item:
@@ -253,7 +256,7 @@ export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, 
           </thead>
           <tbody>
             {files.map((r, i) => (
-              <Fila key={r.id} r={r} i={i} t={t} dicc={dicc} dims={dims}
+              <Fila key={r.id} r={r} i={i} t={t} lang={lang} dicc={dicc} dims={dims}
                 capes={capesDelDiccionari} eixos={capçalera}
                 refValor={(el) => { refsValor.current[r.id] = el }}
                 onTecla={(e) => tecles(e, r, i)}
@@ -303,7 +306,7 @@ function Kbd({ children }) {
   )
 }
 
-function Fila({ r, i, t, dicc, dims, capes, refValor, onTecla, onCapa, onInstancia, onDuplica, onTreu }) {
+function Fila({ r, i, t, lang, dicc, dims, capes, refValor, onTecla, onCapa, onInstancia, onDuplica, onTreu }) {
   // Les píndoles de cada eix surten de la BD (D-31.26): un grup per eix i, dins, les seves files
   // pel `display_order`. Amb el diccionari en vol la llista és buida i la taula es pinta igual.
   // El slug compost es parteix amb el SEPARADOR del diccionari, no amb un guió escrit aquí.
@@ -326,7 +329,7 @@ function Fila({ r, i, t, dicc, dims, capes, refValor, onTecla, onCapa, onInstanc
             borderRadius: 5, padding: '3px 6px', background: 'var(--white)', width: '100%',
             color: 'var(--text-main)',
           }}>
-          {capes.map(c => <option key={c} value={c}>{etiquetaCapa(c, t)}</option>)}
+          {capes.map(c => <option key={c} value={c}>{etiquetaCapa(c, dicc, lang)}</option>)}
         </select>
       </td>
       <td style={td}>
@@ -447,7 +450,7 @@ function separaSufixos(q, dicc) {
   const [, base, tipus, sufix] = m
   // `dicc.instancies` és un OBJECTE per eix ({posicio:[…], estat:[…]}), no una llista: s'aplana.
   const llista = tipus.toUpperCase() === 'C'
-    ? (dicc?.capes?.length ? dicc.capes.map(c => c.slug) : CAPES)
+    ? (dicc?.capes?.map(c => c.slug) || [])
     : Object.values(dicc?.instancies || {}).flat().map(o => o.slug)
   const trobat = llista.filter(s => s.startsWith(sufix.toLowerCase()))
   if (trobat.length !== 1) return { text: q.trim(), eixos: {} }

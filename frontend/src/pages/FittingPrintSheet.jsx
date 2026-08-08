@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { fittingSessions, pieceFittings, models } from '../api/endpoints'
 import FttHeaderBand from '../components/model/FttHeaderBand'
 import { etiquetaCapa, etiquetaInstancia } from '../utils/capaInstancia'
+import { useEstatDiccionari } from '../utils/diccionariMesuresFont'
 import { identitatMesura } from '../utils/identitatMesura'
 
 // EL FULL DE FITTING QUE ES PORTA A LA PROVA — A4 APAÏSAT, per omplir A MÀ.
@@ -33,11 +34,15 @@ const fmt = (n) => (n == null || n === '' ? '' : Number(n).toFixed(1))
 
 // LES CAPES VAN EN ANGLÈS AL FULL (D-31.22), sigui quin sigui l'idioma de qui l'ha generat: el
 // full viatja cap al fabricant i el fabricant llegeix anglès. El vocabulari NO es reescriu aquí
-// —surt del mateix `etiquetaCapa` que la pantalla— i el que canvia és només el traductor.
-const capaEn = (slug, tEn) => etiquetaCapa(slug, tEn)
+// —surt del mateix `etiquetaCapa` que la pantalla, i per tant del diccionari de la BD (F2.2)— i
+// el que canvia és només l'idioma que se li demana.
+const capaEn = (slug, dicc) => etiquetaCapa(slug, dicc, 'en')
 
 export default function FittingPrintSheet() {
   const { sessionId, modelId } = useParams()
+  // El vocabulari de capes, de la BD (F2.2). Si no arriba, el full ensenya el slug cru: mai
+  // una paraula inventada en un document que va al fabricant.
+  const { dicc } = useEstatDiccionari()
   const { t, i18n } = useTranslation()
   const tEn = i18n.getFixedT('en')
   const [dades, setDades] = useState(null)
@@ -151,13 +156,13 @@ export default function FittingPrintSheet() {
         <Pagina key={p} files={files_pag} desDe={p * FILES_PER_PAGINA}
           capcalera={capcalera(p + 1)} ultima={p === pagines.length - 1}
           baseLabel={baseLabel} dataSessio={dataSessio}
-          logoUrl={ple.customer_logo || null} t={t} tEn={tEn} />
+          logoUrl={ple.customer_logo || null} t={t} tEn={tEn} dicc={dicc} />
       ))}
     </div>
   )
 }
 
-function Pagina({ files, desDe, capcalera, ultima, baseLabel, dataSessio, logoUrl, t, tEn }) {
+function Pagina({ files, desDe, capcalera, ultima, baseLabel, dataSessio, logoUrl, t, tEn, dicc }) {
   const ampladaUtil = A4_W - MARGE * 2
   return (
     <div className="ftt-full" style={{
@@ -212,7 +217,7 @@ function Pagina({ files, desDe, capcalera, ultima, baseLabel, dataSessio, logoUr
               return (
                 <tr key={l.id}>
                   <TdPr>{desDe + j + 1}</TdPr>
-                  <TdPr>{capaEn(l.capa, tEn)}</TdPr>
+                  <TdPr>{capaEn(l.capa, dicc)}</TdPr>
                   <TdPr><b>{l.nom_fitxa || l.codi || ''}</b></TdPr>
                   {/* L'ÚNICA cel·la que embolcalla: la llei és que una fila creix només si el
                       seu nom ho fa. `keep-all` i `overflow-wrap: normal` perquè talli per

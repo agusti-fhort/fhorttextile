@@ -4407,12 +4407,6 @@
     "session_logout": "Sign out"
   },
   "capa": {
-    "exterior": "Shell",
-    "folre": "Lining",
-    "entretela": "Interfacing",
-    "farciment": "Padding",
-    "reforc": "Underlining",
-    "fornitura": "Trim",
     "col": "Layer"
   },
   "instancia": {

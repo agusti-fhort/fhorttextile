@@ -34,8 +34,12 @@
 // `pom.MeasurementInstance`). Un tram desconegut es mostra CRU en comptes de desaparèixer: val
 // més veure `sleeve-2` que no veure res.
 
-/** Slugs de capa que el catàleg de la casa sembra, en ordre de presentació (D-31.22). */
-export const CAPES = ['exterior', 'folre', 'entretela', 'farciment', 'reforc', 'fornitura']
+// LES CAPES JA NO ES DECLAREN AQUÍ (F2.2). Eren una constant de sis slugs i un mapa de literals
+// a `i18n/*.json` (`capa.<slug>`), o sigui DUES còpies d'una taula: `pom.MeasurementLayer`, que
+// `GET /api/v1/mesures/diccionari/` publica amb slug, `nom_en`, `nom_ca`, `nom_es` i ordre.
+// La llei d'Agus (08/08) no admet cap enumeració de domini escrita al client, i aquesta a més
+// era la que les maquetes havien copiat malament («Interlining», «Binding», «Knit»).
+// Qui necessiti la llista, que la demani al diccionari; qui no el tingui, que ho DIGUI.
 
 /**
  * LES PARAULES D'INSTÀNCIA NO ES TRADUEIXEN (decisió d'Agus, 05/08). Van en ANGLÈS CANÒNIC, tal
@@ -64,7 +68,8 @@ export const NOM_INSTANCIA = {
 }
 
 /** Els slugs que el diccionari sembra (D-31.26): vuit posicions i dos estats. */
-export const INSTANCIES = Object.keys(NOM_INSTANCIA)
+// `INSTANCIES` (la llista de slugs) s'ha retirat a F2.2: no la consumia ningú i era una
+// enumeració de domini exportada. Qui necessiti la llista, al diccionari (`instancies`).
 
 const SEP_INSTANCIA = '-'
 
@@ -73,12 +78,22 @@ const SEP_INSTANCIA = '-'
 const cru = (slug) => slug.charAt(0).toUpperCase() + slug.slice(1).replace(/[-_]/g, ' ')
 
 /**
- * Literal de la CAPA en l'idioma de qui llegeix. `''`/`null` → `'exterior'` (la capa única:
- * la columna és NOT NULL amb default i el buit vol dir «l'exterior de sempre», no «sense capa»).
+ * Literal de la CAPA en l'idioma de qui llegeix, PRES DEL DICCIONARI (F2.2) — abans venia de
+ * `t('capa.<slug>')`, que era una segona còpia dels `nom_ca`/`nom_en`/`nom_es` de la taula.
+ *
+ * `''`/`null` → `'exterior'` (la capa única: la columna és NOT NULL amb default i el buit vol dir
+ * «l'exterior de sempre», no «sense capa»).
+ *
+ * Sense diccionari es torna el SLUG CRU i mai un literal inventat: val més llegir `folre` que una
+ * paraula que el client s'hagi tret de la màniga. El paper el vol en anglès (D-31.22) i per això
+ * `lang` és explícit i no es dedueix de la sessió.
  */
-export function etiquetaCapa(slug, t) {
+export function etiquetaCapa(slug, dicc = null, lang = 'ca') {
   const s = slug || 'exterior'
-  return CAPES.includes(s) ? t(`capa.${s}`) : cru(s)
+  const fila = (dicc?.capes || []).find(c => c.slug === s)
+  if (!fila) return cru(s)
+  const nom = lang === 'en' ? fila.nom_en : lang === 'es' ? fila.nom_es : fila.nom_ca
+  return curta(nom || fila.nom_en || '') || cru(s)
 }
 
 /**
@@ -150,11 +165,11 @@ export const esGermanaDeCapa = (slug) => !!slug && slug !== 'exterior'
  * La CAPA es tradueix (és una matèria: folre, entretela) i la INSTÀNCIA no (és vocabulari
  * canònic que allarga el nom del POM). Per això `t` només serveix la primera.
  */
-export function sufixIdentitat(fila, t, dicc = null) {
+export function sufixIdentitat(fila, dicc = null, lang = 'ca') {
   if (!fila) return ''
   const trams = []
   const inst = etiquetaInstancia(fila.instancia, dicc)
   if (inst) trams.push(inst)
-  if (esGermanaDeCapa(fila.capa)) trams.push(etiquetaCapa(fila.capa, t))
+  if (esGermanaDeCapa(fila.capa)) trams.push(etiquetaCapa(fila.capa, dicc, lang))
   return trams.length ? ` · ${trams.join(' · ')}` : ''
 }

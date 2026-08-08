@@ -29,6 +29,7 @@ import { potTancar, treuAncoratgeFantasma } from '../utils/tracatPloma'
 import { reparteixCotes, superficieDeCotes } from '../utils/cotesAuto'
 import { nomenclaturaDePom, nomsDePom } from '../utils/nomenclaturaPom'
 import { sufixIdentitat } from '../utils/capaInstancia'
+import { useDiccionariMesures } from '../utils/diccionariMesuresFont'
 // F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
 import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
 
@@ -338,9 +339,9 @@ const identitatDeFila = (bm) => `${bm.pom_id}|${bm.capa || 'exterior'}|${bm.inst
 //
 // La segona línia (`sub`) es queda: és el nom en la llengua del document i no compta com a
 // identitat. El sufix va a la PRIMERA, que és la que es llegeix.
-const nomDeTaula = (fila, tDoc) => {
+const nomDeTaula = (fila, dicc, docLang) => {
   const { canonic, local } = nomsDePom(fila)
-  return { text: `${canonic}${sufixIdentitat(fila, tDoc)}`, sub: local }
+  return { text: `${canonic}${sufixIdentitat(fila, dicc, docLang)}`, sub: local }
 }
 
 // F2 (precedent de col·locació) — objectes del croquis als quals el tècnic assigna una vista
@@ -2602,6 +2603,9 @@ export default function TechSheetEditor() {
   // B7 — idioma del DOCUMENT (≠ idioma de la interfície). Es carrega de `metadata.lang` i es
   // desa amb el document; mentre no n'hi hagi cap declarat, mana el default.
   const [docLang, setDocLang] = useState(DOC_LANG_DEFAULT)
+  // Les capes del sufix d'identitat surten del diccionari de la BD (F2.2) i en l'idioma
+  // del DOCUMENT, no en el de qui l'edita: el full el llegeix el fabricant.
+  const dicc = useDiccionariMesures()
   // Traductor fixat a l'idioma del document: el mateix `t` de sempre, però responent en
   // l'idioma de la fitxa. Tot el que és TEXT DEL DOCUMENT passa per aquí; tot el que és closca
   // de l'editor segueix amb `t`. Tenir-los separats és el que fa que commutar l'idioma del
@@ -4991,7 +4995,7 @@ export default function TechSheetEditor() {
     // almenys una fila porta xifra.
     const rows = bms.map(bm => [
       nomenclaturaDePom(bm),
-      nomDeTaula(bm, tDoc),
+      nomDeTaula(bm, dicc, docLang),
       fmtMeasure(bm.base_value_cm, unit) ?? '',
     ])
     addObject(fitTableObj({
@@ -5053,7 +5057,7 @@ export default function TechSheetEditor() {
       // escrit per a AQUESTA peça i ha de sortir igual a la pantalla i al paper (regla d'or).
       // `rule.pom_nom_en` era el nom del catàleg vist des del ruleset — el mateix que
       // `nomsDePom` ja resol, però sense poder saber res del bateig.
-      nomDeTaula(bm, tDoc),
+      nomDeTaula(bm, dicc, docLang),
       fmtMeasure(bm.base_value_cm, unit) ?? '',
       '', '',                                  // mesura nova · comentaris: per omplir a mà
     ])
@@ -5116,7 +5120,7 @@ export default function TechSheetEditor() {
       // R2 — mateixa llei que les altres taules. `graded-table` ja serveix `ref` resolt al
       // servidor i `nomenclaturaDePom` n'accepta els sinònims (`abbreviation`, `codi`).
       nomenclaturaDePom(row),
-      nomDeTaula(row, tDoc),
+      nomDeTaula(row, dicc, docLang),
       ...sizeLabels.map(sl => cellForSize(row, sl)),
     ])
     // F3 — mateix criteri que a la T1a: opcional, i només si el document té més d'una secció.
@@ -5189,7 +5193,7 @@ export default function TechSheetEditor() {
     }
     const rows = (data.rows || []).map(row => [
       nomenclaturaDePom(row),
-      nomDeTaula(row, tDoc),
+      nomDeTaula(row, dicc, docLang),
       ...esdev.map(s => cella(row, s)),
       row.ultim_comentari?.text || '',
     ])
@@ -6906,7 +6910,7 @@ export default function TechSheetEditor() {
                   // pelat, col·locar la cota d'`A` deixava `A-FOL` en verd i sense casella: el
                   // folre no es podia acotar mai, i res no ho deia.
                   const ident = identitatDeFila(bm)
-                  const sufix = sufixIdentitat(bm, t)
+                  const sufix = sufixIdentitat(bm, dicc, docLang)
                   const colocat = bm.pom_id != null && cotesColocades.has(ident)
                   const armat = cotaPreset?.bmId === bm.id && tool === 'cota_pom'
                   // PROPOSADA-IA: hi ha una cota de visió pendent de revisió per aquesta mesura.

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import client from '../../api/client'
 import { models } from '../../api/endpoints'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
+import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { InfoTraduccio, AMPLADES } from '../EditableTable/EditableTable'
 
 // LA GRADUACIÓ ÉS UNA SUPERFÍCIE PRÒPIA (P0.5d · Agus, 06/08, a pantalla).
@@ -108,7 +109,10 @@ function num(v) {
 }
 
 export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor, onGravat }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  // Les capes surten del diccionari de la BD (F2.2), no de cap llista escrita aquí.
+  const { dicc } = useEstatDiccionari()
+  const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
   const modelId = model?.id
   const [data, setData] = useState(null)
   const [carregant, setCarregant] = useState(true)
@@ -253,7 +257,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
       <tr key={row.id} style={{ background: tocat ? 'var(--fila-activa)' : 'transparent' }}>
         {/* # — el número de fila, com a la consulta (mateix to i cos). */}
         <td style={{ ...tdS, color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>{n}</td>
-        <td style={{ ...tdS, color: 'var(--text-muted)' }}>{etiquetaCapa(row.capa || 'exterior', t)}</td>
+        <td style={{ ...tdS, color: 'var(--text-muted)' }}>{etiquetaCapa(row.capa || 'exterior', dicc, lang)}</td>
         {/* EL CODI EN `--gold` I L'ESTRELLA DELS KEY, com a la consulta: el codi és el que el
             tècnic busca amb l'ull, i el ☆ diu quines mesures manen sense llegir-ne cap. */}
         <td style={{ ...tdS, whiteSpace: 'nowrap', color: 'var(--gold)' }}>
