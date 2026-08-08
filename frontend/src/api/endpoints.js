@@ -347,12 +347,23 @@ export const sizeMap = {
 export const gradingRuleSets = {
   list: (params) => client.get('/api/v1/grading-rule-sets/', { params }),
   get: (id) => client.get(`/api/v1/grading-rule-sets/${id}/`),
+  // A3 — les portes d'escriptura del catàleg de jocs. El `GradingRuleSetViewSet` ja era un
+  // ModelViewSet amb escriptura gated CONFIGURE: aquí no hi ha backend nou, només el client
+  // que fins avui cridava `fetch()` a pèl des de la pàgina (sense refresh de token ni base URL).
+  create: (data) => client.post('/api/v1/grading-rule-sets/', data),
+  update: (id, data) => client.patch(`/api/v1/grading-rule-sets/${id}/`, data),
+  remove: (id, force) => client.delete(`/api/v1/grading-rule-sets/${id}/${force ? '?force=1' : ''}`),
   editRule: (setId, pom, payload) =>
     client.patch(`/api/v1/grading-rule-sets/${setId}/regles/${pom}/editar/`, payload),
 }
 
 export const gradingRules = {
   list: (params) => client.get('/api/v1/grading-rules/', { params }),
+  // ⚠️ `remove` NO esborra: el ViewSet marca `actiu=False` i torna 200 (no 204). El motor
+  // només llegeix regles actives, i el mateix ViewSet respon 409 a un PATCH sobre una regla
+  // inactiva («editar-la no tindria cap efecte»).
+  update: (id, data) => client.patch(`/api/v1/grading-rules/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/grading-rules/${id}/`),
 }
 
 // Capa de Projecte — instàncies ModelTask (model-task-items/, ModelViewSet + row-level scope).
