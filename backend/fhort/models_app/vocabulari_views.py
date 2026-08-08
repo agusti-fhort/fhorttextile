@@ -32,24 +32,95 @@ vocabularis independents. `components/PhaseStepper.jsx` les barrejava —i hi af
 `'Tancat'`, que són d'`ESTAT_CHOICES`, i un `'Tècnic'` que no existeix enlloc (la fase real és
 `'Dev. tècnic'`)—; és codi mort i no el consumeix ningú, però el report ho deixa dit.
 
+────────────────────────────────────────────────────────────────────────────────────────────
+**CODA F2.2 (Agus, 08/08) — LA MARCA LA POSA EL BACKEND, MAI UNA LLISTA AL CLIENT.**
+
+Publicar una enumeració crua no és suficient: hi ha llistes on **no tots els membres valen per a
+tot**. Un `codi` pot ser dada legítima que es LLEGEIX i alhora una opció que ningú no ha de poder
+TRIAR. Fins ara això es resolia amb una llista escurçada al client —`REGIMS = ['LINEAR','STEP',
+'FIXED']` a `GraduacioSuperficie`— i això és exactament la segona font de veritat que aquest
+mòdul existeix per matar, només que disfressada de filtre.
+
+La llei: **la marca viatja amb l'element**. El client ofereix el que l'endpoint diu que és
+oferible, i no perquè ell en tingui una llista pròpia. Dues marques, i les dues són PROPIETATS
+d'un membre, no llistes a part:
+
+  · `regims_graduacio[].autorable` — ¿un tècnic pot TRIAR aquest règim en escriure una regla?
+  · `estats_sessio_fitting[].segellat` — ¿en aquest estat la sessió és de només lectura?
+
+Ho fem així i no amb dues llistes paral·leles (`regims_autorables: [...]`) perquè una llista
+paral·lela es pot desincronitzar de la principal; un booleà al costat del codi, no.
+
+**ELS NO-AUTORABLES, I PER QUÈ CADASCUN.** El règim és una columna de `GradingRule`, o sigui que
+els cinc valors són LLEGIBLES i cap desapareix de la llista: el que la marca diu és si es pot
+ESCRIURE de nou.
+
+  · `EXCEPTION` — **és una PETJA que escriu el motor, no un règim que es triï.** `pom/services.py`
+    (:177, :259, :266) l'estampa a `grading_type_applied` quan la cel·la ve d'un
+    `ModelGradingOverride` o del folre (:768). Cap camí d'autoria l'escriu ni el pot escriure.
+    Oferir-lo en un select deixaria que un tècnic marqués una regla com a override sense ser-ho.
+
+  · `ZERO` — **cap camí el produeix ni el porta cap dada viva.** El detector
+    (`pom/grading_utils.py:245-256`) només pot sortir amb LINEAR, STEP o FIXED. A la BD de
+    staging, de 1.267 regles n'hi ha 1.034 LINEAR i 233 FIXED: **zero ZERO, zero STEP, zero
+    EXCEPTION**. I la única raó escrita que hi ha al codi el descarta explícitament
+    (`GraduacioSuperficie.jsx:81` — «ZERO i EXCEPTION NO s'ofereixen com a tria nova; ZERO =
+    nínxol "sempre 0"»); «sempre 0» ja és FIXED amb base 0, i el mateix full en surt.
+    🛑 **NO és unànime i va al report:** `SizeMapSetup.jsx:21` SÍ que l'ofereix, sense cap raó
+    escrita. La marca resol la contradicció en el sentit de l'única raó documentada. Si l'Agus
+    la vol en l'altre sentit, és **una línia**: treure `LOGICA_ZERO` de `REGIMS_NO_AUTORABLES`.
+
+**LES ≈25 SENSE ENDPOINT — PARTICIÓ PER FASE (Agus, 08/08).** No s'exposen totes de cop: cada
+enumeració s'exposa quan la SEVA pantalla passa conformitat. Aquí hi entren ara les de la Fase A
+—veredictes de fitting i estats de sessió— i la resta (comanda, oferta, albarà, encàrrec, rols,
+capabilities, geometria…) queda **CENSAT-PENDENT** al report, amb les constants del client vives
+fins llavors. Afegir-les totes ara seria publicar vocabulari que ninguna pantalla conforme
+consumeix, i el dia que la pantalla arribés ningú no sabria si l'endpoint encara diu la veritat.
+
+**UNITATS I NORMES: COMPROVAT, I NO S'EXPOSEN.** L'ordre les condicionava a que les pantalles de
+Mesures/Fitting les PINTESSIN. No les pinten: el selector de `CM`/`INCH` i el d'`ISO_8559`/
+`ASTM_D13` viuen només a `GeneralConfig.jsx:13,14` (mòdul Sistema) i a `OnboardingWizard.jsx:110`
+(alta). Mesures i Fitting només CONSUMEIXEN el valor que el tenant ja ha triat
+(`fittingShared.jsx:9-13` el llegeix de `/tenant-config/` per formatar), i consumir un valor no
+és duplicar una enumeració. Queden CENSAT-PENDENT amb la resta del mòdul Sistema.
+────────────────────────────────────────────────────────────────────────────────────────────
+
 Lectura pura: cap escriptura, cap efecte, cap paràmetre.
 """
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from fhort.fitting.models import FittingSession, PieceFittingLine
+from fhort.fitting.services import SEALED_SESSION_ESTATS
 from fhort.models_app.models import Model
 from fhort.pom.models import GradingRule
 from fhort.tasks.models import TaskType
 
+#: Règims que existeixen com a DADA però que cap camí d'autoria pot escriure. El raonament de
+#: cadascun és a la capçalera del mòdul; aquí només hi ha la llista, perquè hi hagi UN sol lloc
+#: on canviar-la el dia que la decisió canviï.
+REGIMS_NO_AUTORABLES = frozenset({
+    GradingRule.LOGICA_EXCEPTION,
+    GradingRule.LOGICA_ZERO,
+})
 
-def _llista(choices):
+
+def _llista(choices, marca=None):
     """`[(codi, etiqueta), …]` → `[{codi, etiqueta}, …]`, en l'ordre en què el model els declara.
 
     L'ORDRE ÉS PART DE LA DADA: les fases d'un model van en seqüència (Pending → … → TOP) i
     reordenar-les alfabèticament al client trencaria qualsevol stepper que les pinti.
+
+    `marca` és `(nom, predicat)` i afegeix UNA propietat booleana a cada element —la marca viatja
+    AMB el membre i no en una llista paral·lela que es pugui desincronitzar (v. capçalera).
     """
-    return [{'codi': c, 'etiqueta': str(e)} for c, e in choices]
+    files = [{'codi': c, 'etiqueta': str(e)} for c, e in choices]
+    if marca:
+        nom, predicat = marca
+        for f in files:
+            f[nom] = predicat(f['codi'])
+    return files
 
 
 @api_view(['GET'])
@@ -58,14 +129,39 @@ def vocabulari_domini_view(request):
     """
     GET /api/v1/vocabulari/
 
-    → {regims_graduacio: [...], fases_model: [...], estats_model: [...], fases_tasca: [...]}
+    → {regims_graduacio, fases_model, estats_model, fases_tasca,
+       estats_sessio_fitting, veredictes_fitting}
 
     Cada element: `{codi, etiqueta}`. El `codi` és el que es desa i el que viatja a l'API;
-    l'`etiqueta` és la del `choices` i és per als ulls.
+    l'`etiqueta` és la del `choices` i és per als ulls. Dues llistes porten una marca de més
+    (`autorable`, `segellat`): v. la capçalera del mòdul.
+
+    ⚠️ **`veredictes_fitting` NO porta el buit, i és a posta.** `PieceFittingLine.decisio` admet
+    `''` —«sense decidir»— però `''` **no és un membre de l'enumeració**: és l'absència de
+    veredicte. Emetre'l aquí faria que qualsevol select el pintés com una quarta opció triable i
+    tornaria a ensorrar la distinció que `PieceFittingLine` defensa amb el `default=''`: una
+    cel·la que ningú no ha mirat no és una cel·la acceptada. Qui hagi d'oferir «cap» que el posi
+    com el que és, un buit de la seva UI, i no com un codi de domini.
     """
     return Response({
-        'regims_graduacio': _llista(GradingRule.LOGICA_CHOICES),
+        'regims_graduacio': _llista(
+            GradingRule.LOGICA_CHOICES,
+            marca=('autorable', lambda c: c not in REGIMS_NO_AUTORABLES),
+        ),
         'fases_model': _llista(Model.FASE_CHOICES),
         'estats_model': _llista(Model.ESTAT_CHOICES),
         'fases_tasca': _llista(TaskType.FASE_CHOICES),
+        # FASE A · el cicle del fitting. `segellat` NO és una llista nova: és el mateix
+        # `SEALED_SESSION_ESTATS` que `fitting_line_is_locked` fa complir a l'escriptura,
+        # importat i no copiat. El client en tenia DUES còpies (`FittingDetail.jsx:164` i
+        # `FittingConvocatoriaSheet.jsx:69`) i cap de les dues sabia que era un mirall d'un
+        # guard: el dia que un tercer estat segellés, la pantalla hauria seguit deixant escriure
+        # fins que el 403 del backend l'aturés.
+        'estats_sessio_fitting': _llista(
+            FittingSession.ESTAT_CHOICES,
+            marca=('segellat', lambda c: c in SEALED_SESSION_ESTATS),
+        ),
+        # FASE A · el veredicte de la modista (D-31.21). Codis crus: van en anglès a totes les
+        # llengües perquè són el que el full imprès porta cap al fabricant.
+        'veredictes_fitting': _llista(PieceFittingLine.DECISIO_CHOICES),
     })
