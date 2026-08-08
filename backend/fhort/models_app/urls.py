@@ -40,6 +40,7 @@ from .views import (
 )
 
 from .comprovacio_views import comprovacio_view
+from .vocabulari_views import vocabulari_domini_view
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
 from .ftt_template_views import DocumentTemplateViewSet
 from .item_fitxer_views import ItemFitxerViewSet
@@ -259,5 +260,10 @@ urlpatterns = (
     + _bulk_paths
     + _techsheet_editor_paths
     + _ftt_document_paths
+    + [
+        # F2.1c — les enumeracions de domini, publicades. Mateix patró que
+        # `mesures/diccionari/`: lectura pura, perquè el frontend deixi de duplicar-les.
+        path('vocabulari/', vocabulari_domini_view),
+    ]
     + router.urls
 )
