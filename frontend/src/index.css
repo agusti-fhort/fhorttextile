@@ -42,13 +42,20 @@
   --gray-l:     #f0f0f0;
   --white:      #ffffff;
 
-  /* Estats (per badges puntuals — mantenir contrast) */
-  --ok:         #3b6d11;
-  --ok-bg:      #eaf3de;
+  /* Estats (per badges puntuals — mantenir contrast).
+     SEMÀFOR ALINEAT A LA NORMA (NORMA_LAYOUT §1b(a), Agus 08/08). Els quatre valors venien
+     d'abans que hi hagués norma escrita i no coincidien amb les maquetes ratificades a
+     pantalla; dos verds i dos vermells al sistema és justament la deriva que la norma combat.
+     Mana la norma i el codi s'hi adapta: --ok #3b6d11→#2e7d32 · --ok-bg #eaf3de→#e9f3ea ·
+     --err #a32d2d→#b42318 · --err-bg #fcebeb→#fbebe9. Tots dos parells segueixen complint AA
+     (mesurat: ok 4.51:1 · err 5.69:1 sobre el seu fons). --warn/--warn-bg NO entren aquí: el
+     taronja de la norma viu als seus tokens propis (--warn-state/--warn-state-bg/--warn-ink). */
+  --ok:         #2e7d32;
+  --ok-bg:      #e9f3ea;
   --warn:       #854f0b;
   --warn-bg:    #faeeda;
-  --err:        #a32d2d;
-  --err-bg:     #fcebeb;
+  --err:        #b42318;
+  --err-bg:     #fbebe9;
   --gate:       var(--ok);     /* gate llest = verd èxit canònic (abans #534ab7 lila) */
   --gate-bg:    var(--ok-bg);  /* variant soft del mateix verd (abans #eeedfe) */
   /* COL·LOCAT: allò que ja té lloc al dibuix (cota al croquis, POM al patró). Verd suau del
