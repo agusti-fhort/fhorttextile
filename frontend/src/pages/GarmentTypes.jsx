@@ -261,7 +261,7 @@ export default function GarmentTypes() {
                   <GroupPills groups={bdGroups} value={grup} onChange={setGrup} allLabel={t('garment_types.all_groups')} />
                 </div>
                 <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
-                  {shown.length === 0 ? <Center>{t('garment_types.empty')}</Center>
+                  {shown.length === 0 ? <Center><span style={buit}>{t('garment_types.empty')}</span></Center>
                     : shown.map(x => (
                       <div key={x.id} onClick={() => triarType(x.id)} style={{
                         padding: '8px 16px', cursor: 'pointer', borderBottom: '1px solid var(--line-soft)',
@@ -270,11 +270,17 @@ export default function GarmentTypes() {
                         background: x.id === selectedId ? 'var(--sel)' : 'transparent',
                         boxShadow: x.id === selectedId ? 'inset 3px 0 0 var(--gold)' : undefined,
                       }}>
-                        <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-main)' }}>
+                        <div title={x.nom_client || x.nom_ca || x.codi_client}
+                             style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600,
+                                      color: 'var(--text-main)', overflow: 'hidden',
+                                      textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {x.nom_client || x.nom_ca || x.codi_client}
                           {!x.actiu && <span style={{ ...badge, marginLeft: 6 }}>{t('garment_types.inactive')}</span>}
                         </div>
-                        <div style={{ fontFamily: MONO, fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>{x.codi_client} · {x.grup}</div>
+                        <div title={`${x.codi_client} · ${x.grup}`}
+                             style={{ fontFamily: MONO, fontSize: 'var(--fs-label)', color: 'var(--text-soft)',
+                                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {x.codi_client} · {x.grup}</div>
                       </div>
                     ))}
                 </div>
@@ -282,7 +288,7 @@ export default function GarmentTypes() {
 
               {/* DETALL: capçalera + graella items×task_types */}
               <div style={{ flex: '3 1 540px', minWidth: 340 }}>
-                {!selected ? <Center>{t('garment_types.pick')}</Center> : (
+                {!selected ? <Center><span style={buit}>{t('garment_types.pick')}</span></Center> : (
                   <div>
                     {/* (1) capçalera del type */}
                     <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', padding: 16, marginBottom: 16 }}>
@@ -339,7 +345,7 @@ export default function GarmentTypes() {
                     {items.length > 0 && (
                       <section style={{ marginTop: 16, border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflow: 'hidden' }}>
                         <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--line)' }}>
-                          <i className="ti ti-folder" aria-hidden="true" style={{ color: 'var(--gold)' }} />
+                          <i className="ti ti-folder" aria-hidden="true" style={{ color: 'var(--gold)', fontSize: 16 }} />
                           <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, flex: 1 }}>
                             {t('garment_types.files_title')}
                             {filesItem && <span style={{ color: 'var(--text-soft)', fontWeight: 400 }}> · {filesItem.code}</span>}
@@ -354,7 +360,7 @@ export default function GarmentTypes() {
                               i el mateix que el backend imposa a `ItemFitxerViewSet.create` (P4). */}
                           {filesItemId && canEdit && (
                             <label style={{ ...actBtn, color: 'var(--gold)', borderColor: 'var(--gold)', opacity: uploading ? 0.5 : 1, cursor: uploading ? 'default' : 'pointer' }}>
-                              <i className="ti ti-file-upload" aria-hidden="true" /> {uploading ? t('garment_types.loading') : t('garment_types.files_upload')}
+                              <i className="ti ti-file-upload" aria-hidden="true" style={{ fontSize: 14 }} /> {uploading ? t('garment_types.loading') : t('garment_types.files_upload')}
                               <input type="file" hidden disabled={uploading} accept={UPLOAD_ACCEPT}
                                 onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; pujarFitxer(f) }} />
                             </label>
@@ -426,7 +432,7 @@ function TypeModal({ mode, tt, t, saving, setSaving, onCancel, onSaved, onError 
         <input type="checkbox" checked={f.actiu} onChange={e => set('actiu', e.target.checked)} /><span>{t('garment_types.active')}</span>
       </label>
       <button type="button" onClick={() => setMore(m => !m)} style={{ ...actBtn, marginBottom: more ? 12 : 0 }}>
-        <i className={`ti ti-chevron-${more ? 'down' : 'right'}`} /> {t('garment_types.more_fields')}
+        <i className={`ti ti-chevron-${more ? 'down' : 'right'}`} aria-hidden="true" style={{ fontSize: 14 }} /> {t('garment_types.more_fields')}
       </button>
       {more && (
         <div>
@@ -473,7 +479,7 @@ function ItemCard({ it, t, canEdit, onEdit, onDelete, onFiles, actiu = false }) 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)' }}>
-            {it.name}{!it.active && <span style={{ marginLeft: 5, fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>({t('garment_types.inactive')})</span>}
+            {it.name}{!it.active && <span style={{ ...badge, marginLeft: 6 }}>{t('garment_types.inactive')}</span>}
           </div>
           <div style={{ fontFamily: MONO, fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>{it.code}</div>
         </div>
@@ -494,15 +500,15 @@ function ItemCard({ it, t, canEdit, onEdit, onDelete, onFiles, actiu = false }) 
           el catàleg pot veure'n els fitxers; només pujar-ne demana CONFIGURE. */}
       <button onClick={onFiles} aria-pressed={actiu}
         style={{ ...actBtn, textAlign: 'left', color: actiu ? 'var(--gold)' : 'var(--text-soft)', borderColor: actiu ? 'var(--gold)' : 'var(--line)' }}>
-        <i className="ti ti-folder" aria-hidden="true" /> {t('garment_types.files_title')} · {it.fitxers_count ?? 0}
+        <i className="ti ti-folder" aria-hidden="true" style={{ fontSize: 14 }} /> {t('garment_types.files_title')} · {it.fitxers_count ?? 0}
       </button>
       {canEdit && (
         <div style={{ display: 'flex', gap: 6, marginTop: 'auto', paddingTop: 4 }}>
           <button onClick={onEdit} style={{ ...actBtn, flex: 1, color: 'var(--gold)', borderColor: 'var(--gold)' }}>
-            <i className="ti ti-pencil" /> {t('garment_types.edit')}
+            <i className="ti ti-pencil" aria-hidden="true" style={{ fontSize: 14 }} /> {t('garment_types.edit')}
           </button>
           <button onClick={onDelete} title={t('garment_types.delete')} style={{ ...iconBtn, color: 'var(--err)' }}>
-            <i className="ti ti-trash" />
+            <i className="ti ti-trash" aria-hidden="true" style={{ fontSize: 14 }} />
           </button>
         </div>
       )}
