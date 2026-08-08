@@ -1292,7 +1292,8 @@
     "order_hint": "Ordre de complexitat creixent dins la família.",
     "required_item": "Codi i nom obligatoris.",
     "item_saved": "Item actualitzat.",
-    "item_created": "Item creat."
+    "item_created": "Item creat.",
+    "back_title": "Tornar al Catàleg de peces"
   },
   "suppliers": {
     "title": "Proveïdors",

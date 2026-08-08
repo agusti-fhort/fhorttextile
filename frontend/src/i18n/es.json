@@ -1292,7 +1292,8 @@
     "order_hint": "Orden de complejidad creciente dentro de la familia.",
     "required_item": "Código y nombre obligatorios.",
     "item_saved": "Item actualizado.",
-    "item_created": "Item creado."
+    "item_created": "Item creado.",
+    "back_title": "Volver al Catálogo de piezas"
   },
   "suppliers": {
     "title": "Proveedores",

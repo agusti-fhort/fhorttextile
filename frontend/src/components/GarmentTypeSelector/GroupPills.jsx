@@ -15,13 +15,22 @@ const MONO = 'IBM Plex Mono, monospace'
 // les superfícies → mateix ordre a tot arreu.
 export const PECA_GRUPS = GARMENT_GROUPS.filter(g => g.codi !== 'ACCESSORIES')
 
+// ⚠️ EL TARONJA SE'N VA, I NO ÉS COSMÈTICA (NORMA_LAYOUT §1 · auditoria de computats 08/08).
+// Aquestes pills són un FILTRE: triar-ne una és dir «on soc», no marcar un avís. El semàfor és
+// NOMÉS tinta de dades, i `--warn` com a fons de selecció era la deriva que la norma combat —
+// l'auditoria el va computar com a `rgb(133,79,11)`, fora de paleta, a `/garment-types`.
+// La selecció de la casa és `--sel` + vora `--gold-border` (i el filet d'or 3px quan és una fila).
+//
+// AIXÒ TOCA TRES SUPERFÍCIES (Garment Types, el selector de peça del wizard i el Navegador de
+// POM Systems) perquè el component és ÚNIC a posta. El canvi va cap a la norma a totes tres,
+// però queda ANOTAT al report: les altres dues encara no han passat la seva conformitat.
 export function groupPillStyle(active) {
   return {
-    padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: MONO,
+    padding: '6px 14px', borderRadius: 'var(--r-ctrl)', cursor: 'pointer', fontFamily: MONO,
     fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 400,
-    background: active ? 'var(--warn-bg)' : 'var(--white)',
-    color: active ? 'var(--warn)' : 'var(--text-main)',
-    border: `1px solid ${active ? 'var(--warn)' : 'var(--gray-l)'}`,
+    background: active ? 'var(--sel)' : 'var(--panel)',
+    color: 'var(--text-main)',
+    border: `1px solid ${active ? 'var(--gold-border)' : 'var(--line)'}`,
   }
 }
 

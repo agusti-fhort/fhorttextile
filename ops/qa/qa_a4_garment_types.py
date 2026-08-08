@@ -9,7 +9,7 @@ Amb fixtures la foto sortiria bé fins i tot amb el gunicorn vell.
 
 EL TOKEN NECESSITA EL CLAIM `tenant_schema` i no s'imprimeix mai.
 
-    FTT_QA_TOKEN=... venv/bin/python ops/qa/qa_a3_grading_rules.py
+    FTT_QA_TOKEN=... venv/bin/python ops/qa/qa_a4_grading_rules.py
 
 ⚠️ **LES ICONES SURTEN BUIDES A LES CAPTURES I NO ÉS UN DEFECTE DE LA PANTALLA.** Tabler entra
 per webfont des d'un CDN (`frontend/index.html:8`) i aquest arnès intercepta `**/*`: tot el que
@@ -37,30 +37,9 @@ TOKEN = os.environ.get('FTT_QA_TOKEN', '')
 #: STEP) sobre el run ALPHA_EU_W; la resta de jocs de `fhort` són buits, i això també s'ha de
 #: veure (badge SENSE REGLES, «no declarat» a la columna de relacions).
 PANTALLES = [
-    ('01_llista', '/poms/grading',
-     'la LLISTA: comptador+cerca, filtres de vista, columnes, «no declarat» i «sense origen»',
-     []),
-    ('02_llista_cerca', '/poms/grading',
-     'la cerca filtra i el primer número del comptador ÉS el resultat',
-     [('fill', 'input[placeholder*="cerca"]', 'ZZ')]),
-    ('03_joc_regles', '/poms/grading',
-     'pantalla del joc, tab «Talles i regles»: barra de talles, règims i Δ per regla',
-     [('fill', 'input[placeholder*="cerca"]', 'ZZ'), ('click', 'button:has-text("Editar")')]),
-    ('04_joc_relacions', '/poms/grading',
-     'tab «Relacions»: Target multi · Construcció/Fit/Grup UN sol valor · NO DECLARAT',
-     [('fill', 'input[placeholder*="cerca"]', 'ZZ'), ('click', 'button:has-text("Editar")'),
-      ('click', 'button:has-text("Relacions")')]),
-    ('05_relacions_declarades', '/poms/grading',
-     'una capa marcada = VERD (esmena Agus) i la previsualització ho diu amb paraules',
-     [('fill', 'input[placeholder*="cerca"]', 'ZZ'), ('click', 'button:has-text("Editar")'),
-      ('click', 'button:has-text("Relacions")'), ('click', 'button:has-text("Woman")'),
-      ('click', 'button:has-text("Woven")')]),
-    ('06_joc_buit', '/poms/grading',
-     'un joc SENSE REGLES: el badge i l\'estat buit amb paraules, no una taula muda',
-     [('fill', 'input[placeholder*="cerca"]', 'LOS Man Knit'), ('click', 'button:has-text("Editar")')]),
-    ('07_jubilats_buit', '/poms/grading',
-     'la vista «Jubilats»: a `fhort` no n\'hi ha cap, i es diu',
-     [('click', 'button:has-text("Jubilats")')]),
+    ('01_llista', '/garment-types', 'menu de pantalla + comptador amb cerca + mestre-detall', []),
+    ('02_detall', '/garment-types', 'fitxa del tipus: seleccio de la casa, cards d\'item, portes', [('click', 'text=Blusa')]),
+    ('03_inactives', '/garment-types', 'la vista Inactives des del menu de pantalla', [('click', 'button:has-text("Inactiu")')]),
 ]
 
 
@@ -115,7 +94,7 @@ def main():
                     pag.wait_for_timeout(900)
                 except Exception as e:
                     print(f'  ⚠️  {nom}: {gest[0]} {gest[1]} no ha anat ({e})')
-            desti = OUT / f'a3_{nom}.png'
+            desti = OUT / f'a4_{nom}.png'
             pag.screenshot(path=str(desti), full_page=True)
             print(f'✓ {desti.name:34} {ruta:16} {què}')
         nav.close()

@@ -1292,7 +1292,8 @@
     "order_hint": "Increasing complexity order within the family.",
     "required_item": "Code and name are required.",
     "item_saved": "Item updated.",
-    "item_created": "Item created."
+    "item_created": "Item created.",
+    "back_title": "Back to the Garment catalogue"
   },
   "suppliers": {
     "title": "Suppliers",
