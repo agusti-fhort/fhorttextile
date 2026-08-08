@@ -301,6 +301,11 @@ export const sizeSystems = {
   // ViewSet ja era un ModelViewSet amb escriptura gated CONFIGURE i el serializer ja tenia
   // les quatre llistes escrivibles per CODI: aquí només faltava la porta del client.
   update: (id, data) => client.patch(`/api/v1/size-systems/${id}/`, data),
+  remove: (id) => client.delete(`/api/v1/size-systems/${id}/`),
+  // A2 — ON S'USA un run. Germà de `poms.us`, i amb la mateixa forma de resposta a posta: la
+  // fitxa d'un run i la d'un POM fan la mateixa pregunta. Compta també les regles ANCORADES a
+  // les seves TALLES, que no apunten al run i que el cens directe no pot veure (lliçó TGIRL).
+  us: (id) => client.get(`/api/v1/size-systems/${id}/us/`),
 }
 
 export const sizeDefinitions = {
