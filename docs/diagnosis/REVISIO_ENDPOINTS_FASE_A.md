@@ -23,8 +23,29 @@ Contrastat contra la resposta REAL de `GET /api/v1/poms/` (fixture de 396 POMs d
 | `pom_code` · `codi_client` · `name_en` · `name_cat` · `nom_client` · `abbreviation` · `categoria_nom` · `categoria` · `actiu` · `id` | `GET /api/v1/poms/` | ✅ tots servits |
 | nom de categoria | `GET /api/v1/pom-categories/` → `codi`/`nom_ca`/`nom_en` | ✅ |
 
-**Fitxa — ⚠️ SIS FILES MORTES.** La secció «Com es mesura» sencera i la «Unitat» llegeixen camps
-que `GET /api/v1/poms/` **no retorna**:
+> ## ❌ ESMENA (08/08, a l'obrir la Fase 2) — AQUEST APARTAT ERA FALS
+>
+> **Vaig dir que els 9 camps no existien. Existeixen.** `POMMasterSerializer` ja els declara
+> tots nou, plans i read-only, a `fhort/pom/serializers.py:55-68` (`source='pom_global.X'`).
+>
+> **L'error:** el cens va mostrejar `results[0]`, i aquella fila tenia `pom_global: None`.
+> Quan el `source` travessa un `None`, **DRF omet el camp** en comptes d'emetre'l nul. Vaig
+> llegir «la clau no hi és» com a «el camp no existeix», sense provar cap fila amb `pom_global`.
+> Una segona mostra ho hauria desmentit en un minut.
+>
+> **Els números reals** (BD sencera, no la primera pàgina): **396 POMs · 274 amb `pom_global`
+> · 122 sense.** Dels 274, **125 tenen els camps de «com es mesura» informats**; els altres
+> 149 els tenen a cadena buida. O sigui que **125/396 (32%)** tenen contingut real.
+>
+> **El que SÍ que és un problema, i és un altre:**
+> 1. **La forma de la resposta varia per fila.** Els 9 camps són *absents* —no nuls— a les 122
+>    files sense `pom_global`. Cap client pot confiar que les claus hi siguin.
+> 2. **149 de 274 estan buits.** Això és DADA, no codi.
+>
+> El text de sota es conserva perquè el rastre de l'error quedi, però **no s'ha de fer servir**.
+
+**Fitxa — ⚠️ SIS FILES MORTES.** ~~La secció «Com es mesura» sencera i la «Unitat» llegeixen camps
+que `GET /api/v1/poms/` **no retorna**~~ (v. esmena):
 
 | Pintat | On viu de debò | Veredicte |
 |---|---|---|
