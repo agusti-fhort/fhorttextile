@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { suppliers as suppliersApi, productions, fittingSessions, models as modelsApi, plan, commerce, recursos as recursosApi, encarrecs } from '../../api/endpoints'
 import useAuthStore from '../../store/auth'
 import Modal from '../ui/Modal'
-import { selS, primaryBtn } from '../ui/buttons'
+import { selS } from '../ui/buttons'
 import TaskAssignWizard from '../TaskAssignWizard'
 
 export const PHASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
@@ -299,7 +299,10 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
     <div style={{ position: 'relative' }}>
       <button type="button" onClick={() => n && setOpen(o => !o)} disabled={!n}
         style={{ ...triggerBtn, opacity: n ? 1 : 0.5, cursor: n ? 'pointer' : 'not-allowed' }}>
-        {triggerLabel || t('model_sheet.actions')}{n > 1 ? ` (${n})` : ''} <i className="ti ti-chevron-down" aria-hidden="true" />
+        {triggerLabel || t('model_sheet.actions')}{n > 1 ? ` (${n})` : ''}
+        {/* §8: icona dins de botó = 14px i SEMPRE currentColor, perquè segueixi la tinta. */}
+        <i className="ti ti-chevron-down" aria-hidden="true"
+          style={{ fontSize: 14, color: 'currentColor' }} />
       </button>
       {open && (
         <>
@@ -538,9 +541,24 @@ function Row({ label, children }) {
   return <div style={{ marginBottom: 12 }}><div style={{ fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--gray)', marginBottom: 4, fontFamily: MONO }}>{label}</div>{children}</div>
 }
 
-// Era una còpia exacta del `primaryBtn` de la casa menys el `marginLeft:'auto'` (S37): el
-// consumeix en comptes de duplicar-lo, i així la tinta d'acció es decideix en UN sol lloc.
-const triggerBtn = { ...primaryBtn, marginLeft: 0 }
+// EL DISPARADOR D'«ACCIONS ▾» ÉS SECUNDARI (NORMA_LAYOUT §5.6, T0-bis.4).
+//
+// «Accions ⋯» és el calaix de les ocasionals —duplicar, exportar, arxivar—, i un calaix no és
+// mai «el que has vingut a fer»: la primària n'és una per pantalla i aquesta no ho és.
+//
+// Fins ara consumia `primaryBtn`, cosa que era CORRECTA mentre la primària era daurada (S37):
+// aleshores «vora/fons de la casa» i «acció primària» eren el mateix color i el préstec no es
+// notava. En passar la primària a blau (T0-bis.2) el préstec va quedar a la vista: el menú
+// d'accions sortia blau a /models, al dashboard del model i al TaskAssignWizard.
+//
+// Es corregeix AQUÍ, un sol cop, i no a les tres pantalles: el disparador és compartit.
+const triggerBtn = {
+  display: 'flex', alignItems: 'center', gap: 6,
+  background: 'var(--panel)', color: 'var(--text-main)',
+  border: '1px solid var(--gold-border)', borderRadius: 'var(--r-ctrl)',
+  padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600,
+  cursor: 'pointer', fontFamily: MONO,
+}
 const menuBox = { position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 41, background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 4, minWidth: 230 }
 const menuItem = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 10px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }
 const fullSel = { ...selS, width: '100%' }
