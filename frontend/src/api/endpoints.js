@@ -248,6 +248,16 @@ export const diccionariMesures = {
   get: () => client.get('/api/v1/mesures/diccionari/'),
 }
 
+// LES ENUMERACIONS DE DOMINI (F2.2): règims de graduació · fases del model · estats del model ·
+// fases de tasca. Germà del diccionari de dalt i pel mateix motiu: eren als `choices` dels models
+// i el front se les escrivia a mà, fins que van derivar (la còpia dels règims en tenia quatre
+// quan el model en declara cinc). Un sol GET perquè cap pantalla en fa servir una de sola.
+// ⚠️ `fases_model` i `fases_tasca` NO són la mateixa cosa: cicle de vida del model vs fase d'una
+// tasca del pla de treball. Vocabularis independents.
+export const vocabulariDomini = {
+  get: () => client.get('/api/v1/vocabulari/'),
+}
+
 // CRUD complet (GarmentTypeViewSet és ModelViewSet). S'usa al tram 7 (finder 3 columnes).
 // U1 — les categories del catàleg (la «família de lletra» de la fitxa).
 export const pomCategories = {
