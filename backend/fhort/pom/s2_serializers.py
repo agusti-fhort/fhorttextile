@@ -29,9 +29,14 @@ class ConstructionTypeSerializer(serializers.Serializer):
 
 
 class FitTypeSerializer(serializers.Serializer):
+    # `nom_cat` i `nom_es` s'exposen (F2.1b) perquè eren l'única raó per la qual una UI catalana
+    # de fits s'havia d'inventar les etiquetes: els altres dos vocabularis de la mateixa família
+    # (Target, ConstructionType) ja les servien i aquest no. Les deu files les tenen informades.
     id = serializers.IntegerField()
     codi = serializers.CharField()
     nom_en = serializers.CharField()
+    nom_cat = serializers.CharField()
+    nom_es = serializers.CharField()
     display_order = serializers.IntegerField()
 
 

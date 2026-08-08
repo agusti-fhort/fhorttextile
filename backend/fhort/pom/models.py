@@ -1571,13 +1571,27 @@ class ClientMesuraPerfil(models.Model):
 # =============================================================================
 
 class FitType(models.Model):
-    """Fit type (Slim / Regular / Loose / Oversized). Public schema."""
+    """Fit type del catàleg de la casa. Schema `public`.
+
+    ELS CHOICES ES POSEN AL DIA AMB LA TAULA (F2.1b). Declaraven CINC codis mentre la taula en
+    té DEU, i a sobre un d'ells —`LOOSE`— no existeix com a fila enlloc. Els `choices` de Django
+    no són DDL: la BD no els fa complir i la divergència no petava, però qualsevol `full_clean()`
+    sobre un fit real (FLARED, TAPERED, STRAIGHT, BODYCON, ATHLETIC, CUSTOM) l'hauria declarat
+    invàlid, i tota UI que llegís els choices n'oferia la meitat.
+    `LOOSE` surt: 0 files a `public`, `fhort` i `los`, 0 runs i 0 rulesets que hi apuntin.
+    L'ordre és el `display_order` de la taula, no l'alfabètic.
+    """
     CODI_CHOICES = [
-        ('SLIM','Slim'),
-        ('REGULAR','Regular'),
-        ('RELAXED','Relaxed'),
-        ('LOOSE','Loose'),
-        ('OVERSIZED','Oversized'),
+        ('REGULAR', 'Regular'),
+        ('SLIM', 'Slim / Fitted'),
+        ('RELAXED', 'Relaxed'),
+        ('OVERSIZED', 'Oversized'),
+        ('FLARED', 'Flared'),
+        ('TAPERED', 'Tapered'),
+        ('STRAIGHT', 'Straight'),
+        ('BODYCON', 'Bodycon'),
+        ('ATHLETIC', 'Athletic / Performance'),
+        ('CUSTOM', 'Custom (client)'),
     ]
     codi          = models.CharField(max_length=20, unique=True, choices=CODI_CHOICES)
     nom_en        = models.CharField(max_length=100)
