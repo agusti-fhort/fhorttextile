@@ -1,4 +1,4 @@
-"""A3 · captures de GRADING RULES contra el SERVEI VIU (bundle del disc + API real).
+"""A4 · captures de GARMENT TYPES contra el SERVEI VIU (bundle del disc + API real).
 
 Mateix arnès que `qa_f22_vocabulari_captures.py`, i pel mateix motiu: el que s'ha de veure és
 que la llista, els règims i les capes de relació surten del que el BACKEND DESPLEGAT contesta.
@@ -9,7 +9,7 @@ Amb fixtures la foto sortiria bé fins i tot amb el gunicorn vell.
 
 EL TOKEN NECESSITA EL CLAIM `tenant_schema` i no s'imprimeix mai.
 
-    FTT_QA_TOKEN=... venv/bin/python ops/qa/qa_a4_grading_rules.py
+    FTT_QA_TOKEN=... venv/bin/python ops/qa/qa_a4_garment_types.py
 
 ⚠️ **LES ICONES SURTEN BUIDES A LES CAPTURES I NO ÉS UN DEFECTE DE LA PANTALLA.** Tabler entra
 per webfont des d'un CDN (`frontend/index.html:8`) i aquest arnès intercepta `**/*`: tot el que
@@ -33,12 +33,11 @@ VIU = 'http://127.0.0.1:8001'
 HOST_TENANT = os.environ.get('FTT_QA_HOST', 'fhorttextile.tech')
 TOKEN = os.environ.get('FTT_QA_TOKEN', '')
 
-#: UN ESTAT PER CAPTURA. El banc de proves és el joc `ZZ-TEST-CHINO` (5 regles: 4 LINEAR + 1
-#: STEP) sobre el run ALPHA_EU_W; la resta de jocs de `fhort` són buits, i això també s'ha de
-#: veure (badge SENSE REGLES, «no declarat» a la columna de relacions).
+#: UN ESTAT PER CAPTURA. El tenant `fhort` té 21 famílies (17 actives) i el catàleg va en
+#: ANGLÈS: els gestos han de clicar el nom REAL de la llista, no un de suposat.
 PANTALLES = [
     ('01_llista', '/garment-types', 'menu de pantalla + comptador amb cerca + mestre-detall', []),
-    ('02_detall', '/garment-types', 'fitxa del tipus: seleccio de la casa, cards d\'item, portes', [('click', 'text=Blusa')]),
+    ('02_detall', '/garment-types', 'fitxa del tipus: seleccio de la casa, cards d\'item, portes', [('click', 'text=Buttoned Tops')]),
     ('03_inactives', '/garment-types', 'la vista Inactives des del menu de pantalla', [('click', 'button:has-text("Inactiu")')]),
 ]
 
