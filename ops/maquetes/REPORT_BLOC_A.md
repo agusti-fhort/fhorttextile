@@ -1,6 +1,6 @@
 # REPORT DE BLOC · A1 · A2 · A3 · A4 — Configuració tècnica conforme
 
-> 08/08/2026 · commits **171 → 174** (cap push) · build **desplegat** (`frontend/dist` és el que
+> 08/08/2026 · commits **171 → 178** (cap push) · build **desplegat** (`frontend/dist` és el que
 > staging serveix: `npm run build` fet, Agus pot obrir el navegador sense reconstruir res).
 > Aquest report tanca el bloc A. Les dues condicions de tancament, al §7.
 
@@ -225,7 +225,9 @@ joc va la regla nova. **Demana backend, no pell.**
 `npm run build` fet i `frontend/dist` és el que staging serveix. `npx eslint src` → **0 errors**.
 Auditoria de computats a les 4 pantalles → **0 incompliments**.
 
-### (2) La suite — vegeu el §8
+### (2) La suite — ✅ **913 tests · OK · 0 errors**
+`python manage.py test fhort.pom fhort.models_app fhort.fitting` · 3.597 s. Els 11 vermells de la
+correguda anterior eren tots de la migració `pom/0075` d'aquest mateix tram i estan resolts (§8).
 
 **Captures** (contra el servei VIU, un estat per captura; `ops/qa/captures/`):
 `a3_01_llista` · `a3_02_llista_cerca` · `a3_03_joc_regles` · `a3_04_joc_relacions` ·
@@ -254,7 +256,8 @@ Tres causes diferents, tres remeis diferents (commit 172):
 **Verds per mòdul, verificats**: `test_ordre_regla_grading` 4/4 · `test_import_poms_duplicats` +
 `test_import_poms_resolucions` 16/16 · `tests_sembra_grading` 103/103.
 
-**Correguda sencera de tancament**: v. la nota al final d'aquest fitxer.
+**Correguda sencera de tancament**: ✅ **913 tests · OK · 0 errors · 0 fallides** (3.597 s),
+amb la mateixa comanda i la mateixa selecció d'apps que la que en donava 11.
 
 > La referència «671/671» del brief és d'una **selecció d'apps diferent**; aquesta correguda en fa
 > 913 perquè cobreix `fhort.pom` + `fhort.models_app` + `fhort.fitting` sencers. El número que val
