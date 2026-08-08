@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
@@ -11,14 +11,23 @@ import Feedback from '../components/ui/Feedback'
 import Table from '../components/ui/Table'
 import Badge from '../components/ui/Badge'
 import { selS, primaryBtn } from '../components/ui/buttons'
+import { useElements } from '../utils/vocabulariDominiFont'
 
 // Size Map Setup — wizard de 5 passos per derivar un SizeSystem (+GradingRuleSet +SizingProfiles)
 // a partir d'una taula de mides de client, i mode llista dels sistemes existents.
 // Backend: pom/size_map_views.py (gated CONFIGURE). Patró visual: TaskTypes.jsx (Peça 0).
 const MONO = 'IBM Plex Mono, monospace'
 
-const BASE_UNITS = ['ALPHA', 'NUMERIC_EU', 'NUMERIC_US', 'CM_HEIGHT', 'MONTHS', 'AGE_YEARS']
-const LOGICA = ['LINEAR', 'STEP', 'FIXED', 'ZERO']
+// LES UNITATS BASE i ELS RÈGIMS ja no es declaren aquí.
+//
+//   · `base_units` — `sizeMap.lookups()` ja les servia i aquesta constant era literalment la
+//     LLISTA DE RESERVA (`lookups.base_units?.length ? … : BASE_UNITS`), el mateix patró que la
+//     peça de les capes va matar a `EditableTable` i `TaulaPOMsCataleg`. Una reserva només
+//     s'usa el dia que l'endpoint falla, que és justament el dia en què ningú la mira.
+//   · `LOGICA` — els règims venen de `/vocabulari/`, filtrats per `autorable`.
+//     🛑 AQUESTA LLISTA OFERIA `ZERO` i la de `GraduacioSuperficie` no: la contradicció es
+//     resol al backend (v. `vocabulari_views.py`), i aquí es perd `ZERO` com a tria. Cap regla
+//     viva en porta (0 de 1.267) i el detector no el pot produir mai.
 const REC_VARIANT = { REUTILITZAR: 'ok', CLONAR: 'gold', CREAR: 'gate' }
 // Badge de confiança del matching (patró del W2): verd/groc/taronja/vermell.
 const CONF_BADGE = {
@@ -198,6 +207,10 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
   // abans de tancar perquè l'humà vegi què s'ha desat i què ha quedat pendent.
   const [result, setResult] = useState(null)
   const [lookups, setLookups] = useState({ targets: [], constructions: [], fit_types: [], garment_types: [], base_units: [] })
+  // Els règims que es poden TRIAR per a una regla detectada: els `autorable` de `/vocabulari/`.
+  const { elements: vocRegims } = useElements('regims_graduacio')
+  const regimsAutorables = useMemo(
+    () => (vocRegims || []).filter(r => r.autorable).map(r => r.codi), [vocRegims])
 
   // Estat global del wizard en un sol objecte.
   const [wiz, setWiz] = useState({
@@ -528,7 +541,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
           </Field>
           <Field label={t('size_map_f_unit')}>
             <select value={wiz.base_unit} onChange={e => set({ base_unit: e.target.value })} style={{ ...selS, width: '100%' }}>
-              {(lookups.base_units?.length ? lookups.base_units.map(o => o.codi) : BASE_UNITS).map(u =>
+              {lookups.base_units.map(o => o.codi).map(u =>
                 <option key={u} value={u}>{u}</option>)}
             </select>
           </Field>
@@ -798,7 +811,7 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                         </td>
                         <td style={{ padding: 6 }}>
                           <select value={g.logica} onChange={e => upd('logica', e.target.value)} style={{ ...selS, padding: '3px 6px' }}>
-                            {LOGICA.map(l => <option key={l} value={l}>{l}</option>)}
+                            {regimsAutorables.map(l => <option key={l} value={l}>{l}</option>)}
                           </select>
                         </td>
                         <td style={{ padding: 6 }}>

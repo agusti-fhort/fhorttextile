@@ -4,6 +4,7 @@ import client from '../../api/client'
 import { models } from '../../api/endpoints'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
+import { useElements } from '../../utils/vocabulariDominiFont'
 import { InfoTraduccio, AMPLADES } from '../EditableTable/EditableTable'
 
 // LA GRADUACIÓ ÉS UNA SUPERFÍCIE PRÒPIA (P0.5d · Agus, 06/08, a pantalla).
@@ -78,11 +79,15 @@ const btnSecondary = {
   borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer',
 }
 
-// Règims oferts a l'autoria, mirall de `GradingRule.LOGICA_CHOICES`. ZERO i EXCEPTION NO
-// s'ofereixen com a tria nova (ZERO = nínxol «sempre 0»; EXCEPTION = tipus que el motor APLICA
-// per cel·la, no un règim de POM), però si una fila ja en porta un es manté a la llista perquè el
-// valor real no s'emmascari. Valors de DADA: no es tradueixen.
-const REGIMS = ['LINEAR', 'STEP', 'FIXED']
+// ELS RÈGIMS OFERTS A L'AUTORIA ELS DIU L'ENDPOINT, no aquesta pantalla. La regla és exactament
+// la que hi havia escrita aquí —ZERO i EXCEPTION no s'ofereixen com a tria nova— però ara ve amb
+// la dada: `/vocabulari/` marca cada règim amb `autorable` (coda F2.2). Aquell comentari era
+// l'ÚNICA raó escrita a tot el projecte per no oferir-los, i vivia en un fitxer de pantalla; ara
+// viu al costat de la dada i `SizeMapSetup` —que oferia ZERO sense cap raó— hi queda alineat.
+//
+// EL QUE NO CANVIA: si una fila ja porta un règim no autorable, es manté a la SEVA llista perquè
+// el valor real no s'emmascari. Poder-lo llegir i poder-lo triar no són la mateixa pregunta.
+// Valors de DADA: no es tradueixen.
 
 // Els deltes només volen dir alguna cosa sota LINEAR. Sota FIXED/ZERO la mesura no creix, i sota
 // STEP el creixement viu a `valors_step` (una llista per talla que aquesta pantalla no edita).
@@ -112,6 +117,12 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   const { t, i18n } = useTranslation()
   // Les capes surten del diccionari de la BD (F2.2), no de cap llista escrita aquí.
   const { dicc } = useEstatDiccionari()
+  // Els règims que un tècnic pot TRIAR: els que l'endpoint marca `autorable`. Sense vocabulari
+  // la llista va buida i el select d'una fila només ofereix el règim que la fila ja porta —que
+  // és el que toca dir quan no sabem quins són oferibles.
+  const { elements: vocRegims } = useElements('regims_graduacio')
+  const regimsAutorables = useMemo(
+    () => (vocRegims || []).filter(r => r.autorable).map(r => r.codi), [vocRegims])
   const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
   const modelId = model?.id
   const [data, setData] = useState(null)
@@ -252,7 +263,8 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     //   · resident + la resta→ del JOC (còpia materialitzada en assignar-lo)
     const delJoc = !!regla.logica
       && (row.regla_es_resident === false || (row.regla_es_resident && row.regla_origen !== 'MANUAL'))
-    const regims = REGIMS.includes(row.logica) || !row.logica ? REGIMS : [...REGIMS, row.logica]
+    const regims = regimsAutorables.includes(row.logica) || !row.logica
+      ? regimsAutorables : [...regimsAutorables, row.logica]
     return (
       <tr key={row.id} style={{ background: tocat ? 'var(--fila-activa)' : 'transparent' }}>
         {/* # — el número de fila, com a la consulta (mateix to i cos). */}
