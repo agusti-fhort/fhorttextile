@@ -8,11 +8,15 @@ import StatCard from '../components/ui/StatCard'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Modal from '../components/ui/Modal'
+import { useEnumeracio } from '../utils/vocabulariDominiFont'
 
 
-// Backend enums (línia divisòria sagrada — valors en català, no es toquen).
-const FASES = ['', 'Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
-const ESTATS = ['', 'Oberta', 'Programada', 'Tancada', 'Anullada']
+// Els dos eixos de filtre eren DOS enums del backend copiats aquí («línia divisòria sagrada»,
+// deia el comentari — i tenia raó en tot menys en el lloc). Ara venen de `/vocabulari/`:
+// `fases_model` (el backend reusa `Model.FASE_CHOICES` a `FittingSession.fase`) i
+// `estats_sessio_fitting`. El `''` de davant NO era part de cap enum: és el botó «totes» d'aquest
+// filtre, o sigui crom d'aquesta pantalla, i per això es continua posant aquí i no allà.
+const TOTES = ''
 
 const estatVariant = {
   Programada: 'gate',   // planificada, encara no oberta (sense variant 'blue' → 'gate' distint)
@@ -69,6 +73,8 @@ export default function FittingSessionList() {
   const [loading, setLoading] = useState(true)
   const [fase, setFase] = useState('')
   const [estat, setEstat] = useState('')
+  const { codis: fases } = useEnumeracio('fases_model')
+  const { codis: estats } = useEnumeracio('estats_sessio_fitting')
   const [stats, setStats] = useState({ total: 0, Oberta: 0, Tancada: 0, Anullada: 0 })
   const [openGroups, setOpenGroups] = useState(() => new Set())   // UUIDs desplegats (default: tot plegat)
   // Peça 3 — accions de grup i de sessió.
@@ -310,7 +316,7 @@ export default function FittingSessionList() {
         <span style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', alignSelf: 'center', marginRight: 4}}>
           {t('fitting.session.fase')}:
         </span>
-        {FASES.map(f => (
+        {[TOTES, ...(fases || [])].map(f => (
           <button key={`f-${f}`} onClick={() => setFase(f)} style={filterBtn(fase === f)}>
             {f || t('fitting.sessions.all')}
           </button>
@@ -318,7 +324,7 @@ export default function FittingSessionList() {
         <span style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', alignSelf: 'center', marginLeft: 12, marginRight: 4}}>
           {t('fitting.session.estat')}:
         </span>
-        {ESTATS.map(e => (
+        {[TOTES, ...(estats || [])].map(e => (
           <button key={`e-${e}`} onClick={() => setEstat(e)} style={filterBtn(estat === e)}>
             {e ? t(`fitting.estats.${e}`, e) : t('fitting.sessions.all')}
           </button>

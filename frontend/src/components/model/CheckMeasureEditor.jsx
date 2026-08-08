@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines } from '../../api/endpoints'
 import { effectiveRegime } from '../../utils/gradingRegime'
+import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 import { finestraHistoric } from './fittingGridAdapter'
 import MeasureGrid from './MeasureGrid'
 import EditableTable from '../EditableTable/EditableTable'
@@ -350,16 +351,19 @@ const checkSource = {
 // (l'eix multi-talla viu a Escalat): comptar-les totes donaria tres vegades el mateix veredicte.
 // El buffer optimista mana sobre la línia, igual que a la cel·la, o el recompte aniria un pas
 // enrere del que la modista acaba de prémer.
-const RECOMPTES = [
-  { clau: 'ACCEPTED', col: 'var(--ok)' },
-  { clau: 'ADJUSTED', col: 'var(--warn)' },
-  { clau: 'REJECTED', col: 'var(--err)' },
-]
+// El COLOR de cada veredicte (crom, com a `fittingGridAdapter`); QUINS veredictes hi ha ho diu
+// `/vocabulari/`. Abans les dues coses anaven fusionades en una sola llista i per tant la
+// pantalla declarava el vocabulari per poder-lo pintar.
+const RECOMPTE_COL = { ACCEPTED: 'var(--ok)', ADJUSTED: 'var(--warn)', REJECTED: 'var(--err)' }
 function RecomptesFitting({ lines, baseLabel, buffer }) {
   const { t } = useTranslation()
+  const { codis: verdictes } = useEnumeracio('veredictes_fitting')
   const base = lines.filter(l => !baseLabel || l.size_label === baseLabel)
   const veredicteDe = (l) => (l.id in (buffer || {}) ? buffer[l.id] : (l.decisio || null))
-  const n = { ACCEPTED: 0, ADJUSTED: 0, REJECTED: 0 }
+  // ⚠️ SENSE VOCABULARI, TOT SÓN PENDENTS I NO ZERO ACCEPTADES. El recompte es construeix a
+  // partir dels veredictes que sabem que existeixen; si no en sabem cap, la barra diu que no hi
+  // ha res decidit —cosa que és certa des d'on mirem— en comptes d'afirmar tres zeros.
+  const n = Object.fromEntries((verdictes || []).map(v => [v, 0]))
   let pendents = 0
   for (const l of base) {
     const v = veredicteDe(l)
@@ -370,10 +374,11 @@ function RecomptesFitting({ lines, baseLabel, buffer }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
                   padding: '10px 16px', marginTop: 12, borderTop: '1px solid var(--border)',
                   background: 'var(--bg-card)', fontSize: 'var(--fs-body)', color: TEXT_2 }}>
-      {RECOMPTES.map(({ clau, col }) => (
+      {(verdictes || []).map(clau => (
         <span key={clau}>
           <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%',
-                                            display: 'inline-block', marginRight: 5, background: col }} />
+                                            display: 'inline-block', marginRight: 5,
+                                            background: RECOMPTE_COL[clau] || 'var(--text-muted)' }} />
           {clau} <b style={{ color: 'var(--text-main)', fontWeight: 600 }}>{n[clau]}</b>
         </span>
       ))}

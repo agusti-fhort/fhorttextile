@@ -19,6 +19,7 @@ import BackButton from '../components/BackButton'
 import Badge from '../components/ui/Badge'
 import Card from '../components/ui/Card'
 import { thStyle } from './fittingShared'
+import { useSessioSegellada } from '../utils/vocabulariDominiFont'
 
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray', Programada: 'gate' }
 
@@ -28,6 +29,10 @@ export default function FittingConvocatoriaSheet() {
   const { uuid } = useParams()
   const navigate = useNavigate()
   const { t } = useTranslation()
+  // Mateix predicat que `FittingDetail`, i per tant la mateixa resposta: una sessió que aquesta
+  // fulla considera viva i l'altra pantalla considera segellada era possible mentre eren dues
+  // llistes. El hook ha de ser AQUÍ dalt: sota els `return` de càrrega seria un React #310.
+  const esSegellat = useSessioSegellada()
 
   const [sessions, setSessions] = useState(null)
   const [wpByModel, setWpByModel] = useState({})
@@ -66,9 +71,8 @@ export default function FittingConvocatoriaSheet() {
   // context de sessió (ModelSheet materialitza la tasca i, en gravar, torna a aquesta fulla via la
   // convocatòria de la pròpia sessió). Sessions segellades (Tancada/Anullada) → split de lectura de
   // FittingDetail (Y7 el conserva).
-  const SEALED = ['Tancada', 'Anullada']
   const obrir = (s) => {
-    if (SEALED.includes(s.estat)) { navigate(`/fittings/${s.id}`); return }
+    if (esSegellat(s.estat)) { navigate(`/fittings/${s.id}`); return }
     navigate(`/models/${s.model}?tab=Mesures&fitting_session=${s.id}`)
   }
 

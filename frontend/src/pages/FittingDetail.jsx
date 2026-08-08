@@ -12,6 +12,7 @@ import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from './fi
 import { orderedSizes } from '../utils/sizeRun'
 import { identitatMesura } from '../utils/identitatMesura'
 import { etiquetaInstancia } from '../utils/capaInstancia'
+import { useSessioSegellada } from '../utils/vocabulariDominiFont'
 
 const estatVariant = { Oberta: 'warn', Tancada: 'ok', Anullada: 'gray' }
 
@@ -160,8 +161,15 @@ function changedRows(grid) {
   return { sizeLabels, baseLabel, rows, isMod }
 }
 
-// Estats en què una sessió és de només lectura (mirall de SEALED_SESSION_ESTATS del backend).
-const SEALED_ESTATS = ['Tancada', 'Anullada']
+// QUINS ESTATS SEGELLEN UNA SESSIÓ HO DIU EL BACKEND, i ara ho diu de debò: `/vocabulari/` marca
+// cada `estats_sessio_fitting` amb `segellat`, i la marca surt del MATEIX `SEALED_SESSION_ESTATS`
+// que `fitting_line_is_locked` fa complir a l'escriptura. Abans això era un «mirall» escrit a mà
+// —el comentari ho deia—, i un mirall és exactament el que deixa de reflectir el dia que algú
+// afegeix un tercer estat segellat: la pantalla hauria seguit deixant escriure fins que el 403
+// del backend l'aturés, sense saber per què.
+//
+// ⚠️ SENSE VOCABULARI, DE LECTURA. «No sé si aquesta sessió està segellada» no pot caure del
+// costat d'obrir-la per escriure: aquí el dubte va cap a la banda que no fa mal.
 
 // Una peça té canvis a gravar si alguna línia de la TALLA BASE té valor_real ≠ valor_teoric.
 // El filtre per talla base NO és redundant amb l'adapter (que ja només pinta la base): `grid.lines`
@@ -538,6 +546,7 @@ export default function FittingDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const esSegellat = useSessioSegellada()
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activePieceId, setActivePieceId] = useState(null)
@@ -570,7 +579,7 @@ export default function FittingDetail() {
       // Sprint Y — l'auto-open D2 (Programada→Oberta en entrar) DESAPAREIX: les sessions vives ja no
       // es treballen aquí (redirect a Mesures, sota), i la sessió s'obre en obrir la TASCA (open-task,
       // Y1). Aquí només queda el landing de lectura de sessions segellades.
-      .then(s => { setReviewMode(!s || SEALED_ESTATS.includes(s.estat)) })
+      .then(s => { setReviewMode(!s || esSegellat(s.estat)) })
       .finally(() => setLoading(false))
   }, [loadSession])
 
@@ -609,7 +618,7 @@ export default function FittingDetail() {
   if (!session) return null
 
   // Sessió tancada/anul·lada → tota la revisió és de lectura (split 40/60 amb taula en lectura).
-  const readOnly = SEALED_ESTATS.includes(session.estat)
+  const readOnly = esSegellat(session.estat)
 
   // Sprint Y — DISSOLUCIÓ: una sessió VIVA (Oberta/Programada) no es treballa aquí; es dissol a la
   // superfície Mesures amb context (ModelSheet materialitza la tasca en muntar amb ?fitting_session=).

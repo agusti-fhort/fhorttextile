@@ -9,6 +9,7 @@
 
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 
 import { pieceFittingLines } from '../../api/endpoints'
 import { effectiveRegime } from '../../utils/gradingRegime'
@@ -165,7 +166,14 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) 
 // Els tres veredictes són DADA de domini i van en anglès a totes les llengües, com LINEAR/STEP:
 // és el que el full imprès porta cap al fabricant (AC/AD/RJ) i el que la Montse diu en veu alta.
 // Traduir-los aquí i no al paper faria que la pantalla i el full parlessin diferent.
-const VERDICTES = ['ACCEPTED', 'ADJUSTED', 'REJECTED']
+// ELS TRES VEREDICTES venen de `/vocabulari/` (`veredictes_fitting` = `PieceFittingLine.
+// DECISIO_CHOICES`). L'endpoint NO hi posa el buit, i és a posta: `''` és l'absència de
+// veredicte, no un quart membre —v. la capçalera de `vocabulari_views.py`—, i el gest de
+// desdir-se (tornar a clicar l'actiu) el continua produint aquesta pantalla, que és on viu.
+//
+// VERDICTE_TO ES QUEDA: és crom —dos tokens de color per veredicte— indexat pel codi, no una
+// segona llista. Un veredicte que l'endpoint dugués i el mapa no tingués sortiria sense color,
+// però sortiria; per això la cel·la el llegeix amb `?.` i no amb accés directe.
 const VERDICTE_TO = {
   ACCEPTED: { col: 'var(--ok)', bg: 'var(--ok-bg)' },
   ADJUSTED: { col: 'var(--warn)', bg: 'var(--warn-bg)' },
@@ -173,6 +181,10 @@ const VERDICTE_TO = {
 }
 
 export function VerdicteCell({ valor, onTria }) {
+  // Sense vocabulari no s'ofereix cap veredicte. La cel·la segueix pintant el que la línia ja
+  // porta (això ho fa la graella), però decidir de nou demana saber entre què es decideix.
+  const { codis: vocVerdictes } = useEnumeracio('veredictes_fitting')
+  const VERDICTES = vocVerdictes || []
   // El CODI no es tradueix (v. la nota de sobre) però el seu SIGNIFICAT sí: qui no sap què
   // vol dir ADJUSTED ho ha de poder llegir en la seva llengua sense sortir de la graella.
   // Va a `title` i a `aria-label`, o sigui que el que viatja al paper segueix sent el codi.
@@ -182,7 +194,7 @@ export function VerdicteCell({ valor, onTria }) {
                    overflow: 'hidden', background: 'var(--white)' }}>
       {VERDICTES.map((v, i) => {
         const on = valor === v
-        const to = VERDICTE_TO[v]
+        const to = VERDICTE_TO[v] || {}
         return (
           <button key={v} type="button"
             // Tornar a clicar el veredicte actiu el TREU: decidir i desdir-se han de costar el
@@ -193,7 +205,8 @@ export function VerdicteCell({ valor, onTria }) {
             aria-pressed={on}
             style={{
               border: 'none', borderRight: i < VERDICTES.length - 1 ? '1px solid var(--border)' : 'none',
-              background: on ? to.bg : 'transparent', color: on ? to.col : 'var(--text-muted)',
+              background: on ? (to.bg || 'transparent') : 'transparent',
+              color: on ? (to.col || 'var(--text-main)') : 'var(--text-muted)',
               fontWeight: on ? 600 : 400, font: 'inherit', fontSize: 'var(--fs-label)',
               letterSpacing: '0.04em', padding: '2px 7px', cursor: 'pointer',
             }}>{v}</button>
