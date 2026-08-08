@@ -80,11 +80,16 @@ function Enrere({ to, title }) {
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
+        // 16px: la mida que la norma (§8) dona a les icones fora de botó de text; i la tinta
+        // de repòs, `--text-soft`. Les DUES es declaren AL BOTÓ i la icona les hereta: si es
+        // queden només a la icona, el botó computa els 16px i el negre del document i la
+        // mesura hi troba un valor que ningú ha decidit (bidireccional d'A5).
+        fontSize: 16,
+        color: 'var(--text-soft)',
       }}
     >
-      {/* 16px: la mida que la norma (§8) dona a les icones fora de botó de text. */}
       <i className="ti ti-arrow-left" aria-hidden="true"
-        style={{ fontSize: 16, color: 'var(--text-soft)', lineHeight: 1 }} />
+        style={{ fontSize: 'inherit', color: 'currentColor', lineHeight: 1 }} />
     </button>
   )
 }

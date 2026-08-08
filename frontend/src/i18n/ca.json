@@ -955,7 +955,8 @@
     "assign_resource_already": "{{n}} ja hi estaven.",
     "set_badge": "SET {{n}}/{{total}} · {{codi}}",
     "measures_view_table": "Taula de mesures",
-    "measures_view_repas": "Repàs de fittings"
+    "measures_view_repas": "Repàs de fittings",
+    "back_title": "Tornar a Models"
   },
   "model_wizard": {
     "customer": "Client",
@@ -1130,7 +1131,21 @@
     "delete_error": "No s'ha pogut esborrar el model.",
     "col_recurs": "Recurs",
     "set_badge": "SET {{n}}/{{total}}",
-    "set_hint": "Peça d'un conjunt · {{codi}} {{nom}}"
+    "set_hint": "Peça d'un conjunt · {{codi}} {{nom}}",
+    "back_title": "Tornar al Dashboard",
+    "entity": "models",
+    "view_active": "Models en curs",
+    "view_done": "Models acabats",
+    "done_pending": "El criteri de «model acabat» encara no està definit — pendent de domini.",
+    "col_ref_intern": "Ref interna",
+    "col_ref_client": "Ref client",
+    "col_model": "Model",
+    "col_temp": "Temp.",
+    "col_entrada_model": "Entrada",
+    "col_deadline": "Deadline",
+    "col_estat": "Estat",
+    "estat_pendent": "Estat comercial: pendent del Kanban.",
+    "select_page": "Selecciona tota la pàgina"
   },
   "models_filters": {
     "button": "Filtres",
@@ -4787,5 +4802,33 @@
     "item_no_trobat": "Item no trobat.",
     "files_empty": "Aquest item no té fitxers.",
     "confirm_delete_file": "Esborrar «{{nom}}»?"
+  },
+  "resum_wizard": {
+    "axes": "Target · Construcció · Fit",
+    "base": "base",
+    "change": "Canviar",
+    "created_by": "Creat per",
+    "definition": "Definició del model",
+    "information": "Informació",
+    "need_base": "Cal un sistema, un run i una talla base dins del run.",
+    "needs_sizes": "requereix talles",
+    "no_customer": "Sense client",
+    "no_deadline": "Sense deadline",
+    "no_value": "—",
+    "piece_saved": "Peça desada.",
+    "piece_type": "Tipus de peça",
+    "run_and_base": "Talla base i run",
+    "save_error": "No s'ha pogut desar.",
+    "save_piece": "Desar peça",
+    "save_sizes": "Desar talles",
+    "see_grading": "Veure graduació",
+    "sizes_saved": "Talles desades.",
+    "step1": "1 · Identificació",
+    "step_grading": "Graduació",
+    "step_piece": "Peça",
+    "step_sizes": "Talles",
+    "steps_of": "{{n}} de {{total}} passos",
+    "systems_for": "Sistema de talles disponible per a {{target}}",
+    "year_season": "Any · Temporada"
   }
 }

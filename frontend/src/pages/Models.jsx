@@ -8,7 +8,8 @@ import BadgeLliurable from '../components/model/BadgeLliurable'
 import ModelsFilterPanel from '../components/model/ModelsFilterPanel'
 import { useFilterOptions, garmentTypeLabel, garmentGroupLabel } from '../components/model/filterOptions'
 import Feedback from '../components/ui/Feedback'
-import useAuthStore from '../store/auth'
+import PageMenu from '../components/ui/PageMenu'
+import TaulaLlista from '../components/ui/TaulaLlista'
 import { useEnumeracio } from '../utils/vocabulariDominiFont'
 
 const MONO = 'IBM Plex Mono, monospace'
@@ -25,24 +26,37 @@ const FILTER_KEYS = [
 ]
 const fmtDate = (v, locale) => v ? new Date(v).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'
 
+// ORDENACIÓ · l'ordre per defecte de sempre (entrada més recent a dalt). Es fa servir tal qual
+// com a `ordering` del backend i com a estat inicial de la icona de la capçalera.
+const ORDRE_DEFECTE = { camp: 'data_entrada', dir: 'desc' }
+// La «Temp.» és una columna de DUES dades (temporada + any) i el que un humà hi busca és
+// l'ordre CRONOLÒGIC: primer l'any, i dins de l'any la temporada. DRF ho accepta separat per
+// comes; els dos camps són a `ordering_fields` del ViewSet.
+const ORDERING_API = { temporada: ['any', 'temporada'] }
+const aOrdering = (o) => (ORDERING_API[o.camp] || [o.camp]).map(c => (o.dir === 'desc' ? `-${c}` : c)).join(',')
+
 export default function Models() {
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const dateLocale = i18n.language === 'es' ? 'es-ES' : i18n.language === 'en' ? 'en-GB' : 'ca-ES'
 
-  // P7 — la columna Recurs només té sentit en una MARCA (és qui assigna). En un Estudi el
-  // camp `studio_assignat` dels seus models no vol dir res i la columna seria soroll.
-  const isBrand = useAuthStore(s => s.tenant?.tipologia === 'marca')
+  // A5 · §8e — la graella canònica NO té columna de RECURS (P7 · `studio_assignat`) ni de
+  // TÈCNIC («Tècnic assignat FORA de les llistes de models: viu a Planificació»). Les dues
+  // dades segueixen viatjant al serializer i vives a la fitxa del model; el que se'n va és la
+  // columna. Per això aquesta pantalla ja no ha de saber si el tenant és marca o estudi.
   // Les fases del filtre venen de `/vocabulari/` (`fases_model`), no d'una constant importada
   // d'`ActionsMenu` —que era una llista escrita a mà que aquesta pantalla reexportava sense
   // saber-ho—. Sense vocabulari el filtre no ofereix cap fase: «totes» segueix funcionant.
   const { codis: fases } = useEnumeracio('fases_model')
   const [items, setItems] = useState([])
   const [count, setCount] = useState(0)
+  // §8e — «el comptador ÉS selecció, no KPI, i ELS VALORS MANEN»: «12/84». El primer número és
+  // el resultat del filtre (`count`); el segon, el CENS SENCER del tenant, que no es pot
+  // deduir d'una pàgina de 25 i per això es demana un cop, a part.
+  const [total, setTotal] = useState(null)
   const [loading, setLoading] = useState(true)
   const [feedback, setFeedback] = useState(null)
   const [selected, setSelected] = useState(() => new Set())
-  const [newOpen, setNewOpen] = useState(false)
   // Selecció de CONJUNT filtrat (patró Gmail, C2): "tots els N del filtre" amb exclusions.
   const [selectAllFilter, setSelectAllFilter] = useState(false)
   const [excludeIds, setExcludeIds] = useState(() => new Set())
@@ -57,6 +71,25 @@ export default function Models() {
   const page = Math.max(1, parseInt(sp.get('page') || '1', 10))
   const [searchInput, setSearchInput] = useState(search)
 
+  // §8e · FILTRES RÀPIDS DE VISTA AL MENÚ: «els elements acabats NO es llisten per defecte».
+  // 🚩 PROVISIONAL-DOMINI — el criteri exacte de «model acabat» encara no existeix: l'estat
+  // comercial el mana el Kanban i el Kanban no hi és. Mentre no hi sigui, la vista «acabats»
+  // NO endevina res: no demana res al backend i ho diu escrit. Inventar-hi un criteri (fase
+  // TOP? `estat='Tancat'`? `data_tancament`?) seria posar una decisió de domini dins d'un tram
+  // de pell, i la llista de «en curs» quedaria amputada sense que ningú ho hagués decidit.
+  const vista = sp.get('vista') === 'acabats' ? 'acabats' : 'curs'
+
+  // ORDENACIÓ a la URL (`ordering`), com la resta de l'estat de la llista: recarregar la
+  // conserva i es pot enllaçar. Es guarda com el backend l'espera (`-camp`).
+  const ordre = useMemo(() => {
+    const raw = sp.get('ordering')
+    if (!raw) return ORDRE_DEFECTE
+    const desc = raw.startsWith('-')
+    const camp = (desc ? raw.slice(1) : raw).split(',')[0]
+    // «any» és el primer camp de l'ordenació composta de Temp.: la capçalera que mana és Temp.
+    return { camp: camp === 'any' ? 'temporada' : camp, dir: desc ? 'desc' : 'asc' }
+  }, [sp])
+
   // Escriu params a la URL (replace: sense inundar l'historial). Buit/undefined → esborra el key.
   const setParams = useCallback((patch) => {
     setSp(prev => {
@@ -68,6 +101,13 @@ export default function Models() {
       return next
     }, { replace: true })
   }, [setSp])
+
+  // Clicar una capçalera: si ja mana, inverteix; si no, entra descendent (el més recent /
+  // el més alt primer, que és el que s'espera d'una llista de treball).
+  const ordenar = useCallback((camp) => {
+    const dir = (ordre.camp === camp && ordre.dir === 'desc') ? 'asc' : 'desc'
+    setParams({ ordering: aOrdering({ camp, dir }), page: undefined })
+  }, [ordre, setParams])
 
   // Params de filtre enviats al backend (i base del contracte C2). Deriven NOMÉS de la URL.
   const spStr = sp.toString()
@@ -142,8 +182,10 @@ export default function Models() {
   }, [faseKey])
 
   const load = useCallback(() => {
+    // Vista «acabats»: cap criteri de domini → cap crida i cap fila inventada (v. `vista`).
+    if (vista === 'acabats') { setItems([]); setCount(0); setLoading(false); return }
     setLoading(true)
-    modelsApi.list({ ...filterParams, ordering: '-data_entrada', page, page_size: PAGE_SIZE })
+    modelsApi.list({ ...filterParams, ordering: aOrdering(ordre), page, page_size: PAGE_SIZE })
       .then(r => {
         const d = r.data
         setItems(Array.isArray(d) ? d : (d.results || []))
@@ -151,7 +193,14 @@ export default function Models() {
       })
       .catch(() => { setItems([]); setCount(0) })
       .finally(() => setLoading(false))
-  }, [filterParams, page])
+  }, [filterParams, page, ordre, vista])
+
+  // El DENOMINADOR del comptador: el cens sencer, sense cap filtre. Una sola fila demanada
+  // (`page_size=1`): l'únic que se'n vol és el `count`.
+  const carregaTotal = useCallback(() => {
+    modelsApi.list({ page_size: 1 }).then(r => setTotal(r.data?.count ?? null)).catch(() => setTotal(null))
+  }, [])
+  useEffect(() => { carregaTotal() }, [carregaTotal])
 
   // Sincronitza l'input de cerca (mirall local) → URL amb debounce; reseteja pàgina en canviar.
   useEffect(() => { setSearchInput(search) }, [search])
@@ -175,7 +224,9 @@ export default function Models() {
   const hasMoreThanPage = count > items.length
 
   const filterCount = Math.max(0, count - (selectAllFilter ? excludeIds.size : 0))
-  const selCount = selectAllFilter ? filterCount : selected.size
+  // El comptador de dalt ja NO diu «N seleccionats» (§8e: el comptador és el resultat del
+  // FILTRE, «12/84»). Qui diu quants n'hi ha de triats és el mateix menú d'accions —«Accions
+  // (3)»— i la banda de conjunt; el número de la capçalera té un sol significat.
 
   const toggle = (id) => setSelected(s => {
     const n = new Set(s)
@@ -222,165 +273,270 @@ export default function Models() {
       return n
     })
   }
-  const afterAction = () => { setSelected(new Set()); setSelectAllFilter(false); setExcludeIds(new Set()); load() }
+  const afterAction = () => { setSelected(new Set()); setSelectAllFilter(false); setExcludeIds(new Set()); load(); carregaTotal() }
 
   const remove = async (m, e) => {
     e.stopPropagation()
     if (!window.confirm(t('models_list.confirm_delete', { codi: m.codi_intern }))) return
-    try { await modelsApi.destroy(m.id); setFeedback({ type: 'ok', text: '✓' }); load() }
+    try { await modelsApi.destroy(m.id); setFeedback({ type: 'ok', text: '✓' }); load(); carregaTotal() }
     catch { setFeedback({ type: 'err', text: t('models_list.delete_error') }) }
   }
 
+  // ── LES COLUMNES DEL CANÒNIC (NORMA_LLISTA_canonica.html) ─────────────────────────────
+  // Amplades PER CONTINGUT, no iguals: refs estretes, la dada reina generosa, dates fixes.
+  const cols = useMemo(() => [
+    {
+      key: 'chk', amplada: 30,
+      render: (m) => (
+        <input type="checkbox" checked={rowChecked(m.id)} onClick={e => e.stopPropagation()}
+          onChange={() => rowToggle(m.id)} aria-label={m.codi_intern}
+          style={{ width: 14, height: 14, accentColor: 'var(--gold)', display: 'block' }} />
+      ),
+    },
+    {
+      key: 'codi_intern', label: t('models_list.col_ref_intern'), min: 118, max: 130, sort: 'codi_intern',
+      estil: { fontSize: 11, color: 'var(--text-soft)' }, titol: (m) => m.codi_intern,
+      render: (m) => m.codi_intern,
+    },
+    {
+      key: 'codi_client', label: t('models_list.col_ref_client'), min: 64, max: 80, sort: 'codi_client',
+      estil: { fontSize: 11, color: 'var(--text-soft)' }, titol: (m) => m.codi_client || undefined,
+      render: (m) => m.codi_client || '—',
+    },
+    {
+      // LA DADA REINA (§8e): a Models és EL NOM, i porta el pes.
+      key: 'nom_prenda', label: t('models_list.col_model'), min: 170, max: 260, sort: 'nom_prenda',
+      estil: { fontWeight: 600 }, titol: (m) => m.nom_prenda || m.codi_intern,
+      render: (m) => (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.nom_prenda || '—'}</span>
+          {/* MARQUES CONDICIONALS de la fila. La graella canònica no els dona columna —i una
+              columna per a una marca que gairebé cap fila porta seria una columna buida—, però
+              no es poden perdre: SET-1 diu de quin CONJUNT és peça la fila, F2.7 què ha
+              lliurat i RETORN-2 la maduresa que publica l'altra casa. Van enganxades a la
+              reina perquè és el que qualifiquen, i només apareixen si hi són. */}
+          <SetBadge m={m} t={t} />
+          <MaduresaBadge model={m} t={t} />
+          <BadgeLliurable rondes={m.lliurable_ronda_n} compacte locale={dateLocale} />
+        </span>
+      ),
+    },
+    {
+      key: 'collection', label: t('models_filters.collection'), min: 110, max: 150, sort: 'collection',
+      estil: { fontSize: 11, color: 'var(--text-soft)' }, titol: (m) => m.collection || undefined,
+      render: (m) => m.collection || '—',
+    },
+    {
+      key: 'temporada', label: t('models_list.col_temp'), min: 70, max: 80, sort: 'temporada',
+      estil: { fontSize: 11, color: 'var(--text-soft)' },
+      render: (m) => `${m.temporada || ''}${m.any ? ` ${m.any}` : ''}` || '—',
+    },
+    {
+      key: 'data_entrada', label: t('models_list.col_entrada_model'), min: 78, max: 86, sort: 'data_entrada',
+      estil: { fontSize: 11, color: 'var(--text-soft)' },
+      render: (m) => fmtDate(m.data_entrada || m.created_at, dateLocale),
+    },
+    {
+      key: 'data_objectiu', label: t('models_list.col_deadline'), min: 78, max: 86, sort: 'data_objectiu',
+      estil: { fontSize: 11, color: 'var(--text-soft)' },
+      render: (m) => fmtDate(m.data_objectiu, dateLocale),
+    },
+    {
+      // §8e: FASE = NOMÉS TEXT (sense badge). El badge daurat d'abans era marca fent de dada.
+      key: 'fase_actual', label: t('models_list.col_phase'), min: 110, max: 130, sort: 'fase_actual',
+      estil: { fontSize: 11, color: 'var(--text-main)' },
+      render: (m) => (m.fase_actual ? t(`model_sheet.dashboard.phase.${m.fase_actual}`, m.fase_actual) : '—'),
+    },
+    {
+      // 🚩 PROVISIONAL-DOMINI · l'ESTAT de la §8e és el COMERCIAL (el del Kanban: Començat
+      // neutre · En curs taronja · Acabat verd), i el Kanban no existeix. `Model.estat`
+      // (Nou/EnCurs/EnRevisio/Tancat) és l'estat INTERN i NO és aquest: pintar-lo aquí seria
+      // dir una cosa per una altra. La columna hi és, buida i amb el motiu escrit.
+      key: 'estat', label: t('models_list.col_estat'), min: 86, max: 100,
+      titolCap: t('models_list.estat_pendent'),
+      estil: { color: 'var(--text-faint)' },
+      render: () => '—',
+    },
+    {
+      key: 'del', amplada: 36,
+      render: (m) => (intentMode ? null : <BotoEsborrar onClick={(e) => remove(m, e)} title={t('models_list.delete')} />),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, dateLocale, intentMode, selectAllFilter, excludeIds, selected])
+
+  const VISTES = [
+    ['curs', t('models_list.view_active')],
+    ['acabats', t('models_list.view_done')],
+  ]
+
   return (
-    <div style={{ padding: '24px', maxWidth: 1240, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--fs-h2)', fontFamily: MONO, color: 'var(--text-main)', fontWeight: 500, margin: 0 }}>{t('models_list.title')}</h1>
-          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, marginTop: 2 }}>
-            {intentMode
-              ? (intent.max != null
-                  ? t('models_intent.counter', { x: selected.size, n: intent.max })
-                  : t('models_intent.counter_open', { x: selected.size }))
-              : (selCount > 0 ? t('models_list.selected', { n: selCount }) : t('models_list.count', { n: count }))}
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <NewModelMenu open={newOpen} setOpen={setNewOpen} navigate={navigate} t={t} />
-          {/* Mode intenció: les accions genèriques (assignar/gate/…) no apliquen → ActionsMenu ocult. */}
+    <>
+      {/* §8b · MENÚ DE PANTALLA — barra blanca de costat a costat amb filet a dalt i a baix.
+          Ordre de la §8e: ← · filtres de VISTA · separador · accions. Les accions van a
+          l'ESQUERRA (comportament de menú) i, en pujar-hi, PERDEN el blau: «el blau viu al
+          contingut; el menú té el seu llenguatge». El marge negatiu les treu dels 24px del
+          `<main>` perquè la barra vagi de costat a costat. */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu
+          backTo="/"
+          backTitle={t('models_list.back_title')}
+          items={VISTES.map(([v, label]) => ({
+            key: v, label, active: vista === v,
+            onClick: () => setParams({ vista: v === 'curs' ? undefined : v, page: undefined }),
+          }))}
+        >
+          <span style={sepMenu} />
+          <NewModelMenu navigate={navigate} t={t} />
+          {/* Mode intenció: les accions genèriques (assignar/gate/…) no apliquen → ocult. */}
           {!intentMode && (
             <ActionsMenu
+              variant="menu"
               targets={selectAllFilter ? [] : selectedModels}
               selectionSet={selectAllFilter ? { filters: filterParams, excludeIds: [...excludeIds], count: filterCount } : null}
               onChanged={afterAction} onFeedback={setFeedback} />
           )}
-        </div>
+          <BotoMenu onClick={() => setPanelOpen(o => !o)} icona="ti-filter" actiu={advancedCount > 0}
+            aria-expanded={panelOpen}
+            label={advancedCount ? t('models_filters.button_n', { n: advancedCount }) : t('models_filters.button')} />
+        </PageMenu>
       </div>
 
-      {intentMode && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', margin: '0 0 12px',
-          background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
-          fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
-          <i className="ti ti-arrow-back-up" aria-hidden="true" />
-          {t('models_intent.banner')}
+      <div style={{ minWidth: 0, maxWidth: '100%' }}>
+        {/* §8e · EL COMPTADOR MANA I LA CERCA HI VA AL COSTAT, mateixa línia, amb els selects
+            ràpids. El nom de l'entitat ja no és títol: és element en caption. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0 12px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>
+            {intentMode ? selected.size : count}
+            <small style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, color: 'var(--text-soft)' }}>
+              /{intentMode ? (intent.max ?? count) : (total ?? count)}</small>
+          </span>
+          <span style={retol}>{t('models_list.entity')}</span>
+          <input value={searchInput} onChange={e => setSearchInput(e.target.value)}
+            placeholder={t('models_list.search_ph')} aria-label={t('models_list.search_ph')}
+            style={{ ...camp, flex: 1, minWidth: 220 }} />
+          <select value={fase} onChange={e => setParams({ fase_actual: e.target.value, page: undefined })}
+            aria-label={t('models_filters.f_phase')} style={camp}>
+            <option value="">{t('models_list.all_phases')}</option>
+            {(fases || []).map(p => <option key={p} value={p}>{faseCounts[p] != null ? `${p} (${faseCounts[p]})` : p}</option>)}
+          </select>
+          <select value={temporada} onChange={e => setParams({ temporada: e.target.value, page: undefined })}
+            aria-label={t('models_filters.f_season')} style={camp}>
+            <option value="">{t('models_list.all_seasons')}</option>
+            {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
-      )}
 
-      <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+        {intentMode && (
+          <div style={banda}>
+            <i className="ti ti-arrow-back-up" aria-hidden="true" />
+            {t('models_intent.banner')}
+          </div>
+        )}
 
-      {/* Toolbar de filtres */}
-      <div style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap', alignItems: 'center' }}>
-        <input value={searchInput} onChange={e => setSearchInput(e.target.value)} placeholder={t('models_list.search_ph')}
-          style={{ ...inp, flex: 1, minWidth: 220 }} />
-        <select value={fase} onChange={e => setParams({ fase_actual: e.target.value, page: undefined })} style={inp}>
-          <option value="">{t('models_list.all_phases')}</option>
-          {(fases || []).map(p => <option key={p} value={p}>{faseCounts[p] != null ? `${p} (${faseCounts[p]})` : p}</option>)}
-        </select>
-        <select value={temporada} onChange={e => setParams({ temporada: e.target.value, page: undefined })} style={inp}>
-          <option value="">{t('models_list.all_seasons')}</option>
-          {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <button onClick={() => setPanelOpen(o => !o)}
-          style={{ ...inp, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
-            color: advancedCount ? 'var(--gold)' : 'var(--text-main)',
-            borderColor: advancedCount ? 'var(--gold)' : 'var(--gray-l)', fontWeight: advancedCount ? 600 : 400 }}>
-          <i className="ti ti-adjustments-horizontal" />
-          {advancedCount ? t('models_filters.button_n', { n: advancedCount }) : t('models_filters.button')}
-          <i className={`ti ti-chevron-${panelOpen ? 'up' : 'down'}`} />
-        </button>
-        {Object.keys(filterParams).length > 0 && (
-          <button onClick={() => setParams(Object.fromEntries([...FILTER_KEYS, 'page']
-            .filter(k => !(intentMode && k === 'customer')).map(k => [k, undefined])))}
-            style={{ ...inp, cursor: 'pointer', color: 'var(--gray)' }}>× {t('models_list.clear')}</button>
+        <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+
+        {panelOpen && (
+          <ModelsFilterPanel sp={sp} setParams={setParams} opts={opts} garmentCounts={garmentCounts}
+            lockedKeys={intentMode ? ['customer'] : []} />
+        )}
+
+        <ActiveChips filterParams={filterParams} sp={sp} setParams={setParams} opts={opts} t={t} lang={i18n.language?.slice(0, 2) || 'ca'} FILTER_KEYS={FILTER_KEYS} lockedKeys={intentMode ? ['customer'] : []} />
+
+        {/* Banda "seleccionar tot el filtre" (patró Gmail): OCULTA en mode intenció (és l'oposat
+            conceptual de "limitat a N"). Apareix quan la pàgina és plena i el filtre té més resultats. */}
+        {!intentMode && (allOnPage || selectAllFilter) && hasMoreThanPage && (
+          <div style={{ ...banda, justifyContent: 'center' }}>
+            {selectAllFilter ? (
+              <>
+                <span>{t('models_list.selected_all_filter', { n: filterCount })}</span>
+                <button type="button" onClick={clearConjunt} style={btnSecundari}>
+                  {t('models_list.clear_selection')}
+                </button>
+              </>
+            ) : (
+              <>
+                <span>{t('models_list.selected_page', { n: selectedModels.length })}</span>
+                <button type="button" onClick={() => setSelectAllFilter(true)} style={btnSecundari}>
+                  {t('models_list.select_all_filter', { n: count })}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Llistat */}
+        {vista === 'acabats' ? (
+          <div style={buitCaixa}>
+            <span style={buit}>{t('models_list.done_pending')}</span>
+          </div>
+        ) : loading ? (
+          <div style={buitCaixa}><span style={buit}>{t('models_list.loading')}</span></div>
+        ) : visibleItems.length === 0 ? (
+          <div style={buitCaixa}>
+            <span style={buit}>
+              {Object.keys(filterParams).length ? t('models_list.empty_filtered') : t('models_list.empty')}
+            </span>
+          </div>
+        ) : (
+          <>
+            <TaulaLlista
+              cols={cols}
+              files={visibleItems}
+              clau={(m) => m.id}
+              ordre={ordre}
+              onOrdenar={ordenar}
+              triada={(m) => rowChecked(m.id)}
+              onObrir={intentMode ? (m) => rowToggle(m.id) : (m) => navigate(`/models/${m.id}`)}
+            />
+            {/* §8c — l'estat buit d'una COLUMNA també s'explica; el silenci d'una columna de
+                guions és pitjor que la columna. */}
+            <div style={{ ...buit, margin: '-8px 0 16px 2px' }}>{t('models_list.estat_pendent')}</div>
+          </>
+        )}
+
+        {/* Select all (pàgina) — sota la taula, com la resta de gestos de conjunt. OCULT en mode
+            intenció (selecció individual limitada, no conjunt). */}
+        {!intentMode && visibleItems.length > 0 && (
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontFamily: MONO, margin: '0 0 12px 2px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={selectAllFilter || allOnPage} onChange={toggleAll} />
+            {t('models_list.select_page')}
+          </label>
+        )}
+
+        {/* Paginació */}
+        {pages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 4, marginBottom: 18, fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
+            <button type="button" onClick={() => setParams({ page: Math.max(1, page - 1) })} disabled={page <= 1}
+              style={{ ...btnSecundari, ...(page <= 1 ? deshabilitat : null) }}>← {t('models_list.prev')}</button>
+            <span style={{ color: 'var(--text-soft)' }}>{t('models_list.page_info', { page, pages })}</span>
+            <button type="button" onClick={() => setParams({ page: Math.min(pages, page + 1) })} disabled={page >= pages}
+              style={{ ...btnSecundari, ...(page >= pages ? deshabilitat : null) }}>{t('models_list.next')} →</button>
+          </div>
+        )}
+
+        {/* Barra de confirmació fixa del mode intenció. */}
+        {intentMode && (
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'wrap',
+            padding: '12px 20px', background: 'var(--panel)',
+            borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--line)',
+            boxShadow: '0 -4px 16px rgba(0,0,0,0.08)', fontFamily: MONO }}>
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
+              {intent.max != null
+                ? t('models_intent.counter', { x: selected.size, n: intent.max })
+                : t('models_intent.counter_open', { x: selected.size })}
+            </span>
+            <button type="button" onClick={cancelIntent} style={btnTerciari}>{t('models_intent.cancel')}</button>
+            {/* §5 · L'ACCIÓ PRIMÀRIA de la pantalla, i l'ÚNICA: en mode intenció la pantalla té
+                una cosa que has vingut a fer. En mode normal la llista no en té cap blau (§8c). */}
+            <button type="button" onClick={confirmIntent} disabled={!selected.size}
+              style={{ ...btnPrimari, ...(!selected.size ? deshabilitat : null) }}>
+              {t('models_intent.confirm')}
+            </button>
+          </div>
         )}
       </div>
-
-      {panelOpen && (
-        <ModelsFilterPanel sp={sp} setParams={setParams} opts={opts} garmentCounts={garmentCounts}
-          lockedKeys={intentMode ? ['customer'] : []} />
-      )}
-
-      <ActiveChips filterParams={filterParams} sp={sp} setParams={setParams} opts={opts} t={t} lang={i18n.language?.slice(0, 2) || 'ca'} FILTER_KEYS={FILTER_KEYS} lockedKeys={intentMode ? ['customer'] : []} />
-
-      {/* Select all (pàgina) — OCULT en mode intenció (selecció individual limitada, no conjunt). */}
-      {!intentMode && items.length > 0 && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO, margin: '0 0 8px 2px', cursor: 'pointer' }}>
-          <input type="checkbox" checked={selectAllFilter || allOnPage} onChange={toggleAll} />
-          {(selectAllFilter || allOnPage) ? '✓' : ''}
-        </label>
-      )}
-
-      {/* Banda "seleccionar tot el filtre" (patró Gmail): OCULTA en mode intenció (és l'oposat
-          conceptual de "limitat a N"). Apareix quan la pàgina és plena i el filtre té més resultats. */}
-      {!intentMode && (allOnPage || selectAllFilter) && hasMoreThanPage && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap',
-          background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
-          padding: '8px 14px', margin: '0 0 10px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-main)' }}>
-          {selectAllFilter ? (
-            <>
-              <span>{t('models_list.selected_all_filter', { n: filterCount })}</span>
-              <button onClick={clearConjunt} style={{ ...inp, cursor: 'pointer', color: 'var(--gold)', border: '0.5px solid var(--gold)', background: 'var(--white)' }}>
-                {t('models_list.clear_selection')}
-              </button>
-            </>
-          ) : (
-            <>
-              <span>{t('models_list.selected_page', { n: selectedModels.length })}</span>
-              <button onClick={() => setSelectAllFilter(true)} style={{ ...inp, cursor: 'pointer', color: 'var(--gold)', border: '0.5px solid var(--gold)', background: 'var(--white)', fontWeight: 600 }}>
-                {t('models_list.select_all_filter', { n: count })}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Llistat */}
-      {loading ? (
-        <div style={{ color: 'var(--gray)', fontSize: 'var(--fs-body)', fontFamily: MONO, padding: '20px 0' }}>{t('models_list.loading')}</div>
-      ) : visibleItems.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--gray)', fontSize: 'var(--fs-body)', fontFamily: MONO }}>
-          {(search || fase || temporada) ? t('models_list.empty_filtered') : t('models_list.empty')}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: intentMode ? 64 : 0 }}>
-          {visibleItems.map(m => (
-            <ModelRow key={m.id} m={m} selected={rowChecked(m.id)} onToggle={() => rowToggle(m.id)}
-              onOpen={intentMode ? () => rowToggle(m.id) : () => navigate(`/models/${m.id}`)}
-              onDelete={(e) => remove(m, e)} t={t} locale={dateLocale} intentMode={intentMode} isBrand={isBrand} />
-          ))}
-        </div>
-      )}
-
-      {/* Paginació */}
-      {pages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 18, fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
-          <button onClick={() => setParams({ page: Math.max(1, page - 1) })} disabled={page <= 1} style={{ ...inp, cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1 }}>← {t('models_list.prev')}</button>
-          <span style={{ color: 'var(--gray)' }}>{t('models_list.page_info', { page, pages })}</span>
-          <button onClick={() => setParams({ page: Math.min(pages, page + 1) })} disabled={page >= pages} style={{ ...inp, cursor: page >= pages ? 'not-allowed' : 'pointer', opacity: page >= pages ? 0.4 : 1 }}>{t('models_list.next')} →</button>
-        </div>
-      )}
-
-      {/* Barra de confirmació fixa del mode intenció. */}
-      {intentMode && (
-        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'wrap',
-          padding: '12px 20px', background: 'var(--white)', borderTop: '1px solid var(--gold)',
-          boxShadow: '0 -4px 16px rgba(0,0,0,0.08)', fontFamily: MONO }}>
-          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
-            {intent.max != null
-              ? t('models_intent.counter', { x: selected.size, n: intent.max })
-              : t('models_intent.counter_open', { x: selected.size })}
-          </span>
-          <button onClick={cancelIntent}
-            style={{ ...inp, cursor: 'pointer', color: 'var(--gray)' }}>{t('models_intent.cancel')}</button>
-          <button onClick={confirmIntent} disabled={!selected.size}
-            style={{ ...inp, cursor: selected.size ? 'pointer' : 'not-allowed', opacity: selected.size ? 1 : 0.5,
-              background: 'var(--gold)', color: 'var(--text-main)', border: '0.5px solid var(--gold)', fontWeight: 600 }}>
-            {t('models_intent.confirm')}
-          </button>
-        </div>
-      )}
-    </div>
+    </>
   )
 }
 
@@ -433,15 +589,16 @@ function ActiveChips({ filterParams, sp, setParams, opts, t, lang, FILTER_KEYS, 
   const hasClearable = chips.some(c => !c.locked)
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', margin: '0 0 12px' }}>
+      {/* Un filtre actiu NO és «inclòs en la definició» (verd) ni «on soc» (filet d'or): és una
+          condició posada, i el seu llenguatge és el de la casa — --sel amb vora daurada. */}
       {chips.map(c => (
-        <span key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 999,
-          background: 'var(--gold-pale)', color: 'var(--gold)', border: '0.5px solid var(--gold)', fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600 }}>
-          {c.locked && <i className="ti ti-lock" style={{ fontSize: 12 }} aria-hidden="true" />}
+        <span key={c.id} style={xip}>
+          {c.locked && <i className="ti ti-lock" style={{ fontSize: 14 }} aria-hidden="true" />}
           {c.text}
           {!c.locked && (
             <button type="button" onClick={c.remove} aria-label={t('models_list.clear')}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1 }}>
-              <i className="ti ti-x" style={{ fontSize: 12 }} aria-hidden="true" />
+              <i className="ti ti-x" style={{ fontSize: 14 }} aria-hidden="true" />
             </button>
           )}
         </span>
@@ -449,7 +606,7 @@ function ActiveChips({ filterParams, sp, setParams, opts, t, lang, FILTER_KEYS, 
       {hasClearable && (
         <button type="button" onClick={() => setParams(Object.fromEntries(
           [...FILTER_KEYS, 'page'].filter(k => !lockedKeys.includes(k)).map(k => [k, undefined])))}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray)', fontFamily: MONO, fontSize: 'var(--fs-caption)', textDecoration: 'underline' }}>
+          style={btnTerciari}>
           {t('models_filters.clear_all')}
         </button>
       )}
@@ -457,120 +614,151 @@ function ActiveChips({ filterParams, sp, setParams, opts, t, lang, FILTER_KEYS, 
   )
 }
 
-function ModelRow({ m, selected, onToggle, onOpen, onDelete, t, locale, intentMode, isBrand }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'stretch', gap: 12, borderRadius: 8, background: 'var(--white)',
-      border: `1px solid ${selected ? 'var(--gold)' : 'var(--gray-l)'}`,
-      boxShadow: selected ? 'inset 0 0 0 1px var(--gold)' : 'none',
-    }}>
-      {/* Checkbox amb "rowspan" sobre les 2 files */}
-      <label onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', padding: '0 4px 0 14px', cursor: 'pointer' }}>
-        <input type="checkbox" checked={selected} onChange={onToggle} style={{ width: 15, height: 15 }} />
-      </label>
-
-      <div onClick={onOpen} style={{ flex: 1, minWidth: 0, padding: '12px 16px 12px 0', cursor: 'pointer' }}>
-        {/* Fila 1 — descriptiva */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--gold)' }}>{m.codi_intern}</span>
-          {m.nom_prenda && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontWeight: 500 }}>{m.nom_prenda}</span>}
-          {m.codi_client && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>· {m.codi_client}</span>}
-          {/* SET-1 — la fila diu si és una PART d'un producte. Sense això un tècnic no pot
-              saber que el que veu és la peça 2 de 3 d'un conjunt (base DALIA §6). */}
-          <SetBadge m={m} t={t} />
-          {/* RETORN-2 — la maduresa que l'estudi publica. Només es pinta si ha arribat. */}
-          <MaduresaBadge model={m} t={t} />
-          {/* F2.7 · RONDA — el PM ha de veure quins models ja han lliurat SENSE entrar-hi un per
-              un. Es pinta només si n'hi ha: una llista de 200 files no pot portar 200 pastilles
-              que diguin «encara no». */}
-          <BadgeLliurable rondes={m.lliurable_ronda_n} compacte locale={locale} />
-          {m.collection &&<span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>· {m.collection}</span>}
-          <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-body)', color: 'var(--gray)', fontFamily: MONO }}>{m.temporada}{m.any ? ` ${m.any}` : ''}</span>
-          <span title={t(m.has_order ? 'models_list.with_order_hint' : 'models_list.direct_hint')} style={{
-            fontSize: 'var(--fs-caption)', padding: '2px 7px', borderRadius: 5, fontFamily: MONO,
-            background: m.has_order ? 'var(--ok-bg)' : 'var(--gray-l)',
-            color: m.has_order ? 'var(--ok)' : 'var(--gray)',
-          }}>{t(m.has_order ? 'models_list.with_order' : 'models_list.direct')}</span>
-          {!intentMode && <button onClick={onDelete} title={t('models_list.delete')} style={delBtn}><i className="ti ti-trash" /></button>}
-        </div>
-        {/* Fila 2 — operativa */}
-        <div style={{ display: 'grid', gridTemplateColumns: isBrand ? 'auto 1fr 1fr 1fr 1.4fr 0.8fr' : 'auto 1fr 1fr 1fr 1.4fr', gap: 12, alignItems: 'center', fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
-          <span style={faseBadge}>{m.fase_actual ? t(`model_sheet.dashboard.phase.${m.fase_actual}`, m.fase_actual) : '—'}</span>
-          <Cell label={t('models_list.col_entrada')} value={fmtDate(m.entrada_prod, locale)} />
-          <Cell label={t('models_list.col_proto')} value={fmtDate(m.arribada_proto, locale)} />
-          <Cell label={t('models_list.col_fitting')} value={fmtDate(m.fitting_prev, locale)} />
-          <Tecnic label={t('models_list.col_tecnic')} tecnics={m.tecnics} />
-          {/* P7 — el RECURS assignat: codi nu, o '—' si el model encara no viatja enlloc. */}
-          {isBrand && <Cell label={t('models_list.col_recurs')} value={m.studio_assignat || '—'} />}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // SET-1 · A4 — «SET n/N» amb el codi comercial del conjunt al title. Codis via token, mai hex.
+// §1: badge = fons suau + tinta del color + VORA FINA DEL MATEIX COLOR. Aquest és neutre (la
+// pertinença a un conjunt no és cap semàfor): fons de pàgina, tinta suau i filet --line.
 function SetBadge({ m, t }) {
   if (!m.garment_set) return null
   const gs = m.garment_set
   return (
     <span title={t('models_list.set_hint', { codi: gs.codi_base, nom: gs.nom_comercial || '' })}
-      style={{
-        fontSize: 'var(--fs-caption)', padding: '2px 7px', borderRadius: 5, fontFamily: MONO,
-        background: 'var(--gold-pale)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
-      }}>
+      style={{ ...badgeNeutre, flex: 'none' }}>
       {t('models_list.set_badge', { n: m.piece_number ?? '?', total: gs.num_pieces })}
     </span>
   )
 }
 
-function Cell({ label, value }) {
+// La paperera de fila (§8e): icona destructiva 14px, hover --err-bg. En repòs NO és vermella
+// plena (§5.5: la destructiva mai plena en repòs).
+function BotoEsborrar({ onClick, title }) {
+  const [hover, setHover] = useState(false)
   return (
-    <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 'var(--fs-caption)', textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gray)' }}>{label}</div>
-      <div style={{ color: value === '—' ? 'var(--gray-l)' : 'var(--text-main)' }}>{value}</div>
-    </div>
+    <button type="button" onClick={onClick} title={title} aria-label={title}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{
+        width: 26, height: 26,
+        borderWidth: 1, borderStyle: 'solid', borderColor: hover ? 'var(--err)' : 'transparent',
+        borderRadius: 'var(--r-ctrl)', background: hover ? 'var(--err-bg)' : 'none',
+        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        // UN BOTÓ QUE NOMÉS PORTA UNA ICONA DECLARA LA MIDA I LA TINTA DE LA ICONA. Deixar-les
+        // heretades és com es cola un 16px del document dins d'un control de 26px.
+        color: 'var(--err)', fontSize: 14, padding: 0,
+      }}>
+      <i className="ti ti-trash" aria-hidden="true" style={{ fontSize: 'inherit', color: 'currentColor' }} />
+    </button>
   )
 }
 
-function Tecnic({ label, tecnics }) {
-  const list = tecnics || []
-  const principal = list[0]
+// Un botó amb ESTIL DE MENÚ (§8e): dins de la barra blanca, una acció no és un botó — pren la
+// forma de píndola de la barra. Mateix llenguatge que `PageMenu`, hover inclòs.
+function BotoMenu({ onClick, icona, label, actiu = false, ...rest }) {
+  const [hover, setHover] = useState(false)
   return (
-    <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 'var(--fs-caption)', textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gray)' }}>{label}</div>
-      {principal ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: principal.color || 'var(--gray)', flex: 'none' }} />
-          <span style={{ color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{principal.nom}</span>
-          {list.length > 1 && <span style={{ color: 'var(--gray)' }}>+{list.length - 1}</span>}
-        </div>
-      ) : <div style={{ color: 'var(--gray-l)' }}>—</div>}
-    </div>
+    <button type="button" onClick={onClick} {...rest}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{
+        borderWidth: 1, borderStyle: 'solid',
+        borderColor: actiu ? 'var(--gold-border)' : 'transparent',
+        borderRadius: 'var(--r-pill)',
+        background: actiu || hover ? 'var(--sel)' : 'none',
+        padding: '6px 14px', fontFamily: MONO, fontSize: 'var(--fs-body)', lineHeight: '16px',
+        color: actiu || hover ? 'var(--text-main)' : 'var(--text-soft)',
+        fontWeight: actiu ? 600 : 400, cursor: 'pointer',
+        display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+      }}>
+      {icona && <i className={`ti ${icona}`} aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />}
+      {label}
+    </button>
   )
 }
 
-function NewModelMenu({ open, setOpen, navigate, t }) {
+// §1 · ACCIONS COMPOSTES: crear a mà i importar una col·lecció són variants de la MATEIXA acció
+// («donar d'alta models») → UN sol desplegable, mai dos botons a la mateixa capçalera. Les dues
+// destinacions són les altes que ja existeixen; aquest tram no en toca cap.
+function NewModelMenu({ navigate, t }) {
+  const [open, setOpen] = useState(false)
   return (
-    <div style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--white)', color: 'var(--gold)', border: '0.5px solid var(--gold)', borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', fontFamily: MONO }}>
-        <i className="ti ti-plus" /> {t('models_list.new_model')} <i className="ti ti-chevron-down" />
-      </button>
+    <span style={{ position: 'relative' }}>
+      <BotoMenu onClick={() => setOpen(o => !o)} icona="ti-plus" actiu={open}
+        aria-haspopup="menu" aria-expanded={open}
+        label={`${t('models_list.new_model')} ▾`} />
       {open && (
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-          <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 41, background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 4, minWidth: 200 }}>
-            <button onClick={() => { setOpen(false); navigate('/models/nou') }} style={menuItem}><i className="ti ti-edit" /> {t('models_list.manual')}</button>
-            <button onClick={() => { setOpen(false); navigate('/models/importar-colleccio') }} style={menuItem}>
-              <i className="ti ti-file-spreadsheet" /> {t('nav.import_collection')}
+          <div role="menu" style={caixaMenu}>
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); navigate('/models/nou') }} style={itemMenu}>
+              <i className="ti ti-edit" aria-hidden="true" style={{ fontSize: 14 }} /> {t('models_list.manual')}
+            </button>
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); navigate('/models/importar-colleccio') }} style={itemMenu}>
+              <i className="ti ti-file-spreadsheet" aria-hidden="true" style={{ fontSize: 14 }} /> {t('nav.import_collection')}
             </button>
           </div>
         </>
       )}
-    </div>
+    </span>
   )
 }
 
-const inp = { padding: '6px 10px', border: '0.5px solid var(--gray-l)', borderRadius: 6, fontSize: 'var(--fs-body)', fontFamily: MONO, background: 'var(--white)', color: 'var(--text-main)' }
-const faseBadge = { fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: 'var(--gold)', color: 'var(--text-main)', justifySelf: 'start' }
-const delBtn = { fontSize: 'var(--fs-body)', color: '#C0392B', background: 'none', border: '0.5px solid #FADBD8', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', fontFamily: MONO }
-const menuItem = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 10px', borderRadius: 6, fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)', cursor: 'pointer' }
+// ── Estils de la casa (tokens de la NORMA, cap hex) ───────────────────────────────────────
+const sepMenu = { width: 1, height: 20, background: 'var(--line)', margin: '0 6px', flex: 'none' }
+const retol = {
+  fontSize: 'var(--fs-label)', letterSpacing: '.08em', textTransform: 'uppercase',
+  color: 'var(--text-soft)', fontWeight: 600, whiteSpace: 'nowrap',
+}
+const camp = {
+  fontFamily: MONO, fontSize: 'var(--fs-body)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+  borderRadius: 'var(--r-ctrl)', padding: '8px 12px',
+  background: 'var(--panel)', color: 'var(--text-main)',
+}
+const buit = { fontSize: 'var(--fs-label)', fontStyle: 'italic', color: 'var(--text-faint)', fontFamily: MONO }
+const buitCaixa = {
+  background: 'var(--panel)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+  borderRadius: 'var(--r-card)', padding: '40px 16px', textAlign: 'center', marginBottom: 16,
+}
+const banda = {
+  display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+  padding: '8px 14px', margin: '0 0 12px',
+  background: 'var(--sel)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)',
+  borderRadius: 'var(--r-ctrl)', fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)',
+}
+const btnSecundari = {
+  fontFamily: MONO, fontSize: 'var(--fs-body)',
+  background: 'var(--panel)', color: 'var(--text-main)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)',
+  borderRadius: 'var(--r-ctrl)', padding: '8px 16px', cursor: 'pointer',
+}
+const btnPrimari = {
+  fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600,
+  background: 'var(--accio)', color: 'var(--white)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--accio)',
+  borderRadius: 'var(--r-ctrl)', padding: '8px 16px', cursor: 'pointer',
+}
+const btnTerciari = {
+  fontFamily: MONO, fontSize: 'var(--fs-body)', background: 'none', color: 'var(--text-soft)',
+  border: 'none', borderRadius: 'var(--r-ctrl)', padding: '8px 12px', cursor: 'pointer',
+}
+// §5.7 · deshabilitat: BAIXA EL FONS, no la tinta.
+const deshabilitat = { background: 'var(--bg-page)', borderColor: 'var(--line)', cursor: 'not-allowed' }
+const badgeNeutre = {
+  fontSize: 'var(--fs-caption)', lineHeight: '12px', fontWeight: 600, letterSpacing: '.04em',
+  padding: '3px 10px', borderRadius: 'var(--r-pill)', whiteSpace: 'nowrap',
+  background: 'var(--bg-page)', color: 'var(--text-soft)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+}
+const xip = {
+  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px',
+  borderRadius: 'var(--r-pill)', background: 'var(--sel)', color: 'var(--text-main)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)',
+  fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600,
+}
+const caixaMenu = {
+  position: 'absolute', left: 0, top: 'calc(100% + 6px)', zIndex: 41, background: 'var(--panel)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 'var(--r-ctrl)',
+  boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 4, minWidth: 220,
+}
+const itemMenu = {
+  display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+  background: 'none', border: 'none', padding: '8px 10px', borderRadius: 'var(--r-ctrl)',
+  fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)', cursor: 'pointer',
+}

@@ -955,7 +955,8 @@
     "assign_resource_already": "{{n}} were already assigned.",
     "set_badge": "SET {{n}}/{{total}} · {{codi}}",
     "measures_view_table": "Measurement table",
-    "measures_view_repas": "Fitting review"
+    "measures_view_repas": "Fitting review",
+    "back_title": "Back to Models"
   },
   "model_wizard": {
     "customer": "Customer",
@@ -1130,7 +1131,21 @@
     "delete_error": "Could not delete the model.",
     "col_recurs": "Resource",
     "set_badge": "SET {{n}}/{{total}}",
-    "set_hint": "Piece of a set · {{codi}} {{nom}}"
+    "set_hint": "Piece of a set · {{codi}} {{nom}}",
+    "back_title": "Back to Dashboard",
+    "entity": "models",
+    "view_active": "Models in progress",
+    "view_done": "Finished models",
+    "done_pending": "The «finished model» criterion is not defined yet — pending domain decision.",
+    "col_ref_intern": "Internal ref",
+    "col_ref_client": "Client ref",
+    "col_model": "Model",
+    "col_temp": "Season",
+    "col_entrada_model": "Entry",
+    "col_deadline": "Deadline",
+    "col_estat": "Status",
+    "estat_pendent": "Commercial status: pending the Kanban.",
+    "select_page": "Select the whole page"
   },
   "models_filters": {
     "button": "Filters",
@@ -4787,5 +4802,33 @@
     "item_no_trobat": "Item not found.",
     "files_empty": "This item has no files.",
     "confirm_delete_file": "Delete “{{nom}}”?"
+  },
+  "resum_wizard": {
+    "axes": "Target · Construction · Fit",
+    "base": "base",
+    "change": "Change",
+    "created_by": "Created by",
+    "definition": "Model definition",
+    "information": "Information",
+    "need_base": "A system, a run and a base size inside the run are required.",
+    "needs_sizes": "requires sizes",
+    "no_customer": "No client",
+    "no_deadline": "No deadline",
+    "no_value": "—",
+    "piece_saved": "Garment saved.",
+    "piece_type": "Garment type",
+    "run_and_base": "Base size and run",
+    "save_error": "Could not save.",
+    "save_piece": "Save garment",
+    "save_sizes": "Save sizes",
+    "see_grading": "View grading",
+    "sizes_saved": "Sizes saved.",
+    "step1": "1 · Identification",
+    "step_grading": "Grading",
+    "step_piece": "Garment",
+    "step_sizes": "Sizes",
+    "steps_of": "{{n}} of {{total}} steps",
+    "systems_for": "Size system available for {{target}}",
+    "year_season": "Year · Season"
   }
 }

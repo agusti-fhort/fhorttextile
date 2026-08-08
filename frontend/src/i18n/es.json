@@ -955,7 +955,8 @@
     "assign_resource_already": "{{n}} ya lo estaban.",
     "set_badge": "SET {{n}}/{{total}} · {{codi}}",
     "measures_view_table": "Tabla de medidas",
-    "measures_view_repas": "Repaso de fittings"
+    "measures_view_repas": "Repaso de fittings",
+    "back_title": "Volver a Modelos"
   },
   "model_wizard": {
     "customer": "Cliente",
@@ -1130,7 +1131,21 @@
     "delete_error": "No se ha podido eliminar el modelo.",
     "col_recurs": "Recurso",
     "set_badge": "SET {{n}}/{{total}}",
-    "set_hint": "Pieza de un conjunto · {{codi}} {{nom}}"
+    "set_hint": "Pieza de un conjunto · {{codi}} {{nom}}",
+    "back_title": "Volver al Dashboard",
+    "entity": "modelos",
+    "view_active": "Modelos en curso",
+    "view_done": "Modelos acabados",
+    "done_pending": "El criterio de «modelo acabado» aún no está definido — pendiente de dominio.",
+    "col_ref_intern": "Ref interna",
+    "col_ref_client": "Ref cliente",
+    "col_model": "Modelo",
+    "col_temp": "Temp.",
+    "col_entrada_model": "Entrada",
+    "col_deadline": "Deadline",
+    "col_estat": "Estado",
+    "estat_pendent": "Estado comercial: pendiente del Kanban.",
+    "select_page": "Seleccionar toda la página"
   },
   "models_filters": {
     "button": "Filtros",
@@ -4787,5 +4802,33 @@
     "item_no_trobat": "Item no encontrado.",
     "files_empty": "Este item no tiene archivos.",
     "confirm_delete_file": "¿Borrar «{{nom}}»?"
+  },
+  "resum_wizard": {
+    "axes": "Target · Construcción · Fit",
+    "base": "base",
+    "change": "Cambiar",
+    "created_by": "Creado por",
+    "definition": "Definición del modelo",
+    "information": "Información",
+    "need_base": "Hace falta un sistema, un run y una talla base dentro del run.",
+    "needs_sizes": "requiere tallas",
+    "no_customer": "Sin cliente",
+    "no_deadline": "Sin deadline",
+    "no_value": "—",
+    "piece_saved": "Prenda guardada.",
+    "piece_type": "Tipo de prenda",
+    "run_and_base": "Talla base y run",
+    "save_error": "No se ha podido guardar.",
+    "save_piece": "Guardar prenda",
+    "save_sizes": "Guardar tallas",
+    "see_grading": "Ver graduación",
+    "sizes_saved": "Tallas guardadas.",
+    "step1": "1 · Identificación",
+    "step_grading": "Graduación",
+    "step_piece": "Prenda",
+    "step_sizes": "Tallas",
+    "steps_of": "{{n}} de {{total}} pasos",
+    "systems_for": "Sistema de tallas disponible para {{target}}",
+    "year_season": "Año · Temporada"
   }
 }
