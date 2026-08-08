@@ -4,33 +4,50 @@ import { useTranslation } from 'react-i18next'
 import LanguageSwitcher from './LanguageSwitcher'
 import { UnitToggle } from '../UnitToggle'
 import useAuthStore from '../../store/auth'
+import { navGroups } from './navGroups'
 
-const PATH_TO_KEY = {
-  '/':                          'nav.dashboard',
-  '/models':                    'nav.models',
-  '/models/nou':                'nav.models_new',
-  '/models/nou-des-de-fitxer':  'nav.models_from_file',
-  '/fittings':                  'nav.fittings',
-  '/planificacio':              'nav.planning',
-  '/task-types':                'nav.tasques_catalog',
-  '/temps':                     'nav.temps',
-  '/poms':                      'nav.poms',
-  '/poms/grading':              'nav.grading',
-  '/perfil':                    'nav.perfil',
+// BREADCRUMB DE NAVEGACIÓ (NORMA_LAYOUT §8b): «Tenant › secció › pantalla», el tenant SEMPRE
+// primer «així sempre se sap on s'està navegant».
+//
+// Les rutes surten de `navGroups` (Sidebar), que és l'única llista de navegació de la casa.
+// El PATH_TO_KEY que hi havia aquí cobria 11 rutes de les 58 del router: fora d'aquelles onze
+// el títol requeia a `t('app.title')` i el resultat era «Fhort Textile Tech › Fhort Textile
+// Tech» — que és el que es veu a qualsevol captura d'un model.
+//
+// Guanya el prefix MÉS ESPECÍFIC, la mateixa regla que el Sidebar fa servir per a l'ítem
+// actiu (Sidebar.jsx:~281); si les dues no coincidissin, el molla del breadcrumb i el ressaltat
+// del menú es contradirien a la mateixa pantalla.
+function trobaMolla(pathname) {
+  let millor = null
+  for (const grup of navGroups) {
+    for (const item of grup.items) {
+      const candidats = [item, ...(item.children || [])]
+      for (const c of candidats) {
+        if (!c.to) continue
+        const encaixa = c.to === '/' ? pathname === '/' : (pathname === c.to || pathname.startsWith(c.to + '/'))
+        if (encaixa && (!millor || c.to.length > millor.to.length)) millor = c
+      }
+    }
+  }
+  return millor
 }
 
 export default function Topbar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
-  const key = PATH_TO_KEY[pathname]
-  const title = key ? t(key) : t('app.title')
+  const molla = trobaMolla(pathname)
   // Pas 5B-fix: el botó "Nou model" surt de la barra global; baixarà a la llista de Models (5C).
   const showNewModel = false
 
   // Bloc nom + data + rellotge (esquerra dels icones). Nom des de l'auth store.
   const user = useAuthStore(s => s.user)
   const nom = user?.nom_complet || user?.username || ''
+  // LA CASA, no la persona (P7 · Federació v2): `tenant` és { nom, codi_tenant, tipologia } i
+  // és null mentre /me no ha respost. Mentrestant es diu el nom del producte, que és el que
+  // deia abans: el breadcrumb no pot quedar-se sense primer element ni parpellejar buit.
+  const tenant = useAuthStore(s => s.tenant)
+  const nomTenant = tenant?.nom || t('app.title')
 
   // Rellotge en viu (patró TimerWidget): tick cada segon, mostra HH:MM. Net al desmuntar.
   const [now, setNow] = useState(() => new Date())
@@ -60,11 +77,16 @@ export default function Topbar() {
       top: import.meta.env.VITE_STAGING === 'true' ? '28px' : '0',
       zIndex: 10,
     }}>
-      <div style={{display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: 'var(--gray)'}}>
-        <i className="ti ti-layout-dashboard" style={{fontSize: 14}} />
-        <span>{t('app.title')}</span>
-        <i className="ti ti-chevron-right" style={{fontSize: 14}} />
-        <strong style={{color: 'var(--charcoal)', fontWeight: 500}}>{title}</strong>
+      {/* El tenant obre sempre; la pantalla actual va en pes 600, com als canònics. El chevron
+          només apareix si hi ha segon element (a l'arrel no penja res de ningú). */}
+      <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-soft)'}}>
+        <span style={{fontWeight: 600, color: 'var(--text-main)'}}>{nomTenant}</span>
+        {molla && (
+          <>
+            <span style={{color: 'var(--text-faint)'}}>›</span>
+            <span style={{color: 'var(--text-main)', fontWeight: 600}}>{t(molla.labelKey)}</span>
+          </>
+        )}
       </div>
       <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.8rem'}}>
         <div style={{
