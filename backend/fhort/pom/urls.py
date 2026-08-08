@@ -97,9 +97,13 @@ except Exception:
 # `poms/<id>/us/` xocaria amb el detall de POMMasterViewSet.
 try:
     from .cataleg_views import item_acumulacio_view, pom_us_view
+    # A2 — la mateixa pregunta per a un RUN. Abans del router pel mateix motiu que la de POMs:
+    # `size-systems/<id>/us/` xocaria amb el detall de `SizeSystemViewSet`.
+    from .size_library_views import size_system_us_view
     _cataleg_paths = [
         path('poms/<int:pom_id>/us/', pom_us_view),
         path('garment-type-items/<int:item_id>/acumulacio/', item_acumulacio_view),
+        path('size-systems/<int:size_system_id>/us/', size_system_us_view),
     ]
 except Exception:
     _cataleg_paths = []
