@@ -59,6 +59,18 @@ PANTALLES = [
      'pas 2: les tres files de píndoles d\'eixos, del catàleg de la BD',
      [('tria_client', ''), ('click', 'button:has-text("Spring/Summer")'),
       ('click', 'button:has-text("Següent")')]),
+    # TRAM NETEJA (08/08) — el catàleg de POMs, buidat i re-sembrat amb 12 ZZ-TEST.
+    ('06_cataleg_poms_net', '/poms',
+     'catàleg NET: 12 ZZ-TEST, 3 categories, i els tres estats del «com es mesura»', []),
+    ('07_grading_rules_net', '/poms/grading',
+     'el joc ZZ-TEST amb 5 regles (4 LINEAR + 1 STEP) sobre ALPHA_EU_W', []),
+    # A1 · els tres estats del «com es mesura», un per captura.
+    ('08_a1_estat_dada', '/poms',
+     'estat DADA: POM lligat i el «com es mesura» informat', [('click', 'text=Chest width')]),
+    ('09_a1_estat_sense_informar', '/poms',
+     'estat LLIGAT SENSE INFORMAR (amb paraules, no guions)', [('click', 'text=Armhole straight')]),
+    ('10_a1_estat_no_lligat', '/poms',
+     'estat NO LLIGAT AL CATÀLEG GLOBAL (amb paraules, no guions)', [('click', 'text=Thigh width')]),
 ]
 
 
