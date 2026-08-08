@@ -3632,16 +3632,6 @@
     "picker_incompatible": "No encaixa amb: {{eixos}}",
     "compat_motiu": "Sense perfil de talles per a {{eix}}"
   },
-  "model_phases": {
-    "Nou": "Nou",
-    "Disseny": "Disseny",
-    "Tècnic": "Tècnic",
-    "Prototip": "Prototip",
-    "Mostres": "Mostres",
-    "Preproducció": "Preproducció",
-    "Producció": "Producció",
-    "Tancat": "Tancat"
-  },
   "export_button": {
     "export": "Exportar",
     "generating": "Generant…"

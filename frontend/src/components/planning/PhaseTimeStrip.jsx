@@ -3,9 +3,15 @@ import { timeAnalysis } from '../../api/endpoints'
 import Center from '../ui/Center'
 
 // Tira horitzontal de fases amb TEMPS estadístic (rollup task_type→fase, GET time-analysis/by-phase/).
-// Germà visual de PhaseStepper, però eix DIFERENT: PhaseStepper pinta el cicle de vida del MODEL
-// (fase_actual: Nou…Tancat); aquí l'eix és TaskType.fase (Disseny…Producció), que és el del temps.
-// Per això NO es reusa PhaseStepper (semàntica i conjunt de fases diferents); se'n manté el llenguatge.
+//
+// L'EIX ÉS LA FASE DE TASCA (`TaskType.fase`: Disseny…Producció), que és la que porta temps, i
+// NO el cicle de vida del model (`Model.fase_actual`: Pending…TOP). Són dos vocabularis
+// independents i l'endpoint `/api/v1/vocabulari/` els publica per separat (`fases_tasca` i
+// `fases_model`) justament perquè no es tornin a barrejar.
+//
+// Aquests comentaris citaven un `PhaseStepper` com a germà visual: era CODI MORT —no el muntava
+// ningú— i barrejava tres vocabularis (dos estats del model, cinc fases de tasca i un 'Tècnic'
+// que no existeix enlloc; la fase real és 'Dev. tècnic'). Esborrat a F2.2.
 const MONO = 'IBM Plex Mono, monospace'
 
 // TaskType.fase → slug per a la clau i18n (els valors reals duen punts/espais: 'Dev. tècnic').

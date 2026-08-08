@@ -3632,16 +3632,6 @@
     "picker_incompatible": "Does not match: {{eixos}}",
     "compat_motiu": "No sizing profile for {{eix}}"
   },
-  "model_phases": {
-    "Nou": "New",
-    "Disseny": "Design",
-    "Tècnic": "Technical",
-    "Prototip": "Prototype",
-    "Mostres": "Samples",
-    "Preproducció": "Pre-production",
-    "Producció": "Production",
-    "Tancat": "Closed"
-  },
   "export_button": {
     "export": "Export",
     "generating": "Generating…"
