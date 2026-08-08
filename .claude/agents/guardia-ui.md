@@ -73,6 +73,24 @@ Per tant, ABANS de qualsevol veredicte:
 
 VERIFICACIÓ BIDIRECCIONAL (OBLIGATÒRIA, lliçó de S37 — la direcció maqueta→pantalla NO POT
 trobar invencions per construcció):
+
+⚠️ **LA BIDIRECCIONAL ES MESURA, NO ES LLEGEIX** (esmena Agus 08/08, bloc A). Obrir la maqueta,
+obrir el JSX i comparar-los llegint **no és la bidireccional**: així es va donar per bona una
+selecció `--sel`+daurada allà on la maqueta diu, amb el comentari escrit al costat,
+`.tg.on{background:var(--ok-bg)…} /* esmena Agus: inclòs = verd */`.
+
+- **Corre `ops/qa/qa_bidireccional.py`**: obre la maqueta (`file://`) i la pantalla (bundle + API
+  viva), executa els gestos que calen a CADA banda per arribar al mateix estat, i compara
+  `getComputedStyle` element per element. Si un estat no hi és a la teva llista de casos,
+  AFEGEIX-L'HI: la taula de casos és la bidireccional, i el que no hi és no s'ha verificat.
+- **Cada desviació que quedi s'ha d'EXPLICAR**, no ignorar: o és un defecte de la pantalla, o és
+  un defecte de la MAQUETA (valor fora de l'escala de la casa), o és una ordre d'Agus posterior a
+  la maqueta. Les tres són respostes vàlides; el silenci no.
+- 🔁 **QUAN LA NORMA O UNA MAQUETA CANVIA, ES TORNA A CÓRRER SOBRE TOTES LES PANTALLES JA
+  CONFORMADES, no només sobre la del tram.** Aquest és el segon forat que va deixar passar el
+  verd: la bidireccional es corria un cop per tram, i una esmena posterior no tornava a passar
+  mai per sobre del que ja estava tancat.
+
 - (a) maqueta→pantalla: tot el que la maqueta té, hi és.
 - (b) pantalla→maqueta: TOT el que la pantalla té és a la maqueta, o és estat asíncron amb
   bastiment de la casa, o és «conducta afegida» LLISTADA al report (permisos, confirmacions
