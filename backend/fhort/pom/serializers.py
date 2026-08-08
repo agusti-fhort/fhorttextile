@@ -38,8 +38,25 @@ class POMCategorySerializer(serializers.ModelSerializer):
 
 
 class POMMasterSerializer(serializers.ModelSerializer):
-    pom_global_codi = serializers.CharField(source='pom_global.codi', read_only=True)
-    pom_global_nom = serializers.CharField(source='pom_global.nom_en', read_only=True)
+    # ── LA FORMA DE LA RESPOSTA NO POT VARIAR PER FILA (F2.1a) ────────────────────────────
+    # Els 21 camps que pengen de `pom_global` s'emeten SEMPRE, amb `null` quan el POM no està
+    # lligat al catàleg global. Abans DESAPAREIXIEN de la resposta: quan el `source` travessa un
+    # `None`, `get_attribute()` de DRF llança AttributeError i, com que `read_only` implica
+    # `required=False`, el camp cau per `SkipField` (rest_framework/fields.py:450-456). Amb
+    # `allow_null=True` la mateixa branca retorna `None` i la clau es queda.
+    #
+    # Per què importa i no és cosmètica: `fhort` té 396 POMs, **122 sense `pom_global`**. Un
+    # client no podia distingir «no lligat al catàleg» de «camp que no existeix» —les dues coses
+    # es veien igual: la clau absent—, i és exactament l'error que va fer que el cens de la
+    # Fase 1 conclogués que aquests camps no existien. Ara la resposta distingeix TRES estats:
+    #     null           → no lligat al catàleg global   (122 POMs)
+    #     cadena buida    → lligat, però sense informar   (149 POMs)
+    #     valor           → dada de debò                  (125 POMs)
+    # La UI els ha de dir amb paraules diferents; els guions muts els amagaven tots tres.
+    #
+    # Additiu i read-only: no es treu ni es renombra res, i no s'obre cap camí d'escriptura.
+    pom_global_codi = serializers.CharField(source='pom_global.codi', read_only=True, allow_null=True)
+    pom_global_nom = serializers.CharField(source='pom_global.nom_en', read_only=True, allow_null=True)
 
     # PAS B5 — bloc complet "com mesurar" per a la vista Catalogue (NOMÉS LECTURA). Mateix patró
     # que GarmentPOMMapSerializer però arrelat al propi POMMaster: pom_global flat amb fallback
@@ -49,29 +66,29 @@ class POMMasterSerializer(serializers.ModelSerializer):
     name_cat = serializers.SerializerMethodField()
     abbreviation = serializers.SerializerMethodField()
     categoria_nom = serializers.SerializerMethodField()
-    applies_woven = serializers.BooleanField(source='pom_global.applies_woven', read_only=True)
-    applies_knit = serializers.BooleanField(source='pom_global.applies_knit', read_only=True)
-    applies_swim = serializers.BooleanField(source='pom_global.applies_swim', read_only=True)
-    start_point = serializers.CharField(source='pom_global.start_point', read_only=True)
-    end_point = serializers.CharField(source='pom_global.end_point', read_only=True)
-    reference_point = serializers.CharField(source='pom_global.reference_point', read_only=True)
-    scope = serializers.CharField(source='pom_global.scope', read_only=True)
-    orientation = serializers.CharField(source='pom_global.orientation', read_only=True)
-    state = serializers.CharField(source='pom_global.state', read_only=True)
-    line = serializers.CharField(source='pom_global.line', read_only=True)
-    body_section = serializers.CharField(source='pom_global.body_section', read_only=True)
+    applies_woven = serializers.BooleanField(source='pom_global.applies_woven', read_only=True, allow_null=True)
+    applies_knit = serializers.BooleanField(source='pom_global.applies_knit', read_only=True, allow_null=True)
+    applies_swim = serializers.BooleanField(source='pom_global.applies_swim', read_only=True, allow_null=True)
+    start_point = serializers.CharField(source='pom_global.start_point', read_only=True, allow_null=True)
+    end_point = serializers.CharField(source='pom_global.end_point', read_only=True, allow_null=True)
+    reference_point = serializers.CharField(source='pom_global.reference_point', read_only=True, allow_null=True)
+    scope = serializers.CharField(source='pom_global.scope', read_only=True, allow_null=True)
+    orientation = serializers.CharField(source='pom_global.orientation', read_only=True, allow_null=True)
+    state = serializers.CharField(source='pom_global.state', read_only=True, allow_null=True)
+    line = serializers.CharField(source='pom_global.line', read_only=True, allow_null=True)
+    body_section = serializers.CharField(source='pom_global.body_section', read_only=True, allow_null=True)
     tol_prod_cm = serializers.DecimalField(source='pom_global.tol_prod_cm',
-                                           max_digits=5, decimal_places=2, read_only=True)
+                                           max_digits=5, decimal_places=2, read_only=True, allow_null=True)
     tol_samp_cm = serializers.DecimalField(source='pom_global.tol_samp_cm',
-                                           max_digits=5, decimal_places=2, read_only=True)
-    iso_ref = serializers.CharField(source='pom_global.iso_ref', read_only=True)
-    unitat = serializers.CharField(source='pom_global.unitat', read_only=True)
-    descripcio_en = serializers.CharField(source='pom_global.descripcio_en', read_only=True)
-    descripcio_ca = serializers.CharField(source='pom_global.descripcio_ca', read_only=True)
+                                           max_digits=5, decimal_places=2, read_only=True, allow_null=True)
+    iso_ref = serializers.CharField(source='pom_global.iso_ref', read_only=True, allow_null=True)
+    unitat = serializers.CharField(source='pom_global.unitat', read_only=True, allow_null=True)
+    descripcio_en = serializers.CharField(source='pom_global.descripcio_en', read_only=True, allow_null=True)
+    descripcio_ca = serializers.CharField(source='pom_global.descripcio_ca', read_only=True, allow_null=True)
     body_measure_iso_codi = serializers.CharField(
-        source='pom_global.body_measure_iso.codi_iso', read_only=True)
+        source='pom_global.body_measure_iso.codi_iso', read_only=True, allow_null=True)
     body_measure_iso_nom = serializers.CharField(
-        source='pom_global.body_measure_iso.nom_en', read_only=True)
+        source='pom_global.body_measure_iso.nom_en', read_only=True, allow_null=True)
 
     def get_pom_code(self, obj):
         pg = obj.pom_global
