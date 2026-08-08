@@ -79,12 +79,25 @@ class OrdreDeterministaReglaGradingTest(TenantTestCase):
     # `.first()` sense ordre retorna en un escaneig seqüencial. El test és vermell contra
     # el comportament anterior i verd amb el criteri del codi mostrat.
 
+    # ⚠️ EL CORPUS HA CANVIAT DE FORMA PERQUÈ LA LLEI HA CANVIAT (migració `pom/0075`).
+    #
+    # Aquest corpus reproduïa el cas viu de staging LITERALMENT: dos POMMaster amb el MATEIX
+    # `codi_client` ('BJ'), un amb global i l'altre sense. Aquell estat ja NO ÉS POSSIBLE:
+    # `uniq_pommaster_codi_client_ci` fa `codi_client` únic per tenant i insensible a
+    # majúscules, i era justament aquell duplicat el que la constraint ha vingut a matar.
+    #
+    # 🔑 L'AMBIGÜITAT QUE EL CRITERI ARREGLA NO DESAPAREIX AMB LA CONSTRAINT: només canvia de
+    # porta. El filtre casa per codi global O per `codi_client`, i dos POMs poden respondre al
+    # mateix codi de la URL sense compartir cap dels dos camps — un pel seu `codi_client`, l'altre
+    # pel seu codi global. És el cas que es construeix aquí, i és l'únic que la BD encara permet.
     def _corpus_bj(self):
-        amb_global = self._pom('BJ', codi_global='LOSPOM-514')   # la llista n'emet 'LOSPOM-514'
-        sense_global = self._pom('BJ')                            # la llista n'emet 'BJ'
+        # Casa per `codi_client`, però la llista n'emet el codi GLOBAL: NO mostra 'BJ'.
+        amb_global = self._pom('BJ', codi_global='LOSPOM-514')
+        # Casa pel codi GLOBAL, que és el que la llista mostra: aquest SÍ que mostra 'BJ'.
+        mostra_bj = self._pom('BJ-CLIENT', codi_global='BJ')
         return (
             self._regla(amb_global, '0.20'),
-            self._regla(sense_global, '0.50'),
+            self._regla(mostra_bj, '0.50'),
         )
 
     def test_s2_edita_la_regla_que_la_llista_mostra_amb_aquell_codi(self):
@@ -127,9 +140,14 @@ class OrdreDeterministaReglaGradingTest(TenantTestCase):
 
     def test_empat_pur_edita_sempre_la_regla_mes_antiga(self):
         """Dos POMs que MOSTREN el mateix codi: el criteri semàntic no desempata i mana
-        el `pk` — la regla més antiga. Aquí el que es fixa és que no sigui aleatori."""
-        antiga = self._regla(self._pom('BJ'), '0.20')
-        nova = self._regla(self._pom('BJ'), '0.50')
+        el `pk` — la regla més antiga. Aquí el que es fixa és que no sigui aleatori.
+
+        L'empat ja no es pot construir amb dos `codi_client` iguals (`pom/0075`), i no cal:
+        un POM sense global mostra el seu `codi_client` i un POM amb global mostra el global,
+        de manera que 'BJ' pot ser el codi MOSTRAT de tots dos amb `codi_client` diferents.
+        """
+        antiga = self._regla(self._pom('BJ'), '0.20')                        # mostra 'BJ' (sense global)
+        nova = self._regla(self._pom('BJ-ALTRE', codi_global='BJ'), '0.50')  # mostra 'BJ' (global)
         self.assertLess(antiga.pk, nova.pk)
 
         resp = self._patch(update_grading_rule_view, 'BJ', 3.5)

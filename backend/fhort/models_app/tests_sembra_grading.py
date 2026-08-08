@@ -1381,8 +1381,12 @@ class EsborratResidentsD314Test(_BaseSembraTest):
         """El recompte es pren abans del `save()`: si es prengués després, el wipe ja hauria
         passat i el watchpoint diria «0 regles esborrades» — un rastre que menteix és pitjor
         que cap rastre."""
-        for o in ('MANUAL', 'MANUAL', 'CANONICAL'):
-            self._resident(o, pom=self._pom(f'RX{o}{self._seq}'))
+        # ⚠️ L'ÍNDEX, no `self._seq`: `_seq` no s'incrementa enlloc, de manera que les dues
+        # files MANUAL demanaven el MATEIX `codi_client` i el catàleg les acceptava totes dues.
+        # Amb `pom/0075` això és un `UniqueViolation`, i el que la constraint ha delatat és que
+        # aquesta prova ja creava un POM duplicat sense voler-ho: en vol TRES de diferents.
+        for i, o in enumerate(('MANUAL', 'MANUAL', 'CANONICAL')):
+            self._resident(o, pom=self._pom(f'RX{o}{i}'))
 
         self._step2(self.model, {'grading_rule_set_id': self.rs.id,
                                  'confirmar_esborrat_residents': True})
