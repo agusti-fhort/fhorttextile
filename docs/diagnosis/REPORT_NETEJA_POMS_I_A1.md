@@ -248,3 +248,85 @@ demostrar que els tres es distingeixen de debò.
 
 Cal la teva sobre A2: **construir la pantalla de runs** (tram propi, amb el seu abast) o
 **una altra cosa**. Amb la resposta, A3 i A4 van seguits.
+
+---
+
+# 🚨 ADDENDA (08/08, vespre) — LA SUITE ÉS VERMELLA I ÉS LA CONSTRAINT
+
+**913 tests · `FAILED (errors=11)`** (`fhort.pom` + `fhort.models_app` + `fhort.fitting`, 61 min).
+
+Abans dels canvis d'aquest tram la referència era **671/671 OK**. La diferència de recompte és que
+aquella correguda no incloïa `fhort.pom`.
+
+**Els 11 errors són TOTS el mateix, i és meu:** `duplicate key value violates unique constraint
+"uniq_pommaster_codi_client_ci"`, sempre al **FIXTURE**, mai a l'asserció. Els tests creen a posta
+dos `POMMaster` amb el mateix `codi_client` i la constraint de `pom/0075` ja no ho permet.
+
+⚠️ **La correguda anterior la vaig matar jo:** `timeout 3000` (50 min) sobre tres apps → `EXIT=124`.
+El «failed with exit code 1» que va arribar era el wrapper reportant la mort, no un test vermell.
+Vaig informar-ne com a «corrent» quan ja estava tallada.
+
+## Els 11, en TRES famílies que no es decideixen igual
+
+### 1 · Un ACCIDENT del fixture — 1 test, mecànic
+
+`models_app/tests_sembra_grading.py:1385` · `test_el_rastre_conta_les_d_ABANS_no_les_de_despres`
+
+```python
+for o in ('MANUAL', 'MANUAL', 'CANONICAL'):
+    self._resident(o, pom=self._pom(f'RX{o}{self._seq}'))
+```
+
+`_seq` l'incrementa `_model()` (`:73`), **no** `_pom()`: amb `MANUAL` dues vegades surt
+`RXMANUAL<n>` repetit. El test comprova que el rastre compta **3 residents**; que dos comparteixin
+POM era incidental. **Es fixa en una línia i no perd res.** No ho he tocat: modificar un test
+perquè passi el meu canvi s'ha de veure, no fer-se en silenci.
+
+### 2 · El test defensa PRECISAMENT el duplicat — 3 tests
+
+`pom/test_ordre_regla_grading.py` · docstring literal:
+
+> «Dos POMs que **MOSTREN el mateix codi**: el criteri semàntic no desempata i mana el `pk` — la
+> regla més antiga. Aquí el que es fixa és que **no sigui aleatori**.»
+
+Aquest test existeix perquè dos POMs podien mostrar el mateix codi. **Ja no poden**, i el guard que
+defensa queda sense escenari.
+
+### 3 · El 409 de l'import amb candidats — 7 tests
+
+`models_app/test_import_poms_duplicats.py` (5) i `test_import_poms_resolucions.py` (2). Asserten
+que, **si el catàleg ja té un codi duplicat**, l'import torna 409 amb els candidats en comptes de
+triar-ne un a l'atzar. Mateixa situació que §2: la premissa ha desaparegut.
+
+## El que he verificat sobre si l'escenari encara és assolible
+
+Perquè la decisió no vagi a cegues: **la col·lisió de codi VISIBLE per a un mateix client sembla
+tancada per tots els camins**, no només pel que la constraint bloqueja.
+
+* `POMMaster.pom_code` = `codi_client or pom_global.codi` → amb `codi_client` únic, i el buit també
+  rebutjat (dos `''` xoquen entre ells), aquesta porta queda tancada.
+* `CustomerPOMAlias` ja té `uniq_customer_client_code`: **el mateix client no pot repetir codi**.
+  Dos clients DIFERENTS sí, però l'import és per client.
+
+Si això es confirma, els 10 tests de §2 i §3 defensen un estat inabastable. **Però esborrar 10
+guards és una decisió amb dents** —i la lògica del 409 podria caldre encara per a col·lisions d'una
+altra font— i per això no l'he presa.
+
+## 🛑 La porta del verd, oberta
+
+Els commits `165`→`170` van entrar amb la suite en estat **desconegut** (la vaig matar). Ara se sap:
+**vermella, per la constraint**. Res del que hi ha commitat és incorrecte per si mateix —el `check`,
+les migracions, l'auditoria SQL, el 400 del duplicat i el build/eslint segueixen verds— però
+**la porta dura de backend NO està passada** fins que es decideixi què es fa amb els 11.
+
+**Tres sortides, i és decisió d'Agus:**
+
+1. **Els tests s'adapten** — §1 mecànic; §2 i §3 es re-fixturen per la porta que encara existeix
+   (àlies de client) o es retiren amb acta si l'escenari és inabastable.
+2. **La constraint s'acota** — p.ex. només sobre `actiu=True`, deixant conviure duplicats
+   desactivats. Canvia la llei que vas demanar.
+3. **La constraint es revoca** i el duplicat es continua impedint només als camins d'escriptura
+   (que és on era abans, i és el que va deixar els 12 duplicats).
+
+**Recomanació:** la 1. La constraint fa exactament el que vas ordenar i el catàleg net la vol; el
+que ha quedat obsolet és l'escenari dels tests, no la regla.
