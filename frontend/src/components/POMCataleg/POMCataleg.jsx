@@ -14,83 +14,101 @@ import { poms, pomCategories, customerAliases } from '../../api/endpoints'
 // LOCAL de pàgina amb tokens —no un component compartit nou, que hauria demanat aturar-se— i
 // s'ANOTA al report que un `Tag` compartit és la convergència òbvia de les tres formes.
 
+// PELL NORMA_LAYOUT v1 (A1). L'estructura —mitja i mitja, seccions de la fitxa, peu d'accions—
+// no es toca: ve de la maqueta v1 ja aprovada. El que canvia és el vestit, i tot són tokens:
+//   --bg-card/--bg-muted → --panel (§1: «--white: TOT panell, targeta i capçalera»; les
+//     capçaleres de panell i el peu deixen de ser crema) · --border → --line · --gold-pale →
+//     --sel + filet d'or (§1: el crema ja no marca selecció) · --gray → --text-faint ·
+//     --text-muted → --text-soft · radis 4/5/9 → --r-ctrl i --r-card · píndoles a --r-pill.
+// Mides: capçaleres de secció i de categoria a 10px (§2, mínim absolut) via --fs-label, que és
+// el rol correcte —van en MAJÚSCULES amb tracking—; --fs-caption queda per al text menor.
 const cx = {
   wrap: { maxWidth: 1520, margin: '0 auto' },
-  split: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 13, alignItems: 'start' },
+  split: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' },
   box: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
-    borderRadius: 9, overflow: 'hidden',
+    background: 'var(--panel)', border: '1px solid var(--line)',
+    borderRadius: 'var(--r-card)', overflow: 'hidden',
   },
   bhead: {
-    padding: '10px 14px', background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)',
-    display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+    padding: '12px 16px', background: 'var(--panel)', borderBottom: '1px solid var(--line)',
+    display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
   },
   input: {
-    flex: 1, minWidth: 150, fontFamily: 'inherit', fontSize: 'var(--fs-label)',
-    border: '1px solid var(--border)', borderRadius: 5, padding: '5px 9px',
-    background: 'var(--bg-card)', color: 'var(--text-main)',
+    flex: 1, minWidth: 150, fontFamily: 'inherit', fontSize: 'var(--fs-body)',
+    border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', padding: '8px 12px',
+    background: 'var(--panel)', color: 'var(--text-main)',
   },
   list: { maxHeight: 660, overflowY: 'auto' },
+  // §8e: capçalera de llista = th 10px MAJÚSCULES tracking .08em «a tot arreu (també llistes
+  // <div>)». Deixa de ser daurada: el daurat és marca i selecció, no rètol de columna.
   cat: {
-    padding: '8px 14px 5px', fontSize: 'var(--fs-caption)', letterSpacing: '.06em',
-    textTransform: 'uppercase', color: 'var(--gold)', background: 'var(--bg-muted)',
-    borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 2,
+    padding: '8px 16px 6px', fontSize: 'var(--fs-label)', lineHeight: '12px',
+    letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-soft)',
+    fontWeight: 600, background: 'var(--panel)',
+    borderBottom: '1px solid var(--line-soft)', position: 'sticky', top: 0, zIndex: 2,
   },
   row: {
-    padding: '8px 14px', borderBottom: '1px solid var(--border)', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+    padding: '8px 16px', borderBottom: '1px solid var(--line-soft)', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
     background: 'transparent', border: 'none', borderBottomStyle: 'solid', font: 'inherit',
     color: 'inherit',
   },
-  rowOn: { background: 'var(--gold-pale)', boxShadow: 'inset 3px 0 0 var(--gold)' },
+  rowOn: { background: 'var(--sel)', boxShadow: 'inset 3px 0 0 var(--gold)' },
   code: { fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gold)', width: 78, flex: 'none' },
   nm: { fontSize: 'var(--fs-body)', flex: 1, lineHeight: 1.35 },
-  loc: { color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 'var(--fs-label)', marginLeft: 7 },
+  loc: { color: 'var(--text-soft)', fontStyle: 'italic', fontSize: 'var(--fs-label)', marginLeft: 8 },
   ab: {
-    fontSize: 'var(--fs-caption)', letterSpacing: '.04em', border: '1px solid var(--border)',
-    borderRadius: 4, padding: '2px 6px', color: 'var(--text-muted)',
-    background: 'var(--bg-card)', flex: 'none',
+    fontSize: 'var(--fs-label)', letterSpacing: '.04em', border: '1px solid var(--line)',
+    borderRadius: 'var(--r-pill)', padding: '2px 8px', color: 'var(--text-soft)',
+    background: 'var(--panel)', flex: 'none',
   },
-  sec: { marginTop: 14 },
+  sec: { marginTop: 16 },
   secH: {
-    fontSize: 'var(--fs-caption)', letterSpacing: '.06em', textTransform: 'uppercase',
-    color: 'var(--gold)', paddingBottom: 5, borderBottom: '1px solid var(--border)',
-    marginBottom: 9,
+    fontSize: 'var(--fs-label)', lineHeight: '12px', letterSpacing: '.08em',
+    textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 600, paddingBottom: 6,
+    borderBottom: '1px solid var(--line-soft)', marginBottom: 10,
   },
   kv: {
-    display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8, padding: '3px 0',
+    display: 'grid', gridTemplateColumns: '132px 1fr', gap: 8, padding: '4px 0',
     fontSize: 'var(--fs-body)', alignItems: 'baseline',
   },
   k: {
-    fontSize: 'var(--fs-caption)', letterSpacing: '.05em', textTransform: 'uppercase',
-    color: 'var(--text-muted)',
+    fontSize: 'var(--fs-label)', letterSpacing: '.05em', textTransform: 'uppercase',
+    color: 'var(--text-soft)',
   },
-  buit: { color: 'var(--gray)', fontStyle: 'italic' },
+  buit: { color: 'var(--text-faint)', fontStyle: 'italic' },
   tag: {
-    fontSize: 'var(--fs-label)', border: '1px solid var(--border)', borderRadius: 5,
-    padding: '2px 8px', background: 'var(--bg-card)',
+    fontSize: 'var(--fs-label)', border: '1px solid var(--line)', borderRadius: 'var(--r-pill)',
+    padding: '3px 10px', background: 'var(--panel)',
   },
-  us: { display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 'var(--fs-body)' },
+  us: { display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 'var(--fs-body)' },
   usN: { fontSize: 'var(--fs-h3)', color: 'var(--gold)', fontWeight: 600 },
   usL: {
-    display: 'block', fontSize: 'var(--fs-caption)', letterSpacing: '.05em',
-    textTransform: 'uppercase', color: 'var(--text-muted)',
+    display: 'block', fontSize: 'var(--fs-label)', letterSpacing: '.05em',
+    textTransform: 'uppercase', color: 'var(--text-soft)',
   },
   ffoot: {
-    padding: '11px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg-muted)',
+    padding: '12px 16px', borderTop: '1px solid var(--line)', background: 'var(--panel)',
     display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
   },
-  note: { fontSize: 'var(--fs-label)', color: 'var(--text-muted)', flex: 1, lineHeight: 1.5 },
+  note: { fontSize: 'var(--fs-label)', color: 'var(--text-soft)', flex: 1, lineHeight: 1.5 },
+  // §1 (esmena Agus 08/08): TOT badge d'estat és fons suau + tinta del color + VORA FINA DEL
+  // MATEIX COLOR, sense excepció. Abans n'hi havia que anaven sense filet.
   badge: {
-    fontSize: 'var(--fs-caption)', letterSpacing: '.04em', padding: '2px 8px', borderRadius: 999,
+    fontSize: 'var(--fs-label)', lineHeight: '12px', fontWeight: 600, letterSpacing: '.04em',
+    padding: '3px 10px', borderRadius: 'var(--r-pill)',
   },
 }
 
+// §5 · jerarquia d'acció. Aquesta pantalla és de CONSULTA i, ara mateix, no té cap acció
+// primària: «Desactivar» és terciària (reversible, de servei) i «Esborrar» és destructiva amb
+// vora. Per això no hi ha cap blau — §8c ho preveu: «pantalles de CONSULTA poden tenir ZERO
+// accions primàries». El daurat ple que feia de `pri` desapareix: el daurat ja no és acció.
 const btn = (variant) => ({
-  border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-main)',
-  borderRadius: 6, padding: '6px 12px', fontFamily: 'inherit', fontSize: 'var(--fs-label)',
-  cursor: 'pointer', whiteSpace: 'nowrap',
-  ...(variant === 'pri' ? { background: 'var(--gold)', borderColor: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600 } : null),
+  border: '1px solid var(--gold-border)', background: 'var(--panel)', color: 'var(--text-main)',
+  borderRadius: 'var(--r-ctrl)', padding: '8px 16px', fontFamily: 'inherit',
+  fontSize: 'var(--fs-body)', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
+  ...(variant === 'ter' ? { borderColor: 'transparent', background: 'none', color: 'var(--text-soft)' } : null),
   ...(variant === 'dang' ? { color: 'var(--err)', borderColor: 'var(--err)' } : null),
 })
 
@@ -194,17 +212,28 @@ export default function POMCataleg() {
 
   return (
     <div style={cx.wrap}>
-      <h1 style={{ fontSize: 'var(--fs-h2)', fontWeight: 600, margin: '0 0 3px' }}>
-        {t('poms.cat.title')}
-      </h1>
-      <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)', margin: '0 0 14px' }}>
-        {t('poms.cat.subtitle')}
-      </p>
+      {/* §8b.3 · IDENTITAT sobre el fons, sense contenidor: comptador + etiqueta + descripció.
+          El comptador és SELECCIÓ, no KPI (§8e): el primer valor segueix el filtre de cerca i
+          el total va menor i suau. Substitueix el títol h2 que hi havia: el nom de l'entitat
+          deixa de ser títol i passa a ser element al costat del número. */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '16px 0 12px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 600, color: 'var(--text-main)' }}>
+          {filtrats.length}
+          <small style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, color: 'var(--text-soft)' }}>
+            /{llista.length}</small>
+        </span>
+        <span style={{ fontSize: 'var(--fs-label)', letterSpacing: '.08em', textTransform: 'uppercase',
+                       color: 'var(--text-soft)', fontWeight: 600 }}>{t('poms.cat.title')}</span>
+        <span style={{ flexBasis: '100%', fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginTop: 2 }}>
+          {t('poms.cat.subtitle')}
+        </span>
+      </div>
 
       {error && (
         <div role="alert" style={{
-          marginBottom: 10, padding: '8px 12px', borderRadius: 6,
-          border: '1px solid var(--err)', color: 'var(--err)', fontSize: 'var(--fs-label)',
+          marginBottom: 12, padding: '8px 12px', borderRadius: 'var(--r-ctrl)',
+          border: '1px solid var(--err)', background: 'var(--err-bg)', color: 'var(--err)',
+          fontSize: 'var(--fs-body)',
         }}>{error}</div>
       )}
 
@@ -214,21 +243,21 @@ export default function POMCataleg() {
           <div style={cx.bhead}>
             <input style={cx.input} value={q} onChange={e => setQ(e.target.value)}
                    placeholder={t('poms.cat.search_ph')} aria-label={t('poms.cat.search_ph')} />
-            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>
               {t('poms.cat.count', { n: filtrats.length })}
             </span>
           </div>
           <div style={cx.list}>
-            {carregant && <div style={{ padding: 40, textAlign: 'center', color: 'var(--gray)' }}>
+            {carregant && <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-faint)', fontStyle: 'italic' }}>
               {t('poms.loading_catalogue')}</div>}
             {!carregant && !filtrats.length && (
-              <div style={{ padding: 40, textAlign: 'center', color: 'var(--gray)' }}>
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-faint)', fontStyle: 'italic' }}>
                 {t('poms.no_match')}</div>
             )}
             {grups.map(g => (
               <div key={g.cat || '—'}>
                 <div style={cx.cat}>{nomCat(g.cat)}
-                  <span style={{ color: 'var(--gray)', letterSpacing: 0 }}> · {g.items.length}</span>
+                  <span style={{ color: 'var(--text-faint)', letterSpacing: 0 }}> · {g.items.length}</span>
                 </div>
                 {g.items.map(p => (
                   <button key={p.id} type="button"
@@ -256,35 +285,38 @@ export default function POMCataleg() {
         {/* ── FITXA ── */}
         <div style={cx.box}>
           {!sel && (
-            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--gray)' }}>
+            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-faint)', fontStyle: 'italic' }}>
               {t('poms.cat.pick_one')}
             </div>
           )}
           {sel && (
             <>
-              <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', letterSpacing: '.04em' }}>
+              <div style={{ padding: '16px', borderBottom: '1px solid var(--line)' }}>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', letterSpacing: '.04em' }}>
                   {sel.pom_code || sel.codi_client} · {nomCat(sel.categoria_nom || sel.categoria)}
                 </div>
-                <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginTop: 3 }}>
+                <div style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600, marginTop: 4 }}>
                   {sel.name_en || sel.nom_client}</div>
-                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2 }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontStyle: 'italic', marginTop: 2 }}>
                   {sel.name_cat || sel.nom_client}</div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                   <span style={{
                     ...cx.badge,
-                    background: sel.actiu ? 'var(--ok-bg)' : 'var(--bg-muted)',
-                    color: sel.actiu ? 'var(--ok)' : 'var(--text-muted)',
+                    background: sel.actiu ? 'var(--ok-bg)' : 'var(--bg-page)',
+                    color: sel.actiu ? 'var(--ok)' : 'var(--text-soft)',
+                    border: `1px solid ${sel.actiu ? 'var(--ok)' : 'var(--line)'}`,
                   }}>{sel.actiu ? t('poms.cat.badge_active') : t('poms.cat.badge_off')}</span>
                   {us && (
                     <span style={{
                       ...cx.badge,
-                      background: us.de_sistema ? 'var(--gold-pale)' : 'var(--bg-muted)',
-                      color: us.de_sistema ? 'var(--gold)' : 'var(--text-muted)',
+                      background: us.de_sistema ? 'var(--sel)' : 'var(--bg-page)',
+                      color: 'var(--text-main)',
+                      border: `1px solid ${us.de_sistema ? 'var(--gold-border)' : 'var(--line)'}`,
                     }}>{us.de_sistema ? t('poms.cat.badge_system') : t('poms.cat.badge_tenant')}</span>
                   )}
                   {sel.pendent_revisio && (
-                    <span style={{ ...cx.badge, background: 'var(--warn-bg)', color: 'var(--warn)' }}>
+                    <span style={{ ...cx.badge, background: 'var(--warn-state-bg)', color: 'var(--warn-ink)',
+                      border: '1px solid var(--warn-state)' }}>
                       {t('poms.cat.badge_review')}</span>
                   )}
                 </div>
@@ -338,11 +370,11 @@ export default function POMCataleg() {
                   {alies.map(a => (
                     <div key={a.id} style={{
                       display: 'grid', gridTemplateColumns: '96px 1fr', gap: 8, padding: '4px 0',
-                      fontSize: 'var(--fs-body)', borderBottom: '1px solid var(--border)',
+                      fontSize: 'var(--fs-body)', borderBottom: '1px solid var(--line-soft)',
                     }}>
                       <span style={{ ...cx.k, alignSelf: 'center' }}>{a.customer_codi || a.customer}</span>
                       <span><span style={{ fontWeight: 600, color: 'var(--gold)' }}>{a.client_code}</span>{' '}
-                        <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>
+                        <span style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-label)' }}>
                           {a.client_description || ''}</span></span>
                     </div>
                   ))}
@@ -364,7 +396,7 @@ export default function POMCataleg() {
                       <span style={cx.usL}>{t('poms.cat.u_rules')}</span></span>
                   </div>
                   {!!us?.cascada?.length && (
-                    <p style={{ ...cx.note, marginTop: 8, color: 'var(--warn)' }}>
+                    <p style={{ ...cx.note, marginTop: 8, color: 'var(--warn-ink)' }}>
                       {t('poms.cat.cascade_warn', {
                         n: us.cascada.reduce((a, f) => a + f.n, 0),
                       })}
@@ -374,7 +406,7 @@ export default function POMCataleg() {
               </div>
 
               <div style={cx.ffoot}>
-                <button type="button" style={btn()} onClick={desactiva} disabled={ocupat}>
+                <button type="button" style={btn('ter')} onClick={desactiva} disabled={ocupat}>
                   {sel.actiu ? t('poms.cat.act_deactivate') : t('poms.cat.act_reactivate')}
                 </button>
                 <button type="button" style={btn('dang')} onClick={esborra}
