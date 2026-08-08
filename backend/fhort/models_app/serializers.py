@@ -165,6 +165,13 @@ class ModelListSerializer(serializers.ModelSerializer):
             'fase_actual',
             'responsable',
             'prioritat',
+            # A5 · llista canònica (NORMA_LAYOUT §8e) — la columna «Entrada» de la graella és la
+            # DATA D'ENTRADA DEL MODEL (`data_entrada`, auto_now_add), no `entrada_prod`, que és
+            # la petició de producció de la fase actual i té el seu propi nom («Entrada prod.»).
+            # Hi faltava: la llista només podia pintar `created_at`, i ORDENAR per `data_entrada`
+            # —que sí que és a `ordering_fields` des de sempre— hauria ordenat per un camp que la
+            # pantalla no ensenya.
+            'data_entrada',
             'data_objectiu',
             # M1 — predicció del planificador (min start / max end de les tasques; §17). Read-only.
             'predicted_start',

@@ -137,7 +137,16 @@ class ModelViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class = ModelFilter
     search_fields = ['codi_intern', 'codi_client', 'nom_prenda']
-    ordering_fields = ['prioritat', 'data_objectiu', 'data_entrada']
+    # A5 · llista canònica (NORMA_LAYOUT §8e): «capçaleres th ORDENABLES amb icona d'ordenació».
+    # Una capçalera que ofereix ordenar i el backend rebutja (DRF ignora en silenci el camp que
+    # no és a la llista) és pitjor que no oferir-ho. S'hi afegeixen NOMÉS els camps que la
+    # graella pinta —tots columnes reals de `Model`, cap anotació ni cap camp calculat—; la
+    # columna «Estat» no hi entra perquè avui no té dada (Kanban comercial pendent).
+    ordering_fields = [
+        'prioritat', 'data_objectiu', 'data_entrada',
+        'codi_intern', 'codi_client', 'nom_prenda', 'collection', 'temporada', 'any',
+        'fase_actual',
+    ]
     ordering = ['-prioritat']
     queryset = Model.objects.all()
 
