@@ -87,6 +87,15 @@
      una taula de mesures; ve del §3 de la norma escrita. */
   --col-talla: 60px;
 
+  /* Radis · §3: control 6 · targeta 12 · badge/chip 999 («píndola SEMPRE»). Els tres valors
+     ja són els de la casa; el que hi faltava era el NOM, i sense nom cada pantalla els
+     tornava a escriure a mà. Els literals que hi ha escampats pel producte NO es migren en
+     massa: cada pantalla els canvia quan passa la seva conformitat, com --border i
+     --gold-pale. Avui l'únic consumidor és <PageMenu> (--r-ctrl). */
+  --r-ctrl: 6px;
+  --r-card: 12px;
+  --r-pill: 999px;
+
   /* Aliases legacy (per components existents) */
   --charcoal:   #1d1d1b;
   --gray:       #868685;

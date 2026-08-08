@@ -25,10 +25,6 @@ import { useNavigate } from 'react-router-dom'
 
 const MONO = 'IBM Plex Mono, monospace'
 
-// Radi de control: 6px. La norma (§3) el bateja `--r-ctrl`, però aquest token NO és a la
-// llista tancada de T0.1, així que aquí va el literal, igual que a la resta de la casa.
-const R_CTRL = 6
-
 function Pindola({ label, active, onClick, title }) {
   const [hover, setHover] = useState(false)
   return (
@@ -42,7 +38,7 @@ function Pindola({ label, active, onClick, title }) {
       style={{
         border: '1px solid transparent',
         borderColor: active ? 'var(--gold-border)' : 'transparent',
-        borderRadius: 999,
+        borderRadius: 'var(--r-pill)',
         background: active || hover ? 'var(--sel)' : 'none',
         padding: '6px 14px',
         fontFamily: MONO,
@@ -78,7 +74,7 @@ function Enrere({ to, title }) {
         height: 32,
         flex: 'none',
         border: '1px solid var(--line)',
-        borderRadius: R_CTRL,
+        borderRadius: 'var(--r-ctrl)',
         background: hover ? 'var(--sel)' : 'var(--panel)',
         display: 'inline-flex',
         alignItems: 'center',
