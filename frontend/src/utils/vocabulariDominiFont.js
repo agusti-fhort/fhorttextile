@@ -86,3 +86,67 @@ export function useEnumeracio(clau) {
   const { voc, error, reintenta } = useEstatVocabulari()
   return { codis: codisDe(voc, clau), error, reintenta }
 }
+
+/**
+ * Els ELEMENTS sencers d'una enumeració (`{codi, etiqueta, …marques}`), o `null`.
+ *
+ * `codisDe` en dona només els codis i n'hi ha prou per omplir un select; això cal quan
+ * l'element porta MARQUES —`autorable` als règims, `segellat` als estats de sessió— que són
+ * propietats del membre i no es poden deduir del codi. Mateix contracte que `codisDe`: `null`
+ * i no `[]` mentre no se sap.
+ */
+export function elementsDe(voc, clau) {
+  const llista = voc?.[clau]
+  return Array.isArray(llista) ? llista : null
+}
+
+/** Hook de conveniència: els elements sencers d'UNA enumeració + si ha fallat. */
+export function useElements(clau) {
+  const { voc, error, reintenta } = useEstatVocabulari()
+  return { elements: elementsDe(voc, clau), error, reintenta }
+}
+
+// ── L'ORDRE ÉS DADA: moure's per una enumeració ordenada ─────────────────────────────────────
+//
+// L'endpoint emet cada llista en l'ORDRE en què el model la declara i això és part de la dada:
+// les fases d'un model van en seqüència. «La fase següent» és, doncs, una pregunta que es
+// respon amb la llista, i fins avui es responia amb DUES còpies del mateix helper
+// (`ActionsMenu.jsx:17-18` i `DashboardGovPanel.jsx:16`), cadascuna tancada sobre la seva
+// pròpia constant. Són genèrics a posta: qualsevol enumeració ordenada els pot fer servir.
+
+/** El codi següent d'una enumeració ordenada, o `null` si és l'últim, no hi és, o no se sap. */
+export function codiSeguent(codis, codi) {
+  if (!Array.isArray(codis)) return null
+  const i = codis.indexOf(codi)
+  return i >= 0 && i < codis.length - 1 ? codis[i + 1] : null
+}
+
+/** El codi anterior d'una enumeració ordenada, o `null` si és el primer, no hi és, o no se sap. */
+export function codiAnterior(codis, codi) {
+  if (!Array.isArray(codis)) return null
+  const i = codis.indexOf(codi)
+  return i > 0 ? codis[i - 1] : null
+}
+
+/**
+ * ¿Aquest estat de sessió de fitting SEGELLA la sessió? — predicat únic.
+ *
+ * Viu aquí i no a cada pantalla perquè la resposta és una MARCA del vocabulari (`segellat`), que
+ * el backend calcula amb el mateix `SEALED_SESSION_ESTATS` que fa complir a l'escriptura
+ * (`fitting/services.py`). En tenien una còpia `FittingDetail` i una altra
+ * `FittingConvocatoriaSheet`, i totes dues es deien «mirall del backend» — que és el nom que
+ * rep un duplicat quan encara no ha divergit.
+ *
+ * ⚠️ **EL DUBTE VA CAP A SEGELLAT.** Sense vocabulari, o amb un estat que el vocabulari no
+ * conegui, torna `true`. «No sé si es pot escriure» no pot caure del costat d'obrir la sessió
+ * per escriure-hi: el cost d'equivocar-se cap a lectura és una pantalla que no deixa editar; el
+ * d'equivocar-se cap a escriptura és una sessió tancada que es toca.
+ */
+export function useSessioSegellada() {
+  const { elements } = useElements('estats_sessio_fitting')
+  return useCallback((estat) => {
+    if (!Array.isArray(elements)) return true
+    const e = elements.find(x => x.codi === estat)
+    return e ? !!e.segellat : true
+  }, [elements])
+}
