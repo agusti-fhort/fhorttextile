@@ -19,10 +19,17 @@ class TargetSerializer(serializers.Serializer):
 
 
 class ConstructionTypeSerializer(serializers.Serializer):
+    # `nom_es` s'exposa (coda F2.2, 08/08) EXACTAMENT pel mateix motiu que `FitTypeSerializer` el
+    # va exposar a F2.1b, i és l'últim dels quatre eixos que li faltava: mentre l'endpoint no el
+    # servia, una UI castellana de construccions s'havia d'inventar «Tejido plano» al client, i
+    # de fet se l'inventava —`components/grading/gradingAxes.js:CONSTRUCTIONS`—. Els altres dos
+    # vocabularis de la família (Target, ConstructionType) ja el servien. Les quatre files el
+    # tenen informat (verificat a `fhort`: 0 sense `nom_cat`/`nom_es`).
     id = serializers.IntegerField()
     codi = serializers.CharField()
     nom_en = serializers.CharField()
     nom_cat = serializers.CharField()
+    nom_es = serializers.CharField()
     mesures_en_mitja = serializers.BooleanField()
     tolerancia_critica_cm = serializers.DecimalField(max_digits=4, decimal_places=2)
     display_order = serializers.IntegerField()
