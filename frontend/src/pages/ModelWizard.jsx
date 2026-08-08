@@ -14,6 +14,7 @@ import useConfirmacioRuleset from '../components/model/useConfirmacioRuleset'
 import useAuthStore from '../store/auth'
 import { targetDerivable } from '../utils/derivaTarget'
 import { ordenaPerProximitat } from '../utils/proximitatRun'
+import { labelsOf, runCapDins, ordenaPelSistema } from '../utils/talles'
 import { models, sizeSystems, gradingRuleSets, garmentGroups, garmentTypes, garmentTypeItems, itemBaseMeasurements, sizingProfiles, customers } from '../api/endpoints'
 
 // Wizard d'ESQUELET unificat. Un sol flux de creació (4 blocs) + mode edició.
@@ -28,20 +29,9 @@ const YEARS = [currentYear, currentYear + 1, currentYear + 2, currentYear + 3]
 // Només l'identificador (codi); l'etiqueta visible es resol amb t('model_wizard.<tipus>_<codi>').
 const SEASONS = ['SS', 'FW', 'CO', 'SP']
 
-// Etiquetes de talla d'un SizeSystem (les tres formes que retorna l'API, en ordre de preferència).
-const labelsOf = (sys) => (sys?.talles || []).map(s => s.etiqueta || s.size_label || s.label).filter(Boolean)
-// Un run és VÀLID dins un sistema si totes les seves talles hi són (subconjunt legítim, forma normal
-// i massiva al tenant: 218 models — DIAGNOSI_MODEL_174 §B0.4).
-const runCapDins = (run, labels) => run.length > 0 && run.every(l => labels.includes(l))
-// S24b — l'ORDRE el mana el SizeSystem, no l'ordre de clic. `labels` ve ja ordenat per
-// `SizeDefinition.ordre` (el prefetch de l'API respecta el Meta.ordering), i per tant ordenar
-// per la seva posició és ordenar pel sistema. Les talles que no hi són (no hauria de passar-ne
-// cap: el guard `runCapDins` ho comprova) queden al final en comptes de desaparèixer.
-const ordenaPelSistema = (run, labels) =>
-  [...run].sort((a, b) => {
-    const ia = labels.indexOf(a), ib = labels.indexOf(b)
-    return (ia < 0 ? Infinity : ia) - (ib < 0 ? Infinity : ib)
-  })
+// `labelsOf`, `runCapDins` i `ordenaPelSistema` han passat a `utils/talles.js`: el Resum amb el
+// wizard partit (§8f) és la GERMANA DE PRESENTACIÓ d'aquest pas 3 i ha de decidir EXACTAMENT
+// igual què és un run vàlid i en quin ordre va. Moviment pur; res del wizard canvia.
 // Els tres eixos venen del CATÀLEG de la BD (`useEixos`), no de cap llista al client: n'usem el
 // `codi` (l'etiqueta la resol `t('model_wizard.*')`). Sense catàleg les tres files de píndoles es
 // queden només amb «Totes» —que segueix filtrant bé— en comptes d'oferir eixos inventats.

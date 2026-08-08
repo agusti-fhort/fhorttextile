@@ -13,12 +13,17 @@ import PropagatedEditor from './PropagatedEditor'
 import GraduacioContenidor from '../components/grading/GraduacioContenidor'
 import GraduacioSuperficie from '../components/grading/GraduacioSuperficie'
 import Modal from '../components/ui/Modal'
-import RuleSetCard from '../components/model/RuleSetCard'
+import PageMenu from '../components/ui/PageMenu'
+// `RuleSetCard` ja no es munta aquí: la graduació del model és el SUBESPAI 4 del Resum (§8f).
+// El fitxer no s'esborra —queda a `components/model/RuleSetCard.jsx`— perquè el dia que Agus
+// decideixi on van la viabilitat i el teixit, torna a ser una línia.
+import ResumWizardPartit from '../components/model/ResumWizardPartit'
 import { MaduresaBadge, EncarrecDelClient } from '../components/model/FederacioBadge'
 import { models, watchpoints, modelTasks, fittingSessions, modelFitxers } from '../api/endpoints'
 import { authFetch } from '../api/authFetch'
 import { missatgeError } from '../api/errorsAuth'
 import useAuthStore from '../store/auth'
+import useMolla from '../store/molla'
 import ObrirTascaDialog from '../components/model/ObrirTascaDialog'
 import ModalAcabarTasca from '../components/model/ModalAcabarTasca'
 import BadgeLliurable from '../components/model/BadgeLliurable'
@@ -178,7 +183,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const [activeTab, setActiveTab] = useState(TABS.includes(tabParam) ? tabParam : defaultTab)
   const [taulaRows, setTaulaRows] = useState([])
   const [modelTaskRows, setModelTaskRows] = useState([])
-  const [sizesAmbDades, setSizesAmbDades] = useState(null)
+  // `sizesAmbDades` l'omplia la graella del Resum vell (`_TabSummary`, no muntat des d'A7). El
+  // SETTER es conserva perquè `reloadTaula` l'escriu i el tab Mesures en depèn del cicle.
+  const [, setSizesAmbDades] = useState(null)
   const [, setDeltes] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -904,6 +911,23 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       .finally(() => setOpeningTask(false))
   }, [dialeg, netejaEdicio, obreDeDebo, obreFitxa, id, reloadTasks, reloadModel, t])
 
+  // §8b · EL MOLLA DE PA PASSA A QUATRE SEGMENTS AQUÍ (ordre d'Agus, bloc B):
+  // **Tenant › Models › {NOM DEL MODEL} › {Secció}**. La top bar dedueix els dos primers de la
+  // ruta, però `/models/1319` i `/models/1319?tab=Mesures` són la MATEIXA ruta per al router:
+  // ni el nom del model ni la secció es poden deduir d'allà. Els publica qui els sap.
+  // Qui la publica, la neteja: en sortir de la fitxa la cua es buida (si no, el nom d'aquest
+  // model es quedaria escrit a la barra de la pantalla següent).
+  const setCua = useMolla(s => s.setCua)
+  const netejaCua = useMolla(s => s.netejaCua)
+  useEffect(() => {
+    if (!model) return
+    setCua([
+      { text: model.nom_prenda || model.codi_intern, to: `/models/${model.id}` },
+      { text: t(TAB_LABELS[activeTab] || activeTab, activeTab) },
+    ])
+  }, [model, activeTab, t, setCua])
+  useEffect(() => () => netejaCua(), [netejaCua])
+
   // ——— A partir d'aquí, RETORNS. Cap hook per sota. ———
   if (loading) {
     return (
@@ -933,35 +957,33 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         onAccio={accioDialeg}
         onCancel={() => setDialeg(null)}
       />
+      {/* §8b · MENÚ DE PANTALLA — la barra blanca de costat a costat, amb ← primer, les NOU
+          seccions del model com a píndoles i les portes transversals a l'extrem dret. És
+          EXACTAMENT la mateixa barra de tot el producte: el que hi havia era una banda de
+          pestanyes amb l'activa en DAURAT PLE, i el daurat ple és marca, no navegació (§8b:
+          «ni blau ni daurat ple: navegar no és ni acció ni marca»).
+          Cap destí canvia, cap pestanya se'n va, cap lògica es toca: `triaTab` és el mateix
+          gest de sempre. El marge negatiu la treu dels 24px del `<main>`. */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu
+          backTo="/models"
+          backTitle={t('model_sheet.back_title')}
+          items={TABS.map(tab => ({
+            key: tab, label: t(TAB_LABELS[tab]),
+            active: activeTab === tab, onClick: () => triaTab(tab),
+          }))}
+          rightChildren={
+            /* B — Watchpoints: PORTA transversal (§8b), en secundari petit i a la dreta.
+               Obre el drawer flotant (escriptura); visible des de qualsevol tab. */
+            <WatchpointTrigger modelId={model.id} onClosed={() => setWpVersion(v => v + 1)} />
+          }
+        />
+      </div>
+
       <ModelSheetHeader model={model} onDelete={handleDelete} onFeedback={setFeedback} onChanged={reloadModel} />
 
       <div style={{ padding: '0 1.5rem' }}>
         <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
-      </div>
-
-      <div style={{
-        display: 'flex', gap: 8, padding: '0.75rem 1.5rem',
-        borderBottom: '0.5px solid var(--border)',
-        background: 'var(--bg-main)',
-      }}>
-        {TABS.map(tab => (
-          <button key={tab} type="button"
-            onClick={() => triaTab(tab)}
-            style={{
-              padding: '6px 16px', borderRadius: 6, border: 'none',
-              background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
-              color: activeTab === tab ? 'var(--text-main)' : 'var(--text-muted)',
-              cursor: 'pointer', fontSize: 'var(--fs-body)',
-              fontWeight: activeTab === tab ? 500 : 400,
-            }}>
-            {t(TAB_LABELS[tab])}
-          </button>
-        ))}
-        {/* B — Watchpoints: pastilla destacada ancorada a la dreta de la banda de pestanyes.
-            Obre el drawer flotant (escriptura); visible des de qualsevol tab. */}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-          <WatchpointTrigger modelId={model.id} onClosed={() => setWpVersion(v => v + 1)} />
-        </div>
       </div>
 
       {error && (
@@ -990,23 +1012,16 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           />
         )}
         {activeTab === 'Resum' && (
-          <div>
-            {/* P4: edició del MODEL aquí (a Resum), no a la capçalera global. */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-              <button type="button" onClick={() => navigate(`/models/${id}/editar`)}
-                style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
-                <i className="ti ti-edit" style={{ fontSize: 14 }} aria-hidden="true" /> {t('app.edit')}
-              </button>
-            </div>
-            <TabSummary
-              model={model}
-              modelId={parseInt(id)}
-              sizesAmbDades={sizesAmbDades}
-              onUpdated={reloadModel}
-            />
-            {/* WIZARD-COMPLET C.3 — ruleset en LECTURA enriquida; el canvi viu al wizard (pas 4). */}
-            {model && <RuleSetCard model={model} />}
-          </div>
+          /* A7 · §8f — EL RESUM ÉS EL WIZARD PARTIT. Abans era una graella de camps en lectura
+             amb un botó «Editar» que SORTIA de la fitxa cap al wizard: per canviar una talla
+             base calies fer tot el recorregut i tornar. Ara la identificació s'edita al mateix
+             lloc on es llegeix i els passos 2-3-4 són subespais amb el seu propi desar.
+             🚩 `TabSummary` i `RuleSetCard` deixen d'estar muntats AQUÍ. **No s'esborren.** El
+             que la nova superfície encara no cobreix —el panell de VIABILITAT i el bloc de
+             TEIXIT— queda anotat al report: on han d'anar és decisió de domini, i deixar-los
+             aquí duplicaria l'editor d'identitat que la §8f acaba de posar a la columna
+             esquerra. El teixit té pantalla pròpia (`/models/:id/teixit`). */
+          <ResumWizardPartit model={model} onUpdated={reloadModel} />
         )}
         {activeTab === 'Mesures' && (
           /* P0.5d — LA GRADUACIÓ, PRIMER DE TOT. És una superfície pròpia i pren el tab sencer,
@@ -1496,6 +1511,15 @@ function TechSheetTab({ modelId, navigate, onModificar }) {
   )
 }
 
+// §8b·3 · IDENTITAT — SOBRE EL FONS DE PÀGINA, SENSE CONTENIDOR (és informativa, no un panell).
+// Codi en caption · nom a 22/500 · badge de FASE **neutre** (§8c: «la fase no és semàfor ni
+// marca» — era daurat ple) · accions a la dreta: «Accions ▾» en secundari i la destructiva amb
+// vora, mai plena en repòs (§5.5). **Cap element se'n va**: el lliurable, el conjunt i les seves
+// germanes, el codi de client i el recurs assignat segueixen tots aquí, amb la pell de la casa.
+//
+// EL QUE SÍ QUE SE'N VA és el «← Models ›» inline que obria la fila: la fletxa d'enrere és del
+// MENÚ DE PANTALLA i té posició fixa a tot el producte (§8b·2). Dues fletxes d'enrere a la
+// mateixa pantalla, a dos llocs diferents, són una de més.
 function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
@@ -1503,107 +1527,107 @@ function ModelSheetHeader({ model, onDelete, onFeedback, onChanged }) {
   if (!model) return null
 
   return (
-    <div style={{ borderBottom: '0.5px solid var(--border)' }}>
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0.75rem 1.5rem',
+      display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+      padding: '16px 1.5rem 12px',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button type="button" onClick={() => navigate('/models')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer',
-                   fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
-                   }}>
-          ← {t('nav.models')}
-        </button>
-        <span style={{ color: 'var(--border)' }}>›</span>
-        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
-                       }}>
-          {model.codi_intern}
-        </span>
-        {model.codi_client && model.codi_client !== model.codi_intern && (
-          <>
-            <span style={{ color: 'var(--border)' }}>·</span>
-            <span style={{ fontSize: 'var(--fs-body)', 
-                           color: 'var(--text-main)', fontWeight: 500 }}>
-              {model.codi_client}
-            </span>
-          </>
-        )}
-        {/* F2.7 — l'avís de lliurable va a la capçalera, al costat de la identitat del model:
-            el PM que obre la fitxa ho ha de veure sense buscar-ho. */}
-        <BadgeLliurable rondes={model.lliurable_ronda_n} />
-        {model.nom_prenda && (
-          <>
-            <span style={{ color: 'var(--border)' }}>·</span>
-            <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 500,
-                           color: 'var(--text-main)' }}>
-              {model.nom_prenda}
-            </span>
-          </>
-        )}
-        {/* SET-1 · A4 — el conjunt a la capçalera: quina peça és, de quantes, i com anar a les
-            germanes. Les germanes vénen niuades al serializer del detall (`garment_set.peces`):
-            un fetch de menys, i la llista ja s'ha de travessar per pintar el badge. */}
-        {model.garment_set && (
-          <>
-            <span style={{ color: 'var(--border)' }}>·</span>
-            <span title={model.garment_set.nom_comercial || ''} style={{
-              fontSize: 'var(--fs-caption)', padding: '2px 8px', borderRadius: 5,
-              background: 'var(--gold-pale)', color: 'var(--gold)',
-              border: '0.5px solid var(--gold)', fontWeight: 600,
-            }}>
-              {t('model_sheet.set_badge', {
-                n: model.piece_number ?? '?', total: model.garment_set.num_pieces,
-                codi: model.garment_set.codi_base,
-              })}
-            </span>
-            {(model.garment_set.peces || [])
-              .filter(p => p.id !== model.id)
-              .map(p => (
-                <button key={p.id} type="button" onClick={() => navigate(`/models/${p.id}`)}
-                  title={p.codi_intern}
-                  style={{ background: 'none', border: '0.5px solid var(--border)',
-                           borderRadius: 5, padding: '2px 8px', cursor: 'pointer',
-                           fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
-                  {p.nom_prenda || `#${p.piece_number}`}
-                </button>
-              ))}
-          </>
-        )}
-        <span style={{
-          fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 20, fontWeight: 600,
-          background: 'var(--gold)', color: 'var(--text-main)',
-        }} title={t('model_sheet.phase')}>
-          {model.fase_actual ? t(`model_sheet.dashboard.phase.${model.fase_actual}`, model.fase_actual) : '—'}
-        </span>
-        {/* P7 — el RECURS assignat. Només en una MARCA (és qui assigna) i només si n'hi ha un:
-            un model sense recurs no viatja enlloc, i dir-ho amb un '—' aquí seria soroll a la
-            capçalera. Qui l'ha de veure buit és la llista, que compara models entre ells. */}
-        {isBrand && model.studio_assignat && (
-          <span style={{
-            fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 20, fontWeight: 600,
-            fontFamily: 'IBM Plex Mono, monospace',
-            background: 'var(--gold-pale)', color: 'var(--gold)', border: '0.5px solid var(--gold)',
-          }} title={t('model_sheet.assign_resource')}>
-            <i className="ti ti-affiliate" style={{ marginRight: 4 }} aria-hidden="true" />
-            {model.studio_assignat}
-          </span>
-        )}
-      </div>
+      <span style={{ minWidth: 0 }}>
+        <span style={identCodi}>{model.codi_intern}</span>
+        {/* EL NOM DEL MODEL ÉS EL TÍTOL D'AQUESTA PÀGINA, i per això és un `h1` i no un `span`:
+            aquí la pantalla parla d'UNA entitat. (A les LLISTES passa el contrari —§8e: «el nom
+            de l'entitat ja no és títol, és element»—, perquè allà la pantalla parla de moltes.)
+            Els estils són els de la norma; el `margin: 0` és perquè l'`h1` no en porti del UA. */}
+        <h1 style={identNom}>{model.nom_prenda || model.codi_intern}</h1>
+      </span>
 
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        {/* P4: "Editar" (edita el MODEL) s'ha mogut a la pestanya Resum perquè no confongui que edita
+      {/* La referència del CLIENT és identitat seva, no nostra: va al costat, en secundari. */}
+      {model.codi_client && model.codi_client !== model.codi_intern && (
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{model.codi_client}</span>
+      )}
+
+      {/* F2.7 — l'avís de lliurable va a la capçalera, al costat de la identitat del model:
+          el PM que obre la fitxa ho ha de veure sense buscar-ho. */}
+      <BadgeLliurable rondes={model.lliurable_ronda_n} />
+
+      {/* SET-1 · A4 — el conjunt a la capçalera: quina peça és, de quantes, i com anar a les
+          germanes. Les germanes vénen niuades al serializer del detall (`garment_set.peces`):
+          un fetch de menys, i la llista ja s'ha de travessar per pintar el badge. */}
+      {model.garment_set && (
+        <>
+          <span title={model.garment_set.nom_comercial || ''} style={badgeNeutreH}>
+            {t('model_sheet.set_badge', {
+              n: model.piece_number ?? '?', total: model.garment_set.num_pieces,
+              codi: model.garment_set.codi_base,
+            })}
+          </span>
+          {(model.garment_set.peces || [])
+            .filter(p => p.id !== model.id)
+            .map(p => (
+              <button key={p.id} type="button" onClick={() => navigate(`/models/${p.id}`)}
+                title={p.codi_intern} style={{ ...btnPorta, padding: '4px 10px' }}>
+                {p.nom_prenda || `#${p.piece_number}`}
+              </button>
+            ))}
+        </>
+      )}
+
+      {/* §8c — BADGE DE FASE: NEUTRE (fons suau + tinta principal + filet --line). Abans anava
+          en daurat ple: la marca pintant una dada. */}
+      <span style={badgeNeutreH} title={t('model_sheet.phase')}>
+        {model.fase_actual ? t(`model_sheet.dashboard.phase.${model.fase_actual}`, model.fase_actual) : '—'}
+      </span>
+
+      {/* P7 — el RECURS assignat. Només en una MARCA (és qui assigna) i només si n'hi ha un:
+          un model sense recurs no viatja enlloc, i dir-ho amb un '—' aquí seria soroll a la
+          capçalera. Qui l'ha de veure buit és la llista, que compara models entre ells. */}
+      {isBrand && model.studio_assignat && (
+        <span style={badgeNeutreH} title={t('model_sheet.assign_resource')}>
+          <i className="ti ti-affiliate" style={{ marginRight: 4, fontSize: 14 }} aria-hidden="true" />
+          {model.studio_assignat}
+        </span>
+      )}
+
+      <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+        {/* P4: "Editar" (edita el MODEL) viu a la pestanya Resum perquè no confongui que edita
             la pantalla visible. Aquí queden les accions de fase i l'esborrat. */}
         <ActionsMenu model={model} onChanged={onChanged} onFeedback={onFeedback} />
-        <button type="button" onClick={onDelete}
-          style={{ ...btnSecondary, color: '#c5221f', borderColor: '#f5c6c6' }}>
-          <i className="ti ti-trash" aria-hidden="true" /> {t('app.delete')}
+        <button type="button" onClick={onDelete} style={btnDestructiu}>
+          <i className="ti ti-trash" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+          {t('app.delete')}
         </button>
-      </div>
-    </div>
+      </span>
     </div>
   )
 }
+
+// ── Pell de la identitat (§8b·3) ───────────────────────────────────────────────────────────
+const identCodi = {
+  display: 'block', fontSize: 'var(--fs-caption)', lineHeight: '12px',
+  letterSpacing: '.04em', color: 'var(--text-faint)',
+}
+const identNom = {
+  display: 'block', margin: 0, fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 500,
+  color: 'var(--text-main)', fontFamily: 'IBM Plex Mono, monospace',
+}
+// §1 · badge NEUTRE: fons suau + tinta principal + VORA FINA. Píndola sempre.
+const badgeNeutreH = {
+  display: 'inline-flex', alignItems: 'center',
+  fontSize: 'var(--fs-caption)', lineHeight: '12px', fontWeight: 600, letterSpacing: '.04em',
+  padding: '3px 10px', borderRadius: 'var(--r-pill)', whiteSpace: 'nowrap',
+  background: 'var(--sel)', color: 'var(--text-main)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+}
+// §5.3 · PORTA: estil secundari (blanc + vora daurada). Mai blava: no compromet res.
+const btnPorta = {
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+  background: 'var(--panel)', color: 'var(--text-main)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)',
+  borderRadius: 'var(--r-ctrl)', padding: '8px 16px',
+  fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)', fontWeight: 500,
+  lineHeight: '16px', cursor: 'pointer',
+}
+// §5.5 · DESTRUCTIVA: vora i tinta --err, MAI plena en repòs.
+const btnDestructiu = { ...btnPorta, color: 'var(--err)', borderColor: 'var(--err)' }
 
 // Disparador del Watchpoint flotant: icona (outline) + badge amb el TOTAL d'entrades del model
 // (mateixa font que el panell: watchpoints.list). Un sol pols breu quan el comptador PUJA respecte
@@ -1670,7 +1694,14 @@ function WatchpointTrigger({ modelId, onClosed }) {
   )
 }
 
-function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
+// 🚩 NO MUNTAT des d'A7 (§8f): el Resum és ara `ResumWizardPartit`. Es conserva SENCER i amb el
+// EXPORTAT a posta: hi viuen el panell de VIABILITAT (nº de tècnics, mode de càlcul, dates) i
+// el bloc de TEIXIT, que la maqueta del wizard partit NO cobreix. On han d'anar és decisió de
+// domini; esborrar-los per no arrossegar un avís de lint seria prendre-la jo. L'export el deixa
+// muntable des de qualsevol pantalla amb una línia el dia que es decideixi. Depèn d'helpers
+// d'aquest mateix fitxer (`calcViabilitat`, `afegirDiesLaborables`, `restarDiesLaborables`,
+// `API`), i per això es queda aquí: moure'l demanaria moure'ls tots.
+export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
   const { t, i18n } = useTranslation()
   const dateLocale = i18n.language === 'es' ? 'es-ES' : i18n.language === 'en' ? 'en-GB' : 'ca-ES'
   const [editing, setEditing] = useState(false)
