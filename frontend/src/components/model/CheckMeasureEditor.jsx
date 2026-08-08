@@ -20,8 +20,8 @@ import SessionActions from './SessionActions'
 // BaseMeasurement origen='CHECKED' (una sola columna 'checked'). MOTOR (resolve_size_check) INTACTE.
 
 const MONO = 'IBM Plex Mono, monospace'
-const TEXT_2 = 'var(--text-muted)'
-const BORDER = 'var(--border)'
+const TEXT_2 = 'var(--text-soft)'
+const BORDER = 'var(--line)'
 
 // P9 — presa TIPADA per origen: cada estadi de l'historial mostra de quina presa ve, amb un punt de
 // color per família d'origen (origen ja viu a MeasurementChangeLog.context). Verd = sessió de fitting;
@@ -31,9 +31,9 @@ const stageAccent = (ctx) => ({
   fitting: 'var(--ok)',
   checked: 'var(--gold)',
   manual: 'var(--gold-l)',
-  import: 'var(--gray)',
-  calculated: 'var(--gray)',
-  standard: 'var(--gray)',
+  import: 'var(--text-soft)',
+  calculated: 'var(--text-soft)',
+  standard: 'var(--text-soft)',
 }[ctx] || null)
 const fmtStageDate = (iso) => iso ? new Date(iso).toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit' }) : ''
 
@@ -104,7 +104,7 @@ function ReadOnlyDecisioNota({ line }) {
 
 const btn = (variant) => ({
   fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
-  border: '0.5px solid var(--gray-l)',
+  border: '1px solid var(--line)',
   background: variant === 'err' ? 'var(--err)' : variant === 'plain' ? 'var(--white)' : 'var(--gold)',
   color: variant === 'plain' ? 'var(--text-main)' : 'var(--text-main)', fontWeight: 500,
 })
@@ -113,7 +113,7 @@ function Tecla({ children }) {
   return (
     <kbd style={{ border: `1px solid ${BORDER}`, borderRadius: 3, padding: '1px 5px',
                   background: 'var(--white)', font: 'inherit', fontSize: 10,
-                  color: 'var(--text-muted)' }}>{children}</kbd>
+                  color: 'var(--text-soft)' }}>{children}</kbd>
   )
 }
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
@@ -372,13 +372,13 @@ function RecomptesFitting({ lines, baseLabel, buffer }) {
   }
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
-                  padding: '10px 16px', marginTop: 12, borderTop: '1px solid var(--border)',
-                  background: 'var(--bg-card)', fontSize: 'var(--fs-body)', color: TEXT_2 }}>
+                  padding: '10px 16px', marginTop: 12, borderTop: '1px solid var(--line)',
+                  background: 'var(--bg-page)', fontSize: 'var(--fs-body)', color: TEXT_2 }}>
       {(verdictes || []).map(clau => (
         <span key={clau}>
           <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%',
                                             display: 'inline-block', marginRight: 5,
-                                            background: RECOMPTE_COL[clau] || 'var(--text-muted)' }} />
+                                            background: RECOMPTE_COL[clau] || 'var(--text-soft)' }} />
           {clau} <b style={{ color: 'var(--text-main)', fontWeight: 600 }}>{n[clau]}</b>
         </span>
       ))}
@@ -707,7 +707,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           treure la mà del número) i no ho deia res: qui obria la sessió les havia de saber
           d'abans. Només s'hi anuncia el que funciona en aquesta pantalla. */}
       {!esPresa && !readOnly && rows.length > 0 && (
-        <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
+        <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)',
                     margin: '0 0 10px', lineHeight: 1.8 }}>
           <Tecla>↓</Tecla>/<Tecla>Enter</Tecla> {t('fitting.grid.kbd_next')} · <Tecla>↑</Tecla> {t('fitting.grid.kbd_prev')}
           {' · '}<Tecla>Tab</Tecla> {t('fitting.grid.kbd_tab')}

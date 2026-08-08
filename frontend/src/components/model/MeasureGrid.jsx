@@ -32,11 +32,11 @@ const COL_NOM_W = 160
 // `filled` = gold-pale (NOMÉS la columna activa destaca); groupStart/End = filet subtil de
 // delimitació del grup (no daurat, per no competir amb el destacat de l'activa).
 const cellTd = (filled, groupStart, groupEnd) => ({
-  padding: '5px 8px', borderBottom: '0.5px solid var(--border)', verticalAlign: 'middle',
+  padding: '5px 8px', borderBottom: '1px solid var(--line-soft)', verticalAlign: 'middle',
   textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
-  background: filled ? 'var(--gold-pale)' : undefined,
-  borderLeft: groupStart ? '1px solid var(--border)' : '0.5px solid var(--border)',
-  borderRight: groupEnd ? '1px solid var(--border)' : undefined,
+  background: filled ? 'var(--sel)' : undefined,
+  borderLeft: groupStart ? '1px solid var(--line)' : '1px solid var(--line-soft)',
+  borderRight: groupEnd ? '1px solid var(--line)' : undefined,
 })
 
 // Parse numèric tolerant amb la COMA decimal (60,5 == 60.5). Buit → null; no-numèric → NaN.
@@ -98,15 +98,17 @@ function NotaDot({ nota }) {
 // editada a mà (ancoratge). Buida si no hi ha línia activa per a aquest (pom, grup).
 const stepBtnStyle = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', height: 11, width: 16,
-  padding: 0, border: '1px solid var(--border)', background: 'var(--white)',
-  color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1, fontSize: 9,
+  padding: 0, border: '1px solid var(--line)', background: 'var(--white)',
+  color: 'var(--text-soft)', cursor: 'pointer', lineHeight: 1, fontSize: 'var(--fs-caption)',
 }
 
 // EL VEREDICTE PINTA EL NÚMERO (fitting_v3). L'etiqueta sola no bastava: el que es llegeix quan
 // s'escombra la columna de dalt a baix és la XIFRA, i una xifra negra sota una etiqueta verda es
 // llegeix com una mesura sense decidir. El color va al número, en negreta, i el rebuig el ratlla —
 // que és el que vol dir «aquest valor no substitueix res».
-const VERDICTE_COL = { ACCEPTED: 'var(--ok)', ADJUSTED: 'var(--warn)', REJECTED: 'var(--err)' }
+// A9 · §1b(d) — l'ajustat va en `--warn-ink` com a TINTA (5.32:1). `--warn` era un taronja
+// antic que no és cap dels tokens de la norma.
+const VERDICTE_COL = { ACCEPTED: 'var(--ok)', ADJUSTED: 'var(--warn-ink)', REJECTED: 'var(--err)' }
 // Les tecles del veredicte, en l'ordre del brief: A accepta · J ajusta · R rebutja. Viuen aquí i no
 // a l'adaptador perquè el que les ha de sentir és el camp del número —la mà no en surt— i és
 // aquest component qui el té. Sense `onVeredicte` (check, escalat, repàs) no s'escolta cap lletra.
@@ -123,7 +125,7 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
   // diuen la veritat: en aquesta fila no hi ha res a anotar (encara).
   if (!active) {
     return (
-      <td style={{ ...cellTd(true, false, false), color: 'var(--text-muted)' }}
+      <td style={{ ...cellTd(true, false, false), color: 'var(--text-soft)' }}
         title={t('measuregrid.sense_linia')}>—</td>
     )
   }
@@ -181,7 +183,7 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
           }}
           style={{
             font: 'inherit', width: 70, padding: '2px 4px', textAlign: 'right',
-            border: `1px solid ${colVerdicte || 'var(--border)'}`, borderRadius: 4, background: 'var(--white)',
+            border: `1px solid ${colVerdicte || 'var(--line)'}`, borderRadius: 4, background: 'var(--white)',
             color: colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)'),
             fontWeight: verdicte || (modified && edited) ? 700 : 400,
             textDecoration: verdicte === 'REJECTED' ? 'line-through' : undefined,
@@ -232,9 +234,9 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
   // derivada s'assembla a un de mesurat, i qui llegeix la columna de dalt a baix ha de poder
   // distingir una PRESA d'un CÀLCUL sense obrir res.
   const Marca = () => (marca ? (
-    <span style={{ fontSize: 'var(--fs-caption)', border: '1px solid var(--border)',
+    <span style={{ fontSize: 'var(--fs-caption)', border: '1px solid var(--line)',
                    borderRadius: 999, padding: '1px 7px', marginLeft: 6, whiteSpace: 'nowrap',
-                   color: 'var(--text-muted)', background: 'var(--white)' }}>
+                   color: 'var(--text-soft)', background: 'var(--white)' }}>
       {t(`fitting.grid.marca_${marca}`)}
     </span>
   ) : null)
@@ -279,7 +281,7 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
         <BateigInput value={nomTraduitModel} placeholder={catLocal || ''}
           title={t('measuregrid.nom_traduit_tip')}
           onSave={(v) => onNomsSave(bmId, { nom_traduit_model: v })}
-          style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-muted)' }} />
+          style={{ fontSize: 'var(--fs-caption)', fontStyle: 'italic', color: 'var(--text-soft)' }} />
       </td>
     )
   }
@@ -294,7 +296,7 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
           {top || '—'}<Inst /><Marca />
           {local && (
             <i className="ti ti-info-circle" title={local} aria-label={local}
-              style={{ fontSize: 12, marginLeft: 6, color: 'var(--text-muted)', cursor: 'help' }} />
+              style={{ fontSize: 12, marginLeft: 6, color: 'var(--text-soft)', cursor: 'help' }} />
           )}
         </div>
       </td>
@@ -311,12 +313,12 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
         placeholder={canon || ''}
         style={{
           font: 'inherit', fontSize: 'var(--fs-caption)', fontStyle: 'italic',
-          color: 'var(--text-muted)', width: '100%', padding: '0 2px', boxSizing: 'border-box',
+          color: 'var(--text-soft)', width: '100%', padding: '0 2px', boxSizing: 'border-box',
           borderRadius: 3, background: focused ? 'var(--white)' : 'transparent',
           // Affordance: subratllat tènue en repòs (pista d'editabilitat) → vora completa en focus.
           border: '1px solid transparent',
-          borderBottom: focused ? '1px solid var(--border)' : '1px dashed var(--border)',
-          ...(focused && { borderColor: 'var(--border)' }),
+          borderBottom: focused ? '1px solid var(--line)' : '1px dashed var(--line)',
+          ...(focused && { borderColor: 'var(--line)' }),
         }}
       />
     </td>
@@ -343,7 +345,7 @@ function CodiCell({ codi, nomFitxa, pomCode, bmId, isKey, editable, editCodi, on
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
         {reorderable && (
           <i className="ti ti-grip-vertical" title={t('measuregrid.reorder')}
-            style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'grab' }} />
+            style={{ fontSize: 12, color: 'var(--text-soft)', cursor: 'grab' }} />
         )}
         {canEdit ? (
           <input
@@ -357,14 +359,14 @@ function CodiCell({ codi, nomFitxa, pomCode, bmId, isKey, editable, editCodi, on
               background: focused ? 'var(--white)' : 'transparent',
               // Affordance: subratllat tènue en repòs → vora completa en focus.
               border: '1px solid transparent',
-              borderBottom: focused ? '1px solid var(--border)' : '1px dashed var(--border)',
-              ...(focused && { borderColor: 'var(--border)' }),
+              borderBottom: focused ? '1px solid var(--line)' : '1px dashed var(--line)',
+              ...(focused && { borderColor: 'var(--line)' }),
             }}
           />
         ) : (
           <span style={{ fontWeight: 500, color: 'var(--gold)' }}>{codi}</span>
         )}
-        {isKey && <i className="ti ti-star" style={{ fontSize: 9, marginLeft: 3, color: 'var(--gold)' }} title="KEY" />}
+        {isKey && <i className="ti ti-star" style={{ fontSize: 14, marginLeft: 3, color: 'var(--gold)' }} title="KEY" />}
       </span>
     </td>
   )
@@ -500,18 +502,18 @@ export default function MeasureGrid({
   // just abans de les mesures. Dos senyals, no un: el color agrupa, el filet talla.
   const agrupat = !!leadGroupLabel
   const REGLA_BG = 'var(--model-band)'                   // crema suau (token de casa, cap hex)
-  const SEP = '2px solid var(--border)'                  // separador Regla | Mesures
+  const SEP = '2px solid var(--line)'                  // separador Regla | Mesures
   const esUltimLead = (i) => agrupat && i === leadCols.length - 1
 
   const stickyHd = (left, w, i = null) => ({
     ...thStyle, position: 'sticky', left, zIndex: 3, minWidth: w, width: w,
-    background: (agrupat && i != null) ? REGLA_BG : 'var(--bg-muted)', textAlign: 'left',
+    background: (agrupat && i != null) ? REGLA_BG : 'var(--panel)', textAlign: 'left',
     ...(esUltimLead(i) && { borderRight: SEP }),
   })
   const stickyTd = (left, w, bg, i = null) => ({
     position: 'sticky', left, zIndex: 1, minWidth: w, width: w,
     background: (agrupat && i != null) ? REGLA_BG : bg,
-    padding: '5px 10px', borderBottom: '0.5px solid var(--border)',
+    padding: '5px 10px', borderBottom: '1px solid var(--line-soft)',
     verticalAlign: 'middle', whiteSpace: 'nowrap',
     ...(esUltimLead(i) && { borderRight: SEP }),
   })
@@ -539,12 +541,12 @@ export default function MeasureGrid({
               )}
               {totalGroupCols > 0 && (
                 <th colSpan={totalGroupCols} style={{
-                  ...thStyle, textAlign: 'center', background: 'var(--bg-muted)',
+                  ...thStyle, textAlign: 'center', background: 'var(--panel)',
                 }}>{groupsLabel}</th>
               )}
               {canPodar && (
                 <th rowSpan={3} style={{ ...thStyle, textAlign: 'center', width: 64, minWidth: 64,
-                                         background: 'var(--bg-muted)', borderLeft: '1px solid var(--border)' }}>
+                                         background: 'var(--panel)', borderLeft: '1px solid var(--line)' }}>
                   {t('measuregrid.col_accions')}
                 </th>
               )}
@@ -562,14 +564,14 @@ export default function MeasureGrid({
               return (
                 <th key={g.key} colSpan={span} style={{
                   ...thStyle, textAlign: 'center',
-                  background: 'var(--bg-muted)',
-                  borderLeft: '1px solid var(--border)',
+                  background: 'var(--panel)',
+                  borderLeft: '1px solid var(--line)',
                 }}>{g.label}</th>
               )
             })}
             {!agrupat && canPodar && (
               <th rowSpan={2} style={{ ...thStyle, textAlign: 'center', width: 64, minWidth: 64,
-                                       background: 'var(--bg-muted)', borderLeft: '1px solid var(--border)' }}>
+                                       background: 'var(--panel)', borderLeft: '1px solid var(--line)' }}>
                 {t('measuregrid.col_accions')}
               </th>
             )}
@@ -577,9 +579,9 @@ export default function MeasureGrid({
           <tr>
             {groups.flatMap(g => {
               const sub = (start) => ({ ...thStyle, textAlign: 'right', fontSize: 'var(--fs-caption)', padding: '3px 8px',
-                background: 'var(--bg-muted)',
-                borderLeft: start ? '1px solid var(--border)' : '0.5px solid var(--border)' })
-              const activeSub = { ...sub(false), background: 'var(--gold-pale)' }   // NOMÉS la columna activa destaca
+                background: 'var(--panel)',
+                borderLeft: start ? '1px solid var(--line)' : '1px solid var(--line-soft)' })
+              const activeSub = { ...sub(false), background: 'var(--sel)' }   // NOMÉS la columna activa destaca
               const hs = (g.historyCols || []).map((h, idx) => <th key={`${g.key}-h-${h.key}`} style={sub(idx === 0)}>{h.label}</th>)
               hs.push(<th key={`${g.key}-active`} style={activeSub}>{g.activeLabel}</th>)
               for (const tcol of (g.trailCols || [])) hs.push(<th key={`${g.key}-t-${tcol.key}`} style={{ ...sub(false), textAlign: 'center' }}>{tcol.label}</th>)
@@ -589,7 +591,7 @@ export default function MeasureGrid({
         </thead>
         <tbody>
           {rows.map((r, i) => {
-            const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-card)'
+            const rowBg = i % 2 === 0 ? 'var(--white)' : 'var(--bg-page)'
             // C2 — candidata a poda: indicador SUBTIL (un filet a l'esquerra), mai un automatisme.
             const soroll = isNoiseRow(r, groups)
             return (
@@ -616,7 +618,7 @@ export default function MeasureGrid({
                   isKey={r.is_key} editable={editable} editCodi={editCodi} onNomSave={onNomSave}
                   reorderable={reorderable}
                   style={soroll
-                    ? { ...stickyTd(COL_CAPA_W, COL_POM_W, rowBg), boxShadow: 'inset 3px 0 0 var(--border)' }
+                    ? { ...stickyTd(COL_CAPA_W, COL_POM_W, rowBg), boxShadow: 'inset 3px 0 0 var(--line)' }
                     : stickyTd(COL_CAPA_W, COL_POM_W, rowBg)}
                   title={soroll ? t('measuregrid.poda_candidata') : undefined} />
                 <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} nomFitxa={r.nom_fitxa} bmId={r.bm_id}
@@ -648,13 +650,13 @@ export default function MeasureGrid({
                       registerInput={registerInput} onNav={onNav} />
                   )
                   for (const tcol of (g.trailCols || [])) {
-                    out.push(<td key={`${g.key}-t-${tcol.key}`} style={{ padding: '5px 8px', borderBottom: '0.5px solid var(--border)', verticalAlign: 'middle' }}>{cell.trail?.[tcol.key] ?? null}</td>)
+                    out.push(<td key={`${g.key}-t-${tcol.key}`} style={{ padding: '5px 8px', borderBottom: '1px solid var(--line-soft)', verticalAlign: 'middle' }}>{cell.trail?.[tcol.key] ?? null}</td>)
                   }
                   return out
                 })}
                 {canPodar && (
-                  <td style={{ padding: '5px 8px', borderBottom: '0.5px solid var(--border)',
-                               borderLeft: '1px solid var(--border)', textAlign: 'center',
+                  <td style={{ padding: '5px 8px', borderBottom: '1px solid var(--line-soft)',
+                               borderLeft: '1px solid var(--line)', textAlign: 'center',
                                verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                     {podaArmada === r.pom_id ? (
                       <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
@@ -672,7 +674,7 @@ export default function MeasureGrid({
                         <button type="button" title={t('common.cancel')} aria-label={t('common.cancel')}
                           onClick={() => setPodaArmada(null)}
                           style={{ border: 'none', background: 'transparent', cursor: 'pointer',
-                                   color: 'var(--text-muted)', padding: 2, lineHeight: 1 }}>
+                                   color: 'var(--text-soft)', padding: 2, lineHeight: 1 }}>
                           <i className="ti ti-x" aria-hidden="true" style={{ fontSize: 15 }} />
                         </button>
                       </span>
@@ -681,7 +683,7 @@ export default function MeasureGrid({
                         aria-label={t('measuregrid.poda_title')}
                         onClick={() => setPodaArmada(r.pom_id)}
                         style={{ border: 'none', background: 'transparent', cursor: 'pointer',
-                                 color: 'var(--text-muted)', padding: 2, lineHeight: 1 }}>
+                                 color: 'var(--text-soft)', padding: 2, lineHeight: 1 }}>
                         <i className="ti ti-trash" aria-hidden="true" style={{ fontSize: 14 }} />
                       </button>
                     )}

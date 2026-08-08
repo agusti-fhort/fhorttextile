@@ -111,12 +111,15 @@ function calcViabilitat(totalMinuts, dataObjectiu, predictedEnd) {
   return { latestStart, semafor, diesNecessaris }
 }
 
+// §5.2 · SECUNDÀRIA: blanc + vora --gold-border + tinta fosca, padding 8×16 i pes 500. Era
+// transparent amb el filet crema deprecat (`--border`) i mig píxel de gruix.
 const btnSecondary = {
-  background: 'transparent',
-  border: '0.5px solid var(--border)',
-  borderRadius: 6, padding: '6px 12px', fontSize: 'var(--fs-body)',
+  background: 'var(--panel)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)',
+  borderRadius: 'var(--r-ctrl)', padding: '8px 16px',
+  fontSize: 'var(--fs-body)', fontWeight: 500, lineHeight: '16px',
   cursor: 'pointer', color: 'var(--text-main)',
-  display: 'flex', alignItems: 'center', gap: 4,
+  display: 'inline-flex', alignItems: 'center', gap: 6,
 }
 
 /**
@@ -132,11 +135,15 @@ const btnSecondary = {
  */
 const btnAccio = (deshabilitat = false) => ({
   ...btnSecondary,
-  background: 'var(--white)',
-  borderColor: 'var(--gold)',
-  color: 'var(--gold)',
-  opacity: deshabilitat ? 0.6 : 1,
-  cursor: deshabilitat ? 'default' : 'pointer',
+  // §5.4 — EL GHOST DAURAT ES JUBILA COM A BOTÓ: la tinta daurada sobre blanc arrossegava el
+  // deute d'AA de tots els ghosts d'acció. Aquestes quatre són les vies d'entrada a les
+  // superfícies de treball de Mesures, i el seu llenguatge és el de la PORTA (§5.3): blanc,
+  // vora de la casa, tinta principal. La marca es queda a la vora.
+  ...(deshabilitat
+    // §5.7 · deshabilitat: BAIXA EL FONS, no la tinta. L'`opacity` apagava també el text.
+    ? { background: 'var(--bg-page)', borderColor: 'var(--line)', color: 'var(--text-faint)',
+        cursor: 'default' }
+    : { cursor: 'pointer' }),
 })
 
 const taskListFromResponse = (data) => data?.results || (Array.isArray(data) ? data : [])
@@ -932,7 +939,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   if (loading) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center',
-                    color: 'var(--text-muted)',
+                    color: 'var(--text-soft)',
                     fontSize: 'var(--fs-body)' }}>
         {t('model_sheet.loading')}
       </div>
@@ -1042,32 +1049,35 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
               onGraduacio={obreGraduacio}
               onPomSaved={finishPomEntry} />
           ) : (!taskParam && editing !== 'Mesures' && !pomReady) ? (
+            /* §8c · L'ESTAT BUIT DE LA PANTALLA: filet discontinu de la casa sobre --panel i la
+               frase en --text-faint CURSIVA. El fons crema (`--bg-muted`) el feia semblar un
+               avís; un buit no és una alarma, és una absència amb el motiu escrit. */
             <div style={{
-              border: '0.5px dashed var(--border)', borderRadius: 8, padding: '1.25rem',
-              background: 'var(--bg-muted)', color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
+              borderWidth: 1, borderStyle: 'dashed', borderColor: 'var(--line)',
+              borderRadius: 'var(--r-card)', padding: '20px',
+              background: 'var(--panel)', fontSize: 'var(--fs-body)',
               display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap',
             }}>
               <div>
                 <div style={{ fontSize: 'var(--fs-h3)', color: 'var(--text-main)', marginBottom: 4 }}>
                   {t('model_sheet.measures_empty_title')}
                 </div>
-                <div>{t('model_sheet.measures_empty_body')}</div>
+                <div style={{ color: 'var(--text-faint)', fontStyle: 'italic' }}>
+                  {t('model_sheet.measures_empty_body')}</div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button type="button" disabled={openingTask}
                   onClick={() => enterEdit('Mesures', 'pom')}
-                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
-                           opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
-                  <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
+                  style={btnAccio(openingTask)}>
+                  <i className="ti ti-ruler-2" style={{ fontSize: 14, color: 'currentColor' }} />
                   {t('model_sheet.start_pom')}
                 </button>
                 {/* Sprint B — la SEGONA superfície de buit del sistema (l'altra és el `selector`
                     de MeasuresEntryPanel). Oferir la còpia només a una deixava mig camí. */}
                 <button type="button" disabled={openingTask}
                   onClick={() => enterEdit('Mesures', 'pom', 'copy')}
-                  style={{ ...btnSecondary, opacity: openingTask ? 0.6 : 1,
-                           cursor: openingTask ? 'default' : 'pointer' }}>
-                  <i className="ti ti-copy" style={{ fontSize: 14 }} />
+                  style={btnAccio(openingTask)}>
+                  <i className="ti ti-copy" style={{ fontSize: 14, color: 'currentColor' }} />
                   {t('measures_entry.copy_title')}
                 </button>
               </div>
@@ -1077,24 +1087,32 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           marginBottom: 10, gap: 12 }}>
               {editing === 'Mesures' ? (
-                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
                   {t('model_sheet.measures_editing')}
                 </span>
               ) : (
                 // Commutador de subvista (consulta): taula del model ↔ repàs dels fittings fets.
-                <div style={{ display: 'flex', gap: 6 }}>
+                /* §8b-bis · TRES GERMANES DINS D'UN PANELL = TABS AMB SUBRATLLAT D'OR, no
+                   píndoles i molt menys en daurat PLE (que és marca fent de navegació). El
+                   menú de PANTALLA ja és el de dalt: barrejar els dos patrons al mateix
+                   nivell és el que la norma prohibeix explícitament. */
+                <div style={{ display: 'flex', gap: 4, borderBottomWidth: 1,
+                              borderBottomStyle: 'solid', borderBottomColor: 'var(--line)' }}>
                   {[['taula', 'model_sheet.measures_view_table', 'ti-table'],
                     ['repas', 'model_sheet.measures_view_repas', 'ti-history'],
                     ['comprovacio', 'comprovacio.titol', 'ti-checkup']].map(([key, label, icon]) => (
                     <button key={key} type="button" onClick={() => setMesuresView(key)}
+                      aria-current={mesuresView === key ? 'true' : undefined}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: 6,
-                        padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                        background: mesuresView === key ? 'var(--gold)' : 'var(--bg-muted)',
-                        color: mesuresView === key ? 'var(--text-main)' : 'var(--text-muted)',
-                        fontSize: 'var(--fs-body)', fontWeight: mesuresView === key ? 500 : 400,
+                        padding: '8px 14px', border: 'none', background: 'none', cursor: 'pointer',
+                        fontFamily: 'IBM Plex Mono, monospace',
+                        color: mesuresView === key ? 'var(--text-main)' : 'var(--text-soft)',
+                        fontSize: 'var(--fs-body)', fontWeight: mesuresView === key ? 600 : 400,
+                        boxShadow: mesuresView === key ? 'inset 0 -2px 0 var(--gold)' : undefined,
                       }}>
-                      <i className={`ti ${icon}`} aria-hidden="true" style={{ fontSize: 14 }} />
+                      <i className={`ti ${icon}`} aria-hidden="true"
+                         style={{ fontSize: 14, color: 'currentColor' }} />
                       {t(label)}
                     </button>
                   ))}
@@ -1239,7 +1257,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             <div style={{ width: 'min(720px, 100%)', background: 'var(--white)',
                           borderRadius: 12, padding: '1.25rem 1.5rem 1.5rem',
                           boxShadow: '0 12px 40px rgba(0,0,0,0.2)',
-                          border: '0.5px solid var(--border)' }}>
+                          border: '1px solid var(--line)' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
                             gap: 12, marginBottom: 14 }}>
                 <h2 style={{ margin: 0, fontSize: 'var(--fs-h2)', fontWeight: 500 }}>
@@ -1362,7 +1380,7 @@ function TechSheetTab({ modelId, navigate, onModificar }) {
   }
 
   if (fitxes === null) return (
-    <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>
+    <div style={{ padding: '24px', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>
       {t('model_sheet.loading')}
     </div>
   )
@@ -1370,7 +1388,7 @@ function TechSheetTab({ modelId, navigate, onModificar }) {
   // Estil compartit per botons outline discrets
   const btnOutline = {
     background: 'transparent',
-    border: '1px solid var(--border)',
+    border: '1px solid var(--line)',
     color: 'var(--text-main)',
     fontSize: 'var(--fs-body)',
     padding: '5px 12px',
@@ -1393,19 +1411,19 @@ function TechSheetTab({ modelId, navigate, onModificar }) {
       confirmDisabled={creant || !(nova.nom || '').trim()}
       onCancel={() => { setNova(null); setErr(null) }}
       onConfirm={crear}>
-      <label style={{ display: 'block', fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4 }}>
+      <label style={{ display: 'block', fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginBottom: 4 }}>
         {t('tech_sheet.tab_new_name')}
       </label>
       <input autoFocus value={nova.nom} onChange={e => setNova({ ...nova, nom: e.target.value })}
         placeholder={t('tech_sheet.new_doc_name_placeholder')}
         style={{ width: '100%', fontSize: 'var(--fs-body)', padding: '8px 10px', marginBottom: 12,
-                 border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)' }} />
-      <label style={{ display: 'block', fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4 }}>
+                 border: '1px solid var(--line)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)' }} />
+      <label style={{ display: 'block', fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginBottom: 4 }}>
         {t('tech_sheet.tab_new_desc')}
       </label>
       <input value={nova.descripcio} onChange={e => setNova({ ...nova, descripcio: e.target.value })}
         style={{ width: '100%', fontSize: 'var(--fs-body)', padding: '8px 10px',
-                 border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)' }} />
+                 border: '1px solid var(--line)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)' }} />
       {err && <p style={{ marginTop: 10, fontSize: 'var(--fs-body)', color: 'var(--err)' }}>{err}</p>}
     </Modal>
   )
@@ -1415,7 +1433,7 @@ function TechSheetTab({ modelId, navigate, onModificar }) {
   if (!fitxes.length) {
     return (
       <div style={{ padding: '24px' }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginBottom: '16px' }}>
+        <p style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-body)', marginBottom: '16px' }}>
           {t('tech_sheet.tab_empty')}
         </p>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1440,10 +1458,10 @@ function TechSheetTab({ modelId, navigate, onModificar }) {
       {/* Capçalera del tab: recompte + la porta de la fitxa nova. */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-muted)',
+        padding: '12px 16px', borderBottom: '1px solid var(--line)', background: 'var(--panel)',
       }}>
         <span style={{ fontSize: 'var(--fs-label)', fontFamily: FILES_MONO,
-                       color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                       color: 'var(--text-soft)', textTransform: 'uppercase' }}>
           {t('tech_sheet.tab_count', { n: fitxes.length })}
         </span>
         <button onClick={() => setNova({ nom: '', descripcio: '' })}
@@ -1457,10 +1475,10 @@ function TechSheetTab({ modelId, navigate, onModificar }) {
       {fitxes.map(f => (
         <div key={f.id} style={{
           display: 'flex', alignItems: 'center', gap: 16,
-          padding: '12px 16px', borderBottom: '1px solid var(--border)',
+          padding: '12px 16px', borderBottom: '1px solid var(--line)',
         }}>
           <i className="ti ti-file-text" aria-hidden="true"
-             style={{ fontSize: 16, color: 'var(--text-muted)', flexShrink: 0 }} />
+             style={{ fontSize: 16, color: 'var(--text-soft)', flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)',
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -1468,16 +1486,16 @@ function TechSheetTab({ modelId, navigate, onModificar }) {
               {f.nom_fitxer}
             </div>
             {f.descripcio && (
-              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)',
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)',
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {f.descripcio}
               </div>
             )}
           </div>
           <span style={{ width: 44, flexShrink: 0, textAlign: 'right', fontSize: 'var(--fs-label)',
-                         fontFamily: FILES_MONO, color: 'var(--text-muted)' }}>v{f.versio}</span>
+                         fontFamily: FILES_MONO, color: 'var(--text-soft)' }}>v{f.versio}</span>
           <span style={{ width: 110, flexShrink: 0, fontSize: 'var(--fs-label)',
-                         fontFamily: FILES_MONO, color: 'var(--text-muted)' }}
+                         fontFamily: FILES_MONO, color: 'var(--text-soft)' }}
                 title={t('tech_sheet.tab_updated')}>{dataDe(f)}</span>
           <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
             {/* F2.2 · D-1 — fins avui aquests dos botons feien EXACTAMENT el mateix `navigate`,
@@ -1502,7 +1520,7 @@ function TechSheetTab({ modelId, navigate, onModificar }) {
       ))}
 
       {/* Cos: resum de l'estat */}
-      <div style={{ padding: '16px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+      <div style={{ padding: '16px', fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
         <p>{t('tech_sheet.tab_hint')}</p>
       </div>
 
@@ -1777,14 +1795,14 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
       <input type="date" value={deadlineVal} onChange={e => setDeadlineVal(e.target.value)}
         style={{ padding: '3px 6px', fontSize: 'var(--fs-body)', 
-                 border: '1px solid var(--border)', borderRadius: 4 }} />
+                 border: '1px solid var(--line)', borderRadius: 4 }} />
       <button type="button" onClick={saveDeadline} disabled={savingDeadline}
         style={{ padding: '3px 10px', background: 'var(--gold)', color: 'var(--text-main)', border: 'none',
                  borderRadius: 4, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
         {savingDeadline ? '…' : '✓'}
       </button>
       <button type="button" onClick={() => { setDeadlineVal(model.data_objectiu || ''); setEditingDeadline(false) }}
-        style={{ padding: '3px 8px', background: 'transparent', border: '0.5px solid var(--border)',
+        style={{ padding: '3px 8px', background: 'transparent', border: '1px solid var(--line)',
                  borderRadius: 4, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
         ✕
       </button>
@@ -1793,10 +1811,10 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
     <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
       {model.data_objectiu
         ? <strong style={{ color: 'var(--gold)' }}>{model.data_objectiu}</strong>
-        : <span style={{ color: 'var(--text-muted)' }}>{t('model_sheet.no_deadline')}</span>}
+        : <span style={{ color: 'var(--text-soft)' }}>{t('model_sheet.no_deadline')}</span>}
       <button type="button" onClick={() => setEditingDeadline(true)} title={t('model_sheet.edit_deadline')}
         style={{ background: 'transparent', border: 'none', cursor: 'pointer',
-                 color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: 0 }}>
+                 color: 'var(--text-soft)', fontSize: 'var(--fs-body)', padding: 0 }}>
         <i className="ti ti-pencil" />
       </button>
     </span>
@@ -1864,27 +1882,27 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
       {editing ? (
         <div style={{ marginBottom: 16 }}>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
                             display: 'block', marginBottom: 4 }}>
               {t('model_sheet.field_garment_name')}
             </label>
             <input value={form.nom_prenda}
               onChange={e => setForm(f => ({...f, nom_prenda: e.target.value}))}
               style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--fs-body)',
-                       border: '1px solid var(--border)', borderRadius: 6 }} />
+                       border: '1px solid var(--line)', borderRadius: 6 }} />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
                             display: 'block', marginBottom: 4 }}>
               {t('model.fields.codi_client')}
             </label>
             <input value={form.codi_client}
               onChange={e => setForm(f => ({...f, codi_client: e.target.value}))}
               style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--fs-body)',
-                       border: '1px solid var(--border)', borderRadius: 6 }} />
+                       border: '1px solid var(--line)', borderRadius: 6 }} />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
                             display: 'block', marginBottom: 4 }}>
               {t('model.fields.descripcio')}
             </label>
@@ -1892,7 +1910,7 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
               onChange={e => setForm(f => ({...f, descripcio: e.target.value}))}
               rows={3}
               style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--fs-body)',
-                       border: '1px solid var(--border)', borderRadius: 6,
+                       border: '1px solid var(--line)', borderRadius: 6,
                        resize: 'vertical' }} />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -1903,7 +1921,7 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
             </button>
             <button type="button" onClick={() => setEditing(false)}
               style={{ padding: '6px 14px', background: 'transparent', fontSize: 'var(--fs-body)',
-                       border: '0.5px solid var(--border)',
+                       border: '1px solid var(--line)',
                        borderRadius: 6, cursor: 'pointer' }}>
               {t('common.cancel')}
             </button>
@@ -1915,16 +1933,16 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                         alignItems: 'flex-start', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 'var(--fs-h2)', fontWeight: 500 }}>
-                {model.nom_prenda || <span style={{color:'var(--text-muted)'}}>{t('model_sheet.no_name')}</span>}
+                {model.nom_prenda || <span style={{color:'var(--text-soft)'}}>{t('model_sheet.no_name')}</span>}
               </div>
               {model.codi_client && model.codi_client !== model.codi_intern && (
-                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
                               marginTop: 2 }}>
                   {model.codi_client}
                 </div>
               )}
               {model.descripcio && (
-                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
                               marginTop: 6 }}>
                   {model.descripcio}
                 </div>
@@ -1938,15 +1956,15 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
         <tbody>
           {readOnlyFields.map(({ label, value, mono, secondary }) => (
             <tr key={label}
-              style={{ borderBottom: '0.5px solid var(--border)' }}>
-              <td style={{ padding: '7px 0', color: 'var(--text-muted)',
+              style={{ borderBottom: '1px solid var(--line)' }}>
+              <td style={{ padding: '7px 0', color: 'var(--text-soft)',
                            width: 180, fontSize: 'var(--fs-body)' }}>
                 {label}
               </td>
               <td style={{ padding: '7px 0',
                            fontFamily: mono ? 'monospace' : undefined,
                            color: secondary
-                             ? 'var(--text-muted)' : 'var(--text-main)' }}>
+                             ? 'var(--text-soft)' : 'var(--text-main)' }}>
                 {value}
               </td>
             </tr>
@@ -1957,7 +1975,7 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
       {model.data_objectiu && (
         <div style={{
           marginTop: '24px',
-          border: '1px solid var(--border)',
+          border: '1px solid var(--line)',
           borderRadius: '4px',
           overflow: 'hidden',
         }}>
@@ -1996,19 +2014,19 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           </div>
 
           {/* Cos del panel */}
-          <div style={{ padding: '12px', background: 'var(--bg-muted)' }}>
+          <div style={{ padding: '12px', background: 'var(--panel)' }}>
             {loadingMinuts ? (
-              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
                 {t('model_sheet.calculating')}
               </p>
             ) : !totalMinuts ? (
-              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
                 {t('model_sheet.viab_no_tasks')}
               </p>
             ) : (
               <>
                 {/* Fila d'info base */}
-                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
                   marginBottom: '12px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                   <span>
                     {t('model_sheet.hours_estimated', { h: Math.round(totalMinuts / 60 * 10) / 10 })}
@@ -2039,8 +2057,8 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                     onChange={e => setModeCalc(e.target.value)}
                     style={{ 
                       fontSize: 'var(--fs-body)', padding: '4px 6px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--bg-card)' }}>
+                      border: '1px solid var(--line)',
+                      background: 'var(--bg-page)' }}>
                     <option value="fi">{t('model_sheet.calc_mode_start_to_end')}</option>
                     <option value="inici">
                       {t('model_sheet.calc_mode_end_to_start')}
@@ -2053,8 +2071,8 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                       onChange={e => setInputData(e.target.value)}
                       style={{ 
                         fontSize: 'var(--fs-body)', padding: '4px 6px',
-                        border: '1px solid var(--border)',
-                        background: 'var(--bg-card)' }}
+                        border: '1px solid var(--line)',
+                        background: 'var(--bg-page)' }}
                     />
                   )}
 
@@ -2069,7 +2087,7 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                             ? 'var(--gold)' : 'transparent',
                           color: numTecnics === n
                             ? 'var(--white)' : 'var(--text-main)',
-                          border: '1px solid var(--border)',
+                          border: '1px solid var(--line)',
                         }}>
                         {n}T
                       </button>
@@ -2112,7 +2130,7 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
                   )}
                 </div>
 
-                <p style={{ marginTop: '8px', fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+                <p style={{ marginTop: '8px', fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
                   {t('model_sheet.viab_disclaimer')}
                 </p>
               </>
@@ -2280,7 +2298,7 @@ function TabFiles({ modelId, onEditFitxa }) {
             {previewCarregant && (
               <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                padding: '10px 0', fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+                padding: '10px 0', fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
               }}>
                 <i className="ti ti-loader-2" aria-hidden="true"
                    style={{ fontSize: 16, animation: 'spin 0.8s linear infinite' }} />
@@ -2318,7 +2336,7 @@ function TabFiles({ modelId, onEditFitxa }) {
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--fs-h2)' }}>✕</button>
             </div>
             {history.loading ? (
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>…</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>…</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {[...history.chain].sort((a, b) => (b.versio || 0) - (a.versio || 0)).map(v => (
@@ -2326,8 +2344,8 @@ function TabFiles({ modelId, onEditFitxa }) {
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '6px 10px', borderRadius: 6,
-                      border: '0.5px solid var(--border)',
-                      background: v.is_current ? 'var(--bg-muted)' : 'transparent',
+                      border: '1px solid var(--line)',
+                      background: v.is_current ? 'var(--panel)' : 'transparent',
                     }}>
                     <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500, minWidth: 32 }}>v{v.versio}</span>
                     <span style={{
@@ -2335,13 +2353,13 @@ function TabFiles({ modelId, onEditFitxa }) {
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }} title={v.nom_fitxer}>{v.nom_fitxer}</span>
                     {v.is_current && (
-                      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
+                      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>
                         {t('model_sheet.current_version')}
                       </span>
                     )}
                     <button type="button"
                       onClick={() => obrirPreview(v)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-soft)' }}>
                       <i className="ti ti-eye" aria-hidden="true" />
                     </button>
                   </div>
@@ -2353,14 +2371,14 @@ function TabFiles({ modelId, onEditFitxa }) {
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_sheet.sort_by')}</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('model_sheet.sort_by')}</span>
         {ORDERS.map(o => (
           <button key={o.key} type="button" onClick={() => setOrderBy(o.key)}
             style={{
               padding: '3px 12px', fontSize: 'var(--fs-body)', borderRadius: 6, cursor: 'pointer',
-              border: '0.5px solid var(--border)',
-              background: orderBy === o.key ? 'var(--bg-muted)' : 'transparent',
-              color: orderBy === o.key ? 'var(--text-main)' : 'var(--text-muted)',
+              border: '1px solid var(--line)',
+              background: orderBy === o.key ? 'var(--panel)' : 'transparent',
+              color: orderBy === o.key ? 'var(--text-main)' : 'var(--text-soft)',
               fontWeight: orderBy === o.key ? 500 : 400,
             }}>
             {o.label}
@@ -2368,9 +2386,9 @@ function TabFiles({ modelId, onEditFitxa }) {
         ))}
         <label style={{
           marginLeft: 'auto', padding: '4px 12px', fontSize: 'var(--fs-body)',
-          border: '0.5px solid var(--border)', borderRadius: 6,
-          cursor: 'pointer', color: 'var(--text-muted)',
-          background: uploading ? 'var(--bg-muted)' : 'transparent',
+          border: '1px solid var(--line)', borderRadius: 6,
+          cursor: 'pointer', color: 'var(--text-soft)',
+          background: uploading ? 'var(--panel)' : 'transparent',
         }}>
           {uploading ? t('model_sheet.uploading') : t('model_sheet.upload')}
           <input type="file" style={{ display: 'none' }}
@@ -2389,7 +2407,7 @@ function TabFiles({ modelId, onEditFitxa }) {
           global d'`index.css:75` no serveix aquí perquè el moviment és de translació. */}
       {uploading && (
         <div role="progressbar" aria-busy="true" aria-label={t('model_sheet.uploading')}
-          style={{ height: 3, borderRadius: 2, background: 'var(--bg-muted)',
+          style={{ height: 3, borderRadius: 2, background: 'var(--panel)',
                    overflow: 'hidden', marginBottom: 12 }}>
           <style>{'@keyframes ftt-upload-bar{from{transform:translateX(-100%)}to{transform:translateX(400%)}}'}</style>
           <div style={{ width: '25%', height: '100%', background: 'var(--gold)',
@@ -2398,7 +2416,7 @@ function TabFiles({ modelId, onEditFitxa }) {
       )}
 
       {sorted.length === 0 ? (
-        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
                       padding: '8px 0', fontStyle: 'italic' }}>
           {t('model_sheet.no_files')}
         </div>
@@ -2406,11 +2424,11 @@ function TabFiles({ modelId, onEditFitxa }) {
         // Patró Finder: llista (esq) + detall lateral (dre). Cap selecció per defecte.
         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
           {/* ESQUERRA — una FILA per fitxer, amb capçaleres de columna. */}
-          <div style={{ flex: '1 1 0', minWidth: 0, border: '0.5px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ flex: '1 1 0', minWidth: 0, border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px',
-              borderBottom: '0.5px solid var(--border)', background: 'var(--bg-muted)',
-              fontSize: 'var(--fs-label)', fontFamily: FILES_MONO, color: 'var(--text-muted)', textTransform: 'uppercase',
+              borderBottom: '1px solid var(--line)', background: 'var(--panel)',
+              fontSize: 'var(--fs-label)', fontFamily: FILES_MONO, color: 'var(--text-soft)', textTransform: 'uppercase',
             }}>
               <span style={{ width: 18, flexShrink: 0 }} />
               <span style={{ flex: 1, minWidth: 0 }}>{t('model_sheet.files.col_name')}</span>
@@ -2436,8 +2454,8 @@ function TabFiles({ modelId, onEditFitxa }) {
                 onDelete={() => handleDelete(selected.id)} />
             ) : (
               <div style={{
-                border: '0.5px solid var(--border)', borderRadius: 8, padding: '40px 20px',
-                textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', fontStyle: 'italic',
+                border: '1px solid var(--line)', borderRadius: 8, padding: '40px 20px',
+                textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)', fontStyle: 'italic',
               }}>
                 <i className="ti ti-click" aria-hidden="true"
                    style={{ fontSize: 'var(--fs-display)', display: 'block', marginBottom: 8, color: 'var(--gray)' }} />
@@ -2470,25 +2488,25 @@ function FileRow({ fitxer, selected, onSelect, onOpen }) {
     <div onClick={onSelect} onDoubleClick={onOpen} title={fitxer.nom_fitxer}
       style={{
         display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', cursor: 'pointer',
-        borderBottom: '0.5px solid var(--border)',
+        borderBottom: '1px solid var(--line)',
         background: selected ? 'var(--gold-pale)' : 'transparent',
         borderLeft: selected ? '2px solid var(--gold)' : '2px solid transparent',
       }}>
       <i className={`ti ${iconForExt(ext)}`} aria-hidden="true"
-         style={{ fontSize: 18, color: 'var(--text-muted)', flexShrink: 0, width: 18 }} />
+         style={{ fontSize: 18, color: 'var(--text-soft)', flexShrink: 0, width: 18 }} />
       <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-body)', color: 'var(--text-main)',
                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fitxer.nom_fitxer}</span>
       <span style={{ width: 80, flexShrink: 0, fontSize: 'var(--fs-label)', fontFamily: FILES_MONO,
-                     color: 'var(--text-muted)', textTransform: 'uppercase' }}>{ext || '—'}</span>
+                     color: 'var(--text-soft)', textTransform: 'uppercase' }}>{ext || '—'}</span>
       <span style={{ width: 96, flexShrink: 0, fontSize: 'var(--fs-label)', fontFamily: FILES_MONO,
-                     color: 'var(--text-muted)' }}>{date}</span>
+                     color: 'var(--text-soft)' }}>{date}</span>
       <span style={{ width: 44, flexShrink: 0, textAlign: 'right', fontSize: 'var(--fs-label)',
-                     fontFamily: FILES_MONO, color: 'var(--text-muted)' }}>v{fitxer.versio}</span>
+                     fontFamily: FILES_MONO, color: 'var(--text-soft)' }}>v{fitxer.versio}</span>
       {/* `stopPropagation`: el botó obre, i no ha de tornar a disparar la selecció de la fila. */}
       <button type="button" onClick={e => { e.stopPropagation(); onOpen() }}
         title={obrirLabel} aria-label={`${obrirLabel} — ${fitxer.nom_fitxer}`}
         style={{ width: 26, flexShrink: 0, background: 'none', border: 'none', padding: 0,
-                 cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1 }}>
+                 cursor: 'pointer', color: 'var(--text-soft)', lineHeight: 1 }}>
         <i className={`ti ${esFitxa ? 'ti-edit' : 'ti-eye'}`} aria-hidden="true"
            style={{ fontSize: 16 }} />
       </button>
@@ -2500,7 +2518,7 @@ function FileRow({ fitxer, selected, onSelect, onOpen }) {
 function DetailRow({ label, value }) {
   return (
     <div style={{ display: 'flex', gap: 8, padding: '3px 0', fontSize: 'var(--fs-body)' }}>
-      <span style={{ width: 92, flexShrink: 0, color: 'var(--text-muted)', fontFamily: FILES_MONO, fontSize: 'var(--fs-label)' }}>{label}</span>
+      <span style={{ width: 92, flexShrink: 0, color: 'var(--text-soft)', fontFamily: FILES_MONO, fontSize: 'var(--fs-label)' }}>{label}</span>
       <span style={{ flex: 1, minWidth: 0, color: 'var(--text-main)', wordBreak: 'break-word' }}>{value}</span>
     </div>
   )
@@ -2524,14 +2542,14 @@ function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onEdit, onDele
     : '—'
 
   const actBtn = {
-    padding: '4px 8px', fontSize: 'var(--fs-body)', border: '0.5px solid var(--border)',
-    background: 'transparent', borderRadius: 4, cursor: 'pointer', color: 'var(--text-muted)',
+    padding: '4px 8px', fontSize: 'var(--fs-body)', border: '1px solid var(--line)',
+    background: 'transparent', borderRadius: 4, cursor: 'pointer', color: 'var(--text-soft)',
   }
 
   return (
-    <div style={{ border: '0.5px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+    <div style={{ border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
       {/* Miniatura */}
-      <div style={{ height: 200, background: 'var(--bg-muted)', display: 'flex', flexDirection: 'column',
+      <div style={{ height: 200, background: 'var(--panel)', display: 'flex', flexDirection: 'column',
                     alignItems: 'center', justifyContent: 'center', gap: 8 }}>
         {isImg ? (
           <img src={url} alt={fitxer.nom_fitxer} onError={() => setImgError(true)}
@@ -2539,8 +2557,8 @@ function FileDetail({ fitxer, onPreview, onHistory, onNewVersion, onEdit, onDele
         ) : (
           <>
             <i className={`ti ${isPdf ? 'ti-file-text' : iconForExt(ext)}`} aria-hidden="true"
-               style={{ fontSize: 'var(--fs-display)', color: 'var(--text-muted)' }} />
-            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+               style={{ fontSize: 'var(--fs-display)', color: 'var(--text-soft)' }} />
+            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontStyle: 'italic' }}>
               {t('model_sheet.files.no_preview')}
             </span>
           </>
@@ -2633,7 +2651,7 @@ function TabAIAnalysis({ modelId }) {
   return (
     <div style={{ maxWidth: 800 }}>
       <div style={{ marginBottom: 16 }}>
-        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 12 }}>
           {t('model_sheet.ai_description')}
         </p>
         <button type="button" onClick={handleAnalyze} disabled={loading}
@@ -2659,7 +2677,7 @@ function TabAIAnalysis({ modelId }) {
 
       {analisi && (
         <div>
-          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
                         marginBottom: 12 }}>
             {analisi.resum}
             {' · '}{t('model_sheet.files_analyzed', { count: analisi.fitxers_analitzats })}
@@ -2704,7 +2722,7 @@ function TabAIAnalysis({ modelId }) {
                         {t('model_sheet.compare_values', { table: alerta.valor_taula || '—', pattern: alerta.valor_patro || '—' })}
                       </div>
                     )}
-                    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+                    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
                                   fontStyle: 'italic' }}>
                       → {alerta.accio_suggerida}
                     </div>
