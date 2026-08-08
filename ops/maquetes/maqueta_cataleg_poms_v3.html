@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta v2 · Catàleg de POMs · NORMA_LAYOUT v1</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ══ TOKENS NORMA_LAYOUT v1 (S37) — estructura idèntica a la v1, pell nova ══ */
+  :root{
+    --bg:#fbfaf8; --panel:#fff; --ink:#1d1d1b; --ink-soft:#6e6a64; --ink-faint:#98938b;
+    --line:#e8e5e0; --line-soft:#f0eeea;
+    --gold:#c27a2a; --gold-border:#e0c8a0; --sel:#f7f5f2;
+    --accio:#2b65c2;
+    --ok:#2e7d32; --ok-bg:#e9f3ea;
+    --warn:#ff9942; --warn-bg:#ffedd9;
+    --err:#b42318; --err-bg:#fbebe9;
+    --white:#fff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:0;display:grid;grid-template-columns:220px 1fr;min-height:100vh;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;line-height:16px}
+  .wrap{max-width:none;margin:0}
+  .crumb{color:var(--ink-soft);font-size:10px;margin-bottom:8px}
+  .crumb b{color:var(--ink)}
+  h1{font-size:22px;line-height:28px;font-weight:500;margin:0 0 4px}
+  .sub{color:var(--ink-soft);font-size:12px;margin:0 0 16px}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  /* NORMA: capçalera de panell BLANCA (el crema --head de la v1 desapareix) */
+  .bhead{padding:12px 16px;background:var(--white);border-bottom:1px solid var(--line);
+         display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .bhead input{flex:1;min-width:150px;font-family:inherit;font-size:12px;border:1px solid var(--line);
+    border-radius:6px;padding:8px 12px;background:var(--panel);color:var(--ink)}
+  .bhead input::placeholder{color:var(--ink-faint);font-style:italic}
+  .bhead input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(194,122,42,.15)}
+  .n{font-size:10px;color:var(--ink-faint);white-space:nowrap}
+
+  /* NORMA · jerarquia d'acció */
+  .btn{border:1px solid var(--gold-border);background:var(--white);color:var(--ink);border-radius:6px;
+       padding:8px 16px;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--sel)}
+  .btn.pri{background:var(--accio);border-color:var(--accio);color:#fff}          /* L'ÚNIC blau de la pantalla */
+  .btn.ter{border-color:transparent;background:none;color:var(--ink-soft)}
+  .btn.ter:hover{background:var(--sel);color:var(--ink)}
+  .btn.dang{color:var(--err);border-color:var(--err)}
+  .btn.dang:hover{background:var(--err-bg)}
+  .btn.sm{padding:6px 12px;font-size:11px}
+  .btn:disabled{background:var(--bg);color:var(--ink-faint);border-color:var(--line);cursor:default}
+
+  .list{max-height:660px;overflow-y:auto}
+  /* NORMA: categoria = capçalera de llista th-style, 10px MAJÚSCULES, blanca */
+  .cat{padding:8px 16px 6px;font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;
+       color:var(--ink-soft);font-weight:600;background:var(--white);border-bottom:1px solid var(--line-soft);
+       position:sticky;top:0;z-index:2}
+  .cat span{color:var(--ink-faint);letter-spacing:0}
+  .pom{padding:8px 16px;border-bottom:1px solid var(--line-soft);cursor:pointer;display:flex;
+       align-items:center;gap:12px;background:var(--white)}
+  .pom:hover{background:var(--bg)}
+  .pom.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold)}
+  .pom .cd{font-size:12px;font-weight:600;color:var(--gold);width:72px;flex:none}
+  .pom .nm{font-size:12px;flex:1;line-height:1.35}
+  .info{flex:none;color:var(--ink-faint);font-size:10px;line-height:1;cursor:help;
+        position:relative;font-style:normal;border:1px solid var(--line);border-radius:999px;
+        width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;
+        margin-left:6px;vertical-align:1px}
+  .info:hover{color:var(--gold);border-color:var(--gold-border)}
+  .info::after{content:attr(data-t);position:absolute;left:50%;transform:translateX(-50%);
+    bottom:calc(100% + 6px);white-space:nowrap;background:var(--ink);color:#fff;
+    font-size:10px;padding:4px 9px;border-radius:6px;opacity:0;pointer-events:none;
+    transition:opacity .12s;z-index:40;letter-spacing:0;text-transform:none;font-weight:400}
+  .info:hover::after{opacity:1}
+  .pom .ab{font-size:10px;letter-spacing:.04em;border:1px solid var(--line);border-radius:999px; /* NORMA: píndola */
+           padding:2px 8px;color:var(--ink-soft);background:var(--panel);flex:none}
+  .pom.off{opacity:.5}
+  .pom.off .cd{color:var(--ink-faint)}
+
+  /* fitxa */
+  .fhead{padding:16px;border-bottom:1px solid var(--line)}
+  .fhead .c{font-size:10px;color:var(--ink-faint);letter-spacing:.04em}
+  .fhead .t{font-size:15px;line-height:20px;font-weight:600;margin-top:4px}
+  .fhead .l{font-size:12px;color:var(--ink-soft);font-style:italic;margin-top:2px}
+  .badges{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  /* NORMA: badge = píndola, caption 10 (mai 9) */
+  .b{font-size:10px;line-height:12px;font-weight:600;letter-spacing:.04em;padding:3px 10px;border-radius:999px}
+  .b.act{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+  .b.off{background:var(--bg);color:var(--ink-soft);border:1px solid var(--line)}
+  .b.rev{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn)}  /* esmena Agus: fons clar + tinta taronja, com ok/err */
+  .b.sys{background:var(--sel);color:var(--ink);border:1px solid var(--gold-border)}
+  .fbody{padding:0 16px 16px;max-height:560px;overflow-y:auto}
+  .sec{margin-top:16px}
+  /* NORMA: capçalera de secció 10px MAJÚSCULES (mai 9) */
+  .sec .h{font-size:10px;line-height:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);
+          font-weight:600;padding-bottom:6px;border-bottom:1px solid var(--line-soft);margin-bottom:10px}
+  .kv{display:grid;grid-template-columns:132px 1fr;gap:8px;padding:4px 0;font-size:12px;align-items:baseline}
+  .kv .k{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+  .kv .v{line-height:1.45}
+  .kv .v.buit{color:var(--ink-faint);font-style:italic}
+  .tags{display:flex;gap:6px;flex-wrap:wrap}
+  /* NORMA: chip píndola; triat = --sel + vora gold-border (fora el crema v1) */
+  .tg{font-size:10px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--panel)}
+  .tg.on{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:600}  /* esmena Agus: inclòs = verd */
+  .tg.no{color:var(--ink-faint);border-style:dashed}
+  .alias{display:grid;grid-template-columns:96px 1fr;gap:8px;padding:5px 0;font-size:12px;
+         border-bottom:1px solid var(--line-soft)}
+  .alias:last-child{border-bottom:none}
+  .alias .cl{font-size:10px;letter-spacing:.05em;color:var(--ink-soft);align-self:center}
+  .alias .co{font-weight:600;color:var(--gold)}
+  .alias .nn{color:var(--ink-soft);font-size:11px}
+  .us{display:flex;gap:16px;flex-wrap:wrap;font-size:12px}
+  .us b{font-size:15px;color:var(--gold)}
+  .us span{display:block;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+  .ffoot{padding:12px 16px;border-top:1px solid var(--line);background:var(--white); /* NORMA: blanc, no crema */
+         display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .note{font-size:10px;color:var(--ink-faint);flex:1;line-height:1.5}
+  .empty{padding:60px 20px;text-align:center;color:var(--ink-faint);font-size:12px;line-height:1.8}
+
+  .foot{margin-top:24px;font-size:11px;color:var(--ink-soft);line-height:1.75;
+        border-left:2px solid var(--line);padding-left:16px}
+  .foot b{color:var(--ink)} .foot ul{margin:8px 0 0;padding-left:18px} .foot li{margin-bottom:6px}
+  .ask{border-left-color:var(--gold);background:var(--white);border:1px solid var(--gold-border);
+       border-left:3px solid var(--gold);padding:12px 16px;border-radius:0 8px 8px 0}
+
+  /* ══ §8b · BASTIMENT DE PÀGINA (afegit a la v3: la v2 és anterior al §8b) ══ */
+  .side{background:var(--panel);border-right:1px solid var(--line);padding:16px 0}
+  .side .logo{padding:0 16px 16px;font-weight:600;color:var(--gold);font-size:14px}
+  .side .sec2{padding:12px 16px 4px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+              color:var(--ink-soft);font-weight:600}
+  .side a{display:block;padding:7px 16px;color:var(--ink-soft);cursor:pointer;font-size:12px}
+  .side a.on{background:var(--sel);box-shadow:inset 3px 0 0 var(--gold);color:var(--ink);font-weight:600}
+  .main{min-width:0;display:flex;flex-direction:column}
+  .topbar{background:var(--panel);border-bottom:1px solid var(--line);
+          display:flex;align-items:center;gap:8px;padding:10px 20px}
+  .tcrumb .tenant{font-weight:600} .tcrumb .sep{color:var(--ink-faint)}
+  .tcrumb a{color:var(--ink-soft);cursor:pointer} .tcrumb .here{font-weight:600}
+  .topbar .tright{margin-left:auto;display:flex;align-items:center;gap:10px;
+                  font-size:11px;color:var(--ink-soft);white-space:nowrap}
+  .topbar .tright b{color:var(--ink)}
+  .swi{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:10px;cursor:pointer}
+  .pmenu-bar{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .pmenu{padding:8px 20px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .back{width:32px;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
+        display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+  .back:hover{background:var(--sel)}
+  .back svg{width:16px;height:16px;stroke:var(--ink-soft);fill:none;stroke-width:1.75;
+            stroke-linecap:round;stroke-linejoin:round}
+  .psep{width:1px;height:20px;background:var(--line);margin:0 6px}
+  .mitem{border:1px solid transparent;border-radius:999px;background:none;padding:6px 14px;
+         font-family:inherit;font-size:12px;color:var(--ink-soft);cursor:pointer;line-height:16px;
+         display:inline-flex;align-items:center;gap:6px}
+  .mitem:hover{background:var(--sel);color:var(--ink)}
+  .mitem.on{background:var(--sel);border-color:var(--gold-border);color:var(--ink);font-weight:600}
+  .mitem svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round}
+  .mx{padding:0 20px 60px}
+  .ident{display:flex;align-items:baseline;gap:12px;padding:16px 0 12px;flex-wrap:wrap}
+  .ident .name{font-size:22px;line-height:28px;font-weight:500}
+  .ident .kpi{font-size:22px;line-height:28px;font-weight:600;color:var(--ink)}
+  .ident .kpi small{font-size:14px;font-weight:500;color:var(--ink-soft)}
+  .ident .lab{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);font-weight:600}
+  /* ❌ `.ident .desc` RETIRADA (esmena §8e d'Agus, 08/08): la fila d'identitat és
+     COMPTADOR + CERCA i prou. Era l'única font del conflicte —les pantalles ja no la
+     pinten i la maqueta encara la demanava—, i corregida aquí cap tram futur no la
+     tornarà a dibuixar. */
+  .ident .cerca{flex:1;min-width:220px;font-family:inherit;font-size:12px;
+                border:1px solid var(--line);border-radius:var(--r-ctrl,6px);
+                padding:8px 12px;background:var(--panel);color:var(--ink);align-self:center}
+  .ident .cerca::placeholder{color:var(--ink-faint);font-style:italic}
+  .ident .cerca:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(194,122,42,.15)}
+</style>
+</head>
+<body>
+<div class="side">
+  <div class="logo">Fhort<br><span style="font-weight:400;color:var(--ink-soft);font-size:10px">Textile Tech</span></div>
+  <div class="sec2">Projectes</div>
+  <a>Desenvolupament</a><a>Models</a><a>Planificació</a><a>Fittings</a>
+  <div class="sec2">Configuració tècnica</div>
+  <a>Garment Types</a><a class="on">POM Systems</a><a>Size Library</a><a>Grading Rules</a>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <span class="tcrumb"><span class="tenant">Fhort Textile Tech</span>
+      <span class="sep">›</span><a>Configuració tècnica</a>
+      <span class="sep">›</span><span class="here">Catàleg de POMs</span></span>
+    <span class="tright"><b>Agustí Devant</b> · 08/08/26 · 09:40
+      <span class="swi">cm → inch</span><span class="swi">CA ▾</span><span class="swi">👤</span></span>
+  </div>
+  <div class="pmenu-bar">
+    <div class="pmenu">
+      <button class="back" title="Tornar a Configuració tècnica"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></button>
+      <span class="psep"></span>
+      <button class="mitem"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nou POM ▾</button>
+      <button class="mitem"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Accions ▾</button>
+      <button class="mitem"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filtres</button>
+    </div>
+  </div>
+  <div class="mx">
+
+
+  <div class="ident">
+    <span class="kpi">13<small>/396</small></span><span class="lab">POMs</span>
+    <input class="cerca" placeholder="cerca per codi, nom, àlies o categoria…">
+  </div>
+
+
+  <div class="split">
+    <!-- ── LLISTA ── -->
+    <div class="box">
+      <div class="bhead">
+        <span class="n" id="cnt">200 POMs</span>
+        <!-- §8e: l'acció primària viu al MENÚ amb estil de menú, no aquí -->
+      </div>
+      <div class="list" id="lst"></div>
+    </div>
+
+    <!-- ── FITXA ── -->
+    <div class="box" id="fx"></div>
+  </div>
+
+  <div class="foot">
+    <b>Què fixa aquesta v2 (estructura = v1 aprovada · pell = NORMA_LAYOUT v1)</b>
+    <ul>
+      <li><b>Mitja i mitja</b>: la llista no perd context i la fitxa té espai per dir-ho tot. Cap panell flotant.</li>
+      <li><b>La fitxa parla la realitat d'ara</b>: identitat (canònic EN + local + nomenclatura), com mesurar, <b>quines instàncies admet</b>, <b>a quines capes té sentit</b>, els <b>àlies de cada client</b> i <b>on s'usa de debò</b>.</li>
+      <li><b>Crear · Editar · Desactivar · Esborrar</b>: <b>un POM amb ús no s'esborra, es desactiva</b>. Esborrar només amb ús zero. Desactivat ≠ esborrat.</li>
+      <li><b>Pell NORMA v1</b>: capçaleres de panell BLANQUES (fora el crema) · selecció --sel + filet d'or · «＋ Nou POM» és l'únic blau de la pantalla · «Editar» secundari amb vora daurada · «Esborrar» destructiu amb vora vermella · badges i abreviatures en píndola · cap text per sota de 10px · PENDENT DE REVISIÓ en taronja viu amb tinta fosca.</li>
+      <li><b>Només anglès al catàleg</b> (decisió vigent): el diccionari de noms locals desapareix de la pantalla. El nom canònic EN és l'únic text; la traducció viu darrere la <b>ⓘ</b>, com a la v4 del catàleg de peces. Mateix patró a llista i a fitxa.</li>
+      <li><b>Ús observat, no política declarada</b> (esmena 08/08): les seccions «Instàncies admeses» i «Capes on té sentit» de la v1 DESAPAREIXEN — POMMaster no té aquests camps i és deliberat. Les substitueix una sola secció de LECTURA que ensenya què s'ha usat realment.</li>
+      <li><b>La llista és el CANÒNIC i prou</b> (llei S36): cap categoria de client — els clients només apareixen com a àlies dins la fitxa.</li>
+    </ul>
+  </div>
+
+  <div class="ask foot">
+    <b>Decisions heretades de la v1 (vigents)</b>
+    <ul>
+      <li><b>Els àlies es veuen aquí però no s'editen aquí.</b> Són del client; el seu lloc és el setup de la marca. Aquí, lectura amb enllaç.</li>
+      <li><b>«On s'usa» compta items del catàleg i models vius</b> i habilita o bloqueja «Esborrar». El recompte pregunta als models de Django, no a la BD (lliçó TGIRL: db_constraint=False no surt a information_schema).</li>
+      <li><b>Els POMs de sistema</b> es poden desactivar però no esborrar mai; els nascuts d'un model sí, mentre no s'usin.</li>
+    </ul>
+  </div>
+</div></div>
+
+<script>
+const POMS=[
+ {cat:'ACCESSORIES',c:'POM-125',en:'Belt hole spacing',loc:'Separació de forats de cinturó',ab:'BELT HS',
+  u:'cm',fam:'Z · Complements',st:'Hole center (1st)',en2:'Hole center (2nd)',ref:'Between consecutive holes',
+  sc:'FULL',or:'HORIZONTAL',state:'FLAT',line:'STRAIGHT',body:'Waist',
+  eixos:{pos:[],est:[]},capes:['exterior','fornitura'],
+  alias:[['BRW','ZF2','Separación agujeros cinturón'],['LOS','CINT-SEP','Separación de ojales']],
+  us:{items:2,models:0,rules:1},sys:true,act:true},
+ {cat:'ACCESSORIES',c:'POM-123',en:'Belt length',loc:'Longitud de cinturó',ab:'BELT L',
+  u:'cm',fam:'Z · Complements',st:'Buckle end',en2:'Tip end',ref:'Along the belt',
+  sc:'FULL',or:'HORIZONTAL',state:'FLAT',line:'STRAIGHT',body:'Waist',
+  eixos:{pos:[],est:[]},capes:['exterior'],
+  alias:[['BRW','ZL','Longitud de cinturón']],us:{items:3,models:0,rules:2},sys:true,act:true},
+ {cat:'ACCESSORIES',c:'POM-124',en:'Belt width',loc:'Amplada de cinturó',ab:'BELT W',
+  u:'cm',fam:'Z · Complements',st:'Top edge',en2:'Bottom edge',ref:'At the widest point',
+  sc:'FULL',or:'VERTICAL',state:'FLAT',line:'STRAIGHT',body:'Waist',
+  eixos:{pos:[],est:[]},capes:['exterior'],
+  alias:[['BRW','ZF','Ancho de cinturón']],us:{items:3,models:0,rules:2},sys:true,act:true},
+
+ {cat:'CLOSURE / DETAIL',c:'POM-091',en:'Button spacing',loc:'Separació de botons',ab:'BTN SP',
+  u:'cm',fam:'U · Botonadura i creuament',st:'Button center (1st)',en2:'Button center (2nd)',
+  ref:'Between consecutive buttons',sc:'FULL',or:'VERTICAL',state:'FLAT',line:'STRAIGHT',body:'Front',
+  eixos:{pos:['cf'],est:[]},capes:['exterior'],
+  alias:[['BRW','U1','Separación de botones'],['LOS','U1','Ancho de vivo']],
+  us:{items:6,models:0,rules:4},sys:true,act:true,avis:true},
+
+ {cat:'CLOSURE / DETAIL',c:'POM-099',en:'Elastic waist width (relaxed)',loc:"Ample d'elàstic de cintura (relaxat)",
+  ab:'EL WA RLX',u:'cm',fam:'W · Goma i elàstics',st:'Left edge',en2:'Right edge',
+  ref:'Waistband, unstretched',sc:'HALF',or:'HORIZONTAL',state:'FLAT',line:'STRAIGHT',body:'Waist',
+  eixos:{pos:[],est:['relaxed','extended']},capes:['exterior','fornitura'],
+  alias:[['BRW','W','Ancho de goma']],us:{items:4,models:0,rules:3},sys:true,act:true},
+
+ {cat:'CLOSURE / DETAIL',c:'POM-095',en:'Hood height',loc:'Alçada de caputxa',ab:'HD H',
+  u:'cm',fam:'H · Caputxa',st:'Neck seam',en2:'Top of hood',ref:'At center back',
+  sc:'FULL',or:'VERTICAL',state:'FLAT',line:'STRAIGHT',body:'Hood',
+  eixos:{pos:['cb'],est:[]},capes:['exterior','folre'],
+  alias:[['BRW','HL','Largo capucha']],us:{items:2,models:0,rules:1},sys:true,act:true},
+
+ {cat:'CLOSURE / DETAIL',c:'POM-154',en:'Half moon length',loc:'Llargada de la mitja lluna',ab:'HM L',
+  u:'cm',fam:'N · Motius i aplicats',st:'Left end',en2:'Right end',ref:'Along the curve',
+  sc:'FULL',or:'HORIZONTAL',state:'FLAT',line:'CURVED',body:'Back',
+  eixos:{pos:[],est:[]},capes:['exterior'],alias:[],us:{items:0,models:0,rules:0},sys:false,act:true,rev:true},
+
+ {cat:'COLLAR / NECKLINE',c:'POM-034',en:'Collar height (CB stand)',loc:'Alçada de coll al CB',ab:'COL H CB',
+  u:'cm',fam:'E · Coll · espatlla · escot',st:'Neck seam',en2:'Collar edge',ref:'At center back',
+  sc:'FULL',or:'VERTICAL',state:'FLAT',line:'STRAIGHT',body:'Neck',
+  eixos:{pos:['cb'],est:[]},capes:['exterior','entretela'],
+  alias:[['BRW','EP','Altura cuello CB'],['LOS','COLL-CB','Alto cuello espalda']],
+  us:{items:5,models:0,rules:3},sys:true,act:true},
+
+ {cat:'COLLAR / NECKLINE',c:'POM-035',en:'Collar height (CF)',loc:'Alçada de coll al CF',ab:'COL H CF',
+  u:'cm',fam:'E · Coll · espatlla · escot',st:'Neck seam',en2:'Collar edge',ref:'At center front',
+  sc:'FULL',or:'VERTICAL',state:'FLAT',line:'STRAIGHT',body:'Neck',
+  eixos:{pos:['cf'],est:[]},capes:['exterior','entretela'],
+  alias:[['BRW','E8','Altura cuello CF']],us:{items:4,models:0,rules:2},sys:true,act:true},
+
+ {cat:'COLLAR / NECKLINE',c:'POM-033',en:'Collar length',loc:'Longitud de coll',ab:'COL L',
+  u:'cm',fam:'E · Coll · espatlla · escot',st:'Left collar point',en2:'Right collar point',
+  ref:'Along the neck seam',sc:'FULL',or:'HORIZONTAL',state:'FLAT',line:'CURVED',body:'Neck',
+  eixos:{pos:['left','right'],est:[]},capes:['exterior','entretela'],
+  alias:[['BRW','E88','Largo cuello']],us:{items:5,models:0,rules:3},sys:true,act:true},
+
+ {cat:'HEM / FINISH',c:'POM-075',en:'Flounce extended',loc:'Volant estès',ab:'FLO EXT',
+  u:'cm',fam:'V · Volant',st:'Seam',en2:'Outer edge',ref:'Fully extended',
+  sc:'FULL',or:'VERTICAL',state:'EXTENDED',line:'CURVED',body:'Hem',
+  eixos:{pos:[],est:['relaxed','extended']},capes:['exterior'],
+  alias:[['BRW','U4','Volante extendido']],us:{items:2,models:0,rules:1},sys:true,act:true},
+
+ {cat:'HEM / FINISH',c:'POM-074',en:'Flounce width',loc:'Ample de volant',ab:'FLO W',
+  u:'cm',fam:'V · Volant',st:'Left edge',en2:'Right edge',ref:'At the widest point',
+  sc:'FULL',or:'HORIZONTAL',state:'FLAT',line:'STRAIGHT',body:'Hem',
+  eixos:{pos:[],est:[]},capes:['exterior'],
+  alias:[['BRW','VR','Ancho de volante']],us:{items:2,models:0,rules:1},sys:true,act:true},
+
+ {cat:'HEM / FINISH',c:'POM-201',en:'Hem tape width',loc:'Ample de cinta de baix',ab:'HEM TP W',
+  u:'cm',fam:'X · Pespunt i vius',st:'Top edge',en2:'Bottom edge',ref:'At the hem',
+  sc:'FULL',or:'VERTICAL',state:'FLAT',line:'STRAIGHT',body:'Hem',
+  eixos:{pos:[],est:[]},capes:['fornitura'],alias:[],us:{items:0,models:0,rules:0},
+  sys:false,act:false}
+];
+const CAPES=['exterior','folre','entretela','farciment','reforc','fornitura'];
+const POS=['left','right','top','bottom','cf','cb','side','waistband_seam'];
+const EST=['relaxed','extended'];
+let sel=0;
+const el=id=>document.getElementById(id);
+
+function llista(){
+  let out='', cat=null;
+  const perCat={};
+  POMS.forEach(p=>{(perCat[p.cat]=perCat[p.cat]||[]).push(p)});
+  POMS.forEach((p,i)=>{
+    if(p.cat!==cat){cat=p.cat;out+=`<div class="cat">${cat} <span>· ${perCat[cat].length}</span></div>`;}
+    out+=`<div class="pom ${i===sel?'on':''} ${p.act?'':'off'}" onclick="sel=${i};llista();fitxa()">
+      <span class="cd">${p.c}</span>
+      <span class="nm">${p.en}<span class="info" data-t="${p.loc}">i</span></span>
+      <span class="ab">${p.ab}</span></div>`;
+  });
+  el('lst').innerHTML=out;
+  el('cnt').textContent=POMS.length+' POMs';
+}
+function tg(list,all){return all.map(x=>`<span class="tg ${list.includes(x)?'on':'no'}">${x}</span>`).join('');}
+function fitxa(){
+  const p=POMS[sel];
+  const usTot=p.us.items+p.us.models+p.us.rules;
+  el('fx').innerHTML=`
+    <div class="fhead">
+      <div class="c">${p.c} · ${p.cat}</div>
+      <div class="t">${p.en}<span class="info" data-t="${p.loc}">i</span></div>
+      <div class="badges">
+        <span class="b ${p.act?'act':'off'}">${p.act?'ACTIU':'DESACTIVAT'}</span>
+        ${p.sys?'<span class="b sys">DE SISTEMA</span>':'<span class="b off">NASCUT D\'UN MODEL</span>'}
+        ${p.rev?'<span class="b rev">PENDENT DE REVISIÓ</span>':''}
+      </div>
+    </div>
+    <div class="fbody">
+      <div class="sec"><div class="h">Identitat</div>
+        <div class="kv"><span class="k">Nom</span><span class="v">${p.en} <span class="info" data-t="${p.loc}">i</span></span></div>
+        <div class="kv"><span class="k">Nomenclatura</span><span class="v">${p.ab}</span></div>
+        <div class="kv"><span class="k">Família de lletra</span><span class="v">${p.fam}</span></div>
+        <div class="kv"><span class="k">Unitat</span><span class="v">${p.u}</span></div>
+      </div>
+
+      <div class="sec"><div class="h">Com es mesura</div>
+        <div class="kv"><span class="k">Des d'on</span><span class="v">${p.st}</span></div>
+        <div class="kv"><span class="k">Fins on</span><span class="v">${p.en2}</span></div>
+        <div class="kv"><span class="k">Referència</span><span class="v">${p.ref}</span></div>
+        <div class="kv"><span class="k">Scope</span><span class="v">${p.sc} · ${p.or} · ${p.state} · ${p.line}</span></div>
+        <div class="kv"><span class="k">Zona del cos</span><span class="v">${p.body}</span></div>
+      </div>
+
+      <div class="sec"><div class="h">Ús observat <em style="font-style:normal;color:var(--ink-faint);letter-spacing:0;text-transform:none;font-size:10px;font-weight:400">· llegit de les dades, no declarat</em></div>
+        <div class="kv"><span class="k">Capes vistes</span><span class="v tags">${p.capes.length?p.capes.map(x=>`<span class="tg on">${x}</span>`).join(''):'<span class="tg no">cap encara</span>'}</span></div>
+        <div class="kv"><span class="k">Instàncies vistes</span><span class="v tags">${(p.eixos.pos.length||p.eixos.est.length)?[...p.eixos.pos,...p.eixos.est].map(x=>`<span class="tg on">${x}</span>`).join(''):'<span class="tg no">cap — no s\'ha partit mai</span>'}</span></div>
+        <div class="kv"><span class="k" style="color:var(--ink-faint)">Nota</span><span class="v" style="font-size:10px;color:var(--ink-faint);line-height:1.55">POMMaster NO declara política d'instàncies ni de capes (decisió 07/08, models.py:1503-1505). Això és el que els models han fet servir de debò: descriu, no autoritza.</span></div>
+      </div>
+
+      <div class="sec"><div class="h">Àlies de client</div>
+        ${p.alias.length?p.alias.map(a=>`<div class="alias"><span class="cl">${a[0]}</span>
+          <span><span class="co">${a[1]}</span> <span class="nn">${a[2]}</span></span></div>`).join('')
+          :'<div class="kv"><span class="v buit">Cap client hi apunta encara.</span></div>'}
+        ${p.avis?'<div class="kv"><span class="k" style="color:var(--err)">Atenció</span><span class="v" style="color:var(--err);font-size:11px">Dos clients hi apunten amb el mateix codi i noms diferents. No és un error: cada client mana al seu espai.</span></div>':''}
+      </div>
+
+      <div class="sec"><div class="h">On s'usa</div>
+        <div class="us">
+          <span><b>${p.us.items}</b><span>items del catàleg</span></span>
+          <span><b>${p.us.models}</b><span>models vius</span></span>
+          <span><b>${p.us.rules}</b><span>regles de graduació</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ffoot">
+      <button class="btn">✎ Editar</button>
+      <button class="btn ter">${p.act?'Desactivar':'Reactivar'}</button>
+      <button class="btn dang" ${usTot||p.sys?'disabled':''}>Esborrar</button>
+      <span class="note">${
+        p.sys ? 'POM de sistema: es pot desactivar, però no esborrar mai.'
+        : usTot ? `Té ${usTot} usos: es pot desactivar, no esborrar.`
+        : 'Sense cap ús: es pot esborrar.'}</span>
+    </div>`;
+}
+llista();fitxa();
+</script>
+</body>
+</html>
