@@ -1,15 +1,16 @@
 # REPORT T0-bis · NORMA UI TANDA 1 (S38) — 🛑 STOP de tram
 
-**Data:** 08/08/2026 · **Branca:** dev · **Commits:** 136 · 137 · 138 · **CAP PUSH**
-**Punt de partida:** `91cf1e56` → **HEAD `a7bc6fa0`**
+**Data:** 08/08/2026 · **Branca:** dev · **Commits:** 136 · 137 · 138 · 140 · **CAP PUSH**
+**Punt de partida:** `91cf1e56` → **HEAD `b0d906fc`**
 
-Tres commits aïllats, cadascun amb build verd. Cap pantalla tocada.
+Quatre commits aïllats, cadascun amb build verd. Cap pantalla tocada.
 
 | # | Commit | Fitxers |
 |---|---|---|
 | 136 | `6f4a3be9` `--fs-caption` 8px → 10px | `index.css` |
 | 137 | `ca30e41d` l'acció primària passa a blava | `components/ui/buttons.js` |
 | 138 | `a7bc6fa0` els radis tenen nom | `index.css` · `PageMenu.jsx` |
+| 140 | `b0d906fc` «Accions ▾» passa a secundari | `components/model/ActionsMenu.jsx` |
 
 ---
 
@@ -74,15 +75,10 @@ tenen en branques EXCLOENTS** i per això no es veuen mai juntes:
 o sigui que **no ha pogut exercitar detalls poblats ni modals oberts**. La inspecció del codi
 cobreix el forat per als 7 fitxers densos, però no puc afirmar-ho dels 28.
 
-### 🚩 El que la sonda SÍ que ha destapat — a resoldre a la conformitat, no aquí
+### 🚩 El que la sonda va destapar → **resolt a T0-bis.4** (v. avall)
 
-**El disparador d'`ActionsMenu` («Accions ▾») ara surt BLAU i no hauria.** Consumeix
-`primaryBtn` (`ActionsMenu.jsx:543`, `triggerBtn = { ...primaryBtn, marginLeft: 0 }`), i la
-norma §5.6 el vol **SECUNDARI**: «Menú Accions ⋯ (secundari): NOMÉS ocasionals (duplicar,
-exportar, arxivar). MAI passos de flux.» Es veu a `t0bis_caption_despres.png`, a dalt a la dreta.
-
-Afecta **`/models` (T1)** i el **dashboard del model (T2)**, i també `TaskAssignWizard`.
-No s'ha tocat, per ordre. És el primer que cauria a T1.
+El disparador d'`ActionsMenu` («Accions ▾») sortia BLAU contra el §5.6. Es veu encara a
+`t0bis_caption_despres.png`, que és d'abans de la correcció.
 
 ---
 
@@ -96,11 +92,53 @@ consumir `--r-ctrl` i `--r-pill` (tenia el literal `6` perquè el token no exist
 
 ---
 
+---
+
+## T0-bis.4 · El disparador d'«Accions ▾» passa a secundari
+
+Commit `b0d906fc`. `triggerBtn` deixa de consumir `primaryBtn`:
+**fons `--panel` · vora 1px `--gold-border` · tinta `--text-main` · radi `--r-ctrl`**, i el
+chevron a **14px `currentColor`** (§8). L'import de `primaryBtn` queda retirat del fitxer.
+
+Consumir `primaryBtn` era correcte mentre la primària era daurada: aleshores «vora de la casa»
+i «acció primària» eren el mateix color i el préstec no es notava. En passar la primària a blau
+va quedar a la vista. Corregit al **component**, un sol cop, no a les tres pantalles.
+
+### Sonda després, sobre les mateixes 30 rutes
+
+| Ruta | Abans | Ara |
+|---|---|---|
+| `/models` | 1 blau («Accions») | **0** |
+| `/models/1308` | 1 blau («Accions») | **0** |
+| Qualsevol ruta amb >1 blau | cap | **cap** |
+
+**`TaskAssignWizard`** no té ruta pròpia (és modal) i s'ha inspeccionat al codi: els seus 3
+`primaryBtn` són **seus**, no del disparador. 🚩 **Dos poden coincidir**: el botó «capturar i
+reintentar» (L413, dins la branca d'error) i el «confirmar» del footer (L506, que es pinta
+FORA del ternari). És l'únic cas de dos blaus que he pogut confirmar llegint codi. Es resol
+a la conformitat del wizard; no és de cap tram d'aquesta tanda.
+
+### Dues correccions al que jo mateix havia dit
+
+1. **«Nou model» de `/models` NO és blau: és daurat.** Ho vaig llegir malament d'una captura.
+   El píxel del botó dóna `(201,126,55)` i `Models.jsx` té **0 usos de `primaryBtn`** — és un
+   botó estilat localment amb `--gold`. La sonda deia la veritat i l'ull no. Queda com a feina
+   de **T1**: §8e vol aquesta acció **pujada al menú i en estil de menú**, no com a botó.
+2. Per això `/models` marca 0 blaus i no 1: l'únic blau que hi havia era el d'«Accions».
+
+### 🚩 Anotat, no tocat
+
+El disparador deshabilitat conserva `opacity: 0.5`. Sobre un botó **ple** això funcionava; sobre
+un **d'outline** abaixa alhora vora i tinta, i el §5.7 diu «deshabilitat: **baixa el fons, no la
+tinta**». No entrava a l'ordre i no ho he tocat.
+
+---
+
 ## Verificació
 
 | Control | Resultat |
 |---|---|
-| `npm run build` | ✅ verd als 3 commits |
+| `npm run build` | ✅ verd als 4 commits |
 | `eslint` global | **1254 problems (991 errors, 263 warnings)** — **idèntic a la línia base: delta 0** |
 | Tokens al navegador | ✅ 8/8 nous i modificats al valor esperat (`--fs-caption` 10px · `--r-ctrl/card/pill` · `--accio` · `--warn-ink` · `--col-talla`) |
 | `eslint` a `PageMenu.jsx` | ✅ net |
@@ -116,7 +154,7 @@ té maqueta contra la qual anar bidireccional; la primera verificació bidirecci
 |---|---|
 | `t0bis_caption_abans.png` / `t0bis_caption_despres.png` | Taula de mesures amb caption a 8px i a 10px (mateix bundle, token reinjectat: l'única diferència és el token) |
 | `t0bis_primaria_clients.png` | El blau primari amb tinta blanca («Nou client») |
-| `t0bis_primaria_models.png` | `/models` — s'hi veu l'«Accions ▾» blau que no hauria de ser-ho |
+| `t0bis_primaria_models.png` | `/models` DESPRÉS de T0-bis.4: «Accions ▾» secundari amb vora daurada, i «Nou model» encara daurat (feina de T1) |
 
 ## Conducta afegida
 
