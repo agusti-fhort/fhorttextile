@@ -12,8 +12,7 @@ import { useTranslation } from 'react-i18next'
 
 import { fittingSessions, models as modelsApi } from '../../api/endpoints'
 import Modal from '../ui/Modal'
-
-const FASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
+import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 
 const selectStyle = {
   width: '100%', padding: '6px 8px', border: '1px solid var(--gray-l)',
@@ -22,6 +21,10 @@ const selectStyle = {
 
 export default function AddModelToGroupModal({ uuid, faseInicial = '', onDone, onCancel }) {
   const { t } = useTranslation()
+  // La fase de la sessió és `Model.FASE_CHOICES` (el backend la reusa a `FittingSession.fase`);
+  // ve de `/vocabulari/`. Sense vocabulari el select va buit: afegir un model a la convocatòria
+  // amb una fase inventada seria pitjor que no poder-l'hi afegir.
+  const { codis: fases } = useEnumeracio('fases_model')
   const [modelOpts, setModelOpts] = useState([])
   const [modelId, setModelId] = useState('')
   const [fase, setFase] = useState(faseInicial)
@@ -62,7 +65,7 @@ export default function AddModelToGroupModal({ uuid, faseInicial = '', onDone, o
       </select>
       <label style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('fitting.session.fase')}</label>
       <select value={fase} onChange={e => setFase(e.target.value)} style={selectStyle}>
-        {FASES.map(f => <option key={f} value={f}>{f}</option>)}
+        {(fases || []).map(f => <option key={f} value={f}>{f}</option>)}
       </select>
       {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginTop: 10 }}>{err}</div>}
     </Modal>

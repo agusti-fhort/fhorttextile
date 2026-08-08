@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { models as modelsApi, commerce } from '../api/endpoints'
-import ActionsMenu, { PHASES } from '../components/model/ActionsMenu'
+import ActionsMenu from '../components/model/ActionsMenu'
 import { MaduresaBadge } from '../components/model/FederacioBadge'
 import BadgeLliurable from '../components/model/BadgeLliurable'
 import ModelsFilterPanel from '../components/model/ModelsFilterPanel'
 import { useFilterOptions, garmentTypeLabel, garmentGroupLabel } from '../components/model/filterOptions'
 import Feedback from '../components/ui/Feedback'
 import useAuthStore from '../store/auth'
+import { useEnumeracio } from '../utils/vocabulariDominiFont'
 
 const MONO = 'IBM Plex Mono, monospace'
 const SEASONS = ['SS', 'FW', 'CO', 'SP']
@@ -32,6 +33,10 @@ export default function Models() {
   // P7 — la columna Recurs només té sentit en una MARCA (és qui assigna). En un Estudi el
   // camp `studio_assignat` dels seus models no vol dir res i la columna seria soroll.
   const isBrand = useAuthStore(s => s.tenant?.tipologia === 'marca')
+  // Les fases del filtre venen de `/vocabulari/` (`fases_model`), no d'una constant importada
+  // d'`ActionsMenu` —que era una llista escrita a mà que aquesta pantalla reexportava sense
+  // saber-ho—. Sense vocabulari el filtre no ofereix cap fase: «totes» segueix funcionant.
+  const { codis: fases } = useEnumeracio('fases_model')
   const [items, setItems] = useState([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -269,7 +274,7 @@ export default function Models() {
           style={{ ...inp, flex: 1, minWidth: 220 }} />
         <select value={fase} onChange={e => setParams({ fase_actual: e.target.value, page: undefined })} style={inp}>
           <option value="">{t('models_list.all_phases')}</option>
-          {PHASES.map(p => <option key={p} value={p}>{faseCounts[p] != null ? `${p} (${faseCounts[p]})` : p}</option>)}
+          {(fases || []).map(p => <option key={p} value={p}>{faseCounts[p] != null ? `${p} (${faseCounts[p]})` : p}</option>)}
         </select>
         <select value={temporada} onChange={e => setParams({ temporada: e.target.value, page: undefined })} style={inp}>
           <option value="">{t('models_list.all_seasons')}</option>

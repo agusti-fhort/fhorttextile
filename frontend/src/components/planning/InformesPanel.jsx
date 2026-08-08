@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { models as modelsApi, timeAnalysis } from '../../api/endpoints'
 import Center from '../ui/Center'
+import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 
 // Tab "Informes" — reporting de direcció. NO construeix backend nou: reusa el substrat agregat ja
 // viu (DIAGNOSI §17.2 / ABAST §C):
@@ -12,7 +13,7 @@ import Center from '../ui/Center'
 // COSTOS parcats (lligats a billing): NO s'hi inclouen. Exportació PDF/full: diferida (commit propi).
 const MONO = 'IBM Plex Mono, monospace'
 
-const PHASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']   // Model.FASE_CHOICES (eix cartera)
+// L'eix de cartera són les fases del model: surten de `/vocabulari/` (`fases_model`), no d'aquí.
 const FASE_KEY = {   // TaskType.FASE_CHOICES → clau i18n planning.time.phase.* (eix productivitat)
   'Disseny': 'disseny', 'Dev. tècnic': 'dev_tecnic', 'Prototip': 'prototip',
   'Mostres': 'mostres', 'Preproducció': 'preproduccio', 'Producció': 'produccio',
@@ -167,6 +168,9 @@ function DeadlinesBlock({ t }) {
 function CarteraBlock({ t }) {
   const [models, setModels] = useState(null)
   const [dim, setDim] = useState('temporada')
+  // Sense vocabulari la taula es queda sense columnes de fase (i el `colSpan` s'hi ajusta):
+  // millor una cartera amb total i risc que sis columnes inventades.
+  const { codis: PHASES } = useEnumeracio('fases_model')
   const DIMENSIONS = [
     ['temporada', t('planning.informes.cartera.dim_temporada'),
       m => m.temporada ? `${m.temporada}${m.any ? ` ${m.any}` : ''}` : t('planning.informes.cartera.no_temporada')],
@@ -216,7 +220,7 @@ function CarteraBlock({ t }) {
           <thead><tr>
             <th style={thS}>{dimLabel}</th>
             <th style={numTh}>{t('planning.informes.cartera.total')}</th>
-            {PHASES.map(p => <th key={p} style={numTh}>{phaseLabel(t, p)}</th>)}
+            {(PHASES || []).map(p => <th key={p} style={numTh}>{phaseLabel(t, p)}</th>)}
             <th style={numTh}>{t('planning.informes.cartera.en_risc')}</th>
           </tr></thead>
           <tbody>
@@ -224,11 +228,11 @@ function CarteraBlock({ t }) {
               <tr key={g.key}>
                 <td style={{ ...tdS, fontFamily: MONO }}>{g.key}</td>
                 <td style={{ ...numTd, fontWeight: 600 }}>{g.total}</td>
-                {PHASES.map(p => <td key={p} style={{ ...numTd, color: g.phases[p] ? 'var(--text-main)' : 'var(--gray-l)' }}>{g.phases[p] || '·'}</td>)}
+                {(PHASES || []).map(p => <td key={p} style={{ ...numTd, color: g.phases[p] ? 'var(--text-main)' : 'var(--gray-l)' }}>{g.phases[p] || '·'}</td>)}
                 <td style={{ ...numTd, color: g.risc ? 'var(--err)' : 'var(--gray-l)', fontWeight: g.risc ? 600 : 400 }}>{g.risc || '·'}</td>
               </tr>
             ))}
-            {groups.length === 0 && <tr><td colSpan={PHASES.length + 3} style={{ ...tdS, textAlign: 'center', color: 'var(--text-muted)' }}>{t('planning.informes.cartera.empty')}</td></tr>}
+            {groups.length === 0 && <tr><td colSpan={(PHASES?.length || 0) + 3} style={{ ...tdS, textAlign: 'center', color: 'var(--text-muted)' }}>{t('planning.informes.cartera.empty')}</td></tr>}
           </tbody>
         </table>
       </div>

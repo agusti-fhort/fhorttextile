@@ -5,8 +5,8 @@ import useAuthStore from '../../store/auth'
 import Modal from '../ui/Modal'
 import { selS } from '../ui/buttons'
 import TaskAssignWizard from '../TaskAssignWizard'
+import { useEnumeracio, codiSeguent, codiAnterior } from '../../utils/vocabulariDominiFont'
 
-export const PHASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
 const CURRENT = '__current__'   // "fase actual de cada model" (bulk)
 const MONO = 'IBM Plex Mono, monospace'
 // Cercle de color d'assignació (color_avatar). Fallback --gold si null. (replica de TaskAssignWizard)
@@ -14,8 +14,10 @@ const ColorDot = ({ color, size = 16 }) => (
   <span style={{ display: 'inline-block', width: size, height: size, borderRadius: '50%',
     background: color || 'var(--gold)', border: '0.5px solid var(--gray-l)', flexShrink: 0 }} />
 )
-const nextPhase = (f) => { const i = PHASES.indexOf(f); return i >= 0 && i < PHASES.length - 1 ? PHASES[i + 1] : null }
-const prevPhase = (f) => { const i = PHASES.indexOf(f); return i > 0 ? PHASES[i - 1] : null }
+// `nextPhase`/`prevPhase` han BAIXAT a dins del component: ara depenen del vocabulari, que és
+// asíncron. La lògica no ha canviat gens —és `codiSeguent`/`codiAnterior` sobre la mateixa
+// llista ordenada—, i ara és la MATEIXA que fa servir `DashboardGovPanel`, que en tenia una
+// còpia pròpia. `PHASES` deixa d'exportar-se: `Models.jsx` demana el vocabulari pel seu compte.
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
 // Pas 5C · TRAM 2 — Desplegable "Accions" per a UN model (fitxa) o N (selecció a la llista).
@@ -25,6 +27,13 @@ const todayISO = () => new Date().toISOString().slice(0, 10)
 // filters+exclude_ids); la resta d'accions (runBulk per-element) queden deshabilitades.
 export default function ActionsMenu({ targets, model, selectionSet = null, onChanged, onFeedback, triggerLabel }) {
   const { t } = useTranslation()
+  // Les fases del model són DADA (`Model.FASE_CHOICES`) i arriben de `/vocabulari/`. Mentre no
+  // hi són, avançar i retrocedir de fase no s'ofereixen: `codiSeguent(null, …)` és `null` i
+  // `someNext`/`somePrev` són falsos. És el que toca —no sabem quina fase ve després—, i no una
+  // llista escrita aquí que el dia que el model canviï ningú no actualitzarà.
+  const { codis: fases } = useEnumeracio('fases_model')
+  const nextPhase = (f) => codiSeguent(fases, f)
+  const prevPhase = (f) => codiAnterior(fases, f)
   const conjunt = !!selectionSet
   const list = (targets && targets.length ? targets : (model ? [model] : []))
   const single = (!conjunt && list.length === 1) ? list[0] : null
@@ -291,7 +300,7 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
   const phaseSelectOptions = (withCurrent) => (
     <>
       {!single && withCurrent && <option value={CURRENT}>{t('model_sheet.current_phase')}</option>}
-      {PHASES.map(p => <option key={p} value={p}>{p}{single && p === single.fase_actual ? ' ●' : ''}</option>)}
+      {(fases || []).map(p => <option key={p} value={p}>{p}{single && p === single.fase_actual ? ' ●' : ''}</option>)}
     </>
   )
 
@@ -439,7 +448,7 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
           <Row label={t('model_sheet.phase')}>
             <select style={fullSel} value={form.fase} onChange={e => setForm(f => ({ ...f, fase: e.target.value }))}>
               {single
-                ? PHASES.map(p => <option key={p} value={p}>{p}{deliveredPhases.has(p) ? ' ✓' : ''}</option>)
+                ? (fases || []).map(p => <option key={p} value={p}>{p}{deliveredPhases.has(p) ? ' ✓' : ''}</option>)
                 : phaseSelectOptions(true)}
             </select>
           </Row>

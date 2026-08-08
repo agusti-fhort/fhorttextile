@@ -7,13 +7,14 @@ import Feedback from '../ui/Feedback'
 import { primaryBtn } from '../ui/buttons'
 import PhaseTimeStrip from './PhaseTimeStrip'
 import TimeTree from './TimeTree'
+import { useEnumeracio, codiSeguent } from '../../utils/vocabulariDominiFont'
 
 // Panell de govern (tab "Tauler" de Planificació). Recupera la cua de gates òrfena de la
 // jubilació del Kanban (DIAGNOSI §16.A.b: gates/ready sense surface). Es construeix per blocs;
 // el primer és la cua "Llestos per validar". Comptadors + models en risc s'afegeixen després.
 const MONO = 'IBM Plex Mono, monospace'
-const PHASES = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
-const nextPhase = (f) => { const i = PHASES.indexOf(f); return i >= 0 && i < PHASES.length - 1 ? PHASES[i + 1] : null }
+// Les fases i «quina ve després» surten de `/vocabulari/` (`fases_model`), en l'ordre que el
+// model declara. `codiSeguent` és el mateix helper que `ActionsMenu`, no una segona còpia.
 
 const thS = {
   fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', textAlign: 'left',
@@ -79,6 +80,7 @@ async function fetchAllPages(apiFn, baseParams = {}) {
 // Visible per a tothom amb accés al govern (no depèn de close_gates).
 function CountersBlock({ t }) {
   const [data, setData] = useState({ counts: {}, total: 0 })
+  const { codis: fases } = useEnumeracio('fases_model')
   useEffect(() => {
     modelsApi.faseCounts({})
       .then(res => setData({ counts: res.data?.counts || {}, total: res.data?.total ?? 0 }))
@@ -92,7 +94,7 @@ function CountersBlock({ t }) {
       </h2>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Chip label={t('dashboard.board.total')} n={data.total} strong />
-        {PHASES.map(ph => (
+        {(fases || []).map(ph => (
           <Chip key={ph} label={t(`model_sheet.dashboard.phase.${ph}`, { defaultValue: ph })} n={data.counts?.[ph] ?? 0} />
         ))}
       </div>
@@ -197,6 +199,11 @@ function GatesReadyBlock({ t }) {
   const [busy, setBusy] = useState(false)
   const [selected, setSelected] = useState(() => new Set())
   const [feedback, setFeedback] = useState(null)
+  // ⚠️ SENSE VOCABULARI NO ES VALIDA RES, i tampoc es diu que el model sigui al final del cicle.
+  // «No sé quina fase ve després» i «no en ve cap» tenen la mateixa forma (`null`) i conseqüències
+  // oposades: la segona és una AFIRMACIÓ sobre el model. Per això `fases` es mira a part.
+  const { codis: fases } = useEnumeracio('fases_model')
+  const nextPhase = (f) => codiSeguent(fases, f)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -291,9 +298,11 @@ function GatesReadyBlock({ t }) {
                           onClick={() => navigate(`/models/${r.model_id}`)}>{r.codi_intern}</td>
                       <td style={tdS}>{t(`model_sheet.dashboard.phase.${r.fase_actual}`, { defaultValue: r.fase_actual })}</td>
                       <td style={tdS}>
-                        {nx
-                          ? <span style={{ fontWeight: 500 }}>{t(`model_sheet.dashboard.phase.${nx}`, { defaultValue: nx })}</span>
-                          : <span style={{ color: 'var(--text-muted)' }}>{t('planning.gates.at_top')}</span>}
+                        {!fases
+                          ? <span style={{ color: 'var(--text-muted)' }}>—</span>
+                          : nx
+                            ? <span style={{ fontWeight: 500 }}>{t(`model_sheet.dashboard.phase.${nx}`, { defaultValue: nx })}</span>
+                            : <span style={{ color: 'var(--text-muted)' }}>{t('planning.gates.at_top')}</span>}
                       </td>
                       <td style={tdS}>{r.task_count}</td>
                       <td style={tdS}>

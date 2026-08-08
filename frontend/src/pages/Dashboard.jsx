@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next"
 import useAuthStore from "../store/auth"
 import { modelTasks, models as modelsApi, customers, calendar } from "../api/endpoints"
 import ProjectGantt from "../components/planning/ProjectGantt"
+import { useEnumeracio } from "../utils/vocabulariDominiFont"
 
 const API = import.meta.env.VITE_API_URL || ""
 const MONO = "IBM Plex Mono, monospace"
@@ -31,8 +32,8 @@ const BOARD_COLS = [
   { key: "paused",  icon: "ti-player-pause", color: "var(--warn)" },
   { key: "done",    icon: "ti-circle-check", color: "var(--ok)" },
 ]
-// Fases del cicle de disseny (eix independent del kanban_state) per als comptadors per fase.
-const PHASES = ["Pending", "Dev", "Proto", "SizeSet", "PP", "TOP"]
+// Fases del cicle de disseny (eix independent del kanban_state): surten de `/vocabulari/`
+// (`fases_model`), no d'aquí. F2.2 — cap enumeració de domini es declara al client.
 const TEMPORADES = ["SS", "FW", "CO", "SP"]
 
 function KPICard({ label, value, sub, color = "var(--gold)", onClick }) {
@@ -121,6 +122,9 @@ function ModelBoard({ scope }) {
   const [search, setSearch] = useState("")
   const [fTemporada, setFTemporada] = useState("")
   const [fFase, setFFase] = useState("")
+  // Les fases són DADA (`Model.FASE_CHOICES`), no una llista d'aquesta pantalla. Sense
+  // vocabulari el filtre no ofereix fases: no en sabem cap, i inventar-ne seria tornar-hi.
+  const { codis: fasesModel } = useEnumeracio('fases_model')
   const [fCustomer, setFCustomer] = useState("")
   const [fCollection, setFCollection] = useState("")
   const [fAfter, setFAfter] = useState("")
@@ -273,7 +277,7 @@ function ModelBoard({ scope }) {
         </select>
         <select value={fFase} onChange={e => setFFase(e.target.value)} style={selS}>
           <option value="">{t("dashboard.board.filter_fase")}</option>
-          {PHASES.map(x => <option key={x} value={x}>{t(`model_sheet.dashboard.phase.${x}`)}</option>)}
+          {(fasesModel || []).map(x => <option key={x} value={x}>{t(`model_sheet.dashboard.phase.${x}`)}</option>)}
         </select>
         <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 'var(--fs-label)', color: "var(--text-muted)", fontFamily: MONO }}>
           {t("dashboard.board.filter_date_from")}

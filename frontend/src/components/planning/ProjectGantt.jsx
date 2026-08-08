@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { plan, companyCalendar } from '../../api/endpoints'
 import Center from '../ui/Center'
+import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 import { IconPackage, IconUser, IconFlag } from '@tabler/icons-react'
 
 // Calendari-Gantt de projecte (LECTURA): UNA barra per model, eix=DIES. Consumeix GET plan/gantt/.
@@ -25,9 +26,15 @@ const fmtDM = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMont
 const DOW = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const dowKey = (d) => DOW[(d.getDay() + 6) % 7]
 const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-const FASE_ORDER = ['Pending', 'Dev', 'Proto', 'SizeSet', 'PP', 'TOP']
-// Paleta categòrica per a "pintar per" (data-viz; mateix criteri que els colors fixos de
-// PlanningCalendar). El color de tècnic ve del backend (responsable_color).
+// L'ORDRE de les fases ve de `/vocabulari/` (`fases_model`), que les emet en la seqüència que
+// el model declara. Aquí només se'n fa servir per ordenar files, i per això la degradació és
+// benigna: sense vocabulari tots els `indexOf` donen -1, l'ordre per fase empata i les files
+// cauen al desempat que ja hi havia (data de lliurament).
+//
+// FASE_COLORS ES QUEDA i no és una còpia de l'enumeració: és una PALETA —crom de data-viz,
+// mateix criteri que els colors fixos de PlanningCalendar— indexada pel codi. Que les seves
+// claus coincideixin amb les fases no la converteix en vocabulari; una fase nova hi entraria
+// sense color i el codi ja té la via de fallback. El color de tècnic ve del backend.
 const FASE_COLORS = {
   Pending: '#9aa0a6', Dev: '#3a7ca5', Proto: '#7e57c2', SizeSet: '#2a9d8f', PP: '#e07b39', TOP: '#3c9a5f',
 }
@@ -46,6 +53,7 @@ function nextFita(m, today) {
 
 export default function ProjectGantt({ t, mine = false }) {
   const navigate = useNavigate()
+  const { codis: fasesModel } = useEnumeracio('fases_model')
   const [models, setModels] = useState([])
   const [today, setToday] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -112,18 +120,19 @@ export default function ProjectGantt({ t, mine = false }) {
       (filterTechs.size === 0 || filterTechs.has(m.responsable_id)) &&
       (!filterColleccio || m.collection === filterColleccio) &&
       (!filterTemporada || m.temporada === filterTemporada))
+    const ordreFases = fasesModel || []
     const cmp = {
       // C4 — 'pla' = l'ordre del backend (pla materialitzat); el lector NO reordena. Les altres
       // vistes queden com a alternatives EXPLÍCITES que l'usuari tria al selector.
       pla: null,
       lliurament: (a, b) => a.end.localeCompare(b.end) || a.codi.localeCompare(b.codi),
       fita: (a, b) => nextFita(a, today).localeCompare(nextFita(b, today)) || a.codi.localeCompare(b.codi),
-      fase: (a, b) => (FASE_ORDER.indexOf(a.fase) - FASE_ORDER.indexOf(b.fase)) || a.end.localeCompare(b.end),
+      fase: (a, b) => (ordreFases.indexOf(a.fase) - ordreFases.indexOf(b.fase)) || a.end.localeCompare(b.end),
     }[order]
     if (cmp) list.sort(cmp)
     if (riskFirst) list.sort((a, b) => (b.en_risc === a.en_risc ? 0 : b.en_risc ? 1 : -1))
     return list
-  }, [models, onlyRisk, order, riskFirst, today, filterTechs, filterColleccio, filterTemporada])
+  }, [models, onlyRisk, order, riskFirst, today, filterTechs, filterColleccio, filterTemporada, fasesModel])
 
   // Rang temporal global: min(primera data, avui) i max(última data, avui), amb 60 dies de
   // marge a banda i banda → AVUI sempre dins el rang i prou aire perquè l'scroll horitzontal

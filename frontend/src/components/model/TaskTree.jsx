@@ -6,6 +6,7 @@ import CronoDeclarat from './CronoDeclarat'
 import { models, taskTypes } from '../../api/endpoints'
 import { taskTypeLabel } from '../../utils/taskType'
 import { formatMinutes } from '../../utils/format'
+import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 import {
   GEST_DECLARAT, GEST_EINA, GEST_SENSE_EINA, GEST_SENSE_PANTALLA,
   destiDeTasca, esOferible, gestDeTasca,
@@ -20,8 +21,15 @@ import {
 
 const API = import.meta.env.VITE_API_URL || ''
 
-// Ordre canònic de fases — mirall de TaskType.FASE_CHOICES (backend tasks/models.py).
-const PHASE_ORDER = ['Disseny', 'Dev. tècnic', 'Prototip', 'Mostres', 'Preproducció', 'Producció']
+// L'ORDRE canònic de les fases de tasca ve de `/vocabulari/` (`fases_tasca`), que és
+// `TaskType.FASE_CHOICES` publicat. Sense vocabulari l'arbre no perd cap fase: les que hi hagi
+// a les dades es pinten igualment, només que en l'ordre en què arriben.
+//
+// PHASE_I18N ES QUEDA, i no és el mateix duplicat: l'endpoint emet UNA etiqueta (la del
+// `choices`, en català) i aquest mapa dona la clau i18n de cada fase en TRES idiomes. És
+// traducció, no vocabulari — la mateixa línia que separa `capa.<slug>` (que va caure) de
+// `capa.col` (que es va quedar). El dia que les fases s'hagin de traduir de debò, la decisió és
+// d'Agus i el lloc és una taula, com diu la capçalera de `vocabulari_views.py`.
 const PHASE_I18N = {
   'Disseny': 'model_sheet.tasks.tree_phase_design',
   'Dev. tècnic': 'model_sheet.tasks.tree_phase_dev',
@@ -58,6 +66,7 @@ const cardsGrid = { display: 'flex', flexWrap: 'wrap', gap: 12 }
 export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTaskStarted, onOpenTab }) {  // eslint-disable-line no-unused-vars
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { codis: fasesTasca } = useEnumeracio('fases_tasca')
   const token = localStorage.getItem('access_token')
   const [types, setTypes] = useState([])
   const [myProfileId, setMyProfileId] = useState(null)
@@ -132,7 +141,8 @@ export default function TaskTree({ modelId, modelTaskRows = [], tasks = [], onTa
     if (!esOferible(tt)) continue
     ;(byPhase[tt.fase] = byPhase[tt.fase] || []).push(tt)
   }
-  const ordered = [...PHASE_ORDER, ...Object.keys(byPhase).filter(p => !PHASE_ORDER.includes(p))]
+  const ordreCanonic = fasesTasca || []
+  const ordered = [...ordreCanonic, ...Object.keys(byPhase).filter(p => !ordreCanonic.includes(p))]
     .filter(p => byPhase[p] && byPhase[p].length)
   // Creuament TaskType.code → ModelTask existent (status + assignee) via el compositor del dashboard.
   const taskByCode = {}
