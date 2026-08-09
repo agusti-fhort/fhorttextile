@@ -269,9 +269,13 @@ class GateEvent(models.Model):
 class Supplier(models.Model):
     """Destinatari d'una confecció (taller/fàbrica). Esquelètic ara; creix cap a fitxa
     de proveïdor en un sprint futur."""
+    # Els `choices` estaven INLINE al camp, sense ni tan sols una constant amb nom, i el modal
+    # de proveïdor n'és un select que ESCRIU. Es bategen perquè `/api/v1/vocabulari/` els pugui
+    # publicar (llei 1: cap enumeració de domini al frontend) i perquè hi hagi UN sol lloc on
+    # canviar-los. Cap valor canvia; és el mateix parell, amb nom.
+    TYPE_CHOICES = [('workshop', 'Taller'), ('factory', 'Fàbrica')]
     name = models.CharField(max_length=200)
-    type = models.CharField(max_length=20,
-                            choices=[('workshop', 'Taller'), ('factory', 'Fàbrica')], default='workshop')
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='workshop')
     active = models.BooleanField(default=True)
 
     # Comercial Studio (B1) — dades fiscals, condicions de compra i contacte. Additives (blank).

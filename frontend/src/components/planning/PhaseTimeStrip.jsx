@@ -19,7 +19,7 @@ const FASE_KEY = {
   'Disseny': 'disseny', 'Dev. tècnic': 'dev_tecnic', 'Prototip': 'prototip',
   'Mostres': 'mostres', 'Preproducció': 'preproduccio', 'Producció': 'produccio',
 }
-const MAT_DOT = { empiric: 'var(--ok)', seed: 'var(--gold)', empty: 'var(--gray-l)' }
+const MAT_DOT = { empiric: 'var(--ok)', seed: 'var(--gold)', empty: 'var(--line)' }
 
 function fmtMins(m) {
   if (m == null) return null
@@ -51,22 +51,22 @@ export default function PhaseTimeStrip({ t }) {
         return (
           <div key={p.fase} style={{ display: 'flex', alignItems: 'center' }}>
             <div title={tip} style={{
-              minWidth: 116, padding: '8px 12px', borderRadius: 6,
-              border: '0.5px solid var(--gray-l)',
-              background: p.maturity === 'empty' ? '#f0f0f0' : 'var(--white)',
+              minWidth: 116, padding: '8px 12px', borderRadius: 'var(--r-ctrl)',
+              border: '1px solid var(--line)',
+              background: p.maturity === 'empty' ? 'var(--bg-page)' : 'var(--panel)',
               opacity: p.maturity === 'empty' ? 0.6 : 1,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: MAT_DOT[p.maturity] || 'var(--gray-l)', flexShrink: 0 }} />
-                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{label}</span>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: MAT_DOT[p.maturity] || 'var(--line)', flexShrink: 0 }} />
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{label}</span>
               </div>
-              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: MONO, color: mins ? 'var(--text-main)' : 'var(--text-muted)' }}>
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: MONO, color: mins ? 'var(--text-main)' : 'var(--text-soft)' }}>
                 {mins || '—'}
               </div>
-              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>{matLabel}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO }}>{matLabel}</div>
             </div>
             {i < phases.length - 1 && (
-              <div style={{ width: 12, height: 1, background: 'var(--border)', flexShrink: 0 }} />
+              <div style={{ width: 12, height: 1, background: 'var(--line)', flexShrink: 0 }} />
             )}
           </div>
         )

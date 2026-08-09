@@ -49,6 +49,7 @@ PANTALLES = [
     # canvia —i el §8b-quater l'ha canviada— la mesura s'ha de tornar a passar per sobre de
     # tot el que ja estava tancat. És el segon forat que el bloc A va deixar passar.
     ('B1 · Desenvolupament (home)', '/'),
+    ('B2 · Planificació', '/planificacio'),
 ]
 
 #: La paleta que la NORMA_LAYOUT §1 permet en una VORA, en rgb() tal com el navegador el computa.

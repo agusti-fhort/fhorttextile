@@ -1519,7 +1519,15 @@
     "exc_added": "Exception added.",
     "exc_removed": "Exception removed.",
     "exc_gti_ph": "— Garment type (GTI) —",
-    "exc_filter_ph": "Filter by garment type…"
+    "exc_filter_ph": "Filter by garment type…",
+    "back_title": "Back to dashboard",
+    "entity": "products",
+    "view_active": "Active products",
+    "view_inactive": "Inactive products",
+    "filter_nature_all": "All natures",
+    "prev": "Previous",
+    "next": "Next",
+    "page_info": "Page {{page}} of {{pages}}"
   },
   "orphans": {
     "title": "Orphaned work orders",
@@ -1542,7 +1550,9 @@
     "reattach_empty": "No candidate lines (open orders for this customer with free quantity).",
     "reattach_confirm": "Reassign",
     "reattach_done": "Work order reassigned to the line.",
-    "reattach_error": "Could not reassign the work order."
+    "reattach_error": "Could not reassign the work order.",
+    "back_title": "Back to work orders",
+    "entity": "orphans"
   },
   "workorders": {
     "title": "Work orders",
@@ -1770,7 +1780,14 @@
     "percentage": "Percentage (%)",
     "days_offset": "Days from date",
     "total_pct": "Total",
-    "total_must_be_100": "must be 100%"
+    "total_must_be_100": "must be 100%",
+    "back_title": "Back to dashboard",
+    "entity": "terms",
+    "view_active": "Active terms",
+    "view_inactive": "Inactive terms",
+    "prev": "Previous",
+    "next": "Next",
+    "page_info": "Page {{page}} of {{pages}}"
   },
   "commerce": {
     "issued_at": "Issue date",
@@ -2056,7 +2073,8 @@
         "empty": "No time data.",
         "error": "Could not complete the operation."
       }
-    }
+    },
+    "back_title": "Back to dashboard"
   },
   "companyCalendar": {
     "title": "Company calendar",

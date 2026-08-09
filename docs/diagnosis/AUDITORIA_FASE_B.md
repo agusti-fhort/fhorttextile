@@ -191,6 +191,70 @@ aplicar a `NORMA_LLISTA_canonica`. **Zero canvi de píxel.**
 
 ---
 
+## B2 · Planificació — `/planificacio` (commit 252)
+
+El shell de govern del planificador: **sis seccions** (Dashboard · Planificació · Assignació ·
+Calendari de projecte · Informes · Registre) sobre la mateixa pantalla, i el Gantt de projecte.
+Germana de referència: **A6** per a l'estructura i **A5/§8e** per a les llistes de dins.
+
+### Cens dada → endpoint
+
+| Què es pinta | D'on surt |
+|---|---|
+| Carpetes Pendents/Assignades | `model-tasks/by-model/?all=true` + `model-tasks/` + `users/` (paginació seguida a les tres) |
+| Cua d'un tècnic (ordre real) | `planned_start`/`planned_end` de les tasques no-Done d'aquell tècnic |
+| Reordenar la cua | `POST plan/reorder/` (`assignee_id` + `model_ids`) |
+| Desassignar un model | `POST models/{id}/unassign/` |
+| Reassignar una tasca | `PATCH model-tasks/{id}/` (`assignee`) |
+| Esborrar una tasca | `DELETE model-tasks/{id}/` (el backend només ho permet en `Pending`) |
+| Gantt de projecte | `GET plan/gantt/` + `companyCalendar` (dies no laborables) |
+| Ordre de fases del Gantt | `GET /api/v1/vocabulari/` → `fases_model` |
+| Viabilitat (latest start · semàfor) | **calculada al client** a partir de `estimated_minutes` i `data_objectiu` 🚩 |
+
+### Desviacions trobades i corregides
+
+| Què | Abans | Ara |
+|---|---|---|
+| Menú de pantalla | **no existia**: sis botons amb l'actiu en **daurat ple** sobre `--bg-muted` | §8b: píndoles a la barra blanca |
+| Rètol de carpeta | **píndola taronja** (`--warn-bg` + `--warn` a 600) amb el recompte entre parèntesis | §8e: **el valor mana** (22/600) + etiqueta en caption, i la cerca al costat |
+| Fila desplegada / arrossegada | fons `--warn-bg` (**semàfor fent de selecció**) | `--sel` (§1) |
+| Nansa d'arrossegar | el caràcter braille **`⠿`** | icona Tabler 16px (§8: mai un caràcter tipogràfic) |
+| Fons de la fila desplegada | **`var(--bg, #faf9f7)`** — `--bg` **no existeix**: es pintava sempre el literal de reserva | `--bg-page` |
+| «En risc» del semàfor | `--warn` (1.86:1 com a text) | `--warn-ink` (§1b(d)) |
+| Xips de filtre del Gantt | el triat s'omplia de **`--err` PLE** amb tinta blanca | «inclòs» = verd (§1): `--ok-bg` + tinta i vora `--ok` |
+| Xips de tècnic | el triat es marcava amb vora `--text-main` | mateixa forma verda d'inclusió |
+| Capçalera de l'eix del Gantt | crema `--bg-muted` | panell blanc + filet `--line` |
+| Sense accés | caixa centrada amb icona de **32px** i tinta `--gray` | frase `--text-faint` cursiva (§8c) |
+| Tokens | `--gray-l`, `--gray`, `--border`, `--text-muted`, `--bg-card`, `--bg-muted`, vores de `0.5px`, radis literals, pes 300 | l'escala de la norma |
+
+**Fitxers del tram:** `pages/Planning.jsx` · `components/planning/{ProjectGantt,DashboardGovPanel,InformesPanel,TimeTree,PhaseTimeStrip}.jsx` · `pages/RegistreActivitat.jsx` (el tab «Registre»).
+
+### `ui/buttons.js` · `selS` es conforma per a TOT el producte
+
+`selS` és el control en línia de la casa i el consumeixen **126 usos en 24 fitxers**. Anava amb
+`0.5px solid var(--gray-l)`: `--gray-l` (#f0f0f0) és un àlies de **farciment** fent de vora, en
+gris fred, quan la vora de la norma és `--line`; i mig píxel no és de cap escala (el navegador
+l'arrodoneix i el resultat depèn del zoom).
+
+⚠️ **Toca pantalles ja conformades** (`/cataleg-peces`, `/garment-types`, l'`ActionsMenu` del
+model). Va cap a la norma a totes — mateix criteri amb què el bloc A va canviar `GroupPills` i el
+bloc B `ui/Badge` per a tot el producte — i per això la bidireccional es torna a córrer sencera
+sobre tot el que ja estava tancat. **L'alçada NO s'hi fixa a posta**: hi ha usos que ajusten el
+`padding` per encabir el control dins d'una cel·la de taula, i una alçada única els trencaria en
+silenci.
+
+### 🚩 Anotat, NO tocat
+
+1. **La VIABILITAT es calcula al client.** `calcViabilitat` (`Planning.jsx`) dedueix el «latest
+   start» i el semàfor amb **420 min/dia i dl-dv sense festius escrits a mà**, mentre el Gantt de
+   la mateixa pantalla llegeix els dies no laborables del **CompanyCalendar** (font única). Dues
+   respostes a la mateixa pregunta a la mateixa pantalla. No s'ha tocat: unificar-ho és decidir
+   quina mana, i això és domini.
+2. **L'auditoria de computats només mesura el tab per defecte** (Dashboard de govern): l'arnès no
+   clica. Els altres cinc tabs s'han conformat per token i pel lint, **no mesurats un a un**.
+3. `FASE_COLORS` del Gantt **es queda**: és una paleta de data-viz indexada pel codi de fase
+   (mateix criteri que `KONVA_COL`), no una còpia de l'enumeració — el fitxer ja ho tenia escrit.
+
 ## CODES PER A LA S2 (backend i compartits · commits 250·204, 250·205, 250)
 
 ### `/customers` tornava a ordenar — DRF es menjava l'ordre en silenci

@@ -1519,7 +1519,15 @@
     "exc_added": "Excepción añadida.",
     "exc_removed": "Excepción quitada.",
     "exc_gti_ph": "— Tipo de prenda (GTI) —",
-    "exc_filter_ph": "Filtrar por tipo de prenda…"
+    "exc_filter_ph": "Filtrar por tipo de prenda…",
+    "back_title": "Volver al panel",
+    "entity": "artículos",
+    "view_active": "Artículos activos",
+    "view_inactive": "Artículos inactivos",
+    "filter_nature_all": "Todas las naturalezas",
+    "prev": "Anterior",
+    "next": "Siguiente",
+    "page_info": "Página {{page}} de {{pages}}"
   },
   "orphans": {
     "title": "Encargos huérfanos",
@@ -1542,7 +1550,9 @@
     "reattach_empty": "Ninguna línea candidata (pedidos abiertos del cliente con cantidad libre).",
     "reattach_confirm": "Reasignar",
     "reattach_done": "Encargo reasignado a la línea.",
-    "reattach_error": "No se ha podido reasignar el encargo."
+    "reattach_error": "No se ha podido reasignar el encargo.",
+    "back_title": "Volver a los encargos",
+    "entity": "huérfanos"
   },
   "workorders": {
     "title": "Encargos",
@@ -1770,7 +1780,14 @@
     "percentage": "Porcentaje (%)",
     "days_offset": "Días desde la fecha",
     "total_pct": "Suma",
-    "total_must_be_100": "debe ser 100%"
+    "total_must_be_100": "debe ser 100%",
+    "back_title": "Volver al panel",
+    "entity": "condiciones",
+    "view_active": "Condiciones activas",
+    "view_inactive": "Condiciones inactivas",
+    "prev": "Anterior",
+    "next": "Siguiente",
+    "page_info": "Página {{page}} de {{pages}}"
   },
   "commerce": {
     "issued_at": "Fecha de emisión",
@@ -2056,7 +2073,8 @@
         "empty": "Sin datos de tiempo.",
         "error": "No se ha podido completar la operación."
       }
-    }
+    },
+    "back_title": "Volver al panel"
   },
   "companyCalendar": {
     "title": "Calendario de empresa",

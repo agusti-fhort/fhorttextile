@@ -1519,7 +1519,15 @@
     "exc_added": "Excepció afegida.",
     "exc_removed": "Excepció treta.",
     "exc_gti_ph": "— Tipus de peça (GTI) —",
-    "exc_filter_ph": "Filtrar per tipus de peça…"
+    "exc_filter_ph": "Filtrar per tipus de peça…",
+    "back_title": "Tornar al tauler",
+    "entity": "articles",
+    "view_active": "Articles actius",
+    "view_inactive": "Articles inactius",
+    "filter_nature_all": "Totes les natures",
+    "prev": "Anterior",
+    "next": "Següent",
+    "page_info": "Pàgina {{page}} de {{pages}}"
   },
   "orphans": {
     "title": "Encàrrecs orfes",
@@ -1542,7 +1550,9 @@
     "reattach_empty": "Cap línia candidata (comandes obertes del client amb quantitat lliure).",
     "reattach_confirm": "Reassignar",
     "reattach_done": "Encàrrec reassignat a la línia.",
-    "reattach_error": "No s'ha pogut reassignar l'encàrrec."
+    "reattach_error": "No s'ha pogut reassignar l'encàrrec.",
+    "back_title": "Tornar als encàrrecs",
+    "entity": "orfes"
   },
   "workorders": {
     "title": "Encàrrecs",
@@ -1770,7 +1780,14 @@
     "percentage": "Percentatge (%)",
     "days_offset": "Dies des de la data",
     "total_pct": "Suma",
-    "total_must_be_100": "ha de ser 100%"
+    "total_must_be_100": "ha de ser 100%",
+    "back_title": "Tornar al tauler",
+    "entity": "condicions",
+    "view_active": "Condicions actives",
+    "view_inactive": "Condicions inactives",
+    "prev": "Anterior",
+    "next": "Següent",
+    "page_info": "Pàgina {{page}} de {{pages}}"
   },
   "commerce": {
     "issued_at": "Data d'emissió",
@@ -2056,7 +2073,8 @@
         "empty": "Sense dades de temps.",
         "error": "No s'ha pogut completar l'operació."
       }
-    }
+    },
+    "back_title": "Tornar al tauler"
   },
   "companyCalendar": {
     "title": "Calendari d'empresa",

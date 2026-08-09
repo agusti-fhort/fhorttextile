@@ -17,13 +17,13 @@ const MONO = 'IBM Plex Mono, monospace'
 // model declara. `codiSeguent` és el mateix helper que `ActionsMenu`, no una segona còpia.
 
 const thS = {
-  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', textAlign: 'left',
-  padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.04em',
-  borderBottom: '0.5px solid var(--gray-l)', whiteSpace: 'nowrap',
+  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-soft)', textAlign: 'left',
+  padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.08em',
+  borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap',
 }
-const tdS = { padding: '8px 10px', fontSize: 'var(--fs-body)', borderBottom: '0.5px solid var(--gray-l)', verticalAlign: 'middle' }
+const tdS = { padding: '8px 10px', fontSize: 'var(--fs-body)', borderBottom: '1px solid var(--line)', verticalAlign: 'middle' }
 const ghostBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
+  background: 'none', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', cursor: 'pointer',
   padding: '4px 12px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-main)',
 }
 
@@ -55,7 +55,7 @@ function TimeAnalysisSection({ t }) {
         <i className="ti ti-clock-cog" style={{ fontSize: 16, marginRight: 6, color: 'var(--gold)' }} />
         {t('planning.time.title')}
       </h2>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginTop: 0, marginBottom: 12 }}>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontWeight: 400, marginTop: 0, marginBottom: 12 }}>
         {t('planning.time.subtitle')}
       </p>
       <PhaseTimeStrip t={t} />
@@ -106,8 +106,8 @@ function Chip({ label, n, strong }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', fontFamily: MONO,
-      color: 'var(--text-muted)', padding: '4px 11px', borderRadius: 10, background: 'var(--white)',
-      border: `0.5px solid ${strong ? 'var(--gold)' : 'var(--gray-l)'}`,
+      color: 'var(--text-soft)', padding: '4px 11px', borderRadius: 'var(--r-pill)', background: 'var(--panel)',
+      borderWidth: 1, borderStyle: 'solid', borderColor: strong ? 'var(--gold-border)' : 'var(--line)',
     }}>
       <span>{label}</span>
       <span style={{ fontWeight: 600, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>{n}</span>
@@ -144,21 +144,21 @@ function RiskBlock({ t }) {
     <section>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
         <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, fontFamily: MONO, margin: 0 }}>
-          <i className="ti ti-alert-triangle" style={{ fontSize: 16, marginRight: 6, color: 'var(--warn)' }} />
+          <i className="ti ti-alert-triangle" style={{ fontSize: 16, marginRight: 6, color: 'var(--warn-ink)' }} />
           {t('planning.risk.title')}
         </h2>
-        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontFamily: MONO }}>{rows.length}</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontFamily: MONO }}>{rows.length}</span>
       </div>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginTop: 0, marginBottom: 12 }}>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontWeight: 400, marginTop: 0, marginBottom: 12 }}>
         {t('planning.risk.subtitle')}
       </p>
       {loading ? <Center>{t('planning.loading')}</Center>
         : rows.length === 0 ? (
-          <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+          <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)', border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)' }}>
             {t('planning.risk.empty')}
           </div>
         ) : (
-          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+          <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflowX: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead><tr>
                 <th style={thS}>{t('planning.col_model')}</th>
@@ -172,7 +172,7 @@ function RiskBlock({ t }) {
                   <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/models/${r.id}`)}>
                     <td style={{ ...tdS, fontFamily: MONO, fontWeight: 600 }}>
                       {r.codi}
-                      <div style={{ fontWeight: 400, color: 'var(--gray)' }}>{r.nom}</div>
+                      <div style={{ fontWeight: 400, color: 'var(--text-soft)' }}>{r.nom}</div>
                     </td>
                     <td style={tdS}>{t(`model_sheet.dashboard.phase.${r.fase}`, { defaultValue: r.fase })}</td>
                     <td style={tdS}>{r.data_objectiu}</td>
@@ -255,7 +255,7 @@ function GatesReadyBlock({ t }) {
           <i className="ti ti-checkup-list" style={{ fontSize: 16, marginRight: 6, color: 'var(--gold)' }} />
           {t('planning.gates.title')}
         </h2>
-        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontFamily: MONO }}>{rows.length}</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontFamily: MONO }}>{rows.length}</span>
         {selectableCount > 0 && (
           <button onClick={validateSelected} disabled={busy} style={{ ...primaryBtn, marginLeft: 'auto' }}>
             <i className="ti ti-circle-check" style={{ fontSize: 14 }} />
@@ -263,7 +263,7 @@ function GatesReadyBlock({ t }) {
           </button>
         )}
       </div>
-      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300, marginTop: 0, marginBottom: 12 }}>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontWeight: 400, marginTop: 0, marginBottom: 12 }}>
         {t('planning.gates.subtitle')}
       </p>
 
@@ -271,11 +271,11 @@ function GatesReadyBlock({ t }) {
 
       {loading ? <Center>{t('planning.loading')}</Center>
         : rows.length === 0 ? (
-          <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+          <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)', border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)' }}>
             {t('planning.gates.empty')}
           </div>
         ) : (
-          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+          <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflowX: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
               <thead><tr>
                 <th style={{ ...thS, width: 34 }}></th>
@@ -299,10 +299,10 @@ function GatesReadyBlock({ t }) {
                       <td style={tdS}>{t(`model_sheet.dashboard.phase.${r.fase_actual}`, { defaultValue: r.fase_actual })}</td>
                       <td style={tdS}>
                         {!fases
-                          ? <span style={{ color: 'var(--text-muted)' }}>—</span>
+                          ? <span style={{ color: 'var(--text-soft)' }}>—</span>
                           : nx
                             ? <span style={{ fontWeight: 500 }}>{t(`model_sheet.dashboard.phase.${nx}`, { defaultValue: nx })}</span>
-                            : <span style={{ color: 'var(--text-muted)' }}>{t('planning.gates.at_top')}</span>}
+                            : <span style={{ color: 'var(--text-soft)' }}>{t('planning.gates.at_top')}</span>}
                       </td>
                       <td style={tdS}>{r.task_count}</td>
                       <td style={tdS}>

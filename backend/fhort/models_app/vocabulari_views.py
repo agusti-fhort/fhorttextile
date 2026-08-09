@@ -97,7 +97,7 @@ from fhort.fitting.models import FittingSession, PieceFittingLine
 from fhort.fitting.services import SEALED_SESSION_ESTATS
 from fhort.models_app.models import Model
 from fhort.pom.models import CustomerPOMAlias, GradingRule
-from fhort.tasks.models import Customer, ModelTask, TaskType
+from fhort.tasks.models import Customer, ModelTask, Supplier, TaskType
 from fhort.tenants.federation_service import ESTATS_LOCALS_ENCARREC
 from fhort.tenants.models import TenantLink
 
@@ -226,6 +226,9 @@ def vocabulari_domini_view(request):
         # resultat és visible a pantalla AVUI: un àlies nascut d'un model pinta la clau i18n
         # crua a la cel·la, perquè l'etiqueta es construeix per interpolació del codi.
         'origens_alias_pom': _llista(_choices_del_camp(CustomerPOMAlias, 'origen')),
+        # `Supplier.type` tenia els `choices` INLINE al camp, sense constant: era l'última
+        # enumeració del lot comercial declarada al client, i és un select que ESCRIU.
+        'tipus_proveidor': _llista(_choices_del_camp(Supplier, 'type')),
         'regims_fiscals_client': _llista(_choices_del_camp(Customer, 'tax_regime')),
         'metodes_pagament_client': _llista(_choices_del_camp(Customer, 'payment_method')),
         'estats_vincle_tenant': _llista(TenantLink.ESTAT_CHOICES),

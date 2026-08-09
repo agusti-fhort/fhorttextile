@@ -59,6 +59,17 @@ TOKEN = os.environ.get('FTT_QA_TOKEN', '')
 PANTALLES = [
     ('LLARGA · /models', '/models'),
     ('CURTA · /garment-types', '/garment-types'),
+    # Lot comercial (S2). `/clients` és on la seva llista té més files; `/comercial/comandes` és
+    # el cas de barra amb NOMÉS la fletxa (sense seccions ni acció primària), que és el que la
+    # §8b.2 descriu i el que no s'havia mesurat enlloc.
+    ('LLARGA · /clients', '/clients'),
+    ('CURTA · /comercial/comandes', '/comercial/comandes'),
+    # Lot tècnic (S1).
+    # ⚠️ AQUESTA ESTÀ GATEJADA PER CAPACITAT (`define_tasks`/`configure`). Amb un usuari que no
+    # les té —el del tenant `los`, per exemple— la pantalla pinta l'estat «sense accés» i **no
+    # munta cap menú de pantalla**, i l'arnès ho dona com a incompliment. No ho és: és la
+    # pantalla dient la veritat. S'ha de mesurar amb `fhort`, que és on l'usuari hi té dret.
+    ('LLARGA · /planificacio', '/planificacio'),
 ]
 
 LINE = 'rgb(232, 229, 224)'   # --line
