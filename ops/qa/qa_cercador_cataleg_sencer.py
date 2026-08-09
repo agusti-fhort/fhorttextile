@@ -119,42 +119,62 @@ def main():
             nav.close()
             return
 
-        # ── 1 · camp BUIT + focus = el catàleg sencer ────────────────────────────────────
-        camp.nth(idx).click()
-        pag.wait_for_timeout(1600)
-        txt = desplegable(pag)
-        comprova('amb el camp BUIT el desplegable ofereix el catàleg',
-                 len(txt) > 40, f'{len(txt.splitlines())} línies al portal')
-        comprova('i diu el sostre (quants se n\'ensenyen de quants)',
-                 '142' in txt, txt.splitlines()[-1][:70] if txt else '')
-        pag.screenshot(path=str(OUT / 'cerca_01_cataleg_sencer.png'), full_page=True)
-
-        # ── 2 · ELS TRES `q` EXACTES DE L'AGUS ───────────────────────────────────────────
-        # 🔑 Es mesura que la fila sigui IDENTIFICABLE, no que el POM «hi sigui» a la resposta.
-        # El defecte d'aquesta volta és justament que hi era i no es podia reconèixer: la fila
-        # pintava només la nomenclatura del client (`FB2 · TOP LINING…`) i qui havia escrit
-        # «front le» —text del nom CANÒNIC— no veia enlloc el que havia escrit. Per això la
-        # comprovació busca el codi de casa i el nom canònic AL TEXT DEL DESPLEGABLE.
-        for q, casa, canonic, primera in (
-            ('front le', 'F', 'Centre front length from HPS', False),
-            ('F', 'F', 'Centre front length from HPS', True),
-            ('neck', 'EK', 'Neck width', False),
+        # ── LES DUES POBLACIONS, A CADA CONSULTA ─────────────────────────────────────────
+        #
+        # 🔑 El que es mesura NO és «el POM hi és a la resposta» sinó **que es pugui reconèixer
+        # a la pantalla**. Tres voltes de QA van morir aquí: el POM hi era, la fila el pintava
+        # amb la nomenclatura de l'altre catàleg, i qui l'havia demanat no el veia. Per això
+        # cada comprovació busca el TEXT literal de la fila al desplegable.
+        #
+        # Cap fila combinada: el canònic surt a la secció de la casa amb el SEU codi i el SEU
+        # nom, i l'àlies a la del client amb els seus i una segona línia «→ canònic».
+        RETOL_CLIENT, RETOL_CASA = 'CATÀLEG DEL CLIENT', 'CATÀLEG DE LA CASA'
+        for q, casa, canonic in (
+            ('', None, None),                                    # camp buit = les dues senceres
+            ('F', 'F', 'Centre front length from HPS'),
+            ('front', 'F', 'Centre front length from HPS'),
+            ('neck', 'EK', 'Neck width'),
         ):
             camp.nth(idx).fill('')
-            pag.wait_for_timeout(400)
-            camp.nth(idx).fill(q)
-            pag.wait_for_timeout(1700)
+            pag.wait_for_timeout(500)
+            if q:
+                camp.nth(idx).fill(q)
+            else:
+                camp.nth(idx).click()
+            pag.wait_for_timeout(1800)
             txt = desplegable(pag)
-            files = [l for l in txt.splitlines() if l.strip()]
-            comprova(f'«{q}» → el canònic «{canonic}» és VISIBLE a la fila',
-                     canonic in txt, files[:3])
-            comprova(f'«{q}» → la fila diu el codi de casa ({casa})',
-                     f'casa: {casa}' in txt or f'{casa} · {canonic}' in txt, '')
-            if primera:
-                # La PRIMERA fila de dades (després del rètol de nivell) ha de resoldre al POM.
-                cap = [l for l in files if not l.isupper()][:4]
-                comprova(f'«{q}» → aquella fila és la PRIMERA', canonic in ' '.join(cap), cap)
-            pag.screenshot(path=str(OUT / f'cerca_02_q_{q.replace(" ", "_")}.png'), full_page=True)
+            etiq = f'«{q}»' if q else 'camp BUIT'
+
+            comprova(f'{etiq} → LES DUES seccions són visibles',
+                     RETOL_CLIENT in txt.upper() and RETOL_CASA in txt.upper(),
+                     [l for l in txt.splitlines() if l.strip().isupper()][:4])
+
+            if q:
+                comprova(f'{etiq} → el canònic «{casa} · {canonic}» surt com a ELL MATEIX',
+                         canonic in txt, [l for l in txt.splitlines() if canonic in l][:2])
+            else:
+                # Les dues poblacions senceres: 64 àlies i 142 canònics, amb el sostre dit.
+                comprova('camp BUIT → cada secció diu el seu sostre',
+                         '/64' in txt and '/142' in txt,
+                         [l for l in txt.splitlines() if '/' in l][:3])
+
+            nom = q.replace(' ', '_') if q else 'buit'
+            pag.screenshot(path=str(OUT / f'cerca_seccions_{nom}.png'), full_page=True)
+
+        # L'exacte, primer DINS de la seva secció: q=F → la fila F encapçala la de la casa.
+        camp.nth(idx).fill('')
+        pag.wait_for_timeout(400)
+        camp.nth(idx).fill('F')
+        pag.wait_for_timeout(1800)
+        txt = desplegable(pag)
+        linies = [l.strip() for l in txt.splitlines() if l.strip()]
+        try:
+            i_casa = next(i for i, l in enumerate(linies) if RETOL_CASA in l.upper())
+            primera = ' '.join(linies[i_casa + 1:i_casa + 3])
+        except StopIteration:
+            primera = ''
+        comprova('«F» → la fila F canònica encapçala la secció de la casa',
+                 'Centre front length from HPS' in primera, primera[:80])
 
         # ⚠️ El carril ESCRIU EN OBRIR-SE (`open-task` salta només d'entrar-hi): el que s'ha de
         # comprovar no és que no n'hi hagi cap —n'hi haurà— sinó que TOTES han quedat retingudes

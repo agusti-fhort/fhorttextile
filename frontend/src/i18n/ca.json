@@ -3392,7 +3392,9 @@
     "pom_propi_codi_hint": "El codi del client. No pot ser un que ja signifiqui una altra cosa.",
     "pom_propi_err": "No s'ha pogut crear el POM.",
     "finder_nivell_model": "creats des d'un model",
-    "cerca_truncada": "Se'n mostren {{mostrats}} de {{total}} — afina la cerca per veure la resta."
+    "cerca_truncada": "Se'n mostren {{mostrats}} de {{total}} — afina la cerca per veure la resta.",
+    "finder_seccio_client": "catàleg del client",
+    "finder_seccio_casa": "catàleg de la casa"
   },
   "dashboard": {
     "tab_home": "Inici",

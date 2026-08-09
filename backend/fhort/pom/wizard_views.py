@@ -232,15 +232,6 @@ def search_poms_view(request):
                              .order_by('_exacte', 'pendent_revisio', 'client_code')
                              .values_list('pom_id', flat=True))
 
-        # La unió, amb els àlies primer i sense repetits. El tall es fa AQUÍ i es diu a la
-        # resposta; l'ordre final el posa la proximitat, més avall.
-        ids_units = list(dict.fromkeys([*ids_alies, *ids_canonic]))
-        total = len(ids_units)
-        ids = ids_units[:limit]
-        per_id = {p.id: p for p in POMMaster.objects.filter(id__in=ids, actiu=True)
-                  .select_related('pom_global', 'categoria')}
-        poms = [per_id[i] for i in ids if i in per_id]
-
         # EL NIVELL DE PROXIMITAT (v8.1 · cercador agrupat). Amb `?model=`, cada resultat diu si
         # el POM ve de l'ITEM d'aquest model, de la seva FAMÍLIA (un altre item del mateix
         # GarmentType) o del CATÀLEG del client. Sense `?model=` tots surten com a 'cataleg': el
@@ -272,53 +263,96 @@ def search_poms_view(request):
                 return 'type'
             return 'cataleg'
 
-        # LA NOMENCLATURA QUE ES PINTA ÉS LA DEL CLIENT. El cercador ensenyava `codi_client` de
-        # `POMMaster` sota el rètol «del catàleg del client», i és el codi de la CASA: el tècnic
-        # de Brownie veia «CH» on el seu document diu «A». Els tres camps d'àlies els resol el
-        # mateix `alies_per_pom`/`camps_de` que la resta de superfícies —una sola font— i queden
-        # buits si el POM no té àlies d'aquest client (llavors mana el catàleg, com sempre).
+        # ══ EL CERCADOR NO FUSIONA ENTITATS: DUES POBLACIONS, SEMPRE (Agus, 09/08) ═══════
+        #
+        # El canònic `F · Centre front length from HPS` i l'àlies `FB2` de Brownie **SÓN DUES
+        # COSES**, i abans se n'oferia UNA: la unió deduplicava per `pom_id` i la presentació
+        # tapava el canònic amb els camps de l'àlies. Qui tenia el catàleg de la casa al davant
+        # i escrivia «F» no podia saber que aquell `FB2` el contenia; qui cercava pel nom
+        # canònic rebia una fila que no deia el nom canònic enlloc. Dir-ho amb una sola fila
+        # obligava el lector a saber-ho ja — i qui no ho sabia, duplicava.
+        #
+        # Ara el desplegable presenta SEMPRE dues poblacions, i cap fila és combinada:
+        #   · CATÀLEG DEL CLIENT — els àlies del client d'aquest model, amb el SEU codi i la SEVA
+        #     redacció, i la segona línia dient a quin canònic apunten;
+        #   · CATÀLEG DE LA CASA — els canònics, cadascun com a ELL MATEIX (codi + nom canònic).
+        #
+        # Un POM amb àlies hi surt DUES vegades, una per secció, i **totes dues resolen al mateix
+        # `pom_id`**: no es demana a ningú que sàpiga que són la mateixa cosa, es deixa que hi
+        # arribi per qualsevol de les dues portes.
+        #
+        # Com a molt UNA fila d'àlies per POM: `alies_per_pom` en dona un per POM (és el que
+        # PINTA la nomenclatura del client) i un client amb dos codis per al mateix POM no ha de
+        # generar dues files calcades.
         from fhort.pom.nomenclatura import alies_per_pom, camps_de
         alias_by_pom = alies_per_pom(customer_id)
+        CAMPS_ALIES = list(camps_de(alias_by_pom, None).keys())
 
-        data = [{
-            'id': p.id,
-            'codi_client': p.codi_client,
-            'nom_client': p.nom_client,
-            'nom_ca': p.pom_global.nom_ca if p.pom_global_id else '',
-            'nom_en': p.pom_global.nom_en if p.pom_global_id else '',
-            'categoria_nom': p.categoria.nom_ca if p.categoria_id else '',
-            'nivell': _nivell(p.id),
-            **camps_de(alias_by_pom, p.id),
-        } for p in poms]
-
-        # L'ordre és el de PROXIMITAT: el que l'item ja declara primer. Qui busca «C» a la taula
-        # d'un jersei vol la seva cintura, no la d'una americana que comparteix catàleg.
-        # ⚠️ **L'EXACTE PRIMER ERA CASUALITAT DE L'ABECEDARI** (QA Agus 09/08, 3a volta).
-        #
-        # Les dues consultes ja anotaven `_exacte` per posar el codi exacte al davant, però
-        # aquest `sort` final el LLENÇAVA i reordenava per codi. Que «F» sortís abans que F1, F3
-        # o FB no era cap garantia: era que la F va abans a l'abecedari. El dia que l'exacte no
-        # guanyi alfabèticament (un àlies exacte que resol a un codi de casa que va més avall),
-        # l'encert queda enterrat enmig de les seves germanes i sembla que no hi sigui.
-        #
-        # Ara l'exactitud viatja fins al final i es mira contra ELS DOS codis —el de la casa i el
-        # del client—, perquè el tècnic pot escriure qualsevol dels dos i en tots dos casos vol
-        # aquella fila la primera. El NIVELL segueix manant per damunt (la proximitat és la llei
-        # de la llista); l'exacte desempata a dins.
         q_cf = q.casefold()
 
-        def _rang_exacte(r):
+        def _rang_exacte(*codis):
+            """0 si el que s'ha escrit ÉS un d'aquests codis. Es miren ELS DOS (casa i client):
+            el tècnic pot escriure qualsevol dels dos i en tots dos casos vol aquella fila la
+            primera. Amb el camp buit no hi ha res «exacte» a premiar."""
             if not q_cf:
-                return 1                      # catàleg sencer: no hi ha res «exacte» a premiar
-            return 0 if q_cf in {(r.get('codi_client') or '').casefold(),
-                                 (r.get('client_code') or '').casefold()} else 1
+                return 1
+            return 0 if q_cf in {(c or '').casefold() for c in codis if c} else 1
 
-        ordre = {'item': 0, 'type': 1, 'cataleg': 2}
-        data.sort(key=lambda r: (ordre[r['nivell']], _rang_exacte(r), (r['codi_client'] or '')))
+        ordre_niv = {'item': 0, 'type': 1, 'cataleg': 2}
 
-        # `count` és el total REAL de la unió i `truncat` diu si el sostre ha tallat. Sense
-        # això, «no hi és» i «no hi cabia» es deien igual — que és com es fabrica un duplicat.
-        return Response({'results': data, 'count': total, 'truncat': total > len(data)})
+        def _fila(p, es_alies):
+            camps = camps_de(alias_by_pom, p.id)
+            fila = {
+                'id': p.id,                       # ← el MATEIX pom_id per les dues portes
+                'seccio': 'client' if es_alies else 'casa',
+                'codi_client': p.codi_client,     # el codi de la CASA (v. `nomenclatura`)
+                'nom_client': p.nom_client,
+                'nom_ca': p.pom_global.nom_ca if p.pom_global_id else '',
+                'nom_en': p.pom_global.nom_en if p.pom_global_id else '',
+                'categoria_nom': p.categoria.nom_ca if p.categoria_id else '',
+                'nivell': _nivell(p.id),
+            }
+            # LA FILA CANÒNICA VA SENSE CAP CAMP D'ÀLIES, i no és un descuit: si els portés, la
+            # presentació tornaria a pintar-hi el codi del client a sobre — que és exactament el
+            # defecte que això tanca. La fila de la casa és la casa.
+            fila.update(camps if es_alies else {c: '' for c in CAMPS_ALIES})
+            return fila
+
+        pids_alies = list(dict.fromkeys(ids_alies))
+        pids_canonic = list(dict.fromkeys(ids_canonic))
+        per_id = {p.id: p for p in POMMaster.objects
+                  .filter(id__in=set(pids_alies) | set(pids_canonic), actiu=True)
+                  .select_related('pom_global', 'categoria')}
+
+        sec_client = [_fila(per_id[i], True) for i in pids_alies if i in per_id]
+        sec_casa = [_fila(per_id[i], False) for i in pids_canonic if i in per_id]
+        # Es puntua i s'ordena DINS de cada secció: exacte primer, després la proximitat (el que
+        # l'item ja declara va davant), i el codi desempata perquè l'ordre sigui estable.
+        for seccio in (sec_client, sec_casa):
+            seccio.sort(key=lambda r: (_rang_exacte(r['codi_client'], r.get('client_code')),
+                                       ordre_niv[r['nivell']], (r['codi_client'] or '')))
+
+        # ⚠️ **EL SOSTRE ES REPARTEIX ENTRE LES DUES SECCIONS.** Tallant la llista sencera, amb
+        # el camp buit els 25 primers serien TOTS del client i la secció de la casa no existiria
+        # mai: una secció buida per aritmètica del tall es llegeix com «aquí no hi ha res», que
+        # és la mentida que aquest tram porta tres voltes tancant. Cada secció té la seva quota i
+        # la que no l'omple cedeix el que li sobra a l'altra.
+        quota = max(1, limit // 2)
+        pren_client = min(len(sec_client), max(quota, limit - len(sec_casa)))
+        pren_casa = min(len(sec_casa), limit - pren_client)
+        data = sec_client[:pren_client] + sec_casa[:pren_casa]
+        total = len(sec_client) + len(sec_casa)
+
+        # `count` és el total REAL i `truncat` diu si el sostre ha tallat. Sense això, «no hi és»
+        # i «no hi cabia» es deien igual — que és com es fabrica un duplicat. Ara cada SECCIÓ diu
+        # també el seu, perquè amb dues poblacions un total sol no permet saber quina s'ha tallat.
+        return Response({
+            'results': data, 'count': total, 'truncat': total > len(data),
+            'seccions': {
+                'client': {'count': len(sec_client), 'mostrats': pren_client},
+                'casa': {'count': len(sec_casa), 'mostrats': pren_casa},
+            },
+        })
     except Exception as e:
         return Response({'error': str(e)}, status=500)
 

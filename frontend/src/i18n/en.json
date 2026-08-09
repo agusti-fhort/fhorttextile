@@ -3392,7 +3392,9 @@
     "pom_propi_codi_hint": "The customer's code. It cannot be one that already means something else.",
     "pom_propi_err": "The POM could not be created.",
     "finder_nivell_model": "created from a model",
-    "cerca_truncada": "Showing {{mostrats}} of {{total}} — refine the search to see the rest."
+    "cerca_truncada": "Showing {{mostrats}} of {{total}} — refine the search to see the rest.",
+    "finder_seccio_client": "client catalogue",
+    "finder_seccio_casa": "house catalogue"
   },
   "dashboard": {
     "tab_home": "Home",

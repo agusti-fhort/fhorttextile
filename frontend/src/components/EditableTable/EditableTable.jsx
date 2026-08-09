@@ -1894,7 +1894,10 @@ function ModalPomPropi({ modelId, nomInicial, onFet, onTanca }) {
   )
 }
 
-const NIVELLS = ['item', 'type', 'cataleg', 'model']
+// LES DUES POBLACIONS DEL DESPLEGABLE (Agus, 09/08). El client PRIMER —la seva nomenclatura és
+// la que mana a la fitxa— i la casa a sota. L'ordre és FIX: que una secció pugi o baixi segons
+// què hagis escrit faria que la mateixa llista es llegís diferent a cada tecla.
+const SECCIONS = ['client', 'casa']
 
 function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearPropi }) {
   const { t, i18n } = useTranslation()
@@ -1921,6 +1924,8 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
   // Quants n'hi ha de debò i si el sostre n'ha tallat (el backend ho diu des de la QA del 09/08).
   const [total, setTotal] = useState(0)
   const [truncat, setTruncat] = useState(false)
+  // El sostre DE CADA SECCIÓ: amb dues poblacions, un total sol no diu quina s'ha tallat.
+  const [seccions, setSeccions] = useState(null)
   // ⚠️ **EL CATÀLEG NOMÉS EXISTIA PER A QUI JA EN SABIA EL NOM** (QA Agus 09/08, segona volta).
   // Amb el camp buit no es cercava res, i qui obre el carril per veure QUÈ hi ha —el cas de qui
   // encara no coneix la nomenclatura d'aquest client— es trobava un buit i en deduïa que no hi
@@ -1937,19 +1942,27 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
     // tornava res i el POM semblava no existir. Amb un sol caràcter el backend cerca només per
     // CODI i posa l'exacte al davant, o sigui que la llista segueix sent curta i útil.
     if (cerca.length < 1 && !focusat) {
-      setResults([]); setObert(false); setTotal(0); setTruncat(false); return
+      setResults([]); setObert(false); setTotal(0); setTruncat(false); setSeccions(null); return
     }
     const timer = setTimeout(() => {
       // El sostre el mana el client i el backend el respecta (abans n'hi havia dos: aquest,
       // que ningú llegia, i un `[:20]` incrustat que tallava en silenci).
-      poms.cerca({ q: cerca, page_size: 25, ...(modelId ? { model: modelId } : {}) })
+      poms.cerca({
+        // 10 = 5 per secció. El sostre és BAIX a posta: el que importa és que les DUES
+        // poblacions es vegin alhora, i cada secció ja diu quantes en té («5/16»). Amb 25
+        // la del client omplia la llista sencera i la de la casa no arribava a sortir.
+        q: cerca, page_size: 10, ...(modelId ? { model: modelId } : {}),
+      })
         .then(r => {
           setResults(r.data?.results || [])
           setTotal(r.data?.count ?? (r.data?.results || []).length)
           setTruncat(!!r.data?.truncat)
+          setSeccions(r.data?.seccions || null)
           setSel(0); setObert(true); setCreaSel(false)
         })
-        .catch(() => { setResults([]); setObert(false); setTotal(0); setTruncat(false) })
+        .catch(() => {
+          setResults([]); setObert(false); setTotal(0); setTruncat(false); setSeccions(null)
+        })
     }, 300)
     return () => clearTimeout(timer)
   }, [cerca, modelId, focusat])
@@ -1960,8 +1973,8 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
     setQuery(''); setResults([]); setObert(false)
   }
 
-  const perNivell = NIVELLS
-    .map(n => [n, results.filter(r => (r.nivell || 'cataleg') === n)])
+  const perSeccio = SECCIONS
+    .map(s => [s, results.filter(r => (r.seccio || 'casa') === s)])
     .filter(([, files]) => files.length > 0)
 
   // P0.2b — LA LLISTA SORTIA TALLADA. Anava `position:absolute` dins del cercador, i el
@@ -1981,10 +1994,16 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
     const MARGE = 8
     const sobre = r.top - MARGE
     const sota = window.innerHeight - r.bottom - MARGE
-    const amunt = sobre >= Math.min(290, sota) || sobre >= 180
+    // ⚠️ EL SOSTRE DE 290px AMAGAVA UNA SECCIÓ SENCERA. Amb dues poblacions i files de dues
+    // línies hi cabien sis files: la del client se'l menjava tot i la de la casa quedava sota
+    // el plec —hi era al DOM i no es veia—, que en aquesta pantalla és el mateix que no existir
+    // (és el defecte que aquest tram porta quatre voltes tancant). El càlcul ja respecta l'espai
+    // real que hi ha; el que sobrava era el topall escrit a mà.
+    const ALCADA_MAX = 460
+    const amunt = sobre >= Math.min(ALCADA_MAX, sota) || sobre >= 180
     return {
       left: r.left,
-      maxHeight: Math.max(120, Math.min(290, amunt ? sobre : sota)),
+      maxHeight: Math.max(120, Math.min(ALCADA_MAX, amunt ? sobre : sota)),
       ...(amunt ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
     }
   }
@@ -2057,57 +2076,54 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
           boxShadow: '0 -8px 24px rgba(0,0,0,0.12)', minWidth: 410,
           maxHeight: pos.maxHeight, overflowY: 'auto',
         }}>
-          {perNivell.map(([nivell, files]) => (
-            <div key={nivell}>
+          {perSeccio.map(([seccio, files]) => (
+            <div key={seccio}>
+              {/* El rètol s'enganxa: quan es desplaça la llista, saber a quina de les dues
+                  poblacions estàs mirant no pot dependre d'haver vist passar la capçalera. */}
               <div style={{ fontSize: 'var(--fs-caption)', textTransform: 'uppercase',
                             letterSpacing: '0.06em', color: 'var(--text-muted)',
-                            padding: '7px 12px 3px', borderTop: '1px solid var(--border)' }}>
-                {t(`editable_table.finder_nivell_${nivell}`)}
+                            padding: '7px 12px 3px', borderTop: '1px solid var(--border)',
+                            position: 'sticky', top: 0, zIndex: 1, background: 'var(--white)' }}>
+                {t(`editable_table.finder_seccio_${seccio}`)}
+                {/* Cada secció diu el SEU sostre: amb dues poblacions, un total sol no permet
+                    saber quina s'ha tallat. */}
+                {seccions?.[seccio] && seccions[seccio].mostrats < seccions[seccio].count && (
+                  <span style={{ textTransform: 'none', letterSpacing: 0 }}>
+                    {` · ${seccions[seccio].mostrats}/${seccions[seccio].count}`}
+                  </span>
+                )}
               </div>
               {files.map(p => {
                 const k = results.indexOf(p)
-                // ⚠️ **EL RESULTAT NO ENSENYAVA PER QUÈ HAVIA SORTIT** (QA Agus 09/08, 3a volta).
-                //
-                // La fila pintava NOMÉS la nomenclatura del client, i el catàleg de la casa hi
-                // era només de reserva. Conseqüència mesurada: qui cerca «front le» —text que
-                // viu al nom CANÒNIC, `F · Centre front length from HPS`— rep aquell POM i el
-                // veu escrit `FB2 · TOP LINING: Centre front length (visible)`. El resultat és
-                // el correcte i **no conté enlloc el que s'ha escrit**, o sigui que es llegeix
-                // com «no l'ha trobat» — i d'aquí surt, un cop més, un duplicat fet a mà.
-                //
-                // No és el cercador: la unió mira codi i nom, canònic i àlies (mesurat: «neck»
-                // torna `EB · Neck binding width`, que NO té cap àlies). Era que la resposta
-                // amagava la meitat del que havia mirat.
-                //
-                // 🔑 La nomenclatura del client SEGUEIX MANANT a la línia principal (decisió
-                // d'Agus 06/08: el tècnic de Brownie ha de llegir el seu codi). El que s'afegeix
-                // és el CANÒNIC A SOTA, i només quan diu una cosa diferent: repetir-lo quan
-                // coincideix seria soroll a cada fila.
-                const codiCasa = p.codi_client || ''
-                const nomCasa = p.nom_client || p.nom_en || ''
-                const casaDiferent = !!(
-                  (p.client_code && p.client_code !== codiCasa)
-                  || (p.client_name_en && p.client_name_en !== nomCasa)
-                )
+                // ⚠️ **CAP FILA COMBINADA** (Agus, 09/08). El canònic i l'àlies són DUES COSES i
+                // es presenten com a dues files, cadascuna a la seva secció. Fusionar-les feia
+                // que qui cercava pel nom canònic rebés `FB2 · TOP LINING…` —el resultat
+                // correcte, sense contenir enlloc el que havia escrit— i ho llegís com «no l'ha
+                // trobat». Les dues resolen al mateix `pom_id`: `tria(p)` és idèntic.
+                const esAlies = p.seccio === 'client'
+                // L'ÀLIES DIU A QUI APUNTA; el canònic no ho ha de dir, perquè és ell mateix.
+                const apunta = esAlies && (p.codi_client || p.nom_client)
                 return (
-                  <div key={p.id} onMouseDown={e => { e.preventDefault(); tria(p) }}
+                  <div key={`${p.seccio}-${p.id}`}
+                    onMouseDown={e => { e.preventDefault(); tria(p) }}
                     onMouseEnter={() => setSel(k)}
                     style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '6px 12px',
                              cursor: 'pointer', fontSize: 'var(--fs-body)',
                              background: k === sel ? 'var(--gold-pale)' : 'transparent' }}>
-                    {/* EL CODI QUE ES PINTA ÉS EL DEL CLIENT. Abans hi anava `codi_client` de
-                        `POMMaster`, que es diu «client» però és el codi de la CASA: el tècnic de
-                        Brownie llegia «CH» sota el rètol «del catàleg del client» quan el seu
-                        document diu «A». El backend ja serveix els tres camps d'àlies. */}
+                    {/* A la secció del CLIENT, el codi del client; a la de la CASA, el de la
+                        casa. Cada fila parla la llengua de la seva secció — abans el codi del
+                        client tapava el de la casa a totes dues. */}
                     <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 56 }}>
-                      {p.client_code || p.codi_client}
+                      {esAlies ? (p.client_code || p.codi_client) : p.codi_client}
                     </span>
                     <span style={{ minWidth: 0, flex: 1 }}>
-                      {p.client_name_en || p.nom_client || p.nom_en || p.nom_ca}
-                      {casaDiferent && (
+                      {esAlies
+                        ? (p.client_name_en || p.client_name_local || p.nom_client)
+                        : (p.nom_client || p.nom_en || p.nom_ca)}
+                      {apunta && (
                         <span style={{ display: 'block', fontSize: 'var(--fs-caption)',
                                        color: 'var(--text-muted)' }}>
-                          {codiCasa}{codiCasa && nomCasa ? ' · ' : ''}{nomCasa}
+                          {`→ ${p.codi_client}${p.codi_client && p.nom_client ? ' · ' : ''}${p.nom_client || ''}`}
                         </span>
                       )}
                     </span>
