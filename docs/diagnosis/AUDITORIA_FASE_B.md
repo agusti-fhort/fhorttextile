@@ -817,10 +817,16 @@ prova que no existeix.** Remei: el de la casa, sense inventar-ne cap.
 
 1. **La fletxa de l'ARREL** — proposta conjunta de dues sessions: la barra es queda i la fletxa
    TAMBÉ, **deshabilitada** (`--text-faint`). Una línia si es vol d'una altra manera.
-2. **El daurat ple de l'acció primària** contra el §5 «la primària és blava». Queda obert a
-   `COL.gold` (editor .ftt), a «Buscar propostes» (Taller) i a la variant `gold` d'`ui/Badge`.
-   **És una decisió per a TOT el producte i s'ha de prendre una sola vegada**, no pantalla a
-   pantalla. Cap de les tres sessions l'ha presa.
+2. ~~**El daurat ple de l'acció primària**~~ — ✅ **RATIFICAT I TANCAT PER AGUS** mentre aquest
+   lot es tancava, en una quarta sessió (commit `57dc3683`): 45 accions amb fons `--gold`
+   escrites a mà, **classificades una a una** abans de tocar-les (41 primàries → `--accio`, 4
+   secundàries pel §5.3/§5.4, i la resta —selecció, píndoles, toggles d'eina, punts de color,
+   steppers— que **no són accions** i es queden). Mesurat: 0 accions amb daurat ple a 28 rutes.
+   **Les tres sessions vam encertar deixant-la oberta**: era una decisió de producte i s'ha
+   pres una sola vegada per a tot el producte, no pantalla a pantalla.
+   🚩 **Residu, corregit aquí**: aquella coda va portar dos botons d'`UsersRoles` (pantalla
+   d'aquest lot) de daurat a blau —correcte— però **l'`opacity: 0.6` del deshabilitat s'hi va
+   quedar**, i la §5.7 la prohibeix. Passen a `apagat`.
 3. **`components/EstatBadge.jsx` és CODI MORT** (zero imports) amb 5 hex literals: candidat a
    esborrar. **`SizeMapSetup`** (l'`export default`) tampoc té ruta.
 4. **`Models.jsx` conserva `badgeNeutre`?** No: mort al 257. El que queda obert és si la variant

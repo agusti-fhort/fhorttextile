@@ -4,6 +4,7 @@ import useAuthStore from '../store/auth'
 import { users as usersApi, taskTypes as taskTypesApi } from '../api/endpoints'
 import { taskTypeLabel } from '../utils/taskType'
 import PageMenu from '../components/ui/PageMenu'
+import { apagat, botoPri } from '../components/ui/buttons'
 import { useEnumeracio } from '../utils/vocabulariDominiFont'
 
 // Tram 3 — Pantalla "Usuaris i rols" (gated manage_users).
@@ -568,11 +569,11 @@ function NewUserModal({ t, roles, onClose, onCreated }) {
             fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 'var(--r-ctrl)',
             cursor: 'pointer', border: '1px solid var(--line-soft)', background: 'var(--panel)', color: 'var(--text-soft)',
           }}>{t('usersRoles.cancel')}</button>
-          <button onClick={submit} disabled={saving} style={{
-            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 'var(--r-ctrl)',
-            cursor: saving ? 'default' : 'pointer', border: 'none',
-            background: 'var(--accio)', color: 'var(--white)', fontWeight: 600, opacity: saving ? 0.6 : 1,
-          }}>{t('usersRoles.nu_create')}</button>
+          {/* §5.7 · el deshabilitat baixa el FONS, no la tinta. La ratificació C2 va portar
+              aquests dos botons de daurat ple a blau —que és el correcte—, però l'`opacity`
+              que ja hi havia es va quedar: apaga també el text i el deixa per sota d'AA. */}
+          <button onClick={submit} disabled={saving}
+            style={{ ...botoPri, ...(saving ? apagat : null) }}>{t('usersRoles.nu_create')}</button>
         </div>
       </div>
     </div>
@@ -704,11 +705,11 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
             fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 'var(--r-ctrl)',
             cursor: 'pointer', border: '1px solid var(--line-soft)', background: 'var(--panel)', color: 'var(--text-soft)',
           }}>{t('usersRoles.cancel')}</button>
-          <button onClick={submit} disabled={saving} style={{
-            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 'var(--r-ctrl)',
-            cursor: saving ? 'default' : 'pointer', border: 'none',
-            background: 'var(--accio)', color: 'var(--white)', fontWeight: 600, opacity: saving ? 0.6 : 1,
-          }}>{saving ? t('usersRoles.ue_saving') : t('usersRoles.ue_save')}</button>
+          {/* §5.7 · el deshabilitat baixa el FONS, no la tinta. La ratificació C2 va portar
+              aquests dos botons de daurat ple a blau —que és el correcte—, però l'`opacity`
+              que ja hi havia es va quedar: apaga també el text i el deixa per sota d'AA. */}
+          <button onClick={submit} disabled={saving}
+            style={{ ...botoPri, ...(saving ? apagat : null) }}>{saving ? t('usersRoles.ue_saving') : t('usersRoles.ue_save')}</button>
         </div>
       </div>
     </div>
