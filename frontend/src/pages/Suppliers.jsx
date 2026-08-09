@@ -6,6 +6,7 @@ import { suppliers } from '../api/endpoints'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
 import Badge from '../components/ui/Badge'
+import { useCodisEstat } from '../components/commercial/estats'
 import PageMenu from '../components/ui/PageMenu'
 import TaulaLlista from '../components/ui/TaulaLlista'
 import {
@@ -41,12 +42,13 @@ import {
 //    contracte les sosté; el que NO s'ha pogut fer es la comprovacio empirica que si que s'ha fet
 //    a /clients. No esta amagat: esta dit.
 //
-// 3 · 🛑 **`Supplier.type` (workshop · factory) segueix declarat al client, marcat.** Els
-//    `choices` son INLINE al model (`tasks/models.py:273`, sense ni tan sols una constant amb
-//    nom) i cap endpoint els publica. La llei diu que no se n'inventin de NOVES; aquesta ja hi
-//    era i es queda VIVA i censada fins que S1 la publiqui — igual que va fer el bloc A amb les
-//    ~25 enumeracions que encara no tenien endpoint. Es un select que ESCRIU, o sigui que el dia
-//    que arribi, arriba amb marca d'oferible o sense.
+// 3 · **`Supplier.type` (workshop · factory) ja ve de `/vocabulari/`** (`tipus_proveidor`), i
+//    era l'ULTIMA enumeracio de domini que el lot comercial declarava al client. Els `choices`
+//    estaven INLINE al camp del model, sense ni tan sols una constant amb nom: la forma mes
+//    dificil de censar de totes, perque no hi ha res a cercar. S1 els ha batejat
+//    (`Supplier.TYPE_CHOICES`) i l'endpoint els llegeix del `_meta` del camp, com la resta.
+//    Es un select que ESCRIU: mentre el vocabulari no ha arribat NO ofereix cap opcio, que es el
+//    correcte —oferir-ne una d'endevinada seria deixar escriure un tipus que potser no existeix.
 const MONO = 'IBM Plex Mono, monospace'
 const PAGE_SIZE = 25
 // Ordre per defecte: alfabètic pel nom, que és el `Meta.ordering` del model. Explícit aquí
@@ -144,9 +146,9 @@ export default function Suppliers() {
       .finally(() => setSaving(false))
   }
 
-  // 🛑 BLOQUEJAT-PER-S1 · l'etiqueta d'un `Supplier.type`. Els choices són inline al model i cap
-  // endpoint els publica: la traducció es queda aquí, marcada, fins que arribi l'enumeració.
-  const typeLabel = (type) => type === 'factory' ? t('suppliers.factory') : t('suppliers.workshop')
+  // L'etiqueta d'un `Supplier.type`. La CLAU es construeix pel codi que arriba, com a tot arreu:
+  // no hi ha cap `if type === 'factory'` que hagi de saber-se la llista.
+  const typeLabel = (type) => (type ? t(`suppliers.${type}`, type) : '—')
 
   const cols = useMemo(() => [
     {
@@ -249,6 +251,7 @@ export default function Suppliers() {
 // (B1-P4). Tab "Dades" = identitat; tab "Comercial" = fiscalitat, condicions de compra i contacte.
 function SupplierModal({ mode, sup, t, saving, setSaving, onCancel, onSaved, onError }) {
   const isEdit = mode === 'edit'
+  const { codis: tipus } = useCodisEstat('tipus_proveidor')
   const [tab, setTab] = useState('dades')
   const [name, setName] = useState(sup?.name || '')
   const [type, setType] = useState(sup?.type || 'workshop')
@@ -291,9 +294,9 @@ function SupplierModal({ mode, sup, t, saving, setSaving, onCancel, onSaved, onE
       {tab === 'dades' && <>
         <Field label={t('suppliers.col_name')}><input value={name} onChange={e => setName(e.target.value)} style={{ ...camp, width: '100%' }} /></Field>
         <Field label={t('suppliers.col_type')}>
+          {/* Cap llista escrita aquí: els dos codis venen de `/vocabulari/` (`tipus_proveidor`). */}
           <select value={type} onChange={e => setType(e.target.value)} style={{ ...camp, width: '100%' }}>
-            <option value="workshop">{t('suppliers.workshop')}</option>
-            <option value="factory">{t('suppliers.factory')}</option>
+            {(tipus || []).map(k => <option key={k} value={k}>{t(`suppliers.${k}`, k)}</option>)}
           </select>
         </Field>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginTop: 4 }}>
