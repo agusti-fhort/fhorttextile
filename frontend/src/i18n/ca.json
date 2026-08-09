@@ -565,7 +565,8 @@
     "pw_saving": "Desant…",
     "pw_mismatch": "Les contrasenyes no coincideixen.",
     "pw_ok": "Contrasenya actualitzada.",
-    "pw_error": "No s'ha pogut actualitzar la contrasenya."
+    "pw_error": "No s'ha pogut actualitzar la contrasenya.",
+    "back_title": "Tornar al tauler"
   },
   "nav": {
     "import_collection": "Importar col·lecció",
@@ -1244,7 +1245,8 @@
     "confirm_delete": "Esborrar el tipus «{{code}}»?",
     "required": "Codi i nom obligatoris.",
     "code_locked": "El codi no es pot canviar (s'usa com a identificador arreu).",
-    "order_hint": "Afecta l'ordre de les tasques a la planificació."
+    "order_hint": "Afecta l'ordre de les tasques a la planificació.",
+    "back_title": "Tornar al tauler"
   },
   "cascade_finder": {
     "col_group": "Grup",
@@ -1412,7 +1414,8 @@
     "token_warn": "Aquest token només es mostra ara. Desa'l en un lloc segur: no es podrà tornar a consultar. Si el perds, revoca el vincle i crea'n un de nou.",
     "token_copy": "Copiar",
     "token_copied": "Copiat ✓",
-    "token_close": "Tancar"
+    "token_close": "Tancar",
+    "back_title": "Tornar al tauler"
   },
   "encarrecs": {
     "title": "Safata d'encàrrecs",

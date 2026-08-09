@@ -56,6 +56,11 @@ PANTALLES = [
     ('B6 · Configuració general', '/configuracio/general'),
     ('B7 · Usuaris i rols', '/configuracio/usuaris'),
     ('B8 · Calendari d\'empresa', '/configuracio/calendari'),
+    # ── AMPLIACIÓ DE LOT (Agus 09/08): la secció SISTEMA sencera ─────────────────────────
+    ('B9 · Catàleg de tasques', '/task-types'),
+    ('B10 · El meu perfil', '/perfil'),
+    ('B11 · Recursos', '/recursos'),
+    ('B12 · Safata d\'encàrrecs', '/encarrecs'),
 ]
 
 #: La paleta que la NORMA_LAYOUT §1 permet en una VORA, en rgb() tal com el navegador el computa.

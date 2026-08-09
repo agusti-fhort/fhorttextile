@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { companyCalendar } from '../api/endpoints'
 import PageMenu from '../components/ui/PageMenu'
-import { apagat, botoPri } from '../components/ui/buttons'
+import { apagat } from '../components/ui/buttons'
 
 // Pantalla "Calendari d'empresa" (gated configure):
 //   - Tram 1A.2: editor de trams horaris per dia. Format `horaris`:

@@ -565,7 +565,8 @@
     "pw_saving": "Saving…",
     "pw_mismatch": "Passwords do not match.",
     "pw_ok": "Password updated.",
-    "pw_error": "Could not update the password."
+    "pw_error": "Could not update the password.",
+    "back_title": "Back to dashboard"
   },
   "nav": {
     "import_collection": "Import collection",
@@ -1244,7 +1245,8 @@
     "confirm_delete": "Delete type «{{code}}»?",
     "required": "Code and name are required.",
     "code_locked": "The code cannot be changed (used as identifier).",
-    "order_hint": "Affects the order of tasks in planning."
+    "order_hint": "Affects the order of tasks in planning.",
+    "back_title": "Back to dashboard"
   },
   "cascade_finder": {
     "col_group": "Group",
@@ -1412,7 +1414,8 @@
     "token_warn": "This token is shown only now. Store it somewhere safe: it cannot be retrieved again. If you lose it, revoke the link and create a new one.",
     "token_copy": "Copy",
     "token_copied": "Copied ✓",
-    "token_close": "Close"
+    "token_close": "Close",
+    "back_title": "Back to dashboard"
   },
   "encarrecs": {
     "title": "Order inbox",

@@ -490,6 +490,58 @@ de cap dels dos tenants té `garment_set`** (0/1 a `fhort`, 0/51 a `los`), o sig
 
 Les cinc tenen la mateixa forma: **el verd no vol dir el que sembla.** I cap es veu llegint codi.
 
+## AMPLIACIÓ DE LOT · la secció SISTEMA sencera (Agus 09/08) — commit 258
+
+| Pantalla | Ruta | Estat |
+|---|---|---|
+| Catàleg de tasques | `/task-types` | ✅ conformada aquí |
+| El meu perfil | `/perfil` | ✅ conformada aquí |
+| Recursos (P7, gate `brand_configure`) | `/recursos` | ✅ conformada aquí |
+| **Safata d'encàrrecs** | `/encarrecs` | ✅ **ja la va conformar la S2** (commit 212) — **verificada, no refeta** |
+
+### Cens dada → endpoint
+
+| Pantalla | Què es pinta | D'on surt |
+|---|---|---|
+| Catàleg de tasques | `code` · `name` · `default_order` · `active` | `GET /api/v1/task-types/?ordering=default_order` (**ReadOnlyModelViewSet**: escriure-hi és 405) |
+| Perfil | fitxa de l'usuari · inicials · color | `GET /api/v1/me/` |
+| Perfil | canvi de contrasenya | `POST` del mateix mòdul |
+| Recursos | vincles del Brand amb els seus Studios | `GET /api/v1/…/recursos/` (llista de `TenantLink`) |
+| Recursos | estat del vincle | `estat` + `/vocabulari/` → `estats_vincle_tenant` |
+| Recursos | alta amb token · aturar/reactivar/revocar | accions del mateix mòdul (gate `brand_configure`, **intacte**) |
+
+### Desviacions corregides
+
+- **Catàleg de tasques**: cap menú · badge d'estat pintat a mà **sense vora**, amb `--gray-l` de
+  fons i `--gray` de tinta → `ui/Badge` · caixa i filets a l'escala de la norma.
+  **G9 (llei vigent) verificada i NO tocada**: la pantalla és de consulta pura, referencia per
+  `code` i no escriu res; el ViewSet és read-only. Cap writer nou.
+- **Perfil**: cap menú · **DOS botons daurats plens** (tancar sessió i canviar contrasenya).
+  Tancar sessió **no és l'acció primària** —el que has vingut a fer aquí és canviar la
+  contrasenya— i tampoc és destructiva: és una PORTA de sortida → secundària, i deixa d'ocupar
+  la línia sencera. La de contrasenya sí que és la primària → blava, amb `apagat` en desactivar-se.
+- **Recursos**: cap menú · «Nou vincle» era un botó blau a la capçalera → **puja al menú i hi
+  perd el color** (§8e), i **només per a qui té la capacitat: el gate no es toca** · el codi de
+  l'Studio anava en **daurat a pes 700** (marca pintant una dada, i 700 no és cap dels tres
+  pesos) → tinta principal a 600 · el badge d'estat, pintat a mà sense vora i amb `--warn` de
+  tinta (1.86:1) → `ui/Badge`.
+
+### Tres components de `ui/` conformats amb aquestes pantalles (toquen tot el producte)
+
+- **`ui/Table`** — la taula simple de consulta (7 consumidors fora del lot comercial): th a
+  `--gray`/pes 400/tracking .1em → §2 · filets de mig píxel → `--line`/`--line-soft` · hover de
+  fila en `--gray-l` (gris fred) → `--sel` · estats de càrrega i buit en caixa de 3rem → §8c.
+- **`ui/Center`** — l'estat de pàgina que munten **30+ pantalles**: era una caixa de 3rem
+  centrada en `--gray` (3.64:1), i el centrat feia que un missatge d'una línia semblés una
+  pàgina d'error → frase `--text-faint` cursiva (§8c).
+- **`ui/Badge`** — hi entra `title` (v. la coda del commit 257).
+
+### 🚩 Anotat, NO tocat
+
+`ESTAT_VARIANT` de Recursos **es queda**: és un mapa de PELL indexat pel codi que arriba, no una
+llista de valors possibles — el mateix criteri que `FASE_COLORS` del Gantt. Que les seves claus
+coincideixin amb una enumeració publicada no el converteix en vocabulari.
+
 ## CODES PER A LA S2 (backend i compartits · commits 250·204, 250·205, 250)
 
 ### `/customers` tornava a ordenar — DRF es menjava l'ordre en silenci

@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { taskTypes } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Table from '../components/ui/Table'
+import PageMenu from '../components/ui/PageMenu'
+import Badge from '../components/ui/Badge'
 
 // Catàleg de TaskType — READ-ONLY. El catàleg és canònic/sistema (sembrat per migració):
 // el tenant NO l'edita. Aquesta pàgina és només consulta (sense alta/edició/esborrat).
@@ -32,30 +34,40 @@ export default function TaskTypes() {
     { key: 'name', label: t('task_types.col_name') },
     { key: 'default_order', label: t('task_types.col_order'), align: 'right',
       render: r => <span style={{ fontFamily: MONO }}>{r.default_order}</span> },
+    // §1 · el badge de la casa: fons suau + tinta + VORA FINA DEL MATEIX COLOR, píndola sempre.
+    // Aquest es pintava a mà, sense vora, amb `--gray-l` de fons per a l'inactiu (un àlies de
+    // farciment) i `--gray` de tinta (3.64:1). `ui/Badge` ja té les dues formes.
     { key: 'active', label: t('task_types.col_active'),
       render: r => (
-        <span style={{
-          fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px', borderRadius: 999, fontFamily: MONO,
-          background: r.active ? 'var(--ok-bg)' : 'var(--gray-l)',
-          color: r.active ? 'var(--ok)' : 'var(--gray)',
-        }}>{r.active ? t('task_types.active') : t('task_types.inactive')}</span>
+        <Badge variant={r.active ? 'ok' : 'gray'}>
+          {r.active ? t('task_types.active') : t('task_types.inactive')}
+        </Badge>
       ) },
   ]
 
   return (
-    <div style={{ minWidth: 0, maxWidth: 1000 }}>
-      <div style={{ marginBottom: '1rem' }}>
-        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('task_types.title')}</h1>
-        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('task_types.subtitle')}</p>
+    <>
+      {/* §8b · menú de pantalla. Sense seccions i sense acció —el catàleg és READ-ONLY i el
+          backend hi retorna 405— queda la fletxa (§8b.2), que aquí és tot el que hi ha per fer
+          a part de mirar. Cap acció inventada: la pantalla no en té cap i no n'ha de tenir. */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu backTo="/" backTitle={t('task_types.back_title')} />
+      </div>
+
+    <div style={{ minWidth: 0, maxWidth: 1000, paddingTop: 16 }}>
+      <div style={{ marginBottom: 16 }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 500, marginBottom: 4, color: 'var(--text-main)', fontFamily: MONO }}>{t('task_types.title')}</h1>
+        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }}>{t('task_types.subtitle')}</p>
       </div>
 
       {loading ? <Center>{t('task_types.loading')}</Center>
         : error ? <Center>{t('task_types.error')}</Center>
           : (
-            <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+            <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', fontSize: 'var(--fs-body)', overflowX: 'auto' }}>
               <Table columns={columns} data={items} loading={false} empty={t('task_types.empty')} />
             </div>
           )}
     </div>
+    </>
   )
 }

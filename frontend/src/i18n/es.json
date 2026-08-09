@@ -565,7 +565,8 @@
     "pw_saving": "Guardando…",
     "pw_mismatch": "Las contraseñas no coinciden.",
     "pw_ok": "Contraseña actualizada.",
-    "pw_error": "No se ha podido actualizar la contraseña."
+    "pw_error": "No se ha podido actualizar la contraseña.",
+    "back_title": "Volver al panel"
   },
   "nav": {
     "import_collection": "Importar colección",
@@ -1244,7 +1245,8 @@
     "confirm_delete": "¿Eliminar el tipo «{{code}}»?",
     "required": "Código y nombre obligatorios.",
     "code_locked": "El código no se puede cambiar (se usa como identificador).",
-    "order_hint": "Afecta al orden de las tareas en la planificación."
+    "order_hint": "Afecta al orden de las tareas en la planificación.",
+    "back_title": "Volver al panel"
   },
   "cascade_finder": {
     "col_group": "Grupo",
@@ -1412,7 +1414,8 @@
     "token_warn": "Este token solo se muestra ahora. Guárdalo en un lugar seguro: no se podrá volver a consultar. Si lo pierdes, revoca el vínculo y crea uno nuevo.",
     "token_copy": "Copiar",
     "token_copied": "Copiado ✓",
-    "token_close": "Cerrar"
+    "token_close": "Cerrar",
+    "back_title": "Volver al panel"
   },
   "encarrecs": {
     "title": "Bandeja de encargos",

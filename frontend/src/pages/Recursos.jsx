@@ -6,7 +6,9 @@ import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
 import Table from '../components/ui/Table'
-import { selS, primaryBtn } from '../components/ui/buttons'
+import { botoTer, selS } from '../components/ui/buttons'
+import PageMenu from '../components/ui/PageMenu'
+import Badge from '../components/ui/Badge'
 
 // P7 (Federació v2) — la superfície del Brand sobre els seus RECURSOS.
 //
@@ -17,17 +19,22 @@ import { selS, primaryBtn } from '../components/ui/buttons'
 // EL TOKEN ES VEU UN SOL COP. Arriba a la resposta de l'alta i es mostra en un modal propi.
 // No es desa a cap estat de llista ni es torna a demanar mai: no hi ha endpoint que el torni.
 const MONO = 'IBM Plex Mono, monospace'
+// §5.4 · accions de FILA: terciàries. La de revocar hi sobreescriu la tinta i la vora i queda
+// DESTRUCTIVA amb vora, mai plena en repòs (§5.5).
 const actBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
+  ...botoTer, padding: '4px 10px',
 }
 
-// Colors d'estat via tokens (mai hex): el pont obert és un OK, l'aturat un avís, el revocat mort.
-const ESTAT_STYLE = {
-  ACTIU:   { background: 'var(--ok-bg)', color: 'var(--ok)' },
-  ATURAT:  { background: 'var(--warn-bg)', color: 'var(--warn)' },
-  REVOCAT: { background: 'var(--gray-l)', color: 'var(--gray)' },
-}
+// L'ESTAT DEL VINCLE, amb el badge de la casa. Això era un mapa de parells fons/tinta SENSE
+// VORA (la §1 la vol sempre: «fons suau + tinta del color + VORA FINA DEL MATEIX COLOR, píndola
+// sempre»), amb `--warn` de tinta —1.86:1 sobre el seu fons— i `--gray-l`/`--gray` per al
+// revocat. `ui/Badge` ja té les tres formes i les té bé; aquí només queda la CORRESPONDÈNCIA
+// estat → variant, que és el que aquesta pantalla sap i el component no.
+// 🚩 L'enumeració ja NO es declara aquí: els codis surten de `/vocabulari/` →
+// `estats_vincle_tenant` (publicada per al lot comercial). Això és un mapa de PELL indexat pel
+// codi que arriba, no una llista de valors possibles — el mateix criteri que `FASE_COLORS` del
+// Gantt: que les claus coincideixin amb una enumeració no el converteix en vocabulari.
+const ESTAT_VARIANT = { ACTIU: 'ok', ATURAT: 'warn', REVOCAT: 'gray' }
 
 export default function Recursos() {
   const { t, i18n } = useTranslation()
@@ -71,17 +78,17 @@ export default function Recursos() {
 
   const columns = [
     { key: 'studio_codi', label: t('recursos.col_codi'),
-      render: r => <span style={{ fontFamily: MONO, fontWeight: 700, color: 'var(--gold)' }}>{r.studio_codi}</span> },
+      // §8e · el daurat és marca, no dada; i 700 no és cap dels tres pesos de la casa.
+      render: r => <span style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-main)' }}>{r.studio_codi}</span> },
     { key: 'studio_nom', label: t('recursos.col_nom'),
-      render: r => r.studio_nom || <span style={{ color: 'var(--gray-l)' }}>—</span> },
+      render: r => r.studio_nom || <span style={{ color: 'var(--text-faint)' }}>—</span> },
     { key: 'estat', label: t('recursos.col_estat'), render: r => (
-      <span style={{
-        fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px', borderRadius: 999,
-        fontFamily: MONO, ...(ESTAT_STYLE[r.estat] || ESTAT_STYLE.REVOCAT),
-      }}>{t(`recursos.estat_${r.estat}`, r.estat)}</span>
+      <Badge variant={ESTAT_VARIANT[r.estat] || 'gray'}>
+        {t(`recursos.estat_${r.estat}`, r.estat)}
+      </Badge>
     ) },
     { key: 'created_at', label: t('recursos.col_data'),
-      render: r => <span style={{ fontFamily: MONO, color: 'var(--gray)' }}>{fmtDate(r.created_at)}</span> },
+      render: r => <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>{fmtDate(r.created_at)}</span> },
     ...(canEdit ? [{ key: '_a', label: '', align: 'right', render: r => (
       <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
         {r.estat === 'ACTIU' && (
@@ -99,17 +106,23 @@ export default function Recursos() {
   ]
 
   return (
-    <div style={{ minWidth: 0, maxWidth: 900 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('recursos.title')}</h1>
-          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('recursos.subtitle')}</p>
-        </div>
-        {canEdit && (
-          <button onClick={() => setAltaOpen(true)} style={{ ...primaryBtn, marginLeft: 0 }}>
-            <i className="ti ti-plus" style={{ fontSize: 14 }} />{t('recursos.new')}
-          </button>
-        )}
+    <>
+      {/* §8b · MENÚ DE PANTALLA, i l'acció hi puja: «Nou vincle» era un botó blau a la
+          capçalera, i la §8e diu que l'acció primària pujada al menú deixa de ser botó i deixa
+          de ser blava («el blau viu al contingut; el menú té el seu llenguatge»). Només hi és
+          per a qui té la capacitat: el gate `brand_configure` no es toca. */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu
+          backTo="/"
+          backTitle={t('recursos.back_title')}
+          items={canEdit ? [{ key: 'nou', label: t('recursos.new'), onClick: () => setAltaOpen(true) }] : []}
+        />
+      </div>
+
+    <div style={{ minWidth: 0, maxWidth: 900, paddingTop: 16 }}>
+      <div style={{ marginBottom: 16 }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 500, marginBottom: 4, color: 'var(--text-main)', fontFamily: MONO }}>{t('recursos.title')}</h1>
+        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }}>{t('recursos.subtitle')}</p>
       </div>
 
       <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
@@ -117,7 +130,7 @@ export default function Recursos() {
       {loading ? <Center>{t('recursos.loading')}</Center>
         : error ? <Center>{t('recursos.error')}</Center>
           : (
-            <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+            <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflowX: 'auto' }}>
               <Table columns={columns} data={items} loading={false} empty={t('recursos.empty')} />
             </div>
           )}
@@ -135,6 +148,7 @@ export default function Recursos() {
 
       {tokenNou && <TokenModal t={t} dades={tokenNou} onClose={() => setTokenNou(null)} />}
     </div>
+    </>
   )
 }
 
@@ -162,7 +176,7 @@ function AltaModal({ t, saving, setSaving, onCancel, onCreated, onError }) {
       onCancel={onCancel} onConfirm={submit} confirmDisabled={saving || invalid}>
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '.04em',
-          color: 'var(--gray)', marginBottom: 4, fontFamily: MONO }}>{t('recursos.col_codi')}</div>
+          color: 'var(--text-soft)', marginBottom: 4, fontFamily: MONO }}>{t('recursos.col_codi')}</div>
         <input value={codi} maxLength={3} autoFocus
           onChange={e => setCodi(e.target.value.toUpperCase())}
           placeholder={t('recursos.codi_ph')}
@@ -187,8 +201,8 @@ function TokenModal({ t, dades, onClose }) {
       cancelLabel={t('recursos.token_close')} confirmLabel={copiat ? t('recursos.token_copied') : t('recursos.token_copy')}
       onCancel={onClose} onConfirm={copia}>
       <div style={{
-        background: 'var(--warn-bg)', border: '0.5px solid var(--warn)', color: 'var(--warn)',
-        borderRadius: 8, padding: '8px 12px', marginBottom: 12,
+        background: 'var(--warn-state-bg)', border: '1px solid var(--warn-state)', color: 'var(--warn-ink)',
+        borderRadius: 'var(--r-ctrl)', padding: '8px 12px', marginBottom: 12,
         fontSize: 'var(--fs-body)', lineHeight: 1.5, fontFamily: MONO,
       }}>
         <i className="ti ti-alert-triangle" style={{ marginRight: 6 }} aria-hidden="true" />
@@ -196,7 +210,7 @@ function TokenModal({ t, dades, onClose }) {
       </div>
       <div style={{
         fontFamily: MONO, fontSize: 'var(--fs-body)', wordBreak: 'break-all', userSelect: 'all',
-        background: 'var(--gray-l)', borderRadius: 8, padding: '10px 12px', color: 'var(--text-main)',
+        background: 'var(--bg-page)', borderRadius: 'var(--r-ctrl)', padding: '10px 12px', color: 'var(--text-main)',
       }}>{dades.token}</div>
     </Modal>
   )
