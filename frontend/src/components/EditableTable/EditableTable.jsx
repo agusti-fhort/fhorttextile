@@ -1193,7 +1193,12 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           // Llei de presentació de la casa (nom internacional dalt · llengua de qui llegeix
           // sota), APLICADA AL CLIENT: si el POM té àlies, manen les seves descripcions.
           const dalt = row.client_name_en || row.nom_en || row.nom_ca || row.pom_code
-          const sota = row.client_name_en ? row.client_name_local : row.nom_ca
+          // ⚠️ LA TRADUCCIÓ NO S'HA DE PERDRE PER TENIR ÀLIES (QA Agus 09/08). Anava
+          // `client_name_en ? client_name_local : nom_ca`: un POM amb àlies del client PERÒ
+          // sense descripció local es quedava sense cap segona llengua, tot i que la casa en
+          // tenia una. Són dues preguntes diferents —«com ho diu el client en la seva llengua»
+          // i «com ho diu la casa»— i la segona val quan la primera calla.
+          const sota = row.client_name_local || row.nom_ca
           // v8.1 — EL SUBTÍTOL TRADUÏT PERMANENT SE'N VA A LA ⓘ. Era una segona línia a cada
           // fila d'una taula que ara n'ha de mostrar tretze i distingir-ne quatre germanes: el
           // que ha de saltar a la vista és QUINA mesura és cada fila (capa i instància), no el
@@ -1913,15 +1918,27 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
   const eixos = m ? resolSufix(dicc, m[2]) : null
   const cerca = eixos ? m[1] : query.trim()
 
+  // Quants n'hi ha de debò i si el sostre n'ha tallat (el backend ho diu des de la QA del 09/08).
+  const [total, setTotal] = useState(0)
+  const [truncat, setTruncat] = useState(false)
+
   useEffect(() => {
-    if (cerca.length < 2) { setResults([]); setObert(false); return }
+    // ⚠️ EL MÍNIM ERA DE DOS I DEIXAVA FORA ELS CODIS D'UNA LLETRA. El catàleg v4 de Brownie
+    // en té 22 (A, B, C, D, E, **F**…): escriure «F» —que és com es diu aquella cota— no
+    // tornava res i el POM semblava no existir. Amb un sol caràcter el backend cerca només per
+    // CODI i posa l'exacte al davant, o sigui que la llista segueix sent curta i útil.
+    if (cerca.length < 1) { setResults([]); setObert(false); setTotal(0); setTruncat(false); return }
     const timer = setTimeout(() => {
-      poms.cerca({ q: cerca, page_size: 10, ...(modelId ? { model: modelId } : {}) })
+      // El sostre el mana el client i el backend el respecta (abans n'hi havia dos: aquest,
+      // que ningú llegia, i un `[:20]` incrustat que tallava en silenci).
+      poms.cerca({ q: cerca, page_size: 25, ...(modelId ? { model: modelId } : {}) })
         .then(r => {
           setResults(r.data?.results || [])
+          setTotal(r.data?.count ?? (r.data?.results || []).length)
+          setTruncat(!!r.data?.truncat)
           setSel(0); setObert(true); setCreaSel(false)
         })
-        .catch(() => { setResults([]); setObert(false) })
+        .catch(() => { setResults([]); setObert(false); setTotal(0); setTruncat(false) })
     }, 300)
     return () => clearTimeout(timer)
   }, [cerca, modelId])
@@ -2059,6 +2076,16 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
               })}
             </div>
           ))}
+          {/* EL SOSTRE ES DIU. Una llista tallada en silenci fa creure que el POM no existeix, i
+              d'aquí surt un duplicat creat a mà (QA Agus 09/08). Si n'hi ha més dels que caben,
+              es diu quants i que cal afinar la cerca — mai es deixa endevinar. */}
+          {truncat && (
+            <div style={{ padding: '6px 12px', fontSize: 'var(--fs-caption)',
+                          color: 'var(--text-muted)', borderTop: '1px solid var(--border)',
+                          fontStyle: 'italic' }}>
+              {t('editable_table.cerca_truncada', { mostrats: results.length, total })}
+            </div>
+          )}
           {results.length === 0 && (
             <div style={{ padding: '8px 12px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
               {t('editable_table.no_pom_found', { query: cerca })}

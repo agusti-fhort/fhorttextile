@@ -3391,7 +3391,8 @@
     "pom_propi_codi": "Nomenclatura",
     "pom_propi_codi_hint": "El código del cliente. No puede ser uno que ya signifique otra cosa.",
     "pom_propi_err": "No se ha podido crear el POM.",
-    "finder_nivell_model": "creados desde un modelo"
+    "finder_nivell_model": "creados desde un modelo",
+    "cerca_truncada": "Se muestran {{mostrats}} de {{total}} — afina la búsqueda para ver el resto."
   },
   "dashboard": {
     "tab_home": "Inicio",
