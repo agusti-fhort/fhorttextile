@@ -889,7 +889,7 @@ píndoles + fletxa amb destí), menú amb una ACCIÓ pujada que **perd el color*
 B7), i menú de **NOMÉS FLETXA** (B4, §8b.2). **6 casos nous · 6 casen · 0 desvien.**
 La bidireccional sencera passa de 56 a **64 casos: 61 casen · 1 desvia · 2 no toquen res.**
 
-### 🚨 EL NÚMERO ÉS ESTABLE I EL CONJUNT NO — i això és pitjor
+### 🚨 EL RECOMPTE AGUANTA TRES DE CADA QUATRE, I EL CONJUNT NO — i això és pitjor que si ballés
 
 Els dos silencis **no són sempre els mateixos**. Quatre corregudes seguides del mateix bundle:
 
