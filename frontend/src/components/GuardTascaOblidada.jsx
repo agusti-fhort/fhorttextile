@@ -265,7 +265,7 @@ export default function GuardTascaOblidada() {
         // accident amb un clic al costat és tornar al problema que el guard resol.
         <div role="dialog" aria-modal="true" style={overlayBase({ alignItems: 'center', zIndex: Z_GUARD })}>
           <div style={{
-            background: 'var(--white)', borderRadius: 12, padding: 22,
+            background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: 20,
             width: 460, maxWidth: '92vw',
           }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 4, fontFamily: MONO,
@@ -273,7 +273,7 @@ export default function GuardTascaOblidada() {
               <i className="ti ti-clock-exclamation" style={{ color: 'var(--warn)' }} />
               {t('guard_tasca.titol', { minuts: Math.round(LLINDAR_MIN) })}
             </h2>
-            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', marginBottom: 14 }}>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 14 }}>
               {t('guard_tasca.cos', {
                 tasca: tasca?.nom || '—',
                 model: tasca?.model || '—',
@@ -284,7 +284,7 @@ export default function GuardTascaOblidada() {
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
               padding: '10px 0 4px', fontFamily: MONO,
             }}>
-              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
                 {t('guard_tasca.compte_enrere')}
               </span>
               <span style={{ fontSize: '1.6rem', fontWeight: 500, color: 'var(--warn)',

@@ -57,7 +57,10 @@ export default function SessioActiva() {
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        background: 'var(--white)', border: '0.5px solid var(--gray-l)', borderRadius: 999,
+        // §1 · la píndola de la sessió activa és crom GLOBAL: es pinta sobre TOTES les
+        // pantalles del producte. La vora era `--gray-l` (àlies de FARCIMENT, gris fred) de
+        // mig píxel. Va a `--line`, com qualsevol vora de la casa.
+        background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 'var(--r-pill)',
         padding: '6px 8px 6px 14px', boxShadow: '0 2px 12px rgba(0,0,0,0.10)',
       }}>
         <span style={{
@@ -73,10 +76,10 @@ export default function SessioActiva() {
           }}
         >
           <span style={{ fontWeight: 500 }}>{sessio.nom}</span>
-          <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
             {sessio.model}
           </span>
-          <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-muted)' }}>
+          <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-soft)' }}>
             {mins}
           </span>
         </button>
