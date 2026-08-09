@@ -1020,3 +1020,169 @@ S'afegeix a la sèrie, que ja en són quatre:
 | **El cas que no toca res** | verd perquè el selector no troba l'element | comprovar que cada cas MESURA de debò |
 
 Les quatre s'han trobat el mateix dia, entre les dues sessions, i cap es veu llegint codi.
+
+---
+
+# [S2] LOT FITXA TÈCNICA + PATRONS (09/08) — crom, mai llenç
+
+Encàrrec: el bug d'accés reportat per Agus, i després el repàs de conformitat de la Fitxa
+tècnica i de Patrons **amb frontera absoluta al llenç** (ni components del canvas, ni
+`KONVA_COL`, ni el pipeline PDF, ni cap mida en pt del món paper).
+
+## 🔴 EL BUG D'ACCÉS · «la Fitxa tècnica no s'obre»
+
+**No era una regressió del crom** —que és on el report apuntava, perquè el commit 254 havia
+tocat la Fitxa tècnica el mateix matí— i té **dues meitats**.
+
+### La causa: infra, no codi
+
+Reproduït contra el gunicorn viu (bundle de `dist` servit per `page.route`, `/api/` reenviat a
+`127.0.0.1:8001` amb el Host del tenant):
+
+```
+POST /api/v1/models/1319/ftt-document/ → 500
+PermissionError: [Errno 13] Permission denied:
+  media/fhort/model_fitxers/2026/08/FTT-SS26-0001_fitxa.ftt
+```
+
+`backend/media/fhort/model_fitxers/2026/08/` era **root:root** —creat el 05/08 per un procés
+root— i el gunicorn corre com www-data. O sigui: **cap fitxa tècnica nova s'ha pogut crear en
+tot l'agost, a cap model**. El registre del servei en té un altre d'idèntic a les 11:29, set
+minuts abans de la meva reproducció: no és un cas de laboratori.
+
+És el parany conegut de `media/`, i té una propietat que el fa reincident: **el directori del
+mes és nou cada mes**. L'1 de setembre pot tornar a passar sol si qui el crea primer és un
+procés root.
+
+Resolt amb `chown www-data:www-data` (infra, fora de git). L'editor obre: `/models/1319/ftt/758`.
+
+### La meitat que sí que era codi: **el 500 era invisible**
+
+`FttResolver` (App.jsx) tenia tres `catch { /* noop */ }` i, en fallar, feia
+`navigate('/models/:id')` **sense dir res**. Per això un error del servidor es veia exactament
+com «una pantalla que no obre»: ni missatge, ni rastre, ni cap manera de saber que hi havia
+hagut una crida — i per això el report va anar a parar al crom.
+
+**El defecte real no era el 500: era que el 500 fos invisible.** Sense arreglar això, el pròxim
+tornarà a semblar una altra cosa.
+
+| `catch` | Què feia | Ara |
+|---|---|---|
+| crear el document | se n'anava a `/models/:id` en silenci | ho diu, amb el missatge del servidor si n'hi ha i una porta de sortida |
+| llistar les fitxes | `fitxes = []` → **i zero vol dir «crea'n una de nova»** | ho diu i s'atura |
+| llistar les plantilles | crea en blanc en comptes d'oferir la plantilla | 🚩 es queda: molesta, no fa mal |
+
+🔑 **El de llistar era pitjor del que sembla.** Una caiguda de xarxa deixava el model amb una
+fitxa DUPLICADA al costat de les que ja hi ha. **Zero perquè no n'hi ha i zero perquè no s'ha
+pogut saber no són el mateix zero**, i el codi els confonia — germà de la lliçó de F2.2 sobre
+`null` («no ho sé») contra 0 («no n'hi ha»).
+
+## 🚨 `var(--text)` NO EXISTEIX a `:root`
+
+Dos consumidors trobats i corregits a `--text-main`: `FttResolver` (les tres caixes) i
+`components/pattern/PieceIdentityList.jsx`.
+
+La declaració queda invàlida al càlcul i el color cau a l'heretat: **es veia negre per accident,
+no per decisió**, i el dia que el pare canviï de tinta canvia sol. És el mode de fallada exacte
+del `var(--fs-title)` del commit 254 i del `var(--bg, #faf9f7)` de Planificació. **No es veu
+llegint**: `var(--text)` s'assembla massa a `var(--text-main)` per cridar l'atenció.
+
+## Perímetre i frontera
+
+Tres superfícies que **comparteixen components**: el tab «Patró» del model, el Taller de patró i
+—no ho esperava— **l'aside de l'editor .ftt**, que munta `ModelPomList`. No són dos lots; és el
+mateix codi vist des de tres portes, i per això una sola passada sobre `components/pattern/*`
+conforma alhora part del repàs de la Fitxa tècnica.
+
+**La frontera, verificada pel diff i no per la intenció:** cap literal de color ha canviat, cap
+fitxer de canvas és al diff, cap primitiva, cap mida del món paper. A `PatternViewer` només
+canvien el contenidor, la barra de zoom i la barra d'estat; les 18 constants de dibuix, intactes.
+A `TechSheetEditor`, `COL` ja el va separar el 254 i `KONVA_COL` no s'ha tocat.
+
+## Cens de tokens — 162 substitucions
+
+| Deprecat | Viu | Motiu |
+|---|---|---|
+| `--border` | `--line` | §1b(b) |
+| `--text-muted` | `--text-soft` | §1b(c) · 3.64:1 → 5.37:1 (per sota d'AA) |
+| `--bg-card` | `--panel` | mateix blanc, ara amb nom de ROL |
+| `--gold-pale` | `--sel` | ELIMINAT del sistema |
+| `--gray` / `--charcoal` | `--text-soft` / `--text-main` | àlies legacy |
+| `--white` | `--panel` | **NOMÉS on fa de SUPERFÍCIE** |
+
+🔑 **`--white` va haver d'anar per (fitxer, línia), no per substitució cega** — l'única peça no
+mecànica del tram. `--white` fa DOS papers: superfície i TINTA. La superfície passa a `--panel`,
+que és el nom del rol; **la tinta blanca sobre un farciment ple es queda** — és el que `botoPri`
+ja fa, i canviar-la per un nom de superfície diria una cosa falsa del que és. Són 19 llocs de
+superfície i 8 de tinta; un `replace` global n'hauria fet un sol munt.
+
+## Dues coses que no eren tokens
+
+· **L'overlay del resolutor es feia a mà, amb `zIndex: 50`.** El sistema en té un
+  (`ui/overlay.js`, `Z_MODAL` = 150) i existeix precisament perquè el menú lateral és `fixed` a
+  z 100. Aquí no es notava —el resolutor va fora del Shell—, però **un overlay propi que no es
+  nota és el que acaba copiat a la pantalla on sí que es notarà**.
+
+· **«Document en blanc» anava en daurat i les plantilles en gris.** Són la mateixa decisió —d'on
+  surt el document— i el daurat hi deia «aquesta és la bona» sense que ho hagués decidit ningú;
+  amb una plantilla mestra sembrada a cada tenant, la recomanable és més aviat l'altra. §5.3: cap
+  de les dues és una acció, totes dues són portes.
+
+## VERIFICACIÓ MESURADA · `qa_auditoria_computats.py`, tres rutes noves
+
+| | Ruta | `--border` | `--gray-l` | Mides |
+|---|---|---|---|---|
+| C1 | `/models/1319/ftt/758` | 14 → **14** ⚠️ | 0 → 4 ⚠️ | 7 · 0 per sobre |
+| C2 | `/models/1319?tab=Patró` | 4 → **0** ✅ | 12 ⚠️ | 15 · 0 per sobre |
+| C3 | `/models/1319/patro/taller` | 32 → **6** ⚠️ | 4 ⚠️ | 9 · 0 per sobre |
+
+Les tres hi entren **tot i tenir llenç, i a posta**: un `<canvas>` és un sol node opac per a
+l'auditor —ni vores del DOM ni `fontSize` computat—, o sigui que mesurar aquestes rutes és,
+literalment, mesurar-ne el crom.
+
+L'script guanya `FTT_QA_DIST`: aquí `npm run build` DESPLEGA, i amb tres sessions escrivint
+alhora, verificar un canvi propi no pot obligar a publicar el codi a mig fer de ningú altre.
+Sense la variable es comporta com sempre.
+
+### 🛑 El zero que falta, i de qui és
+
+**Tot el que queda a les tres rutes és de `components/ui/*`, que és de la sessió 1.** Enviat per
+missatge amb la mesura; s'escriu aquí perquè **el zero que falta tingui amo i no sembli feina
+meva a mitges**:
+
+| Fitxer | Línia | Token | On es veu |
+|---|---|---|---|
+| `ui/Contenidor.jsx` | 36, 44 | `--border` | 6 vores a C3, 14 a C1 (capçalera de secció col·lapsable) |
+| `ui/FileDropCard.jsx` | 78 | `--gray-l` | 12 a C2, 4 a C1/C3 («Fitxer DXF obligatori») |
+| `ui/TranslatableField.jsx` | 51 | `--gray-l` | fora de les meves rutes; mateix token |
+
+## 🚩 Punts oberts
+
+1. **~16 directoris `root:root` sota `media/`** (`brg/`, `test/`, `los/document_templates/2026/07/`).
+   El `chown -R` el bloqueja el classificador de permisos d'aquesta sessió; els crítics
+   (`fhort/model_fitxers/2026/08`, `los/`, `los/document_templates/`) sí que estan fets. Per a Agus:
+   `chown -R www-data:www-data /var/www/ftt-staging/backend/media`.
+2. **El daurat ple de l'acció primària** (`COL.gold` a l'editor, «Buscar propostes» al Taller)
+   contra el §5 «un blau per pantalla». La sessió 1 ja el va marcar com a pregunta al 254; **no
+   el toco unilateralment**: és la mateixa decisió i l'ha de prendre Agus una sola vegada.
+3. **Ni l'editor .ftt ni el Taller de patró munten `PageMenu`** — les dues rutes són fora del
+   Shell a posta («és una eina a pantalla completa, el canvas mana»). Si la §8b els ha d'arribar,
+   és decisió de navegació, no de tokens. ⚠️ I si algun dia hi munten `PageMenu`, el portal se
+   n'anirà a un node **desenganxat** i la barra no es pintarà EN SILENCI: `FORAT_CROM` és un node
+   de mòdul i existeix igualment, o sigui que el fallback `FORAT_CROM ? … : barra` no salta.
+4. **El `catch` de les plantilles** segueix mut (crea en blanc en comptes d'oferir la plantilla).
+5. **No s'hi ha construït res.** El Motor de Patrons v2 és disseny sense implementació
+   (`MOTOR_DE_PATRONS_V2.md`, `PLA_IMPLEMENTACIO_MOTOR_PATRONS.md`, cap dels dos commitats).
+
+## 🛑 Límits del banc
+
+El tenant `fhort` té **1 model i 0 documents .ftt**; `los`, 51 models i 0 documents. O sigui que
+**abans d'aquest tram no existia cap fitxa tècnica a cap tenant**, i el camí «obrir una que ja
+hi és» (1 fitxa → entra directe; N → selector) **no s'ha pogut exercir amb dades reals**: el
+selector de N s'ha vist amb la llista servida per l'arnès, no pel banc. El model 1319 no té cap
+patró carregat, i per això el Taller s'ha mesurat en estat buit.
+
+⚠️ **He deixat un document creat**: `ModelFitxer` 758 sobre FTT-SS26-0001, fet en verificar que
+la fitxa torna a obrir després del `chown`. No l'esborro —és la prova que el camí funciona, i
+esborrar-lo és una altra escriptura al domini—; queda dit perquè el banc ja no és com el vaig
+trobar.
