@@ -1,0 +1,95 @@
+client_code;pom_canonic;capa_proposta;instancia_proposta;descripcions_cobertes
+0;SLT;exterior;;"Back opening length; Front opening length / CF slit; Opening at sleeve"
+A;A;exterior;;"1/2 chest width (armpit to armpit); 1/2 front chest width (armpit to armpit)"
+AA;Y;exterior;«Back bottom piece» · pos. TOP · relaxed;1/2 back bottom piece width at top relaxed
+AA1;Y;exterior;«Back bottom piece» · pos. TOP · estat extended;1/2 back bottom piece width at top stretched out
+B;B;exterior;;"1/2 waist width; 1/2 waist width at the top"
+B0;U2;exterior;;First button position
+BB;B;exterior;pos. BOTTOM;1/2 waist width at the bottom
+BF;BF;exterior;;Waistband height
+BF1;BF;exterior;pos. CF;Height at CF
+BF2;BF;exterior;pos. RIGHT;Height at the right side when wearing
+BF3;BF;exterior;pos. LEFT;Height at the left side when wearing
+BF4;BF;exterior;inst. lliure «Longest point»;Height at the longest point
+BR;BR;exterior;;Ancho bragueta / fly width
+BR1;BR1;exterior;;Largo dibujo bragueta / fly draw length
+BT;BT;exterior;;Waist position from HPS
+BW;QTD;exterior;;Pleat depth
+C;C;exterior;;"1/2 hip width; Ancho total cadera / hip width"
+CO;YP;exterior;;"Cut out from HPS; Cut out from shoulder seam at the front"
+CO1;YP;exterior;pos. CB;Cut out from shoulder seam at the back
+CO2;YC1;exterior;;Cut out from shoulder to sleeve
+CT;CT;folre/exterior;;1/2 thigh width / ancho muslo
+D1;D;exterior;estat EXTENDED;1/2 bottom width extended / stretched out
+E;E;exterior;;Shoulder to shoulder
+E1;E1;exterior;;"Shoulder seam; Shoulder width at true shoulder"
+E2;E2;exterior;;"Across front width (11 cm from HPS); Across front width (16 cm from HPS); Across front width relaxed"
+E22;E2;exterior;estat EXTENDED;Across front width total width
+E3;E3;exterior;;Across back width (11 cm from HPS)
+E4;E4;exterior;;Shoulder Forward
+E5;E5;exterior;;Shoulder drop (from HPS to shoulder point)
+EK1;EK1;exterior;;"Front neck drop from HPS to edge; Front neck drop from HPS to middle of first button; Front neck drop from HPS to seam"
+EK2;EK2;exterior;datum SEAM / EDGE;Back neck drop from HPS to seam / to edge
+EK3;EK2;exterior;datum COLLAR;Back neck drop length at collar
+F11;F2;exterior;estat EXTENDED;Total side length extended
+FB1;FF;exterior;datum VISIBLE;TOP: Centre back length (visible)
+FB2;F;folre;datum VISIBLE;TOP LINING: Centre front length (visible)
+FB3;FF;folre;datum VISIBLE;TOP LINING: Centre back length (visible)
+FC;FC;exterior;;Hip position from top edge / posición cadera
+FD;FD;exterior;datum INCL. CINTURILLA;Tiro delantero desde cinturilla / Front rise (waistband included)
+FE;FE;folre/exterior;;"Back rise (excl. waistband); Back rise length (waistband included)"
+FF1;Y1;exterior;«Back bottom piece» · pos. CB;Back bottom piece height at CB
+FI;FI;exterior;;Largo entrepierna / Inseam length
+FR;FD;folre/exterior;datum EXCL. CINTURILLA;Front rise (excl. waistband)
+FS;FS;exterior;pos. CF;Total length at the CF / Skirt CF length / Total CF length of the skirt
+FS1;FS;exterior;;"Skirt side length; Total length at the right side when wearing"
+FS2;FS;exterior;;"Total length at the CB / Total CB length of the skirt; Total length at the left side when wearing"
+FS3;FS;exterior;pos. SIDE;Total length at the side seams
+FS4;FS;exterior;inst. lliure «Top layer» · datum COSTURA DE CINTURILLA;Top layer of the skirt length from waistband bottom seam
+FS5;FS5;folre;;Lining length difference between true length
+FZ;ZF;fornitura;;Cord width
+G1;G1;exterior;;"Bottom height / Bottom hem; Bottom hem / Bottom rib height"
+G2;W;fornitura;pos. cintura;Elastic height at the waist
+GD;GD;exterior;;Godet length at the longest point
+GD1;GD1;exterior;;Godet length at the seams
+HL;HL;exterior;;Hoodie's height at the shoulder point
+HO;HO;exterior;;1/2 opening of the hoodie
+HW;HW;exterior;;Width of the hoodie at 12 cm from top edge
+I;I;exterior;;Sleeve length
+I4;I4;exterior;;Sleeve length from CB over shoulder point (incl cuff)
+J;J;exterior;;1/2 Bicep width
+J1;J1;exterior;estat relaxed;Sleeve opening relaxed
+J2;J1;exterior;estat EXTENDED;Sleeve opening stretched out
+J3;J3;exterior;;Sleeve hem / Sleeve cuff height
+J4;I5;exterior;;Elbow position measured from CB over shoulder point
+JJ;JJ;exterior;;1/2 Elbow width
+L;P;exterior;;Back yoke CB height from top edge / Back yoke height at CB
+L2;L;exterior;;Yoke seam from armhole to armhole
+LZ1;ZL;fornitura;;"Collar bow total length from edge to edge; Cord length / Total cord length"
+M2;Y;exterior;«Front piece» · pos. BOTTOM;Front piece width at the bottom
+P;Y1;exterior;«Chest piece» · pos. SIDE;Height at side seam (Chest piece)
+PKT CF;PR;exterior;;Pocket placement from CF
+PKT D;R3;exterior;;Pocket length
+PKT S;PR;exterior;;Pocket placement from side seam
+PR1;PR;exterior;;"Pocket position from side seam; Posición bolsillo detrás"
+PR2;PR;exterior;;Pocket position from waistband
+PR3;PR;exterior;;Posición bolsillo desde centro
+R;R1;exterior;;Pocket opening
+R1;R3;exterior;;Largo bolsillo / pocket length
+R2;R2;exterior;;"Pocket width; Pocket width at the top"
+R3;R3;exterior;;"Ancho bolsillo detrás / back pocket length; Pocket height at the center"
+R4;R2;exterior;;"Ancho bolsillo detrás / back pocket width; Pocket width at the bottom"
+RR;G1;exterior;;Pocket opening height hem
+S;S;exterior;;Front armhole along seam
+S2;S2;exterior;;Back armhole along seam
+SF;SF;exterior;;"Armhole depth from HPS / Sleeve depth; Sleeve depth from HPS to seam excluding collar binding"
+U;Y;exterior;«Sequins piece»;Width sequins piece
+U1;Y1;exterior;«Sequins piece»;Height sequins piece / Sequins piece height
+U2;U2;exterior;;First button measured from top
+U3;U3;exterior;;Last button measured from collar seam
+UT1;UT1;fornitura;;Alto loop / loop length
+UT2;UT2;fornitura;;Ancho loop / loop width
+V;V;exterior;;"Frill at the armhole measured at the shoulder; Frill width at the shoulder / Side frill width; Ruffle at the hem"
+V1;V;exterior;pos. TOP / BOTTOM;Top / Bottom front frill width at CB
+VL;VP;exterior;;End of frill distance from HPS
+VL1;VP;exterior;2a instància · pos. CF;End of bottom frilling at CF from HPS
