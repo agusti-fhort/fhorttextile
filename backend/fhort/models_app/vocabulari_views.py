@@ -152,6 +152,7 @@ def vocabulari_domini_view(request):
 
     → FASE A: {regims_graduacio, fases_model, estats_model, fases_tasca,
                estats_sessio_fitting, veredictes_fitting}
+      PART B · lot tècnic: {temporades}
       PART B · lot comercial: {estats_oferta, estats_comanda, estats_albara, estats_encarrec,
                tipus_encarrec, origens_encarrec, tipus_linia_albara, natures_producte,
                modes_preu_producte, estats_tasca, origens_alias_pom, regims_fiscals_client,
@@ -175,6 +176,11 @@ def vocabulari_domini_view(request):
         ),
         'fases_model': _llista(Model.FASE_CHOICES),
         'estats_model': _llista(Model.ESTAT_CHOICES),
+        # PART B · la TEMPORADA del model. Entra amb la pantalla de Desenvolupament (la home),
+        # que la declarava al client (`Dashboard.jsx` — `TEMPORADES = ["SS","FW","CO","SP"]`).
+        # Té una germana viva a `pages/Models.jsx` (`SEASONS`), que és pantalla ja conformada i
+        # per tant intocable en aquest lot: queda reportada, no corregida.
+        'temporades': _llista(_choices_del_camp(Model, 'temporada')),
         'fases_tasca': _llista(TaskType.FASE_CHOICES),
         # FASE A · el cicle del fitting. `segellat` NO és una llista nova: és el mateix
         # `SEALED_SESSION_ESTATS` que `fitting_line_is_locked` fa complir a l'escriptura,

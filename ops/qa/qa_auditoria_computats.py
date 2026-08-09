@@ -44,6 +44,11 @@ PANTALLES = [
     ('A7 · Resum · wizard partit', '/models/1319?tab=Resum'),
     ('A8 · Mesures', '/models/1319?tab=Mesures'),
     ('A10 · Comprovació', '/models/1319?tab=Mesures'),
+    # ── PART B · LOT TÈCNIC (S1) ─────────────────────────────────────────────────────────
+    # ⚠️ Les pantalles ja conformades es queden a la llista i no en surten mai: quan la NORMA
+    # canvia —i el §8b-quater l'ha canviada— la mesura s'ha de tornar a passar per sobre de
+    # tot el que ja estava tancat. És el segon forat que el bloc A va deixar passar.
+    ('B1 · Desenvolupament (home)', '/'),
 ]
 
 #: La paleta que la NORMA_LAYOUT §1 permet en una VORA, en rgb() tal com el navegador el computa.

@@ -75,7 +75,12 @@
     "tray_title": "Bandeja de albaranables",
     "tray_hint": "Tareas terminadas, extras, gastos y deducciones pendientes de albarán, agrupados por modelo.",
     "tray_empty": "Ningún ítem pendiente de albarán para este cliente.",
-    "tray_add": "Añadir ({{n}})"
+    "tray_add": "Añadir ({{n}})",
+    "back_title": "Volver al panel",
+    "entity": "albaranes",
+    "prev": "Anterior",
+    "next": "Siguiente",
+    "page_info": "Página {{page}} de {{pages}}"
   },
   "grading_propagate": {
     "button": "Propagar",
@@ -1373,7 +1378,9 @@
     "search_pending": "Esta lista aún no se puede buscar.",
     "prev": "Anterior",
     "next": "Siguiente",
-    "page_info": "Página {{page}} de {{pages}}"
+    "page_info": "Página {{page}} de {{pages}}",
+    "search_ph": "Busca por nombre, NIF o ciudad…",
+    "empty_filtered": "Ningún proveedor con esta búsqueda."
   },
   "recursos": {
     "title": "Recursos",
@@ -1609,7 +1616,12 @@
     "dn_blocked_help": "Revisa los extras pendientes en la sección Revisión comercial de cada encargo.",
     "dn_confirm": "Generar",
     "dn_cancel": "Cancelar",
-    "dn_error": "No se ha podido generar el albarán."
+    "dn_error": "No se ha podido generar el albarán.",
+    "back_title": "Volver al panel",
+    "entity": "encargos",
+    "prev": "Anterior",
+    "next": "Siguiente",
+    "page_info": "Página {{page}} de {{pages}}"
   },
   "orders": {
     "title": "Pedidos",
@@ -1681,7 +1693,12 @@
     "due_dates": "Vencimientos",
     "due_dates_empty": "Ningún vencimiento.",
     "pending_lines": "{{n}} línea(s) todavía por imputar.",
-    "continue_selecting": "Continuar seleccionando"
+    "continue_selecting": "Continuar seleccionando",
+    "back_title": "Volver al panel",
+    "entity": "pedidos",
+    "prev": "Anterior",
+    "next": "Siguiente",
+    "page_info": "Página {{page}} de {{pages}}"
   },
   "config_general": {
     "title": "Configuración general",
@@ -1853,7 +1870,12 @@
     "convert_conflict_generic": "no se ha podido asignar.",
     "convert_conflicts_open": "Abrir pedido",
     "pending_lines": "{{n}} línea(s) sin ningún modelo previsto.",
-    "continue_selecting": "Continuar seleccionando"
+    "continue_selecting": "Continuar seleccionando",
+    "back_title": "Volver al panel",
+    "entity": "ofertas",
+    "prev": "Anterior",
+    "next": "Siguiente",
+    "page_info": "Página {{page}} de {{pages}}"
   },
   "planning": {
     "title": "Planificación",
@@ -3407,7 +3429,8 @@
       "scope_mine": "Los míos",
       "scope_all": "Todos",
       "empty_mine": "No tienes ningún modelo asignado."
-    }
+    },
+    "back_arrel": "Estás al inicio: desde aquí no hay dónde subir"
   },
   "alerts": {
     "gravetat": {

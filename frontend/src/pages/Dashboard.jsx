@@ -5,6 +5,9 @@ import { useTranslation } from "react-i18next"
 import useAuthStore from "../store/auth"
 import { modelTasks, models as modelsApi, customers, calendar } from "../api/endpoints"
 import ProjectGantt from "../components/planning/ProjectGantt"
+import PageMenu from "../components/ui/PageMenu"
+import { apagat, botoSec, botoTer } from "../components/ui/buttons"
+import useToc, { anellFocus } from "../components/ui/toc"
 import { useEnumeracio } from "../utils/vocabulariDominiFont"
 
 const API = import.meta.env.VITE_API_URL || ""
@@ -26,39 +29,59 @@ const localISO = (d) => {
 // kanban_state (derivat al backend, by-model 1c) ∈ {pending, open, paused, done}.
 // Columnes: [Pendents | En curs (Open) | Pausats | Fets]. Mateixa paleta que el Kanban jubilat
 // (pending=gris, open=or, paused=àmbar, done=verd), però via tokens del design system.
+// ⚠️ EL CODI DE COLORS DE LES QUATRE COLUMNES SE'N VA, i cal dir per què (report-only, §8).
+// Hi havia `--gray` (àlies legacy), `--gold`, `--warn` (token vell) i `--ok` tenyint la icona
+// de cada capçalera. Dos problemes: la §8 només admet QUATRE tintes d'icona (repòs --text-soft ·
+// activa --gold · deshabilitada --text-faint · destructiva --err) i el daurat és MARCA, no una
+// dada; i la §8c ho remata («el daurat NO pinta números»). Podria haver-hi semàfor —la §1 diu
+// que «la dada porta el color»—, però la §8e només en nomena TRES estats (Començat neutre · En
+// curs taronja · Acabat verd) i aquest board en té QUATRE: assignar el color del quart
+// (`paused`) seria inventar domini dins d'un tram de pell. Les columnes es distingeixen pel seu
+// NOM i la seva posició, que és el que de debò les distingia. Si l'Agus vol el codi de colors,
+// la decisió que falta és una: quin color és «pausat».
 const BOARD_COLS = [
-  { key: "pending", icon: "ti-inbox",        color: "var(--gray)" },
-  { key: "open",    icon: "ti-player-play",  color: "var(--gold)" },
-  { key: "paused",  icon: "ti-player-pause", color: "var(--warn)" },
-  { key: "done",    icon: "ti-circle-check", color: "var(--ok)" },
+  { key: "pending", icon: "ti-inbox" },
+  { key: "open",    icon: "ti-player-play" },
+  { key: "paused",  icon: "ti-player-pause" },
+  { key: "done",    icon: "ti-circle-check" },
 ]
-// Fases del cicle de disseny (eix independent del kanban_state): surten de `/vocabulari/`
-// (`fases_model`), no d'aquí. F2.2 — cap enumeració de domini es declara al client.
-const TEMPORADES = ["SS", "FW", "CO", "SP"]
 
-function KPICard({ label, value, sub, color = "var(--gold)", onClick }) {
+// §8c · KPI. «KPI/recomptes NEUTRES (--text-main). NOMÉS els KPI d'alerta porten semàfor
+// (p.ex. "En risc · 1" en --err). El daurat NO pinta números.» Per això el color per defecte
+// deixa de ser `--gold` i passa a `--text-main`: dels tres KPI d'aquesta pantalla, l'únic que
+// és una alerta és «En risc». La vora passa de `--border` (DEPRECAT, §1b(b)) a `--line` i el
+// radi de 8 a `--r-card`, que és el de la targeta de la casa.
+function KPICard({ label, value, sub, color = "var(--text-main)", onClick }) {
   return (
     <div
       onClick={onClick}
       style={{
-        background: "var(--white)", border: "1px solid var(--border)", borderRadius: 8,
-        padding: "18px 20px", cursor: onClick ? "pointer" : "default",
+        background: "var(--panel)", border: "1px solid var(--line)", borderRadius: "var(--r-card)",
+        // La targeta declara la MIDA DE COS. Sense això hereta els 16px del document i, encara
+        // que els fills posin la seva i a ull no es noti, el contenidor computa un valor que
+        // ningú ha decidit — és el defecte que la mesura del bloc A va treure a la llum a les
+        // files de /poms i /size-library. La maqueta del §8b ho declara: `.card{font-size:12px}`.
+        fontSize: "var(--fs-body)",
+        padding: 16, cursor: onClick ? "pointer" : "default",
         transition: "all .1s", flex: 1, minWidth: 140,
       }}
-      onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = color)}
-      onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = "var(--border)")}
+      onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = "var(--gold-border)")}
+      onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = "var(--line)")}
     >
-      <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-muted)", fontFamily: MONO, marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-soft)", fontFamily: MONO, marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 'var(--fs-display)', fontWeight: 600, color, fontFamily: MONO, lineHeight: 1 }}>{value ?? "—"}</div>
-      {sub && <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-muted)", fontFamily: MONO, marginTop: 6 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 'var(--fs-caption)', color: "var(--text-soft)", fontFamily: MONO, marginTop: 6 }}>{sub}</div>}
     </div>
   )
 }
 
-const selS = {
-  fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 9px',
-  border: '0.5px solid var(--gray-l)', borderRadius: 8,
-  background: 'var(--white)', color: 'var(--text-main)',
+// §8c · EL CONTROL DE FILTRE DE LA CASA: «vora --line, radi 6, alçada única, MAI blaus —
+// filtrar no és l'acció de la pantalla». Aquesta còpia local anava amb `--gray-l` (un àlies de
+// FARCIMENT fent de vora) i vora de mig píxel, que no és de cap escala.
+const camp = {
+  fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 10px', height: 32,
+  border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)',
+  background: 'var(--panel)', color: 'var(--text-main)',
 }
 
 // Segueix la paginació de DRF per no truncar (mateix patró que Planning/Kanban).
@@ -77,37 +100,48 @@ async function fetchAllPages(apiFn, baseParams = {}) {
 
 // Card de MODEL (zoom-in: clic → /models/:id). Reusa la forma de la ModelRow del Kanban,
 // adaptada a navegació directa i tokens del design system.
+// LA DADA REINA ÉS EL NOM, no el codi (§8e, i és el que A5 va fixar a /models: «a Models: EL
+// NOM, 600/tinta principal; les refs en secundari»). Aquí el codi anava a 600 EN DAURAT i el
+// nom en tinta normal: marca pintant una dada, i la jerarquia al revés de la llista germana.
+// La FASE passa a text pla (§8e: «FASE = NOMÉS TEXT», sense badge) — el xip gris amb radi 6
+// que hi havia no és cap de les formes de la casa.
 function ModelCard({ model, onClick, t, highlight = false, innerRef = null }) {
   const c = model.counts || {}
   const total = (c.pending || 0) + (c.paused || 0) + (c.in_progress || 0) + (c.done || 0)
   const faseLabel = model.fase ? t(`model_sheet.dashboard.phase.${model.fase}`, model.fase) : null
-  // C4b — ressaltat de la feina ACTIVA (in_progress): anell daurat perquè destaqui dins la columna.
-  const baseBorder = highlight ? 'var(--gold)' : 'var(--gray-l)'
+  // El toc de la casa (`ui/toc`): hover i focus amb estat, i l'anell NOMÉS amb focus de teclat
+  // — si no, la targeta es queda amb l'anell enganxat després del clic i apareix el quart estat
+  // fantasma que el bloc A va haver de caçar a les pastilles de capa.
+  const [toc, gestos] = useToc()
   return (
-    <button ref={innerRef} onClick={onClick} style={{
-      textAlign: 'left', width: '100%', border: `0.5px solid ${baseBorder}`,
-      boxShadow: highlight ? '0 0 0 1.5px var(--gold)' : 'none',
-      background: 'var(--white)', borderRadius: 8, padding: '8px 10px',
-      cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4,
+    // C4b — ressaltat de la feina ACTIVA (in_progress). Era un anell daurat de 1.5px per fora;
+    // ara és la forma de «on soc» de la casa (§1 · §4): fons `--sel` + FILET D'OR de 3px a
+    // l'esquerra. El filet va sempre declarat (transparent quan no toca) perquè la targeta no
+    // canviï d'amplada en encendre's — una targeta que salta 3px quan algú comença una tasca
+    // és el mateix defecte que la §7 evita amb el `box-shadow` del subratllat del veredicte.
+    <button ref={innerRef} onClick={onClick} {...gestos} style={{
+      textAlign: 'left', width: '100%',
+      borderWidth: '1px 1px 1px 3px', borderStyle: 'solid',
+      borderColor: `var(--line) var(--line) var(--line) ${highlight ? 'var(--gold)' : 'transparent'}`,
+      background: highlight || toc.hover ? 'var(--sel)' : 'var(--panel)', borderRadius: 'var(--r-card)',
+      padding: '8px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4,
+      outline: 'none', ...(toc.focus ? anellFocus : null),
     }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--gold)' }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = baseBorder }}
     >
-      <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 4 }}>
-        {model.reanchored_by_start && <i className="ti ti-plus" title={t('planning.gantt.reanchored')} style={{ fontSize: 'var(--fs-label)', color: 'var(--gold)' }} />}
+      {model.model_nom && (
+        <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.3 }}>
+          {model.model_nom}
+        </div>
+      )}
+      <div style={{ fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', display: 'flex', alignItems: 'center', gap: 4 }}>
+        {model.reanchored_by_start && <i className="ti ti-plus" title={t('planning.gantt.reanchored')} aria-hidden="true" style={{ fontSize: 'var(--fs-label)', color: 'currentColor' }} />}
         {model.model_codi || `#${model.model_id}`}
       </div>
-      {model.model_nom && (
-        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', lineHeight: 1.3 }}>{model.model_nom}</div>
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         {faseLabel && (
-          <span style={{
-            fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO,
-            padding: '1px 6px', borderRadius: 6, background: 'var(--gray-l)',
-          }}>{faseLabel}</span>
+          <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }}>{faseLabel}</span>
         )}
-        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>{t('dashboard.board.tasks_n', { n: total })}</span>
+        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }}>{t('dashboard.board.tasks_n', { n: total })}</span>
       </div>
     </button>
   )
@@ -125,6 +159,7 @@ function ModelBoard({ scope }) {
   // Les fases són DADA (`Model.FASE_CHOICES`), no una llista d'aquesta pantalla. Sense
   // vocabulari el filtre no ofereix fases: no en sabem cap, i inventar-ne seria tornar-hi.
   const { codis: fasesModel } = useEnumeracio('fases_model')
+  const { codis: temporades } = useEnumeracio('temporades')
   const [fCustomer, setFCustomer] = useState("")
   const [fCollection, setFCollection] = useState("")
   const [fAfter, setFAfter] = useState("")
@@ -237,15 +272,17 @@ function ModelBoard({ scope }) {
 
   return (
     <div>
-      {/* Capçalera + comptadors per fase */}
+      {/* Capçalera. El rètol de secció anava en DAURAT: la §8b reserva el daurat a marca,
+          selecció i base, i un rètol de bloc no és cap de les tres (§8c: el daurat no pinta ni
+          números ni etiquetes). Passa a `--text-soft`, que és el rètol de bloc de la casa. */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
         <div style={{
           fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: ".08em",
-          textTransform: "uppercase", color: "var(--gold)", fontFamily: MONO,
+          textTransform: "uppercase", color: "var(--text-soft)", fontFamily: MONO,
         }}>
           {t("dashboard.board.title")}
         </div>
-        <span style={{ fontSize: 'var(--fs-body)', color: "var(--text-muted)", fontFamily: MONO }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: "var(--text-soft)", fontFamily: MONO }}>
           {t("dashboard.board.results_n", { n: count })}
         </span>
       </div>
@@ -257,10 +294,11 @@ function ModelBoard({ scope }) {
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
         <input
           value={search} onChange={e => setSearch(e.target.value)}
-          placeholder={t("dashboard.board.search_ph")}
-          style={{ ...selS, flex: "0 1 240px", minWidth: 160 }}
+          placeholder={t("dashboard.board.search_ph")} aria-label={t("dashboard.board.search_ph")}
+          style={{ ...camp, flex: "0 1 240px", minWidth: 160 }}
         />
-        <select value={fCustomer} onChange={e => setFCustomer(e.target.value)} style={selS}>
+        <select value={fCustomer} onChange={e => setFCustomer(e.target.value)}
+          aria-label={t("dashboard.board.filter_customer")} style={camp}>
           <option value="">{t("dashboard.board.filter_customer")}</option>
           {customerOpts.map(c => (
             <option key={c.id} value={c.id}>{c.nom || c.codi || `#${c.id}`}</option>
@@ -268,27 +306,37 @@ function ModelBoard({ scope }) {
         </select>
         <input
           value={fCollection} onChange={e => setFCollection(e.target.value)}
-          placeholder={t("dashboard.board.filter_collection")}
-          style={{ ...selS, width: 150 }}
+          placeholder={t("dashboard.board.filter_collection")} aria-label={t("dashboard.board.filter_collection")}
+          style={{ ...camp, width: 150 }}
         />
-        <select value={fTemporada} onChange={e => setFTemporada(e.target.value)} style={selS}>
+        {/* LES TEMPORADES SORTIEN D'UNA CONSTANT DEL CLIENT (`["SS","FW","CO","SP"]`) i ara
+            surten de `/vocabulari/` → `temporades` (`Model.TEMPORADA_CHOICES`), com les fases.
+            Llei 1: cap enumeració de domini al frontend. Sense vocabulari, el filtre no ofereix
+            cap temporada — no en sabem cap, i inventar-ne seria tornar-hi (mateixa conducta
+            que ja tenia el filtre de fases). 🚩 La germana `SEASONS` de `pages/Models.jsx:14`
+            és pantalla CONFORMADA i intocable en aquest lot: reportada, no corregida. */}
+        <select value={fTemporada} onChange={e => setFTemporada(e.target.value)}
+          aria-label={t("dashboard.board.filter_temporada")} style={camp}>
           <option value="">{t("dashboard.board.filter_temporada")}</option>
-          {TEMPORADES.map(x => <option key={x} value={x}>{t(`kanban.temporades.${x}`)}</option>)}
+          {(temporades || []).map(x => <option key={x} value={x}>{t(`kanban.temporades.${x}`)}</option>)}
         </select>
-        <select value={fFase} onChange={e => setFFase(e.target.value)} style={selS}>
+        <select value={fFase} onChange={e => setFFase(e.target.value)}
+          aria-label={t("dashboard.board.filter_fase")} style={camp}>
           <option value="">{t("dashboard.board.filter_fase")}</option>
           {(fasesModel || []).map(x => <option key={x} value={x}>{t(`model_sheet.dashboard.phase.${x}`)}</option>)}
         </select>
-        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 'var(--fs-label)', color: "var(--text-muted)", fontFamily: MONO }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 'var(--fs-label)', color: "var(--text-soft)", fontFamily: MONO }}>
           {t("dashboard.board.filter_date_from")}
-          <input type="date" value={fAfter} onChange={e => setFAfter(e.target.value)} style={selS} />
+          <input type="date" value={fAfter} onChange={e => setFAfter(e.target.value)} style={camp} />
         </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 'var(--fs-label)', color: "var(--text-muted)", fontFamily: MONO }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 'var(--fs-label)', color: "var(--text-soft)", fontFamily: MONO }}>
           {t("dashboard.board.filter_date_to")}
-          <input type="date" value={fBefore} onChange={e => setFBefore(e.target.value)} style={selS} />
+          <input type="date" value={fBefore} onChange={e => setFBefore(e.target.value)} style={camp} />
         </label>
-        <button onClick={clearFilters} style={{ ...selS, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-          <i className="ti ti-x" style={{ fontSize: 12 }} /> {t("dashboard.board.clear")}
+        {/* §8c · «Neteja» = TERCIÀRIA. Anava amb l'estil d'un input, com el cancel·lar del
+            modal de la casa: un camp de text fent de botó al costat de sis camps de debò. */}
+        <button onClick={clearFilters} style={botoTer}>
+          <i className="ti ti-x" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} /> {t("dashboard.board.clear")}
         </button>
       </div>
 
@@ -298,21 +346,26 @@ function ModelBoard({ scope }) {
           const items = byState[col.key] || []
           return (
             <div key={col.key} style={{
-              background: "var(--white)", border: "0.5px solid var(--border)", borderRadius: 12,
+              background: "var(--panel)", border: "1px solid var(--line)", borderRadius: "var(--r-card)",
+              fontSize: "var(--fs-body)",   // v. la nota de `KPICard`: la targeta declara el cos
               overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 320, minWidth: 0,
             }}>
+              {/* La capçalera anava sobre `--gray-l` (#f0f0f0, gris fred i àlies de farciment)
+                  amb filets de mig píxel. Ara és panell blanc amb el filet de la casa, i el
+                  recompte és un rètol neutre: la §8c vol els recomptes en tinta principal, i
+                  la píndola grisa que hi havia semblava un badge d'estat sense ser-ho. */}
               <div style={{
-                padding: "0.8rem 1rem", borderBottom: "0.5px solid var(--border)",
-                display: "flex", alignItems: "center", gap: 8, background: "var(--gray-l)",
+                padding: "12px 16px", borderBottom: "1px solid var(--line)",
+                display: "flex", alignItems: "center", gap: 8, background: "var(--panel)",
               }}>
-                <i className={`ti ${col.icon}`} style={{ fontSize: 14, color: col.color }} />
-                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500 }}>{t(`dashboard.board.state.${col.key}`)}</span>
+                <i className={`ti ${col.icon}`} aria-hidden="true" style={{ fontSize: 16, color: "var(--text-soft)" }} />
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: "var(--text-main)" }}>{t(`dashboard.board.state.${col.key}`)}</span>
                 <span style={{
-                  marginLeft: "auto", fontSize: 'var(--fs-body)', color: "var(--gray)",
-                  padding: "2px 8px", borderRadius: 10, background: "var(--white)",
+                  marginLeft: "auto", fontSize: 'var(--fs-body)', fontWeight: 600, color: "var(--text-main)",
+                  fontFamily: MONO,
                 }}>{items.length}</span>
               </div>
-              <div style={{ flex: 1, padding: "0.6rem", display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ flex: 1, padding: 8, display: "flex", flexDirection: "column", gap: 8 }}>
                 {loading && rows.length === 0 ? (
                   <div style={ph}>{t("common.loading")}</div>
                 ) : items.length === 0 ? (
@@ -331,11 +384,13 @@ function ModelBoard({ scope }) {
 
       {hasNext && (
         <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
-          <button onClick={loadMore} disabled={loading} style={{
-            ...selS, cursor: loading ? "default" : "pointer", opacity: loading ? 0.6 : 1,
-            display: "flex", alignItems: "center", gap: 6, padding: "8px 16px",
-          }}>
-            <i className={`ti ${loading ? "ti-loader-2" : "ti-chevron-down"}`} style={{ fontSize: 13 }} />
+          {/* §5.2 · SECUNDÀRIA (blanc + vora daurada). «Carregar-ne més» no és el que has
+              vingut a fer aquí, o sigui que no és blava; i el deshabilitat baixa el FONS i no
+              la tinta (§5.7) — l'`opacity: 0.6` que hi havia apagava també el text. */}
+          <button onClick={loadMore} disabled={loading}
+            style={{ ...botoSec, ...(loading ? apagat : null) }}>
+            <i className={`ti ${loading ? "ti-loader-2" : "ti-chevron-down"}`} aria-hidden="true"
+              style={{ fontSize: 14, color: 'currentColor' }} />
             {t("dashboard.board.load_more")}
           </button>
         </div>
@@ -344,7 +399,9 @@ function ModelBoard({ scope }) {
   )
 }
 
-const ph = { fontSize: 'var(--fs-body)', color: 'var(--gray)', textAlign: 'center', padding: '1.2rem', fontWeight: 300 }
+// §8c · ESTAT BUIT = frase en `--text-faint` CURSIVA, mai caixa buida muda. Anava en `--gray`
+// (àlies legacy, 3.64:1) amb pes 300, que no és cap pes de la casa.
+const ph = { fontSize: 'var(--fs-body)', color: 'var(--text-faint)', fontStyle: 'italic', textAlign: 'center', padding: 16 }
 
 // Selector d'abast del dashboard del tècnic: [Els meus · Tots]. Default per ROL (es deriva del
 // rol/capabilities a Dashboard, NO de localStorage). Sempre visible i commutable.
@@ -451,71 +508,77 @@ export default function Dashboard() {
   const salutacio = hora < 13 ? t("dashboard.greeting_morning") : hora < 20 ? t("dashboard.greeting_afternoon") : t("dashboard.greeting_evening")
 
   return (
-    <div style={{ padding: "24px", maxWidth: 1280, margin: "0 auto" }}>
-      {/* Onboarding banner */}
+    // §3 · el padding arrel de pàgina és 0: els 24px els dona el `<main>` del Shell, i aquí
+    // n'hi havia 24 més a sobre (48 en total). El `maxWidth` del CONTINGUT es conserva, però
+    // baixa un nivell: la barra del §8b ha d'anar de costat a costat, i abans quedava atrapada
+    // dins de la columna centrada.
+    <>
+      {/* §8b · MENÚ DE PANTALLA. El que hi havia era una banda de pestanyes amb l'activa en
+          DAURAT amb subratllat daurat, al mateix nivell de la pàgina: exactament el patró que
+          A6 va treure del dashboard del model («ni blau ni daurat ple: navegar no és ni acció
+          ni marca»). Les dues seccions de la home —Desenvolupament i Planificació— són seccions
+          grans d'una entitat, o sigui píndoles del §8b-bis, no tabs de secció.
+          🛑 LA FLETXA: aquesta pantalla és L'ARREL del producte i no penja d'enlloc → `backTo`
+          és `null` i la fletxa surt DESHABILITADA. El motiu, a `ui/PageMenu.jsx`. Pendent
+          d'Agus. El marge negatiu la treu dels 24px del `<main>`, com a la resta del producte. */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu
+          backTo={null}
+          backTitle={t('dashboard.back_arrel')}
+          items={DASH_TABS.map(tab => ({
+            key: tab, label: t(DASH_TAB_LABELS[tab]),
+            active: activeTab === tab, onClick: () => setActiveTab(tab),
+          }))}
+        />
+      </div>
+
+      <div style={{ maxWidth: 1280, margin: "0 auto", paddingTop: 16 }}>
+      {/* §8b.3 · IDENTITAT SOBRE EL FONS DE PÀGINA, sense contenidor. Aquí la identitat és de
+          qui mira, no d'una entitat: la salutació fa d'`h1` (22/500) i la data de caption. */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 500, color: "var(--text-main)", margin: "0 0 4px" }}>
+          {salutacio}{me ? `, ${me.full_name?.split(" ")[0] || me.username}` : ""}.
+        </h1>
+        <div style={{ fontSize: 'var(--fs-caption)', color: "var(--text-soft)", fontFamily: MONO }}>
+          {new Date().toLocaleDateString(i18n.language || "ca", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+        </div>
+      </div>
+
+      {/* PORTA a la configuració inicial (§5.3), no una franja de marca. Anava sobre
+          `--gold-pale`, que la §1 ELIMINA del sistema («cap superfície ni estat»), amb el
+          percentatge en daurat dins d'un cercle i un fals botó de fons daurat ple. Ara: targeta
+          de la casa, el percentatge com a KPI NEUTRE (§8c: «el daurat NO pinta números») i una
+          PORTA en secundari amb chevron — anar a un altre lloc no compromet res i per això no
+          pot cridar més que el que sí que compromet. */}
       {onboarding && typeof onboarding.percentatge === 'number' && onboarding.percentatge < 100 && (
-        <div
-          onClick={() => navigate('/onboarding')}
-          style={{
-            marginBottom: 20, padding: '12px 16px',
-            borderRadius: 8, background: 'var(--gold-pale)',
-            border: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', gap: 14,
-            cursor: 'pointer',
-          }}
-        >
+        <div style={{
+          marginBottom: 24, padding: 16,
+          borderRadius: 'var(--r-card)', background: 'var(--panel)',
+          border: '1px solid var(--line)',
+          display: 'flex', alignItems: 'center', gap: 16,
+        }}>
           <div style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: 'var(--white)', color: 'var(--gold)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 'var(--fs-body)', fontWeight: 600,
+            fontSize: 'var(--fs-h2)', lineHeight: '24px', fontWeight: 600,
+            color: 'var(--text-main)', fontFamily: MONO, whiteSpace: 'nowrap',
           }}>
             {onboarding.percentatge}%
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)' }}>
               {t('dashboard.onboarding_incomplete')}
             </div>
-            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>
+            <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', marginTop: 2 }}>
               {onboarding.passos_pendents
                 ? t('dashboard.onboarding_steps_left', { count: onboarding.passos_pendents })
                 : t('dashboard.onboarding_complete_setup')}
             </div>
           </div>
-          <span style={{
-            padding: '6px 12px', borderRadius: 6, fontSize: 'var(--fs-body)',
-            background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 500,
-          }}>
-            {t('dashboard.complete_setup')} →
-          </span>
+          <button type="button" onClick={() => navigate('/onboarding')} style={botoSec}>
+            {t('dashboard.complete_setup')}
+            <i className="ti ti-chevron-right" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+          </button>
         </div>
       )}
-
-      {/* Greeting */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, color: "var(--text-main)", margin: "0 0 4px" }}>
-          {salutacio}{me ? `, ${me.full_name?.split(" ")[0] || me.username}` : ""}.
-        </h1>
-        <div style={{ fontSize: 'var(--fs-body)', color: "var(--text-muted)", fontFamily: MONO }}>
-          {new Date().toLocaleDateString(i18n.language || "ca", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-        </div>
-      </div>
-
-      {/* Tabs de la home: acció (KPIs + board) · el meu Gantt de planificació. */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 24, borderBottom: "0.5px solid var(--border)" }}>
-        {DASH_TABS.map(tab => (
-          <button key={tab} type="button" onClick={() => setActiveTab(tab)}
-            style={{
-              padding: "8px 16px", border: "none", background: "none", cursor: "pointer",
-              fontFamily: MONO, fontSize: "var(--fs-body)",
-              color: activeTab === tab ? "var(--gold)" : "var(--text-muted)",
-              borderBottom: activeTab === tab ? "2px solid var(--gold)" : "2px solid transparent",
-              marginBottom: -1,
-            }}>
-            {t(DASH_TAB_LABELS[tab])}
-          </button>
-        ))}
-      </div>
 
       {activeTab === 'planning' ? (
         // Tab 2 — el meu Gantt: sempre "meu" (mine), sense selector d'abast propi.
@@ -525,12 +588,11 @@ export default function Dashboard() {
       {/* Selector d'abast (DALT): Els meus · Tots. */}
 
       {scope === "me" && !scopeLoading && scopeRows.length === 0 ? (
-        // Estat buit de "els meus": NO cau a tots; convida a mirar tot l'abast.
-        <div style={{
-          padding: "32px 20px", border: "1px dashed var(--border)", borderRadius: 8,
-          textAlign: "center", color: "var(--text-muted)", fontSize: 'var(--fs-body)', fontFamily: MONO,
-        }}>
-          <i className="ti ti-inbox-off" style={{ fontSize: 26, color: "var(--gray)", display: "block", marginBottom: 8 }} />
+        // §8c · ESTAT BUIT = frase en `--text-faint` cursiva, «mai caixa buida muda». Era una
+        // caixa amb vora DISCONTÍNUA i una icona de 26px al mig — i el filet discontinu és el
+        // llenguatge d'avís, no el de «aquí encara no hi ha res».
+        <div style={{ padding: 16, color: "var(--text-faint)", fontStyle: "italic",
+          fontSize: 'var(--fs-body)', fontFamily: MONO }}>
           {t("dashboard.scope.empty_mine")}
         </div>
       ) : (
@@ -539,10 +601,10 @@ export default function Dashboard() {
               cadascuna sota el seu label MONO de secció. */}
           <div style={{ marginBottom: 28 }}>
             <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
-              <div style={{ flex: 1, fontSize: "var(--fs-body)", color: "var(--text-muted)", fontFamily: MONO }}>
+              <div style={{ flex: 1, fontSize: "var(--fs-label)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-soft)", fontFamily: MONO }}>
                 {t("dashboard.scope.label")}
               </div>
-              <div style={{ flex: 1, fontSize: "var(--fs-body)", color: "var(--text-muted)", fontFamily: MONO }}>
+              <div style={{ flex: 1, fontSize: "var(--fs-label)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-soft)", fontFamily: MONO }}>
                 {t("dashboard.upcoming.title")}
               </div>
             </div>
@@ -560,22 +622,24 @@ export default function Dashboard() {
                   sub={t("dashboard.kpi_sub.at_risk")}
                   color="var(--err)"
                 />
+                {/* «En curs» perd el daurat i queda NEUTRE (§8c): dels tres KPI d'aquesta
+                    pantalla, l'únic que és una alerta és «En risc», i és l'únic que porta
+                    semàfor. El daurat no pinta números. */}
                 <KPICard
                   label={t("dashboard.kpi.in_progress")}
                   value={scopeLoading ? "…" : kpi.open}
                   sub={t("dashboard.kpi_sub.in_progress")}
-                  color="var(--gold)"
                 />
               </div>
               {/* PROPERAMENT — relatiu + inner absolut: l'alçada la dicta la fila de KPIs; scroll intern. */}
               <div style={{ flex: 1, position: "relative" }}>
                 <div style={{
                   position: "absolute", inset: 0, overflowY: "auto",
-                  border: "1px solid var(--border)", borderRadius: 8,
-                  background: "var(--white)", padding: "12px 16px",
+                  border: "1px solid var(--line)", borderRadius: "var(--r-card)",
+                  background: "var(--panel)", padding: 16, fontSize: "var(--fs-body)",
                 }}>
                   {upcoming.length === 0 ? (
-                    <div style={{ color: "var(--text-muted)", fontSize: "var(--fs-body)", fontStyle: "italic" }}>
+                    <div style={{ color: "var(--text-faint)", fontSize: "var(--fs-body)", fontStyle: "italic" }}>
                       {t("dashboard.upcoming.empty")}
                     </div>
                   ) : (
@@ -585,8 +649,10 @@ export default function Dashboard() {
                           i18n.language || "ca", { day: "numeric", month: "long" })
                         return (
                           <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--text-main)" }}>
+                            {/* §8 · 16px (fila de llista) i tinta de repòs `--text-soft`. Els
+                                15px no són de cap de les tres mides, i `--gray` és legacy. */}
                             <i className={`ti ${it.tipus === "fitting" ? "ti-ruler-2" : "ti-building-factory"}`}
-                               style={{ fontSize: 15, color: "var(--gray)" }} />
+                               aria-hidden="true" style={{ fontSize: 16, color: "var(--text-soft)" }} />
                             <span style={{ flex: 1, fontSize: "var(--fs-body)" }}>
                               {it.tipus === "fitting"
                                 ? t("dashboard.upcoming.fitting", { data: dataFmt })
@@ -608,6 +674,7 @@ export default function Dashboard() {
       )}
       </>
       )}
-    </div>
+      </div>
+    </>
   )
 }

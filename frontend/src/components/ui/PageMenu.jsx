@@ -58,15 +58,28 @@ function Pindola({ label, active, onClick, title }) {
   )
 }
 
+// L'ARREL (`backTo === null`): la fletxa HI ÉS I ESTÀ DESHABILITADA. Ni desapareix —això
+// contradiria la lletra de la §8b i, pitjor, la seva raó: «la posició del ← és fixa a tot el
+// producte, i és justament el que la fa trobable sense mirar»— ni apunta a la pantalla on ja
+// ets, que és una mentida que es descobreix al primer clic i que el `backTo` obligatori existeix
+// per evitar. Deshabilitada diu la veritat exacta: el botó existeix, és al seu lloc de sempre, i
+// des d'aquí no hi ha on pujar.
+// La forma no s'inventa: §5.7 «deshabilitat, baixa el fons, no la tinta», amb l'excepció que el
+// bloc B ja va haver de resoldre DINS d'aquesta mateixa barra blanca —«a la barra no hi ha fons
+// que baixar; donar-li --bg-page el deixa a un pas de --sel, que allà vol dir el contrari»— i
+// que va concloure que al menú mana la §1: `--text-faint` és «només deshabilitat».
 function Enrere({ to, title }) {
   const navigate = useNavigate()
   const [hover, setHover] = useState(false)
+  const arrel = to === null
   return (
     <button
       type="button"
       title={title}
       aria-label={title}
-      onClick={() => navigate(to)}
+      disabled={arrel}
+      aria-disabled={arrel || undefined}
+      onClick={arrel ? undefined : () => navigate(to)}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -75,17 +88,17 @@ function Enrere({ to, title }) {
         flex: 'none',
         border: '1px solid var(--line)',
         borderRadius: 'var(--r-ctrl)',
-        background: hover ? 'var(--sel)' : 'var(--panel)',
+        background: hover && !arrel ? 'var(--sel)' : 'var(--panel)',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        cursor: 'pointer',
+        cursor: arrel ? 'not-allowed' : 'pointer',
         // 16px: la mida que la norma (§8) dona a les icones fora de botó de text; i la tinta
         // de repòs, `--text-soft`. Les DUES es declaren AL BOTÓ i la icona les hereta: si es
         // queden només a la icona, el botó computa els 16px i el negre del document i la
         // mesura hi troba un valor que ningú ha decidit (bidireccional d'A5).
         fontSize: 16,
-        color: 'var(--text-soft)',
+        color: arrel ? 'var(--text-faint)' : 'var(--text-soft)',
       }}
     >
       <i className="ti ti-arrow-left" aria-hidden="true"
@@ -99,7 +112,7 @@ const Separador = () => (
 )
 
 /**
- * @param {string}   backTo        destí EXPLÍCIT de la fletxa (obligatori)
+ * @param {string}   backTo        destí EXPLÍCIT de la fletxa (obligatori) · `null` = ARREL
  * @param {string}   backTitle     títol/aria-label de la fletxa — ja traduït pel qui crida
  * @param {Array}    items         [{ key, label, to, active, onClick, title }] píndoles de secció
  * @param {node}     children      contingut extra a l'esquerra (desplegables, botons de menú)
@@ -130,6 +143,12 @@ export default function PageMenu({ backTo, backTitle, items = [], children = nul
         gap: 4,
         flexWrap: 'wrap',
       }}>
+        {/* 🛑 L'ARREL (part B · pantalla 1) — PROPOSTA CONJUNTA DE LES DUES SESSIONS, PENDENT
+            DE LA PARAULA D'AGUS. `backTo={null}` és una declaració EXPLÍCITA («aquesta pantalla
+            és arrel i no penja d'enlloc»), no un valor per defecte que es pugui colar per
+            oblit: `undefined` segueix pintant la fletxa i, sense destí, falla de seguida. La
+            fletxa es queda i es deshabilita; el perquè, al comentari d'`Enrere`. Si l'Agus ho
+            vol d'una altra manera —arrel sense barra, o fletxa cap a algun lloc—, és una línia. */}
         <Enrere to={backTo} title={backTitle} />
         {(items.length > 0 || children) && <Separador />}
         {items.map((it) => (

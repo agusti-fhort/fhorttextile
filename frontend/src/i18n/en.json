@@ -75,7 +75,12 @@
     "tray_title": "Billable tray",
     "tray_hint": "Finished tasks, extras, expenses and deductions pending delivery, grouped by model.",
     "tray_empty": "No items pending delivery for this customer.",
-    "tray_add": "Add ({{n}})"
+    "tray_add": "Add ({{n}})",
+    "back_title": "Back to dashboard",
+    "entity": "delivery notes",
+    "prev": "Previous",
+    "next": "Next",
+    "page_info": "Page {{page}} of {{pages}}"
   },
   "grading_propagate": {
     "button": "Propagate",
@@ -1373,7 +1378,9 @@
     "search_pending": "This list is not searchable yet.",
     "prev": "Previous",
     "next": "Next",
-    "page_info": "Page {{page}} of {{pages}}"
+    "page_info": "Page {{page}} of {{pages}}",
+    "search_ph": "Search by name, tax ID or city…",
+    "empty_filtered": "No suppliers match this search."
   },
   "recursos": {
     "title": "Resources",
@@ -1609,7 +1616,12 @@
     "dn_blocked_help": "Review the pending extras in the Commercial review section of each work order.",
     "dn_confirm": "Generate",
     "dn_cancel": "Cancel",
-    "dn_error": "Could not generate the delivery note."
+    "dn_error": "Could not generate the delivery note.",
+    "back_title": "Back to dashboard",
+    "entity": "work orders",
+    "prev": "Previous",
+    "next": "Next",
+    "page_info": "Page {{page}} of {{pages}}"
   },
   "orders": {
     "title": "Orders",
@@ -1681,7 +1693,12 @@
     "due_dates": "Due dates",
     "due_dates_empty": "No due dates.",
     "pending_lines": "{{n}} line(s) still to allocate.",
-    "continue_selecting": "Keep selecting"
+    "continue_selecting": "Keep selecting",
+    "back_title": "Back to dashboard",
+    "entity": "orders",
+    "prev": "Previous",
+    "next": "Next",
+    "page_info": "Page {{page}} of {{pages}}"
   },
   "config_general": {
     "title": "General settings",
@@ -1853,7 +1870,12 @@
     "convert_conflict_generic": "could not be assigned.",
     "convert_conflicts_open": "Open order",
     "pending_lines": "{{n}} line(s) with no planned model.",
-    "continue_selecting": "Keep selecting"
+    "continue_selecting": "Keep selecting",
+    "back_title": "Back to dashboard",
+    "entity": "quotes",
+    "prev": "Previous",
+    "next": "Next",
+    "page_info": "Page {{page}} of {{pages}}"
   },
   "planning": {
     "title": "Planning",
@@ -3407,7 +3429,8 @@
       "scope_mine": "Mine",
       "scope_all": "All",
       "empty_mine": "You have no assigned models."
-    }
+    },
+    "back_arrel": "You are at the start: there is nowhere to go up from here"
   },
   "alerts": {
     "gravetat": {

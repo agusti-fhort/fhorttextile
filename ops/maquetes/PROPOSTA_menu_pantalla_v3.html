@@ -36,7 +36,15 @@
   .pmenu-bar{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
   .pmenu{max-width:1400px;margin:0 auto;padding:8px 24px;
          display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  /* ESMENA (part B · S1, 09/08) — LA MAQUETA HA DE DIR EL QUE PINTA. `.back` no declarava ni
+     `color` ni `font-size` i es quedava amb els de l'AGENT D'USUARI (negre, 13.33px). Aquí no
+     es notava, perquè la icona és un <svg> amb la seva pròpia mida i el seu propi `stroke`;
+     però la pantalla fa servir una icona de FONT, que els hereta del botó, i la bidireccional
+     donava com a desviació de la pantalla un valor que ningú no havia decidit a la maqueta.
+     Mateixa esmena, i mateix motiu, que el bloc B va aplicar a `NORMA_LLISTA_canonica`.
+     ZERO CANVI DE PÍXEL: l'<svg> ja porta width/height 16 i stroke var(--ink-soft). */
   .back{width:32px;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);
+        font-size:16px;color:var(--ink-soft);
         display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
   .back:hover{background:var(--sel)}
   .back svg{width:16px;height:16px;stroke:var(--ink-soft);fill:none;stroke-width:1.75;

@@ -245,6 +245,33 @@ CASOS = [
      '/models/1319?tab=Resum',
      [('click', 'div:has(> span:text-is("Talles")) button:has-text("Canviar")')],
      'div:has(> span:text-is("Alpha EU — Men"))'),
+    # ── PART B · B1 · Desenvolupament (la home) ──────────────────────────────────────────
+    # La home no té maqueta pròpia: el que s'hi mesura és l'ESTRUCTURA DE PÀGINA del §8b, i
+    # per això la referència és la mateixa evidència que va servir per al dashboard del model
+    # («aquesta pantalla va a missa»). El tram és pell: es mesuren els embolcalls, no cap
+    # component del board.
+    ('B1', 'píndola de secció ACTIVA', 'PROPOSTA_menu_pantalla_v3.html',
+     '.pill.on', [],
+     '/', [], 'button[aria-current="page"]'),
+    ('B1', 'píndola de secció en repòs', 'PROPOSTA_menu_pantalla_v3.html',
+     '.pmenu .pill:not(.on)', [],
+     '/', [], 'button:text-is("Planificació")'),
+    # 🛑 DESVIACIÓ ESPERADA I DECLARADA — no és un defecte que se'ns hagi escapat. Aquesta
+    # pantalla és L'ARREL del producte i la fletxa hi surt DESHABILITADA (`--text-faint`, §1
+    # «només deshabilitat») perquè des d'aquí no hi ha on pujar; la maqueta la dibuixa
+    # habilitada perquè dibuixa una pantalla que SÍ que penja d'algun lloc. La caixa (fons,
+    # vora, radi, mida) ha de casar; la TINTA no, i és la decisió que espera l'Agus. El cas hi
+    # és a posta: el que no es mesura no s'ha verificat, i una desviació explicada val més que
+    # un cas absent.
+    ('B1', "fletxa d'enrere · ARREL (deshabilitada)", 'PROPOSTA_menu_pantalla_v3.html',
+     '.back', [],
+     '/', [], 'button[aria-disabled="true"]'),
+    ('B1', 'nom de la identitat (22/500)', 'PROPOSTA_menu_pantalla_v3.html',
+     '.ident .name', [],
+     '/', [], 'h1'),
+    ('B1', 'targeta de contingut (KPI)', 'PROPOSTA_menu_pantalla_v3.html',
+     '.card', [],
+     '/', [], 'div:has(> div:text-is("Models de l\'abast"))'),
 ]
 
 JS_UN = """
@@ -346,8 +373,18 @@ def main():
         pag.evaluate("([t]) => { localStorage.setItem('access_token', t);"
                      " localStorage.setItem('fhort.lang','ca') }", [TOKEN])
 
+        # `FTT_QA_TRAM=B1,A5` corre NOMÉS aquests trams. La llista sencera passa de 50 casos i
+        # triga; sense filtre, tancar un tram obliga a esperar tots els altres — i, pitjor, el
+        # token de la sessió pot CADUCAR pel camí. Quan això passa l'app redirigeix a /login i
+        # els casos del final es mesuren contra una pantalla que no és la seva: surten com a
+        # «no mesurat» i com a desviacions absurdes (un h1 a 40px/700, que és el del navegador).
+        # És un fals negatiu que s'assembla massa a un defecte. El filtre és per a treballar;
+        # **la correguda de tancament es fa SEMPRE sencera i sense filtre**.
+        nomes = {x.strip() for x in os.environ.get('FTT_QA_TRAM', '').split(',') if x.strip()}
         tram_actual = None
         for tram, què, fitxer, sel_maq, gestos_maq, ruta, gestos, sel_pant in CASOS:
+            if nomes and tram not in nomes:
+                continue
             if tram != tram_actual:
                 print(f'\n═══════ {tram} ═══════')
                 tram_actual = tram
