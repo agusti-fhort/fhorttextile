@@ -93,6 +93,14 @@ TRAMS = {
          'la germana Repas, amb el mateix llenguatge de tabs',
          [('click', 'button:has-text("Repàs")')]),
     ],
+    # ── CODA (retocs d'Agus vistos a pantalla real) ───────────────────────────────────────
+    'coda': [
+        ('01_fons_pagina', '/models',
+         'retoc 4 · el fons de pagina passa de --gray-l (gris fred) a --bg-page (blanc calid)', []),
+        ('02_definicio_pom', f'/models/{MODEL}?tab=Mesures&mode=entry',
+         'retocs 1+2+3 · carril de talla base CENTRAT · «Gravar POM» BLAU · «Descartar» terciaria',
+         [('click', 'text=Introduir manualment')]),
+    ],
 }
 PANTALLES = TRAMS[TRAM]
 
