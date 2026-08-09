@@ -245,9 +245,26 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
   }, [customerId])
 
   // Bloc 3 (LLEI 5 CAPES) — carrega SizeSystems PURS quan hi ha target i estem al bloc 3.
-  // Escala pura: SENSE fit, SENSE construcció, SENSE graduació. Pre-selecciona el primer en creació.
+  // Escala pura: SENSE fit, SENSE construcció, SENSE graduació.
   // F1.1 — també al pas 4: entrant per «Canviar graduació» (?block=4) els sistemes no es carregaven
   // mai i la rehidratació no tenia de què estirar (DIAGNOSI_MODEL_174, risc #7).
+  //
+  // ── L'ELECCIÓ NEIX BUIDA I LLIURE (Agus, 09/08) ────────────────────────────────────────
+  // Aquí hi havia `if (rows.length && !selSystem && !isEditMode) setSelSystem(rows[0])`: en un
+  // model NOU, el primer run de la llista quedava triat pel sol fet de ser el primer. I com que
+  // l'efecte de sota omple el run sencer i la talla base en quant hi ha sistema, el pas 3
+  // arribava amb TRES decisions ja preses que ningú no havia pres.
+  //
+  // El delator era el diàleg de substitució: la tècnica clicava el run que volia de debò i el
+  // sistema li preguntava si volia «substituir» un run que ella no havia triat mai. Aquell avís
+  // (`pickSystem`, F1.2) és correcte i es queda — però només té sentit **quan ja hi havia tria
+  // HUMANA**, que és exactament el que passa ara: amb la preselecció fora, el primer clic troba
+  // `selectedSizes` buit i no pregunta res.
+  //
+  // És la mateixa llei que ja regeix la llista (D-31.3, W2.2) portada fins al final: LA
+  // PROXIMITAT ORDENA, MAI TRIA. Ordenar és oferir; preseleccionar és decidir per l'altre. I té
+  // el precedent escrit a quatre línies d'aquí: la B1 va retirar l'autoselecció del ruleset pel
+  // mateix motiu —un model no pot néixer graduat sense que ningú hi hagi passat.
   //
   // W2.2 — LA PROXIMITAT ORDENA, NO EXCLOU (maqueta v1: «ordenats per proximitat, cap amagat»).
   // Fins ara el target ERA UN FILTRE: un sistema que no el portés als seus `target_codis`
@@ -271,7 +288,6 @@ export default function ModelWizard({ embedModelId = null, initialBlock = null,
           { target, construction, fit, grup: garmentGroupCodi },
           customerCodi)
         setSystems(rows)
-        if (rows.length && !selSystem && !isEditMode) setSelSystem(rows[0])
       })
       .catch(() => { if (alive) setSystems([]) })
     return () => { alive = false }
