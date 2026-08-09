@@ -1587,3 +1587,34 @@ no pot ser «Models › {NOM} › …». Absorbir-la demana decidir **de qui pen
 hi ha al seu menú de pantalla, i això és una pregunta de navegació, no de tokens.
 
 Cens ja fet d'aquell fitxer (del tram anterior): 9 usos de token deprecat i 5 literals hex.
+
+## 🚩 CENS D'`opacity` AL PERÍMETRE (§5.7) — la lectura feta, la decisió no
+
+S1 va passar el criteri «una migració de color no s'emporta l'`opacity` de sota» pel seu lot i el
+va aplicar també al meu avís; **el criteri em va caçar el meu «Exportar PDF»** (corregit) i, en
+passar-lo per tot el perímetre, surten ~20 llocs més. **Cap és meu d'aquest tram i cap es toca**:
+el que segueix és el cens classificat, perquè qui ho agafi comenci amb la lectura feta.
+
+🔑 **La troballa del cens és que NO hi ha un sol remei, n'hi ha quatre** — i per això no és una
+escombrada:
+
+| Família | On | Remei |
+|---|---|---|
+| **A · Botó amb fons** | `ExportModal:236` · `PatternTab:394` · `RelationsPanel:396` · `SegmentEditor:77` · `SewEditor:116` · `TallerPatro:1317` · `PatternViewer:884` · `TechSheetEditor:7165`, `8087` | `apagat` (§5.7: baixa el fons, no la tinta) |
+| **B · Text sense fons** | `SewEditor:200` (`opacity: 0.85` en un valor de longitud) | **`--text-soft`/`--text-faint`** — no és cap deshabilitat, és un secundari fet amb opacitat en comptes de token (§1). És el cas que S1 va resoldre a `UsersRoles`: *quan no hi ha fons que baixar, mana l'escala de tintes*. |
+| **C · Contenidor «ocupat»** | `ProposalsPanel:99` · `DartProposalsPanel:71` (fila sencera amb `background: --panel` mentre treballa) | ❓ **No és deshabilitat, és EN CURS.** La norma no en té forma escrita. Decisió. |
+| **D · Regió sencera** | `TechSheetEditor:8141` — un `<fieldset disabled>` amb `opacity: 0.45` que embolica *children* arbitraris quan la tasca està en pausa | ❓ Ni `apagat` (no és un botó) ni una tinta (són molts elements). **Decisió.** |
+
+**Fora del cens i intocable:** tota l'`opacity` de `PatternViewer` (552, 594, 639, 660, 803, 838)
+i de `TechSheetEditor` (2194, 7342) és **de dibuix** — primitives Konva i objectes de document.
+Una escombrada per `grep opacity` se les hauria endut, que és el mateix parany que els
+`fontSize: 8` del món paper.
+
+**I el que es queda per decisió meva, escrit perquè consti:** `ribbonToolStyle:6395`
+(`opacity: 0.45`, ~60 botons d'eina). `apagat` els donaria fons `--bg-page` **dins d'una barra
+d'eines**; això és una decisió de com es veu una eina inactiva, no un descuit.
+
+> 🔑 **La lliçó de mètode, que és de S1 i val més que el cens:** de les quatre `opacity` fora de
+> norma trobades avui entre les sessions, **cap es va trobar rellegint el diff**. Totes quatre,
+> amb el criteri escrit a la mà. *Un criteri escrit troba coses que la mateixa persona no veu
+> tornant a mirar el mateix codi.*
