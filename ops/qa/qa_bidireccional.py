@@ -232,42 +232,57 @@ CASOS = [
     # ── A7 · Resum · EL WIZARD PARTIT (§8f) ──────────────────────────────────────────────
     # El tram gros del bloc, i l'únic que no és pell: aquí es mesura que els TRES ESTATS del
     # subespai (FET · ACTUAL · BLOQUEJAT) i el xip d'inclusió pinten el que la maqueta diu.
+    #
+    # ⚠️ **EL BANC ERA EL MODEL 1319 I EL 1319 JA NO EXISTEIX.** La SEMBRA v4 (09/08) va fer
+    # esborrat total del catàleg i el va re-sembrar: aquests onze casos apuntaven a un model
+    # mort i no mesuraven res —cada un d'ells hauria donat «element no trobat», que en aquest
+    # arnès es llegeix com una línia de soroll i no com un vermell. És el mateix mode de
+    # fallada que la capçalera d'aquest fitxer descriu: un selector que depèn d'una cosa que es
+    # pot moure deixa de mesurar el que deia, SENSE AVISAR. El banc passa a **1320**
+    # (BRW-FW26-0001 · Blusa KAYCE), que és el model viu del QA.
     ('A7', 'títol de contenidor', 'PROPOSTA_resum_wizard_partit.html',
      '.chead .t', [],
-     '/models/1319?tab=Resum', [], 'span:text-is("Informació")'),
+     '/models/1320?tab=Resum', [], 'span:text-is("Informació")'),
     ('A7', 'nota del contenidor (quin pas és)', 'PROPOSTA_resum_wizard_partit.html',
      '.chead .n', [],
-     '/models/1319?tab=Resum', [], 'span:text-is("1 · Identificació")'),
+     '/models/1320?tab=Resum', [], 'span:text-is("1 · Identificació")'),
     ('A7', 'rètol de camp', 'PROPOSTA_resum_wizard_partit.html',
      '.kv .k', [],
-     '/models/1319?tab=Resum', [], 'span:text-is("Client")'),
+     '/models/1320?tab=Resum', [], 'span:text-is("Client")'),
     ('A7', 'valor BUIT (tènue i cursiva)', 'PROPOSTA_resum_wizard_partit.html',
      '.kv .v.buit', [],
-     '/models/1319?tab=Resum', [], 'span:text-is("Sense deadline")'),
+     '/models/1320?tab=Resum', [], 'span:text-is("Sense deadline")'),
     ('A7', 'numeral del pas FET (✓ verd)', 'PROPOSTA_resum_wizard_partit.html',
      '.step.done .shead .num', [],
-     '/models/1319?tab=Resum', [], 'span:text-is("✓") >> nth=0'),
+     '/models/1320?tab=Resum', [], 'span:text-is("✓") >> nth=0'),
     ('A7', 'xip d\'INCLUSIÓ (elecció fixada)', 'PROPOSTA_resum_wizard_partit.html',
      '.chip.on', [],
-     '/models/1319?tab=Resum', [], 'button[aria-pressed="true"] >> nth=0'),
-    ('A7', 'acció PRIMÀRIA del pas pendent', 'PROPOSTA_resum_wizard_partit.html',
+     '/models/1320?tab=Resum', [], 'button[aria-pressed="true"] >> nth=0'),
+    # El `.btn.pri` de la maqueta és el «Desar talles» d'un subespai OBERT (línia 268), i el cas
+    # anava contra «Definir graduació» — el botó que saltava al wizard vell, que ja no existeix
+    # (graduació ara edita in-situ, Agus 09/08). Mesurar-lo amb el subespai obert és alhora el
+    # que la maqueta dibuixa i l'única forma estable de trobar-hi un primari: amb els tres
+    # passos FETS, la §8f diu que el blau CALLA i no n'hi ha d'haver cap enlloc.
+    ('A7', 'acció PRIMÀRIA del subespai obert', 'PROPOSTA_resum_wizard_partit.html',
      '.btn.pri', [],
-     '/models/1319?tab=Resum', [], 'button:has-text("Definir graduació")'),
+     '/models/1320?tab=Resum',
+     [('click', 'div:has(> span:text-is("Talles")) button:has-text("Canviar")')],
+     'button:has-text("Desar talles")'),
     ('A7', 'capçalera del pas ACTUAL (--sel + filet d\'or)', 'PROPOSTA_resum_wizard_partit.html',
      '.step.now .shead', [],
-     '/models/1319?tab=Resum',
+     '/models/1320?tab=Resum',
      [('click', 'div:has(> span:text-is("Talles")) button:has-text("Canviar")')],
      'div:has(> span:text-is("Talles"))'),
     ('A7', 'xip en REPÒS (triable, no triat)', 'PROPOSTA_resum_wizard_partit.html',
      '.chips .chip:not(.on)', [],
-     '/models/1319?tab=Resum',
+     '/models/1320?tab=Resum',
      [('click', 'div:has(> span:text-is("Talles")) button:has-text("Canviar")')],
      'button[aria-pressed="false"] >> nth=0'),
     ('A7', 'fila de run TRIADA (inclusió)', 'PROPOSTA_resum_wizard_partit.html',
      '.runrow.on', [],
-     '/models/1319?tab=Resum',
+     '/models/1320?tab=Resum',
      [('click', 'div:has(> span:text-is("Talles")) button:has-text("Canviar")')],
-     'div:has(> span:text-is("Alpha EU — Men"))'),
+     'div:has(> span:text-is("Alpha EU — Women"))'),
     # ── PART B · B1 · Desenvolupament (la home) ──────────────────────────────────────────
     # La home no té maqueta pròpia: el que s'hi mesura és l'ESTRUCTURA DE PÀGINA del §8b, i
     # per això la referència és la mateixa evidència que va servir per al dashboard del model
