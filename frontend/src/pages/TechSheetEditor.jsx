@@ -6753,19 +6753,23 @@ export default function TechSheetEditor() {
   return (
     // DINS DEL BASTIMENT COMÚ ja no és `100vw × 100vh`: aquelles dues mides deien «sóc tota la
     // finestra», i era veritat quan la ruta vivia fora del Shell. Ara l'editor és una secció
-    // més i ha d'omplir el que queda sota el crom, ni un píxel més — `100vh` aquí faria una
-    // pantalla més alta que el seu forat i el llenç se n'aniria per sota del plec.
-    // `flex: 1` + `minHeight: 0` ho diu sense saber quant fa el crom, que és cosa del Shell
-    // (§8b-quater: «el crom del sistema es declara un sol cop»). El `minHeight: 0` no és
-    // decoració: sense ell, un fill flex no baixa del seu min-content i la columna del llenç
-    // —que té el seu propi scroll— empenyeria la pàgina en comptes de desplaçar-se.
-    // I EL PADDING DEL `<main>` ES CANCEL·LA PELS QUATRE COSTATS, no per tres. Les pàgines
-    // normals només en cancel·len tres (el menú de pantalla s'ha de menjar el de dalt i els
-    // laterals) i deixen el de sota, que és l'aire del final de la pàgina. Aquí no hi ha final
-    // de pàgina: l'editor ÉS la superfície, i aquells 24 px de sota li sobraven per fora del
-    // plec — el document desbordava per 2 px i sortia una barra de desplaçament a una eina que
-    // per definició no se'n va enlloc.
-    <div style={{ flex: 1, minHeight: 0, marginBottom: '-1.5rem', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
+    // més i ha d'omplir el que queda sota el crom, ni un píxel més.
+    //
+    // `--chrome-h` la publica el Shell EN VIU (§8b-quater(4)) i és l'única manera que això
+    // funcioni: el bloc de crom **NO fa una alçada fixa**. Mesurat abans de publicar-la, de
+    // 106px a 245px segons l'amplada de la finestra —el menú de pantalla porta `flexWrap` i
+    // les píndoles passen a dues o tres files quan no hi caben—, o sigui que una constant
+    // hauria estat certa només en una finestra ampla i hauria mentit a totes les altres.
+    // El `minHeight: 0` no és decoració: sense ell, un fill flex no baixa del seu min-content
+    // i la columna del llenç —que té el seu propi scroll— empenyeria la pàgina.
+    // I EL PADDING DEL `<main>` ES CANCEL·LA PELS QUATRE COSTATS, des de l'arrel. Les pàgines
+    // normals en cancel·len tres amb un `<div>` de marge negatiu al voltant del menú i deixen
+    // el de sota, que és l'aire del final de la pàgina. **Aquí no hi ha final de pàgina**:
+    // l'editor ÉS la superfície i va de vora a vora. Fer-ho a l'arrel, i no amb el `<div>` de
+    // sempre, és el que fa que el `calc` quadri: `--chrome-h` mesura des de dalt del viewport,
+    // i si l'arrel comencés 24px més avall (el `padding-top` del `<main>`) sobraria exactament
+    // aquesta franja per sota del plec — que és com desbordava mentre ho provava.
+    <div style={{ height: 'calc(100vh - var(--chrome-h))', minHeight: 0, margin: '-1.5rem', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
       {acabant && (
         <ModalAcabarTasca
           taskId={acabant.id}
@@ -6782,10 +6786,10 @@ export default function TechSheetEditor() {
           mantenint en paral·lel. Tot això marxa: la identitat i el camí són del Shell, i
           l'editor es queda amb el que és seu de debò —les seccions del model (les mateixes
           que Mesures o Fitting, de la llista canònica) i el crom del DOCUMENT.
-          El `<div>` de marge negatiu cancel·la el padding del `<main>` i es queda buit: la
-          barra es teletransporta al forat del crom (§8b-quater). */}
-      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
-        <PageMenu
+          Sense el `<div>` de marge negatiu que porten les altres pantalles: aquí el padding
+          del `<main>` ja el cancel·la l'arrel, i la barra se'n va igualment al forat del crom
+          pel portal (§8b-quater), o sigui que aquí no ocupa lloc. */}
+      <PageMenu
           backTo={`/models/${id}`}
           backTitle={t('tech_sheet.back_to_model')}
           onBack={() => sortirDeLaFitxa()}
@@ -6820,8 +6824,7 @@ export default function TechSheetEditor() {
               {exporting ? t('tech_sheet.exporting') : t('tech_sheet.export_pdf')}
             </button>
           </>}
-        />
-      </div>
+      />
 
       {/* ── Ribbon SolidWorks: fila 1 grups, fila 2 comandaments ── */}
       <div style={{ flexShrink: 0, background: CTX_BG, borderBottom: `1px solid ${CTX_BORDER}`, color: CTX_TEXT }}>

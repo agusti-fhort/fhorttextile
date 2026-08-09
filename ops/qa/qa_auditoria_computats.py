@@ -18,6 +18,7 @@ No toca res: imprimeix la taula i surt amb codi 1 si hi ha cap incompliment.
     FTT_QA_TOKEN=... /tmp/qa-venv/bin/python ops/qa/qa_auditoria_computats.py
 """
 import collections
+import json
 import mimetypes
 import os
 import pathlib
@@ -75,7 +76,11 @@ PANTALLES = [
     # l'auditor. O sigui que la mesura d'aquestes rutes és, literalment, la del crom.
     # El 3r element és el SENYAL: el selector que ha d'existir perquè la mesura valgui. V. el
     # bloc de `senyal` al bucle — les tres pantalles poden muntar-se «a mitges» sense fallar.
-    ('C1 · Editor .ftt', '/models/1319/ftt/758', '[data-ftt-screen="ftt-editor"]'),
+    # ⚠️ L'id és el CAP DE CADENA VIGENT del model, no un document qualsevol: el .ftt es
+    # versiona en cadena i el backend només deixa desar des del cap (409 si no). El `758` que
+    # hi havia va quedar enrere per culpa d'aquest mateix arnès (v. el bloc d'escriptures), i
+    # mesurava un editor en error. Amb les escriptures bloquejades ja no s'hauria de moure més.
+    ('C1 · Editor .ftt', '/models/1319/ftt/761', '[data-ftt-screen="ftt-editor"]'),
     ('C2 · Patró (tab del model)', '/models/1319?tab=Patr%C3%B3', '[data-ftt-screen="patro-tab"]'),
     ('C3 · Taller de patró', '/models/1319/patro/taller', '[data-ftt-screen="taller-patro"]'),
     # 🛑 SizeMapSetup NO TÉ RUTA: el seu `export default` no el munta ningú (v. el report). El
@@ -182,17 +187,72 @@ def _comprova_sessio(sess, quan):
                  "d'aquesta correguda seria d'una altra pantalla (v. la 2a tapadora).")
 
 
+# ── 🚨 UNA AUDITORIA NO POT ESCRIURE AL DOMINI QUE MESURA ────────────────────────────────
+# Trobat mesurant, i pel símptoma: a C1 es llegia «Error desant» a pantalla. La causa no era
+# l'editor. **L'editor .ftt fa autosave en carregar-se**, i aquest arnès reenviava els PATCH al
+# servei viu com qualsevol altra crida: cada correguda de l'auditoria CREAVA UNA VERSIÓ NOVA del
+# document. El `758` que la llista de rutes anomena ja té una cadena de quatre al darrere
+# (758→759→760→761) i **ell mateix ja no és el cap vigent**, o sigui que el backend refusa
+# desar-hi (409, «només des del cap de cadena vigent») i el que s'estava mesurant era un editor
+# en estat d'error que ningú havia demanat.
+#
+# I EL SENYAL NO HO ATRAPA: l'`aside` es pinta igual, o sigui que `data-ftt-screen` diu que sí,
+# que això és l'editor. És el mateix cap de sèrie que «`?mode=entry` és un GEST»: una eina de
+# lectura que entra en una superfície d'escriptura, escriu.
+#
+# La regla, doncs: **cap escriptura surt d'aquí**, amb UNA excepció escrita.
+#: Escriptures que SÍ es deixen passar, i per què. El lock del .ftt és una escriptura
+#: EFÍMERA (TTL al backend, i l'editor l'allibera al desmuntar-se) i **és condició per veure la
+#: pantalla**: sense lock, l'editor no pinta els panells laterals i l'auditoria mesuraria una
+#: closca buida creient que és l'editor sencer. Bloquejar-la no seria prudència, seria mesurar
+#: una altra cosa.
+ESCRIPTURES_EFIMERES = ('/lock/', '/unlock/')
+
+
+def _es_escriptura(metode, cami):
+    if metode in ('GET', 'HEAD', 'OPTIONS'):
+        return False
+    return not any(cami.endswith(sufix) for sufix in ESCRIPTURES_EFIMERES)
+
+
+def _cos_substitut(sess, cami):
+    """Què es contesta a una escriptura bloquejada.
+
+    Un `{}` sec no serviria: el client de l'editor fa `setSheet(await r.json())` i la barra
+    passaria a dir `v1` quan el document va per la 4. Per a l'autosave del .ftt es contesta amb
+    **l'estat REAL d'ara**, demanat amb un GET (que sí que és de lectura): la pantalla queda
+    exactament com quedaria després d'un desat correcte —«Desat ✓» i la versió de debò— i al
+    servidor no s'hi ha escrit res. Per a la resta, un objecte buit.
+    """
+    if '/ftt-documents/' in cami:
+        try:
+            r = sess.get(VIU + cami, headers={'Host': HOST_TENANT,
+                                              'Authorization': f'Bearer {TOKEN}'}, timeout=15)
+            if r.ok:
+                return json.dumps(r.json().get('fitxer') or {})
+        except Exception:
+            pass
+    return '{}'
+
+
 def main():
     if not TOKEN:
         sys.exit("Falta FTT_QA_TOKEN.")
     if not DIST.exists():
         sys.exit(f'No hi ha bundle a {DIST} — cal `npm run build`.')
     sess = requests.Session()
+    bloquejades = []
 
     def handler(route, request):
         url = request.url
         cami = url.split(BASE, 1)[-1].split('?')[0] if url.startswith(BASE) else url
         if cami.startswith('/api/'):
+            if _es_escriptura(request.method, cami):
+                bloquejades.append(f'{request.method} {cami}')
+                cos = _cos_substitut(sess, cami)
+                route.fulfill(status=200, body=cos,
+                              headers={'content-type': 'application/json'})
+                return
             try:
                 r = sess.request(request.method, VIU + url.split(BASE, 1)[-1],
                                  headers={'Host': HOST_TENANT, 'Authorization': f'Bearer {TOKEN}',
@@ -267,6 +327,13 @@ def main():
                 print(f'    🔴 {tipus:6} {fs:.0f}px ×{n:<4} p.ex. «{ex["txt"]}»  {ex["cam"]}')
         nav.close()
     _comprova_sessio(sess, "just després de l'última mesura")
+    # El que NO s'ha fet es diu en veu alta: una escriptura bloquejada en silenci deixa la
+    # pantalla en un estat que no és el que tindria en ús real, i qui llegeixi el verd ha de
+    # poder saber quin tros de la pantalla no ha viscut la seva vida normal.
+    if bloquejades:
+        print(f'\n  ✋ {len(bloquejades)} escriptures BLOQUEJADES (l\'auditoria mesura, no muta):')
+        for e, n in sorted(collections.Counter(bloquejades).items(), key=lambda kv: -kv[1]):
+            print(f'     ×{n:<3} {e}')
     print(f'\n──────── {incompliments} incompliments ────────')
     sys.exit(1 if incompliments else 0)
 

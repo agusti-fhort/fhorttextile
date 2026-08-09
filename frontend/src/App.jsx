@@ -94,9 +94,12 @@ function ProtectedRoute({ children }) {
   const location = useLocation()
 
   if (estatAuth === AUTH_DESCONEGUT) return <PantallaEspera />
-  // El guard de tasca oblidada penja D'AQUÍ i no del Shell a posta: l'editor .ftt i el taller de
-  // patró són rutes de fora del Shell (són eines a pantalla completa), i són precisament on el
-  // tècnic passa aquells 30 minuts. Muntat al Shell, l'avís no existiria allà on més cal.
+  // El guard de tasca oblidada penja D'AQUÍ i no del Shell a posta: el TALLER DE PATRÓ és una
+  // ruta de fora del Shell (és una eina a pantalla completa), i és precisament on el tècnic
+  // passa aquells 30 minuts. Muntat al Shell, l'avís no existiria allà on més cal.
+  // (L'editor .ftt també era fora fins a la fusió de capçaleres; ara és dins i el tindria
+  // igualment pel Shell. Es queda aquí perquè el motiu segueix viu per al taller, i perquè
+  // penjar-lo del guard és el que garanteix que hi sigui a TOTA ruta protegida, dins o fora.)
   // Va com a GERMÀ de children: repintar-se cada segon no arrossega l'app sencera.
   // AvisSessio (K5) va al costat del guard de tasca oblidada i pel mateix motiu: tots dos
   // són globals i han de viure allà on la persona treballa, no en una pantalla concreta.
