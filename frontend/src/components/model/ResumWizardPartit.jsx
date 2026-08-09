@@ -25,9 +25,13 @@
 // ── QUÈ ES COMPARTEIX AMB EL WIZARD, I QUÈ NO ─────────────────────────────────────────────
 // Aquesta és la **germana de presentació** dels passos 2-4: mateix domini, mateixa decisió,
 // altra pell. El que decideix va a mòduls compartits (`utils/talles`, `utils/proximitatRun`,
-// `CascadeFinder`, `useEixos`) i el wizard els importa dels mateixos llocs — **el wizard vell
-// no es toca ni es trenca**, i segueix sent la VÀLVULA D'ESCAPAMENT: la porta de graduació
-// d'aquí hi porta, perquè és allà on el canvi de joc ja és explícit i re-materialitza.
+// `CascadeFinder`, `RuleSetPicker`, `useConfirmacioRuleset`, `useEixos`) i el wizard els importa
+// dels mateixos llocs — **el wizard vell no es toca ni es trenca**.
+//
+// El que ha deixat de ser cert (Agus, QA 09/08) és que el wizard fos la VÀLVULA D'ESCAPAMENT de
+// la graduació: el pas 4 també edita AQUÍ, i cap dels tres subespais treu ja de la fitxa. El
+// wizard segueix existint i fent la seva feina —crear— però no és el lloc on s'ha d'anar a
+// acabar un model que ja existeix. V. la capçalera de `PasGraduacio`.
 //
 // ── PER QUÈ CADA SUBESPAI POT DESAR SOL, SENSE BACKEND NOU ────────────────────────────────
 // `PATCH /models/<id>/update-step2/` ja resol camp a camp: `_resolve_garment_def` **només
@@ -36,12 +40,13 @@
 // entri al payload **i** que sigui un altre). O sigui que partir el desat no demana endpoint
 // nou: demana enviar menys.
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import CascadeFinder from '../CascadeSelector/CascadeFinder'
 import CustomerSelector from '../CustomerSelector'
 import { useEixos } from '../grading/eixosFont'
-import { models, sizeSystems, gradingRuleSets, customers } from '../../api/endpoints'
+import RuleSetPicker from '../grading/RuleSetPicker'
+import useConfirmacioRuleset from './useConfirmacioRuleset'
+import { models, sizeSystems, gradingRuleSets, garmentGroups, customers } from '../../api/endpoints'
 import { ordenaPerProximitat } from '../../utils/proximitatRun'
 import { labelsOf, ordenaPelSistema } from '../../utils/talles'
 import Feedback from '../ui/Feedback'
@@ -213,7 +218,6 @@ function Subespai({ num, titol, estat, motiu, accions, onObrir, children }) {
 
 export default function ResumWizardPartit({ model, onUpdated }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const { targets: catTargets, constructions: catConstructions, fits: catFits } = useEixos()
   const [feedback, setFeedback] = useState(null)
   // Quin subespai està OBERT. `null` = mana l'estat (el primer pendent és l'ACTUAL); un número
@@ -239,14 +243,23 @@ export default function ResumWizardPartit({ model, onUpdated }) {
     return obert == null && actual === n ? 'ara' : 'pendent'
   }
 
-  const desa = useCallback(async (payload, okKey) => {
+  // `enviar` és opcional i existeix per a UN cas: la graduació, que no pot cridar l'endpoint pelat
+  // perquè abans ha de passar per les confirmacions de `useConfirmacioRuleset`. La resta del
+  // tancament —tancar el subespai, dir-ho, rellegir el model— és idèntica per als tres passos i
+  // per això segueix vivint aquí i no es copia a cap d'ells.
+  const desa = useCallback(async (payload, okKey, enviar) => {
     try {
-      await models.updateStep2(id, payload)
+      await (enviar ? enviar(payload) : models.updateStep2(id, payload))
       setObert(null)
       setFeedback({ type: 'ok', text: t(okKey) })
       onUpdated?.()
       return true
     } catch (e) {
+      // UN 409 QUE ARRIBA FINS AQUÍ ÉS UNA CONFIRMACIÓ DECLINADA, NO UNA AVARIA. L'embolcall ha
+      // preguntat, l'usuari ha dit que no, i rellança l'avís tal com venia. Pintar-lo de vermell
+      // diria que ha fallat una cosa que precisament NO s'ha arribat a intentar. El subespai es
+      // queda obert i amb la tria a la mà, que és on l'usuari l'ha deixada.
+      if (e?.response?.status === 409 && e.response.data?.conflict) return false
       const d = e?.response?.data
       setFeedback({ type: 'err', text: d?.message || d?.error || t('resum_wizard.save_error') })
       return false
@@ -274,7 +287,8 @@ export default function ResumWizardPartit({ model, onUpdated }) {
             desa={desa} onCancel={() => setObert(null)} />
           <PasTalles model={model} estat={estatDe(3)} onObrir={() => setObert(3)}
             desa={desa} onCancel={() => setObert(null)} />
-          <PasGraduacio model={model} estat={estatDe(4)} navigate={navigate} />
+          <PasGraduacio model={model} estat={estatDe(4)} onObrir={() => setObert(4)}
+            desa={desa} onCancel={() => setObert(null)} />
         </Targeta>
       </div>
     </>
@@ -695,48 +709,159 @@ function FilaRun({ sistema, triat, onTria, t }) {
 
 // ── DRETA · PAS 4 · GRADUACIÓ ─────────────────────────────────────────────────────────────
 // §8f — «Graduació segueix blau-per-estat: sense joc = "Definir graduació" primari; amb joc =
-// valors + porta "Veure graduació ›"». No hi ha editor aquí a posta: el CANVI DE JOC destrueix
-// regles residents i el backend l'aguanta amb un 409 que demana confirmació amb el recompte al
-// davant (D-31.4). Aquell gest ja té la seva superfície —el pas 4 del wizard— i és la VÀLVULA
-// D'ESCAPAMENT que aquesta porta obre. Duplicar-lo aquí duplicaria la confirmació.
-function PasGraduacio({ model, estat, navigate }) {
+// valors fixats + "Canviar"».
+//
+// ── PER QUÈ AQUÍ HI HAVIA UNA PORTA, I PER QUÈ JA NO N'HI HA (Agus, QA 09/08) ─────────────
+// Fins avui aquest pas no editava res: «Definir graduació» feia `navigate('…/editar?block=4')`
+// i et deixava al ModelWizard vell. El motiu escrit era que el canvi de joc destrueix regles
+// residents i demana un 409 confirmat (D-31.4), i que duplicar aquell gest duplicaria la
+// confirmació. **La premissa era falsa**: la confirmació no viu al wizard, viu a
+// `useConfirmacioRuleset` —un hook compartit, fet precisament perquè no se n'escrivís una segona
+// còpia—, i `update-step2` és el MATEIX endpoint que el wizard crida. O sigui que portar el gest
+// aquí no duplica cap confirmació: en reutilitza exactament la mateixa, com fan els passos 2 i 3.
+//
+// El que sí que era un defecte és el que quedava: els altres dos subespais editen al lloc on
+// després es llegeixen, i aquest et treia de la fitxa. Un contenidor que es diu «Definició del
+// model» i que en el seu últim pas t'expulsa a una altra pantalla no és un contenidor.
+//
+// ── LA LLISTA ORDENA, MAI TRIA (LLEI C5 · D-31.3), I PER AIXÒ ÉS `eliminatiu` ─────────────
+// El picker va en mode ELIMINATIU, no `strict`, i la diferència no és cosmètica: l'estricte
+// exigeix que el joc DECLARI target, construcció, fit, grup i sistema, i que tots cinc casin.
+// El catàleg d'aquesta casa no és així —el joc de Brownie (142 regles) porta els eixos BUITS i
+// només declara el sistema de talles—, i buit NO vol dir incompatible: vol dir NO DECLARAT
+// (llei de N1). Amb `strict` aquest pas no oferiria RES i el model no es podria graduar mai des
+// d'aquí. Amb `eliminatiu` hi són tots, els compatibles primer i els altres atenuats i AMB EL
+// MOTIU ESCRIT — que és la mateixa llei que el pas 3 aplica als runs.
+//
+// Els dos casos que el backend sí que bloqueja de debò (joc buit · sistema de talles divergent)
+// segueixen sent seus i tornen 400: aquí no es reimplementen, es mostren.
+function PasGraduacio({ model, estat, onObrir, desa, onCancel }) {
   const { t } = useTranslation()
-  const [joc, setJoc] = useState(null)
+  const obert = estat === 'ara'
   const grsId = model?.grading_rule_set ?? null
+  const [joc, setJoc] = useState(null)
+  const [jocs, setJocs] = useState([])
+  const [ggCodiById, setGgCodiById] = useState({})
+  const [sel, setSel] = useState(grsId)
+  const [desant, setDesant] = useState(false)
+  const { executa, dialeg } = useConfirmacioRuleset()
 
+  // El joc VIGENT, per poder-lo pintar amb el pas tancat (les eleccions fixades i visibles de §8f).
   useEffect(() => {
-    if (!grsId) { setJoc(null); return }
+    if (!grsId) { setJoc(null); return undefined }
     let viu = true
     gradingRuleSets.get(grsId).then(r => { if (viu) setJoc(r.data || null) }).catch(() => {})
     return () => { viu = false }
   }, [grsId])
 
-  const porta = () => navigate(`/models/${model.id}/editar?block=4`)
+  // El CATÀLEG només es carrega quan el subespai s'obre: amb el pas tancat no hi ha res a triar i
+  // dues crides per cada fitxa de model serien dues crides per res. En obrir, la tria parteix
+  // SEMPRE del que el model té desat — la mateixa llei que el pas 2 (§419).
+  useEffect(() => {
+    if (!obert) return undefined
+    let viu = true
+    setSel(grsId)
+    Promise.all([
+      // `amb_regles: 1` com al wizard: un joc sense regles no és una opció llunyana, és un
+      // bloqueig dur al backend (400 `ruleset_buit`). Oferir-lo seria oferir un carreró sense
+      // sortida, que no és el que «no amagar» vol dir.
+      gradingRuleSets.list({ page_size: 200, amb_regles: 1 }),
+      garmentGroups.list({ page_size: 200 }),
+    ])
+      .then(([rsRes, ggRes]) => {
+        if (!viu) return
+        const rs = rsRes.data?.results ?? (Array.isArray(rsRes.data) ? rsRes.data : [])
+        const gg = ggRes.data?.results ?? (Array.isArray(ggRes.data) ? ggRes.data : [])
+        const map = {}; gg.forEach(g => { map[g.id] = g.codi })
+        setJocs(rs); setGgCodiById(map)
+      })
+      .catch(() => { if (viu) setJocs([]) })
+    return () => { viu = false }
+  }, [obert, grsId])
+
+  // Els eixos del MODEL, tal com els porta el seu detall. El `fit` va en MAJÚSCULES perquè
+  // `Model.fit_type` és un choice ('Regular') i els jocs el declaren pel codi del vocabulari
+  // ('REGULAR'): sense normalitzar, un joc que declara el fit no casaria mai amb cap model.
+  const eixos = {
+    target: model.target || null,
+    construction: model.construction || null,
+    fit: model.fit_type ? String(model.fit_type).toUpperCase() : null,
+    garmentGroup: model.garment_type_grup || null,
+    garmentTypeId: model.garment_type ?? null,
+    garmentTypeItemId: model.garment_type_item ?? null,
+  }
+
+  const desar = async () => {
+    setDesant(true)
+    // Les confirmacions (joc d'un altre client · esborrat de residents) les porta el hook
+    // compartit, que reintenta amb UN flag per cas. Aquí no se'n reimplementa cap.
+    await desa({ grading_rule_set_id: sel }, 'resum_wizard.grading_saved',
+      p => executa(flags => models.updateStep2(model.id, { ...p, ...flags })))
+    setDesant(false)
+  }
+
+  if (!obert) {
+    return (
+      <Subespai num={4} titol={t('resum_wizard.step_grading')} estat={estat}
+        motiu={t('resum_wizard.needs_sizes')} onObrir={onObrir}
+        accions={estat === 'blocat' ? null : (
+          // El pas ACTUAL ja s'obre sol (i llavors el blau és el seu «Desar graduació»); aquí
+          // només s'hi arriba amb el pas FET o amb un altre subespai obert, i en tots dos casos
+          // l'acció és secundària: el blau és d'un pas de sol (§8f).
+          <Boto variant="sec" onClick={onObrir} style={{ padding: '6px 12px' }}>
+            {grsId ? t('resum_wizard.change') : t('model_sheet.define_grading')}
+          </Boto>
+        )}>
+        {estat !== 'blocat' && grsId && (
+          <div>
+            <span style={retolCamp}>{t('dependency.ruleset')}</span>
+            <div><b>{joc?.nom || model.grading_rule_set_nom || model.grading_rule_set}</b></div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+              {(joc?.targets_codis || []).map(c => (
+                <Xip key={c} marcat disabled>{t(`model_wizard.target_${c}`, c)}</Xip>
+              ))}
+              {joc?.construction_codi && <Xip marcat disabled>{t(`model_wizard.construction_${joc.construction_codi}`, joc.construction_codi)}</Xip>}
+              {joc?.fit_type_codi && <Xip marcat disabled>{t(`model_wizard.fit_${joc.fit_type_codi}`, joc.fit_type_codi)}</Xip>}
+            </div>
+            <div style={{ marginTop: 8, color: 'var(--text-soft)' }}>
+              {t('model_sheet.grading_rules_label')}: {joc?.regles_count ?? 0}
+            </div>
+          </div>
+        )}
+      </Subespai>
+    )
+  }
 
   return (
-    <Subespai num={4} titol={t('resum_wizard.step_grading')} estat={estat}
-      motiu={t('resum_wizard.needs_sizes')}
-      accions={estat === 'blocat' ? null : (grsId
-        ? <Boto variant="sec" onClick={porta}>{t('resum_wizard.see_grading')} ›</Boto>
-        // EL BLAU ÉS DEL PAS ACTUAL, I D'UN DE SOL (§8f). Si l'usuari té un altre subespai
-        // obert, el blau és el SEU desar: aquesta porta baixa a secundària i espera el torn.
-        : <Boto variant={estat === 'ara' ? 'pri' : 'sec'} onClick={porta}>{t('model_sheet.define_grading')}</Boto>)}>
-      {estat !== 'blocat' && grsId && (
+    <Subespai num={4} titol={t('resum_wizard.step_grading')} estat="ara">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
           <span style={retolCamp}>{t('dependency.ruleset')}</span>
-          <div><b>{joc?.nom || model.grading_rule_set_nom || model.grading_rule_set}</b></div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-            {(joc?.targets_codis || []).map(c => (
-              <Xip key={c} marcat disabled>{t(`model_wizard.target_${c}`, c)}</Xip>
-            ))}
-            {joc?.construction_codi && <Xip marcat disabled>{t(`model_wizard.construction_${joc.construction_codi}`, joc.construction_codi)}</Xip>}
-            {joc?.fit_type_codi && <Xip marcat disabled>{t(`model_wizard.fit_${joc.fit_type_codi}`, joc.fit_type_codi)}</Xip>}
-          </div>
-          <div style={{ marginTop: 8, color: 'var(--text-soft)' }}>
-            {t('model_sheet.grading_rules_label')}: {joc?.regles_count ?? 0}
-          </div>
+          {/* EL SELECTOR ÉS EL MATEIX COMPONENT que el pas 4 del wizard (`RuleSetPicker`), pel
+              mateix motiu que el pas 2 comparteix `CascadeFinder`: duplicar-lo seria estrenar
+              una segona manera de triar una graduació. */}
+          <RuleSetPicker
+            ruleSets={jocs}
+            garmentGroupCodiById={ggCodiById}
+            axes={eixos}
+            eliminatiu
+            selectedId={sel}
+            actionLabel={t('model_sheet.use_ruleset')}
+            onPick={(rs) => setSel(rs.id)}
+          />
         </div>
-      )}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', paddingTop: 4 }}>
+          {!sel && <span style={{ ...buitText, fontSize: 'var(--fs-caption)' }}>{t('resum_wizard.need_ruleset')}</span>}
+          <Boto variant="ter" onClick={onCancel}>{t('model_wizard.cancel')}</Boto>
+          {/* EL SEU DESAR ÉS L'ÚNIC BLAU d'aquesta columna (§8f). Re-desar el joc que ja hi és no
+              és una acció: el backend no en faria res (`canvia_joc` mira que el joc sigui UN
+              ALTRE) i el botó no ha de prometre una feina que no passarà. */}
+          <Boto variant="pri" onClick={desar} disabled={desant || !sel || sel === grsId}>
+            {desant ? t('model_wizard.saving') : t('resum_wizard.save_grading')}
+          </Boto>
+        </div>
+      </div>
+      {dialeg}
     </Subespai>
   )
 }

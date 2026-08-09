@@ -4893,7 +4893,6 @@
     "save_error": "No se ha podido guardar.",
     "save_piece": "Guardar prenda",
     "save_sizes": "Guardar tallas",
-    "see_grading": "Ver graduación",
     "sizes_saved": "Tallas guardadas.",
     "step1": "1 · Identificación",
     "step_grading": "Graduación",
@@ -4901,7 +4900,10 @@
     "step_sizes": "Tallas",
     "steps_of": "{{n}} de {{total}} pasos",
     "systems_for": "Sistema de tallas disponible para {{target}}",
-    "year_season": "Año · Temporada"
+    "year_season": "Año · Temporada",
+    "save_grading": "Guardar graduación",
+    "grading_saved": "Graduación guardada.",
+    "need_ruleset": "Elige un conjunto de reglas"
   },
   "disseny": {
     "back_title": "Volver al panel"

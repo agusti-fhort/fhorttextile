@@ -4893,7 +4893,6 @@
     "save_error": "Could not save.",
     "save_piece": "Save garment",
     "save_sizes": "Save sizes",
-    "see_grading": "View grading",
     "sizes_saved": "Sizes saved.",
     "step1": "1 · Identification",
     "step_grading": "Grading",
@@ -4901,7 +4900,10 @@
     "step_sizes": "Sizes",
     "steps_of": "{{n}} of {{total}} steps",
     "systems_for": "Size system available for {{target}}",
-    "year_season": "Year · Season"
+    "year_season": "Year · Season",
+    "save_grading": "Save grading",
+    "grading_saved": "Grading saved.",
+    "need_ruleset": "Pick a rule set"
   },
   "disseny": {
     "back_title": "Back to dashboard"

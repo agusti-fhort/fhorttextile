@@ -4893,7 +4893,6 @@
     "save_error": "No s'ha pogut desar.",
     "save_piece": "Desar peça",
     "save_sizes": "Desar talles",
-    "see_grading": "Veure graduació",
     "sizes_saved": "Talles desades.",
     "step1": "1 · Identificació",
     "step_grading": "Graduació",
@@ -4901,7 +4900,10 @@
     "step_sizes": "Talles",
     "steps_of": "{{n}} de {{total}} passos",
     "systems_for": "Sistema de talles disponible per a {{target}}",
-    "year_season": "Any · Temporada"
+    "year_season": "Any · Temporada",
+    "save_grading": "Desar graduació",
+    "grading_saved": "Graduació desada.",
+    "need_ruleset": "Tria un joc de regles"
   },
   "disseny": {
     "back_title": "Tornar al tauler"
