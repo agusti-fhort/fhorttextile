@@ -110,9 +110,16 @@ CASOS = [
     ('A1', 'fila SELECCIONADA («on soc»)', 'maqueta_cataleg_poms_v3.html',
      '.pom.on', [('click', '.pom >> nth=0')],
      '/poms', [], 'button[aria-current="true"]'),
+    # ⚠️ EL SELECTOR S'HA HAGUT D'ACOTAR A `main`, i el motiu val la pena. Anava per
+    # `div[style*="sticky"] >> nth=0`, o sigui «el primer element enganxós de la pàgina» — i
+    # des del §8b-quater(2) el primer element enganxós del document és el BLOC DE CROM del
+    # Shell, que és fora del `<main>`. El cas va passar de mesurar la capçalera de categoria a
+    # mesurar la top bar, i va donar cinc desviacions que NO eren de la pantalla.
+    # És el mateix mode de fallada que la coda del bloc B va patir amb el literal «Pendent»: un
+    # selector que depèn d'una cosa que es pot moure deixa de mesurar el que deia, sense avisar.
     ('A1', 'capçalera de categoria', 'maqueta_cataleg_poms_v3.html',
      '.cat', [],
-     '/poms', [], 'div[style*="sticky"] >> nth=0'),
+     '/poms', [], 'main div[style*="sticky"] >> nth=0'),
     # ── A5 · Models · LA LLISTA CANÒNICA (§8e) ───────────────────────────────────────────
     # La maqueta d'aquest tram és la NORMA de llista, no la d'una pantalla: el que es mesura
     # aquí val per a QUALSEVOL llista del producte, i per això s'hi mesura la graella sencera
