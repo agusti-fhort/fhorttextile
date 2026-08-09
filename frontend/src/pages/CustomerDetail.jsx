@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
@@ -15,7 +15,7 @@ import Badge from '../components/ui/Badge'
 import { StatusBadge } from './Quotes'
 import { OrderStatusBadge } from './Orders'
 import { DNStatusBadge } from './DeliveryNotes'
-import { primaryBtn, selS } from '../components/ui/buttons'
+import { primaryBtn, selS, botoSec, botoDestructiu, apagat } from '../components/ui/buttons'
 
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
 const dayOf = (r) => (r.issued_at || r.created_at || '').slice(0, 10)
@@ -49,11 +49,53 @@ export default function CustomerDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [feedback, setFeedback] = useState(null)
+  // EL GOVERN DEL CLIENT VIU A LA SEVA FITXA (§8e · §5.6). La llista de Clients tenia, a cada
+  // fila, quatre botons de text: obrir · pujar logo · activar/desactivar · esborrar. La graella
+  // canònica no en dona cap columna —només la paperera— i la §5.6 reserva el menú d'accions als
+  // gestos OCASIONALS. «Pujar el logo» i «desactivar» ho són, i totes dues parlen d'UN client:
+  // el seu lloc és aquí, on la pantalla parla d'una entitat, i no a la llista, on en parla de
+  // moltes. Entren en aquest tram i no en el següent a posta: així la llista no perd cap
+  // capacitat en cap moment intermedi.
+  const [saving, setSaving] = useState(false)
+  const logoRef = useRef(null)
+  const API = import.meta.env.VITE_API_URL || ''
 
   const load = useCallback(() => {
     setError(false)
     return customers.get(id).then(res => setCustomer(res.data)).catch(() => setError(true))
   }, [id])
+
+  // El logo del client no passa per `customers.update`: té endpoint propi multipart. `fetch` i
+  // no el client d'API perquè el cos és un `FormData` i el `Content-Type` l'ha de posar el
+  // navegador amb el `boundary` (mateix codi que tenia la llista).
+  const pujaLogo = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !customer) return
+    setSaving(true); setFeedback(null)
+    const fd = new FormData(); fd.append('logo', file)
+    fetch(`${API}/api/v1/customers/${customer.id}/upload-logo/`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+      body: fd,
+    })
+      .then(r => { if (!r.ok) throw new Error('upload'); return r.json() })
+      .then(() => load())
+      .then(() => setFeedback({ type: 'ok', text: t('clients.logo_uploaded') }))
+      .catch(() => setFeedback({ type: 'err', text: t('clients.error') }))
+      .finally(() => setSaving(false))
+  }
+
+  // Activar/desactivar. El client propi (is_self) no s'ofereix: el tenant es quedaria sense
+  // casa. Amagar-ho és cortesia — qui blinda de debò és el backend (409 `self_customer_protected`).
+  const commutaActiu = () => {
+    setSaving(true); setFeedback(null)
+    customers.update(customer.id, { active: !customer.active })
+      .then(() => load())
+      .then(() => setFeedback({ type: 'ok', text: t('clients.saved') }))
+      .catch(() => setFeedback({ type: 'err', text: t('clients.error') }))
+      .finally(() => setSaving(false))
+  }
 
   useEffect(() => {
     let alive = true
@@ -95,6 +137,28 @@ export default function CustomerDetail() {
           {/* La fitxa del client propi no es distingia de cap altra: hi entraves i no sabies que
               estaves mirant casa teva. Mateix badge que a la llista (definició única). */}
           {customer.is_self && <SelfBadge t={t} />}
+
+          {/* §8b.3 · les accions de la identitat van A LA DRETA. Cap de les dues és blava: el
+              blau és «el que has vingut a fer» (§5.1) i a la fitxa d'un client això és DESAR les
+              dades, que ja porta el seu botó al tab. Pujar un logo i desactivar són gestos de la
+              casa: secundari amb vora daurada, i la de desactivar amb VORA vermella i mai plena
+              (§5.5 — el vermell ple només al botó que confirma dins d'un modal). */}
+          {canEdit && (
+            <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input ref={logoRef} type="file" accept="image/*" hidden onChange={pujaLogo} />
+              <button type="button" onClick={() => logoRef.current?.click()} disabled={saving}
+                style={{ ...botoSec, ...(saving ? apagat : null) }}>
+                <i className="ti ti-photo" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+                {customer.logo ? t('clients.logo_replace') : t('clients.logo_upload')}
+              </button>
+              {!customer.is_self && (
+                <button type="button" onClick={commutaActiu} disabled={saving}
+                  style={{ ...(customer.active ? botoDestructiu : botoSec), ...(saving ? apagat : null) }}>
+                  {customer.active ? t('clients.deactivate') : t('clients.activate')}
+                </button>
+              )}
+            </span>
+          )}
         </div>
       </div>
 
