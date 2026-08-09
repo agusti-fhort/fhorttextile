@@ -255,3 +255,188 @@ en aquesta casa». **No es conforma** (conformar codi mort és pintar una porta 
 Quan la S2 buidi les seves 11 pantalles, li queden set consumidors **fora** del lot comercial:
 `components/model/{FittingTab,ProductionTab,RegistreActivitatTab,TaskLog}.jsx`, `pages/Recursos.jsx`,
 `pages/SizeMapSetup.jsx` i `pages/TaskTypes.jsx`. Dos són del meu lot (SizeMapSetup) o adjacents.
+
+---
+---
+
+# [S2] AUDITORIA · PART B · SESSIÓ 2 — LOT COMERCIAL (només frontend)
+
+> 09/08/2026 · branca `dev` · **cap push** · commits **199 → 215** (sèrie 2xx).
+> Sessió germana: **S1**, lot tècnic + propietària de `index.css`, `components/ui/*`,
+> `components/layout/*`, `src/i18n/*` i **tot** `backend/`. Aquesta sessió **no ha tocat cap
+> fitxer d'aquells**: tot el que hi calia s'ha demanat per missatge i ho ha fet S1.
+> **Cap build i cap restart des d'aquí** (un sol builder, S1).
+
+## Perímetre — 16 superfícies i 2 kits
+
+| # | Superfície | Commit |
+|---|---|---|
+| B1 | `/clients` (llista) | 200 · 201 · 203 |
+| B2 | `/clients/:id` (fitxa, 3 tabs) | 200 · 202 |
+| B3 | `/proveïdors` + el seu modal (= la seva fitxa) | 204 · 209 |
+| B4 | `/comercial/productes` + `/productes/:id` + modal d'article | 211 |
+| B5 | `/comercial/ofertes` + modal d'alta | 207 |
+| B6 | `/comercial/comandes` | 208 |
+| B7 | Encàrrecs de federació (safata del Studio) | 212 |
+| B8 | `/comercial/encàrrecs` (WorkOrders) | 208 |
+| B9 | `/comercial/albarans` | 208 |
+| B10 | Encàrrecs orfes | 210 |
+| B11 | Condicions de pagament + el seu modal | 210 |
+| B12 | Les 4 fitxes de document (Oferta · Comanda · Encàrrec · Albarà) | 213 · 214 · 215 |
+| — | `components/commercial/*` (kit de fitxa, 5 components) | 213 |
+| — | `components/llista/ChromLlista.jsx` (crom de llista) — **nou** | 199 |
+| — | `components/commercial/estats.jsx` (badges d'estat) — **nou** | 206 |
+| — | `CustomerModal` · `CustomerForm` (frontera acordada amb S1) | 202 · 215 |
+
+## Les dues peces compartides que s'han creat, i per què no són invenció
+
+**`components/llista/ChromLlista.jsx` (199).** `ui/TaulaLlista` ja havia tret de `/models` la
+GRAELLA; el que es va quedar dins de `Models.jsx` va ser la capa del voltant —botó amb estil de
+menú, desplegable d'acció composta, comptador «X/N», camp de filtre, paginació, estat buit,
+paperera de fila—. Aquest lot són onze pantalles: copiar-la vuit vegades és el pedaç que la llei
+de mètode prohibeix, i el mode de fallada és conegut (nou còpies d'una decisió divergeixen sense
+que falli res; només es pinten diferent). **Cada valor surt d'A5, ja conformada i mesurada**;
+l'única cosa que s'hi afegeix és `ui/toc`, que A5 encara no feia.
+
+**`components/commercial/estats.jsx` (206).** Aquí NO hi ha cap llista de codis: només el mapa de
+COLOR. La frontera, escrita al fitxer: **una llista AFIRMA quins membres existeixen** i el dia que
+l'original n'afegeix un menteix sense fallar (`CustomerPOMAlias.origen` en va guanyar un cinquè i
+el client en seguia declarant quatre); **un mapa amb fallback no afirma res** — qui no hi és es
+pinta neutre i **s'ensenya igualment**.
+
+---
+
+## Cens dada → endpoint (les 11 pantalles)
+
+| Pantalla | Llista | Filtres server-side | Enumeracions (totes de `/vocabulari/`) |
+|---|---|---|---|
+| Clients | `GET /customers/` + `page_size=1` per al cens | `active` · `search` · `ordering`(7) | — |
+| CustomerDetail | `/customers/{id}/`, `/customer-aliases/`, `/grading-rule-sets/`, `/sizing-profiles/`, `/quotes/`, `/orders/`, `/delivery-notes/` | `customer` | `origens_alias_pom` · `estats_vincle_tenant` |
+| Proveïdors | `GET /suppliers/` | `active` · `search` · `ordering`(3) | 🛑 `Supplier.type` — v. §Desviació |
+| Productes | `GET /commerce/products/` | `active` · `nature` · `ordering` | `natures_producte` · `modes_preu_producte` |
+| Ofertes | `GET /commerce/quotes/` | `status` · `customer` · `ordering` | `estats_oferta` |
+| Comandes | `GET /commerce/orders/` | `status` · `customer` · `ordering` | `estats_comanda` · `estats_tasca` |
+| Encàrrecs (fed.) | `GET /encarrecs/` | — (informe agrupat per Brand) | `estats_locals_encarrec` |
+| WorkOrders | `GET /commerce/work-orders/` | `kind` · `status` · `customer` · `ordering` | `estats_encarrec` · `tipus_encarrec` · `estats_tasca` |
+| Albarans | `GET /commerce/delivery-notes/` | `status` · `customer` · `ordering` | `estats_albara` · `tipus_linia_albara` |
+| Orfes | `GET /commerce/work-orders/orphaned/` (informe sencer) | — | `estats_encarrec` |
+| Cond. pagament | `GET /commerce/payment-terms/` | `active` · `ordering` | — |
+
+**Cap endpoint nou a tot el lot.**
+
+---
+
+## 🚨 Els cinc defectes que no eren d'estil
+
+### 1 · `/clients` demanava un ordre que DRF descartava EN SILENCI
+`CustomerViewSet` declarava `filter_backends = [DjangoFilterBackend, SearchFilter]`. Declarar-ne
+dos **no n'afegeix: els substitueix tots tres** del `DEFAULT_FILTER_BACKENDS`, i queia
+l'`OrderingFilter`. `pages/Customers.jsx` enviava `ordering=codi` a cada crida des de feia mesos.
+**No fallava mai**: la llista sortia en l'ordre del `Meta.ordering` del model i semblava que
+funcionés. Arreglat per S1 (commit 250·204) amb els set camps —els tres de dada i els **quatre
+comptadors**, que són `annotate` i per tant ordenables sense cost—, i **mesurat contra l'API viva
+abans de posar cap icona**.
+
+### 2 · `/proveïdors` tenia un cercador que no filtrava — el GERMÀ INVERS
+Aquí el `SearchFilter` **hi era** i el que faltava era `search_fields`; DRF, sense
+`search_fields`, **deixa passar el queryset sencer**. Mesurat abans (`?search=zzzz` → `count 1`,
+el mateix que sense filtre) i després de l'arreglo de S1 (`count 0`). **Dos silencis diferents amb
+la mateixa cara**: no falla, no avisa, i el control sembla que funciona.
+
+### 3 · Quatre llistes filtraven EN MEMÒRIA sobre `page_size: 500`
+Ofertes, comandes, encàrrecs i albarans demanaven 500 files i després feien `items.filter(...)`.
+**La llista es partia en silenci a partir de la 501** —la 501a no existia per a ningú— i el
+comptador no podia dir mai la veritat, perquè només sabia comptar el que ja tenia carregat.
+
+### 4 · `ModelTask.status` declarat DUES vegades amb DOS mapes de color divergents
+`WorkOrderDetail:23` (badge) i `OrderDetail:299` (punt de color). **La mateixa tasca es pintava
+d'un color a la comanda i d'un altre a l'encàrrec**, i cap dels dos fitxers sabia que l'altre
+existia.
+
+### 5 · Un error de COMPOSICIÓ es pintava com un error de CÀRREGA
+A `/albarans`, si «Compondre albarà» fallava, el `catch` feia `setError(true)` i la pantalla deia
+«no s'han pogut carregar els albarans» **quan els havia carregat perfectament**.
+
+---
+
+## Conformitat de norma — el que ha canviat, per secció
+
+**§8b** · Les 16 superfícies porten `ui/PageMenu` amb destí explícit. Se'n van: sis botons-fletxa
+solts sobre el títol, i **dues bandes de navegació pròpies amb l'activa en DAURAT PLE**
+(`CustomerDetail`, `CustomerModal`) — el mateix defecte que A6 va corregir al dashboard del model.
+
+**§8b.3** · Identitat sobre el fons, sense contenidor, a les sis fitxes. A les de document el
+subjecte **canvia**: el número baixa a caption i el **CLIENT** puja a `h1`. A la LLISTA la reina
+és el número (allà se cerca per número); a la FITXA ja saps quin document mires i el que has de
+reconèixer d'un cop d'ull és **de qui és**.
+
+**§8e** · Vuit llistes passen a `ui/TaulaLlista` amb capçaleres ordenables, amplades per
+contingut i `ellipsis + title`. `/productes` deixa de fer servir `LineTable` —que és la taula de
+**línies d'un document**— per a una llista principal: que les dues fossin taules no les feia la
+mateixa taula.
+
+**§5** · Tots els botons a la família de `ui/buttons`. Se'n van: quatre `primaryBtn` que es
+fabricaven a mà, un vermell PLE fet sobreescrivint el fons del primari, un «Cancel·lar» amb
+l'estil d'un **input**, tres ghosts daurats i sis usos d'`opacity` com a deshabilitat.
+
+**§1** · `--gold-pale` (ELIMINAT del sistema), `--model-band` (crema) i `--intern-bg` (gris fred,
+fora de paleta) deixen de tenir consumidors al lot. **Cens del perímetre: 0** ocurrències de
+`--gray-l` · `--text-muted` · `--border` · `--gray` · `--bg-muted` · `--gold-pale` ·
+`--model-band` · `--intern-bg` · qualsevol `0.5px`.
+
+---
+
+## 🚩 Decisions de DOMINI (no d'estil) — per si Agus les vol vetar
+
+1. **Els INACTIUS deixen d'estar a la llista per defecte** a Clients, Proveïdors, Productes i
+   Condicions de pagament. La §8e ho mana; aquí, a diferència de Models, **el criteri no
+   s'endevina** (`active` és un camp de debò i el backend ja el filtra). Són a un clic.
+2. **OFERTA · `EXPIRED` es pinta com `REJECTED` (vermell).** Totes dues volen dir que l'oferta
+   s'ha acabat sense convertir-se en comanda; la diferència la diu la paraula. Abans era taronja,
+   que en aquesta escala vol dir «encara en curs», i una oferta caducada no ho està.
+3. **TASCA · `Paused` i `Pending` comparteixen el neutre.** Quatre estats sobre un eix de tres
+   colors; el que col·lapsa és «ara mateix no corre». L'eix de la §8e és el **progrés**, no el
+   rellotge.
+4. **PROVINENÇA i TIPUS DE LÍNIA deixen de pintar-se com a semàfor.** `origen` d'un àlies i
+   `line_kind` d'un albarà són CLASSIFICACIONS: cap membre és millor que un altre. Anaven amb
+   verd, daurat, vermell i taronja repartits sense criteri llegible —`TASK` verd i `DEDUCTION`
+   vermell suggerien que una deducció és un error—. El vermell d'una deducció **el porta el
+   número**, que ja és negatiu (D-31.21).
+5. **El GOVERN baixa de la llista a la fitxa** (logo i actiu/inactiu del client; editar i
+   actiu/inactiu de l'article). La graella canònica no dona columna a les accions de fila i la
+   §5.6 reserva el menú als gestos ocasionals. **Entren en el mateix tram que la llista les perd**,
+   perquè la capacitat no desaparegui en cap moment intermedi.
+
+## 🚩 Desviacions declarades
+
+**`/proveïdors` · `Supplier.type` (workshop · factory) — BLOQUEJAT-PER-S1.** Els `choices` són
+**inline** al model (`fhort/tasks/models.py:273`, ni una constant amb nom) i cap endpoint els
+publica. És un select que **ESCRIU**. La llei prohibeix inventar-ne de noves; aquesta ja hi era i
+es queda **viva i censada**, com el bloc A va fer amb les ~25 sense endpoint. **És l'única
+enumeració de domini que el lot encara declara al client.**
+
+**`/clients/:id` · tres columnes de la biblioteca d'àlies porten DUES línies.** No és un salt de
+línia (que és el que la §8e prohibeix perquè trenca la fila): és una **pila de dos camps**
+—descripció EN + descripció local amb el seu codi d'idioma, i codi global de POM + abreviatura—.
+Aplanar-les faria desaparèixer dades que aquesta pantalla existeix per ensenyar.
+
+**Encàrrecs de federació NO és una llista canònica**, i és a posta: són **grups per Brand**,
+cadascun amb la seva acció i el seu comptador. Aplanar-ho perdria el que la pantalla diu.
+
+**Orfes no té paginació**: l'endpoint és un **informe** (torna `{orphaned: [...]}` sencer, sense
+`count` ni `next`). Paginar-ho al client seria paginar una llista que ja hi és tota.
+
+## 🛑 Límits del banc — el que NO s'ha pogut veure
+
+| Pantalla | Dades vives | Conseqüència |
+|---|---|---|
+| Proveïdors | **1** (`Syttex`, `fhort`) · **0** a `los` | l'ordenació no és observable |
+| Productes | **1** (`FITSES`) | ni ordenació ni paginació observables |
+| Orfes | **0** | la taula amb dades i el modal de reassignació, **no fotografiables** |
+| Comandes · Albarans | 2 i 2 | paginació no observable |
+| Ofertes | 8 (6 DRAFT + 2 ACCEPTED) | l'únic conjunt on el filtre és visible de debò |
+
+**El que SÍ està verificat**: cada filtre i cada ordenació **mesurats contra l'API viva** abans de
+connectar-hi cap control (els números, a cada commit), `npx eslint src` → **0 errors**, i el cens
+de tokens del perímetre a **0**. **El que NO**: la pell de les graelles plenes. No està amagat:
+està dit.
