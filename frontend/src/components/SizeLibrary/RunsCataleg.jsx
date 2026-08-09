@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { sizeSystems } from '../../api/endpoints'
 import { useEixos } from '../grading/eixosFont'
 import { useGarmentGroups } from '../grading/garmentCatalog'
-import useToc, { anellFocus } from '../ui/toc'
+import Xip from '../ui/Xip'
 
 // A2 · SIZE LIBRARY — la llista de RUNS i la seva fitxa (maqueta_size_library_v3).
 //
@@ -136,40 +136,22 @@ function Talles({ talles, buit }) {
 }
 
 /**
- * Un xip de capa: TRES estats i cap més.
+ * Un xip de capa. **Els tres estats i el fantasma que en feia un quart ja NO viuen aquí**: són
+ * de `ui/Xip`, que és el mateix control que fa servir Graduació. Aquí només hi queden les
+ * MÈTRIQUES d'aquesta pantalla (lletra de rètol, encoixinat curt), que sí que li són pròpies.
  *
- *   repòs        vora `--line` fina · fons `--panel`
- *   seleccionat  fons `--ok-bg` · vora i tinta `--ok` · pes 600   ← INCLUSIÓ = VERD (§1)
- *   hover        fons `--sel` (i NO trepitja el verd: un seleccionat sobre el qual passes
- *                el ratolí segueix sent verd — el hover diu «es pot clicar», no «està triat»)
+ * INCLÒS = VERD: no és una tria d'aquesta pantalla, és la REGLA DE LES DUES SELECCIONS
+ * (NORMA §1, esmena Agus 08/08) — d'aquí el `verd`.
  *
- * ⚠️ **HI HAVIA UN QUART ESTAT, I ERA UN FANTASMA.** En desmarcar un xip es quedava amb una vora
- * fosca i gruixuda: no era el toggle —desmarcava bé— sinó **l'anell de focus del navegador**, que
- * el botó conserva després del clic. Es corregeix a `ui/toc.js`, que és compartit: l'anell només
- * surt amb focus de TECLAT (`:focus-visible`), i la base porta `outline: 'none'` perquè el de
- * l'UA no torni a entrar per la seva porta.
+ * Repòs = tinta PRINCIPAL (mesurat: `.tg` de la maqueta és `--ink`), que ja és la base de
+ * `ui/Xip`; `cx.ab` —el xip de només-lectura— va en `--text-soft` i no serveix per a un xip
+ * que es pot triar.
  */
 function XipCapa({ on, disabled, onClick, children }) {
-  const [toc, gestos] = useToc()
   return (
-    <button type="button" disabled={disabled} aria-pressed={on} onClick={onClick} {...gestos}
-            style={{
-              ...cx.ab, cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit',
-              fontSize: 'var(--fs-label)', padding: '3px 10px', outline: 'none',
-              // Repòs = tinta PRINCIPAL (mesurat: `.tg` de la maqueta és `--ink`). `cx.ab` és el
-              // xip de només-lectura i va en `--text-soft`; un xip que es pot triar no és una
-              // etiqueta apagada.
-              color: 'var(--text-main)',
-              ...(toc.hover && !disabled && !on ? { background: 'var(--sel)' } : null),
-              // INCLÒS = VERD. No és una tria d'aquesta pantalla: és la REGLA DE LES DUES
-              // SELECCIONS (NORMA §1, esmena Agus 08/08), i la maqueta la porta escrita al costat
-              // de `.tg.on` — «esmena Agus: inclòs = verd». Aquí hi havia la selecció de
-              // NAVEGACIÓ (--sel + daurat) fent de selecció d'INCLUSIÓ, i una capa marcada
-              // gairebé no es distingia d'una que no ho estava.
-              ...(on ? { background: 'var(--ok-bg)', borderColor: 'var(--ok)',
-                         color: 'var(--ok)', fontWeight: 600 } : null),
-              ...(toc.focus ? anellFocus : null),
-            }}>{children}</button>
+    <Xip on={on} verd disabled={disabled} onClick={onClick}
+         style={{ fontSize: 'var(--fs-label)', letterSpacing: '.04em',
+                  padding: '3px 10px', flex: 'none' }}>{children}</Xip>
   )
 }
 

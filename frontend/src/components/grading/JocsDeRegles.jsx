@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { gradingRuleSets, gradingRules, sizeSystems } from '../../api/endpoints'
 import PageMenu from '../ui/PageMenu'
 import useToc, { anellFocus } from '../ui/toc'
+import Xip from '../ui/Xip'
 import { useEixos } from './eixosFont'
 import { useGarmentGroups } from './garmentCatalog'
 import { useElements } from '../../utils/vocabulariDominiFont'
@@ -195,44 +196,30 @@ function Boto({ variant, disabled, style, children, ...props }) {
   )
 }
 
-/** Píndola commutable: capa de relació, talla de trencament, filtre. Marcada = el verd d'inclusió. */
-function Xip({ on, disabled, verd, style, children, ...props }) {
-  const [toc, gestos] = useToc()
-  return (
-    <button type="button" disabled={disabled} aria-pressed={on} {...gestos} {...props}
-            style={{
-              fontSize: 'var(--fs-body)', border: '1px solid var(--line)', borderRadius: 'var(--r-pill)',
-              padding: '4px 12px', background: 'var(--panel)', color: 'var(--text-main)',
-              // `fontFamily`, MAI la shorthand `font`: `font: 'inherit'` és una shorthand i,
-              // com que les claus duplicades de JS conserven la posició de la PRIMERA, acabava
-              // aplicant-se DESPRÉS del `fontSize` d'aquest mateix objecte i li menjava la mida
-              // (a la Size Library això posava tots els xips a 16px en comptes de 10).
-              fontFamily: 'inherit', cursor: disabled ? 'default' : 'pointer', outline: 'none',
-              ...(toc.hover && !disabled && !on ? { background: 'var(--sel)' } : null),
-              // Esmena Agus 08/08 (NORMA §1): «INCLÒS en la definició» = VERD (marcar és
-              // confirmar); «on soc» = --sel + filet d'or. Són dues seleccions diferents.
-              ...(on && verd ? { background: 'var(--ok-bg)', borderColor: 'var(--ok)',
-                                 color: 'var(--ok)', fontWeight: 600 } : null),
-              ...(on && !verd ? { background: 'var(--sel)', borderColor: 'var(--gold-border)',
-                                  color: 'var(--text-main)', fontWeight: 600 } : null),
-              ...(disabled && !on ? { background: 'var(--bg-page)', color: 'var(--text-faint)' } : null),
-              ...(toc.focus ? anellFocus : null),
-              ...style,
-            }}>{children}</button>
-  )
-}
+// Píndola commutable: capa de relació, talla de trencament, filtre. Marcada = el verd d'inclusió.
+//
+// ⚠️ VIVIA AQUÍ, I N'HI HAVIA UNA SEGONA CÒPIA a `SizeLibrary/RunsCataleg` amb el MATEIX
+// defecte (la vora fosca en desclicar). Ara és `ui/Xip`, un de sol per a les dues superfícies:
+// la capçalera d'aquell fitxer explica per què el fantasma no era l'anell de focus.
 
-/** Control de text/nombre de la casa: vora --line, radi 6, FOCUS DAURAT (NORMA §8c). */
+/**
+ * Control de text/nombre de la casa: vora --line, radi 6, FOCUS DAURAT (NORMA §8c).
+ *
+ * ⚠️ La vora entra sencera per la shorthand i el daurat del focus es decideix DINS del seu valor.
+ * Amb `borderColor` a part —com estava— el camp es quedava amb la vora fosca en PERDRE el focus,
+ * pel mateix mecanisme que el fantasma del xip (v. `ui/Xip`): en desaparèixer la longhand, React
+ * la neteja i no reescriu una shorthand que no ha canviat, i el `border-color` cau a `currentColor`.
+ */
 function Camp({ style, ...props }) {
   const [toc, gestos] = useToc()
   return (
     <input {...gestos} {...props}
            style={{
-             fontFamily: 'inherit', fontSize: 'var(--fs-body)', border: '1px solid var(--line)',
+             fontFamily: 'inherit', fontSize: 'var(--fs-body)',
+             border: `1px solid ${toc.focus ? 'var(--gold)' : 'var(--line)'}`,
              borderRadius: 'var(--r-ctrl)', padding: '8px 12px', background: 'var(--panel)',
              color: 'var(--text-main)', outline: 'none',
-             ...(toc.focus ? { outline: 'none', borderColor: 'var(--gold)',
-                               boxShadow: '0 0 0 3px rgba(194,122,42,.15)' } : null),
+             ...(toc.focus ? { boxShadow: '0 0 0 3px rgba(194,122,42,.15)' } : null),
              ...style,
            }} />
   )
