@@ -37,7 +37,7 @@ export default function POMPicker({ onTria, onCancel }) {
     <div style={{
       position: 'absolute', zIndex: 30, top: 40, left: 0,
       width: 340, maxHeight: 380, overflow: 'auto',
-      background: 'var(--white)', border: '1px solid var(--gold)',
+      background: 'var(--panel)', border: '1px solid var(--gold)',
       borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', padding: '0.6rem',
     }}>
       <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
@@ -48,7 +48,7 @@ export default function POMPicker({ onTria, onCancel }) {
           placeholder={t('pattern.pom_search')}
           style={{
             flex: 1, fontSize: 'var(--fs-body)', padding: '0.3rem 0.5rem',
-            border: '1px solid var(--border)', borderRadius: 4,
+            border: '1px solid var(--line)', borderRadius: 4,
           }}
         />
         <button
@@ -61,12 +61,12 @@ export default function POMPicker({ onTria, onCancel }) {
       </div>
 
       {carregant && (
-        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0 }}>
+        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0 }}>
           {t('app.loading')}
         </p>
       )}
       {!carregant && resultats.length === 0 && (
-        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0 }}>
+        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0 }}>
           {t('pattern.pom_none')}
         </p>
       )}
@@ -77,14 +77,14 @@ export default function POMPicker({ onTria, onCancel }) {
           onClick={() => onTria(pom)}
           style={{
             display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
-            background: 'none', border: 'none', borderBottom: '1px solid var(--border)',
+            background: 'none', border: 'none', borderBottom: '1px solid var(--line)',
             padding: '0.4rem 0.2rem',
           }}
         >
           <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>
             {pom.codi_client || pom.pom_code}
           </div>
-          <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
             {pom.nom_client || pom.nom}
           </div>
         </button>

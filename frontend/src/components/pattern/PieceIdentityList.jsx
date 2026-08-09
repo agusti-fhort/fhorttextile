@@ -54,7 +54,7 @@ export default function PieceIdentityList({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
       <p style={{
-        fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0,
+        fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0,
       }}>
         {t('pattern.identity_hint')}
       </p>
@@ -74,7 +74,7 @@ export default function PieceIdentityList({
             style={{
               width: '100%', textAlign: 'left', cursor: 'pointer',
               background: 'transparent', border: 'none', padding: '0.4rem 0',
-              color: 'var(--text-muted)', fontSize: 'var(--fs-caption)',
+              color: 'var(--text-soft)', fontSize: 'var(--fs-caption)',
               display: 'flex', alignItems: 'center', gap: '0.3rem',
             }}
             aria-expanded={obertesTreball}
@@ -104,7 +104,7 @@ export default function PieceIdentityList({
 
       {actaVigent && (
         <p style={{
-          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0,
+          fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0,
           display: 'flex', alignItems: 'center', gap: '0.3rem',
         }}>
           <i className="ti ti-circle-check" style={{ color: 'var(--ok)' }} />
@@ -115,7 +115,7 @@ export default function PieceIdentityList({
         </p>
       )}
       {acta && !actaVigent && (
-        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0 }}>
+        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0 }}>
           {t('pattern.identity_confirmed_stale', { versio: acta.versio_patro })}
         </p>
       )}
@@ -126,9 +126,9 @@ export default function PieceIdentityList({
         title={ambRol.length === 0 ? t('pattern.identity_confirm_none') : ''}
         style={{
           cursor: ambRol.length === 0 ? 'not-allowed' : 'pointer',
-          background: ambRol.length === 0 ? 'var(--bg-card)' : 'var(--gold)',
-          color: ambRol.length === 0 ? 'var(--text-muted)' : 'var(--text-main)',
-          border: '1px solid var(--border)', borderRadius: 6,
+          background: ambRol.length === 0 ? 'var(--panel)' : 'var(--gold)',
+          color: ambRol.length === 0 ? 'var(--text-soft)' : 'var(--text-main)',
+          border: '1px solid var(--line)', borderRadius: 6,
           padding: '0.5rem 0.8rem', fontSize: 'var(--fs-body)',
         }}
       >
@@ -146,8 +146,8 @@ function Targeta({ p, rols, t, idioma, sel, confirmada, onTria, onDesa }) {
 
   const camp = {
     fontSize: 'var(--fs-caption)', padding: '0.15rem 0.3rem',
-    border: '1px solid var(--border)', borderRadius: 4,
-    background: 'var(--white)', color: 'var(--text)',
+    border: '1px solid var(--line)', borderRadius: 4,
+    background: 'var(--panel)', color: 'var(--text-main)',
   }
 
   return (
@@ -158,8 +158,8 @@ function Targeta({ p, rols, t, idioma, sel, confirmada, onTria, onDesa }) {
         // El verd de confirmat és el token de FTP-1: el mateix que ja marca «això ja té
         // lloc» a l'editor de fitxa. Dos verds diferents per a la mateixa idea serien dos
         // idiomes visuals.
-        background: confirmada ? 'var(--placed-bg)' : 'var(--bg-card)',
-        border: `1px solid ${sel ? 'var(--gold)' : 'var(--border)'}`,
+        background: confirmada ? 'var(--placed-bg)' : 'var(--panel)',
+        border: `1px solid ${sel ? 'var(--gold)' : 'var(--line)'}`,
         borderRadius: 6, padding: '0.5rem 0.7rem',
         display: 'flex', flexDirection: 'column', gap: '0.35rem',
       }}
@@ -178,7 +178,7 @@ function Targeta({ p, rols, t, idioma, sel, confirmada, onTria, onDesa }) {
       {/* L2 — el rol, gris i cursiva. Si no en té, la línia no hi és. */}
       {nomDelRol(p, idioma) && (
         <span style={{
-          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontStyle: 'italic',
+          fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontStyle: 'italic',
         }}>
           {nomDelRol(p, idioma)}
         </span>
@@ -233,8 +233,8 @@ function Targeta({ p, rols, t, idioma, sel, confirmada, onTria, onDesa }) {
         {/* El xip de Material del fitxer, intacte: és evidència, no una tria. */}
         {p.metadata?.material && (
           <span style={{
-            fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
-            border: '1px solid var(--border)', borderRadius: 8, padding: '0 6px',
+            fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
+            border: '1px solid var(--line)', borderRadius: 8, padding: '0 6px',
             alignSelf: 'center',
           }}>
             {p.metadata.material}

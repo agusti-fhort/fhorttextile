@@ -401,8 +401,8 @@ export default function PatternViewer({
       <div
         ref={viewportRef}
         style={{
-          border: '1px solid var(--border)', borderRadius: 8,
-          background: 'var(--white)', overflow: 'hidden',
+          border: '1px solid var(--line)', borderRadius: 8,
+          background: 'var(--panel)', overflow: 'hidden',
           cursor: maAlta ? 'grabbing' : anotant ? 'crosshair' : 'grab',
           ...(omplirAlcada ? { flex: 1, minHeight: 0 } : null),
         }}
@@ -873,14 +873,14 @@ function Controls({ t, zoom, capes, presents, gran = false, onZoom, onEncaixa, o
     ['mirror', 'ti-flip-horizontal'], ['notch', 'ti-scissors'], ['grain', 'ti-arrow-narrow-up'],
   ]
   const boto = {
-    background: 'var(--white)', border: '1px solid var(--border)',
+    background: 'var(--panel)', border: '1px solid var(--line)',
     cursor: 'pointer', display: 'flex', alignItems: 'center',
     ...(gran ? METRICA_EINA : METRICA_EINA_COMPACTA),
   }
   const encesa = (on) => ({
     ...boto,
-    background: on ? 'var(--gold-pale)' : 'var(--white)',
-    borderColor: on ? 'var(--gold)' : 'var(--border)',
+    background: on ? 'var(--sel)' : 'var(--panel)',
+    borderColor: on ? 'var(--gold)' : 'var(--line)',
     opacity: on ? 1 : 0.55,
   })
 
@@ -897,14 +897,14 @@ function Controls({ t, zoom, capes, presents, gran = false, onZoom, onEncaixa, o
         {t('pattern.fit')}
       </button>
       <span style={{
-        fontSize: gran ? 'var(--fs-body)' : 'var(--fs-caption)', color: 'var(--text-muted)',
+        fontSize: gran ? 'var(--fs-body)' : 'var(--fs-caption)', color: 'var(--text-soft)',
         fontFamily: 'var(--mono)', minWidth: 52,
       }}>
         {(zoom * 100).toFixed(0)}%
       </span>
 
       <span style={{
-        width: 1, height: gran ? 22 : 18, background: 'var(--border)', margin: '0 0.2rem',
+        width: 1, height: gran ? 22 : 18, background: 'var(--line)', margin: '0 0.2rem',
       }} />
 
       {TOGGLES.filter(([capa]) => presents.has(capa)).map(([capa, icona]) => (
@@ -953,7 +953,7 @@ function BarraEstat({ t, hover, pieces, pecaSel, colocant, unit, potInvertir }) 
   return (
     <div style={{
       display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center',
-      fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+      fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
       fontFamily: 'var(--mono)', minHeight: 18, flexShrink: 0,
     }}>
       {/* Col·locant, la pista de la mà NO substitueix les coordenades: mentre es marca un

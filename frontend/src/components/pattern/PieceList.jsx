@@ -27,8 +27,8 @@ export default function PieceList({ pieces, pecaSel, onTria }) {
             aria-pressed={sel}
             style={{
               textAlign: 'left', cursor: 'pointer',
-              background: sel ? 'var(--gold-pale)' : 'var(--bg-card)',
-              border: `1px solid ${sel ? 'var(--gold)' : 'var(--border)'}`,
+              background: sel ? 'var(--sel)' : 'var(--panel)',
+              border: `1px solid ${sel ? 'var(--gold)' : 'var(--line)'}`,
               borderRadius: 6, padding: '0.5rem 0.7rem',
               display: 'flex', flexDirection: 'column', gap: 3,
             }}
@@ -42,15 +42,15 @@ export default function PieceList({ pieces, pecaSel, onTria }) {
               </strong>
               {p.metadata?.material && (
                 <span style={{
-                  fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
-                  border: '1px solid var(--border)', borderRadius: 8, padding: '0 6px',
+                  fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
+                  border: '1px solid var(--line)', borderRadius: 8, padding: '0 6px',
                 }}>
                   {p.metadata.material}
                 </span>
               )}
               {!p.has_sew && (
                 <span title={t('pattern.no_sew_layer')}
-                      style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-caption)' }}>
+                      style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-caption)' }}>
                   <i className="ti ti-scissors-off" />
                 </span>
               )}
@@ -59,13 +59,13 @@ export default function PieceList({ pieces, pecaSel, onTria }) {
                 peça encara no en té, la línia no hi és — un buit no s'omple amb text. */}
             {nomDelRol(p, i18n.language) && (
               <span style={{
-                fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+                fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
                 fontStyle: 'italic',
               }}>
                 {nomDelRol(p, i18n.language)}
               </span>
             )}
-            <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
               {t('pattern.piece_points', {
                 total: p.total_punts, turn: c.turn || 0, curve: c.curve || 0,
                 notch: c.notch || 0,
@@ -73,7 +73,7 @@ export default function PieceList({ pieces, pecaSel, onTria }) {
             </span>
             {bb && (
               <span style={{
-                fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+                fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
                 fontFamily: 'var(--mono)',
               }}>
                 {cm(bb.ample)} × {cm(bb.alt)} cm

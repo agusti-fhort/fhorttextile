@@ -1101,7 +1101,7 @@ export default function TallerPatro() {
       <main style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <aside style={{
           width: 360, flexShrink: 0, display: 'flex', flexDirection: 'column',
-          minHeight: 0, borderRight: '1px solid var(--border)', background: 'var(--bg-page)',
+          minHeight: 0, borderRight: '1px solid var(--line)', background: 'var(--bg-page)',
         }}>
           <Contenidor
             titol={t('pattern.pieces', { n: geometria?.pieces?.length || 0 })}
@@ -1309,9 +1309,9 @@ const round2 = (v) => Math.round(v * 100) / 100
  */
 function BarraEines({ t, mode, onMode, tascaId, errTasca, slotVisor }) {
   const boto = (actiu) => ({
-    background: actiu ? 'var(--gold)' : 'var(--white)',
+    background: actiu ? 'var(--gold)' : 'var(--panel)',
     color: actiu ? 'var(--text-main)' : 'var(--text-main)',
-    border: `1px solid ${actiu ? 'var(--gold)' : 'var(--border)'}`,
+    border: `1px solid ${actiu ? 'var(--gold)' : 'var(--line)'}`,
     cursor: tascaId ? 'pointer' : 'not-allowed',
     opacity: tascaId ? 1 : 0.5,
     display: 'flex', alignItems: 'center',
@@ -1377,7 +1377,7 @@ function BarraEines({ t, mode, onMode, tascaId, errTasca, slotVisor }) {
       ) : tascaId && (
         <span style={{
           display: 'flex', alignItems: 'center', gap: '0.35rem',
-          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+          fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
         }}>
           <i className="ti ti-clock-play" />
           {t('pattern.task_running')}
@@ -1444,7 +1444,7 @@ function Avis({ text, err = false, onTanca = null, tancaEtiqueta = null }) {
     <div style={{
       display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0,
       fontSize: 'var(--fs-caption)',
-      color: err ? 'var(--err)' : 'var(--text-muted)',
+      color: err ? 'var(--err)' : 'var(--text-soft)',
       background: err ? 'var(--err-bg)' : 'var(--bg-muted)',
       border: err ? '1px solid var(--err)' : '1px solid transparent',
       borderRadius: 4, padding: '0.3rem 0.6rem',
@@ -1468,14 +1468,14 @@ function Capcalera({ t, model, fp, modelId, onTorna }) {
   return (
     <header style={{
       flexShrink: 0, height: 52, display: 'flex', alignItems: 'center', gap: '0.8rem',
-      padding: '0 1rem', borderBottom: '1px solid var(--border)',
-      background: 'var(--bg-card)',
+      padding: '0 1rem', borderBottom: '1px solid var(--line)',
+      background: 'var(--panel)',
     }}>
       <button
         onClick={onTorna}
         style={{
           display: 'flex', alignItems: 'center', gap: '0.35rem',
-          background: 'var(--white)', border: '1px solid var(--border)',
+          background: 'var(--panel)', border: '1px solid var(--line)',
           borderRadius: 4, padding: '0.3rem 0.7rem', cursor: 'pointer',
           fontSize: 'var(--fs-body)', color: 'var(--text-main)',
         }}
@@ -1484,11 +1484,11 @@ function Capcalera({ t, model, fp, modelId, onTorna }) {
         {t('pattern.taller.back')}
       </button>
 
-      <span style={{ width: 1, height: 22, background: 'var(--border)' }} />
+      <span style={{ width: 1, height: 22, background: 'var(--line)' }} />
 
       <div style={{
         display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0,
-        fontSize: 'var(--fs-body)', color: 'var(--text-muted)',
+        fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
       }}>
         <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {model?.codi_intern || `#${modelId}`}
@@ -1505,7 +1505,7 @@ function Capcalera({ t, model, fp, modelId, onTorna }) {
       {fp && (
         <span style={{
           display: 'flex', alignItems: 'center', gap: '0.4rem',
-          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+          fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
         }}>
           <i className="ti ti-file-vector" />
           <span style={{
@@ -1515,9 +1515,9 @@ function Capcalera({ t, model, fp, modelId, onTorna }) {
             {fp.nom_fitxer}
           </span>
           <span style={{
-            border: `1px solid ${fp.is_current ? 'var(--gold)' : 'var(--border)'}`,
+            border: `1px solid ${fp.is_current ? 'var(--gold)' : 'var(--line)'}`,
             borderRadius: 10, padding: '1px 8px',
-            background: fp.is_current ? 'var(--gold-pale)' : 'var(--white)',
+            background: fp.is_current ? 'var(--sel)' : 'var(--panel)',
             color: 'var(--text-main)',
           }}>
             {t('pattern.version_option', { versio: fp.versio })}
@@ -1532,7 +1532,7 @@ function Centrat({ text, err = false }) {
   return (
     <div style={{
       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: err ? 'var(--err)' : 'var(--text-muted)', fontSize: 'var(--fs-body)',
+      color: err ? 'var(--err)' : 'var(--text-soft)', fontSize: 'var(--fs-body)',
     }}>
       {text}
     </div>

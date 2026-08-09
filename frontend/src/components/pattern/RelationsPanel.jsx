@@ -167,7 +167,7 @@ export default function RelationsPanel({
                 {p.pom_code}
               </div>
               <div style={{
-                fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+                fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {p.pom_nom} · {p.peca}
@@ -380,7 +380,7 @@ function BuscaPropostes({ t, cercades, buscant, onBusca }) {
       display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.4rem',
       padding: '0.2rem 0',
     }}>
-      <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0 }}>
+      <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0 }}>
         {cercades
           ? t('pattern.taller.proposals_none_found')
           : t('pattern.taller.proposals_not_searched')}
@@ -422,7 +422,7 @@ function Rebuigs({ t, rebuigs, unit, onDesfa }) {
         style={{
           display: 'flex', alignItems: 'center', gap: '0.3rem', width: '100%',
           background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', textAlign: 'left',
+          fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', textAlign: 'left',
         }}
       >
         <i className="ti ti-ban" style={{ flexShrink: 0 }} />
@@ -439,8 +439,8 @@ function Rebuigs({ t, rebuigs, unit, onDesfa }) {
               key={r.id}
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.4rem',
-                border: '1px solid var(--border)', borderRadius: 4,
-                padding: '0.2rem 0.4rem', background: 'var(--bg-card)',
+                border: '1px solid var(--line)', borderRadius: 4,
+                padding: '0.2rem 0.4rem', background: 'var(--panel)',
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -459,7 +459,7 @@ function Rebuigs({ t, rebuigs, unit, onDesfa }) {
                   })}
                 </div>
                 {r.motiu && (
-                  <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
                     {r.motiu}
                   </div>
                 )}
@@ -502,7 +502,7 @@ function AcceptaTolerancia({ t, sewId, estat, acceptacio, onAccepta, onDesaccept
     return (
       <div style={{
         display: 'flex', alignItems: 'center', gap: '0.35rem',
-        fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+        fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
       }}>
         <i className="ti ti-rosette-discount-check" style={{ color: 'var(--ok)', flexShrink: 0 }} />
         <span
@@ -519,7 +519,7 @@ function AcceptaTolerancia({ t, sewId, estat, acceptacio, onAccepta, onDesaccept
           disabled={ocupat}
           style={{
             background: 'none', border: 'none', cursor: ocupat ? 'wait' : 'pointer',
-            color: 'var(--text-muted)', textDecoration: 'underline', padding: 0,
+            color: 'var(--text-soft)', textDecoration: 'underline', padding: 0,
             fontSize: 'var(--fs-caption)', flexShrink: 0,
           }}
         >
@@ -536,7 +536,7 @@ function AcceptaTolerancia({ t, sewId, estat, acceptacio, onAccepta, onDesaccept
       title={t('pattern.taller.tol_accept_title')}
       style={{
         alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '0.3rem',
-        background: 'none', border: '1px solid var(--border)', borderRadius: 4,
+        background: 'none', border: '1px solid var(--line)', borderRadius: 4,
         padding: '0.1rem 0.5rem', cursor: ocupat ? 'wait' : 'pointer',
         color: 'var(--text-main)', fontSize: 'var(--fs-caption)',
       }}
@@ -676,8 +676,8 @@ function Pinca({ t, pinca, unit, marcat, onMarca, onReanomena, onEsborra, onAcce
 
   return (
     <div style={{
-      border: `1px solid ${desajust ? g.color : 'var(--border)'}`, borderRadius: 4,
-      padding: '0.3rem 0.5rem', background: desajust ? g.bg : 'var(--bg-card)',
+      border: `1px solid ${desajust ? g.color : 'var(--line)'}`, borderRadius: 4,
+      padding: '0.3rem 0.5rem', background: desajust ? g.bg : 'var(--panel)',
       display: 'flex', flexDirection: 'column', gap: 3,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -719,7 +719,7 @@ function Pinca({ t, pinca, unit, marcat, onMarca, onReanomena, onEsborra, onAcce
             </button>
           )}
           <div style={{
-            fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+            fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {/* Els dos costats, amb la seva longitud. Si no fan el mateix, la pinça no es pot
@@ -793,8 +793,8 @@ function Tram({ t, tram, unit, marcat, onMarca, onReanomena, onReobre, onEsborra
 
   return (
     <div style={{
-      border: '1px solid var(--border)', borderRadius: 4,
-      padding: '0.3rem 0.5rem', background: 'var(--bg-card)',
+      border: '1px solid var(--line)', borderRadius: 4,
+      padding: '0.3rem 0.5rem', background: 'var(--panel)',
       display: 'flex', flexDirection: 'column', gap: 3,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -836,7 +836,7 @@ function Tram({ t, tram, unit, marcat, onMarca, onReanomena, onReobre, onEsborra
             </button>
           )}
           <div style={{
-            fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+            fontSize: 'var(--fs-caption)', color: 'var(--text-soft)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {tram.peca} · {t('pattern.taller.segment_edge', { vora: tram.vora })}
@@ -864,7 +864,7 @@ function Tram({ t, tram, unit, marcat, onMarca, onReanomena, onReobre, onEsborra
           <i
             className="ti ti-needle-thread"
             title={t('pattern.taller.segment_used')}
-            style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+            style={{ color: 'var(--text-soft)', flexShrink: 0 }}
           />
         )}
         <BotoIcona
@@ -903,7 +903,7 @@ function Seccio({ titol, accions, children }) {
     <div>
       <div style={{
         display: 'flex', alignItems: 'center', gap: '0.4rem',
-        background: 'var(--charcoal)', color: 'var(--white)',
+        background: 'var(--text-main)', color: 'var(--white)',
         borderRadius: 4, padding: '0.25rem 0.5rem', margin: '0 0 0.35rem',
       }}>
         <h4 style={{
@@ -927,8 +927,8 @@ function Fila({ children }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: '0.5rem',
-      border: '1px solid var(--border)', borderRadius: 4,
-      padding: '0.3rem 0.5rem', background: 'var(--bg-card)',
+      border: '1px solid var(--line)', borderRadius: 4,
+      padding: '0.3rem 0.5rem', background: 'var(--panel)',
     }}>
       {children}
     </div>
@@ -937,7 +937,7 @@ function Fila({ children }) {
 
 function Buit({ text }) {
   return (
-    <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0 }}>
+    <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0 }}>
       {text}
     </p>
   )
@@ -951,7 +951,7 @@ function BotoIcona({ icona, etiqueta, onClick }) {
       title={etiqueta}
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
-        color: 'var(--text-muted)', flexShrink: 0, padding: 2,
+        color: 'var(--text-soft)', flexShrink: 0, padding: 2,
       }}
     >
       <i className={`ti ${icona}`} />
@@ -966,7 +966,7 @@ function BotoEsborra({ onClick, etiqueta }) {
       aria-label={etiqueta}
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
-        color: 'var(--text-muted)', flexShrink: 0, padding: 2,
+        color: 'var(--text-soft)', flexShrink: 0, padding: 2,
       }}
     >
       <i className="ti ti-trash" />

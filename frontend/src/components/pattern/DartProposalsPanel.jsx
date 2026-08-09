@@ -21,7 +21,7 @@ export default function DartProposalsPanel({
 
   if (!candidats.length) {
     return (
-      <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: 0 }}>
+      <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: 0 }}>
         {t('pattern.taller.darts_empty')}
       </p>
     )
@@ -38,7 +38,7 @@ export default function DartProposalsPanel({
 
       {descartats && (descartats.ja_declarades > 0 || descartats.rebutjades > 0) && (
         <p style={{
-          fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', margin: '0.2rem 0 0',
+          fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', margin: '0.2rem 0 0',
           display: 'flex', alignItems: 'center', gap: '0.3rem',
         }}>
           <i className="ti ti-filter" />
@@ -66,8 +66,8 @@ function Candidat({ t, c, unit, onConfirma, onRebutja, onRessalta }) {
       onMouseEnter={() => onRessalta(c)}
       onMouseLeave={() => onRessalta(null)}
       style={{
-        border: '1px solid var(--border)', borderLeft: '3px solid var(--gold)',
-        borderRadius: 4, padding: '0.35rem 0.5rem', background: 'var(--bg-card)',
+        border: '1px solid var(--line)', borderLeft: '3px solid var(--gold)',
+        borderRadius: 4, padding: '0.35rem 0.5rem', background: 'var(--panel)',
         display: 'flex', flexDirection: 'column', gap: 3, opacity: ocupat ? 0.5 : 1,
       }}
     >
@@ -82,7 +82,7 @@ function Candidat({ t, c, unit, onConfirma, onRebutja, onRessalta }) {
             {t('pattern.taller.dart_proposed', { peca: c.peca })}
           </div>
           <div style={{
-            fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontFamily: 'var(--mono)',
+            fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: 'var(--mono)',
           }}>
             {t('pattern.taller.dart_legs', {
               a: formatLen(c.costat_a_cm, unit), b: formatLen(c.costat_b_cm, unit),
@@ -105,8 +105,8 @@ function Candidat({ t, c, unit, onConfirma, onRebutja, onRessalta }) {
           title={c.senyals.map(s => `+${s.punts} · ${s.detall}`).join('\n')}
           style={{
             fontFamily: 'var(--mono)', fontSize: 'var(--fs-caption)', fontWeight: 600,
-            color: c.confianca >= 0.66 ? 'var(--ok)' : 'var(--text-muted)',
-            border: '1px solid var(--border)', borderRadius: 10, padding: '0 6px',
+            color: c.confianca >= 0.66 ? 'var(--ok)' : 'var(--text-soft)',
+            border: '1px solid var(--line)', borderRadius: 10, padding: '0 6px',
             flexShrink: 0,
           }}
         >
@@ -157,8 +157,8 @@ function Candidat({ t, c, unit, onConfirma, onRebutja, onRessalta }) {
           title={t('pattern.taller.proposal_reject_title')}
           style={{
             display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.5rem',
-            background: 'var(--white)', color: 'var(--text-muted)',
-            border: '1px solid var(--border)', borderRadius: 4,
+            background: 'var(--panel)', color: 'var(--text-soft)',
+            border: '1px solid var(--line)', borderRadius: 4,
             cursor: ocupat ? 'wait' : 'pointer', fontSize: 'var(--fs-caption)',
           }}
         >
@@ -175,7 +175,7 @@ function Senyal({ text, fluix = false }) {
     <li style={{
       display: 'flex', alignItems: 'flex-start', gap: '0.3rem',
       fontSize: 'var(--fs-caption)',
-      color: fluix ? 'var(--text-muted)' : 'var(--text-main)',
+      color: fluix ? 'var(--text-soft)' : 'var(--text-main)',
     }}>
       <i
         className={`ti ${fluix ? 'ti-point' : 'ti-plus'}`}
