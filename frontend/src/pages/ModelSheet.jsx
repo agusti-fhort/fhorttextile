@@ -29,6 +29,7 @@ import ModalAcabarTasca from '../components/model/ModalAcabarTasca'
 import BadgeLliurable from '../components/model/BadgeLliurable'
 import { CARA_CAP, caraDeError, caraObrirTasca } from '../utils/caraObrirTasca'
 import { CODE_PER_TAB, saltDeSuperficie, minutsDeSessio } from '../utils/sessioActiva'
+import { SECCIONS_MODEL, ETIQUETA_SECCIO, pindolesDeModel } from '../utils/modelSeccions'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
@@ -44,7 +45,10 @@ const API = import.meta.env.VITE_API_URL || ''
 // conserven (no destructiu); simplement no apareix a la banda de pestanyes.
 // 'Patró' va entre Escalat i Fitxa tècnica: és una etapa del flux tècnic (el patró es
 // digitalitza i s'escala), no un annex documental.
-const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Patró', 'Fitxa tècnica', 'Fitxers', "Registre d'activitat", 'Tasques']
+// LA LLISTA CANÒNICA VIU A `utils/modelSeccions.js` des que l'editor .ftt també la pinta: dues
+// còpies d'una llista d'ordre són dues llistes que es poden contradir, i el dia que se
+// n'afegís una, l'editor ensenyaria un model amb una secció menys.
+const TABS = SECCIONS_MODEL
 
 // ELS PARÀMETRES QUE OBREN UNA SUPERFÍCIE DE TREBALL, i que per tant s'han de netejar en sortir-ne
 // (v. `netejaEdicio`). Els tres diuen «entra a treballar», no «mira aquesta pantalla»:
@@ -59,18 +63,9 @@ const TABS = ['Dashboard', 'Resum', 'Mesures', 'Escalat', 'Patró', 'Fitxa tècn
 // per a l'F5, i perquè la tasca de graduació hi pugui portar quan P0.4 connecti els botons.
 // Reusa `mode` en comptes d'estrenar un paràmetre — és la mateixa pregunta («a què véns»).
 const PARAMS_DE_TREBALL = ['mode', 'task_id', 'fitting_session']
-// L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix l'etiqueta.
-const TAB_LABELS = {
-  'Dashboard': 'model_sheet.tab_dashboard',
-  'Tasques': 'model_sheet.tab_tasks',
-  'Resum': 'model_sheet.tab_summary',
-  'Mesures': 'model.tabs.mesures',
-  'Escalat': 'model_sheet.tab_grading',
-  'Patró': 'model_sheet.tab_pattern',
-  'Fitxa tècnica': 'model_sheet.tab_tech_sheet',
-  'Fitxers': 'model.tabs.fitxers',
-  "Registre d'activitat": 'model_sheet.tab_activity_log',
-}
+// L'id del tab (clau de lògica: activeTab===, defaultTab) es manté; només se'n tradueix
+// l'etiqueta. El mapa és a `utils/modelSeccions.js`, al costat de la llista que l'ordena.
+const TAB_LABELS = ETIQUETA_SECCIO
 
 // ── Helpers de viabilitat (purs) ──────────────────────────────────────────
 // Aproximació estàndard: dl-dv laborables, sense festius. Jornada 420 min/dia.
@@ -975,10 +970,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         <PageMenu
           backTo="/models"
           backTitle={t('model_sheet.back_title')}
-          items={TABS.map(tab => ({
-            key: tab, label: t(TAB_LABELS[tab]),
-            active: activeTab === tab, onClick: () => triaTab(tab),
-          }))}
+          items={pindolesDeModel({ activa: activeTab, onTria: triaTab, t })}
           rightChildren={
             /* B — Watchpoints: PORTA transversal (§8b), en secundari petit i a la dreta.
                Obre el drawer flotant (escriptura); visible des de qualsevol tab. */
