@@ -193,16 +193,16 @@ class CustomerSerializer(serializers.ModelSerializer):
         return link.estat if link else None
 
     def get_quotes_sent(self, o):
-        return getattr(o, 'cnt_quotes_sent', 0) or 0
+        return getattr(o, 'quotes_sent', 0) or 0
 
     def get_quotes_accepted(self, o):
-        return getattr(o, 'cnt_quotes_accepted', 0) or 0
+        return getattr(o, 'quotes_accepted', 0) or 0
 
     def get_orders_open(self, o):
-        return getattr(o, 'cnt_orders_open', 0) or 0
+        return getattr(o, 'orders_open', 0) or 0
 
     def get_delivery_notes_count(self, o):
-        return getattr(o, 'cnt_delivery_notes', 0) or 0
+        return getattr(o, 'delivery_notes_count', 0) or 0
 
 
 class ProductionSerializer(serializers.ModelSerializer):

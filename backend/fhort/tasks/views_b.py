@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.filters import SearchFilter
+from rest_framework.filters import OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Q, ProtectedError, Min
 from django.db.models.functions import Coalesce
@@ -780,9 +780,35 @@ def _vol_desactivar(data):
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter]
+    # ⚠️ AQUÍ HI HAVIA `[DjangoFilterBackend, SearchFilter]` I ES MENJAVA L'ORDENACIÓ EN SILENCI.
+    # `DEFAULT_FILTER_BACKENDS` (settings.py:222-225) porta els TRES —DjangoFilterBackend,
+    # SearchFilter i OrderingFilter—, i declarar-ne dos aquí no n'afegeix: els SUBSTITUEIX tots.
+    # Conseqüència viva: `pages/Customers.jsx` envia `ordering=codi` a cada crida i DRF el
+    # descarta sense error ni avís. La pàgina demanava un ordre que ningú aplicava, i no fallava
+    # mai: la llista sortia en l'ordre del `Meta.ordering` del model i semblava que funcionés.
+    # (Trobat pel lot comercial de la part B en anar a posar capçaleres ordenables a `/clients`,
+    # que és el que la §8e mana a tota llista del producte.)
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['active']
     search_fields = ['codi', 'nom']   # cercador de la pàgina Clients (codi, nom)
+    # Els camps de dada de la llista + els QUATRE COMPTADORS. Els comptadors són `annotate` del
+    # `get_queryset` (una sola consulta, cap N+1) i per tant ordenables sense cost afegit: si la
+    # §8e diu que tota capçalera de llista és ordenable, una columna de comptador que no ordena
+    # és una capçalera que menteix. `ordering` explícit encara que `Customer.Meta.ordering` ja
+    # digui el mateix: qui llegeix el ViewSet ha de poder saber en quin ordre surt la llista
+    # sense anar a buscar el `Meta` del model.
+    #
+    # ⚠️ **EL NOM AMB QUÈ S'ORDENA HA DE SER EL NOM AMB QUÈ ES LLEGEIX.** Les anotacions es deien
+    # `cnt_quotes_sent`… i el que el client rep es diu `quotes_sent`… — o sigui que ordenar per
+    # una columna hauria demanat un nom que la resposta no conté enlloc. Això no és un detall
+    # d'estil: `?ordering=quotes_sent` amb el nom d'anotació vell hauria estat DESCARTAT EN
+    # SILENCI per DRF (exactament el defecte que aquest commit arregla, un nivell més avall).
+    # Les anotacions passen a dir-se com els camps de la resposta i els quatre `getattr` del
+    # serializer (`serializers_b.py:195-205`) els segueixen. Cap altre consumidor: censat.
+    ordering_fields = ['codi', 'nom', 'active',
+                       'quotes_sent', 'quotes_accepted',
+                       'orders_open', 'delivery_notes_count']
+    ordering = ['codi']
 
     def get_queryset(self):
         """Comptadors agregats en UNA sola consulta (annotate, cap N+1): ofertes presentades
@@ -790,10 +816,10 @@ class CustomerViewSet(viewsets.ModelViewSet):
         amaga el customer propi (is_self) — només la pàgina Clients l'envia; la resta de consumidors
         (selectors de client) segueixen veient-lo."""
         qs = Customer.objects.annotate(
-            cnt_quotes_sent=Count('quotes', filter=Q(quotes__status='SENT'), distinct=True),
-            cnt_quotes_accepted=Count('quotes', filter=Q(quotes__status='ACCEPTED'), distinct=True),
-            cnt_orders_open=Count('salesorders', filter=Q(salesorders__status='OPEN'), distinct=True),
-            cnt_delivery_notes=Count('deliverynotes', distinct=True),
+            quotes_sent=Count('quotes', filter=Q(quotes__status='SENT'), distinct=True),
+            quotes_accepted=Count('quotes', filter=Q(quotes__status='ACCEPTED'), distinct=True),
+            orders_open=Count('salesorders', filter=Q(salesorders__status='OPEN'), distinct=True),
+            delivery_notes_count=Count('deliverynotes', distinct=True),
         )
         p = self.request.query_params.get('exclude_self')
         if p and p.lower() not in ('0', 'false', ''):
