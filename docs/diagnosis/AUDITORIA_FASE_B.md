@@ -304,6 +304,100 @@ pintés quedava absolta per una excepció que ja no li pertocava** — i va pass
 vores de `ui/Card` a `/fittings`, donades per bones. La llista s'escurça a l'únic hex que segueix
 sent del menú lateral. **Una excepció que sobreviu al seu motiu és una tapadora.**
 
+## B4 · Documents — `/disseny/documents` · B5 · Fitxa tècnica — `/fitxa-tecnica` (commit 254)
+
+Dues pantalles petites al mateix commit perquè comparteixen exactament el mateix defecte
+d'estructura i el mateix remei.
+
+### B4 · Documents
+
+És un **placeholder** (`DissenyPlaceholder`): la pàgina real arriba en sprints posteriors. Una
+pantalla sense contingut **té estructura igualment** (§8b: «de dalt a baix, TOTA pantalla del
+producte»), i és on més es nota si no la té — aquí no hi ha res que distregui de la seva absència.
+
+🚨 **El títol no tenia mida.** `var(--fs-title)` **no existeix a `:root`** (el token de la casa és
+`--fs-h1`): la declaració queda invàlida al càlcul, la mida cau a la de l'agent d'usuari per a un
+`h1` —2em, **32px**— i el que es veia era un títol un terç més gran que el de qualsevol altra
+pantalla. És germà del `var(--bg, #faf9f7)` de Planificació, i **pitjor**: allà el fallback amagava
+el forat, aquí no n'hi havia i el tapava el navegador. **Cap de les dues es veu llegint; totes dues
+es veuen mesurant.**
+
+També: cap menú de pantalla (i per tant cap manera de tornar enrere que no fos el menú lateral),
+icona en `--gold`, i la frase de «properament» en `--text-muted`. Ara: barra amb **només la
+fletxa** (§8b.2), identitat 22/500, i la frase com a estat buit de la casa (§8c).
+
+### B5 · Fitxa tècnica — **NOMÉS crom**, com mana el brief
+
+| Superfície | Què s'hi ha fet |
+|---|---|
+| `pages/TechSheetEntry.jsx` (la porta) | menú de pantalla amb només la fletxa · identitat · l'avís d'error i el bloc de «no autoritzat» passen a la forma de la casa (radi, vora d'1px, `--err-bg`) · el botó «obrir en consulta» és una **PORTA** (§5.3 → `botoSec`), no un botó daurat · el `padding` arrel duplicat se'n va |
+| `components/assets/{AssetNavigator,FileList}.jsx` | 41 substitucions de token: `--border`, `--gray-l`, `--text-muted`, `--gray`, `--white`, `--bg-card`, `--gold-pale`, vores de `0.5px`, radis literals |
+| `pages/TechSheetEditor.jsx` | **NOMÉS el mapa `COL`** (v. sota) + tres literals que se li havien escapat |
+
+**Per què tocar `COL` és exactament «només crom».** L'editor ja tenia separades les dues paletes:
+`COL` és el **DOM** (on `var()` resol) i `KONVA_COL` és el **canvas** (literals, perquè Konva no
+resol `var()`). Tocar `COL` conforma la closca sencera sense acostar-se ni al llenç ni al pipeline
+de PDF, que és el que el brief demanava. `KONVA_COL` **no s'ha tocat**.
+Dins de `COL`: `--gold-pale` (**ELIMINAT**) → `--sel` · `--border` i `--text-muted` (**DEPRECATS**)
+→ `--line` i `--text-soft` · `--white`/`--bg-card` → `--panel` · i el fons de treball, que anava a
+`--gray-l` **perquè era el que el `<main>` pintava** —el comentari ho deia— passa a `--bg-page`,
+que és on el `<main>` ja va anar al bloc B: **el motiu escrit apunta ara al token nou**.
+
+### 🚩 Anotat, NO tocat (fitxa tècnica)
+
+1. **`COL.gold` segueix sent l'accent de les accions principals de l'editor**, i la §5 diu que la
+   primària és blava. Canviar-ho és tocar la jerarquia d'acció d'un editor complet, no crom.
+2. **`COL.charcoal`** (capçalera fosca de secció, compartida amb el Taller de Patró): la §1 no té
+   cap superfície fosca. És una decisió cross-superfície amb acta pròpia; es reporta.
+3. L'editor **conserva la seva pròpia capçalera** i no hi entra el `PageMenu`, **pel mateix motiu
+   que A9 va donar per a `FittingDetail`**: és una superfície d'editor a pantalla completa.
+
+---
+
+## 🚨 EL BADGE NEUTRE TENIA DUES DEFINICIONS (commit 254)
+
+Trobat per la sessió 2 en estrenar la bidireccional contra `NORMA_LLISTA_canonica.html` — **la
+primera vegada que la canònica verifica una pantalla que no és Models**, que és justament el que
+la §8e diu que ha de passar.
+
+```
+maqueta  .b.neutral        → --bg(-page) + --ink-soft   + --line
+Models.jsx `badgeNeutre`   → --bg-page   + --text-soft  + --line   ← casa amb la maqueta
+ui/Badge  variant `gray`   → --sel       + --text-main  + --line   ← NO casava
+```
+
+**Per què no s'havia vist mai:** la graella de `/models` **no pinta cap badge d'estat** (la
+columna ESTAT hi és buida esperant el Kanban i la FASE és text pla, §8e). La bidireccional d'A5
+**no va comparar `.b.neutral` amb res**. El lot comercial és el primer que els pinta de debò.
+
+**Resolució: mana la maqueta, i la NORMA hi va a favor.** La §1 reserva `--sel` a la SELECCIÓ
+(«fila/contenidor triat, sempre amb filet d'or»). Un badge d'estat sobre `--sel` **li roba el
+significat**: dins d'una fila triada —que ja és `--sel`— hi desapareix a sobre, i dins d'una fila
+normal diu «triat» sense ser-ho. `ui/Badge` passa a `--bg-page` + `--text-soft` + `--line`.
+Toca **21 fitxers**.
+
+🚩 **Pregunta oberta per a Agus:** la variant `gold` comparteix el mateix fons `--sel` (el bloc B
+la va ratificar explícitament així, i el seu filet `--gold-border` la distingeix). **No s'ha
+tocat.**
+🚩 **`Models.jsx` conserva una còpia local `badgeNeutre`** que ara és redundant. És pantalla
+conformada i **intocable en aquest lot**: matar-la és una línia el dia que es decideixi.
+
+## Esmena a CINC maquetes · el badge taronja no complia AA
+
+`.b.warn` pintava el TEXT en `--warn` (#ff9942) sobre `--warn-bg`: **1.86:1**. La §1b(d) va
+partir el token precisament per això (`--warn-state` per a vores i marques de dada; `--warn-ink`
+per al text, 5.32:1) i la pantalla ja ho feia des del bloc B: **la maqueta s'havia quedat al valor
+anterior i la bidireccional donava com a desviació de la PANTALLA un defecte d'ella**. Esmenades
+les cinc a la font, amb acta. La forma ratificada per Agus (fons clar + text taronja + filet fi)
+no canvia; només el to del text, perquè es llegeixi.
+
+## L'auditoria absolia un color que ja no li pertocava — i va caçar-ne un de real
+
+En escurçar `CROM` a un sol hex (v. B3), la correguda següent va treure **12 vores `--border`
+(deprecat) a `/fitxa-tecnica`**, dins de l'`AssetNavigator`, que fins llavors quedaven absoltes.
+Corregides. **12 pantalles → 0 incompliments** amb la paleta escurçada, i la bidireccional sencera
+→ **0 desviacions** llevat de la declarada (la tinta de la fletxa d'arrel).
+
 ## CODES PER A LA S2 (backend i compartits · commits 250·204, 250·205, 250)
 
 ### `/customers` tornava a ordenar — DRF es menjava l'ordre en silenci

@@ -24,7 +24,27 @@ const VARIANTS = {
   // `gate` («llest per a la porta») ja era un àlies del verd d'èxit: mateix significat, mateix color.
   gate: { bg: 'var(--gate-bg)',      color: 'var(--gate)',      vora: 'var(--gate)' },
   gold: { bg: 'var(--sel)',          color: 'var(--text-main)', vora: 'var(--gold-border)' },
-  gray: { bg: 'var(--sel)',          color: 'var(--text-main)', vora: 'var(--line)' },
+  // ⚠️ EL NEUTRE CANVIA (part B) — i el va trobar LA MESURA, no una relectura.
+  //
+  // Hi havia DUES definicions del badge neutre convivint, totes dues a pantalles conformades i
+  // divergents sense que res fallés:
+  //     maqueta `.b.neutral`      → --bg(-page) + --ink-soft   + --line
+  //     `badgeNeutre` de Models   → --bg-page   + --text-soft  + --line   ← casa amb la maqueta
+  //     aquí, variant `gray`      → --sel       + --text-main  + --line   ← NO casava
+  //
+  // I no s'havia vist mai perquè **la graella de `/models` no pinta cap badge d'estat**: la
+  // columna ESTAT hi és buida esperant el Kanban i la FASE és text pla (§8e). La bidireccional
+  // d'A5 no va comparar mai `.b.neutral` amb res. El lot comercial és el primer que els pinta
+  // de debò, i per això surt ara.
+  //
+  // MANA LA MAQUETA, I A MÉS LA NORMA HI VA A FAVOR: la §1 reserva `--sel` a la SELECCIÓ
+  // («fila/contenidor triat, sempre amb filet d'or»). Un badge d'estat sobre `--sel` li ROBA el
+  // significat: dins d'una fila triada —que ja és `--sel`— el badge hi desapareix a sobre, i
+  // dins d'una fila normal diu «triat» sense ser-ho. `--bg-page` no té cap significat reservat.
+  // 🚩 La variant `gold` es queda com estava (bloc B la va ratificar explícitament) perquè el
+  // seu filet `--gold-border` la distingeix igualment; però comparteix el mateix fons, i això
+  // va al report com a pregunta oberta.
+  gray: { bg: 'var(--bg-page)',      color: 'var(--text-soft)', vora: 'var(--line)' },
 }
 
 export default function Badge({ variant = 'gray', icon, children, style }) {

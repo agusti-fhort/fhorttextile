@@ -56,7 +56,7 @@ function useLlista(clau, carrega) {
 
 const cap = {
   background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: MONO,
-  fontSize: 'var(--fs-body)', color: 'var(--text-muted)', padding: '2px 4px',
+  fontSize: 'var(--fs-body)', color: 'var(--text-soft)', padding: '2px 4px',
 }
 
 function Carpeta({ icona, titol, subtitol, comptador, onClick, onDoubleClick, actiu = false }) {
@@ -64,18 +64,18 @@ function Carpeta({ icona, titol, subtitol, comptador, onClick, onDoubleClick, ac
     <button type="button" onClick={onClick} onDoubleClick={onDoubleClick} aria-current={actiu || undefined} style={{
       display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
       padding: '10px 12px', cursor: 'pointer', fontFamily: MONO,
-      background: actiu ? 'var(--gold-pale)' : 'transparent',
-      border: 'none', borderBottom: '0.5px solid var(--border)',
+      background: actiu ? 'var(--sel)' : 'transparent',
+      border: 'none', borderBottom: '1px solid var(--line)',
     }}>
       <i className={`ti ${icona}`} aria-hidden="true" style={{ fontSize: 18, color: 'var(--gold)', flexShrink: 0 }} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontWeight: actiu ? 700 : 500 }}>{titol}</span>
-        {subtitol && <span style={{ display: 'block', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>{subtitol}</span>}
+        {subtitol && <span style={{ display: 'block', fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>{subtitol}</span>}
       </span>
       {comptador !== undefined && (
-        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>{comptador}</span>
+        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>{comptador}</span>
       )}
-      <i className="ti ti-chevron-right" aria-hidden="true" style={{ color: 'var(--text-muted)' }} />
+      <i className="ti ti-chevron-right" aria-hidden="true" style={{ color: 'var(--text-soft)' }} />
     </button>
   )
 }
@@ -250,9 +250,9 @@ export default function AssetNavigator({
   const cosNavegador = (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
       {/* 1 · cerca global, sempre visible */}
-      <div style={{ padding: '10px 12px', borderBottom: '0.5px solid var(--border)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '0.5px solid var(--border)', borderRadius: 6, padding: '6px 10px', background: 'var(--white)' }}>
-          <i className="ti ti-search" aria-hidden="true" style={{ color: 'var(--text-muted)' }} />
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', padding: '6px 10px', background: 'var(--panel)' }}>
+          <i className="ti ti-search" aria-hidden="true" style={{ color: 'var(--text-soft)' }} />
           <input value={query} onChange={e => setQuery(e.target.value)}
             placeholder={mode === 'models' ? t('asset_navigator.search_models') : t('asset_navigator.search_all')}
             aria-label={t('asset_navigator.search_all')}
@@ -269,13 +269,13 @@ export default function AssetNavigator({
       {!cerca && (
         <div style={{ flexShrink: 0 }}>
           {mode === 'files' && (
-            <div style={{ display: 'flex', borderBottom: '0.5px solid var(--border)' }}>
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--line)' }}>
               {['models', 'catalog'].map(tb => (
                 <button key={tb} type="button" onClick={() => patch({ tab: tb })}
                   style={{
                     flex: 1, padding: '8px 4px', cursor: 'pointer', fontFamily: MONO, border: 'none',
-                    fontSize: 'var(--fs-body)', background: nav.tab === tb ? 'var(--gold-pale)' : 'transparent',
-                    color: nav.tab === tb ? 'var(--gold)' : 'var(--text-muted)',
+                    fontSize: 'var(--fs-body)', background: nav.tab === tb ? 'var(--sel)' : 'transparent',
+                    color: nav.tab === tb ? 'var(--gold)' : 'var(--text-soft)',
                     borderBottom: `2px solid ${nav.tab === tb ? 'var(--gold)' : 'transparent'}`,
                   }}>
                   {t(`asset_navigator.tab_${tb}`)}
@@ -283,10 +283,10 @@ export default function AssetNavigator({
               ))}
             </div>
           )}
-          <nav aria-label={t('asset_navigator.breadcrumb')} style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 12px', flexWrap: 'wrap', borderBottom: '0.5px solid var(--border)' }}>
+          <nav aria-label={t('asset_navigator.breadcrumb')} style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 12px', flexWrap: 'wrap', borderBottom: '1px solid var(--line)' }}>
             {molles.map((m, i) => (
               <span key={i} style={{ display: 'inline-flex', alignItems: 'center' }}>
-                {i > 0 && <i className="ti ti-chevron-right" aria-hidden="true" style={{ color: 'var(--text-muted)', fontSize: 12 }} />}
+                {i > 0 && <i className="ti ti-chevron-right" aria-hidden="true" style={{ color: 'var(--text-soft)', fontSize: 12 }} />}
                 {m.go
                   ? <button type="button" onClick={m.go} style={{ ...cap, color: 'var(--gold)' }}>{m.txt}</button>
                   : <span style={{ ...cap, color: 'var(--text-main)', fontWeight: 600 }}>{m.txt}</span>}
@@ -302,15 +302,15 @@ export default function AssetNavigator({
       {/* 4 · peu contextual */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-        borderTop: '0.5px solid var(--border)', flexShrink: 0, background: 'var(--bg-muted)',
+        borderTop: '1px solid var(--line)', flexShrink: 0, background: 'var(--bg-muted)',
       }}>
-        <span style={{ flex: 1, minWidth: 0, fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ flex: 1, minWidth: 0, fontFamily: MONO, fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {mode === 'models'
             ? (nav.modelId ? modelDe(nav.modelId)?.codi_intern : t('asset_navigator.pick_model'))
             : (triat ? triat.nom_fitxer : t('asset_navigator.pick_file'))}
         </span>
         {onClose && (
-          <button type="button" onClick={onClose} style={{ ...cap, border: '0.5px solid var(--border)', borderRadius: 5, padding: '5px 12px', color: 'var(--text-main)' }}>
+          <button type="button" onClick={onClose} style={{ ...cap, border: '1px solid var(--line)', borderRadius: 5, padding: '5px 12px', color: 'var(--text-main)' }}>
             {t('app.cancel')}
           </button>
         )}
@@ -329,7 +329,7 @@ export default function AssetNavigator({
 
   if (inline) {
     return (
-      <div style={{ border: '0.5px solid var(--border)', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '60vh', background: 'var(--white)' }}>
+      <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '60vh', background: 'var(--panel)' }}>
         {cosNavegador}
       </div>
     )
@@ -342,10 +342,10 @@ export default function AssetNavigator({
     }}>
       <div role="dialog" aria-modal="true" aria-label={t('asset_navigator.title')}
         onClick={e => e.stopPropagation()} style={{
-          background: 'var(--white)', borderRadius: 12, width: 900, maxWidth: '94vw',
+          background: 'var(--panel)', borderRadius: 'var(--r-card)', width: 900, maxWidth: '94vw',
           height: 620, maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '0.5px solid var(--border)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
           <span style={{ fontFamily: MONO, fontSize: 'var(--fs-h3)', fontWeight: 600 }}>{t('asset_navigator.title')}</span>
           <button type="button" onClick={onClose} aria-label={t('app.close')} style={{ ...cap, fontSize: 18 }}>
             <i className="ti ti-x" aria-hidden="true" />
@@ -360,10 +360,10 @@ export default function AssetNavigator({
 const Secció = ({ titol }) => (
   <div style={{
     padding: '6px 12px', fontFamily: MONO, fontSize: 'var(--fs-caption)', textTransform: 'uppercase',
-    letterSpacing: '0.05em', color: 'var(--text-muted)', background: 'var(--bg-muted)',
+    letterSpacing: '0.05em', color: 'var(--text-soft)', background: 'var(--bg-muted)',
   }}>{titol}</div>
 )
 
 const Buit = ({ txt }) => (
-  <div style={{ padding: 20, textAlign: 'center', fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic' }}>{txt}</div>
+  <div style={{ padding: 20, textAlign: 'center', fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontStyle: 'italic' }}>{txt}</div>
 )

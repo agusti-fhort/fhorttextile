@@ -4133,7 +4133,8 @@
     "not_allowed": "The tech sheet is not in your task list, so you cannot open it to work on it ({{codi}}).",
     "open_readonly": "Open read-only",
     "open_error": "Could not open the tech sheet.",
-    "unexpected_response": "The server responded unexpectedly. The tech sheet was not opened."
+    "unexpected_response": "The server responded unexpectedly. The tech sheet was not opened.",
+    "back_title": "Back to dashboard"
   },
   "file_picker": {
     "explore_tenant": "Browse the whole tenant",
@@ -4894,5 +4895,8 @@
     "steps_of": "{{n}} of {{total}} steps",
     "systems_for": "Size system available for {{target}}",
     "year_season": "Year · Season"
+  },
+  "disseny": {
+    "back_title": "Back to dashboard"
   }
 }

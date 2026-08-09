@@ -4133,7 +4133,8 @@
     "not_allowed": "No tienes la ficha técnica en tu lista de tareas, así que no puedes abrirla para trabajar en ella ({{codi}}).",
     "open_readonly": "Abrir en consulta",
     "open_error": "No se ha podido abrir la ficha técnica.",
-    "unexpected_response": "El servidor ha respondido de forma inesperada. No se ha abierto la ficha."
+    "unexpected_response": "El servidor ha respondido de forma inesperada. No se ha abierto la ficha.",
+    "back_title": "Volver al panel"
   },
   "file_picker": {
     "explore_tenant": "Explora todo el tenant",
@@ -4894,5 +4895,8 @@
     "steps_of": "{{n}} de {{total}} pasos",
     "systems_for": "Sistema de tallas disponible para {{target}}",
     "year_season": "Año · Temporada"
+  },
+  "disseny": {
+    "back_title": "Volver al panel"
   }
 }

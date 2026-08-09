@@ -13,7 +13,7 @@
     --gold:#c27a2a; --gold-border:#e0c8a0; --sel:#f7f5f2;
     --accio:#2b65c2;
     --ok:#2e7d32; --ok-bg:#e9f3ea;
-    --warn:#ff9942; --warn-bg:#ffedd9;
+    --warn:#ff9942; --warn-bg:#ffedd9; --warn-ink:#96500c;
     --err:#b42318; --err-bg:#fbebe9;
     --white:#fff;
   }
@@ -84,7 +84,14 @@
   .b.act{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
   .b.off{background:var(--bg);color:var(--ink-soft);border:1px solid var(--line)}
   .b.sys{background:var(--sel);color:var(--ink);border:1px solid var(--gold-border)}
-  .b.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn)}
+  /* ESMENA (part B · S1, 09/08) — LA MAQUETA DIBUIXAVA UNA COSA QUE NO COMPLEIX AA.
+     El text del badge taronja anava en `--warn` (#ff9942) sobre `--warn-bg`: **1.86:1**.
+     La §1b(d) va PARTIR el token justament per això —`--warn-state` per a vores, farciments
+     i marques de dada; `--warn-ink` per al TEXT (5.32:1, AA)— i la pantalla ja ho fa des del
+     bloc B. La maqueta s'havia quedat al valor anterior i la bidireccional donava com a
+     desviació de la PANTALLA el que era un defecte d'ella. La forma ratificada per Agus
+     (fons clar + text taronja + filet fi) no canvia; només el TO del text, perquè es llegeixi. */
+  .b.warn{background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn)}
   .b.bad{background:var(--err-bg);color:var(--err);border:1px solid var(--err)}
 
   .szbar{padding:12px 16px;border-bottom:1px solid var(--line);background:var(--white);

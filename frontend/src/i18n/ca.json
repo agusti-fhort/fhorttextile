@@ -4133,7 +4133,8 @@
     "not_allowed": "No tens la fitxa tècnica a la teva llista de tasques, així que no pots obrir-la per treballar-hi ({{codi}}).",
     "open_readonly": "Obrir en consulta",
     "open_error": "No s'ha pogut obrir la fitxa tècnica.",
-    "unexpected_response": "El servidor ha respost de manera inesperada. No s'ha obert la fitxa."
+    "unexpected_response": "El servidor ha respost de manera inesperada. No s'ha obert la fitxa.",
+    "back_title": "Tornar al tauler"
   },
   "file_picker": {
     "explore_tenant": "Explora tot el tenant",
@@ -4894,5 +4895,8 @@
     "steps_of": "{{n}} de {{total}} passos",
     "systems_for": "Sistema de talles disponible per a {{target}}",
     "year_season": "Any · Temporada"
+  },
+  "disseny": {
+    "back_title": "Tornar al tauler"
   }
 }

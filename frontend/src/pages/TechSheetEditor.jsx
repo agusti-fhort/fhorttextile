@@ -99,18 +99,32 @@ const FONT_OPTIONS = [
 // (:root a index.css) per coherència amb la resta del SaaS — substitueix els literals dark/
 // SolidWorks dels commits f77309e/233f10f-9c3c0de. COL és el mapa DOM→token (var() resol al DOM);
 // KONVA_COL (canvas) NO es toca.
+// ── CONFORMITAT (part B · pantalla 5) — NOMÉS EL CROM, i per això es fa AQUÍ ────────────────
+// El brief d'aquest tram diu «només crom de pantalla; el llenç Konva i el pipeline PDF NO es
+// toquen», i aquest mapa és exactament el crom: `COL` és el DOM (var() hi resol) i `KONVA_COL`
+// és el canvas (literals, perquè Konva no resol var()). Tocar `COL` conforma la closca sencera
+// de l'editor sense acostar-se ni al llenç ni al PDF — que és el que es demanava.
+//
+// El que canvia, i per què (tot ve de la §1/§1b):
+//   · `--gold-pale` està **ELIMINAT del sistema** («cap superfície ni estat»). Feia d'«estat
+//     actiu», i l'estat actiu de la casa és `--sel` (+ filet d'or on toqui).
+//   · `--border` i `--text-muted` són **DEPRECATS** (§1b(b)(c)) → `--line` i `--text-soft`
+//     (aquest, a més, puja de 3.64:1 a 5.37:1).
+//   · `--white` i `--bg-card` són el mateix blanc sense nom de ROL → `--panel`.
+//   · el fons de treball anava a `--gray-l` **perquè era el que el `<main>` pintava**, i el
+//     comentari ho deia. El `<main>` ja va passar a `--bg-page` al bloc B: el motiu escrit
+//     apunta ara al token nou, i deixar-hi el gris fred trencaria justament la coherència que
+//     aquell comentari buscava.
 export const COL = {
-  sidebar: 'var(--white)',       // topbar/ribbon/peu: BLANC com la navbar del dashboard (no beix)
-  gold: 'var(--gold)',           // accent (només per a accions principals)
-  goldPale: 'var(--gold-pale)',  // estat actiu amb tint gold suau
-  border: 'var(--border)',       // filet/vora subtil de la plataforma
+  sidebar: 'var(--panel)',       // topbar/ribbon/peu: BLANC com la navbar del dashboard (no beix)
+  gold: 'var(--gold)',           // accent (només per a accions principals) 🚩 v. el report
+  goldPale: 'var(--sel)',        // estat actiu (§1: la selecció de la casa)
+  border: 'var(--line)',         // filet/vora subtil de la plataforma
   textMain: 'var(--text-main)',  // text principal
-  textMuted: 'var(--text-muted)',// text secundari
-  bg: 'var(--bg-card)',          // contenidors (paleta/dock/tira/panells): blanc-card amb filet
-  // Fons de treball darrere el paper = el gris clar NEUTRE del dashboard (<main> usa --gray-l),
-  // no --bg-muted (que és beix càlid i reintroduiria el to taronjós). Així el paper blanc destaca.
-  work: 'var(--gray-l)',
-  field: 'var(--white)',         // interior de controls: blanc net
+  textMuted: 'var(--text-soft)', // text secundari
+  bg: 'var(--panel)',            // contenidors (paleta/dock/tira/panells)
+  work: 'var(--bg-page)',        // fons de treball darrere el paper (= el del <main>)
+  field: 'var(--panel)',         // interior de controls
   // Tokens compartits amb el Taller de Patró (llenguatge visual únic, diagnosi
   // DIAGNOSI_UNIFICACIO_LAYOUT_TALLER_FITXA §P4′.1): capçalera fosca de secció i semàfor
   // de veredicte. Cap hex nou — són els mateixos var() ja definits a index.css.
@@ -6954,7 +6968,7 @@ export default function TechSheetEditor() {
                           // COL·LOCAT en verd suau: l'estat es DERIVA del document del servidor
                           // (cotesColocades = cotes vives amb pomId a les pàgines desades), mai
                           // d'un rastre local — per això sobreviu a refrescar la pàgina.
-                          background: colocat ? COL.placedBg : armat ? 'var(--gold-pale)' : 'var(--bg-card)',
+                          background: colocat ? COL.placedBg : armat ? COL.goldPale : COL.bg,
                           border: `1px solid ${armat ? COL.gold : COL.border}`,
                           borderLeft: `3px solid ${accent}`,
                           borderRadius: 4, padding: '0.3rem 0.5rem',
@@ -7867,7 +7881,9 @@ export default function TechSheetEditor() {
           </span>
         )}
         {saveLabel && <span>{saveLabel}</span>}
-        {notice && <span style={{ color: 'var(--warn)', background: 'var(--gold-pale)', border: `1px solid ${COL.gold}`, padding: '2px 8px', borderRadius: 5 }}>{notice}</span>}
+        {/* §1 · el badge de la casa: fons suau + tinta + VORA FINA DEL MATEIX COLOR, píndola sempre.
+            El taronja de TEXT és `--warn-ink` (§1b(d)): `--warn` sobre crema no es llegeix. */}
+        {notice && <span style={{ color: 'var(--warn-ink)', background: 'var(--warn-state-bg)', border: '1px solid var(--warn-state)', padding: '2px 8px', borderRadius: 'var(--r-pill)' }}>{notice}</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
           <button type="button" onClick={() => setZoomClamped(z => z - ZOOM_STEP)} title={t('tech_sheet.zoom_out')} style={{ ...headerBtn, padding: '3px 6px' }}>
             <i className="ti ti-minus" aria-hidden="true" style={{ fontSize: 13 }} />
@@ -8052,7 +8068,7 @@ const NODE_TOOL_ITEMS = [
 ]
 // C1 — fila de la biblioteca d'inserció: mateixa geometria que la fila de POM (radi 4, filet
 // subtil) perquè les cinc persianes es llegeixin com una sola llista i no com cinc widgets.
-const libRow = { display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '0.3rem 0.5rem', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 4, background: 'var(--bg-card)', color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', cursor: 'pointer' }
+const libRow = { display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '0.3rem 0.5rem', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 'var(--r-ctrl)', background: COL.bg, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', cursor: 'pointer' }
 const libIcon = { fontSize: 14, color: COL.gold, flexShrink: 0 }
 const libName = { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 // Y1 — la mida de la peça: dada secundària a la mateixa fila, sense robar-li el nom.

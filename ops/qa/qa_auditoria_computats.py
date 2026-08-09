@@ -51,6 +51,8 @@ PANTALLES = [
     ('B1 · Desenvolupament (home)', '/'),
     ('B2 · Planificació', '/planificacio'),
     ('B3 · Fittings', '/fittings'),
+    ('B4 · Documents', '/disseny/documents'),
+    ('B5 · Fitxa tècnica (porta)', '/fitxa-tecnica'),
 ]
 
 #: La paleta que la NORMA_LAYOUT §1 permet en una VORA, en rgb() tal com el navegador el computa.
