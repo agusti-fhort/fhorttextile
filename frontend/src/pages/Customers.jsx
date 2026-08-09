@@ -10,7 +10,7 @@ import PageMenu from '../components/ui/PageMenu'
 import TaulaLlista from '../components/ui/TaulaLlista'
 import {
   BotoMenu, SepMenu, Comptador, FilaIdentitat, EstatBuit, BotoEsborrar, Paginacio,
-  camp, buit, forceBarra,
+  camp, forceBarra,
 } from '../components/llista/ChromLlista'
 
 // ARXIU DE CLIENTS (`Customer`) — LLISTA CANÒNICA DE LA CASA (NORMA_LAYOUT §8b + §8e).
@@ -38,16 +38,22 @@ import {
 //    fabricar-la aquí com un bucle de PATCH al client seria pitjor: una fallada a mig bucle deixa
 //    la meitat dels clients commutats i l'altra meitat no, sense que ningú pugui saber quins.
 //
-// 3 · **LES CAPÇALERES NO ORDENEN ENCARA — 🛑 BLOQUEJAT-PER-S1.** La §8e les vol ordenables i
-//    aquí no es pot: `CustomerViewSet` (`tasks/views_b.py:783`) declara
-//    `filter_backends = [DjangoFilterBackend, SearchFilter]` i amb això es carrega
-//    l'`OrderingFilter` que ve del `DEFAULT_FILTER_BACKENDS`. La versió anterior d'aquesta
-//    pantalla enviava `ordering: 'codi'` a cada crida i **DRF se'l menjava en silenci**. Les
-//    columnes van, doncs, SENSE `sort`: sense icona no hi ha promesa. Ordenar-les al client seria
-//    mentir —només ordenaria la pàgina carregada, no el cens— i és la mateixa raó per la qual el
-//    denominador del comptador es demana a part i no es dedueix de la pàgina.
+// 3 · **LES SET CAPÇALERES ORDENEN, I ES VA HAVER D'ARREGLAR EL BACKEND PERQUÈ HO FESSIN.**
+//    `CustomerViewSet` declarava `filter_backends = [DjangoFilterBackend, SearchFilter]`, i
+//    declarar-ne dos no n'AFEGEIX: els SUBSTITUEIX tots tres del `DEFAULT_FILTER_BACKENDS`, o
+//    sigui que es carregava l'`OrderingFilter`. La versió anterior d'aquesta pantalla enviava
+//    `ordering: 'codi'` a cada crida i **DRF el descartava sense error ni avís**: la llista
+//    sortia en l'ordre del `Meta.ordering` del model i semblava que funcionés. Corregit per S1
+//    (propietària del backend) amb els set camps —els tres de dada i els QUATRE COMPTADORS, que
+//    són `annotate` i per tant ordenables sense cost—, i **mesurat contra l'API viva** abans de
+//    posar-hi cap icona: `?ordering=-codi` inverteix, `?ordering=-orders_open` i
+//    `?ordering=-delivery_notes_count` porten a dalt el client amb més comandes i més albarans.
 const MONO = 'IBM Plex Mono, monospace'
 const PAGE_SIZE = 25
+// L'ordre per defecte de la casa per a un ARXIU: alfabètic pel codi. És el que el ViewSet
+// declara com a `ordering`, i el que la icona de la capçalera ha de dir en obrir la pàgina.
+const ORDRE_DEFECTE = { camp: 'codi', dir: 'asc' }
+const aOrdering = (o) => (o.dir === 'desc' ? `-${o.camp}` : o.camp)
 
 export default function Customers() {
   const { t } = useTranslation()
@@ -87,6 +93,15 @@ export default function Customers() {
   // no hi surten; hi són a un clic, a la píndola del costat. Va al report perquè Agus ho pugui vetar.
   const vista = sp.get('vista') === 'inactius' ? 'inactius' : 'actius'
 
+  // L'ORDENACIÓ viu a la URL com la resta de l'estat de la llista: recarregar la conserva i es
+  // pot enllaçar. Es guarda tal com el backend l'espera (`-camp`).
+  const ordre = useMemo(() => {
+    const raw = sp.get('ordering')
+    if (!raw) return ORDRE_DEFECTE
+    const desc = raw.startsWith('-')
+    return { camp: desc ? raw.slice(1) : raw, dir: desc ? 'desc' : 'asc' }
+  }, [sp])
+
   const setParams = useCallback((patch) => {
     setSp(prev => {
       const next = new URLSearchParams(prev)
@@ -118,10 +133,18 @@ export default function Customers() {
     ...(search ? { search } : {}),
   }), [vista, tipologia, search])
 
+  // Clicar una capçalera: si ja mana, inverteix; si no, entra ASCENDENT — a un arxiu, el que
+  // s'espera d'una columna nova és el començament de l'alfabet, no el final (l'invers de
+  // `/models`, on la columna nova entra descendent perquè allà el que es busca és el més recent).
+  const ordenar = useCallback((c) => {
+    const dir = (ordre.camp === c && ordre.dir === 'asc') ? 'desc' : 'asc'
+    setParams({ ordering: aOrdering({ camp: c, dir }), page: undefined })
+  }, [ordre, setParams])
+
   const load = useCallback(() => {
     if (!tipologia) return
     setLoading(true); setError(false)
-    customers.list({ ...filtreBase, page, page_size: PAGE_SIZE })
+    customers.list({ ...filtreBase, ordering: aOrdering(ordre), page, page_size: PAGE_SIZE })
       .then(res => {
         const d = res.data
         setItems(Array.isArray(d) ? d : (d.results || []))
@@ -129,7 +152,7 @@ export default function Customers() {
       })
       .catch(() => { setItems([]); setCount(0); setError(true) })
       .finally(() => setLoading(false))
-  }, [filtreBase, page, tipologia])
+  }, [filtreBase, ordre, page, tipologia])
 
   // El DENOMINADOR: el cens sencer del tenant, sense cap filtre de vista ni de cerca. Una sola
   // fila demanada — l'únic que se'n vol és el `count`.
@@ -166,14 +189,14 @@ export default function Customers() {
   // ── LES COLUMNES (§8e: amplades PER CONTINGUT, no iguals) ─────────────────────────────
   const cols = useMemo(() => [
     {
-      key: 'codi', label: t('clients.col_codi'), min: 78, max: 100,
+      key: 'codi', label: t('clients.col_codi'), min: 78, max: 100, sort: 'codi',
       estil: { fontSize: 11, color: 'var(--text-soft)' }, titol: (c) => c.codi,
       render: (c) => c.codi,
     },
     {
       // LA DADA REINA: porta el pes, i les marques de la fila hi van enganxades perquè és el
       // que qualifiquen (mateix patró que el `SetBadge` d'A5 dins de la cel·la del nom).
-      key: 'nom', label: t('clients.col_nom'), min: 200, max: 340,
+      key: 'nom', label: t('clients.col_nom'), min: 200, max: 340, sort: 'nom',
       estil: { fontWeight: 600 }, titol: (c) => c.nom,
       render: (c) => (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
@@ -185,7 +208,7 @@ export default function Customers() {
     {
       // §8e: l'ESTAT va amb badge de codi de colors. Actiu = verd; inactiu = neutre (no és cap
       // error, és un client retirat: pintar-lo en vermell diria que alguna cosa ha fallat).
-      key: 'active', label: t('clients.col_active'), min: 86, max: 100,
+      key: 'active', label: t('clients.col_active'), min: 86, max: 100, sort: 'active',
       render: (c) => (
         <Badge variant={c.active ? 'ok' : 'gray'}>
           {c.active ? t('clients.active') : t('clients.inactive')}
@@ -193,7 +216,7 @@ export default function Customers() {
       ),
     },
     {
-      key: 'offers', label: t('clients.col_offers'), min: 90, max: 110, align: 'right',
+      key: 'offers', label: t('clients.col_offers'), min: 90, max: 110, align: 'right', sort: 'quotes_sent',
       titolCap: t('clients.offers_hint'),
       render: (c) => (
         <span style={{ fontFamily: MONO }} title={t('clients.offers_hint')}>
@@ -204,11 +227,11 @@ export default function Customers() {
       ),
     },
     {
-      key: 'orders_open', label: t('clients.col_orders_open'), min: 100, max: 120, align: 'right',
+      key: 'orders_open', label: t('clients.col_orders_open'), min: 100, max: 120, align: 'right', sort: 'orders_open',
       render: (c) => <Recompte v={c.orders_open} />,
     },
     {
-      key: 'delivery_notes', label: t('clients.col_delivery_notes'), min: 80, max: 100, align: 'right',
+      key: 'delivery_notes', label: t('clients.col_delivery_notes'), min: 80, max: 100, align: 'right', sort: 'delivery_notes_count',
       render: (c) => <Recompte v={c.delivery_notes_count} />,
     },
     {
@@ -274,15 +297,11 @@ export default function Customers() {
                 cols={cols}
                 files={items}
                 clau={(c) => c.id}
+                ordre={ordre}
+                onOrdenar={ordenar}
                 onObrir={(c) => navigate(`/clients/${c.id}`)}
               />
             )}
-
-        {/* §8c · l'estat buit d'una capacitat també s'explica: aquí no hi ha icona d'ordenació a
-            cap capçalera i el motiu no es pot llegir a la pantalla. Es diu. */}
-        {items.length > 0 && (
-          <div style={{ ...buit, margin: '-8px 0 16px 2px' }}>{t('clients.sort_pending')}</div>
-        )}
 
         <Paginacio page={page} pages={pages} onPage={(p) => setParams({ page: p })}
           labelPrev={t('clients.prev')} labelNext={t('clients.next')}
