@@ -20,7 +20,7 @@
 //
 // El hover va amb estat de React i no amb CSS perquè aquesta casa estila inline amb tokens;
 // posar-hi classes obligaria a mantenir el CSS de la píndola en un segon lloc.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { FORAT_CROM } from '../layout/chromeSlot'
@@ -122,6 +122,18 @@ const Separador = () => (
  */
 export default function PageMenu({ backTo, backTitle, items = [], children = null, rightChildren = null }) {
   const navigate = useNavigate()
+  // 🚨 EL FORAT POT EXISTIR I NO ESTAR ENGANXAT ENLLOC. `FORAT_CROM` és un node de mòdul: viu
+  // des que es carrega el bundle, i qui l'enganxa al document és el Shell. Hi ha rutes FORA del
+  // Shell (l'editor de fitxa tècnica, el taller de patró); si una d'elles muntés aquest
+  // component, el portal aniria a un node desenganxat i **la barra no es pintaria, en silenci**
+  // — el mateix mode de fallada que el `:has()` que aquesta mateixa peça va haver de treure
+  // (§8b-quater(2)): quan falla, no falla res.
+  // Es tanca mirant `isConnected` DESPRÉS del muntatge i no durant el render: dins del Shell,
+  // el pare fa `commit` després que els fills hagin renderitzat, o sigui que al primer render
+  // el forat encara no està enganxat i comprovar-ho allà pintaria la barra al mig de la pàgina
+  // una passada. Així el cas normal no parpelleja i el cas anòmal degrada VISIBLEMENT.
+  const [forat, setForat] = useState(FORAT_CROM)
+  useEffect(() => { if (FORAT_CROM && !FORAT_CROM.isConnected) setForat(null) }, [])
   // Cap literal de cara a l'usuari en aquest fitxer: les etiquetes i el títol de la fletxa
   // arriben ja traduïts des de la pantalla, que és qui sap de què parla.
   //
@@ -177,5 +189,5 @@ export default function PageMenu({ backTo, backTitle, items = [], children = nul
   )
   // Sense forat (proves unitàries, o un `PageMenu` muntat fora del Shell) es pinta al seu lloc:
   // val més una barra al mig de la pàgina que cap barra.
-  return FORAT_CROM ? createPortal(barra, FORAT_CROM) : barra
+  return forat ? createPortal(barra, forat) : barra
 }

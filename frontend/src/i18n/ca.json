@@ -270,7 +270,8 @@
     "camp_run_talles": "Run de talles",
     "camp_talla_base": "Talla base",
     "camp_es_conjunt": "És conjunt",
-    "import_n_btn": "Importar {{n}} models"
+    "import_n_btn": "Importar {{n}} models",
+    "back_title": "Tornar a Models"
   },
   "clients": {
     "title": "Clients",
@@ -4904,5 +4905,34 @@
   },
   "disseny": {
     "back_title": "Tornar al tauler"
-  }
+  },
+  "onboarding": {
+    "eyebrow": "Configuració inicial",
+    "title": "Configuració inicial",
+    "back_title": "Tornar al tauler",
+    "step_intro": "Benvinguda",
+    "step_config": "Dades de l'estudi",
+    "step_dades": "Carregar dades",
+    "step_fi": "Verificació",
+    "intro": "Configurem el teu entorn en tres passos.",
+    "estat_actual": "Estat actual",
+    "percent_done": "{{n}}% completat",
+    "begin": "Començar",
+    "nom_empresa": "Nom de l'empresa",
+    "nom_empresa_ph": "Ex: Textiles Brownie SL",
+    "unitat": "Unitats de mesura",
+    "save_next": "Desar i continuar",
+    "file_intro": "Carrega el fitxer mestre per inicialitzar el catàleg de POMs, els jocs de graduació i els sistemes de talles.",
+    "upload": "Carregar el fitxer",
+    "uploading": "Carregant…",
+    "done_title": "Configuració completada",
+    "loaded": "Dades carregades",
+    "go_dashboard": "Anar al tauler",
+    "no_vocab": "No s'ha pogut llegir el vocabulari d'unitats."
+  },
+  "size_map_conf_HIGH": "alta",
+  "size_map_conf_MEDIUM": "mitjana",
+  "size_map_conf_LOW": "baixa",
+  "size_map_conf_NO_MATCH": "sense correspondència",
+  "size_map_back_title": "Tornar al tauler"
 }

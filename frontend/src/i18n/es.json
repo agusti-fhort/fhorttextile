@@ -270,7 +270,8 @@
     "camp_run_talles": "Run de tallas",
     "camp_talla_base": "Talla base",
     "camp_es_conjunt": "Es conjunto",
-    "import_n_btn": "Importar {{n}} modelos"
+    "import_n_btn": "Importar {{n}} modelos",
+    "back_title": "Volver a Modelos"
   },
   "clients": {
     "title": "Clientes",
@@ -4904,5 +4905,34 @@
   },
   "disseny": {
     "back_title": "Volver al panel"
-  }
+  },
+  "onboarding": {
+    "eyebrow": "Configuración inicial",
+    "title": "Configuración inicial",
+    "back_title": "Volver al panel",
+    "step_intro": "Bienvenida",
+    "step_config": "Datos del estudio",
+    "step_dades": "Cargar datos",
+    "step_fi": "Verificación",
+    "intro": "Configuremos tu entorno en tres pasos.",
+    "estat_actual": "Estado actual",
+    "percent_done": "{{n}}% completado",
+    "begin": "Empezar",
+    "nom_empresa": "Nombre de la empresa",
+    "nom_empresa_ph": "Ej: Textiles Brownie SL",
+    "unitat": "Unidades de medida",
+    "save_next": "Guardar y continuar",
+    "file_intro": "Carga el fichero maestro para inicializar el catálogo de POMs, los juegos de graduación y los sistemas de tallas.",
+    "upload": "Cargar el fichero",
+    "uploading": "Cargando…",
+    "done_title": "Configuración completada",
+    "loaded": "Datos cargados",
+    "go_dashboard": "Ir al panel",
+    "no_vocab": "No se ha podido leer el vocabulario de unidades."
+  },
+  "size_map_conf_HIGH": "alta",
+  "size_map_conf_MEDIUM": "media",
+  "size_map_conf_LOW": "baja",
+  "size_map_conf_NO_MATCH": "sin correspondencia",
+  "size_map_back_title": "Volver al panel"
 }

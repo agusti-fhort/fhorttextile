@@ -270,7 +270,8 @@
     "camp_run_talles": "Size run",
     "camp_talla_base": "Base size",
     "camp_es_conjunt": "Is a set",
-    "import_n_btn": "Import {{n}} models"
+    "import_n_btn": "Import {{n}} models",
+    "back_title": "Back to Models"
   },
   "clients": {
     "title": "Clients",
@@ -4904,5 +4905,34 @@
   },
   "disseny": {
     "back_title": "Back to dashboard"
-  }
+  },
+  "onboarding": {
+    "eyebrow": "Initial setup",
+    "title": "Initial setup",
+    "back_title": "Back to dashboard",
+    "step_intro": "Welcome",
+    "step_config": "Studio details",
+    "step_dades": "Load data",
+    "step_fi": "Verification",
+    "intro": "Let's set up your environment in three steps.",
+    "estat_actual": "Current status",
+    "percent_done": "{{n}}% complete",
+    "begin": "Start",
+    "nom_empresa": "Company name",
+    "nom_empresa_ph": "E.g. Textiles Brownie SL",
+    "unitat": "Measurement units",
+    "save_next": "Save and continue",
+    "file_intro": "Upload the master file to initialise the POM catalogue, grading rule sets and size systems.",
+    "upload": "Upload the file",
+    "uploading": "Uploading…",
+    "done_title": "Setup complete",
+    "loaded": "Data loaded",
+    "go_dashboard": "Go to the dashboard",
+    "no_vocab": "Could not read the units vocabulary."
+  },
+  "size_map_conf_HIGH": "high",
+  "size_map_conf_MEDIUM": "medium",
+  "size_map_conf_LOW": "low",
+  "size_map_conf_NO_MATCH": "no match",
+  "size_map_back_title": "Back to dashboard"
 }

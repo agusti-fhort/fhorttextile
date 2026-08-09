@@ -542,6 +542,82 @@ Les cinc tenen la mateixa forma: **el verd no vol dir el que sembla.** I cap es 
 llista de valors possibles — el mateix criteri que `FASE_COLORS` del Gantt. Que les seves claus
 coincideixin amb una enumeració publicada no el converteix en vocabulari.
 
+## B9·B10·B11 · Configuració inicial · Import massiu · Size Map Setup (commit 259)
+
+Els tres wizards del lot. Cap gest, cap pas, cap validació canvia a cap.
+
+### 🚨 B9 · La Configuració inicial NO TENIA i18n
+
+**Cap** cadena de cara a l'usuari passava per `t()`: **vint literals catalans escrits a dins**
+(«Benvingut a FHORT Textile Tech», «Guardar i continuar →», «Nom de l'empresa *»…). És la porta
+que el `CLAUDE.md` posa com a guardià de frontend, i era **la pantalla on més mal fa: és la
+PRIMERA que veu un tenant nou**, i un estudi anglès o castellà l'obria en català sense cap
+manera de canviar-ho. 22 claus noves amb paritat ca/en/es.
+
+**I la paleta era una altra**: nou hex literals fora de la casa (`#f0f9f0`, `#fff0f0`, `#c0dd97`,
+`#f09595`, `#3b6d11`, `#a32d2d`, `#f5e6d0`, `#f5f0ea`, `#c8b89a`) — entre ells **el verd i el
+vermell ANTERIORS a l'alineació del semàfor de la §1b(a)**, que el bloc A ja va migrar a tot el
+producte. Aquesta pantalla se n'havia quedat fora perquè no els llegia dels tokens: se'ls havia
+escrit.
+
+**§6 · el wizard no tenia stepper.** Quatre passos i cap manera de saber on eres. La seqüència
+**no se l'inventa aquest tram** —ja era al codi (`step` 0→1→2→3) i és la que el backend
+serveix—; el que hi entra és la FORMA que la norma li dona: FET (verd amb ✓) · ACTUAL (`--sel` +
+filet d'or) · DISPONIBLE (blanc + `--line`) · BLOQUEJAT (tènue).
+I les unitats, que eren `['CM','INCH']` al client, surten de `/vocabulari/` → `unitats_mesura`.
+
+### B10 · Import massiu
+
+| Què | Abans | Ara |
+|---|---|---|
+| Sortida | una **`✕ Cancel·lar` de text pla** a l'extrem de la capçalera, i **cap altra** | menú de pantalla amb la fletxa a `/models` + la `✕` com a terciària (cancel·lar i tornar no són el mateix gest) |
+| Stepper | cercle **daurat ple** amb tinta blanca (**3.44:1**) i un `✓` tipogràfic | §6: FET `--ok-bg`+check · ACTUAL `--sel`+filet d'or · DISPONIBLE blanc+`--line` |
+| Primària | **daurat ple** amb tinta blanca | blava (§5.1), amb `apagat` en desactivar-se |
+| «Ghost» daurat | botó de vora daurada i tinta daurada | secundària de la casa — **la §5.4 jubila el ghost daurat com a botó** |
+| Avís d'error | `#fee` / `#fcc` / `#c00` | `--err-bg` + filet i tinta `--err` (§1) |
+| `GOLD` | **`var(--gold, #c27a2a)`** — una `var()` amb **fallback literal** | fora |
+
+⚠️ El fallback literal aquí **no s'usava mai** (el token existeix). Es diu igualment perquè és
+**el mateix patró** que a Planificació amagava un token INEXISTENT (`var(--bg, #faf9f7)`): un
+fallback que ningú no veu és una xarxa que no se sap si aguanta.
+
+### B11 · Size Map Setup — 🛑 i el titular és un altre
+
+| Què | Abans | Ara |
+|---|---|---|
+| Badge de confiança del matching | mapa amb **4 hex literals** i **l'etiqueta EN CATALÀ escrita a dins** (`label: 'alta'`, `'sense match'`) | `ui/Badge` + clau i18n |
+| MEDIUM i LOW | tots dos en **daurat** (marca fent de semàfor) | taronja d'avís; la distinció la fa l'etiqueta, que és qui la sap dir |
+| Acció «Nou run» | botó blau a la capçalera | puja al menú i hi perd el color (§8e) |
+
+🛑 **`SizeMapSetup` NO TÉ RUTA.** El seu `export default` **no el munta ningú**: `App.jsx` no en
+declara cap `<Route>` i l'únic consumidor de tot `src/` és `SizeAuthoringDrawer`, que n'importa
+**el `Wizard`** (i el munten la Size Library i els jocs de regles). O sigui que **la pantalla-llista
+és codi mort** i el que és viu és el wizard de dins.
+Conseqüència pràctica: la conformitat del **wizard** (que és el gruix del fitxer, i el que porta
+el badge de confiança) **arriba a l'usuari**; la de la capçalera-llista i el seu menú de pantalla,
+**no**. No s'esborra —els esborrats són decisió d'Agus— i **no s'audita per ruta**: posar-hi una
+ruta inventada hauria mesurat un 404. Precedent de la casa: `GraduacioPanel`.
+
+### El que la mesura va treure a `/models/importar-colleccio`
+
+Dos incompliments que **no eren de la pantalla sinó del `CustomerSelector`** que hi munta:
+`--gray-l` de vora al select (àlies de farciment fent de vora, en gris fred) i **`--warn` de
+tinta I de vora al botó «+ Nou client»** — el taronja del SEMÀFOR fent de botó, quan la §1 el
+reserva a la dada. Passa a secundària de la casa. I un rètol «Client» a 12px en majúscules
+(§2: un rètol va a 10; 12 en majúscules és la mida d'un valor).
+⚠️ `CustomerSelector` és el component de frontera amb el lot comercial: el canvi és **pell pura**,
+cap prop, cap `onChange`, cap contracte del modal.
+
+### `ui/PageMenu` · es tanca un mode de fallada silenciós (avís de la sessió de fitxa tècnica)
+
+`FORAT_CROM` és un node de mòdul: existeix des que es carrega el bundle, i qui l'enganxa al
+document és el Shell. **Hi ha rutes FORA del Shell** (l'editor de fitxa tècnica, el taller de
+patró); si una d'elles muntés `PageMenu`, el portal aniria a un node desenganxat i **la barra no
+es pintaria, en silenci** — el mateix mode de fallada que el `:has()` del §8b-quater(2). Ara es
+comprova `isConnected` **després** del muntatge (no durant el render: dins del Shell el pare fa
+`commit` després que els fills hagin renderitzat, i comprovar-ho al render pintaria la barra al
+mig de la pàgina una passada). Cas normal sense parpelleig; cas anòmal, **degradació visible**.
+
 ## CODES PER A LA S2 (backend i compartits · commits 250·204, 250·205, 250)
 
 ### `/customers` tornava a ordenar — DRF es menjava l'ordre en silenci

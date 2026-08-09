@@ -61,6 +61,11 @@ PANTALLES = [
     ('B10 · El meu perfil', '/perfil'),
     ('B11 · Recursos', '/recursos'),
     ('B12 · Safata d\'encàrrecs', '/encarrecs'),
+    ('B13 · Configuració inicial', '/onboarding'),
+    ('B14 · Import massiu', '/models/importar-colleccio'),
+    # 🛑 SizeMapSetup NO TÉ RUTA: el seu `export default` no el munta ningú (v. el report). El
+    # que SÍ que és viu és el seu `Wizard`, que munta `SizeAuthoringDrawer` des de la Size
+    # Library — i s'audita allà, no aquí. Posar-hi una ruta inventada hauria mesurat un 404.
 ]
 
 #: La paleta que la NORMA_LAYOUT §1 permet en una VORA, en rgb() tal com el navegador el computa.
