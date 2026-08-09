@@ -929,8 +929,9 @@ cap gest fallit**, o sigui que **l'arnès no és la causa**: ho són les dades v
 
 ### ⚠️ ABANS DE LLEGIR LA LLISTA DE SOTA · les llistes d'accions caduquen
 
-Aquesta llista s'ha repassat al final amb una pregunta que no és «hi falta res?» sinó **«què hi
-queda que ja no sigui veritat?»** — i n'ha caigut un punt sencer (el 8) i mig (el 2), tots dos
+Aquesta llista s'ha repassat **el 09/08/2026 al tancament** amb una pregunta que no és «hi falta
+res?» sinó **«què hi queda que ja no sigui veritat?»** — i porta data perquè **una llista
+d'accions sense data convida a llegir-la com si fos d'ara** — i n'ha caigut un punt sencer (el 8) i mig (el 2), tots dos
 perquè **una altra sessió els havia resolt mentre jo escrivia**.
 
 🔑 **La lliçó, de la sessió de patrons, i és la més fina del dia:**
@@ -968,9 +969,15 @@ caigut aquí l'haurien enviat exactament a això.
 7. **19 ViewSets més perden l'`OrderingFilter`** pel mateix patró que `/customers`.
 8. ~~**INFRA · `backend/media/` amb directoris `root:root`**~~ — ✅ **RESOLT A L'ARREL, i el meu
    punt estava MORT.** Jo hi demanava un `chown` i avisava que «el directori del mes és nou cada
-   mes». La sessió de patrons no va anar al símptoma sinó a la CAUSA: **setgid als directoris +
-   `FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o2775`** a `settings.py`, o sigui que els directoris que
-   Django crei cada mes **hereten el grup i els permisos sols**.
+   mes». Qui va anar a la CAUSA va ser la **sessió C1** (commit `86cb640c`, l'únic que toca
+   `FILE_UPLOAD_DIRECTORY_PERMISSIONS`): **setgid als directoris + mode `0o2775`** a
+   `settings.py`, o sigui que els directoris que Django crei cada mes **hereten el grup i els
+   permisos sols**.
+   ⚠️ **Atribució corregida**: primer ho vaig donar a la sessió de patrons, i ella mateixa m'ho
+   va desmentir. El seu és el **diagnòstic** —reproduir el 500, veure que era `media/…/2026/08`
+   en `root:root` i, sobretot, **adonar-se que el directori del mes és nou cada mes**, que és el
+   que va fer que C1 anés a la causa—; el **remei** és de C1, i era millor que el que aquella
+   sessió i jo proposàvem. **Diagnòstic d'una, remei d'una altra.**
    **Verificat per mi, no acceptat**: dels 60 directoris de `media/`, **0 sense grup `www-data` i
    0 sense setgid**.
    🚨 Deixar-hi el meu punt no hauria estat una imprecisió: **hauria enviat l'Agus a fer una
