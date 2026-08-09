@@ -178,8 +178,8 @@ export default function Topbar() {
             onClick={() => navigate('/models/nou')}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
-              background: 'var(--gold)',
-              color: 'var(--text-main)',
+              background: 'var(--accio)',
+              color: 'var(--white)',
               border: 'none',
               borderRadius: 8,
               padding: '0 0.9rem',

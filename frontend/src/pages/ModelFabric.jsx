@@ -295,8 +295,8 @@ export default function ModelFabric() {
           </button>
           <button type="button" onClick={handleSave} disabled={saving}
             style={{
-              padding: '8px 20px', background: saving ? '#ccc' : 'var(--gold)',
-              color: 'var(--text-main)', border: 'none', borderRadius: 6,
+              padding: '8px 20px', background: saving ? '#ccc' : 'var(--accio)',
+              color: 'var(--white)', border: 'none', borderRadius: 6,
               fontSize: 'var(--fs-h3)', fontWeight: 500,
               cursor: saving ? 'not-allowed' : 'pointer',
             }}>

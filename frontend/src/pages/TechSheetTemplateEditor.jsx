@@ -310,7 +310,7 @@ export default function TechSheetTemplateEditor() {
         <button onClick={() => navigate('/clients')} style={headerBtn}>
           <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('app.back')}
         </button>
-        <button onClick={onExport} disabled={exporting} style={{ ...headerBtn, background: COL.gold, border: 'none', color: 'var(--white)', opacity: exporting ? 0.5 : 1 }}>
+        <button onClick={onExport} disabled={exporting} style={{ ...headerBtn, background: 'var(--accio)', border: 'none', color: 'var(--white)', opacity: exporting ? 0.5 : 1 }}>
           <i className="ti ti-file-download" style={{ fontSize: 14 }} /> {exporting ? t('tech_sheet.exporting') : t('tech_sheet.export_pdf')}
         </button>
         <span style={{ fontSize: 'var(--fs-h3)', fontWeight: 600 }}>{t('tech_sheet.tmpl_title')} · {customerData?.nom || `#${customerId}`}</span>
@@ -395,7 +395,10 @@ export default function TechSheetTemplateEditor() {
         <aside style={{ width: 180, flexShrink: 0, borderLeft: `1px solid ${COL.border}`, background: COL.bg, display: 'flex', flexDirection: 'column', minHeight: 0, fontFamily: FONT }}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
             <SectionTitle>{t('tech_sheet.insert_data_block')}</SectionTitle>
-            <button onClick={insertHeader} disabled={!canEdit} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: 'none', borderRadius: 5, background: COL.gold, color: 'var(--white)', fontFamily: FONT, cursor: !canEdit ? 'default' : 'pointer', opacity: !canEdit ? 0.45 : 1 }}>
+            {/* C2 · SECUNDÀRIA (§5.2), no blava. Inserir un bloc és una eina de la paleta, no
+                «el que has vingut a fer»: el blau d'aquesta pantalla ja el porta «Exportar PDF»
+                a la capçalera, i dos blaus a la vegada no en deixen cap. */}
+            <button onClick={insertHeader} disabled={!canEdit} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', padding: '6px 8px', marginBottom: 6, border: '1px solid var(--gold-border)', borderRadius: 5, background: COL.bg, color: COL.textMain, fontFamily: FONT, cursor: !canEdit ? 'default' : 'pointer', opacity: !canEdit ? 0.45 : 1 }}>
               <i className="ti ti-layout-navbar" style={{ fontSize: 13 }} /> {t('tech_sheet.model_header')}
             </button>
             <p style={{ fontSize: 'var(--fs-label)', color: COL.textMuted, margin: '0 0 8px' }}>

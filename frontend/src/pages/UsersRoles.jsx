@@ -354,7 +354,7 @@ export default function UsersRoles() {
                 ...inputS, cursor: 'pointer', border: '1px solid var(--line-soft)', color: 'var(--text-soft)',
               }}>{t('usersRoles.cancel')}</button>
               <button onClick={applyBulk} style={{
-                ...inputS, cursor: 'pointer', border: 'none', background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600,
+                ...inputS, cursor: 'pointer', border: 'none', background: 'var(--accio)', color: 'var(--white)', fontWeight: 600,
               }}>{t('usersRoles.confirm')}</button>
             </div>
           </div>
@@ -429,7 +429,7 @@ function ResetLinkModal({ t, data, onClose }) {
               }} />
               <button onClick={copy} style={{
                 fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 'var(--r-ctrl)',
-                border: 'none', background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600,
+                border: 'none', background: 'var(--accio)', color: 'var(--white)', fontWeight: 600,
                 cursor: 'pointer', whiteSpace: 'nowrap',
               }}>{copied ? t('usersRoles.rl_copied') : t('usersRoles.rl_copy')}</button>
             </div>
@@ -571,7 +571,7 @@ function NewUserModal({ t, roles, onClose, onCreated }) {
           <button onClick={submit} disabled={saving} style={{
             fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 'var(--r-ctrl)',
             cursor: saving ? 'default' : 'pointer', border: 'none',
-            background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600, opacity: saving ? 0.6 : 1,
+            background: 'var(--accio)', color: 'var(--white)', fontWeight: 600, opacity: saving ? 0.6 : 1,
           }}>{t('usersRoles.nu_create')}</button>
         </div>
       </div>
@@ -707,7 +707,7 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
           <button onClick={submit} disabled={saving} style={{
             fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 'var(--r-ctrl)',
             cursor: saving ? 'default' : 'pointer', border: 'none',
-            background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600, opacity: saving ? 0.6 : 1,
+            background: 'var(--accio)', color: 'var(--white)', fontWeight: 600, opacity: saving ? 0.6 : 1,
           }}>{saving ? t('usersRoles.ue_saving') : t('usersRoles.ue_save')}</button>
         </div>
       </div>

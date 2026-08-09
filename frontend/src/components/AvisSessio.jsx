@@ -102,7 +102,7 @@ export default function AvisSessio() {
           </button>
           <button type="button" disabled={ocupat} onClick={continua}
             style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '7px 14px', borderRadius: 6,
-                     border: 'none', background: 'var(--gold)', color: 'var(--text-main)',
+                     border: 'none', background: 'var(--accio)', color: 'var(--white)',
                      fontWeight: 600, cursor: ocupat ? 'wait' : 'pointer' }}>
             {t('auth.session_keep')}
           </button>

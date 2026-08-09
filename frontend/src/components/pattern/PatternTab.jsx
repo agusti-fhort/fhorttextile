@@ -388,7 +388,7 @@ function CampsPujada({ t, pujant, dxf, rul, setDxf, setRul, onTria, compacte = f
           onClick={onTria}
           disabled={pujant || !dxf}
           style={{
-            background: 'var(--gold)', color: 'var(--text-main)', border: 'none',
+            background: 'var(--accio)', color: 'var(--white)', border: 'none',
             borderRadius: 6, padding: '0.5rem 1.1rem',
             cursor: pujant ? 'wait' : (!dxf ? 'not-allowed' : 'pointer'),
             opacity: (!dxf && !pujant) ? 0.45 : 1,
@@ -522,14 +522,18 @@ function Capcalera({ t, fp, cadena, onCanviaVersio, pujant, dxf, rul, setDxf, se
         display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center',
         borderTop: '1px solid var(--line)', paddingTop: '0.6rem',
       }}>
-        {/* L'acció primària de la porta: obrir el patró al TALLER, que és on hi ha les
-            eines i on el rellotge de la tasca corre. Aquí només es consulta. */}
+        {/* Obrir el patró al TALLER, que és on hi ha les eines i on el rellotge de la tasca
+            corre. Aquí només es consulta.
+            C2 · és una PORTA, i el §5.3 diu que les portes es pinten com la SECUNDÀRIA i mai
+            blaves: «anar a un altre lloc no compromet res, i per això no pot cridar més que
+            l'acció que sí que compromet». Era daurat ple i el comentari en deia «primària»:
+            les dues coses queden desfetes alhora, perquè el color venia del nom. */}
         <button
           onClick={onTaller}
           style={{
             display: 'flex', alignItems: 'center', gap: '0.35rem',
             fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-main)',
-            border: 'none', borderRadius: 4, background: 'var(--gold)',
+            borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)', borderRadius: 4, background: 'var(--panel)',
             padding: '0.35rem 0.9rem', cursor: 'pointer',
           }}
         >

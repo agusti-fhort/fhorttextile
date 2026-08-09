@@ -35,7 +35,7 @@ const slugify = (s) => (s || '').toLowerCase().trim()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
 
 const btnPrimary = (disabled) => ({
-  background: disabled ? '#ccc' : 'var(--gold)', color: 'var(--text-main)', border: 'none',
+  background: disabled ? '#ccc' : 'var(--accio)', color: 'var(--white)', border: 'none',
   borderRadius: 6, padding: '8px 20px', fontSize: 'var(--fs-body)', fontWeight: 600,
   cursor: disabled ? 'not-allowed' : 'pointer',
 })

@@ -235,7 +235,7 @@ export default function ContractFormPage() {
           <button type="submit" disabled={saving}
             style={{
               width: 'auto', padding: '11px 26px', border: 'none', borderRadius: 8,
-              background: 'var(--gold)', color: '#fff', fontFamily: MONO, fontSize: 13, fontWeight: 600,
+              background: 'var(--accio)', color: '#fff', fontFamily: MONO, fontSize: 13, fontWeight: 600,
               cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1,
             }}>
             {saving ? 'Desant…' : 'Desar'}

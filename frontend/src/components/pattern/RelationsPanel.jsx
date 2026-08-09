@@ -390,8 +390,8 @@ function BuscaPropostes({ t, cercades, buscant, onBusca }) {
         disabled={buscant}
         style={{
           display: 'flex', alignItems: 'center', gap: '0.3rem',
-          background: 'var(--gold)', color: 'var(--text-main)',
-          border: '1px solid var(--gold)', borderRadius: 4,
+          background: 'var(--accio)', color: 'var(--white)',
+          border: '1px solid var(--accio)', borderRadius: 4,
           padding: '0.25rem 0.6rem', fontSize: 'var(--fs-caption)',
           cursor: buscant ? 'wait' : 'pointer', opacity: buscant ? 0.6 : 1,
         }}

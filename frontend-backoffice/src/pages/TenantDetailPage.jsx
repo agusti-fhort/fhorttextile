@@ -492,7 +492,7 @@ function ContactesSection({ contactes, isAdmin, codi, onChange, mock }) {
             <button type="button" onClick={() => { setAdding(false); setError('') }} disabled={saving}
               style={{ ...ghostBtn, color: 'var(--text-muted)' }}>Cancel·lar</button>
             <button type="button" onClick={handleAdd} disabled={saving}
-              style={{ background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontFamily: MONO, fontSize: 12, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+              style={{ background: 'var(--accio)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontFamily: MONO, fontSize: 12, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
               {saving ? 'Desant…' : 'Desar contacte'}
             </button>
           </div>
@@ -552,7 +552,7 @@ function CondicionsTab({ tenant, planObj, plans, isAdmin, codi, onChanged }) {
             <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
               <button type="button" onClick={() => { setChanging(false); setError('') }} disabled={saving} style={{ ...ghostBtn, color: 'var(--text-muted)' }}>Cancel·lar</button>
               <button type="button" onClick={handleSave} disabled={saving}
-                style={{ background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontFamily: MONO, fontSize: 12, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+                style={{ background: 'var(--accio)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontFamily: MONO, fontSize: 12, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
                 {saving ? 'Desant…' : 'Confirmar'}
               </button>
             </div>

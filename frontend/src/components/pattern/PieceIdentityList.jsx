@@ -126,8 +126,8 @@ export default function PieceIdentityList({
         title={ambRol.length === 0 ? t('pattern.identity_confirm_none') : ''}
         style={{
           cursor: ambRol.length === 0 ? 'not-allowed' : 'pointer',
-          background: ambRol.length === 0 ? 'var(--panel)' : 'var(--gold)',
-          color: ambRol.length === 0 ? 'var(--text-soft)' : 'var(--text-main)',
+          background: ambRol.length === 0 ? 'var(--panel)' : 'var(--accio)',
+          color: ambRol.length === 0 ? 'var(--text-soft)' : 'var(--white)',
           border: '1px solid var(--line)', borderRadius: 6,
           padding: '0.5rem 0.8rem', fontSize: 'var(--fs-body)',
         }}

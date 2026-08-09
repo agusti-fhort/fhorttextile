@@ -283,7 +283,7 @@ export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, 
           {/* El «Tornar» de la v4 va AL CATÀLEG (`tanca()`), no enrere a l'historial: entrant per
               URL directa, un `history.back()` se'n duria l'usuari fora de l'aplicació. */}
           <button style={btnPeu} onClick={onTornar}>{t('cataleg_peces.back')}</button>
-          <button style={{ ...btnPeu, background: 'var(--gold)', borderColor: 'var(--gold)', color: 'var(--white)', fontWeight: 600 }}
+          <button style={{ ...btnPeu, background: 'var(--accio)', borderColor: 'var(--accio)', color: 'var(--white)', fontWeight: 600 }}
             disabled={desant} onClick={desa}>{t('cataleg_peces.save')}</button>
         </span>
       </div>

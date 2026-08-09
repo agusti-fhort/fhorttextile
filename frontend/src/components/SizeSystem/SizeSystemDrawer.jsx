@@ -272,8 +272,8 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted, onTar
                 onClick={handleSaveTargets}
                 disabled={savingTargets}
                 style={{
-                  padding: '0.35rem 0.8rem', border: '1px solid var(--gold)',
-                  borderRadius: 6, background: 'var(--gold)', color: 'var(--text-main)',
+                  padding: '0.35rem 0.8rem', border: '1px solid var(--accio)',
+                  borderRadius: 6, background: 'var(--accio)', color: 'var(--white)',
                   cursor: savingTargets ? 'default' : 'pointer',
                   opacity: savingTargets ? 0.6 : 1,
                   fontSize: '0.8rem', fontWeight: 500,
@@ -351,7 +351,7 @@ export default function SizeSystemDrawer({ sizeSystem, onClose, onDeleted, onTar
                           <button onClick={handleSave}
                             style={{
                               fontSize: '0.7rem', padding: '0.15rem 0.4rem',
-                              background: 'var(--gold)', color: 'var(--text-main)', border: 'none',
+                              background: 'var(--accio)', color: 'var(--white)', border: 'none',
                               borderRadius: 3, cursor: 'pointer', marginRight: 4,
                             }}>
                             ✓

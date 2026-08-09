@@ -1789,7 +1789,7 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
         style={{ padding: '3px 6px', fontSize: 'var(--fs-body)', 
                  border: '1px solid var(--line)', borderRadius: 4 }} />
       <button type="button" onClick={saveDeadline} disabled={savingDeadline}
-        style={{ padding: '3px 10px', background: 'var(--gold)', color: 'var(--text-main)', border: 'none',
+        style={{ padding: '3px 10px', background: 'var(--accio)', color: 'var(--white)', border: 'none',
                  borderRadius: 4, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
         {savingDeadline ? '…' : '✓'}
       </button>
@@ -1907,7 +1907,7 @@ export function TabSummary({ model, modelId, sizesAmbDades, onUpdated }) {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={handleSave} disabled={saving}
-              style={{ padding: '6px 16px', background: 'var(--gold)', color: 'var(--text-main)',
+              style={{ padding: '6px 16px', background: 'var(--accio)', color: 'var(--white)',
                        border: 'none', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
               {saving ? t('model_sheet.saving') : t('model_sheet.save')}
             </button>
@@ -2648,8 +2648,8 @@ function TabAIAnalysis({ modelId }) {
         </p>
         <button type="button" onClick={handleAnalyze} disabled={loading}
           style={{
-            padding: '8px 20px', background: loading ? '#ccc' : 'var(--gold)',
-            color: 'var(--text-main)', border: 'none', borderRadius: 6,
+            padding: '8px 20px', background: loading ? '#ccc' : 'var(--accio)',
+            color: 'var(--white)', border: 'none', borderRadius: 6,
             fontSize: 'var(--fs-body)', fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer',
           }}>
           {loading ? (

@@ -116,7 +116,7 @@ export default function TempsDeclaratForm({ tasca, onFet, onCancel }) {
           <button onClick={desa} disabled={enviant} style={{
             fontFamily: 'inherit', fontSize: 'var(--fs-body)', fontWeight: 600,
             padding: '7px 14px', border: 'none', borderRadius: 6,
-            background: 'var(--gold)', color: 'var(--text-main)',
+            background: 'var(--accio)', color: 'var(--white)',
             cursor: enviant ? 'not-allowed' : 'pointer', opacity: enviant ? 0.5 : 1,
           }}>
             {t('temps_declarat.desa')}

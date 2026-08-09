@@ -303,8 +303,8 @@ const LOGIN_CSS = `
 .login-screen .remember input{accent-color:var(--gold);width:15px;height:15px;cursor:pointer}
 .login-screen .forgot{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--gold-d);text-decoration:none;letter-spacing:.01em;background:none;border:0;cursor:pointer;padding:0}
 .login-screen .forgot:hover{text-decoration:underline}
-.login-screen .btn{width:100%;font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--text-main);background:var(--gold);border:0;border-radius:11px;padding:15px;cursor:pointer;transition:.18s;box-shadow:0 8px 20px -10px rgba(194,122,42,.7)}
-.login-screen .btn:hover{background:var(--gold-d);transform:translateY(-1px);box-shadow:0 12px 26px -10px rgba(194,122,42,.8)}
+.login-screen .btn{width:100%;font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--white);background:var(--accio);border:0;border-radius:11px;padding:15px;cursor:pointer;transition:.18s;box-shadow:0 8px 20px -10px rgba(43,101,194,.7)}
+.login-screen .btn:hover{background:var(--accio-hover);transform:translateY(-1px);box-shadow:0 12px 26px -10px rgba(43,101,194,.8)}
 .login-screen .btn:active{transform:translateY(0)}
 .login-screen .btn:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
 .login-screen .err{font-family:var(--mono);font-size:12px;color:#a32d2d;text-align:center;margin:-8px 0 16px}

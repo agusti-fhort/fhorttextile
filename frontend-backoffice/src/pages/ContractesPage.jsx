@@ -37,7 +37,7 @@ export default function ContractesPage() {
         </div>
         <button onClick={() => navigate('/contractes/new')}
           style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px',
-            background:'var(--gold)', color:'#fff', border:'none', borderRadius:6,
+            background:'var(--accio)', color:'#fff', border:'none', borderRadius:6,
             cursor:'pointer', fontSize:13, fontFamily:MONO }}>
           <IconPlus size={15}/> Nou contracte
         </button>

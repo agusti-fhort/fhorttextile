@@ -72,7 +72,7 @@ export default function ResetPassword() {
             <button onClick={() => navigate('/login')} style={{
               marginTop: 18, width: '100%', fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)',
               fontWeight: 600, padding: '11px', borderRadius: 8, border: 'none',
-              background: 'var(--gold)', color: 'var(--text-main)', cursor: 'pointer',
+              background: 'var(--accio)', color: 'var(--white)', cursor: 'pointer',
             }}>{t('reset.back_login')}</button>
           </>
         )}
@@ -97,7 +97,7 @@ export default function ResetPassword() {
             <button type="submit" disabled={saving || !pw || !pw2} style={{
               width: '100%', fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)',
               fontWeight: 600, padding: '11px', borderRadius: 8, border: 'none',
-              background: 'var(--gold)', color: 'var(--text-main)', cursor: saving ? 'default' : 'pointer',
+              background: 'var(--accio)', color: 'var(--white)', cursor: saving ? 'default' : 'pointer',
               opacity: (saving || !pw || !pw2) ? 0.6 : 1,
             }}>{saving ? t('reset.saving') : t('reset.submit')}</button>
           </form>

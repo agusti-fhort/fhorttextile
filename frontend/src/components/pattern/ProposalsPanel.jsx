@@ -181,6 +181,11 @@ function Proposta({ t, p, unit, marcat, onMarca, onConfirma, onRebutja, onRessal
         </span>
       </div>
 
+      {/* C2 · «Confirma» era daurat ple. No pot passar a blau: és una acció DE FILA i n'hi ha
+          una per proposta a la llista, mentre que la §5.1 dona UNA primària per pantalla —
+          N blaus alhora no diuen «el que has vingut a fer», diuen soroll. Va a SECUNDÀRIA
+          (§5.2), que és el que la norma reserva a les accions de la casa; el pes contra
+          «Rebutja» el segueix marcant el filet d'or contra el filet neutre. */}
       <div style={{ display: 'flex', gap: '0.35rem' }}>
         <button
           onClick={() => acte(() => onConfirma(p))}
@@ -188,8 +193,8 @@ function Proposta({ t, p, unit, marcat, onMarca, onConfirma, onRebutja, onRessal
           style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: '0.3rem', padding: '0.2rem 0.4rem',
-            background: 'var(--gold)', color: 'var(--text-main)',
-            border: '1px solid var(--gold)', borderRadius: 4,
+            background: 'var(--panel)', color: 'var(--text-main)',
+            border: '1px solid var(--gold-border)', borderRadius: 4,
             cursor: ocupat ? 'wait' : 'pointer', fontSize: 'var(--fs-caption)',
           }}
         >

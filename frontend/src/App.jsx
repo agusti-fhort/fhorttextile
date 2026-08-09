@@ -340,7 +340,8 @@ class AppErrorBoundary extends React.Component {
               window.location.reload();
             }}
             style={{
-              background: 'var(--gold)', color: 'var(--text-main)',
+              // C2 · §5.1 — l'única acció d'aquesta pantalla és tornar a provar: és LA primària.
+              background: 'var(--accio)', color: 'var(--white)',
               border: 'none', borderRadius: 4,
               padding: '8px 20px', cursor: 'pointer',
               fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)'

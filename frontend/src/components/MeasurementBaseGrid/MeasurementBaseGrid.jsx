@@ -22,7 +22,7 @@ const thS = {
 }
 const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: 'var(--fs-body)' }
 const btnPrimary = (disabled) => ({
-  background: disabled ? '#ccc' : 'var(--gold)', color: 'var(--text-main)',
+  background: disabled ? '#ccc' : 'var(--accio)', color: 'var(--white)',
   border: 'none', borderRadius: 6, padding: '7px 18px',
   fontSize: 'var(--fs-body)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
 })

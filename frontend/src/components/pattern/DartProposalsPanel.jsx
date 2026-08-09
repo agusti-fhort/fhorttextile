@@ -136,6 +136,8 @@ function Candidat({ t, c, unit, onConfirma, onRebutja, onRessalta }) {
         />
       </ul>
 
+      {/* C2 · secundària i no blava, pel mateix motiu que a `ProposalsPanel`: és una acció DE
+          FILA, i la §5.1 dona UNA primària per pantalla. */}
       <div style={{ display: 'flex', gap: '0.35rem' }}>
         <button
           onClick={() => acte(() => onConfirma(c))}
@@ -143,8 +145,8 @@ function Candidat({ t, c, unit, onConfirma, onRebutja, onRessalta }) {
           style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: '0.3rem', padding: '0.2rem 0.4rem',
-            background: 'var(--gold)', color: 'var(--text-main)',
-            border: '1px solid var(--gold)', borderRadius: 4,
+            background: 'var(--panel)', color: 'var(--text-main)',
+            border: '1px solid var(--gold-border)', borderRadius: 4,
             cursor: ocupat ? 'wait' : 'pointer', fontSize: 'var(--fs-caption)',
           }}
         >

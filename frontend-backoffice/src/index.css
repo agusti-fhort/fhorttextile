@@ -14,6 +14,15 @@
   --border:     #e0d5c5;
   --base-hairline: #e3cfa3; /* filet de la columna de talla base (graella fitting) */
 
+  /* Acció · NORMA_LAYOUT §5 (C2, 09/08). El backoffice NO ha passat la T0.1: aquí NO hi entra
+     la llista de tokens de la norma, només els DOS que la §5 necessita, amb el mateix valor que
+     a `frontend/src/index.css` — perquè el daurat ple deixi de fer d'acció també en aquesta SPA
+     i el blau signifiqui el mateix als dos costats del producte. Definir-los aquí és obligatori:
+     un `var(--accio)` sense declaració és una declaració INVÀLIDA i el fons cau a l'heretat —
+     el botó es veuria transparent, no blau, i ningú ho llegiria al codi. */
+  --accio:       #2b65c2;  /* 5.61:1 amb tinta blanca — AA */
+  --accio-hover: #245399;  /* 7.57:1 amb tinta blanca */
+
   /* Aliases legacy (per components existents) */
   --charcoal:   #1d1d1b;
   --gray:       #868685;

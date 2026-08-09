@@ -68,8 +68,8 @@ const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: FS_VAL }
 // dia. Ara venen d'`EditableTable.AMPLADES`, que és l'única declaració.
 
 const btnPrimary = (disabled) => ({
-  background: disabled ? 'var(--bg-muted)' : 'var(--gold)',
-  color: disabled ? 'var(--text-muted)' : 'var(--text-main)',
+  background: disabled ? 'var(--bg-muted)' : 'var(--accio)',
+  color: disabled ? 'var(--text-muted)' : 'var(--white)',
   border: 'none', borderRadius: 6, padding: '7px 18px',
   fontSize: 'var(--fs-body)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
 })

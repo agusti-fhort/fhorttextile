@@ -99,7 +99,7 @@ export default function CronoDeclarat({ modelId, code, nomTasca, subtitol, onTan
   })
   const primari = {
     fontFamily: 'inherit', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '9px 14px',
-    border: 'none', borderRadius: 6, background: 'var(--gold)', color: 'var(--text-main)',
+    border: 'none', borderRadius: 6, background: 'var(--accio)', color: 'var(--white)',
     cursor: enviant ? 'not-allowed' : 'pointer', opacity: enviant ? 0.5 : 1,
   }
   const secundari = { ...selS, cursor: enviant ? 'not-allowed' : 'pointer' }
