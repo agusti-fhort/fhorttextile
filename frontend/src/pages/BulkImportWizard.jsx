@@ -146,7 +146,9 @@ export default function BulkImportWizard() {
         <PageMenu backTo="/models" backTitle={t('bulk_import.back_title')} />
       </div>
 
-    <div style={{ maxWidth: 920, margin: '0 auto', paddingTop: 16 }}>
+    {/* v. la nota d'`OnboardingWizard`: sense `width: 100%`, en columna flex la caixa passa
+        a mida de contingut (mesurat: 920 → 561.6). */}
+    <div style={{ width: '100%', maxWidth: 920, margin: '0 auto', paddingTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
         <div>
           <h1 style={{ fontFamily: MONO, fontSize: 'var(--fs-h1)', fontWeight: 500, margin: 0 }}>{t('bulk_import.title')}</h1>

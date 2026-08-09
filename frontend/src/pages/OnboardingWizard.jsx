@@ -151,7 +151,10 @@ export default function OnboardingWizard() {
         <PageMenu backTo="/" backTitle={t('onboarding.back_title')} />
       </div>
 
-      <div style={{ maxWidth: 600, margin: '0 auto', paddingTop: 16 }}>
+      {/* `width: '100%'` no és redundant: en una columna FLEX (el `<main>` ho és des del
+          §8b-quater(3)) un `margin: 0 auto` anul·la l'`align-items: stretch` i la caixa passa
+          a mida de CONTINGUT. Mesurat: 600 → 505.7. En bloc no canvia res. */}
+      <div style={{ width: '100%', maxWidth: 600, margin: '0 auto', paddingTop: 16 }}>
         {/* §8b.3 · identitat sobre el fons. El títol anava en DAURAT: el daurat és marca, i el
             títol d'una pàgina és tinta principal (§8c: el daurat no pinta ni números ni rètols).
             L'ull de cella («FHORT Textile Tech · Onboarding») deia el nom del producte, que ja
