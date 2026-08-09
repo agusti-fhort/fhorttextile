@@ -1419,3 +1419,127 @@ patró carregat, i per això el Taller s'ha mesurat en estat buit.
 la fitxa torna a obrir després del `chown`. No l'esborro —és la prova que el camí funciona, i
 esborrar-lo és una altra escriptura al domini—; queda dit perquè el banc ja no és com el vaig
 trobar.
+
+---
+
+# [S2] FUSIÓ DE CAPÇALERES · la fitxa tècnica entra al bastiment comú (09/08)
+
+🔴 **AGUS, A PANTALLA:** «doble/triple menú superior propi, fora del layout implantat a la
+resta». Era literal, i tenia una causa d'arquitectura: **la ruta de l'editor .ftt es va declarar
+FORA del Shell** amb l'argument «és una eina a pantalla completa, el canvas mana».
+
+🔑 **L'ARGUMENT SE'NS VA TORNAR EN CONTRA.** Sense bastiment, l'editor se'l va haver de pintar
+ell mateix —logo, breadcrumb, barra de 56px—, i el resultat era la fitxa tècnica **amb el camí
+escrit dues vegades, mantingut a part, i sense assemblar-se a cap altra secció del model**. La
+llibertat de no tenir marc va acabar sent l'obligació de fabricar-se'n un de pitjor.
+
+## Els tres nivells, i de qui és cadascun
+
+| | Nivell | Amo |
+|---|---|---|
+| 1 | Top bar del Shell | **la casa** — identitat i camí |
+| 2 | `ui/PageMenu` | seccions del model + crom del DOCUMENT |
+| 3 | La cinta | **l'editor** — és crom d'eina legítim i es queda |
+
+El molla de pa passa a quatre segments reals: **Tenant › Models › {NOM} › Fitxa tècnica**.
+L'editor només publica a `store/molla` el tros que la ruta no pot dir (`/models/1319/ftt/761`
+no sap com es diu el model ni que això és la fitxa tècnica); la top bar el llegeix.
+
+## El que va marxar, i el que NO es podia esborrar
+
+**El nivell de 26px d'«Edició»** era una franja pròpia per a UN sol desplegable — un pis de crom
+per a un botó. Baixa a la fila de tabs de la cinta.
+
+🚨 **Però esborrar-lo hauria estat un error, i el codi ho tenia escrit:** les seves cinc entrades
+—desfés, refés, copia, enganxa, duplica— són **l'ÚNICA superfície VISIBLE d'aquestes accions**; a
+tot arreu més només existeixen com a drecera de teclat, i *una drecera que ningú anuncia no
+existeix per a qui no la sap*. Es mou de lloc; no es perd. «Absorbir» no vol dir «eliminar», i
+aquí la diferència era una funcionalitat sencera per a qui no es sap les dreceres.
+
+## 🚨 Totes les sortides per la mateixa porta
+
+`sortirDeLaFitxa` tenia el destí com a CONSTANT perquè hi havia UNA sortida: la fletxa de la
+barra pròpia. El menú comú n'obre **nou més** (les seccions del model). Si alguna hagués navegat
+pel seu compte, **hauria tret l'usuari de la fitxa amb la tasca oberta i el rellotge corrent** —
+exactament el que el modal d'acabar existeix per impedir. El destí passa a ser paràmetre.
+
+## «Exportar PDF»: resolt per JERARQUIA, no per votació
+
+El brief el marcava com un dels daurats plens pendents. **No ha calgut decidir la pregunta gran**
+(blau contra daurat), que és d'Agus i per a tot el producte: la §8b diu que a l'extrem dret del
+menú de pantalla hi van PORTES en secundari petit, **mai l'acció primària**. En pujar-hi, deixa
+de ser l'acció primària d'una barra pròpia i passa a ser una porta del menú comú → `botoSec`.
+
+I per tant **aquesta pantalla es queda sense cap blau, i és correcte**: és la §8e literal —
+*«l'acció pujada al menú deixa de ser blava»*— i té precedent mesurat a A4. La ratificació que
+Agus va signar mentrestant (commit C2) hi va a favor: les portes són `--panel` + `--gold-border`,
+i els toggles d'eina de la cinta —que **no són accions**— es queden daurats per ordre seva.
+
+## L'alçada: `--chrome-h`, i per què no podia ser una constant
+
+Vaig demanar a la sessió 1 que el `<main>` fos columna flex i **li vaig escriure que era
+zero-risc raonant-ho**. Ho va mesurar (`qa_diff_layout.py`) i va trobar **8 de 26 rutes amb
+moviment**: el `<div>` de marge negatiu del menú deixa de pujar (forat de 24px a dalt) i les
+caixes centrades amb `margin: 0 auto` cauen a mida de contingut (1312→1064 · 600→505.7 ·
+920→561.6).
+
+🚨 **CAP D'AQUESTS VUIT CANVIA UN COLOR NI UNA MIDA DE LLETRA: les tres eines li haurien donat
+verd.** És una tapadora nova — **el canvi que no mou cap valor MESURAT però mou la pàgina** — i
+la vaig proposar jo. El meu raonament era correcte *en tot el que deia* i fallava en el que no
+deia. No es dedueix llegint.
+
+La sortida: el Shell publica `--chrome-h` **en viu** (`ResizeObserver`) i només l'editor la
+consumeix. I la pregunta que valia la pena fer abans d'acceptar-la era si era constant:
+
+| Amplada | Crom | Editor | Desbordament |
+|---|---|---|---|
+| 1600 | 108 | 892 | **0** |
+| 1200 | 144 | 856 | **0** |
+| 900 | 178 | 822 | **0** |
+
+**De 106 a 245px** segons la mesura de la sessió 1: el menú porta `flexWrap`. Una constant hauria
+estat certa només en una finestra ampla.
+
+## «Res sota 10px»: ja es complia, i per què no s'ha tocat res
+
+Els `fontSize: 8` i `9` del fitxer són **TOTS del món paper** (`measureTextWidthMm`, objectes de
+document en mm, primitives Konva). 🚨 **Una escombrada per número els hauria «corregit» i hauria
+canviat la mida de la lletra IMPRESA.** La frontera es respecta mirant QUÈ és cada número, no
+quant val.
+
+## 🚨 UNA AUDITORIA NO POT ESCRIURE AL DOMINI QUE MESURA
+
+Trobat pel símptoma —«Error desant» a C1— i la causa no era l'editor: **l'arnès reenviava els
+PATCH d'autosave al servei viu**, o sigui que *cada correguda de l'auditoria creava una versió
+nova del document*. El `758` de la llista arrossega una cadena de quatre i ja no és el cap
+vigent; el backend s'hi nega (409) i jo mesurava un editor en error.
+
+**I el senyal `data-ftt-screen` NO ho atrapa**: l'`aside` es pinta igual. El senyal respon «és
+aquesta pantalla?», no «està en un estat que ningú ha provocat des de fora?». Dues preguntes.
+
+Regla nova: cap escriptura surt de l'arnès, amb **una excepció escrita** — el `lock` del .ftt, que
+és efímer i és *condició per veure la pantalla* (sense lock no es pinten els panells i mesuraríem
+una closca buida creient que és l'editor). I el que es bloqueja **es diu**:
+
+```
+✋ 2 escriptures BLOQUEJADES (l'auditoria mesura, no muta):
+   ×1  PATCH /api/v1/ftt-documents/761/
+   ×1  POST  /api/v1/models/1319/open-task/
+```
+
+🚨 **El segon és pitjor que el primer i no el buscava:** el Taller obre la TASCA en carregar-se.
+Cada correguda de C3 des d'ahir ha posat `pattern_digit` a córrer. **Es veia a les meves pròpies
+captures i no ho vaig llegir** — la píndola de tasca activa creixia 4m → 9m → 16m foto a foto.
+
+## VERIFICACIÓ
+
+🟢 **27 rutes · 0 incompliments**, i ara amb la garantia afegida que els zeros no s'han pagat
+mutant res. eslint 0 errors · `vite build` net (outDir de proves).
+
+## 🚩 El que la meva eina ha deixat al banc (per a Agus, i NO ho toco)
+
+1. **Model 1319 té 4 documents .ftt** (758→759→760→761) on abans d'ahir no n'hi havia cap. El
+   resolutor hi ensenyarà ara el selector de «quina fitxa obro?».
+2. **Tasca `pattern_digit` (pk 361) en `InProgress`** amb un `TimerEntrada` obert des de les
+   13:24. **Tocar hores registrades és decisió seva**: un timer és el registre d'un fet, i
+   esborrar-lo o tancar-lo són dues mentides diferents. El `GuardTascaOblidada` hi és per a això.
