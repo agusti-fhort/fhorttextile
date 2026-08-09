@@ -2284,7 +2284,9 @@
       "title": "Sesiones de fitting",
       "empty": "Ninguna sesión de fitting con estos filtros.",
       "new": "Nueva sesión",
-      "all": "Todas"
+      "all": "Todas",
+      "back_title": "Volver al panel",
+      "entity": "sesiones"
     },
     "now": {
       "button": "Fitting ahora",

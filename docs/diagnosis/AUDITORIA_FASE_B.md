@@ -255,6 +255,55 @@ silenci.
 3. `FASE_COLORS` del Gantt **es queda**: és una paleta de data-viz indexada pel codi de fase
    (mateix criteri que `KONVA_COL`), no una còpia de l'enumeració — el fitxer ja ho tenia escrit.
 
+## B3 · Fittings — `/fittings` (commit 253)
+
+La llista de sessions de fitting, amb els grups (convocatòries) plegables. Germana de
+referència: **A5/§8e**.
+
+### Cens dada → endpoint
+
+| Què es pinta | D'on surt |
+|---|---|
+| Files i grups | `GET /api/v1/fitting-sessions/?page_size=100` (+ `fase`, `estat`) |
+| Els quatre recomptes de dalt | quatre `GET …?page_size=1` → `count` (el cens no es dedueix d'una pàgina) |
+| Filtre de fase / d'estat | `GET /api/v1/vocabulari/` → `fases_model` · `estats_sessio_fitting` |
+| Assistents (punts de color) | `attendees_info[].color_avatar` de la mateixa resposta |
+| Assistents elegibles | `GET plan/eligible-attendees/` |
+| «Fitting aquí i ara» | `POST fitting-sessions/schedule-now/` |
+| Accions de grup (reprogramar, afegir model, assistents, esborrar) | `fitting-sessions/` + `AddModelToGroupModal` |
+
+### Desviacions trobades i corregides
+
+| Què | Abans | Ara |
+|---|---|---|
+| Menú de pantalla | **no existia**; «Fitting ara» era un botó de fons **`--charcoal`** (negre ple) | §8b: l'acció puja al menú i **deixa de ser botó i de ser de color** |
+| Capçalera | `h1` amb el nom de l'entitat i el recompte sol dins d'un `<p>` **sense dir de què era** | §8e: el valor gran + la seva etiqueta + els filtres a la mateixa línia |
+| Els dos eixos de filtre | **dues files de pastilles** amb el triat en negre ple (sis fases + quatre estats = dues línies senceres) | dos selects, control de la casa (§8c) |
+| Columna FASE | `Badge variant="gate"` — el **verd d'èxit** pintant una fase | **només text** (§8e) |
+| Columna «objectiu» (la dada reina) | `--gold` a pes 500 | `--text-main` a 600 (§8e) |
+| Filet de la fila filla del grup | `2px solid var(--gold-pale)` — **token ELIMINAT** | `--gold-border` |
+| Assistent marcat al modal | fons `--gold-pale` | «inclòs» = verd (§1) |
+| Confirmar/cancel·lar en línia | `--charcoal` ple / vora `--gray-l`, radi 4 | primària blava i terciària (§5) |
+| Estats buit i de càrrega | caixa de `3rem` centrada | frase `--text-faint` cursiva (§8c) |
+| KPI | `subColor` de semàfor a tres dels quatre | **neutres**: cap dels quatre és una alerta. I era **codi mort**: cap passa `sub`, i `subColor` només tenyeix el subtítol |
+
+### Dos components de `ui/` conformats amb aquesta pantalla (toquen tot el producte)
+
+- **`ui/StatCard`**: `#e4e4e2` de vora · icona en `--gold` (§8c: «el daurat NO pinta números»;
+  §8: el daurat és la tinta ACTIVA, no la de repòs) · `--gray`/`--charcoal` · el valor a `2rem`
+  escrit a mà, que és exactament `--fs-display` però sense nom · subtítol a pes 300.
+- **`ui/Card`**: `#e4e4e2`, vores de mig píxel, radi literal, paddings en `rem` fora de la base
+  de 4, i la icona de capçalera a **18px en `--gold`** (ni la mida ni la tinta són de la §8).
+
+### 🚨 L'auditoria absolia un color que ja no li pertocava
+
+`qa_auditoria_computats.py` tenia tres hex a la llista de **«crom del sistema»** (top bar + menú
+lateral) que no compten com a incompliment. Dos eren de la **top bar**, que ja ha passat
+conformitat i no en fa servir cap. Deixar-los era pitjor que inútil: **qualsevol pantalla que els
+pintés quedava absolta per una excepció que ja no li pertocava** — i va passar, amb les quatre
+vores de `ui/Card` a `/fittings`, donades per bones. La llista s'escurça a l'únic hex que segueix
+sent del menú lateral. **Una excepció que sobreviu al seu motiu és una tapadora.**
+
 ## CODES PER A LA S2 (backend i compartits · commits 250·204, 250·205, 250)
 
 ### `/customers` tornava a ordenar — DRF es menjava l'ordre en silenci

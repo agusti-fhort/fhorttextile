@@ -8,6 +8,7 @@ import StatCard from '../components/ui/StatCard'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Modal from '../components/ui/Modal'
+import PageMenu from '../components/ui/PageMenu'
 import { useEnumeracio } from '../utils/vocabulariDominiFont'
 
 
@@ -25,45 +26,56 @@ const estatVariant = {
   Anullada: 'gray',
 }
 
-const filterBtn = (active) => ({
-  background: active ? 'var(--charcoal)' : 'var(--white)',
-  color:      active ? 'var(--white)' : 'var(--gray)',
-  border: '0.5px solid #e4e4e2', borderRadius: 8,
-  padding: '5px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer',
-})
+// §8c · el control de filtre de la casa i el rètol d'element del §8e. Substitueixen el
+// `filterBtn`, que pintava el filtre triat en NEGRE PLE (`--charcoal`) amb vora `#e4e4e2` —
+// una sisena forma de botó que no és a la §5 i un color fora de paleta.
+const camp = {
+  fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)', padding: '6px 10px', height: 32,
+  border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)',
+  background: 'var(--panel)', color: 'var(--text-main)',
+}
+const retol = {
+  fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-caption)', fontWeight: 600,
+  letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-soft)',
+}
 
 // Cercle de color d'assignació (color_avatar). Fallback --gold si null.
 const ColorDot = ({ color, size = 14 }) => (
   <span style={{ display: 'inline-block', width: size, height: size, borderRadius: '50%',
-    background: color || 'var(--gold)', border: '0.5px solid var(--gray-l)', flexShrink: 0 }} />
+    background: color || 'var(--gold)', border: '1px solid var(--line)', flexShrink: 0 }} />
 )
 
 // Assistents → ColorDots (màx 4 + "+N"). Rep [{id, nom, color_avatar}].
 const AttendeeDots = ({ attendees }) => {
-  if (!attendees || !attendees.length) return <span style={{ color: 'var(--gray)' }}>—</span>
+  if (!attendees || !attendees.length) return <span style={{ color: 'var(--text-soft)' }}>—</span>
   const shown = attendees.slice(0, 4)
   const extra = attendees.length - shown.length
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
       {shown.map(a => <ColorDot key={a.id} color={a.color_avatar} />)}
-      {extra > 0 && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)' }}>+{extra}</span>}
+      {extra > 0 && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)' }}>+{extra}</span>}
     </span>
   )
 }
 
+// §2 · th 10px MAJÚSCULES tracking .08em «a tot arreu», en pes 600 i tinta `--text-soft`.
 const thStyle = (align) => ({
-  padding: '0.7rem 1rem', fontSize: 'var(--fs-label)', letterSpacing: '0.1em',
-  textTransform: 'uppercase', color: 'var(--gray)', fontWeight: 400,
-  borderBottom: '0.5px solid var(--gray-l)', textAlign: align || 'left', whiteSpace: 'nowrap',
+  padding: '8px 16px', fontSize: 'var(--fs-label)', letterSpacing: '.08em',
+  textTransform: 'uppercase', color: 'var(--text-soft)', fontWeight: 600,
+  borderBottom: '1px solid var(--line)', textAlign: align || 'left', whiteSpace: 'nowrap',
 })
 const tdStyle = (align, extra) => ({
-  padding: '0.75rem 1rem', fontSize: 'var(--fs-body)', textAlign: align || 'left', ...extra,
+  padding: '12px 16px', fontSize: 'var(--fs-body)', textAlign: align || 'left', ...extra,
 })
+// §5 · confirmar/cancel·lar en línia: primària blava i terciària. El negre ple (`--charcoal`)
+// no és cap de les sis formes de la §5, i el radi 4 no és cap dels tres de la casa.
 const miniBtn = (primary) => ({
-  fontSize: 'var(--fs-body)', padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-  border: primary ? 'none' : '0.5px solid var(--gray-l)',
-  background: primary ? 'var(--charcoal)' : 'var(--white)',
-  color: primary ? 'var(--white)' : 'var(--gray)',
+  fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-body)', fontWeight: primary ? 600 : 500,
+  padding: '4px 12px', borderRadius: 'var(--r-ctrl)', cursor: 'pointer',
+  borderWidth: 1, borderStyle: 'solid',
+  borderColor: primary ? 'var(--accio)' : 'transparent',
+  background: primary ? 'var(--accio)' : 'none',
+  color: primary ? 'var(--panel)' : 'var(--text-soft)',
 })
 
 export default function FittingSessionList() {
@@ -232,7 +244,7 @@ export default function FittingSessionList() {
   }
 
   // Cel·la d'accions d'una sessió (eliminar si Programada; descartar si Programada/Oberta).
-  const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray)', fontSize: 'var(--fs-h3)', padding: '2px 4px' }
+  const iconBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-soft)', fontSize: 'var(--fs-h3)', padding: '2px 4px' }
   const SessionActionsCell = ({ s }) => (
     <span style={{ display: 'inline-flex', gap: 4, justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
       {(s.estat === 'Programada' || s.estat === 'Oberta') && (
@@ -267,7 +279,7 @@ export default function FittingSessionList() {
               {t('fitting.row.discard_label')}
               <input type="text" value={rowAction.motiu || ''} autoFocus
                 onChange={e => setRowAction(r => ({ ...r, motiu: e.target.value }))}
-                style={{ fontSize: 'var(--fs-body)', padding: '3px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, minWidth: 220 }} />
+                style={{ fontSize: 'var(--fs-body)', padding: '3px 8px', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', minWidth: 220 }} />
               <button style={miniBtn(true)} disabled={actBusy} onClick={() => doDiscard(id, rowAction.motiu)}>{t('common.confirm')}</button>
               <button style={miniBtn(false)} disabled={actBusy} onClick={() => setRowAction(null)}>{t('common.cancel')}</button>
               {rowAction.err && <span style={{ color: 'var(--err)' }}>{rowAction.err}</span>}
@@ -279,22 +291,43 @@ export default function FittingSessionList() {
   }
 
   return (
-    <div>
-      <div style={{display: 'flex', alignItems: 'flex-start', marginBottom: '1.5rem'}}>
-        <div>
-          <h1 style={{fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4}}>{t('fitting.sessions.title')}</h1>
-          <p style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300}}>
-            {stats.total}
-          </p>
-        </div>
-        <button onClick={() => setNowOpen(true)} style={{
-          marginLeft: 'auto',
-          background: 'var(--charcoal)', color: 'var(--white)',
-          border: 'none', borderRadius: 8, padding: '8px 16px',
-          fontSize: 'var(--fs-body)', cursor: 'pointer',
-        }}>
-          + {t('fitting.now.button')}
-        </button>
+    <>
+      {/* §8b · MENÚ DE PANTALLA. Aquesta llista no en tenia cap, i l'acció «fitting ara» era un
+          botó de fons `--charcoal` (negre ple) a la capçalera — una sisena forma de botó que no
+          és a la §5. En pujar al menú, l'acció **deixa de ser botó i deixa de ser de color**
+          (§8e: «el blau viu al contingut; el menú té el seu llenguatge»). */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu
+          backTo="/"
+          backTitle={t('fitting.sessions.back_title')}
+          items={[{ key: 'ara', label: t('fitting.now.button'), onClick: () => setNowOpen(true) }]}
+        />
+      </div>
+
+      <div style={{ paddingTop: 16 }}>
+      {/* §8e · EL COMPTADOR MANA I ELS FILTRES HI VAN AL COSTAT, mateixa línia. El títol de
+          l'entitat deixa de ser `h1` («el nom de l'entitat ja no és títol, és element») i el
+          recompte, que anava sol dins d'un `<p>` sota el títol sense dir de què era, passa a
+          ser el valor gran amb la seva etiqueta.
+          ELS DOS EIXOS DE FILTRE DEIXEN DE SER FILES DE PASTILLES. Eren dues files de botons
+          amb el triat en NEGRE PLE (`--charcoal`), i amb sis fases i quatre estats ocupaven dues
+          línies senceres per a una tria que un select resol en un control. La §8c: «filtres en
+          línia (cerca, selects, dates): control de la casa, alçada única, MAI blaus». */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 16, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 600, color: 'var(--text-main)' }}>
+          {stats.total}
+        </span>
+        <span style={retol}>{t('fitting.sessions.entity')}</span>
+        <select value={fase} onChange={e => setFase(e.target.value)}
+          aria-label={t('fitting.session.fase')} style={camp}>
+          <option value={TOTES}>{t('fitting.session.fase')}: {t('fitting.sessions.all')}</option>
+          {(fases || []).map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <select value={estat} onChange={e => setEstat(e.target.value)}
+          aria-label={t('fitting.session.estat')} style={camp}>
+          <option value={TOTES}>{t('fitting.session.estat')}: {t('fitting.sessions.all')}</option>
+          {(estats || []).map(e => <option key={e} value={e}>{t(`fitting.estats.${e}`, e)}</option>)}
+        </select>
       </div>
 
       {nowOpen && (
@@ -306,38 +339,22 @@ export default function FittingSessionList() {
         display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '1rem', marginBottom: '1.5rem',
       }}>
+        {/* §8c · els KPI van NEUTRES; cap dels quatre és una alerta (un fitting «obert» no és
+            un problema, és el seu estat normal). Els `subColor` que hi havia eren, a més, CODI
+            MORT: cap dels quatre passa `sub`, i `subColor` només tenyeix el subtítol. */}
         <StatCard icon="ti-clipboard-list" label={t('fitting.sessions.title')} value={stats.total} />
-        <StatCard icon="ti-folder-open"    label={t('fitting.estats.Oberta')}   value={stats.Oberta}   subColor="var(--warn)" />
-        <StatCard icon="ti-circle-check"   label={t('fitting.estats.Tancada')}  value={stats.Tancada}  subColor="var(--ok)" />
-        <StatCard icon="ti-ban"            label={t('fitting.estats.Anullada')} value={stats.Anullada} subColor="var(--gray)" />
-      </div>
-
-      <div style={{display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap'}}>
-        <span style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', alignSelf: 'center', marginRight: 4}}>
-          {t('fitting.session.fase')}:
-        </span>
-        {[TOTES, ...(fases || [])].map(f => (
-          <button key={`f-${f}`} onClick={() => setFase(f)} style={filterBtn(fase === f)}>
-            {f || t('fitting.sessions.all')}
-          </button>
-        ))}
-        <span style={{fontSize: 'var(--fs-body)', color: 'var(--gray)', alignSelf: 'center', marginLeft: 12, marginRight: 4}}>
-          {t('fitting.session.estat')}:
-        </span>
-        {[TOTES, ...(estats || [])].map(e => (
-          <button key={`e-${e}`} onClick={() => setEstat(e)} style={filterBtn(estat === e)}>
-            {e ? t(`fitting.estats.${e}`, e) : t('fitting.sessions.all')}
-          </button>
-        ))}
+        <StatCard icon="ti-folder-open"    label={t('fitting.estats.Oberta')}   value={stats.Oberta} />
+        <StatCard icon="ti-circle-check"   label={t('fitting.estats.Tancada')}  value={stats.Tancada} />
+        <StatCard icon="ti-ban"            label={t('fitting.estats.Anullada')} value={stats.Anullada} />
       </div>
 
       <Card padding={0}>
         {loading ? (
-          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
+          <div style={{padding: 16, color: 'var(--text-faint)', fontStyle: 'italic', fontSize: 'var(--fs-body)'}}>
             {t('common.loading')}
           </div>
         ) : !hasRows ? (
-          <div style={{padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)'}}>
+          <div style={{padding: 16, color: 'var(--text-faint)', fontStyle: 'italic', fontSize: 'var(--fs-body)'}}>
             {t('fitting.sessions.empty')}
           </div>
         ) : (
@@ -363,8 +380,8 @@ export default function FittingSessionList() {
                 return (
                   <Fragment key={uuid}>
                     <tr onClick={() => toggleGrup(uuid)}
-                      style={{ background: 'var(--bg-muted)', cursor: 'pointer', fontWeight: 500,
-                               borderBottom: '0.5px solid var(--gray-l)' }}>
+                      style={{ background: 'var(--sel)', cursor: 'pointer', fontWeight: 500,
+                               borderBottom: '1px solid var(--line-soft)' }}>
                       <td style={tdStyle()}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                           <i className="ti ti-chevron-right" style={{
@@ -378,7 +395,7 @@ export default function FittingSessionList() {
                           {t('fitting.convocatoria')} · {sessions.length} {t('fitting.models')}
                         </span>
                       </td>
-                      <td style={tdStyle()}><Badge variant="gate">{primera.fase_display || primera.fase}</Badge></td>
+                      <td style={tdStyle()}>{primera.fase_display || primera.fase}</td>
                       <td style={tdStyle()}><Badge variant={ea.variant}>{ea.text}</Badge></td>
                       <td style={tdStyle()}><AttendeeDots attendees={attendeesUnio(sessions)} /></td>
                       <td style={tdStyle('right', { fontVariantNumeric: 'tabular-nums' })}>{sum(sessions, 'duracio_minuts')}</td>
@@ -391,8 +408,8 @@ export default function FittingSessionList() {
                         {menuGrup === uuid && (
                           <>
                             <div onClick={() => setMenuGrup(null)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-                            <div style={{ position: 'absolute', right: 12, top: '100%', zIndex: 41, background: 'var(--white)',
-                              border: '0.5px solid var(--gray-l)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                            <div style={{ position: 'absolute', right: 12, top: '100%', zIndex: 41, background: 'var(--panel)',
+                              border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                               minWidth: 170, textAlign: 'left', padding: 4 }}>
                               {[
                                 { k: 'openSheet', icon: 'ti-list-details', label: t('fitting.sheet.open_sheet') },
@@ -406,7 +423,7 @@ export default function FittingSessionList() {
                                     border: 'none', cursor: 'pointer', padding: '7px 10px', fontSize: 'var(--fs-body)',
                                     color: it.danger ? 'var(--err)' : 'var(--text-main)',
                                     borderRadius: 6 }}>
-                                  <i className={`ti ${it.icon}`} style={{ fontSize: 14, color: it.danger ? 'var(--err)' : 'var(--gray)' }} /> {it.label}
+                                  <i className={`ti ${it.icon}`} style={{ fontSize: 14, color: it.danger ? 'var(--err)' : 'var(--text-soft)' }} /> {it.label}
                                 </button>
                               ))}
                             </div>
@@ -417,18 +434,18 @@ export default function FittingSessionList() {
                     {isOpen && sessions.map((s, j) => (
                       <Fragment key={`${uuid}-${s.id}`}>
                       <tr onClick={() => navigate(`/fittings/${s.id}`)}
-                        style={{ background: 'var(--bg-card)', cursor: 'pointer', fontSize: 'var(--fs-body)',
-                                 borderBottom: j < sessions.length - 1 ? '0.5px solid var(--gray-l)' : '0.5px solid var(--gray-l)' }}>
-                        <td style={tdStyle(null, { paddingLeft: 24, borderLeft: '2px solid var(--gold-pale)', color: 'var(--gray)' })}>
+                        style={{ background: 'var(--panel)', cursor: 'pointer', fontSize: 'var(--fs-body)',
+                                 borderBottom: j < sessions.length - 1 ? '1px solid var(--line-soft)' : '1px solid var(--line-soft)' }}>
+                        <td style={tdStyle(null, { paddingLeft: 24, borderLeft: '2px solid var(--gold-border)', color: 'var(--text-soft)' })}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <i className="ti ti-corner-down-right" style={{ fontSize: 12, color: 'var(--gray)' }} />
+                            <i className="ti ti-corner-down-right" style={{ fontSize: 12, color: 'var(--text-soft)' }} />
                             {s.start_time ? s.start_time.slice(0, 5) : '—'}
                           </span>
                         </td>
-                        <td style={tdStyle(null, { fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 500 })}>{s.target?.label || '—'}</td>
-                        <td style={tdStyle(null, { color: 'var(--gray)' })}>—</td>
+                        <td style={tdStyle(null, { fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontWeight: 600 })}>{s.target?.label || '—'}</td>
+                        <td style={tdStyle(null, { color: 'var(--text-soft)' })}>—</td>
                         <td style={tdStyle()}><Badge variant={estatVariant[s.estat] || 'gray'}>{s.estat_display || s.estat}</Badge></td>
-                        <td style={tdStyle(null, { color: 'var(--gray)' })}>—</td>
+                        <td style={tdStyle(null, { color: 'var(--text-soft)' })}>—</td>
                         <td style={tdStyle('right', { fontVariantNumeric: 'tabular-nums' })}>{s.duracio_minuts || '—'}</td>
                         <td style={tdStyle('right', { fontVariantNumeric: 'tabular-nums' })}>{s.n_peces ?? 0}</td>
                         <td style={tdStyle('right')}><SessionActionsCell s={s} /></td>
@@ -445,13 +462,13 @@ export default function FittingSessionList() {
                 <Fragment key={r.id}>
                 <tr onClick={() => navigate(`/fittings/${r.id}`)}
                   style={{ cursor: 'pointer',
-                           borderBottom: i < individuals.length - 1 ? '0.5px solid var(--gray-l)' : 'none' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--gray-l)'}
+                           borderBottom: i < individuals.length - 1 ? '1px solid var(--line-soft)' : 'none' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--sel)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                  <td style={tdStyle(null, { color: 'var(--gray)', fontWeight: 300 })}>
+                  <td style={tdStyle(null, { color: 'var(--text-soft)', fontWeight: 300 })}>
                     {r.data || '—'}{r.start_time ? ` · ${r.start_time.slice(0, 5)}` : ''}
                   </td>
-                  <td style={tdStyle(null, { fontSize: 'var(--fs-body)', color: 'var(--gold)', fontWeight: 500 })}>{r.target?.label || '—'}</td>
+                  <td style={tdStyle(null, { fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontWeight: 600 })}>{r.target?.label || '—'}</td>
                   <td style={tdStyle()}><Badge variant="gate">{r.fase_display || r.fase}</Badge></td>
                   <td style={tdStyle()}><Badge variant={estatVariant[r.estat] || 'gray'}>{r.estat_display || r.estat}</Badge></td>
                   <td style={tdStyle()}><AttendeeDots attendees={r.attendees_info} /></td>
@@ -473,12 +490,12 @@ export default function FittingSessionList() {
           confirmLabel={actBusy ? t('common.saving') : t('common.confirm')}
           cancelLabel={t('common.cancel')} confirmDisabled={actBusy}
           onConfirm={doReschedule} onCancel={() => !actBusy && setModalGrup(null)}>
-          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('fitting.session.date')}</label>
+          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('fitting.session.date')}</label>
           <input type="date" value={modalGrup.data} onChange={e => setModalGrup(m => ({ ...m, data: e.target.value }))}
-            style={{ width: '100%', marginBottom: 12, padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 'var(--fs-body)' }} />
-          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('fitting.group.start_time_opt')}</label>
+            style={{ width: '100%', marginBottom: 12, padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', fontSize: 'var(--fs-body)' }} />
+          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('fitting.group.start_time_opt')}</label>
           <input type="time" value={modalGrup.start_time} onChange={e => setModalGrup(m => ({ ...m, start_time: e.target.value }))}
-            style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--gray-l)', borderRadius: 4, fontSize: 'var(--fs-body)' }} />
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', fontSize: 'var(--fs-body)' }} />
           {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginTop: 10 }}>{modalGrup.err}</div>}
         </Modal>
       )}
@@ -499,14 +516,14 @@ export default function FittingSessionList() {
           cancelLabel={t('common.cancel')} confirmDisabled={actBusy}
           onConfirm={doAttendees} onCancel={() => !actBusy && setModalGrup(null)}>
           {eligibles.length === 0
-            ? <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('model_sheet.fitting_no_attendees')}</div>
+            ? <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('model_sheet.fitting_no_attendees')}</div>
             : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflowY: 'auto' }}>
                 {eligibles.map(e => {
                   const sel = (modalGrup.attendee_ids || []).includes(e.profile_id)
                   return (
                     <label key={e.profile_id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                      padding: '5px 6px', borderRadius: 6, fontSize: 'var(--fs-body)', background: sel ? 'var(--gold-pale)' : 'transparent' }}>
+                      padding: '5px 6px', borderRadius: 'var(--r-ctrl)', fontSize: 'var(--fs-body)', background: sel ? 'var(--ok-bg)' : 'transparent' }}>
                       <input type="checkbox" checked={sel} style={{ accentColor: 'var(--gold)' }}
                         onChange={() => setModalGrup(m => ({ ...m,
                           attendee_ids: sel
@@ -534,7 +551,8 @@ export default function FittingSessionList() {
           {modalGrup.err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginTop: 10 }}>{modalGrup.err}</div>}
         </Modal>
       )}
-    </div>
+      </div>
+    </>
   )
 }
 

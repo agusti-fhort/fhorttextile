@@ -2284,7 +2284,9 @@
       "title": "Fitting sessions",
       "empty": "No fitting sessions with these filters.",
       "new": "New session",
-      "all": "All"
+      "all": "All",
+      "back_title": "Back to dashboard",
+      "entity": "sessions"
     },
     "now": {
       "button": "Fitting now",

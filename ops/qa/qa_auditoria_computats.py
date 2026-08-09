@@ -50,6 +50,7 @@ PANTALLES = [
     # tot el que ja estava tancat. És el segon forat que el bloc A va deixar passar.
     ('B1 · Desenvolupament (home)', '/'),
     ('B2 · Planificació', '/planificacio'),
+    ('B3 · Fittings', '/fittings'),
 ]
 
 #: La paleta que la NORMA_LAYOUT §1 permet en una VORA, en rgb() tal com el navegador el computa.
@@ -69,10 +70,16 @@ VORES_OK = {
     # saltar en fer hover), no un color fora de paleta.
     'rgba(0, 0, 0, 0)': 'transparent (reserva de gruix)',
 }
-#: CROM DEL SISTEMA — top bar i menú lateral. §8b: «el menú lateral NO ES TOCA» i la top bar està
-#: «pendent de foto pròpia». S'informa perquè consti, però no compta com a incompliment de les
-#: quatre pantalles del bloc: no són seves.
-CROM = {'rgb(228, 228, 226)', 'rgb(232, 232, 232)', 'rgb(224, 213, 197)'}
+#: CROM DEL SISTEMA — **NOMÉS el menú lateral**. §8b: «el menú lateral NO ES TOCA». S'informa
+#: perquè consti, però no compta com a incompliment de la pantalla: no és seu.
+#:
+#: ⚠️ LA LLISTA S'ESCURÇA (part B · §8b-quater). Hi havia també `rgb(228, 228, 226)` (#e4e4e2) i
+#: `rgb(224, 213, 197)` (--border), i eren de la TOP BAR, que ara ja ha passat conformitat i no
+#: en fa servir cap. Deixar-los aquí era pitjor que inútil: qualsevol PANTALLA que els pintés
+#: quedava absolta per una excepció que ja no li pertocava — i va passar (`ui/Card`, quatre
+#: vores a `/fittings`, donades per bones com a «crom del sistema»). Una excepció que sobreviu
+#: al seu motiu és una tapadora.
+CROM = {'rgb(232, 232, 232)'}
 #: El negre de --text-main en una vora NO és una decisió: és `currentColor`, i per tant una
 #: `var()` que no ha resolt. Es marca a part perquè la causa arrel és diferent.
 NEGRE = 'rgb(29, 29, 27)'

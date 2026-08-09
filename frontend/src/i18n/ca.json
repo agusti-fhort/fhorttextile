@@ -2284,7 +2284,9 @@
       "title": "Sessions de fitting",
       "empty": "Cap sessió de fitting amb aquests filtres.",
       "new": "Nova sessió",
-      "all": "Totes"
+      "all": "Totes",
+      "back_title": "Tornar al tauler",
+      "entity": "sessions"
     },
     "now": {
       "button": "Fitting ara",
