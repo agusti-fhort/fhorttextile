@@ -681,11 +681,20 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>
               {taskTypes.map(tt => {
                 const checked = isAdmin ? true : tasksSet.has(tt.code)
+                // §5.7 · deshabilitat: la TINTA baixa a `--text-faint`, no s'apaga la caixa
+                // amb `opacity`. Aquí no hi ha fons que baixar (és una etiqueta damunt del
+                // panell), i la §1 reserva `--text-faint` a «només deshabilitat» — la mateixa
+                // resolució que el bloc B va donar al menú de pantalla. Amb `opacity: 0.6` el
+                // text quedava per sota d'AA, i el que diu és justament què NO es pot canviar
+                // perquè l'usuari és admin.
+                // (El comentari va abans del `return (`: a dins encara ets en context
+                // d'expressió i `{/* */}` s'hi llegeix com un objecte literal. Quarta vegada
+                // avui entre les quatre sessions; l'error surt a la línia SEGÜENT.)
                 return (
                   <label key={tt.id} style={{
                     display: 'flex', alignItems: 'center', gap: 7, fontFamily: MONO, fontSize: 'var(--fs-body)',
-                    color: 'var(--text-main)', cursor: isAdmin ? 'default' : 'pointer',
-                    opacity: isAdmin ? 0.6 : 1,
+                    color: isAdmin ? 'var(--text-faint)' : 'var(--text-main)',
+                    cursor: isAdmin ? 'default' : 'pointer',
                   }}>
                     <input type="checkbox" checked={checked} disabled={isAdmin}
                            onChange={() => toggleTask(tt.code)} />

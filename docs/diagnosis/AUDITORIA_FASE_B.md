@@ -813,6 +813,29 @@ amb el motiu escrit— però **la va aplicar només a `fhort.pom`**: aquesta viu
 app que aquell bloc **no va córrer**. **Una prova vermella en una app que ningú corre és una
 prova que no existeix.** Remei: el de la casa, sense inventar-ne cap.
 
+### DUES TRAMPES DE MÈTODE que ens han caçat a totes les sessions
+
+**1 · L'`opacity` que sobreviu a una migració de color.** Quan una coda canvia el COLOR d'un
+botó, es mira el color — i **l'`opacity` que hi havia a sota no se'n va sola**. La §5.7 la
+prohibeix amb el motiu escrit: apaga TAMBÉ el text i el deixa per sota d'AA, i el que diu un
+botó deshabilitat és justament el que ara no es pot fer.
+Trobada **tres vegades** avui, i cap per relectura: a `ui/Modal` (commit 250), als dos botons
+d'`UsersRoles` que la ratificació del daurat va portar a blau (270), i a «Exportar PDF» de
+l'editor .ftt —que la va posar la mateixa sessió tres hores abans i no la va veure en canviar
+el color—. En repassar el meu lot amb aquest criteri n'ha sortit **una quarta**: les etiquetes
+de tasca d'`UsersRoles` per a un admin (`opacity: 0.6`). Aquí no hi ha fons que baixar (és una
+etiqueta damunt del panell) i mana la §1: **`--text-faint`**, la mateixa resolució que el bloc B
+va donar al menú de pantalla.
+🚩 **No es toca** l'`opacity: 0.45` de `ribbonToolStyle` (≈60 botons d'eina de la cinta):
+`apagat` els donaria fons `--bg-page` dins d'una barra d'eines. **Això és una decisió de com es
+veu una eina inactiva, no un descuit** — a la taula.
+
+**2 · El comentari `{/* … */}` com a primer fill d'un `{cond && ( … )}` o d'un `return (`.**
+Allà encara ets en context d'EXPRESSIÓ i les claus es llegeixen com un **objecte literal**;
+l'error surt com a `Unexpected token` **a la línia SEGÜENT**, no a la del comentari — que és el
+que el fa car de trobar. **Quatre vegades avui entre les quatre sessions.** El comentari ha
+d'anar FORA, o com a `//` abans del `return`.
+
 ### 🚩 A LA TAULA D'AGUS
 
 1. **La fletxa de l'ARREL** — proposta conjunta de dues sessions: la barra es queda i la fletxa
