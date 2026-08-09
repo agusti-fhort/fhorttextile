@@ -651,6 +651,7 @@ mig de la pàgina una passada). Cas normal sense parpelleig; cas anòmal, **degr
 | `npx eslint src` | ✅ 0 errors |
 | `npm run build` | ✅ net i **desplegat** (`frontend/dist` és el que serveix staging) |
 | `manage.py check` | ✅ net |
+| **La suite** · `fhort.tasks fhort.models_app fhort.accounts fhort.tenants` | ✅ **966 tests · OK · 0 errors · 0 fallides** (4.499 s = **75 min**) |
 
 **L'única desviació és la declarada** (la tinta de la fletxa d'arrel, que espera Agus). **Els dos
 casos sense mesura estan explicats**: l'estat «cap capa declarada» d'A2 —que el bloc A ja va
@@ -794,7 +795,13 @@ desacords.
 ### 🛑 LA SUITE · dues vermelles, i totes dues diuen alguna cosa
 
 Primera correguda de `fhort.tasks fhort.models_app fhort.accounts fhort.tenants`: **966 tests ·
-1 fallida · 1 error**.
+1 fallida · 1 error**. **Correguda de tancament, després dels dos remeis: 966 tests · OK · 0
+errors · 0 fallides** (75 minuts).
+
+⏱️ **La suite d'aquestes quatre apps triga 75 minuts** i el gruix és muntar els esquemes de
+tenant, no córrer les proves — el mateix ordre de magnitud que el bloc B ja va deixar anotat per
+a `pom+models_app+fitting`. **No es mata amb timeouts curts**, i `--keepdb` menteix (v. el report
+del bloc B: 73 errors, cap real).
 
 **1 · FAIL `test_les_sis_llistes_hi_son_i_van_en_lordre_del_model` — MEVA, i la prova tenia raó
 a mitges.** Comprovava `assertEqual(set(d.keys()), …)`: «les sis hi són» escrit com a **«NOMÉS hi
