@@ -21,7 +21,9 @@
 // El hover va amb estat de React i no amb CSS perquè aquesta casa estila inline amb tokens;
 // posar-hi classes obligaria a mantenir el CSS de la píndola en un segon lloc.
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
+import { FORAT_CROM } from '../layout/chromeSlot'
 
 const MONO = 'IBM Plex Mono, monospace'
 
@@ -122,15 +124,19 @@ export default function PageMenu({ backTo, backTitle, items = [], children = nul
   const navigate = useNavigate()
   // Cap literal de cara a l'usuari en aquest fitxer: les etiquetes i el títol de la fletxa
   // arriben ja traduïts des de la pantalla, que és qui sap de què parla.
-  return (
-    // `data-ftt-pagemenu` no és decoració: és l'ÀNCORA del §8b-quater (Agus 09/08) — «top bar
-    // + menú de pantalla fixos en scroll, com un sol bloc enganxat». La regla que ho fa viu a
-    // `index.css` i s'aplica al CONTENIDOR d'aquesta barra, no a la barra: un element enganxós
-    // només es pot moure DINS del seu contenidor, i el contenidor d'aquí fa exactament
-    // l'alçada de la barra — o sigui, recorregut zero i sticky mort. Per això la regla puja un
-    // nivell amb `:has(> [data-ftt-pagemenu])` i cap pantalla no ha de re-declarar res.
-    // El fons ja és `--panel` OPAC i el filet inferior ja és `--line`: la norma els demanava
-    // des del §8b i és el que fa que el contingut hi passi per sota sense transparentar-se.
+  //
+  // §8b-quater · LA BARRA NO ES PINTA ON ES DECLARA. Es teletransporta al forat que el Shell
+  // obre just sota la top bar, i així les dues queden enganxades com UN SOL BLOC. El motiu
+  // llarg —i per què no es fa amb `position: sticky` + `:has()`, que Firefox < 121 ignora en
+  // silenci— és a `components/layout/chromeSlot.js`.
+  // El `<div>` de marge negatiu que cada pantalla posa al voltant d'aquest component es queda
+  // BUIT i **conserva el seu marge**: és el que cancel·la el padding del `<main>` i deixa el
+  // contingut exactament on era. Cap pantalla ha de canviar res.
+  const barra = (
+    // `data-ftt-pagemenu` es conserva com a ÀNCORA DE MESURA: els arnesos de QA (§8b-quater)
+    // hi troben la barra sense dependre de cap classe interna. Ja no hi penja cap regla de CSS.
+    // El fons és `--panel` OPAC i el filet inferior `--line`: la norma els demana des del §8b i
+    // és el que fa que el contingut hi passi per sota sense transparentar-se.
     <div data-ftt-pagemenu="" style={{
       background: 'var(--panel)',
       borderTop: '1px solid var(--line)',
@@ -169,4 +175,7 @@ export default function PageMenu({ backTo, backTitle, items = [], children = nul
       </div>
     </div>
   )
+  // Sense forat (proves unitàries, o un `PageMenu` muntat fora del Shell) es pinta al seu lloc:
+  // val més una barra al mig de la pàgina que cap barra.
+  return FORAT_CROM ? createPortal(barra, FORAT_CROM) : barra
 }

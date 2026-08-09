@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
+import { enganxaForat } from './chromeSlot'
 
 export default function Shell() {
   return (
@@ -42,7 +43,21 @@ export default function Shell() {
           flexDirection: 'column',
           minHeight: '100vh',
         }}>
-          <Topbar />
+          {/* §8b-quater · EL BLOC DE CROM: top bar + menú de pantalla, enganxats COM UN SOL
+              BLOC. La franja sencera és `sticky` aquí dalt i el menú s'hi teletransporta des de
+              la pàgina (v. `chromeSlot.js` per al perquè d'un portal i no d'un `:has()`).
+              El fons és `--panel` OPAC perquè el contingut hi passi per sota sense
+              transparentar-se, i la z queda per sobre del contingut i per SOTA del menú lateral
+              (100) i dels modals (150, `ui/overlay.js`). */}
+          <div style={{
+            position: 'sticky',
+            top: 'var(--topbar-top)',
+            zIndex: 30,
+            background: 'var(--panel)',
+          }}>
+            <Topbar />
+            <div ref={enganxaForat} />
+          </div>
           <main style={{
             flex: 1,
             minWidth: 0,          // no deixis que el contingut ample empenyi la columna

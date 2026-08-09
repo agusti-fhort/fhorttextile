@@ -79,8 +79,12 @@ JS = """
   const top = document.querySelector('header');
   const menu = document.querySelector('[data-ftt-pagemenu]');
   if (!top || !menu) return { falta: !top ? 'top bar' : 'menú de pantalla' };
-  const host = menu.parentElement;
-  const csT = getComputedStyle(top), csM = getComputedStyle(menu), csH = getComputedStyle(host);
+  // EL BLOC DE CROM és el pare de la top bar: és ell qui s'enganxa, i qui hi ha a dins són la
+  // top bar i el forat on el menú es teletransporta (§8b-quater). Abans s'hi mesurava el
+  // CONTENIDOR DEL MENÚ dins de la pàgina, que és on vivia la implementació amb `:has()`.
+  const bloc = top.parentElement;
+  const csT = getComputedStyle(top), csM = getComputedStyle(menu), csH = getComputedStyle(bloc);
+  const dinsDelBloc = bloc.contains(menu);
   const rT = top.getBoundingClientRect(), rM = menu.getBoundingClientRect();
   // Qui hi ha al punt just sota la vora inferior del menú, al mig de l'amplada del menú:
   // si el contingut hi passa per DAVANT, aquí no hi surt el menú.
@@ -88,7 +92,7 @@ JS = """
   return {
     topDalt: rT.top, topBaix: rT.bottom, topAlt: rT.height,
     menuDalt: rM.top, menuBaix: rM.bottom, menuAlt: rM.height,
-    posHost: csH.position, topHost: csH.top, zHost: csH.zIndex,
+    posBloc: csH.position, topBloc: csH.top, zBloc: csH.zIndex, dinsDelBloc,
     posTop: csT.position, zTop: csT.zIndex,
     bgTop: csT.backgroundColor, bgMenu: csM.backgroundColor,
     filetTop: csT.borderBottomColor, filetTopAmpl: csT.borderBottomWidth,
@@ -215,19 +219,23 @@ def main():
                 mal(nom, f"el filet inferior del menú és {b['filetMenu']} i la norma diu --line ({LINE})")
 
             # (6) Z.
-            zt, zh = b['zTop'], b['zHost']
-            print(f"      · z: top bar {zt} · menú {zh} · sidebar 100 · modals 150")
+            z = b['zBloc']
+            print(f"      · z del bloc de crom: {z} · sidebar 100 · modals 150")
             try:
-                zt_i, zh_i = int(zt), int(zh)
-                if not (0 < zh_i < 100 and zh_i <= zt_i < 100):
-                    mal(nom, f'la z del bloc no queda sobre el contingut i sota el sidebar/modals '
-                             f'(top bar {zt} · menú {zh})')
+                z_i = int(z)
+                if not 0 < z_i < 100:
+                    mal(nom, f'la z del bloc no queda sobre el contingut i sota el sidebar/modals ({z})')
             except ValueError:
-                mal(nom, f'z-index sense valor numèric (top bar {zt} · menú {zh})')
+                mal(nom, f'z-index del bloc sense valor numèric ({z})')
 
-            if b['posHost'] != 'sticky':
-                mal(nom, f"el contenidor del menú no és sticky ({b['posHost']}) — la regla del "
-                         f'§8b-quater no hi ha arribat')
+            if b['posBloc'] != 'sticky':
+                mal(nom, f"el bloc de crom no és sticky ({b['posBloc']})")
+            # ⚠️ I QUE SIGUIN DE DEBÒ UN SOL BLOC: el menú ha de ser DINS del mateix element
+            # enganxat que la top bar. Enganxar-les per separat també les deixaria quietes, però
+            # com a dues coses — i és el que l'ordre d'Agus descarta.
+            if not b['dinsDelBloc']:
+                mal(nom, 'el menú de pantalla NO és dins del bloc enganxat: són dues coses, '
+                         'no un sol bloc')
 
     print(f'\n──────── {len(incompliments)} incompliments ────────')
     for i in incompliments:

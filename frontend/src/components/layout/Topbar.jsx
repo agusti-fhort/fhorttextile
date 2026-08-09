@@ -100,9 +100,9 @@ export default function Topbar() {
       alignItems: 'center',
       padding: '0 1.5rem',
       gap: '1rem',
-      position: 'sticky',
-      top: 'var(--topbar-top)',
-      zIndex: 30,
+      // §8b-quater · el `sticky` puja al BLOC DE CROM del Shell, que conté la top bar i el
+      // forat del menú de pantalla: enganxar-les per separat les deixaria enganxades, sí, però
+      // com a dues coses. L'ordre d'Agus és «com un sol bloc».
     }}>
       {/* Tenant › SECCIÓ › pantalla (decisió Agus 08/08). La secció és la del menú lateral, o
           sigui que el molla i el ressaltat del menú no poden dir coses diferents. Els segments
