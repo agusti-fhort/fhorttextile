@@ -927,6 +927,21 @@ res, i el cas surt com a «no toca res» — **indistingible d'un estat que de d
 Ara els gestos fallits **es diuen** (amb `timeout` explícit). Resultat: **cap correguda reporta
 cap gest fallit**, o sigui que **l'arnès no és la causa**: ho són les dades vives.
 
+### ⚠️ ABANS DE LLEGIR LA LLISTA DE SOTA · les llistes d'accions caduquen
+
+Aquesta llista s'ha repassat al final amb una pregunta que no és «hi falta res?» sinó **«què hi
+queda que ja no sigui veritat?»** — i n'ha caigut un punt sencer (el 8) i mig (el 2), tots dos
+perquè **una altra sessió els havia resolt mentre jo escrivia**.
+
+🔑 **La lliçó, de la sessió de patrons, i és la més fina del dia:**
+
+> **Les llistes d'accions caduquen pel teu propi treball — i el teu propi treball és justament
+> el que no revises**, perquè el tens per sabut.
+
+Un punt obert caducat **no és una imprecisió**: en una llista d'accions per a l'Agus, és
+**fer-li fer feina ja feta, o deixar-li creure el contrari del que passa**. Els dos que han
+caigut aquí l'haurien enviat exactament a això.
+
 ### 🚩 A LA TAULA D'AGUS
 
 1. **La fletxa de l'ARREL** — proposta conjunta de dues sessions: la barra es queda i la fletxa
@@ -951,9 +966,16 @@ cap gest fallit**, o sigui que **l'arnès no és la causa**: ho són les dades v
    mentre el Gantt de la mateixa pantalla llegeix el CompanyCalendar. Dues respostes a la
    mateixa pregunta.
 7. **19 ViewSets més perden l'`OrderingFilter`** pel mateix patró que `/customers`.
-8. **INFRA · `backend/media/` amb directoris `root:root`** i gunicorn com a www-data → 500 a tot
-   upload. **El directori del mes és nou cada mes**: arreglar l'agost no arregla el setembre.
-   Demana un `umask`/propietari al desplegament, no un `chown` cada trenta dies.
+8. ~~**INFRA · `backend/media/` amb directoris `root:root`**~~ — ✅ **RESOLT A L'ARREL, i el meu
+   punt estava MORT.** Jo hi demanava un `chown` i avisava que «el directori del mes és nou cada
+   mes». La sessió de patrons no va anar al símptoma sinó a la CAUSA: **setgid als directoris +
+   `FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o2775`** a `settings.py`, o sigui que els directoris que
+   Django crei cada mes **hereten el grup i els permisos sols**.
+   **Verificat per mi, no acceptat**: dels 60 directoris de `media/`, **0 sense grup `www-data` i
+   0 sense setgid**.
+   🚨 Deixar-hi el meu punt no hauria estat una imprecisió: **hauria enviat l'Agus a fer una
+   feina ja feta, i de la manera dolenta** — un `chown` manual cada trenta dies en comptes de la
+   herència que ja hi és.
 
 ## CODES PER A LA S2 (backend i compartits · commits 250·204, 250·205, 250)
 
