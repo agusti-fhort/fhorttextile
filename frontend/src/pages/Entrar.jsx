@@ -195,7 +195,12 @@ const title = { fontSize: 'var(--fs-h2)', fontFamily: MONO, fontWeight: 500, col
 const sub = { fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: '0 0 20px', lineHeight: 1.5 }
 const lbl = { display: 'block', fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--gray)', marginBottom: 6 }
 const input = { width: '100%', padding: '10px 12px', border: '0.5px solid var(--gray-l)', borderRadius: 8, fontSize: 'var(--fs-body)', fontFamily: MONO, background: 'var(--white)', color: 'var(--text-main)', boxSizing: 'border-box' }
-const submitBtn = { width: '100%', marginTop: 18, padding: '11px 14px', background: 'var(--accio)', color: 'var(--white)', border: 'none', borderRadius: 8, fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: MONO }
+// 🔒 DAURAT PLE A POSTA — l'EXCEPCIÓ ÚNICA de la §1 · Acció (Agus, 09/08). Aquí encara no s'és
+// dins del producte, s'és davant de la MARCA: el botó d'entrar no competeix amb cap altra acció
+// i el daurat hi fa de logo. La coda C2 el va passar a `--accio` i la decisió d'Agus el torna.
+// NO és un incompliment de la §5.1 pendent d'arreglar: si algú el torna a trobar en un cens,
+// que trobi també aquesta línia. Tinta `--text-main` (4.91:1 sobre daurat, solució de S37).
+const submitBtn = { width: '100%', marginTop: 18, padding: '11px 14px', background: 'var(--gold)', color: 'var(--text-main)', border: 'none', borderRadius: 8, fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: MONO }
 const linkBtn = { marginTop: 18, background: 'none', border: 'none', color: 'var(--gold)', fontSize: 'var(--fs-body)', fontFamily: MONO, cursor: 'pointer', textDecoration: 'underline' }
 const linkDeshabilitat = { ...linkBtn, display: 'block', width: '100%', marginTop: 16, color: 'var(--gray)', cursor: 'not-allowed', textDecoration: 'none' }
 const errBox = { marginTop: 12, padding: '8px 12px', borderRadius: 8, background: 'var(--err-bg)', color: 'var(--err)', fontSize: 'var(--fs-body)' }

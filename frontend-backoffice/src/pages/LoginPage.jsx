@@ -205,6 +205,15 @@ export default function LoginPage() {
 // Estils del login. Variables de marca scoped a `.login-screen` (ombregen els tokens
 // globals només dins d'aquest subarbre); pseudo-elements, focus, hover, màscara de
 // textura, keyframes i el breakpoint responsive no es poden fer amb estils inline.
+//
+// 🔒 `.btn` VA EN DAURAT PLE A POSTA — l'EXCEPCIÓ ÚNICA de la §1 · Acció (Agus, 09/08). La coda
+// C2 va treure el daurat de tota acció, i la porta d'entrada en queda fora: aquí encara no s'és
+// dins del producte, s'és davant de la MARCA. És la porta BESSONA de la del producte i porta la
+// mateixa excepció; el motiu és el mateix i no en pot tenir un de propi.
+// ⚠️ La tinta SÍ que canvia: `#fff` sobre daurat dona **3.44:1** i no passa AA. La §1 escriu la
+// tinta d'aquesta excepció —`--ch` (#1d1d1b), 4.91:1— i és la solució de S37: «quan el fons de
+// marca no pot canviar, canvia la TINTA». El blanc hi era des d'abans de la norma i el blau de
+// C2 el tapava per accident; en tornar el daurat, tornaria també el defecte.
 const LOGIN_CSS = `
 .login-screen{
   --gold:#c27a2a;--gold-d:#a8651f;--gold-l:#d18b3e;--gold-pale:#f7ede0;--gold-xpale:#fdf8f2;
@@ -254,8 +263,8 @@ const LOGIN_CSS = `
 .login-screen .row-aux{display:flex;justify-content:space-between;align-items:center;margin:-2px 0 26px}
 .login-screen .remember{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:#5c5c5a;cursor:pointer;user-select:none}
 .login-screen .remember input{accent-color:var(--gold);width:15px;height:15px;cursor:pointer}
-.login-screen .btn{width:100%;font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.06em;color:#fff;background:var(--accio);border:0;border-radius:11px;padding:15px;cursor:pointer;transition:.18s;box-shadow:0 8px 20px -10px rgba(43,101,194,.7)}
-.login-screen .btn:hover{background:var(--accio-hover);transform:translateY(-1px);box-shadow:0 12px 26px -10px rgba(43,101,194,.8)}
+.login-screen .btn{width:100%;font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--ch);background:var(--gold);border:0;border-radius:11px;padding:15px;cursor:pointer;transition:.18s;box-shadow:0 8px 20px -10px rgba(194,122,42,.7)}
+.login-screen .btn:hover{background:var(--gold-d);transform:translateY(-1px);box-shadow:0 12px 26px -10px rgba(194,122,42,.8)}
 .login-screen .btn:active{transform:translateY(0)}
 .login-screen .btn:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
 .login-screen .err{font-family:var(--mono);font-size:12px;color:#a32d2d;text-align:center;margin:-8px 0 16px}

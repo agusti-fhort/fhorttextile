@@ -12,6 +12,37 @@ xips, les barres i els punts de color es queden i no són el subjecte de la coda
 """
 
 import pathlib
+
+#: 🔒 L'EXCEPCIÓ ÚNICA DEL PRODUCTE (Agus, 09/08 · NORMA_LAYOUT §1 · Acció): **la porta d'entrada
+#: va en daurat ple**. Allà encara no s'és dins del producte, s'és davant de la MARCA: el botó
+#: d'entrar no competeix amb cap altra acció de la pantalla i el daurat hi fa de logo.
+#:
+#: L'exclusió és per PREFIX DE RUTA i porta el MOTIU a dins perquè la sonda l'hagi de DIR cada
+#: correguda. Una exclusió que només fa que el número baixi és pitjor que no tenir-la: el zero
+#: que en surt ja no distingeix «no hi ha daurat» de «n'hi ha i no el mires». Aquí el daurat
+#: d'aquestes rutes es compta igual, s'imprimeix igual, i el que canvia és NOMÉS el veredicte.
+EXCEPCIONS = {
+    '/login': 'porta d\'entrada · territori de MARCA (§1 · Acció, Agus 09/08)',
+    '/entrar': 'porta d\'entrada · territori de MARCA (§1 · Acció, Agus 09/08)',
+    '/reset-password': 'porta d\'entrada · territori de MARCA (§1 · Acció, Agus 09/08)',
+}
+
+
+def excepcio(ruta):
+    """El motiu escrit si la ruta és una excepció ratificada; `None` si no ho és."""
+    return next((m for p, m in EXCEPCIONS.items() if ruta.split('?')[0].startswith(p)), None)
+
+
+#: Les portes NO són a `PANTALLES` (l'arnès mesura el producte amb sessió), o sigui que
+#: l'exclusió de dalt no arribaria a disparar-se mai i l'excepció quedaria escrita i no
+#: verificada. Aquestes es mesuren a part, en un context sense token. El reset demana `uid` i
+#: `token` a la ruta: amb valors inventats la pantalla es munta igual i cau a l'estat `invalid`,
+#: que és **precisament** un dels dos botons daurats que hi ha d'haver.
+EXCEPCIONS_MESURABLES = [
+    ('/login', EXCEPCIONS['/login']),
+    ('/entrar', EXCEPCIONS['/entrar']),
+    ('/reset-password/xx/yy', EXCEPCIONS['/reset-password']),
+]
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -95,12 +126,37 @@ def main():
                 print(f'{nom:38} 🛑 SENYAL ABSENT — no mesurat')
                 continue
             d = pag.evaluate(JS)
-            total_gold += len(d['gold'])
-            marca = '🔴' if d['gold'] else ('  ' if len(d['blau']) <= 1 else '⚠️ ')
+            motiu = excepcio(ruta)
+            if not motiu:
+                total_gold += len(d['gold'])
+            marca = '🔒' if motiu else ('🔴' if d['gold'] else ('  ' if len(d['blau']) <= 1 else '⚠️ '))
             print(f'{marca} {nom:38} daurat={len(d["gold"])}  blau={len(d["blau"])}'
                   + (f'  → {d["blau"]}' if d['blau'] else ''))
+            if motiu:
+                # L'exclusió es DIU, no se silencia: qui llegeixi el zero de baix ha de poder
+                # saber quines rutes hi han entrat per excepció i amb quin motiu ratificat.
+                print(f'      🔒 EXCEPCIÓ RATIFICADA — {motiu}')
+                continue
             for g in d['gold']:
                 print(f'      🔴 DAURAT PLE CLICABLE: «{g}»')
+        # ── LES PORTES, MESURADES DE DEBÒ ────────────────────────────────────────────────
+        # Una excepció declarada i no mesurada seria un permís, no una mesura: el dia que algú
+        # torni el blau aquí, res no ho diria. Es mesuren en un context NET (sense token al
+        # localStorage) perquè amb sessió vàlida `/login` rebota al taulell i mesuraríem el
+        # taulell creient que mesurem la porta — la primera tapadora, un altre cop.
+        ctx_net = nav.new_context(viewport={'width': 1600, 'height': 1000})
+        pag_net = ctx_net.new_page()
+        pag_net.route('**/*', handler)
+        for ruta, motiu in EXCEPCIONS_MESURABLES:
+            pag_net.goto(Q.BASE + ruta, wait_until='networkidle')
+            pag_net.wait_for_timeout(1200)
+            d = pag_net.evaluate(JS)
+            ok = '🔒' if d['gold'] and not d['blau'] else '🔴'
+            print(f'{ok} PORTA {ruta:32} daurat={len(d["gold"])}  blau={len(d["blau"])}')
+            print(f'      🔒 EXCEPCIÓ RATIFICADA — {motiu}')
+            if not d['gold'] or d['blau']:
+                print('      🔴 …però la pantalla NO la compleix: la porta ha de dur daurat ple '
+                      'i cap blau. O s\'ha revertit sense voler, o la §1 ha canviat.')
         nav.close()
     Q._comprova_sessio(sess, "just després de l'última mesura")
     print(f'\n──── {total_gold} accions amb daurat ple ────')

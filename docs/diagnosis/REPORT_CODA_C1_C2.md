@@ -188,11 +188,15 @@ dos SPA s'han construït contra un **outDir de proves** (`FTT_QA_DIST`) i s'han 
    `ModelFabric` i `ModelSheet`. És un hex literal contra la llei de tokens, i el §5.7 ja té
    forma pròpia (`apagat` a `ui/buttons.js`). Només he canviat la branca daurada de cada
    ternari; el `#ccc` és scope creep i no l'he tocat.
-4. **La porta d'entrada ara és blava.** `Login`, `/entrar` i el reset de contrasenya són el que
-   més es veurà d'aquesta coda, i el fons daurat allà podia llegir-se com a MARCA i no com a
-   acció. He aplicat la ratificació al peu de la lletra («fins a l'última superfície») perquè el
-   botó és inequívocament «el que has vingut a fer». **Una línia si es vol l'excepció**; l'ombra
-   del botó també ha passat de daurada a blava per no deixar-hi un halo taronja.
+4. ~~La porta d'entrada ara és blava.~~ ✅ **DECIDIT PER AGUS el 09/08: la porta d'entrada torna a
+   DAURAT PLE, i és l'EXCEPCIÓ ÚNICA del producte.** Motiu: allà encara no s'és dins del producte,
+   s'és davant de la **marca**. Revertit a `Login`, `/entrar`, el reset i la porta bessona del
+   backoffice; l'ombra del botó torna al taronja. **L'excepció s'ha ESCRIT a tres llocs** perquè
+   no la «corregeixi» ningú en un cens futur: `NORMA_LAYOUT.md` §1 · Acció, un comentari a cada
+   fitxer, i la sonda. ⚠️ **La tinta de la porta del backoffice SÍ que canvia**: hi tenia `#fff`
+   sobre daurat (**3.44:1**, per sota d'AA) i la §1 escriu que la tinta d'aquesta excepció és
+   `--text-main` (4.91:1, la solució de S37). El blanc hi era des d'abans de la norma i el blau
+   de C2 el tapava per accident; en tornar el daurat, tornava també el defecte.
 5. **Dues respostes a la mateixa pregunta: «Exportar PDF».** La coda de fusió de capçaleres
    (commits `133496e2`/`2353c222`, sessió concurrent) va pujar l'«Exportar PDF» de l'editor
    `.ftt` al `PageMenu`, on el §8e li treu el color: **aquella pantalla queda sense cap blau**.
