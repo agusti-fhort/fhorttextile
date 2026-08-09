@@ -7,6 +7,7 @@ import { MaduresaBadge } from '../components/model/FederacioBadge'
 import BadgeLliurable from '../components/model/BadgeLliurable'
 import ModelsFilterPanel from '../components/model/ModelsFilterPanel'
 import { useFilterOptions, garmentTypeLabel, garmentGroupLabel } from '../components/model/filterOptions'
+import Badge from '../components/ui/Badge'
 import Feedback from '../components/ui/Feedback'
 import PageMenu from '../components/ui/PageMenu'
 import TaulaLlista from '../components/ui/TaulaLlista'
@@ -621,10 +622,10 @@ function SetBadge({ m, t }) {
   if (!m.garment_set) return null
   const gs = m.garment_set
   return (
-    <span title={t('models_list.set_hint', { codi: gs.codi_base, nom: gs.nom_comercial || '' })}
-      style={{ ...badgeNeutre, flex: 'none' }}>
+    <Badge variant="gray" style={{ flex: 'none' }}
+      title={t('models_list.set_hint', { codi: gs.codi_base, nom: gs.nom_comercial || '' })}>
       {t('models_list.set_badge', { n: m.piece_number ?? '?', total: gs.num_pieces })}
-    </span>
+    </Badge>
   )
 }
 
@@ -740,12 +741,6 @@ const btnTerciari = {
 }
 // §5.7 · deshabilitat: BAIXA EL FONS, no la tinta.
 const deshabilitat = { background: 'var(--bg-page)', borderColor: 'var(--line)', cursor: 'not-allowed' }
-const badgeNeutre = {
-  fontSize: 'var(--fs-caption)', lineHeight: '12px', fontWeight: 600, letterSpacing: '.04em',
-  padding: '3px 10px', borderRadius: 'var(--r-pill)', whiteSpace: 'nowrap',
-  background: 'var(--bg-page)', color: 'var(--text-soft)',
-  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
-}
 const xip = {
   display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px',
   borderRadius: 'var(--r-pill)', background: 'var(--sel)', color: 'var(--text-main)',

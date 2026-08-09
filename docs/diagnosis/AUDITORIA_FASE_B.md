@@ -443,6 +443,53 @@ sempre, i s'emeten amb `etiqueta` = codi perquè la forma de l'endpoint no canvi
 | **B8** | **els set noms de dia eren rètols en majúscules a 12px** | `--fs-label` 10 — **ho va trobar la mesura**: 7 rètols per sobre del sostre |
 | totes 3 | `--gray-l`, `--gray`, `--border`, `--text-muted`, `--white`, `--bg-card`, `0.5px`, radis literals, pes 300 | l'escala de la norma |
 
+## CODA · el `badgeNeutre` de `Models.jsx` i EL TRI-ESTAT DEL VEREDICTE (commit 257)
+
+Dues codes autoritzades per Agus, i totes dues surten del tancament del lot comercial.
+
+### 1 · La còpia local mor
+
+`Models.jsx` (pantalla conformada, A5) es va quedar una definició pròpia del badge neutre. Avui
+és *redundant però correcta*; el risc no és avui, **és el dia que algú toqui `ui/Badge` i no
+sàpiga que hi ha una segona definició que no se n'assabentarà**. Substituïda pel component.
+
+⚠️ **I la substitució hauria perdut el TOOLTIP en silenci.** `ui/Badge` no acceptava `title`, i
+la còpia local en tenia un —el badge és una abreujació («SET 2/3») i el text sencer viu al
+tooltip—. Un tooltip que desapareix no trenca res i no el veu ningú fins que algú el busca.
+`ui/Badge` el reenvia ara.
+
+### 2 · EL VEREDICTE DE QA PASSA A TRES COLUMNES
+
+**`N mesurats · M desviacions` amagava la tercera possibilitat, que és la pitjor**: el cas que
+**no toca res**. `_mesura()` ja distingia els dos casos —torna `None` quan el selector no troba
+res— i el que faltava era que el veredicte ho separés. Ara:
+
+```
+──────── 14 CASEN · 0 DESVIEN · 1 NO TOQUEN RES (de 15 casos) ────────
+   ⚠️ ELS QUE NO TOQUEN RES NO SÓN VERDS: SÓN SILENCI.
+   · A5 · badge NEUTRE (la marca de conjunt) · NO MESURAT a la pantalla (…)
+```
+
+**I ha justificat el seu preu a la primera correguda.** La passada d'A5 va sortir **0 CASEN · 0
+DESVIEN · 15 NO TOQUEN RES**: els quinze morts de cop. Amb el veredicte antic això s'hauria
+imprès com **«0 desviacions»** i hauria passat per verd. La causa era el **token caducat a mitja
+sessió** (tapadora núm. 2): l'app queia a `/login` i es mesurava una altra pantalla.
+Amb un token fresc: 14 casen · 0 desvien · **1 no toca res**, i aquest un s'explica —**cap model
+de cap dels dos tenants té `garment_set`** (0/1 a `fhort`, 0/51 a `los`), o sigui que el
+`SetBadge` no és assolible amb les dades vives. Limitació declarada, no defecte.
+
+### LES CINC TAPADORES, tal com queden
+
+| # | Tapadora | Com es veu | Com es tanca |
+|---|---|---|---|
+| 1 | **Bundle ranci** | verd o vermell sobre codi que ja no existeix | mirar la data del `dist` |
+| 2 | **Token caducat** | l'app cau a `/login` i mesures una altra pantalla | correguda de tancament sencera + el tri-estat, que ho delata |
+| 3 | **Excepció caducada** | el defecte hi és i l'eina l'absol | revisar *per què* existeix cada exempció |
+| 4 | **Cas que no toca res** | verd perquè el selector no troba l'element | el tri-estat del veredicte |
+| 5 | **Un sol motor** | la mesura passa on l'usuari no mira | v. §8b-quater(2): `:has()` a Chromium ✓, Firefox ✗ |
+
+Les cinc tenen la mateixa forma: **el verd no vol dir el que sembla.** I cap es veu llegint codi.
+
 ## CODES PER A LA S2 (backend i compartits · commits 250·204, 250·205, 250)
 
 ### `/customers` tornava a ordenar — DRF es menjava l'ordre en silenci

@@ -272,6 +272,16 @@ CASOS = [
     ('B1', 'targeta de contingut (KPI)', 'PROPOSTA_menu_pantalla_v3.html',
      '.card', [],
      '/', [], 'div:has(> div:text-is("Models de l\'abast"))'),
+    # ── B7 · el badge NEUTRE de la graella canònica ─────────────────────────────────────
+    # AQUEST CAS ÉS EL REMEI DE LA QUARTA TAPADORA. La bidireccional d'A5 tenia la graella
+    # sencera mesurada MENYS els badges, perquè `/models` no en pinta cap d'estat (ESTAT és
+    # buida esperant el Kanban i FASE és text pla, §8e): l'única cosa que hi fa de badge neutre
+    # és el `SetBadge` de la cel·la del nom, i no totes les files en porten. Es mesura a
+    # `/models` amb el filtre que deixa una fila amb SET, i si el banc no en té cap el veredicte
+    # ho dirà com a «NO TOCA RES» en comptes de fer-lo passar per verd.
+    ('A5', 'badge NEUTRE (la marca de conjunt)', 'NORMA_LLISTA_canonica.html',
+     '.b.neutral', [],
+     '/models', [], 'td span[style*="border-radius: 999px"], td span[title]'),
 ]
 
 JS_UN = """
@@ -349,6 +359,17 @@ def main():
                       headers={'content-type': mimetypes.guess_type(f.name)[0] or 'text/html'})
 
     desviacions = 0
+    # 🚨 LA QUARTA TAPADORA (part B, entre les dues sessions): **una comprovació que no toca res
+    # és indistingible d'una que passa.** La bidireccional d'A5 donava verd sobre `.b.neutral`
+    # durant tot un bloc perquè la graella de `/models` **no pinta cap badge d'estat** (la columna
+    # ESTAT hi és buida esperant el Kanban i la FASE és text pla, §8e): el cas existia, es corria,
+    # i no comparava res. Un selector que no troba res i un selector que troba una cosa correcta
+    # produeixen el MATEIX silenci.
+    # `_mesura()` ja distingeix els dos casos —torna `None` quan `count() == 0`—, o sigui que la
+    # informació hi era i el que faltava era que el VEREDICTE la separés. Ara es compten a part i
+    # es llisten al final: un cas mort no pot passar per un cas verd.
+    morts = []
+    casen = 0
     with sync_playwright() as p:
         nav = p.chromium.launch()
         # ── banda MAQUETA: fitxer local, sense cap intercepció ────────────────────────────
@@ -400,9 +421,11 @@ def main():
             print(f'\n  · {què}   [maqueta `{sel_maq}`]')
             if m is None:
                 print('      ⚠️  la maqueta no té aquest element — cas a revisar')
+                morts.append(f'{tram} · {què} · NO HI ÉS A LA MAQUETA (`{sel_maq}`)')
                 continue
             if pant is None:
                 print('      ⚠️  NO MESURAT a la pantalla (estat no assolible amb les dades vives)')
+                morts.append(f'{tram} · {què} · NO MESURAT a la pantalla (`{sel_pant}`)')
                 continue
             for prop in PROPS:
                 a, b = m.get(prop), pant.get(prop)
@@ -414,9 +437,25 @@ def main():
             else:
                 pass
             if all(m.get(x) == pant.get(x) for x in PROPS):
+                casen += 1
                 print('      ✓ casa a totes les propietats mesurades')
         nav.close()
-    print(f'\n──────── {desviacions} desviacions mesurades ────────')
+    # ── EL VEREDICTE ÉS DE TRES COLUMNES, no de dues (proposta de la S2, ratificada per Agus).
+    # «N mesurats · M desviacions» amagava la tercera possibilitat, que és la pitjor de les tres:
+    # el cas que **no toca res**. Ara es diuen els tres números i el tercer, si no és zero,
+    # s'explica cas per cas — igual que una desviació.
+    total = casen + desviacions + len(morts)
+    print(f'\n──────── {casen} CASEN · {desviacions} DESVIEN · {len(morts)} NO TOQUEN RES '
+          f'(de {total} casos) ────────')
+    if morts:
+        print('   ⚠️  ELS QUE NO TOQUEN RES NO SÓN VERDS: SÓN SILENCI. Cadascun s\'ha')
+        print('       d\'explicar (selector que no troba · estat no assolible amb les dades')
+        print('       vives · element que la maqueta no dibuixa), com una desviació.')
+        for x in morts:
+            print(f'   · {x}')
+    # El codi de sortida segueix penjant NOMÉS de les desviacions: un cas no mesurable amb les
+    # dades del banc és una limitació declarada, no un defecte de la pantalla. El que canvia és
+    # que ja no es pot passar per alt, que era el problema.
     sys.exit(1 if desviacions else 0)
 
 

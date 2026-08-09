@@ -47,10 +47,14 @@ const VARIANTS = {
   gray: { bg: 'var(--bg-page)',      color: 'var(--text-soft)', vora: 'var(--line)' },
 }
 
-export default function Badge({ variant = 'gray', icon, children, style }) {
+// `title` s'ha de poder passar: un badge sovint és una ABREUJACIÓ («SET 2/3») i el text
+// sencer viu al tooltip. En substituir la còpia local de `Models.jsx` per aquest component, el
+// `title` que aquella tenia s'hauria perdut EN SILENCI — un tooltip que desapareix no trenca
+// res i no el veu ningú fins que algú el busca.
+export default function Badge({ variant = 'gray', icon, children, style, title }) {
   const v = VARIANTS[variant] || VARIANTS.gray
   return (
-    <span style={{
+    <span title={title} style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
       fontSize: 'var(--fs-caption)', lineHeight: '12px', letterSpacing: '.04em',
       padding: '3px 10px', borderRadius: 'var(--r-pill)',
