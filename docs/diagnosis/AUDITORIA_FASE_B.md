@@ -1677,3 +1677,29 @@ d'eines**; això és una decisió de com es veu una eina inactiva, no un descuit
 > norma trobades avui entre les sessions, **cap es va trobar rellegint el diff**. Totes quatre,
 > amb el criteri escrit a la mà. *Un criteri escrit troba coses que la mateixa persona no veu
 > tornant a mirar el mateix codi.*
+
+## 🚨 EL RECOMPTE ÉS ESTABLE I EL QUE COMPTA NO
+
+La sessió 1 va avisar que els silencis de la bidireccional **no són sempre els mateixos** entre
+corregudes (el gest depèn de les dades vives del run que l'arnès obre) i va recomanar córrer-la
+dos cops abans de tancar el número. **Jo havia declarat el meu amb UNA sola correguda.**
+Corregut dos cops, i el resultat afina l'avís:
+
+| | Correguda 1 | Correguda 2 |
+|---|---|---|
+| Els 2 casos de C1 | ✓ casen | ✓ casen |
+| Desviació | la declarada | la declarada |
+| Silenci A5 | badge NEUTRE | badge NEUTRE — **estable** |
+| Silenci A2 | «estat buit» | **«capa de restricció TRIADA»** — **ha canviat de cas** |
+
+🔑 **I aquí hi ha la part que l'avís no deia: el RECOMPTE no es mou (2 silencis les dues
+vegades) i el CONJUNT sí.** Qui segueixi el número veurà una estabilitat perfecta mentre **cada
+correguda deixa un cas DIFERENT sense mesurar**. És la família del dia amb una volta més: no és
+un verd que es dona per fet, és **un número estable que amaga un conjunt que balla**. Un
+recompte reproduïble no vol dir una mesura reproduïble.
+
+**Conseqüència pràctica:** el número de silencis no es pot llegir sol. La línia que els enumera
+—que l'arnès ja imprimeix— **és la dada; el recompte n'és el resum, i el resum aquí menteix per
+omissió.** Els dos casos propis (C1) casen a totes dues corregudes, o sigui que la conformitat
+d'aquest lot no en depèn; però el número global d'aquest report s'ha de llegir amb la llista al
+costat, no en comptes d'ella.
