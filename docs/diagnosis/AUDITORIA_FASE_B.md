@@ -826,9 +826,27 @@ el color—. En repassar el meu lot amb aquest criteri n'ha sortit **una quarta*
 de tasca d'`UsersRoles` per a un admin (`opacity: 0.6`). Aquí no hi ha fons que baixar (és una
 etiqueta damunt del panell) i mana la §1: **`--text-faint`**, la mateixa resolució que el bloc B
 va donar al menú de pantalla.
-🚩 **No es toca** l'`opacity: 0.45` de `ribbonToolStyle` (≈60 botons d'eina de la cinta):
-`apagat` els donaria fons `--bg-page` dins d'una barra d'eines. **Això és una decisió de com es
-veu una eina inactiva, no un descuit** — a la taula.
+**I la regla té QUATRE remeis, no un** — el cens complet el va fer la sessió de patrons amb
+aquest criteri i li'n van sortir ~20 llocs més:
+
+| | Cas | Remei |
+|---|---|---|
+| **A** | botó **amb fons** | `apagat` (§5.7: baixa el fons) — mecànic |
+| **B** | **text sense fons** | l'escala de tintes (`--text-faint`) — és el cas d'`UsersRoles` |
+| **C** | **contenidor OCUPAT** (una fila que s'atenua *mentre treballa*) | ❓ **no és deshabilitat, és EN CURS, i la norma no en té forma escrita** |
+| **D** | **regió sencera** (`<fieldset disabled>` amb children arbitraris) | ❓ ni `apagat` (no és un botó) ni una tinta (són molts elements) |
+
+🚩 **C i D són PREGUNTES DE NORMA i van a la taula**, no a un tram: amb només A i B això seria una
+escombrada de deu minuts.
+🚩 **Tampoc es toca** l'`opacity: 0.45` de `ribbonToolStyle` (≈60 botons d'eina de la cinta):
+`apagat` els donaria fons `--bg-page` dins d'una barra d'eines. **És una decisió de com es veu
+una eina inactiva, no un descuit.**
+
+⚠️ **I el cens NO es fa per nom de propietat.** La meitat del que surt amb `grep opacity` és de
+DIBUIX (primitives Konva, objectes de document, i les dianes de `PaperFlatEditor` a `0.001`), i
+un cens per nom se les hauria endut. **Es classifica per QUÈ ÉS cada número, no per com es diu
+la propietat** — el mateix parany que els `fontSize` de la fitxa tècnica, i tots dos esperen al
+mateix lloc: un fitxer amb llenç.
 
 **2 · El comentari `{/* … */}` com a primer fill d'un `{cond && ( … )}` o d'un `return (`.**
 Allà encara ets en context d'EXPRESSIÓ i les claus es llegeixen com un **objecte literal**;
