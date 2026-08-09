@@ -9,6 +9,7 @@ import GuardTascaOblidada from './components/GuardTascaOblidada'
 import SessioActiva from './components/SessioActiva'
 import AvisSessio from './components/AvisSessio'
 import { modelFitxers } from './api/endpoints'
+import { botoSec } from './components/ui/buttons'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Models = lazy(() => import('./pages/Models'))
@@ -147,6 +148,13 @@ function FttResolver() {
   const [choose, setChoose] = useState(null)
   // F2 · nom intern de la fitxa nova des del selector de N. Buit → nom derivat del model.
   const [nouNom, setNouNom] = useState('')
+  // 🚨 BUG D'ACCÉS (Agus, 09/08) · «la Fitxa tècnica no s'obre». El resolutor ENGOLIA els errors
+  // del servidor i se n'anava a `/models/:id` sense dir res: un `POST .../ftt-document/` amb 500
+  // es veia, exactament, com una pantalla que no obre. Ni missatge, ni rastre, ni manera de
+  // saber que hi havia hagut una crida. La causa d'aquell 500 era d'infra i està resolta; això
+  // d'aquí és l'altra meitat del defecte, i és la que fa que la PRÒXIMA vegada es vegi.
+  // Un error del servidor es DIU. Val més que el sistema sembli trencat que no pas que dissimuli.
+  const [fatal, setFatal] = useState(null)
   const API = import.meta.env.VITE_API_URL || ''
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }
 
@@ -158,9 +166,9 @@ function FttResolver() {
       if ((nom || '').trim()) cos.nom = nom.trim()
       const { data: f } = await modelFitxers.crearFitxa(id, cos)
       navigate(`/models/${id}/ftt/${f.id}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })
-      return
-    } catch { /* noop */ }
-    navigate(`/models/${id}`, { replace: true })
+    } catch (e) {
+      setFatal(e?.response?.data?.error || t('tech_sheet.tab_new_err'))
+    }
   }
 
   useEffect(() => {
@@ -171,11 +179,18 @@ function FttResolver() {
       // tenia una d'accessible per aquest camí.
       // U4 — mateixa font que el tab "Fitxa tècnica" del ModelSheet (modelFitxers.fitxesTecniques):
       // el selector de N i la llista canònica no poden dir coses diferents del mateix model.
-      let fitxes = []
+      // 🚨 AQUEST `catch` NO POT CAURE CAP AVALL. Si la llista falla, `fitxes` es queda a zero i
+      // el camí de sota vol dir «aquest model no en té cap» → CREARIA UNA FITXA NOVA al costat
+      // de les que ja hi ha, i el model es quedaria amb un document duplicat per una caiguda de
+      // xarxa. Zero perquè no n'hi ha i zero perquè no s'ha pogut saber no són el mateix zero.
+      let fitxes
       try {
         const { data: d } = await modelFitxers.fitxesTecniques(id)
         fitxes = d.results || d || []
-      } catch { /* noop */ }
+      } catch (e) {
+        if (!cancelled) setFatal(e?.response?.data?.error || t('tech_sheet_entry.open_error'))
+        return
+      }
       if (cancelled) return
       if (fitxes.length === 1) {
         navigate(`/models/${id}/ftt/${fitxes[0].id}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })
@@ -195,6 +210,25 @@ function FttResolver() {
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  // EL FRACÀS, DIT. Mateixa caixa centrada que les altres dues decisions d'aquest resolutor —el
+  // que canvia és què hi diu—, i una porta de sortida explícita cap al model: qui arriba aquí ha
+  // vingut a obrir una fitxa i no la tindrà, però ha de saber-ho i ha de poder marxar.
+  if (fatal) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+        <div role="alert" style={{ background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.4rem', maxWidth: 360, width: '90%', border: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 14 }}>
+            <i className="ti ti-alert-circle" aria-hidden="true" style={{ fontSize: 16, color: 'var(--err)', flex: 'none', marginTop: 1 }} />
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>{fatal}</span>
+          </div>
+          <button type="button" onClick={() => navigate(`/models/${id}`, { replace: true })} style={botoSec}>
+            {t('app.back')}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   // F2 — el model ja té N fitxes: quina s'obre? Amb la porta per fer-ne una de nova amb nom.
   if (choose?.fitxes) {
