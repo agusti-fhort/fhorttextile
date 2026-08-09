@@ -724,6 +724,26 @@ pantalla conforme consumeix»):
   raonament és bo; el consum, no hi és. Cas de frontera: la pantalla decideix la pell pel codi
   que ARRIBA i no necessita la llista. **Dit, no resolt.**
 
+### El protocol de mesura, tal com queda tancat
+
+Tres eines, i **tres asserccions que abans no hi eren** — cadascuna tanca una tapadora:
+
+| Assercció | Qui la va proposar | Quina tapadora tanca |
+|---|---|---|
+| **La sessió és viva** (`GET /me/` abans i després de la correguda) | sessió de fitxa tècnica/patrons | **2 · token caducat** |
+| **El veredicte és de tres columnes** (`casen · desvien · NO TOQUEN RES`) | sessió comercial | **4 · cas que no toca res** |
+| **El senyal de pantalla** (`data-ftt-screen`; sense senyal es CRIDA, no es mesura) | sessió de fitxa tècnica/patrons | **4-bis · la ruta que no és la que creus** |
+
+🚩 **DEUTE CONEGUT, dit i no fet**: el senyal de pantalla és **opcional a la tupla** i els meus
+24 casos encara no en porten. Posar-los és additiu i no trenca res, però és feina nova al
+tancament: **queda escrit, no mig fet.** Sense senyal, una ruta meva que canviés de destí es
+mesuraria contra una altra pantalla i donaria el mateix zero.
+
+⚠️ I el senyal va justificar el seu preu de seguida, però per una tapadora que no era la seva:
+la primera correguda després d'afegir-lo va donar **3 incompliments** —`🛑 SENYAL ABSENT` a les
+tres rutes de patrons— i **era cert**: les àncores eren al codi i **no al bundle**. Sense el
+senyal, tres zeros que hauria donat per bons. **Tapadora 1 caçada per l'eina de la 4.**
+
 ### 🚩 A LA TAULA D'AGUS
 
 1. **La fletxa de l'ARREL** — proposta conjunta de dues sessions: la barra es queda i la fletxa
