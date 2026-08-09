@@ -744,6 +744,17 @@ la primera correguda després d'afegir-lo va donar **3 incompliments** —`🛑 
 tres rutes de patrons— i **era cert**: les àncores eren al codi i **no al bundle**. Sense el
 senyal, tres zeros que hauria donat per bons. **Tapadora 1 caçada per l'eina de la 4.**
 
+### La vora de «un sol builder» (lliçó de mètode, de la sessió de patrons)
+
+Amb tres sessions escrivint al mateix disc, la regla **«un sol builder»** és bona i s'ha
+mantingut tot el lot. Però té una vora que va aparèixer al final: **si no construeixes, no
+mesures el que has escrit.** Les àncores de la sessió de patrons eren al codi i no al bundle
+precisament perquè aquella sessió, correctament, no publicava.
+
+La sortida no és trencar la regla: és `FTT_QA_DIST`, que mesura contra un `outDir` de proves
+**sense publicar**. Existia i no es va fer servir a l'última correguda. **La regla es queda; el
+que s'aprèn és que «no publico» i «no mesuro» no poden ser la mateixa decisió.**
+
 ### 🚩 A LA TAULA D'AGUS
 
 1. **La fletxa de l'ARREL** — proposta conjunta de dues sessions: la barra es queda i la fletxa
