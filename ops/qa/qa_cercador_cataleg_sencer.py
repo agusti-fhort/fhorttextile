@@ -129,13 +129,32 @@ def main():
                  '142' in txt, txt.splitlines()[-1][:70] if txt else '')
         pag.screenshot(path=str(OUT / 'cerca_01_cataleg_sencer.png'), full_page=True)
 
-        # ── 2 · «F», un sol caràcter ─────────────────────────────────────────────────────
-        camp.nth(idx).fill('F')
-        pag.wait_for_timeout(1600)
-        txt_f = desplegable(pag)
-        comprova('amb «F» el POM F hi és', '\nF\n' in f'\n{txt_f}\n' or 'F ·' in txt_f
-                 or 'Centre front length' in txt_f, txt_f.splitlines()[:4])
-        pag.screenshot(path=str(OUT / 'cerca_02_una_lletra_F.png'), full_page=True)
+        # ── 2 · ELS TRES `q` EXACTES DE L'AGUS ───────────────────────────────────────────
+        # 🔑 Es mesura que la fila sigui IDENTIFICABLE, no que el POM «hi sigui» a la resposta.
+        # El defecte d'aquesta volta és justament que hi era i no es podia reconèixer: la fila
+        # pintava només la nomenclatura del client (`FB2 · TOP LINING…`) i qui havia escrit
+        # «front le» —text del nom CANÒNIC— no veia enlloc el que havia escrit. Per això la
+        # comprovació busca el codi de casa i el nom canònic AL TEXT DEL DESPLEGABLE.
+        for q, casa, canonic, primera in (
+            ('front le', 'F', 'Centre front length from HPS', False),
+            ('F', 'F', 'Centre front length from HPS', True),
+            ('neck', 'EK', 'Neck width', False),
+        ):
+            camp.nth(idx).fill('')
+            pag.wait_for_timeout(400)
+            camp.nth(idx).fill(q)
+            pag.wait_for_timeout(1700)
+            txt = desplegable(pag)
+            files = [l for l in txt.splitlines() if l.strip()]
+            comprova(f'«{q}» → el canònic «{canonic}» és VISIBLE a la fila',
+                     canonic in txt, files[:3])
+            comprova(f'«{q}» → la fila diu el codi de casa ({casa})',
+                     f'casa: {casa}' in txt or f'{casa} · {canonic}' in txt, '')
+            if primera:
+                # La PRIMERA fila de dades (després del rètol de nivell) ha de resoldre al POM.
+                cap = [l for l in files if not l.isupper()][:4]
+                comprova(f'«{q}» → aquella fila és la PRIMERA', canonic in ' '.join(cap), cap)
+            pag.screenshot(path=str(OUT / f'cerca_02_q_{q.replace(" ", "_")}.png'), full_page=True)
 
         # ⚠️ El carril ESCRIU EN OBRIR-SE (`open-task` salta només d'entrar-hi): el que s'ha de
         # comprovar no és que no n'hi hagi cap —n'hi haurà— sinó que TOTES han quedat retingudes

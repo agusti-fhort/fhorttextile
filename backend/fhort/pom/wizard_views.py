@@ -293,8 +293,28 @@ def search_poms_view(request):
 
         # L'ordre és el de PROXIMITAT: el que l'item ja declara primer. Qui busca «C» a la taula
         # d'un jersei vol la seva cintura, no la d'una americana que comparteix catàleg.
+        # ⚠️ **L'EXACTE PRIMER ERA CASUALITAT DE L'ABECEDARI** (QA Agus 09/08, 3a volta).
+        #
+        # Les dues consultes ja anotaven `_exacte` per posar el codi exacte al davant, però
+        # aquest `sort` final el LLENÇAVA i reordenava per codi. Que «F» sortís abans que F1, F3
+        # o FB no era cap garantia: era que la F va abans a l'abecedari. El dia que l'exacte no
+        # guanyi alfabèticament (un àlies exacte que resol a un codi de casa que va més avall),
+        # l'encert queda enterrat enmig de les seves germanes i sembla que no hi sigui.
+        #
+        # Ara l'exactitud viatja fins al final i es mira contra ELS DOS codis —el de la casa i el
+        # del client—, perquè el tècnic pot escriure qualsevol dels dos i en tots dos casos vol
+        # aquella fila la primera. El NIVELL segueix manant per damunt (la proximitat és la llei
+        # de la llista); l'exacte desempata a dins.
+        q_cf = q.casefold()
+
+        def _rang_exacte(r):
+            if not q_cf:
+                return 1                      # catàleg sencer: no hi ha res «exacte» a premiar
+            return 0 if q_cf in {(r.get('codi_client') or '').casefold(),
+                                 (r.get('client_code') or '').casefold()} else 1
+
         ordre = {'item': 0, 'type': 1, 'cataleg': 2}
-        data.sort(key=lambda r: (ordre[r['nivell']], (r['codi_client'] or '')))
+        data.sort(key=lambda r: (ordre[r['nivell']], _rang_exacte(r), (r['codi_client'] or '')))
 
         # `count` és el total REAL de la unió i `truncat` diu si el sostre ha tallat. Sense
         # això, «no hi és» i «no hi cabia» es deien igual — que és com es fabrica un duplicat.

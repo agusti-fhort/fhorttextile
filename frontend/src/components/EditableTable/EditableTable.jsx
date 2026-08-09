@@ -2066,10 +2066,33 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
               </div>
               {files.map(p => {
                 const k = results.indexOf(p)
+                // ⚠️ **EL RESULTAT NO ENSENYAVA PER QUÈ HAVIA SORTIT** (QA Agus 09/08, 3a volta).
+                //
+                // La fila pintava NOMÉS la nomenclatura del client, i el catàleg de la casa hi
+                // era només de reserva. Conseqüència mesurada: qui cerca «front le» —text que
+                // viu al nom CANÒNIC, `F · Centre front length from HPS`— rep aquell POM i el
+                // veu escrit `FB2 · TOP LINING: Centre front length (visible)`. El resultat és
+                // el correcte i **no conté enlloc el que s'ha escrit**, o sigui que es llegeix
+                // com «no l'ha trobat» — i d'aquí surt, un cop més, un duplicat fet a mà.
+                //
+                // No és el cercador: la unió mira codi i nom, canònic i àlies (mesurat: «neck»
+                // torna `EB · Neck binding width`, que NO té cap àlies). Era que la resposta
+                // amagava la meitat del que havia mirat.
+                //
+                // 🔑 La nomenclatura del client SEGUEIX MANANT a la línia principal (decisió
+                // d'Agus 06/08: el tècnic de Brownie ha de llegir el seu codi). El que s'afegeix
+                // és el CANÒNIC A SOTA, i només quan diu una cosa diferent: repetir-lo quan
+                // coincideix seria soroll a cada fila.
+                const codiCasa = p.codi_client || ''
+                const nomCasa = p.nom_client || p.nom_en || ''
+                const casaDiferent = !!(
+                  (p.client_code && p.client_code !== codiCasa)
+                  || (p.client_name_en && p.client_name_en !== nomCasa)
+                )
                 return (
                   <div key={p.id} onMouseDown={e => { e.preventDefault(); tria(p) }}
                     onMouseEnter={() => setSel(k)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px',
+                    style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '6px 12px',
                              cursor: 'pointer', fontSize: 'var(--fs-body)',
                              background: k === sel ? 'var(--gold-pale)' : 'transparent' }}>
                     {/* EL CODI QUE ES PINTA ÉS EL DEL CLIENT. Abans hi anava `codi_client` de
@@ -2079,7 +2102,15 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
                     <span style={{ color: 'var(--gold)', fontWeight: 600, minWidth: 56 }}>
                       {p.client_code || p.codi_client}
                     </span>
-                    <span>{p.client_name_en || p.nom_client || p.nom_en || p.nom_ca}</span>
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      {p.client_name_en || p.nom_client || p.nom_en || p.nom_ca}
+                      {casaDiferent && (
+                        <span style={{ display: 'block', fontSize: 'var(--fs-caption)',
+                                       color: 'var(--text-muted)' }}>
+                          {codiCasa}{codiCasa && nomCasa ? ' · ' : ''}{nomCasa}
+                        </span>
+                      )}
+                    </span>
                     {eixos && (
                       <span style={{ background: 'var(--gold-pale)', color: 'var(--gold)',
                                      border: '1px solid var(--border)', borderRadius: 999,
