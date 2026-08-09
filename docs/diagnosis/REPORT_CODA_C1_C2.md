@@ -205,6 +205,49 @@ dos SPA s'han construït contra un **outDir de proves** (`FTT_QA_DIST`) i s'han 
    contradicció de criteri —les dues segueixen la norma des d'on són—, però **el mateix botó
    es veu de dues maneres**, i això s'arregla absorbint també el template editor al bastiment
    comú, no repintant-lo.
-6. **Qui audita el backoffice?** No té arnès i no ha passat la T0.1. Ara hi conviuen el blau nou
+6. **Qui audita el backoffice?**
+7. ⬇️ **La cua «Sistema → wizards → STOP de lot» JA ESTAVA FETA** — v. la secció final. No té arnès i no ha passat la T0.1. Ara hi conviuen el blau nou
    i el seu semàfor antic (`--ok #3b6d11`, `--err #a32d2d`), que la §1b(a) ja va moure al
    producte. O hi entra la norma sencera, o no hi entra.
+
+---
+
+## 🛑 LA CUA SEGÜENT JA ESTAVA FETA — i no la refaig
+
+Encàrrec rebut: *«Sistema (Encàrrecs · Catàleg de tasques · Perfil · Recursos) → wizards
+9·10·11 → STOP de lot»*. **Els tres trams existeixen ja, commitats per la sessió S1**, que ara
+va pel 279. He anat a mirar-ho abans de tocar res, i el que hi ha és exactament la cua sencera:
+
+| Tram de la cua | On és | Què conté |
+|---|---|---|
+| **Sistema** | `99463960` · «258 · S1·Sistema» | `TaskTypes.jsx` · `UserProfilePage.jsx` · `Recursos.jsx`, i de retruc `ui/Table`, `ui/Center` i `ui/Badge` |
+| **Encàrrecs** | `212` (S2) | conformada abans; el 258 la declara **«verificada, no refeta»** |
+| **Wizards 9·10·11** | `c408d7ea` · «259 · S1·B9·B10·B11» | `OnboardingWizard.jsx` (+ i18n que NO tenia: 22 claus) · `BulkImportWizard.jsx` · `SizeMapSetup.jsx` |
+| **STOP de lot** | `aaa06f6f` (263) i `eb82f02b` (273) | fitxa de tancament de 24 pantalles · suite 966 tests en verd |
+
+### Verificat per mi, no acceptat
+
+No em refio d'un missatge de commit per dir que una cosa està feta — és la mateixa regla que
+S1 es va aplicar al 279 amb la MEVA feina de C1. Mesurat avui, sobre el bundle construït del
+codi d'ara:
+
+| Control | Resultat |
+|---|---|
+| `qa_auditoria_computats` · B9 Catàleg de tasques · B10 Perfil · B11 Recursos · B12 Encàrrecs · B13 Config. inicial · B14 Import massiu | **0 incompliments** a totes sis |
+| `qa_sonda_fons_accio` · les mateixes sis | **0 accions daurades**; blaus: 0 · 0 · 0 · 0 · 1 («Començar») · 0 |
+| `PageMenu` muntat a les 7 pantalles del tram | ✅ 7/7 |
+| Paritat i18n ca/en/es | **4544 = 4544 = 4544**, 0 claus òrfenes en cap direcció |
+| `background: var(--gold)` ple a les 7 | 1, i és el **punt del stepper** de `SizeMapSetup` (selecció, no acció) — i aquell `export default` no té ruta |
+
+### Per què NO la refaig
+
+Refer-la seria una segona passada divergent sobre fitxers d'una altra sessió viva, sense un sol
+defecte mesurat que la justifiqui. És literalment la lliçó que el 279 va escriure a partir del
+meu propi treball: **una llista d'accions caduca pel treball que s'ha fet mentrestant, i el que
+no es revisa és justament el propi.** El 279 va matar el seu punt 8 perquè el meu C1 ja l'havia
+resolt; aquest tram és el mateix cas amb els papers canviats.
+
+🚩 **Per a Agus, la pregunta que sí que canvia la feina:** si aquesta cua era per a mi i no per
+a S1, digues **què hi vols de diferent** (una segona lectura bidireccional? un tram nou?), perquè
+tal com està escrita ja té les quatre pantalles i els tres wizards tancats i mesurats. Si era la
+cua de S1, aquí no hi ha res pendent i el meu STOP de lot és aquest report.
