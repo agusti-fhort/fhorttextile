@@ -700,6 +700,30 @@ accident**.
 | `Planning` | `var(--bg, #faf9f7)` | **amb fallback**: pinta un crema que ningú ha decidit i **cap eina el veu** |
 | `IssueDateField` | `var(--text)` | el color queia a l'heretat i es veia negre |
 
+### El creuament de claus · publicades ↔ consumides (idea de la sessió comercial)
+
+`GET /vocabulari/` → conjunt de claus, creuat amb un `grep` de les que el client demana. Detecta
+les **dues** direccions, i cap es veu llegint codi.
+
+| Direcció | Resultat |
+|---|---|
+| 🔴 **demanada i NO publicada** (select buit en silenci; **sempre és un defecte**) | ✅ **cap** |
+| 🟠 **publicada i sense consumidor** (pregunta, no veredicte) | **4** |
+
+Les quatre, dites sense embuts perquè **dues són meves i van contra la política que el mateix
+mòdul del vocabulari té escrita** («afegir-les totes ara seria publicar vocabulari que ninguna
+pantalla conforme consumeix»):
+
+- `origens_encarrec` i `tipus_linia_albara` — **publicades i no llegides per ningú**. Venien del
+  cens del lot comercial, que ja avisava que eren de prioritat baixa («si les deixes fora, ho dic
+  al report i no invento res»). **Les vaig publicar igualment**: era més barat fer-ho d'una
+  passada, i el preu és aquest. No es retiren (retirar-les podria trencar feina pendent), però
+  **el dia que algú les canviï no hi ha cap pantalla que ho delati**.
+- `estats_vincle_tenant` i `origens_alias_pom` — **surten només a COMENTARIS** (a `Recursos.jsx` i
+  a `CustomerDetail.jsx`), explicant que el mapa de pell local **no és** l'enumeració. El
+  raonament és bo; el consum, no hi és. Cas de frontera: la pantalla decideix la pell pel codi
+  que ARRIBA i no necessita la llista. **Dit, no resolt.**
+
 ### 🚩 A LA TAULA D'AGUS
 
 1. **La fletxa de l'ARREL** — proposta conjunta de dues sessions: la barra es queda i la fletxa
