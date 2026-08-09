@@ -1549,3 +1549,18 @@ mutant res. eslint 0 errors · `vite build` net (outDir de proves).
 2. **Tasca `pattern_digit` (pk 361) en `InProgress`** amb un `TimerEntrada` obert des de les
    13:24. **Tocar hores registrades és decisió seva**: un timer és el registre d'un fet, i
    esborrar-lo o tancar-lo són dues mentides diferents. El `GuardTascaOblidada` hi és per a això.
+
+## 🚩 El germà que queda fora: `TechSheetTemplateEditor`
+
+La sessió C2 ho va veure des de l'altre cantó i té raó: **el mateix botó «Exportar PDF» ha
+quedat amb dues formes**. Al meu editor puja al menú de pantalla i el §8e li treu el color; al
+`TechSheetTemplateEditor` és blau, perquè **aquella pantalla encara es pinta la capçalera ella
+mateixa**. Cadascuna segueix la norma des d'on és, i per això la divergència **no es tanca
+repintant-ne cap**: es tanca absorbint el template editor al bastiment comú, com s'ha fet aquí.
+
+⚠️ **I no és un calc del que acabo de fer**, per això queda anotat i no fet: una PLANTILLA no
+penja d'un model. `pindolesDeModel` no li serveix —no té seccions de model— i el seu molla de pa
+no pot ser «Models › {NOM} › …». Absorbir-la demana decidir **de qui penja una plantilla** i què
+hi ha al seu menú de pantalla, i això és una pregunta de navegació, no de tokens.
+
+Cens ja fet d'aquell fitxer (del tram anterior): 9 usos de token deprecat i 5 literals hex.
