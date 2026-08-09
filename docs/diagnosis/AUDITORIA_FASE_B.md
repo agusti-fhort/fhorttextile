@@ -1533,6 +1533,12 @@ meva a mitges**:
 
 ## 🚩 Punts oberts
 
+> ⚠️ **AMB QUINA PREGUNTA s'ha repassat aquesta llista, i quan.** Repassada el 09/08 al vespre
+> amb **«què hi queda que ja NO sigui veritat?»** — que no és la pregunta que sembla. La que
+> ens fèiem tots dos era «hi falta res?», i aquesta **no troba mai un punt mort**. Tres dels
+> cinc d'aquí ho eren. Una llista d'accions que no diu amb quina pregunta s'ha revisat, ni
+> quan, convida a llegir-la com si fos d'ara.
+
 1. ~~**~16 directoris `root:root` sota `media/`**~~ — ✅ **TANCAT D'ARREL, i millor que com jo
    ho demanava.** Jo deixava aquí un `chown -R` per a Agus, o sigui **una feina manual que
    tornaria a caldre cada mes** (el subdirectori del mes és nou cada mes). La coda C1
