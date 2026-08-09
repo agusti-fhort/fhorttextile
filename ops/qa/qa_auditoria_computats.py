@@ -27,7 +27,11 @@ import requests
 from playwright.sync_api import sync_playwright
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-DIST = REPO / 'frontend' / 'dist'
+# El bundle a mesurar. Per defecte el desplegat (`frontend/dist`), que és el que Agus veu.
+# `FTT_QA_DIST` el reapunta a un outDir de proves: amb tres sessions escrivint alhora, aquí
+# `npm run build` DESPLEGA, i mesurar un canvi propi no pot obligar a publicar el codi a mig
+# fer de ningú altre.
+DIST = pathlib.Path(os.environ.get('FTT_QA_DIST') or (REPO / 'frontend' / 'dist'))
 BASE = 'https://staging.fhorttextile.tech'
 VIU = 'http://127.0.0.1:8001'
 HOST_TENANT = os.environ.get('FTT_QA_HOST', 'fhorttextile.tech')
@@ -63,6 +67,15 @@ PANTALLES = [
     ('B12 · Safata d\'encàrrecs', '/encarrecs'),
     ('B13 · Configuració inicial', '/onboarding'),
     ('B14 · Import massiu', '/models/importar-colleccio'),
+    # ── PART B · LOT FITXA TÈCNICA + PATRONS (S2) ────────────────────────────────────────
+    # ⚠️ LES TRES SÓN PANTALLES AMB LLENÇ, i el llenç NO ENTRA al perímetre (ordre d'Agus:
+    # «crom, MAI llenç»). Que hi surtin igualment és a posta: el que es mesura és la CLOSCA
+    # —barres d'eines, panells laterals, modals, botons— i el llenç no aporta ni vores del
+    # DOM ni text amb `fontSize` computat, perquè és un `<canvas>`: un sol node opac per a
+    # l'auditor. O sigui que la mesura d'aquestes rutes és, literalment, la del crom.
+    ('C1 · Editor .ftt', '/models/1319/ftt/758'),
+    ('C2 · Patró (tab del model)', '/models/1319?tab=Patr%C3%B3'),
+    ('C3 · Taller de patró', '/models/1319/patro/taller'),
     # 🛑 SizeMapSetup NO TÉ RUTA: el seu `export default` no el munta ningú (v. el report). El
     # que SÍ que és viu és el seu `Wizard`, que munta `SizeAuthoringDrawer` des de la Size
     # Library — i s'audita allà, no aquí. Posar-hi una ruta inventada hauria mesurat un 404.

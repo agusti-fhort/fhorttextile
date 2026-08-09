@@ -10,6 +10,7 @@ import SessioActiva from './components/SessioActiva'
 import AvisSessio from './components/AvisSessio'
 import { modelFitxers } from './api/endpoints'
 import { botoSec } from './components/ui/buttons'
+import { overlayBase } from './components/ui/overlay'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Models = lazy(() => import('./pages/Models'))
@@ -134,6 +135,32 @@ function MesuresRedirect() {
   return <Navigate to={`/models/${id}?tab=Mesures${taskId ? `&task_id=${taskId}` : ''}`} replace />
 }
 
+// ── EL CROM DE LES TRES CAIXES DEL RESOLUTOR ────────────────────────────────────────────────
+// Les tres decisions que aquest resolutor pot haver de plantejar —quina fitxa obro, d'on la
+// creo, i «no s'ha pogut»— són la MATEIXA caixa amb contingut diferent, i abans cadascuna es
+// tornava a escriure a mà. Ara la forma és una i el que canvia és què hi diu.
+//
+// 🚨 EL QUE LA MESURA VA TROBAR I LLEGIR NO TROBAVA: aquestes caixes pintaven el text amb
+// `var(--text)`, I `--text` NO EXISTEIX a `:root`. La declaració queda invàlida al càlcul i el
+// color cau a l'heretat — o sigui que el títol i les files es veien negres per accident, no per
+// decisió, i el dia que el pare canviés de tinta canviarien soles. És exactament el mode de
+// fallada del `var(--fs-title)` del commit 254, i tampoc es veu llegint el codi.
+// La tinta de la casa és `--text-main`; la secundària, `--text-soft` (`--text-muted` és
+// DEPRECAT §1b(c) i dona 3.64:1). Vores `--line`, superfícies `--panel`, radis `--r-card`/
+// `--r-ctrl`, i l'overlay del sistema (`overlayBase`, z 150) en comptes d'un `zIndex: 50` fet a
+// mà que queda per sota del menú lateral (100).
+const fittPanel = (maxWidth) => ({
+  background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.4rem',
+  maxWidth, width: '90%', border: '1px solid var(--line)', alignSelf: 'center',
+})
+const fittTitol = { fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12, color: 'var(--text-main)' }
+const fittFila = {
+  textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px',
+  border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)',
+  background: 'var(--panel)', color: 'var(--text-main)', cursor: 'pointer',
+}
+const fittDesc = { fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }
+
 // Cutover .ftt (F8): /models/:id/fitxa ja no munta l'editor TechSheet (O2O). Resol o crea el
 // document .ftt del model (ModelFitxer tipus TECHSHEET) i redirigeix a l'editor .ftt, conservant
 // task_id. Així WorkPlan (tasca tech_sheet) i el tab Fitxa segueixen apuntant a /fitxa sense canvis.
@@ -216,8 +243,8 @@ function FttResolver() {
   // vingut a obrir una fitxa i no la tindrà, però ha de saber-ho i ha de poder marxar.
   if (fatal) {
     return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-        <div role="alert" style={{ background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.4rem', maxWidth: 360, width: '90%', border: '1px solid var(--line)' }}>
+      <div style={overlayBase({ alignItems: 'center' })}>
+        <div role="alert" style={fittPanel(360)}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 14 }}>
             <i className="ti ti-alert-circle" aria-hidden="true" style={{ fontSize: 16, color: 'var(--err)', flex: 'none', marginTop: 1 }} />
             <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>{fatal}</span>
@@ -232,26 +259,25 @@ function FttResolver() {
 
   // F2 — el model ja té N fitxes: quina s'obre? Amb la porta per fer-ne una de nova amb nom.
   if (choose?.fitxes) {
-    const btn = { textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)', color: 'var(--text)', cursor: 'pointer' }
     return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-        <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '1.4rem', maxWidth: 380, width: '90%', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>{t('tech_sheet.pick_doc_title')}</h2>
+      <div style={overlayBase({ alignItems: 'center' })}>
+        <div style={fittPanel(380)}>
+          <h2 style={fittTitol}>{t('tech_sheet.pick_doc_title')}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {choose.fitxes.map(f => (
-              <button key={f.id} type="button" style={btn}
+              <button key={f.id} type="button" style={fittFila}
                 onClick={() => navigate(`/models/${id}/ftt/${f.id}${taskId ? `?task_id=${taskId}` : ''}`, { replace: true })}>
                 {f.nom_fitxer}
-                {f.descripcio && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{f.descripcio}</div>}
+                {f.descripcio && <div style={fittDesc}>{f.descripcio}</div>}
               </button>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
             <input value={nouNom} onChange={e => setNouNom(e.target.value)}
               placeholder={t('tech_sheet.new_doc_name_placeholder')}
-              style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--white)', color: 'var(--text)' }} />
+              style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', background: 'var(--panel)', color: 'var(--text-main)' }} />
             <button type="button" onClick={() => createDoc(null, nouNom)}
-              style={{ ...btn, border: '1px solid var(--gold)', color: 'var(--gold)', background: 'transparent', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              style={{ ...botoSec, whiteSpace: 'nowrap' }}>
               {t('tech_sheet.new_doc_add')}
             </button>
           </div>
@@ -261,19 +287,21 @@ function FttResolver() {
   }
   if (choose) {
     return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-        <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>{t('tech_sheet.new_doc_title')}</h2>
+      <div style={overlayBase({ alignItems: 'center' })}>
+        <div style={fittPanel(360)}>
+          <h2 style={fittTitol}>{t('tech_sheet.new_doc_title')}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <button type="button" onClick={() => createDoc(null)}
-              style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--gold)', borderRadius: 6, background: 'transparent', color: 'var(--gold)', fontWeight: 600, cursor: 'pointer' }}>
+            {/* «En blanc» i les plantilles són la MATEIXA decisió —d'on surt el document—, i per
+                això es pinten igual (§5.3: cap de les dues és una acció, totes dues són portes).
+                Abans la primera anava en daurat i les altres en gris, i el daurat hi deia
+                «aquesta és la bona» sense que ningú ho hagués decidit. */}
+            <button type="button" onClick={() => createDoc(null)} style={fittFila}>
               {t('tech_sheet.new_doc_blank')}
             </button>
             {choose.templates.map(tpl => (
-              <button key={tpl.id} type="button" onClick={() => createDoc(tpl.id)}
-                style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)', color: 'var(--text)', cursor: 'pointer' }}>
+              <button key={tpl.id} type="button" onClick={() => createDoc(tpl.id)} style={fittFila}>
                 {tpl.nom}
-                {tpl.descripcio && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{tpl.descripcio}</div>}
+                {tpl.descripcio && <div style={fittDesc}>{tpl.descripcio}</div>}
               </button>
             ))}
           </div>
@@ -281,7 +309,7 @@ function FttResolver() {
       </div>
     )
   }
-  return <div style={{ padding: 24, color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>…</div>
+  return <div style={{ padding: 24, color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>…</div>
 }
 
 class AppErrorBoundary extends React.Component {
