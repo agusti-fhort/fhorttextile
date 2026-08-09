@@ -14,6 +14,7 @@ import Badge from '../components/ui/Badge'
 import PageMenu from '../components/ui/PageMenu'
 import TaulaLlista from '../components/ui/TaulaLlista'
 import { BotoEsborrar, EstatBuit, camp, buit, forceBarra } from '../components/llista/ChromLlista'
+import { ClassificacioBadge } from '../components/commercial/estats'
 import { StatusBadge } from './Quotes'
 import { OrderStatusBadge } from './Orders'
 import { DNStatusBadge } from './DeliveryNotes'
@@ -28,10 +29,30 @@ const dayOf = (r) => (r.issued_at || r.created_at || '').slice(0, 10)
 // (ofertes/comandes del client). L'edició d'àlies està gated CONFIGURE al backend.
 const MONO = 'IBM Plex Mono, monospace'
 const TABS = ['dades', 'tecnic', 'comercial']
-// Els QUATRE choices d'origen del model (pom/models.py:243-246). Han d'estar tots aquí i tots
-// als tres i18n (clients.origen_*): la clau es construeix per interpolació (`origen_${r.origen}`)
-// i, si falta, i18next pinta la clau crua a la cel·la (QA-S8 · D4c).
-const ORIGEN_VARIANT = { IMPORT: 'gold', MANUAL: 'ok', MIGRACIO: 'gray', DICCIONARI: 'gate' }
+// 🚨 AQUÍ HI HAVIA EL CAS DE MANUAL DE PER QUÈ CAP ENUMERACIÓ ES DECLARA AL CLIENT.
+//
+// Hi vivia `ORIGEN_VARIANT = { IMPORT, MANUAL, MIGRACIO, DICCIONARI }` amb un comentari que deia
+// en veu alta «els QUATRE choices d'origen del model (pom/models.py:243-246)». Tres coses hi
+// eren falses alhora, i cap fallava:
+//
+//  1. **En són CINC.** `CustomerPOMAlias.ORIGEN_CHOICES` declara també `MODEL` («Nascut d'un
+//     model»), afegit després per la migració `0061`. Ningú va tornar a aquest fitxer.
+//  2. **Hi ha qui l'escriu.** `pom/wizard_views.py:694` fa `origen='MODEL'` —el camí «Crear POM
+//     propi del model»— i està documentat allà mateix com a provinença **permanent**. O sigui
+//     que hi ha files reals amb aquest valor i n'hi seguirà havent.
+//  3. **El punter portava a un lloc plausible i fals.** `pom/models.py:243-246` no és una línia
+//     morta: és un `ORIGEN_CHOICES` VIU d'un ALTRE model (n'hi ha quatre blocs al fitxer: 147,
+//     214, 282 i el bo, 513). Qui hi anés a verificar hi trobaria choices, en comptaria quatre i
+//     quedaria tranquil.
+//
+// L'efecte viu era que un àlies amb `origen='MODEL'` pintava **`clients.origen_MODEL` en cru** a
+// la cel·la — el mode de fallada que el comentari de sota descrivia tres línies més avall. El
+// fitxer s'avisava a si mateix i no s'escoltava.
+//
+// Ara els codis surten de `/vocabulari/` (`origens_alias_pom`) i el badge és NEUTRE: la
+// provinença és una CLASSIFICACIÓ, no un semàfor — cap origen és millor ni pitjor que un altre, i
+// verd/daurat/gris/gate repartits suggerien una jerarquia que no existeix
+// (v. `components/commercial/estats`, decisió 3).
 
 export default function CustomerDetail() {
   const { id } = useParams()
@@ -373,7 +394,7 @@ function TecnicTab({ customer, canEdit, t, navigate, notify }) {
     // el diccionari futur pot afegir-lo.
     { key: 'origen', label: t('clients.alias_origen'), min: 110, max: 140, estil: pila, render: r => (
       <div style={{ lineHeight: 1.3 }}>
-        <Badge variant={ORIGEN_VARIANT[r.origen] || 'gray'}>{t(`clients.origen_${r.origen}`)}</Badge>
+        <ClassificacioBadge>{t(`clients.origen_${r.origen}`)}</ClassificacioBadge>
         {r.creat_at && <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', marginTop: 3 }}>{r.creat_at.slice(0, 10)}</div>}
       </div>
     ) },
