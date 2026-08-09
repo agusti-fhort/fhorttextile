@@ -18,6 +18,7 @@ import {
 } from '../../utils/diccionariMesures'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import AvisDiccionari from '../ui/AvisDiccionari'
+import { boto, botoTer } from '../ui/buttons'
 import BateigInput from '../model/BateigInput'
 import { baseMeasurements, poms } from '../../api/endpoints'
 
@@ -83,11 +84,11 @@ const tdS = { padding: '4px 10px', verticalAlign: 'middle', fontSize: FS_VAL }
 // norma igual que LINEAR/STEP → canviable des del desplegable. ZERO/EXCEPTION NO s'ofereixen com a tria
 // nova (ZERO = nínxol "sempre 0"; EXCEPTION = tipus APLICAT per cel·la pel motor —override/excepció—,
 // no un règim de POM); si una fila ja en porta un, es manté com a opció perquè el valor real no s'emmascari.
-const btnPrimary = (disabled) => ({
-  background: disabled ? 'var(--bg-muted)' : 'var(--gold)', color: disabled ? 'var(--text-muted)' : 'var(--text-main)',
-  border: 'none', borderRadius: 6, padding: '7px 18px',
-  fontSize: 'var(--fs-body)', fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer',
-})
+// CODA · retoc 2 (Agus): «GRAVAR POM» ÉS L'ACCIÓ PRIMÀRIA d'aquesta pantalla —és el que has
+// vingut a fer a Definició de POMs— i per tant va en BLAU (§5.1). Anava en daurat ple, que és la
+// llei ANTERIOR a la §5: el daurat feia dues feines alhora (marcar la casa i cridar l'acció) i
+// quan un color diu dues coses no en diu cap. La forma la dona ara `ui/buttons`, compartida.
+const btnPrimary = (disabled) => boto('pri', disabled)
 // v8.1 `kbd` :24-25 — la tecla dibuixada com una tecla: fons de capçalera, filet i cantonada.
 function Kbd({ children }) {
   return (
@@ -97,11 +98,9 @@ function Kbd({ children }) {
     }}>{children}</kbd>
   )
 }
-const btnSecondary = {
-  background: 'transparent', color: 'var(--text-muted)',
-  border: '0.5px solid var(--border)',
-  borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer',
-}
+// CODA · retoc 3: «Descartar canvis» és TERCIÀRIA (§5.4). Fa costat a la primària i el que fa
+// és desfer: no pot demanar la mateixa atenció que gravar.
+const btnSecondary = botoTer
 
 // UNA SOLA TAULA, DOS MODES (05/08). «Definició POM» i «Mesurar prenda» són la mateixa eina
 // —`mesures`— i han de ser la mateixa taula: la mateixa identitat de fila, els mateixos grups
@@ -851,8 +850,16 @@ export default function EditableTable({
                     prometre una talla que ningú ha declarat.
                     v8.1 `th.baseh` — el carril va ACOTAT pels dos costats amb `--line`: és una
                     columna sencera de fons `--sel` i, sense filets, es vessa sobre les veïnes. */}
-                <th rowSpan={2} style={{ ...thS, textAlign: 'right', minWidth: AMPLADES.base, background: 'var(--gold-pale)',
-                                         borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
+                {/* CODA · retoc 1 (Agus, vist a pantalla real): LA LLETRA DE LA TALLA VA CENTRADA
+                    A LA SEVA COLUMNA, no arrambada a la vora dreta. El carril és una columna
+                    d'amplada fixa amb un camp més estret a dins; amb `text-align:right` tant
+                    l'etiqueta com la lletra quedaven enganxades al filet i el buit se n'anava
+                    tot a l'esquerra. La maqueta v9 l'alineava a la dreta; l'ordre és posterior
+                    i mana (jerarquia §8b).
+                    I el carril pren els tokens que la maqueta li dona (`th.baseh`): `--sel` amb
+                    marc `--gold-border`. `--gold-pale` està ELIMINAT del sistema (§1). */}
+                <th rowSpan={2} style={{ ...thS, textAlign: 'center', minWidth: AMPLADES.base, background: 'var(--sel)',
+                                         borderLeft: '1px solid var(--gold-border)', borderRight: '1px solid var(--gold-border)' }}>
                   {displaySize ? (
                     <>
                       <span style={{ display: 'block', fontWeight: 600, color: 'var(--gold)' }}>
@@ -1296,9 +1303,11 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
             : row.base_vigent}
         </td>
       )}
-      {/* v8.1 `td.valcell` — EL CARRIL, acotat pels dos costats amb `--line` sobre `--sel`. */}
-      <td style={{ ...tdS, textAlign: 'right', background: 'var(--gold-pale)',
-                   borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
+      {/* v8.1 `td.valcell` — EL CARRIL, acotat pels dos costats sobre `--sel`.
+          CODA · retoc 1: el CAMP va centrat a la columna (el número de dins segueix alineat a
+          la dreta i tabular — el que s'ha de poder escombrar amunt i avall és la xifra). */}
+      <td style={{ ...tdS, textAlign: 'center', background: 'var(--sel)',
+                   borderLeft: '1px solid var(--gold-border)', borderRight: '1px solid var(--gold-border)' }}>
         <CarrilInput
           value={row.base_value_cm}
           readOnly={readOnly}
