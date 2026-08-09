@@ -3736,7 +3736,7 @@
       "empty_rules_body": "Un juego vacío no se puede asignar a ningún modelo.",
       "note_no_break": "Ninguna regla con ruptura: el incremento es constante en todo el run. Solo las reglas con Δ break pueden recibir una.",
       "add_pom": "＋ Añadir POM",
-      "add_pom_blocked": "Todavía no se puede añadir un POM desde aquí: la API no deja decir a qué juego va la regla nueva. Requiere backend.",
+      "add_pom_blocked": "Requiere una talla base que el motor no lee nunca (metadata del seed). Se abre con CAT2.1, en el paquete del catálogo nuevo.",
       "save_rules": "Grabar reglas",
       "rule_removed": "Regla marcada como inactiva.",
       "relations_notice": "Las relaciones ordenan la propuesta, nunca esconden nada. Una capa sin nada marcado no quiere decir «sirve para todos»: quiere decir NO DECLARADO — nadie lo ha dicho todavía.",

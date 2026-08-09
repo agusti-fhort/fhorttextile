@@ -3736,7 +3736,7 @@
       "empty_rules_body": "Un joc buit no es pot assignar a cap model.",
       "note_no_break": "Cap regla amb trencament: l'increment és constant a tot el run. Només les regles amb Δ break en poden rebre un.",
       "add_pom": "＋ Afegir POM",
-      "add_pom_blocked": "Encara no es pot afegir un POM des d'aquí: l'API no deixa dir a quin joc va la regla nova. Demana backend.",
+      "add_pom_blocked": "Requereix una talla base que el motor no llegeix mai (metadata del seed). S'obre amb CAT2.1, al paquet del catàleg nou.",
       "save_rules": "Gravar regles",
       "rule_removed": "Regla marcada com a inactiva.",
       "relations_notice": "Les relacions ordenen la proposta, mai amaguen res. Una capa sense res marcat no vol dir «serveix a tothom»: vol dir NO DECLARAT — ningú no ho ha dit encara.",

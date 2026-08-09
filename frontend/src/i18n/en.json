@@ -3736,7 +3736,7 @@
       "empty_rules_body": "An empty set cannot be assigned to any model.",
       "note_no_break": "No rule has a break: the increment is constant across the run. Only rules with a Δ break can receive one.",
       "add_pom": "＋ Add POM",
-      "add_pom_blocked": "A POM cannot be added here yet: the API does not let the new rule say which set it belongs to. Needs backend.",
+      "add_pom_blocked": "Requires a base size the engine never reads (seed metadata). It opens with CAT2.1, in the new-catalogue package.",
       "save_rules": "Save rules",
       "rule_removed": "Rule marked as inactive.",
       "relations_notice": "Relations order the proposal, they never hide anything. A layer with nothing marked does not mean “serves everyone”: it means NOT DECLARED — nobody has said so yet.",

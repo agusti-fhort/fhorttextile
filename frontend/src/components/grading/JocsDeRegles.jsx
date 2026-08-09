@@ -773,17 +773,32 @@ function Joc({ joc, run, vocabularis, regimsAutorables, accions, onTanca, onCanv
             </div>
 
             <div style={cx.sfoot}>
-              {/* 🛑 BLOQUEJAT, I EL BOTÓ HO DIU. `GradingRuleSerializer` té `rule_set` com a
-                  read_only: un POST a /grading-rules/ no pot dir a quin joc va, i `talla_base`
-                  és FK obligatòria. Afegir un POM demana backend, no pell — v. el report. */}
+              {/* 🛑 BLOQUEJAT, I EL BOTÓ DIU LA PARET DE DEBÒ.
+                  El motiu que hi havia aquí —«`rule_set` és read_only»— era MITJA VERITAT, i
+                  amagava la que mana: `talla_base` és una FK NOT NULL que demana **una dada que
+                  ningú té i que el motor no llegeix mai** (`grading_utils.py:72`: «mer metadata
+                  del seed»). Un `read_only` es treu amb una línia; això no.
+                  DECISIÓ D'AGUS (09/08): s'obre per la VIA C —fer la FK nullable, que és el pas
+                  (b) de CAT2.1— i **no ara**: va al paquet del CATÀLEG NOU, on la sembra del
+                  corpus i la migració es fan juntes. Avui 46 dels 47 jocs no tenen cap regla:
+                  obrir el botó seria obrir una porta a una sala buida.
+                  Les tres vies i el seu preu: `docs/diagnosis/DIAGNOSI_AFEGIR_POM.md`. */}
               <Boto disabled title={t('grading.jocs.add_pom_blocked')}>
                 <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 14 }} />
                 {t('grading.jocs.add_pom')}
               </Boto>
-              {/* Sense cap regla, el que s'ha de dir NO és què passa amb el trencament (seria
-                  cert i buit): és per què el botó de dalt no respon. */}
+              {/* EL MOTIU, SEMPRE VISIBLE i al costat del botó que apaga. Abans només sortia
+                  escrit quan el joc no tenia cap regla; amb regles se n'anava al `title`, i un
+                  motiu que s'ha de descobrir amb el ratolí és mig amagat. Un control apagat
+                  sense motiu llegible no és un estat: és una avaria (§8c). */}
+              <span style={{ ...cx.note, flex: 'none', maxWidth: 420, fontStyle: 'italic',
+                             color: 'var(--text-faint)' }}>
+                {t('grading.jocs.add_pom_blocked')}
+              </span>
+              {/* I la nota del trencament segueix sent la seva: parla de les regles que hi ha,
+                  no del botó. Sense cap regla seria certa i buida, i per això calla. */}
               <span style={cx.note}>
-                {!regles.length ? t('grading.jocs.add_pom_blocked')
+                {!regles.length ? ''
                   : ambBreak ? t('grading.jocs.note_break', { count: ambBreak, total: regles.length })
                     : t('grading.jocs.note_no_break')}
               </span>

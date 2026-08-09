@@ -97,9 +97,18 @@ TRAMS = {
     'coda': [
         ('01_fons_pagina', '/models',
          'retoc 4 · el fons de pagina passa de --gray-l (gris fred) a --bg-page (blanc calid)', []),
+        # ⚠️ AQUESTA ADREÇA ÉS UN GEST, NO UNA VISTA (`PARAMS_DE_TREBALL`): obre la tasca de
+        # Definició POM i li engega el rellotge. Va deixar dues tasques i una fase moguda al
+        # banc. Si s'ha de tornar a fotografiar, que sigui sobre un model de sacrifici.
         ('02_definicio_pom', f'/models/{MODEL}?tab=Mesures&mode=entry',
          'retocs 1+2+3 · carril de talla base CENTRAT · «Gravar POM» BLAU · «Descartar» terciaria',
          [('click', 'text=Introduir manualment')]),
+    ],
+    # El motiu del botó bloquejat: es llegeix sense tocar res (consulta pura).
+    'coda2': [
+        ('03_afegir_pom_motiu', '/poms/grading',
+         'el motiu del boto «＋ Afegir POM», que ara diu la paret de debo',
+         [('fill', 'input[placeholder*="cerca"]', 'ZZ'), ('click', 'button:has-text("Editar")')]),
     ],
 }
 PANTALLES = TRAMS[TRAM]
