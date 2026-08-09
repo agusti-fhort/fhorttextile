@@ -26,7 +26,10 @@ import requests
 from playwright.sync_api import sync_playwright
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-DIST = REPO / 'frontend' / 'dist'
+# `FTT_QA_DIST` reapunta el bundle a un outDir de proves (mateix motiu que a
+# `qa_auditoria_computats.py`: aquí `npm run build` DESPLEGA, i mesurar un canvi propi no pot
+# obligar a publicar el codi a mig fer d'una altra sessió). Sense la variable, com sempre.
+DIST = pathlib.Path(os.environ.get('FTT_QA_DIST') or (REPO / 'frontend' / 'dist'))
 MAQ = REPO / 'ops' / 'maquetes'
 BASE = 'https://staging.fhorttextile.tech'
 VIU = 'http://127.0.0.1:8001'
@@ -213,6 +216,19 @@ CASOS = [
     ('A6', 'píndola de secció en repòs', 'PROPOSTA_menu_pantalla_v3.html',
      '.pmenu .pill:not(.on)', [],
      '/models/1319', [], 'button:text-is("Escalat")'),
+    # ── C1 · EDITOR .ftt · el menú de pantalla, DINS D'UNA EINA A PANTALLA COMPLETA ──────
+    # La fusió de capçaleres hi va muntar el mateix `ui/PageMenu` que porten Mesures i Fitting.
+    # Que el component sigui compartit **no és la prova**: aquesta pantalla el declara amb
+    # `rightChildren` propis, dins d'un `<main>` amb el padding cancel·lat pels quatre costats i
+    # sota un `--chrome-h` que aquí val el doble que a la resta. Si res d'això li canviés la
+    # pell —una herència de `fontFamily`, un `color` del contenidor— la maqueta ho diria i el
+    # cens de paleta no, perquè el color seguiria sent de la llista.
+    ('C1', 'píndola de secció ACTIVA', 'PROPOSTA_menu_pantalla_v3.html',
+     '.pill.on', [],
+     '/models/1319/ftt/761', [], 'button[aria-current="page"]'),
+    ('C1', 'píndola de secció en repòs', 'PROPOSTA_menu_pantalla_v3.html',
+     '.pmenu .pill:not(.on)', [],
+     '/models/1319/ftt/761', [], 'button:text-is("Escalat")'),
     # ── A7 · Resum · EL WIZARD PARTIT (§8f) ──────────────────────────────────────────────
     # El tram gros del bloc, i l'únic que no és pell: aquí es mesura que els TRES ESTATS del
     # subespai (FET · ACTUAL · BLOQUEJAT) i el xip d'inclusió pinten el que la maqueta diu.
@@ -279,6 +295,37 @@ CASOS = [
     ('B1', 'targeta de contingut (KPI)', 'PROPOSTA_menu_pantalla_v3.html',
      '.card', [],
      '/', [], 'div:has(> div:text-is("Models de l\'abast"))'),
+    # ── EL MENÚ DE PANTALLA, VERIFICAT A CADA PANTALLA QUE EL MUNTA ──────────────────────
+    # 🚩 **AQUEST BLOC FALTAVA I EL VA DESTAPAR LA SESSIÓ DE PATRONS**, que havia despatxat la
+    # bidireccional del seu lot amb «les meves pantalles no tenen maqueta». És mig fals, i a mi
+    # em passava igual: no hi ha maqueta de Planificació ni de Fittings, però
+    # `PROPOSTA_menu_pantalla_v3.html` **és l'evidència ratificada del §8b** i totes aquestes
+    # pantalles hi munten un `PageMenu`.
+    #
+    # «El component és meu i ja està verificat a B1» NO és la prova. Cada pantalla el declara
+    # en un context diferent —`children` propis, `rightChildren`, un pare amb altres estils— i
+    # si el context li canviés la pell (una herència de `fontFamily`, un `color` del
+    # contenidor), **la maqueta ho diria i el cens de paleta no**, perquè el color seguiria sent
+    # de la llista. Es cobreixen les tres variants estructurals del lot: menú amb SECCIONS,
+    # menú amb una ACCIÓ pujada, i menú de NOMÉS FLETXA.
+    ('B2', 'píndola de secció ACTIVA (6 seccions)', 'PROPOSTA_menu_pantalla_v3.html',
+     '.pill.on', [],
+     '/planificacio', [], 'button[aria-current="page"]'),
+    ('B2', 'píndola de secció en repòs', 'PROPOSTA_menu_pantalla_v3.html',
+     '.pmenu .pill:not(.on)', [],
+     '/planificacio', [], 'button:text-is("Informes")'),
+    ('B2', "fletxa d'enrere (amb destí)", 'PROPOSTA_menu_pantalla_v3.html',
+     '.back', [],
+     '/planificacio', [], 'button[aria-label="Tornar al tauler"]'),
+    ('B3', "ACCIÓ pujada al menú (§8e: perd el color)", 'PROPOSTA_menu_pantalla_v3.html',
+     '.pmenu .pill:not(.on)', [],
+     '/fittings', [], 'button:text-is("Fitting ara")'),
+    ('B4', "menú de NOMÉS FLETXA (§8b.2)", 'PROPOSTA_menu_pantalla_v3.html',
+     '.back', [],
+     '/disseny/documents', [], 'button[aria-label="Tornar al tauler"]'),
+    ('B7', "ACCIÓ pujada al menú", 'PROPOSTA_menu_pantalla_v3.html',
+     '.pmenu .pill:not(.on)', [],
+     '/configuracio/usuaris', [], 'button:text-is("Nou usuari")'),
     # ── B7 · el badge NEUTRE de la graella canònica ─────────────────────────────────────
     # AQUEST CAS ÉS EL REMEI DE LA QUARTA TAPADORA. La bidireccional d'A5 tenia la graella
     # sencera mesurada MENYS els badges, perquè `/models` no en pinta cap d'estat (ESTAT és
