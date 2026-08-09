@@ -652,6 +652,15 @@ mig de la pàgina una passada). Cas normal sense parpelleig; cas anòmal, **degr
 | `npm run build` | ✅ net i **desplegat** (`frontend/dist` és el que serveix staging) |
 | `manage.py check` | ✅ net |
 | **La suite** · `fhort.tasks fhort.models_app fhort.accounts fhort.tenants` | ✅ **966 tests · OK · 0 errors · 0 fallides** (4.499 s = **75 min**) |
+| `node --test "src/**/*.test.js"` | ✅ **218 · 0 fallides** |
+
+🚩 **I una falta de mètode meva, dita aquí perquè quedi:** vaig declarar el lot tancat **amb
+aquesta última porta sense córrer**. La va recordar la sessió de la fitxa tècnica al seu propi
+tancament, no jo — i és una porta que aquest lot es podia haver carregat de debò: he tocat nou
+components de `ui/` i els tres fitxers d'i18n, i les proves de `node` viuen justament al costat
+d'`utils/`. **Va sortir verda, però això no és el punt: el punt és que el «tancat» el vaig dir
+abans de tenir-la.** La llista de condicions d'un STOP no es reconstrueix de memòria al final;
+s'escriu al principi.
 
 **L'única desviació és la declarada** (la tinta de la fletxa d'arrel, que espera Agus). **Els dos
 casos sense mesura estan explicats**: l'estat «cap capa declarada» d'A2 —que el bloc A ja va
