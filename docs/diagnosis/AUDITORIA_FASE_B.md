@@ -692,7 +692,10 @@ a la pròxima correguda. El canvi és semàntic (classificació vs semàfor), no
 publicada i no la consumia ningú perquè el mapa local havia sobreviscut a la meva pròpia neteja.
 **Una declaració a un missatge de commit no és una comprovació.**
 
-### `ops/qa/qa_s2_bidireccional.py` (nou) — **16 casos · 13 casen · 3 desvien**
+### `ops/qa/qa_s2_bidireccional.py` (nou) — ✅ **16 casos · 16 casen · 0 desviacions**
+
+> **Estat FINAL, després que S1 resolgués les tres.** La correguda que les va trobar (13/3) i el
+> que en va sortir es conserven a sota, perquè el valor no és el número sinó el que va destapar.
 
 Cap pantalla del lot comercial té maqueta pròpia: la seva referència és **la germana conformada**.
 Però la §8e diu, amb aquestes paraules, que la graella canònica **«no és un patró opcional de la
@@ -759,3 +762,41 @@ Amb això ja en són tres, i totes tres són el mateix mal amb tres cares:
 
 La xifra de tancament d'aquest lot (**0/13**) està presa amb les tres tancades: bundle que porta
 l'últim commit, token fresc, i la llista d'exempcions ja escurçada.
+
+
+## [S2] RE-CORREGUDA DE TANCAMENT — §8d: si la norma o les maquetes canvien, es torna a mesurar TOT
+
+S1 va resoldre les tres desviacions: `ui/Badge` variant `gray` passa a **`--bg-page` +
+`--text-soft` + `--line`** (mana la maqueta: la §1 reserva `--sel` a la SELECCIÓ i un badge d'estat
+a sobre li roba el significat) i les **cinc** maquetes que portaven `.b.warn` amb els tokens
+anteriors a la §1b(d) queden esmenades a la font amb acta.
+
+Això toca `ui/Badge`, que **el meu lot munta a totes les llistes**. La §8d mana tornar-hi:
+
+| Eina | Resultat |
+|---|---|
+| `qa_s2_computats.py` · 13 rutes | ✅ **0 incompliments** (es manté) |
+| `qa_s2_bidireccional.py` · 16 casos | ✅ **16 casen · 0 desviacions** (era 13/3) |
+
+**Les tres desviacions eren les tres de la maqueta o del component compartit, i el lot no s'ha
+tocat per resoldre-les.** És el que la §8d demana distingir: una desviació no és per definició un
+defecte de pantalla, i «arreglar» la pantalla per fer callar la mesura hauria estat el pitjor
+desenllaç possible — hauria propagat als 21 fitxers d'`ui/Badge` un fons que la norma té reservat.
+
+### 🚨 LA QUARTA TAPADORA · **una comprovació que no toca res és indistingible d'una que passa**
+
+`ui/Badge` i `Models.jsx` portaven **dues definicions divergents del badge neutre** i la
+bidireccional d'A5 donava verd, perquè **la graella de `/models` no pinta cap badge d'estat**: la
+columna ESTAT hi és buida esperant el Kanban i FASE és text pla (§8e). El cas existia, es corria,
+i **no comparava res**.
+
+S'afegeix a la sèrie, que ja en són quatre:
+
+| Tapadora | Com es veu | Com es tanca |
+|---|---|---|
+| **El bundle ranci** | verd o vermell sobre codi que ja no existeix | mirar la data del `dist` |
+| **El token caducat** | l'app cau a `/login` i mesures una altra pantalla | tancament sencer, sense filtres |
+| **L'excepció caducada** | el defecte hi és i l'eina l'absol | revisar *per què* existeix cada exempció |
+| **El cas que no toca res** | verd perquè el selector no troba l'element | comprovar que cada cas MESURA de debò |
+
+Les quatre s'han trobat el mateix dia, entre les dues sessions, i cap es veu llegint codi.
