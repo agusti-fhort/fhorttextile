@@ -193,6 +193,14 @@ dos SPA s'han construït contra un **outDir de proves** (`FTT_QA_DIST`) i s'han 
    acció. He aplicat la ratificació al peu de la lletra («fins a l'última superfície») perquè el
    botó és inequívocament «el que has vingut a fer». **Una línia si es vol l'excepció**; l'ombra
    del botó també ha passat de daurada a blava per no deixar-hi un halo taronja.
-5. **Qui audita el backoffice?** No té arnès i no ha passat la T0.1. Ara hi conviuen el blau nou
+5. **Dues respostes a la mateixa pregunta: «Exportar PDF».** La coda de fusió de capçaleres
+   (commits `133496e2`/`2353c222`, sessió concurrent) va pujar l'«Exportar PDF» de l'editor
+   `.ftt` al `PageMenu`, on el §8e li treu el color: **aquella pantalla queda sense cap blau**.
+   El seu germà `TechSheetTemplateEditor` fa la MATEIXA acció i aquí li he posat el blau,
+   perquè encara es pinta la seva pròpia capçalera i no ha passat la fusió. No és una
+   contradicció de criteri —les dues segueixen la norma des d'on són—, però **el mateix botó
+   es veu de dues maneres**, i això s'arregla absorbint també el template editor al bastiment
+   comú, no repintant-lo.
+6. **Qui audita el backoffice?** No té arnès i no ha passat la T0.1. Ara hi conviuen el blau nou
    i el seu semàfor antic (`--ok #3b6d11`, `--err #a32d2d`), que la §1b(a) ja va moure al
    producte. O hi entra la norma sencera, o no hi entra.
