@@ -13,6 +13,7 @@ import DependencyPanel from './DependencyPanel'
 import WatchpointsPanel from './WatchpointsPanel'
 import SessionPanel from './SessionPanel'
 import SessionActions from './SessionActions'
+import { boto, botoPorta } from '../ui/buttons'
 
 // CHECK sobre l'editor únic MeasureGrid (substitueix SizeCheckWork): UNA graella amb l'historial
 // d'estadis (base-stages, read-only) com a columnes + la columna activa 'Real' (valor_real) + el
@@ -102,12 +103,15 @@ function ReadOnlyDecisioNota({ line }) {
   )
 }
 
-const btn = (variant) => ({
-  fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
-  border: '1px solid var(--line)',
-  background: variant === 'err' ? 'var(--err)' : variant === 'plain' ? 'var(--white)' : 'var(--gold)',
-  color: variant === 'plain' ? 'var(--text-main)' : 'var(--text-main)', fontWeight: 500,
-})
+// CODA · retoc 3 (Agus) — LA JERARQUIA DE LA §5, i UN SOL BLAU per pantalla i estat.
+// Aquí hi havia tres variants pròpies: `gold` (daurat ple = la llei anterior a la §5), `err`
+// (vermell PLE en repòs, que la §5.5 prohibeix fora d'una confirmació) i `plain`. Ara la forma
+// ve de `ui/buttons`, que és on viu la regla:
+//   `gold`  → PRIMÀRIA blava   · `plain` → TERCIÀRIA   · `err` → DESTRUCTIVA amb VORA
+// El vermell ple sobreviu NOMÉS dins del modal de confirmació (`err-ple`), que és on la §5.5
+// el vol: quan l'usuari ja ha dit que sí i el botó ha de dir què passarà.
+const btn = (variant, disabled = false) => boto(
+  variant === 'gold' ? 'pri' : variant === 'plain' ? 'ter' : variant, disabled)
 // fitting_v3 `kbd` :31-32 — la tecla dibuixada com una tecla.
 function Tecla({ children }) {
   return (
@@ -741,8 +745,8 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
             <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: TEXT_2, padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
               <span>{t('basestage.no_base_title')}</span>
               <button type="button" onClick={() => navigate(`/models/${model.id}?tab=Mesures&mode=entry`)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 4, border: '0.5px solid var(--gold)', background: 'var(--white)', color: 'var(--gold)', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
-                <i className="ti ti-ruler-2" aria-hidden="true" style={{ fontSize: 16 }} />
+                style={botoPorta}>
+                <i className="ti ti-ruler-2" aria-hidden="true" style={{ fontSize: 16, color: 'currentColor' }} />
                 {t('basestage.no_base_cta')}
               </button>
             </div>
@@ -763,8 +767,10 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
 
       {src.supportsResolve && !readOnly && check && rows.length > 0 && (
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-          <button style={btn('gold')} disabled={busy} onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.save')}</button>
-          <button style={btn('err')} disabled={busy} onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard')}</button>
+          <button type="button" style={btn('gold', busy)} disabled={busy}
+            onClick={() => onResolveClick('Acceptat')}>{t('sizecheck.save')}</button>
+          <button type="button" style={btn('err', busy)} disabled={busy}
+            onClick={() => onResolveClick('Descartat')}>{t('sizecheck.discard')}</button>
         </div>
       )}
 
@@ -784,8 +790,10 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
             <h3 style={{ margin: '0 0 12px', fontSize: 'var(--fs-h3)', fontWeight: 600 }}>{t('sizecheck.propagate_title')}</h3>
             <p style={{ margin: '0 0 18px', fontSize: 'var(--fs-body)', lineHeight: 1.5, color: 'var(--text-main)' }}>{t('sizecheck.propagate_warning')}</p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button style={btn('plain')} disabled={busy} onClick={() => setConfirm(null)}>{t('common.cancel')}</button>
-              <button style={btn('gold')} disabled={busy} onClick={() => doResolve('Acceptat')}>{t('sizecheck.confirm_propagate')}</button>
+              <button type="button" style={btn('plain', busy)} disabled={busy}
+                onClick={() => setConfirm(null)}>{t('common.cancel')}</button>
+              <button type="button" style={btn('gold', busy)} disabled={busy}
+                onClick={() => doResolve('Acceptat')}>{t('sizecheck.confirm_propagate')}</button>
             </div>
           </div>
         </div>
@@ -801,8 +809,12 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
             <input type="date" value={reDate} onChange={e => setReDate(e.target.value)}
               style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 8px', borderRadius: 4, border: `1px solid ${BORDER}`, marginBottom: 18, width: '100%', boxSizing: 'border-box' }} />
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button style={btn('plain')} disabled={busy} onClick={() => setReschedule(null)}>{t('common.cancel')}</button>
-              <button style={btn(reschedule.estat === 'Descartat' ? 'err' : 'gold')} disabled={busy || !reDate}
+              <button type="button" style={btn('plain', busy)} disabled={busy}
+                onClick={() => setReschedule(null)}>{t('common.cancel')}</button>
+              {/* §5.5 — el vermell PLE viu NOMÉS aquí: al botó que confirma la destrucció, quan
+                  l'usuari ja ha dit que sí i el color ha de dir què passarà. */}
+              <button type="button" disabled={busy || !reDate}
+                style={btn(reschedule.estat === 'Descartat' ? 'err-ple' : 'gold', busy || !reDate)}
                 onClick={() => doResolve(reschedule.estat, { data_represa: reDate })}>{t('sizecheck.reschedule_confirm')}</button>
             </div>
           </div>

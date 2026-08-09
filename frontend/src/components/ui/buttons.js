@@ -24,3 +24,58 @@ export const primaryBtn = {
   display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', background: 'var(--accio)', color: 'var(--white)',
   border: 'none', borderRadius: 6, padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', fontFamily: MONO,
 }
+
+// ── LA FAMÍLIA SENCERA DE LA §5 (coda del bloc B) ─────────────────────────────────────────
+//
+// `primaryBtn` (a dalt) porta `marginLeft: 'auto'` cuit a dins i el consumeixen 28 fitxers: no
+// es toca. El que faltava era LA RESTA de la família, i mentre no hi fos cada superfície se
+// l'inventava — `btn('gold')` a `CheckMeasureEditor`, un altre `btn('gold')` a `SessionActions`,
+// `btnPrimary`/`btnSecondary` a `EditableTable`—, i totes tres deien que l'acció primària era
+// DAURADA, que és la llei anterior a la §5. Tres còpies de la mateixa decisió és com la
+// pantalla d'edició de mesures va acabar amb tres botons daurats i cap blau.
+//
+// LES SIS FORMES, i què vol dir cadascuna:
+//   PRIMÀRIA    `--accio` ple + tinta blanca. «El que has vingut a fer», UNA per pantalla i
+//               estat. Si n'hi ha dues, una de les dues no ho és.
+//   SECUNDÀRIA  blanc + vora `--gold-border`. Accions de la casa que no completen la feina.
+//   PORTA       IDÈNTICA a la secundària (§5.3): anar a un altre lloc no compromet res, i per
+//               això no pot cridar més que l'acció que sí que compromet. Té nom propi perquè
+//               el motiu és un altre, no perquè es pinti diferent.
+//   TERCIÀRIA   text sol, hover `--sel`. Cancel·lar, descartar canvis, tancar.
+//   DESTRUCTIVA vora i tinta `--err`, **MAI plena en repòs** (§5.5).
+//   DESTRUCTIVA PLENA  `--err` ple: NOMÉS al botó de confirmació d'un modal, mai a la pantalla.
+//
+// La vora es declara amb longhands a posta: una shorthand `border` posada després de la seva
+// pròpia longhand la reescriu sencera, i és exactament el defecte que el bloc A va haver de
+// caçar amb el navegador (línies negres de 3px on hi havia d'haver un filet d'1px).
+const botoBase = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 500, lineHeight: '16px',
+  borderRadius: 'var(--r-ctrl)', padding: '8px 16px',
+  borderWidth: 1, borderStyle: 'solid', cursor: 'pointer',
+}
+
+export const botoPri = { ...botoBase, background: 'var(--accio)', borderColor: 'var(--accio)', color: 'var(--white)', fontWeight: 600 }
+export const botoSec = { ...botoBase, background: 'var(--panel)', borderColor: 'var(--gold-border)', color: 'var(--text-main)' }
+export const botoPorta = botoSec
+export const botoTer = { ...botoBase, background: 'none', borderColor: 'transparent', color: 'var(--text-soft)' }
+export const botoDestructiu = { ...botoBase, background: 'var(--panel)', borderColor: 'var(--err)', color: 'var(--err)' }
+export const botoDestructiuPle = { ...botoBase, background: 'var(--err)', borderColor: 'var(--err)', color: 'var(--white)', fontWeight: 600 }
+
+/** §5.7 · DESHABILITAT: **baixa el fons, no la tinta**. L'`opacity` que hi havia escampada
+ *  apagava també el text i el deixava per sota d'AA — un botó que no es pot prémer ha de seguir
+ *  sent llegible, perquè el que diu és justament el que no es pot fer ara. */
+export const apagat = {
+  background: 'var(--bg-page)', borderColor: 'var(--line)', color: 'var(--text-faint)',
+  cursor: 'not-allowed',
+}
+
+/** Ajuda per als llocs que ja tenien `btn(variant, disabled)`: retorna l'estil sencer. */
+export const boto = (variant = 'sec', disabled = false) => ({
+  ...(variant === 'pri' ? botoPri
+    : variant === 'ter' ? botoTer
+      : variant === 'err' ? botoDestructiu
+        : variant === 'err-ple' ? botoDestructiuPle
+          : botoSec),
+  ...(disabled ? apagat : null),
+})

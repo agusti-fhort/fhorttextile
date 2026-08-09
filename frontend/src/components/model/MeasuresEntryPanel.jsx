@@ -5,6 +5,7 @@ import ImportWizard from '../ImportWizard/ImportWizard'
 import Modal from '../ui/Modal'
 import ModelPicker from './ModelPicker'
 import { IconBulb, IconX } from '@tabler/icons-react'
+import { botoPorta } from '../ui/buttons'
 import { models } from '../../api/endpoints'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -278,13 +279,13 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                 fit: baseSetAbsent.fit_type || t('base_set_panel.fit_regular'),
               })}
             </div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)', marginTop: 4 }}>
+            <div style={{ color: 'var(--text-soft)', fontSize: 'var(--fs-label)', marginTop: 4 }}>
               {t('measures_entry.base_set_absent_hint')}
             </div>
           </div>
           <button type="button" onClick={() => setBaseSetAbsent(null)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2,
-                     color: 'var(--text-muted)', display: 'inline-flex' }}
+                     color: 'var(--text-soft)', display: 'inline-flex' }}
             title={t('common.close')}>
             <IconX size={16} stroke={1.5} />
           </button>
@@ -325,13 +326,13 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
               </label>
             ))}
           </div>
-          <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', margin: '10px 0 0' }}>
+          <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', margin: '10px 0 0' }}>
             {t('measures_entry.copy_sobirania_hint')}
           </p>
           {copySrcPoms.length > 0 && (
             <>
               <p style={{ fontSize: 'var(--fs-body)', margin: '12px 0 0',
-                          color: copyPomIds.length === 0 ? 'var(--warn)' : 'var(--text-muted)' }}>
+                          color: copyPomIds.length === 0 ? 'var(--warn)' : 'var(--text-soft)' }}>
                 {copyPomIds.length === 0
                   ? t('measures_entry.copy_count_zero')
                   : t('measures_entry.copy_count', { total: copySrcPoms.length, tria: copyPomIds.length })}
@@ -358,7 +359,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
           confirmDisabled={savingPom}
         >
           <p style={{ fontSize: 'var(--fs-body)', margin: 0, display: 'flex', alignItems: 'flex-start', gap: 8,
-                      color: pomReseed ? 'var(--err)' : 'var(--text-muted)' }}>
+                      color: pomReseed ? 'var(--err)' : 'var(--text-soft)' }}>
             {pomReseed && <i className="ti ti-alert-triangle" style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }} />}
             {pomReseed ? t('model_measurements.gravar_confirm_reseed') : t('model_measurements.gravar_confirm_simple')}
           </p>
@@ -366,7 +367,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
       )}
 
       {mode === 'loading' && !error && (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-soft)' }}>
           {t('model_sheet.loading')}
         </div>
       )}
@@ -376,7 +377,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
           <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '0 0 0.5rem' }}>
             {t('model_measurements.pom_title')}
           </h2>
-          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: '1.5rem' }}>
             {t('model_measurements.intro')}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
@@ -386,7 +387,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                        opacity: seedBusy ? 0.6 : 1 }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}><i className="ti ti-pencil" style={{ color: 'var(--gold)' }} /></div>
               <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.manual_title')}</div>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
                 {t('model_measurements.manual_desc', { type: model?.garment_type_nom || t('model_measurements.this_garment') })}
               </div>
               {pomsSuggerits.length > 0 && (
@@ -400,7 +401,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                        borderRadius: 12, padding: '1.5rem', cursor: 'pointer' }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}><i className="ti ti-bolt" style={{ color: 'var(--gold)' }} /></div>
               <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 6 }}>{t('model_measurements.import_title')}</div>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_measurements.import_desc')}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('model_measurements.import_desc')}</div>
             </div>
             {/* Sprint B — tercera via de gènesi: el patrimoni d'un model germà. Ni manual ni
                 import: el que ja està mesurat en un altre model d'aquesta col·lecció. */}
@@ -409,7 +410,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                        borderRadius: 12, padding: '1.5rem', cursor: 'pointer' }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}><i className="ti ti-copy" style={{ color: 'var(--gold)' }} /></div>
               <div style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 6 }}>{t('measures_entry.copy_title')}</div>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('measures_entry.copy_desc')}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('measures_entry.copy_desc')}</div>
             </div>
           </div>
         </div>
@@ -422,7 +423,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
               <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '0 0 0.25rem' }}>
                 {t('model_measurements.pom_title')}
               </h2>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
                 {t('model_measurements.pom_subtitle')}
               </div>
             </div>
@@ -432,15 +433,15 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                   que el botó de la barra de consulta. */}
               {onGraduacio && (
                 <button type="button" onClick={onGraduacio}
-                  style={{ background: 'transparent', color: 'var(--gold)', border: '0.5px solid var(--gold)',
-                           borderRadius: 6, padding: '7px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
-                  <i className="ti ti-chart-arrows-vertical" /> {t('graduacio.button')}
+                  style={botoPorta}>
+                  <i className="ti ti-chart-arrows-vertical" aria-hidden="true"
+                     style={{ fontSize: 14, color: 'currentColor' }} /> {t('graduacio.button')}
                 </button>
               )}
               <button type="button" onClick={() => setMode('import')}
-                style={{ background: 'transparent', color: 'var(--gold)', border: '0.5px solid var(--gold)',
-                         borderRadius: 6, padding: '7px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
-                <i className="ti ti-upload" /> {t('model_measurements.import_table')}
+                style={botoPorta}>
+                <i className="ti ti-upload" aria-hidden="true"
+                   style={{ fontSize: 14, color: 'currentColor' }} /> {t('model_measurements.import_table')}
               </button>
             </div>
           </div>
@@ -474,7 +475,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                        background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
               ← {t('app.back')}
             </button>
-            {hasValues && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('model_measurements.unsaved_pom_hint')}</span>}
+            {hasValues && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('model_measurements.unsaved_pom_hint')}</span>}
           </div>
         </div>
       )}
@@ -497,7 +498,7 @@ function POMChipSuggerit({ pom, selected, onToggle }) {
         padding: '3px 10px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
         border: selected ? '1.5px solid var(--gold)' : '0.5px solid var(--border)',
         background: selected ? 'var(--gold-pale)' : 'transparent',
-        color: selected ? 'var(--gold)' : 'var(--text-muted)',
+        color: selected ? 'var(--gold)' : 'var(--text-soft)',
       }}>
       <span style={{ marginRight: 4 }}>{pom.pom_code}</span>
       {pom.nom_ca || pom.nom_en}
