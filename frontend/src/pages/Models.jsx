@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { models as modelsApi, commerce } from '../api/endpoints'
@@ -266,6 +266,17 @@ export default function Models() {
     if (selectAllFilter) setExcludeIds(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
     else toggle(id)
   }
+  // El checkbox de capçalera té TRES estats, no dos: buit (res triat), ple (tota la pàgina —o
+  // tot el conjunt— triat) i INDETERMINAT (n'hi ha de triats, però no tots). Sense el tercer,
+  // una pàgina amb 3 files marcades ensenya el mateix control que una pàgina sense res marcat,
+  // i el gest de «marca-ho tot» queda dient una cosa falsa. En mode conjunt l'indeterminat és
+  // l'existència d'exclusions: «tots els del filtre MENYS aquests».
+  //
+  // I quan és indeterminat, `checked` ha de ser FALS. `indeterminate` només pinta: el navegador
+  // hi ensenya el guionet tant si `checked` és cert com si no, i deixar-l'hi cert fa que el
+  // control DIGUI «marcat» a qui l'escolta (el lector de pantalla llegeix `checked`, no el
+  // dibuix) mentre a la pantalla hi ha un guionet. Ho va caçar l'arnès, no la lectura.
+  const capParcial = selectAllFilter ? excludeIds.size > 0 : (selected.size > 0 && !allOnPage)
   const toggleAll = () => {
     if (selectAllFilter) { clearConjunt(); return }   // sortir del mode conjunt
     setSelected(s => {
@@ -288,10 +299,18 @@ export default function Models() {
   const cols = useMemo(() => [
     {
       key: 'chk', amplada: 30,
+      // EL GEST DE CONJUNT VIU A LA CAPÇALERA de la seva columna, com la graella canònica
+      // (`NORMA_LLISTA_canonica.html`: `<th class="c-chk"><input type="checkbox" class="chk">`).
+      // Abans era una línia solta sota la taula: un control de la taula que vivia fora de la
+      // taula, i que a més obligava a llegir-ne el rètol per saber què marcava.
+      // OCULT en mode intenció: allà la selecció és individual i limitada a N, i «tot» n'és
+      // l'oposat conceptual —el mateix motiu pel qual la banda de conjunt tampoc hi surt.
+      renderCap: () => (intentMode ? null : (
+        <Checkbox checked={(selectAllFilter || allOnPage) && !capParcial} indeterminat={capParcial}
+          onChange={toggleAll} label={t('models_list.select_page')} titol />
+      )),
       render: (m) => (
-        <input type="checkbox" checked={rowChecked(m.id)} onClick={e => e.stopPropagation()}
-          onChange={() => rowToggle(m.id)} aria-label={m.codi_intern}
-          style={{ width: 14, height: 14, accentColor: 'var(--gold)', display: 'block' }} />
+        <Checkbox checked={rowChecked(m.id)} onChange={() => rowToggle(m.id)} label={m.codi_intern} />
       ),
     },
     {
@@ -362,8 +381,10 @@ export default function Models() {
       key: 'del', amplada: 36,
       render: (m) => (intentMode ? null : <BotoEsborrar onClick={(e) => remove(m, e)} title={t('models_list.delete')} />),
     },
+    // `items` i `allOnPage` hi són perquè la capçalera de `chk` ara depèn de la PÀGINA (què hi
+    // ha i què hi ha triat): sense ells el control de conjunt es queda amb la pàgina anterior.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, dateLocale, intentMode, selectAllFilter, excludeIds, selected])
+  ], [t, dateLocale, intentMode, selectAllFilter, excludeIds, selected, items, allOnPage, capParcial])
 
   const VISTES = [
     ['curs', t('models_list.view_active')],
@@ -495,15 +516,6 @@ export default function Models() {
           </>
         )}
 
-        {/* Select all (pàgina) — sota la taula, com la resta de gestos de conjunt. OCULT en mode
-            intenció (selecció individual limitada, no conjunt). */}
-        {!intentMode && visibleItems.length > 0 && (
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontFamily: MONO, margin: '0 0 12px 2px', cursor: 'pointer' }}>
-            <input type="checkbox" checked={selectAllFilter || allOnPage} onChange={toggleAll} />
-            {t('models_list.select_page')}
-          </label>
-        )}
-
         {/* Paginació */}
         {pages > 1 && (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 4, marginBottom: 18, fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
@@ -626,6 +638,22 @@ function SetBadge({ m, t }) {
       title={t('models_list.set_hint', { codi: gs.codi_base, nom: gs.nom_comercial || '' })}>
       {t('models_list.set_badge', { n: m.piece_number ?? '?', total: gs.num_pieces })}
     </Badge>
+  )
+}
+
+// El checkbox de la columna `chk` — el de fila i el de capçalera són EL MATEIX control (mateixa
+// mida, mateix `accentColor` daurat), que és el que la graella canònica ensenya.
+//
+// `indeterminate` NO és un atribut d'HTML: és una PROPIETAT del node, i React no la pot passar
+// per JSX. Escriure-la amb un ref és l'única manera que el navegador pinti el tercer estat; fer
+// veure que no existeix seria pintar «buit» quan la pàgina té files triades.
+function Checkbox({ checked, indeterminat = false, onChange, label, titol = false }) {
+  const ref = useRef(null)
+  useEffect(() => { if (ref.current) ref.current.indeterminate = !!indeterminat }, [indeterminat])
+  return (
+    <input ref={ref} type="checkbox" checked={checked} onChange={onChange}
+      onClick={e => e.stopPropagation()} aria-label={label} title={titol ? label : undefined}
+      style={{ width: 14, height: 14, accentColor: 'var(--gold)', display: 'block' }} />
   )
 }
 

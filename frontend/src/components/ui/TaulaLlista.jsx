@@ -81,7 +81,12 @@ function Capcalera({ col, ordre, onOrdenar }) {
         cursor: ordenable ? 'pointer' : 'default',
         userSelect: 'none',
       }}>
-      {col.label}
+      {/* La capçalera d'una columna no sempre és un rètol: a la graella canònica el `th` de la
+          columna `chk` porta el CONTROL de conjunt (`<th class="c-chk"><input type="checkbox">`).
+          `renderCap` deixa que la columna pinti la seva pròpia capçalera; sense ell, l'etiqueta
+          de sempre. El control el dona la pantalla —aquí no hi ha ni literals ni estat de
+          selecció—, i la caixa del `th` (mida, filet, fons) segueix sent la de la norma. */}
+      {col.renderCap ? col.renderCap() : col.label}
       {ordenable && <IconaOrdre estat={mana ? ordre.dir : 'cap'} hover={hover} />}
     </th>
   )
@@ -124,7 +129,8 @@ function Fila({ cols, fila, triada, onObrir, hover, setHover }) {
 
 /**
  * @param {Array}    cols     [{ key, label, min, max, amplada, align, sort, estil, render,
- *                              titol, titolCap }] — `render(fila)` pinta la cel·la
+ *                              renderCap, titol, titolCap }] — `render(fila)` pinta la cel·la i
+ *                              `renderCap()`, si hi és, la CAPÇALERA en lloc de `label`
  * @param {Array}    files    les files ja carregades (la pantalla mana la paginació)
  * @param {Function} clau     fila → id estable
  * @param {Object}   ordre    { camp, dir: 'asc'|'desc' } | null
