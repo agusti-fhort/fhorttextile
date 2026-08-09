@@ -1710,42 +1710,48 @@ d'eines**; això és una decisió de com es veu una eina inactiva, no un descuit
 > amb el criteri escrit a la mà. *Un criteri escrit troba coses que la mateixa persona no veu
 > tornant a mirar el mateix codi.*
 
-## 🚨 EL RECOMPTE ÉS ESTABLE I EL QUE COMPTA NO
+## 🚨 UN RECOMPTE GAIREBÉ ESTABLE AMAGA UN CONJUNT QUE BALLA
 
 La sessió 1 va avisar que els silencis de la bidireccional **no són sempre els mateixos** entre
 corregudes (el gest depèn de les dades vives del run que l'arnès obre) i va recomanar córrer-la
 dos cops abans de tancar el número. **Jo havia declarat el meu amb UNA sola correguda.**
-Corregut dos cops, i el resultat afina l'avís:
 
-| | Correguda 1 | Correguda 2 |
-|---|---|---|
-| Els 2 casos de C1 | ✓ casen | ✓ casen |
-| Desviació | la declarada | la declarada |
-| Silenci A5 | badge NEUTRE | badge NEUTRE — **estable** |
-| Silenci A2 | «estat buit» | **«capa de restricció TRIADA»** — **ha canviat de cas** |
+Corregut dos cops pel meu cantó i **quatre** pel seu, sobre el mateix bundle:
 
-🔑 **I aquí hi ha la part que l'avís no deia: el RECOMPTE amb prou feines es mou i el CONJUNT
-sí.**
+| | C1 (meva) | C2 (meva) | S1 ×4 |
+|---|---|---|---|
+| Els 2 casos de C1 | ✓ casen | ✓ casen | — |
+| Desviació | la declarada | la declarada | la declarada ×4 |
+| Silenci **A5** | badge NEUTRE | badge NEUTRE | ✔✔✔✔ — **estable** |
+| Silenci **A2** | «estat buit» | «capa TRIADA» | buit · — · buit · TRIADA |
+| **Recompte** | 2 | 2 | **2 · 1 · 2 · 2** |
 
-> ⚠️ **CORRECCIÓ, i és del mateix dia.** Aquí hi deia «el recompte NO es mou», i ho vaig
-> escriure amb **dues** corregudes. La sessió 1 en va fer **quatre** i el número es mou una
-> vegada: `2 · 1 · 2 · 2`. La frase era certa a la meva mostra i falsa com a afirmació.
-> **Corregida, i el que en surt és pitjor del que jo deia, no millor:** un recompte que
-> aguanta tres de cada quatre vegades **és més convincent com a estabilitat** que un que
-> balla a la vista, i per tant amaga millor el conjunt que hi ha a sota. Un número gairebé
-> estable no és un número estable amb soroll: és una trampa més bona. Qui segueixi el número veurà una estabilitat perfecta mentre **cada
-correguda deixa un cas DIFERENT sense mesurar**. És la família del dia amb una volta més: no és
-un verd que es dona per fet, és **un número estable que amaga un conjunt que balla**. Un
-recompte reproduïble no vol dir una mesura reproduïble.
+🔑 **EN BALLA UN, NO DOS**, i la distinció importa perquè **tenen causes diferents i només una és
+arreglable**: el d'A5 és un selector que no troba (es tanca amb un selector millor) i el d'A2
+depèn del gest sobre les dades vives (no es tanca sense fixar el banc). Barrejar-los faria que el
+que té remei semblés tan irremeiable com l'altre.
 
-**I la causa fàcil està descartada, que és el que fa que «depèn de les dades» sigui una
-conclusió i no una hipòtesi:** `_gestos` s'engolia TOTES les excepcions (`except Exception:
-pass`), o sigui que un clic fallit per temps deixava la pantalla en un altre estat i el cas
-sortia com a «no toca res», **indistingible d'un estat que de debò no és assolible**. La sessió 1
-ho va fer parlar (commit 276) i en quatre corregudes **cap gest falla**. L'arnès no és la causa.
+⚠️ **I LA MEVA PRIMERA FORMULACIÓ ERA «EL RECOMPTE NO ES MOU I EL CONJUNT SÍ», TRETA DE n=2.**
+Les quatre corregudes de la sessió 1 la falsen: el recompte fa `2 · 1 · 2 · 2`. Era certa a la
+meva mostra i **falsa com a afirmació** — generalitzar des de dues mostres, que és la falta que
+aquest mateix report assenyala a tot arreu, comesa a la conclusió que en treia.
 
-**Conseqüència pràctica:** el número de silencis no es pot llegir sol. La línia que els enumera
-—que l'arnès ja imprimeix— **és la dada; el recompte n'és el resum, i el resum aquí menteix per
-omissió.** Els dos casos propis (C1) casen a totes dues corregudes, o sigui que la conformitat
-d'aquest lot no en depèn; però el número global d'aquest report s'ha de llegir amb la llista al
-costat, no en comptes d'ella.
+**I corregida surt PITJOR del que jo deia, no millor:**
+
+> Un recompte que aguanta **tres de cada quatre** vegades és **més convincent** com a
+> estabilitat que un que balla a la vista — i per tant **amaga millor** el conjunt que hi ha a
+> sota. **Un número gairebé estable no és un número estable amb soroll: és una trampa més
+> bona.** L'estabilitat mateixa és el que et convenç de no mirar-hi.
+
+**I la causa fàcil està descartada**, que és el que fa que «depèn de les dades» sigui una
+conclusió i no una hipòtesi: `_gestos` s'engolia TOTES les excepcions (`except Exception: pass`),
+o sigui que un clic fallit per temps deixava la pantalla en un altre estat i el cas sortia com a
+«no toca res», **indistingible d'un estat que de debò no és assolible**. La sessió 1 ho va fer
+parlar (commit 276) i en quatre corregudes **cap gest falla**. L'arnès no és la causa. *La
+comprovació no va trobar res, i justament per això val: és l'única de les dues explicacions que
+ha estat sotmesa a poder fallar.*
+
+**CONSEQÜÈNCIA PER A LA LECTURA D'AQUEST REPORT: el recompte de silencis no es pot llegir sol.**
+La línia que els ENUMERA —que l'arnès ja imprimeix— és la dada; el recompte n'és el resum, i aquí
+**el resum menteix per omissió**. Els dos casos propis (C1) casen a totes dues corregudes, o
+sigui que la conformitat d'aquest lot no en depèn.
