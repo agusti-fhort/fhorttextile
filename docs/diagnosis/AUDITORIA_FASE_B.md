@@ -504,3 +504,68 @@ cadascun amb la seva acció i el seu comptador. Aplanar-ho perdria el que la pan
 connectar-hi cap control (els números, a cada commit), `npx eslint src` → **0 errors**, i el cens
 de tokens del perímetre a **0**. **El que NO**: la pell de les graelles plenes. No està amagat:
 està dit.
+
+---
+
+## [S2] VERIFICACIÓ MESURADA
+
+### `ops/qa/qa_s2_computats.py` (nou) — ✅ **0 incompliments · 13 rutes**
+
+No duplica lògica: importa el mesurador de `qa_auditoria_computats` —la paleta ratificada, el JS
+de `getComputedStyle`, el proxy cap al servei viu i el veredicte— i **només li canvia
+`PANTALLES`**. Runner i no ampliació de la llista original perquè el fitxer és de la sessió
+germana i s'està tocant en paral·lel: dues sessions editant la mateixa llista és com es perd una
+ruta sense que ho noti ningú. Cadascú la seva llista; **el mesurador, un**.
+
+Resultat de la correguda de tancament: **totes les vores de les 13 rutes són de la paleta de la
+§1** (`--line` · `--line-soft` · `--gold-border` · `--gold` · `--ok` · `--err` · `--warn-state` ·
+`--accio` · `--panel` · `--sel` · `--bg-page` · transparent), **0 rètols/badges/píndoles per sobre
+del seu sostre**, i cap `currentColor` (que és el que delata una `var()` que no resol). Els tres
+colors del crom del sistema (top bar i menú lateral) s'informen i no compten: §8b diu que el menú
+lateral no es toca.
+
+### 🚨 La lliçó de la primera correguda: **EL BUNDLE ÉS EL QUE MESURA, NO EL CODI DEL DISC**
+
+La primera passada va donar **72 incompliments** de `--gray-l` sobre `<input>` a la fitxa de
+client. **No era un defecte del codi**: era el `selS` d'ABANS de conformar-lo, congelat en un
+`dist` de deu minuts abans. L'arbre ja el tenia bé.
+
+És la mateixa família de trampa que el token que caduca a mitja correguda (que deixa mesurant
+contra `/login`), per l'altra porta: **un resultat que no diu res del codi d'ara i que s'assembla
+massa a un de veritat**. Està escrit a la capçalera de l'arnès perquè el pròxim no hi caigui.
+⚠️ El commit **218** (la provinença d'àlies) és POSTERIOR a aquest bundle: la seva mesura entra
+a la pròxima correguda. El canvi és semàntic (classificació vs semàfor), no de token.
+
+### Altres controls
+
+| Control | Resultat |
+|---|---|
+| `npx eslint src` | ✅ **0 errors** (el control de porta de la casa; `eslint .` compta `dist-tenants/` i menteix) |
+| Cens de tokens deprecats al perímetre | ✅ **0** ocurrències en codi |
+| Claus de `/vocabulari/` consumides pel client vs publicades | ✅ **15/15 existeixen** — creuament contra l'endpoint viu |
+
+**El creuament de claus és el que va destapar el commit 218**: `origens_alias_pom` estava
+publicada i no la consumia ningú perquè el mapa local havia sobreviscut a la meva pròpia neteja.
+**Una declaració a un missatge de commit no és una comprovació.**
+
+### ❌ Bidireccional — NO correguda, i el motiu
+
+`ops/qa/qa_bidireccional.py` compara pantalla ↔ **MAQUETA**. Les maquetes ratificades cobreixen
+el camí del model i la configuració tècnica (`NORMA_LLISTA_canonica`, `maqueta_mesures_carril`,
+`maqueta_fitting`, `PROPOSTA_resum_wizard_partit`…); **cap pantalla del lot comercial en té una**.
+La referència d'aquest lot no és una maqueta pròpia sinó **la germana conformada**: `/clients`,
+`/proveïdors`, `/productes`… es fan com `/models`, i les fitxes com la del model. Afegir casos
+comparant les meves pantalles contra `NORMA_LLISTA_canonica` **sí que és possible i seria el pas
+correcte**; ho deixo proposat i no fet, perquè el fitxer de casos és compartit i la sessió germana
+l'està tocant. 🚩 **Obert.**
+
+## [S2] 🚨 ERROR DE MÈTODE, escrit perquè consti
+
+El commit **215** es va endur **dos fitxers de la sessió germana** (`components/ui/buttons.js` i
+`pages/Planning.jsx`), que van quedar commitats sota el meu missatge. Causa: `git add
+frontend/src/pages/ frontend/src/components/` — **paths de DIRECTORI**. El `CLAUDE.md` ho prohibeix
+(«`git add` de paths explícits, mai `-A`/`-u`») i ara se sap per què: amb dues sessions escrivint
+alhora, un `add` de directori no afegeix «els meus canvis», afegeix **tot el que hi ha brut**.
+El contingut de la sessió germana és **intacte** (el meu script no els tocava; només han quedat
+mal etiquetats). No s'ha reescrit història: hi ha commits a sobre i un `rebase` amb dues sessions
+vives és pitjor que un commit mal etiquetat. Avisat de seguida a S1.
