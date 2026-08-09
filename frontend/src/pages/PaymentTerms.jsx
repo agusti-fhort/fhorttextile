@@ -1,22 +1,40 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import useAuthStore from '../store/auth'
 import { commerce } from '../api/endpoints'
-import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
-import Table from '../components/ui/Table'
-import { selS, primaryBtn } from '../components/ui/buttons'
+import Badge from '../components/ui/Badge'
+import PageMenu from '../components/ui/PageMenu'
+import TaulaLlista from '../components/ui/TaulaLlista'
 import TranslatableField, { pickTranslation } from '../components/ui/TranslatableField'
+import {
+  BotoMenu, SepMenu, Comptador, FilaIdentitat, EstatBuit, BotoEsborrar, Paginacio,
+  camp, buit, forceBarra,
+} from '../components/llista/ChromLlista'
+import { botoSec } from '../components/ui/buttons'
 
-// Mòdul Comercial — M4 · Condicions de pagament (PaymentTerms). Llista + fitxa amb fraccions
-// (percentage, days_offset, position). Les fraccions s'editen com a conjunt i es desen amb la
-// condició en una sola crida (nested writable); el guard Σ%=100 viu al backend i s'hi mostra.
+// CONDICIONS DE PAGAMENT (`PaymentTerms`, M4) — LLISTA CANONICA (NORMA_LAYOUT §8b + §8e).
+//
+// Llista + fitxa amb FRACCIONS (percentage, days_offset, position). Les fraccions s'editen com a
+// conjunt i es desen amb la condicio en UNA sola crida (nested writable); el guard Σ%=100 viu al
+// backend i aqui nomes s'hi ensenya.
+//
+// ── DUES COSES QUE ES DIUEN EN VEU ALTA ──────────────────────────────────────────────────
+//
+// 1 · **EL TOTAL DE FRACCIONS ES L'UNIC SEMAFOR LEGITIM D'AQUESTA PANTALLA**, i es queda —pero
+//    ara amb la forma de la casa. «Σ = 100%» verd / «no suma 100» vermell es LA DADA portant el
+//    color (D-31.21), que es exactament el cas que la §1 admet. El que canvia es que ho fa amb
+//    els tokens del semafor i no amb tinta solta sobre el fons del modal.
+//
+// 2 · **ES L'UNICA PANTALLA DEL LOT AMB UNA COLUMNA QUE POT SER LLARGA DE DEBO**: el resum de
+//    fraccions («50% · +0d | 50% · +30d»). La §8e mana ellipsis + `title`, i aixi es queda: el
+//    detall sencer es al modal, que es on s'editen. Una fila d'una linia es el que fa que la
+//    llista es pugui escombrar amb la vista.
 const MONO = 'IBM Plex Mono, monospace'
-const actBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
-}
+const PAGE_SIZE = 25
+const ORDRE_DEFECTE = { camp: 'code', dir: 'asc' }
 
 export default function PaymentTerms() {
   const { t, i18n } = useTranslation()
@@ -24,103 +42,175 @@ export default function PaymentTerms() {
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
 
+  const [items, setItems] = useState([])
+  const [count, setCount] = useState(0)
+  const [total, setTotal] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [items, setItems] = useState([])
   const [feedback, setFeedback] = useState(null)
   const [saving, setSaving] = useState(false)
   const [modal, setModal] = useState(null)   // { mode:'create'|'edit', term? }
 
-  const fetchList = () => commerce.paymentTerms.list({ ordering: 'code', page_size: 500 })
-    .then(res => res.data?.results ?? (Array.isArray(res.data) ? res.data : []))
+  const [sp, setSp] = useSearchParams()
+  const page = Math.max(1, parseInt(sp.get('page') || '1', 10))
+  // §8e · filtres ràpids de VISTA. Com a Clients i Proveïdors: el criteri no s'endevina,
+  // `active` és un camp de debò i el backend ja el filtra.
+  const vista = sp.get('vista') === 'inactives' ? 'inactives' : 'actives'
+  const ordre = useMemo(() => {
+    const raw = sp.get('ordering')
+    if (!raw) return ORDRE_DEFECTE
+    const desc = raw.startsWith('-')
+    return { camp: desc ? raw.slice(1) : raw, dir: desc ? 'desc' : 'asc' }
+  }, [sp])
+
+  const setParams = useCallback((patch) => {
+    setSp(prev => {
+      const next = new URLSearchParams(prev)
+      Object.entries(patch).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === '') next.delete(k)
+        else next.set(k, v)
+      })
+      return next
+    }, { replace: true })
+  }, [setSp])
+
+  const ordenar = useCallback((c) => {
+    const dir = (ordre.camp === c && ordre.dir === 'asc') ? 'desc' : 'asc'
+    setParams({ ordering: dir === 'desc' ? `-${c}` : c, page: undefined })
+  }, [ordre, setParams])
 
   const load = useCallback(() => {
-    setError(false)
-    return fetchList().then(setItems).catch(() => setError(true))
+    setLoading(true); setError(false)
+    commerce.paymentTerms.list({
+      active: vista === 'actives',
+      ordering: ordre.dir === 'desc' ? `-${ordre.camp}` : ordre.camp,
+      page, page_size: PAGE_SIZE,
+    })
+      .then(res => {
+        const d = res.data
+        setItems(Array.isArray(d) ? d : (d.results || []))
+        setCount(d?.count ?? (Array.isArray(d) ? d.length : 0))
+      })
+      .catch(() => { setItems([]); setCount(0); setError(true) })
+      .finally(() => setLoading(false))
+  }, [vista, ordre, page])
+
+  const carregaTotal = useCallback(() => {
+    commerce.paymentTerms.list({ page_size: 1 })
+      .then(r => setTotal(r.data?.count ?? null)).catch(() => setTotal(null))
   }, [])
 
-  useEffect(() => {
-    let alive = true
-    fetchList()
-      .then(rows => { if (alive) setItems(rows) })
-      .catch(() => { if (alive) setError(true) })
-      .finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
-  }, [])
+  useEffect(() => { carregaTotal() }, [carregaTotal])
+  useEffect(() => { const id = setTimeout(load, 150); return () => clearTimeout(id) }, [load])
 
-  const toggleActive = (term) => {
-    setSaving(true); setFeedback(null)
-    commerce.paymentTerms.update(term.id, { active: !term.active })
-      .then(() => load())
-      .then(() => setFeedback({ type: 'ok', text: t('payment_terms.saved') }))
-      .catch(() => setFeedback({ type: 'err', text: t('payment_terms.error') }))
-      .finally(() => setSaving(false))
-  }
+  const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
 
-  const remove = (term) => {
+  const remove = (term, e) => {
+    e.stopPropagation()
     if (!window.confirm(t('payment_terms.confirm_delete', { name: term.name }))) return
     setSaving(true); setFeedback(null)
     commerce.paymentTerms.remove(term.id)
-      .then(() => load())
+      .then(() => { load(); carregaTotal() })
       .then(() => setFeedback({ type: 'ok', text: t('payment_terms.deleted') }))
-      .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.detail || t('payment_terms.error') }))
+      .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('payment_terms.error') }))
       .finally(() => setSaving(false))
   }
 
-  const fractionsSummary = (r) => (r.lines || [])
+  const resumFraccions = (r) => (r.lines || [])
     .map(l => `${Number(l.percentage)}% · +${l.days_offset}d`).join('  |  ') || '—'
 
-  const columns = [
-    { key: 'code', label: t('payment_terms.col_code'), render: r => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{r.code}</span> },
-    { key: 'name', label: t('payment_terms.col_name'), render: r => pickTranslation(r, 'name', lang) },
-    { key: 'fractions', label: t('payment_terms.col_fractions'), render: r => (
-      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{fractionsSummary(r)}</span>
-    ) },
-    { key: 'active', label: t('payment_terms.col_active'), render: r => (
-      <span style={{
-        fontSize: 'var(--fs-label)', fontWeight: 600, padding: '2px 8px', borderRadius: 999, fontFamily: MONO,
-        background: r.active ? 'var(--ok-bg)' : 'var(--gray-l)', color: r.active ? 'var(--ok)' : 'var(--gray)',
-      }}>{r.active ? t('payment_terms.active') : t('payment_terms.inactive')}</span>
-    ) },
-    ...(canEdit ? [{ key: '_a', label: '', align: 'right', render: r => (
-      <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-        <button onClick={() => setModal({ mode: 'edit', term: r })} disabled={saving} style={actBtn}>{t('payment_terms.edit')}</button>
-        <button onClick={() => toggleActive(r)} disabled={saving} style={actBtn}>{r.active ? t('payment_terms.deactivate') : t('payment_terms.activate')}</button>
-        <button onClick={() => remove(r)} disabled={saving} style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }}>{t('payment_terms.delete')}</button>
-      </span>) }] : []),
+  const cols = useMemo(() => [
+    {
+      // LA DADA REINA d'un catàleg de condicions és el CODI («50-50», «30D»): és amb el que es
+      // demanen i el que surt al document. Mateix cas que el catàleg de POMs, no el de clients.
+      key: 'code', label: t('payment_terms.col_code'), min: 90, max: 120, sort: 'code',
+      estil: { fontWeight: 600 }, titol: r => r.code,
+      render: r => r.code,
+    },
+    {
+      key: 'name', label: t('payment_terms.col_name'), min: 160, max: 240, sort: 'name',
+      titol: r => pickTranslation(r, 'name', lang),
+      render: r => pickTranslation(r, 'name', lang),
+    },
+    {
+      key: 'fractions', label: t('payment_terms.col_fractions'), min: 200, max: 340,
+      estil: { fontSize: 11, color: 'var(--text-soft)' },
+      titol: r => resumFraccions(r),
+      render: r => resumFraccions(r),
+    },
+    {
+      key: 'active', label: t('payment_terms.col_active'), min: 86, max: 100, sort: 'active',
+      render: r => (
+        <Badge variant={r.active ? 'ok' : 'gray'}>
+          {r.active ? t('payment_terms.active') : t('payment_terms.inactive')}
+        </Badge>
+      ),
+    },
+    {
+      key: 'del', amplada: 36,
+      render: r => (canEdit
+        ? <BotoEsborrar onClick={(e) => remove(r, e)} title={t('payment_terms.delete')} disabled={saving} />
+        : null),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, lang, canEdit, saving])
+
+  const VISTES = [
+    ['actives', t('payment_terms.view_active')],
+    ['inactives', t('payment_terms.view_inactive')],
   ]
 
   return (
-    <div style={{ minWidth: 0, maxWidth: 900 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('payment_terms.title')}</h1>
-          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('payment_terms.subtitle')}</p>
-        </div>
-        {canEdit && (
-          <button onClick={() => setModal({ mode: 'create' })} style={{ ...primaryBtn, marginLeft: 0 }}>
-            <i className="ti ti-plus" style={{ fontSize: 14 }} />{t('payment_terms.new')}
-          </button>
-        )}
+    <>
+      <div style={forceBarra}>
+        <PageMenu
+          backTo="/" backTitle={t('payment_terms.back_title')}
+          items={VISTES.map(([v, label]) => ({
+            key: v, label, active: vista === v,
+            onClick: () => setParams({ vista: v === 'actives' ? undefined : v, page: undefined }),
+          }))}
+        >
+          {canEdit && <>
+            <SepMenu />
+            <BotoMenu onClick={() => setModal({ mode: 'create' })} icona="ti-plus"
+              label={t('payment_terms.new')} />
+          </>}
+        </PageMenu>
       </div>
 
-      <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+      <div style={{ minWidth: 0, maxWidth: '100%' }}>
+        <FilaIdentitat>
+          <Comptador valor={count} total={total ?? count} etiqueta={t('payment_terms.entity')} />
+        </FilaIdentitat>
 
-      {loading ? <Center>{t('payment_terms.loading')}</Center>
-        : error ? <Center>{t('payment_terms.error')}</Center>
-          : (
-            <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
-              <Table columns={columns} data={items} loading={false} empty={t('payment_terms.empty')} />
-            </div>
-          )}
+        <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+
+        {loading ? <EstatBuit>{t('payment_terms.loading')}</EstatBuit>
+          : error ? <EstatBuit>{t('payment_terms.error')}</EstatBuit>
+            : items.length === 0 ? <EstatBuit>{t('payment_terms.empty')}</EstatBuit>
+              : (
+                <TaulaLlista cols={cols} files={items} clau={(r) => r.id}
+                  ordre={ordre} onOrdenar={ordenar}
+                  // No hi ha fitxa pròpia: el modal ÉS la fitxa d'una condició de pagament.
+                  onObrir={canEdit ? (r) => setModal({ mode: 'edit', term: r }) : null} />
+              )}
+
+        <Paginacio page={page} pages={pages} onPage={(p) => setParams({ page: p })}
+          labelPrev={t('payment_terms.prev')} labelNext={t('payment_terms.next')}
+          info={t('payment_terms.page_info', { page, pages })} />
+      </div>
 
       {modal && (
         <PaymentTermModal mode={modal.mode} term={modal.term} t={t} saving={saving} setSaving={setSaving}
           onCancel={() => setModal(null)}
-          onSaved={(msg) => { setModal(null); load().then(() => setFeedback({ type: 'ok', text: msg })) }}
+          onSaved={(msg) => {
+            setModal(null)
+            load(); carregaTotal()
+            setFeedback({ type: 'ok', text: msg })
+          }}
           onError={(text) => setFeedback({ type: 'err', text })} />
       )}
-    </div>
+    </>
   )
 }
 
@@ -166,42 +256,45 @@ function PaymentTermModal({ mode, term, t, saving, setSaving, onCancel, onSaved,
       cancelLabel={t('payment_terms.cancel')} confirmLabel={isEdit ? t('payment_terms.save') : t('payment_terms.create')}
       onCancel={onCancel} onConfirm={submit} confirmDisabled={saving || invalid}>
       <Field label={t('payment_terms.col_code')}>
-        <input value={code} onChange={e => setCode(e.target.value)} placeholder="ex: 50-50" style={{ ...selS, width: '100%' }} />
+        <input value={code} onChange={e => setCode(e.target.value)} placeholder="ex: 50-50" style={{ ...camp, width: '100%' }} />
       </Field>
       <TranslatableField label={t('payment_terms.col_name')} field="name" value={name} onChange={setName}
         translations={translations} onTranslationsChange={setTranslations} />
 
       <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-          {t('payment_terms.fractions')}
-        </label>
-        <button onClick={addLine} style={{ ...actBtn }}>
-          <i className="ti ti-plus" style={{ fontSize: 12 }} /> {t('payment_terms.add_fraction')}
+        <label style={etiquetaCamp}>{t('payment_terms.fractions')}</label>
+        {/* SECUNDARI (§5.2): afegir una fracció no acaba la feina —desar la condició, sí— i per
+            això no competeix amb el botó de confirmar del modal. */}
+        <button type="button" onClick={addLine} style={{ ...botoSec, padding: '5px 10px' }}>
+          <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+          {t('payment_terms.add_fraction')}
         </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 6, marginBottom: 4 }}>
-        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>{t('payment_terms.percentage')}</span>
-        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>{t('payment_terms.days_offset')}</span>
+        <span style={etiquetaCamp}>{t('payment_terms.percentage')}</span>
+        <span style={etiquetaCamp}>{t('payment_terms.days_offset')}</span>
         <span />
       </div>
       {lines.map((l, i) => (
         <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-          <input type="text" inputMode="decimal" value={l.percentage} onChange={e => setLine(i, 'percentage', e.target.value)} style={{ ...selS, width: '100%' }} />
-          <input type="text" inputMode="numeric" value={l.days_offset} onChange={e => setLine(i, 'days_offset', e.target.value)} style={{ ...selS, width: '100%' }} />
-          <button onClick={() => removeLine(i)} style={{ ...actBtn, color: 'var(--err)', borderColor: 'var(--err)' }} title={t('payment_terms.remove_fraction')}>
-            <i className="ti ti-trash" style={{ fontSize: 13 }} />
-          </button>
+          <input type="text" inputMode="decimal" value={l.percentage} onChange={e => setLine(i, 'percentage', e.target.value)} style={{ ...camp, width: '100%' }} />
+          <input type="text" inputMode="numeric" value={l.days_offset} onChange={e => setLine(i, 'days_offset', e.target.value)} style={{ ...camp, width: '100%' }} />
+          <BotoEsborrar onClick={() => removeLine(i)} title={t('payment_terms.remove_fraction')} />
         </div>
       ))}
-      {lines.length === 0 && <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: '4px 0 10px' }}>{t('payment_terms.no_fractions')}</p>}
+      {/* §8c · estat buit = frase en --text-faint CURSIVA, mai una caixa muda ni text gris pla. */}
+      {lines.length === 0 && <p style={{ ...buit, margin: '4px 0 10px' }}>{t('payment_terms.no_fractions')}</p>}
 
-      <div style={{
-        marginTop: 8, marginBottom: 4, fontFamily: MONO, fontSize: 'var(--fs-body)',
-        color: totalOk ? 'var(--ok)' : 'var(--err)', fontWeight: 600,
-      }}>
-        {t('payment_terms.total_pct')}: {total.toFixed(2)}%
-        {!totalOk && ` · ${t('payment_terms.total_must_be_100')}`}
+      {/* D-31.21 · LA DADA PORTA EL COLOR, i aquest és el cas que la §1 admet: la suma de
+          fraccions és una condició de validesa (el guard Σ=100 viu al backend) i el seu
+          resultat es llegeix d'un cop d'ull. Amb la forma de badge de la casa —fons suau +
+          tinta + filet fi— i no amb tinta solta sobre el fons del modal. */}
+      <div style={{ marginTop: 8, marginBottom: 4 }}>
+        <Badge variant={totalOk ? 'ok' : 'err'}>
+          {t('payment_terms.total_pct')}: {total.toFixed(2)}%
+          {!totalOk && ` · ${t('payment_terms.total_must_be_100')}`}
+        </Badge>
       </div>
 
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', marginTop: 8 }}>
@@ -214,8 +307,16 @@ function PaymentTermModal({ mode, term, t, saving, setSaving, onCancel, onSaved,
 function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
+      <label style={etiquetaCamp}>{label}</label>
       {children}
     </div>
   )
+}
+
+// §2 · l'etiqueta d'un camp és un LABEL: 10px majúscules, tracking .08em, pes 600. Anava a mida
+// de COS (12) i pes normal, o sigui que cridava tant com el valor que etiqueta.
+const etiquetaCamp = {
+  display: 'block', marginBottom: 6, fontFamily: MONO,
+  fontSize: 'var(--fs-label)', lineHeight: '12px', letterSpacing: '.08em',
+  textTransform: 'uppercase', color: 'var(--text-soft)', fontWeight: 600,
 }
