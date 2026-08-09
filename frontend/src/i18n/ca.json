@@ -1744,7 +1744,8 @@
     "iban": "IBAN",
     "iban_hint": "Compte de cobrament. Surt al peu de les ofertes i comandes.",
     "payment_notes": "Notes de pagament",
-    "payment_notes_hint": "Text lliure (forma de pagament, referències). Surt al peu del document."
+    "payment_notes_hint": "Text lliure (forma de pagament, referències). Surt al peu del document.",
+    "back_title": "Tornar al tauler"
   },
   "payment_terms": {
     "title": "Condicions de pagament",
@@ -2107,7 +2108,8 @@
     "add_holiday": "Afegir festiu",
     "remove_holiday": "Treure festiu",
     "err_holiday_empty": "Hi ha un festiu sense data.",
-    "err_holiday_dup": "Hi ha dates de festiu duplicades."
+    "err_holiday_dup": "Hi ha dates de festiu duplicades.",
+    "back_title": "Tornar al tauler"
   },
   "usersRoles": {
     "title": "Usuaris i rols",
@@ -2180,7 +2182,8 @@
       "product_manager": "Product manager",
       "manager": "Manager",
       "admin": "Admin"
-    }
+    },
+    "back_title": "Tornar al tauler"
   },
   "kanban": {
     "temporades": {

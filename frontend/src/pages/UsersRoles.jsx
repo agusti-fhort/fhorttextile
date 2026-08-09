@@ -3,28 +3,38 @@ import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { users as usersApi, taskTypes as taskTypesApi } from '../api/endpoints'
 import { taskTypeLabel } from '../utils/taskType'
+import PageMenu from '../components/ui/PageMenu'
+import { useEnumeracio } from '../utils/vocabulariDominiFont'
 
 // Tram 3 — Pantalla "Usuaris i rols" (gated manage_users).
 // Peça C: matriu editable (capacitats → permisos.grant/revoke; tasques → permisos.tasks) +
 // filtres (search/role/can_task) + selecció i bulk amb confirmació i recompte.
 
-const CAPS = ['execute_tasks', 'define_tasks', 'schedule_fittings',
-              'close_gates', 'configure', 'view_team_tasks', 'manage_users']
-const ROLES = ['technician', 'product_manager', 'manager', 'admin']
-
-const CREMA = 'var(--warn-bg)'        // #faeeda
-const AMBER_BORDER = '#ba7517'
-const AMBER_TEXT = 'var(--warn)'      // #854f0b
+// LES DUES ENUMERACIONS SE'N VAN DEL CLIENT (llei 1). `CAPS` i `ROLES` eren la còpia de
+// `fhort/accounts/capabilities.py` — un fitxer que es declara a si mateix «font de veritat
+// única»— i ara surten de `/vocabulari/` → `capacitats` · `rols`.
+// ⚠️ L'ORDRE DE `capacitats` ÉS L'ORDRE DE LES COLUMNES d'aquesta matriu, i per això la font
+// del backend ha hagut de ser una TUPLA: `ALL_CAPABILITIES` és un `frozenset` i no en té. Amb
+// la còpia local, el dia que hi entrés una capacitat nova la matriu no l'hauria ensenyada mai.
+//
+// 🎨 I LA PANTALLA DEIXA DE SER TARONJA. `FIXA_BG`/`'var(--text-soft)'` eren `--warn-bg`/`--warn` —el
+// SEMÀFOR— fent de fons de la columna fixa, de les capçaleres del bloc de tasques i de TOTES
+// les etiquetes de formulari; i `FIXA_LINE` era un hex (`#ba7517`) que no és a cap paleta.
+// La §1 reserva el taronja a la DADA («la dada porta el color»): aquí no hi havia cap dada
+// taronja, hi havia una pantalla pintada de taronja. La columna fixa passa al fons de pàgina
+// —que és el que la distingeix del panell blanc que hi llisca per sota— i els filets, a `--line`.
 const MONO = 'IBM Plex Mono, monospace'
+const FIXA_BG = 'var(--bg-page)'      // fons de la columna/capçalera FIXA (no és una selecció)
+const FIXA_LINE = 'var(--line)'       // el filet que separa el bloc fix del que es desplaça
 
 const thBase = {
-  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)',
-  padding: '8px 8px', textTransform: 'uppercase', letterSpacing: '.04em',
-  whiteSpace: 'nowrap', borderBottom: '0.5px solid var(--gray-l)',
+  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-soft)',
+  padding: '8px 8px', textTransform: 'uppercase', letterSpacing: '.08em',
+  whiteSpace: 'nowrap', borderBottom: '1px solid var(--line-soft)',
 }
 const inputS = {
   fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 10px',
-  border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)',
+  border: '1px solid var(--line-soft)', borderRadius: 'var(--r-ctrl)', background: 'var(--panel)',
   color: 'var(--text-main)',
 }
 
@@ -35,12 +45,12 @@ function ToggleCell({ on, title }) {
       title={title}
       style={{
         textAlign: 'center', padding: '7px 8px', minWidth: 58,
-        borderBottom: '0.5px solid var(--gray-l)',
+        borderBottom: '1px solid var(--line-soft)',
       }}
     >
       {on
         ? <i className="ti ti-check" style={{ fontSize: 14, color: 'var(--ok)' }} />
-        : <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#e4e4e2' }} />}
+        : <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--line)' }} />}
     </td>
   )
 }
@@ -50,7 +60,7 @@ function ColorDot({ color, size = 16 }) {
   return (
     <span style={{
       display: 'inline-block', width: size, height: size, borderRadius: '50%',
-      background: color || 'var(--gold)', border: '0.5px solid var(--gray-l)',
+      background: color || 'var(--gold)', border: '1px solid var(--line-soft)',
       boxSizing: 'border-box', verticalAlign: 'middle',
     }} />
   )
@@ -58,6 +68,10 @@ function ColorDot({ color, size = 16 }) {
 
 export default function UsersRoles() {
   const { t } = useTranslation()
+  // Sense vocabulari, ni la matriu ofereix columnes ni el select ofereix rols: no en sabem cap,
+  // i inventar-ne seria replantar la còpia que aquest tram acaba de matar.
+  const { codis: CAPS } = useEnumeracio('capacitats')
+  const { codis: ROLES } = useEnumeracio('rols')
   const me = useAuthStore(s => s.user)
   const canManage = !!me?.capabilities?.includes('manage_users')
 
@@ -152,22 +166,33 @@ export default function UsersRoles() {
   }
 
   if (me == null) {
-    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>{t('usersRoles.loading')}</div>
+    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('usersRoles.loading')}</div>
   }
   if (!canManage) {
     return (
       <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-        <i className="ti ti-lock" style={{ fontSize: 32, color: 'var(--gray)' }} />
-        <p style={{ marginTop: 12, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('usersRoles.no_access')}</p>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', fontStyle: 'italic', fontFamily: MONO }}>{t('usersRoles.no_access')}</p>
       </div>
     )
   }
 
   return (
-    <div style={{ minWidth: 0, maxWidth: '100%' }}>
-      <div style={{ marginBottom: '1.2rem' }}>
-        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4 }}>{t('usersRoles.title')}</h1>
-        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('usersRoles.subtitle')}</p>
+    <>
+      {/* §8b · MENÚ DE PANTALLA, i l'acció hi puja. «Nou usuari» era un botó de fons DAURAT PLE
+          a l'extrem de la barra de filtres: el daurat és marca, no acció (§5), i a més barrejava
+          l'acció amb els filtres. Al menú deixa de ser botó i deixa de ser de color (§8e). */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu
+          backTo="/"
+          backTitle={t('usersRoles.back_title')}
+          items={[{ key: 'nou', label: t('usersRoles.new_user'), onClick: () => setNewUserOpen(true) }]}
+        />
+      </div>
+
+    <div style={{ minWidth: 0, maxWidth: '100%', paddingTop: 16 }}>
+      <div style={{ marginBottom: 16 }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 500, marginBottom: 4, color: 'var(--text-main)' }}>{t('usersRoles.title')}</h1>
+        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }}>{t('usersRoles.subtitle')}</p>
       </div>
 
       {/* Barra de filtres */}
@@ -178,27 +203,18 @@ export default function UsersRoles() {
         />
         <select value={role} onChange={e => setRole(e.target.value)} style={inputS}>
           <option value="">{t('usersRoles.all_roles')}</option>
-          {ROLES.map(r => <option key={r} value={r}>{t(`usersRoles.roles.${r}`)}</option>)}
+          {(ROLES || []).map(r => <option key={r} value={r}>{t(`usersRoles.roles.${r}`)}</option>)}
         </select>
         <select value={canTask} onChange={e => setCanTask(e.target.value)} style={inputS}>
           <option value="">{t('usersRoles.all_tasks')}</option>
           {taskTypes.map(tt => <option key={tt.id} value={tt.code}>{taskTypeLabel(t, tt.code, tt.name)}</option>)}
         </select>
-        {/* Botó "Nou usuari" (la pàgina ja està gated per manage_users). */}
-        <button onClick={() => setNewUserOpen(true)} style={{
-          marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
-          background: 'var(--gold)', color: 'var(--text-main)', border: 'none', borderRadius: 6,
-          padding: '7px 14px', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', fontFamily: MONO,
-        }}>
-          <i className="ti ti-plus" style={{ fontSize: 14 }} />
-          {t('usersRoles.new_user')}
-        </button>
       </div>
 
       {/* Barra d'accions massives (apareix amb selecció) */}
       {selected.size > 0 && (
         <BulkBar
-          t={t} count={selected.size} roles={ROLES} taskTypes={taskTypes}
+          t={t} count={selected.size} roles={ROLES || []} taskTypes={taskTypes}
           onSetRole={(r) => askBulk('set_role', r, `${t('usersRoles.bulk_role')}: ${t(`usersRoles.roles.${r}`)}`)}
           onActive={(on) => askBulk('set_active', on, on ? t('usersRoles.bulk_activate') : t('usersRoles.bulk_deactivate'))}
           onTask={(code, on) => {
@@ -210,48 +226,48 @@ export default function UsersRoles() {
 
       {feedback && (
         <div style={{
-          fontSize: 'var(--fs-body)', padding: '8px 12px', borderRadius: 6, marginBottom: 12,
+          fontSize: 'var(--fs-body)', padding: '8px 12px', borderRadius: 'var(--r-ctrl)', marginBottom: 12,
           background: feedback.type === 'ok' ? 'var(--ok-bg)' : 'var(--err-bg)',
           color: feedback.type === 'ok' ? 'var(--ok)' : 'var(--err)',
         }}>{feedback.text}</div>
       )}
 
       {loading ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>{t('usersRoles.loading')}</div>
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('usersRoles.loading')}</div>
       ) : rows.length === 0 ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>{t('usersRoles.empty')}</div>
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('usersRoles.empty')}</div>
       ) : (
-        <div style={{ overflowX: 'auto', maxWidth: '100%', border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)' }}>
+        <div style={{ overflowX: 'auto', maxWidth: '100%', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-card)', background: 'var(--panel)' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 'var(--fs-body)' }}>
             <thead>
               <tr>
-                <th style={{ ...thBase, position: 'sticky', left: 0, zIndex: 2, background: CREMA,
-                             borderRight: `1px solid ${AMBER_BORDER}`, textAlign: 'left' }}>
+                <th style={{ ...thBase, position: 'sticky', left: 0, zIndex: 2, background: FIXA_BG,
+                             borderRight: `1px solid ${FIXA_LINE}`, textAlign: 'left' }}>
                   <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} title={t('usersRoles.select_all')} />
                 </th>
                 <th style={thBase} />
-                <th colSpan={CAPS.length} style={{ ...thBase, textAlign: 'center', color: 'var(--text-main)' }}>
+                <th colSpan={(CAPS || []).length} style={{ ...thBase, textAlign: 'center', color: 'var(--text-main)' }}>
                   {t('usersRoles.group_scope')}
                 </th>
-                <th colSpan={taskTypes.length} style={{ ...thBase, textAlign: 'center', background: CREMA,
-                             color: AMBER_TEXT, borderLeft: `1px solid ${AMBER_BORDER}` }}>
+                <th colSpan={taskTypes.length} style={{ ...thBase, textAlign: 'center', background: FIXA_BG,
+                             color: 'var(--text-soft)', borderLeft: `1px solid ${FIXA_LINE}` }}>
                   {t('usersRoles.group_tasks')}
                 </th>
                 <th style={thBase} />
               </tr>
               <tr>
-                <th style={{ ...thBase, position: 'sticky', left: 0, zIndex: 2, background: CREMA,
-                             borderRight: `1px solid ${AMBER_BORDER}`, textAlign: 'left', minWidth: 200 }}>
+                <th style={{ ...thBase, position: 'sticky', left: 0, zIndex: 2, background: FIXA_BG,
+                             borderRight: `1px solid ${FIXA_LINE}`, textAlign: 'left', minWidth: 200 }}>
                   {t('usersRoles.col_user')}
                 </th>
                 <th style={{ ...thBase, textAlign: 'center' }}>{t('usersRoles.col_color')}</th>
-                {CAPS.map(cap => (
+                {(CAPS || []).map(cap => (
                   <th key={cap} style={{ ...thBase, textAlign: 'center' }} title={t(`usersRoles.caps.${cap}`)}>
                     {t(`usersRoles.caps.${cap}`)}
                   </th>
                 ))}
                 {taskTypes.map(tt => (
-                  <th key={tt.id} style={{ ...thBase, textAlign: 'center', background: CREMA, color: AMBER_TEXT }}
+                  <th key={tt.id} style={{ ...thBase, textAlign: 'center', background: FIXA_BG, color: 'var(--text-soft)' }}
                       title={`${taskTypeLabel(t, tt.code, tt.name)} (${tt.code})`}>{taskTypeLabel(t, tt.code, tt.name)}</th>
                 ))}
                 <th style={{ ...thBase, textAlign: 'center' }}>{t('usersRoles.col_action')}</th>
@@ -263,8 +279,8 @@ export default function UsersRoles() {
                 const allowed = u.allowed_tasks || []
                 return (
                   <tr key={u.id}>
-                    <td style={{ position: 'sticky', left: 0, zIndex: 1, background: CREMA,
-                                 borderRight: `1px solid ${AMBER_BORDER}`, borderBottom: '0.5px solid var(--gray-l)',
+                    <td style={{ position: 'sticky', left: 0, zIndex: 1, background: FIXA_BG,
+                                 borderRight: `1px solid ${FIXA_LINE}`, borderBottom: '1px solid var(--line-soft)',
                                  padding: '8px 12px', minWidth: 200 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} />
@@ -272,28 +288,28 @@ export default function UsersRoles() {
                           <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-main)' }}>
                             {u.full_name || u.username}
                           </div>
-                          <div style={{ fontSize: 'var(--fs-label)', color: AMBER_TEXT, marginTop: 2 }}>
+                          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginTop: 2 }}>
                             {t('usersRoles.role')}: {u.rol_nom || '—'}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td style={{ textAlign: 'center', padding: '7px 8px', borderBottom: '0.5px solid var(--gray-l)' }}>
+                    <td style={{ textAlign: 'center', padding: '7px 8px', borderBottom: '1px solid var(--line-soft)' }}>
                       <ColorDot color={u.color_avatar} />
                     </td>
-                    {CAPS.map(cap => (
+                    {(CAPS || []).map(cap => (
                       <ToggleCell key={cap} on={caps.includes(cap)} title={t(`usersRoles.caps.${cap}`)} />
                     ))}
                     {taskTypes.map(tt => (
                       <ToggleCell key={tt.id} on={allowed.includes(tt.code)} title={taskTypeLabel(t, tt.code, tt.name)} />
                     ))}
-                    <td style={{ textAlign: 'center', padding: '7px 10px', borderBottom: '0.5px solid var(--gray-l)' }}>
+                    <td style={{ textAlign: 'center', padding: '7px 10px', borderBottom: '1px solid var(--line-soft)' }}>
                       {canManage && (
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                           <button onClick={() => setEditUser(u)} title={t('usersRoles.edit')} style={{
                             display: 'inline-flex', alignItems: 'center', gap: 5,
-                            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 6,
-                            border: '0.5px solid var(--gray-l)', background: 'var(--white)',
+                            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 'var(--r-ctrl)',
+                            border: '1px solid var(--line-soft)', background: 'var(--panel)',
                             color: 'var(--text-main)', cursor: 'pointer', whiteSpace: 'nowrap',
                           }}>
                             <i className="ti ti-pencil" style={{ fontSize: 13 }} />
@@ -301,8 +317,8 @@ export default function UsersRoles() {
                           </button>
                           <button onClick={() => genResetLink(u)} title={t('usersRoles.reset_link')} style={{
                             display: 'inline-flex', alignItems: 'center', gap: 5,
-                            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 6,
-                            border: '0.5px solid var(--gray-l)', background: 'var(--white)',
+                            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 'var(--r-ctrl)',
+                            border: '1px solid var(--line-soft)', background: 'var(--panel)',
                             color: 'var(--text-main)', cursor: 'pointer', whiteSpace: 'nowrap',
                           }}>
                             <i className="ti ti-key" style={{ fontSize: 13 }} />
@@ -326,7 +342,7 @@ export default function UsersRoles() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
         }} onClick={() => setConfirmState(null)}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 12, padding: '1.5rem',
+            background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.5rem',
             maxWidth: 400, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
           }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 10 }}>{t('usersRoles.confirm_title')}</h2>
@@ -335,7 +351,7 @@ export default function UsersRoles() {
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button onClick={() => setConfirmState(null)} style={{
-                ...inputS, cursor: 'pointer', border: '0.5px solid var(--gray-l)', color: 'var(--gray)',
+                ...inputS, cursor: 'pointer', border: '1px solid var(--line-soft)', color: 'var(--text-soft)',
               }}>{t('usersRoles.cancel')}</button>
               <button onClick={applyBulk} style={{
                 ...inputS, cursor: 'pointer', border: 'none', background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600,
@@ -348,7 +364,7 @@ export default function UsersRoles() {
       {/* Modal "Nou usuari" (alta amb rol; els toggles fins s'afinen després a la matriu) */}
       {newUserOpen && (
         <NewUserModal
-          t={t} roles={ROLES}
+          t={t} roles={ROLES || []}
           onClose={() => setNewUserOpen(false)}
           onCreated={(u) => {
             setNewUserOpen(false)
@@ -361,7 +377,7 @@ export default function UsersRoles() {
       {/* Modal d'edició per usuari (rol + tasques + nom complet + color) */}
       {editUser && (
         <UserEditModal
-          t={t} user={editUser} roles={ROLES} taskTypes={taskTypes}
+          t={t} user={editUser} roles={ROLES || []} taskTypes={taskTypes}
           onClose={() => setEditUser(null)}
           onSave={(diff) => patchUser(editUser.id, diff)}
           onSaved={() => {
@@ -376,6 +392,7 @@ export default function UsersRoles() {
         <ResetLinkModal t={t} data={resetModal} onClose={() => setResetModal(null)} />
       )}
     </div>
+    </>
   )
 }
 
@@ -394,37 +411,37 @@ function ResetLinkModal({ t, data, onClose }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: 'var(--white)', borderRadius: 12, padding: '1.5rem',
+        background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.5rem',
         maxWidth: 480, width: '92%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
       }}>
         <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>
           {t('usersRoles.rl_title')} — {data.name}
         </h2>
         {data.loading ? (
-          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('usersRoles.loading')}</p>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('usersRoles.loading')}</p>
         ) : (
           <>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input readOnly value={data.url} onFocus={e => e.target.select()} style={{
                 flex: 1, fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 10px',
-                border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--gray-l)',
+                border: '1px solid var(--line-soft)', borderRadius: 'var(--r-ctrl)', background: 'var(--line)',
                 color: 'var(--text-main)',
               }} />
               <button onClick={copy} style={{
-                fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 6,
+                fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 'var(--r-ctrl)',
                 border: 'none', background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600,
                 cursor: 'pointer', whiteSpace: 'nowrap',
               }}>{copied ? t('usersRoles.rl_copied') : t('usersRoles.rl_copy')}</button>
             </div>
-            <p style={{ marginTop: 12, fontSize: 'var(--fs-label)', color: 'var(--gray)', lineHeight: 1.5 }}>
+            <p style={{ marginTop: 12, fontSize: 'var(--fs-label)', color: 'var(--text-soft)', lineHeight: 1.5 }}>
               {t('usersRoles.rl_note')}
             </p>
           </>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
           <button onClick={onClose} style={{
-            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 6,
-            cursor: 'pointer', border: '0.5px solid var(--gray-l)', background: 'var(--white)', color: 'var(--gray)',
+            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 'var(--r-ctrl)',
+            cursor: 'pointer', border: '1px solid var(--line-soft)', background: 'var(--panel)', color: 'var(--text-soft)',
           }}>{t('usersRoles.cancel')}</button>
         </div>
       </div>
@@ -436,19 +453,19 @@ function BulkBar({ t, count, roles, taskTypes, onSetRole, onActive, onTask }) {
   const [taskCode, setTaskCode] = useState('')
   const selS = { ...{
     fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 8px',
-    border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)',
+    border: '1px solid var(--line-soft)', borderRadius: 'var(--r-ctrl)', background: 'var(--panel)',
   } }
   const btn = {
-    fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 6,
-    border: '0.5px solid var(--gray-l)', background: 'var(--white)', cursor: 'pointer', color: 'var(--text-main)',
+    fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 10px', borderRadius: 'var(--r-ctrl)',
+    border: '1px solid var(--line-soft)', background: 'var(--panel)', cursor: 'pointer', color: 'var(--text-main)',
   }
   return (
     <div style={{
       display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
-      padding: '10px 12px', marginBottom: 12, borderRadius: 8,
-      background: CREMA, border: `0.5px solid ${AMBER_BORDER}`,
+      padding: '10px 12px', marginBottom: 12, borderRadius: 'var(--r-ctrl)',
+      background: FIXA_BG, border: `1px solid ${FIXA_LINE}`,
     }}>
-      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: AMBER_TEXT }}>
+      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-soft)' }}>
         {t('usersRoles.selected', { n: count })}
       </span>
       {/* set_role */}
@@ -490,9 +507,9 @@ function NewUserModal({ t, roles, onClose, onCreated }) {
 
   const fieldS = {
     fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 10px', width: '100%', boxSizing: 'border-box',
-    border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)',
+    border: '1px solid var(--line-soft)', borderRadius: 'var(--r-ctrl)', background: 'var(--panel)', color: 'var(--text-main)',
   }
-  const labelS = { fontSize: 'var(--fs-body)', color: AMBER_TEXT, fontFamily: MONO, marginBottom: 4, display: 'block' }
+  const labelS = { fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontFamily: MONO, marginBottom: 4, display: 'block' }
 
   function submit() {
     // Validació client mínima; la resta (únic, rol vàlid…) la valida el backend.
@@ -513,7 +530,7 @@ function NewUserModal({ t, roles, onClose, onCreated }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: 'var(--white)', borderRadius: 12, padding: '1.5rem',
+        background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.5rem',
         maxWidth: 420, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
       }}>
         <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 14 }}>{t('usersRoles.nu_title')}</h2>
@@ -539,20 +556,20 @@ function NewUserModal({ t, roles, onClose, onCreated }) {
           <div>
             <label style={labelS}>{t('usersRoles.nu_password')} *</label>
             <input type="password" value={form.password} onChange={e => set('password', e.target.value)} style={fieldS} />
-            <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginTop: 4 }}>{t('usersRoles.nu_password_hint')}</div>
+            <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginTop: 4 }}>{t('usersRoles.nu_password_hint')}</div>
           </div>
         </div>
         {error && (
-          <div style={{ marginTop: 12, fontSize: 'var(--fs-body)', padding: '8px 10px', borderRadius: 6,
+          <div style={{ marginTop: 12, fontSize: 'var(--fs-body)', padding: '8px 10px', borderRadius: 'var(--r-ctrl)',
                         background: 'var(--err-bg)', color: 'var(--err)' }}>{error}</div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
           <button onClick={onClose} disabled={saving} style={{
-            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 6,
-            cursor: 'pointer', border: '0.5px solid var(--gray-l)', background: 'var(--white)', color: 'var(--gray)',
+            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 'var(--r-ctrl)',
+            cursor: 'pointer', border: '1px solid var(--line-soft)', background: 'var(--panel)', color: 'var(--text-soft)',
           }}>{t('usersRoles.cancel')}</button>
           <button onClick={submit} disabled={saving} style={{
-            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 6,
+            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 'var(--r-ctrl)',
             cursor: saving ? 'default' : 'pointer', border: 'none',
             background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600, opacity: saving ? 0.6 : 1,
           }}>{t('usersRoles.nu_create')}</button>
@@ -590,9 +607,9 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
 
   const fieldS = {
     fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 10px', width: '100%', boxSizing: 'border-box',
-    border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)',
+    border: '1px solid var(--line-soft)', borderRadius: 'var(--r-ctrl)', background: 'var(--panel)', color: 'var(--text-main)',
   }
-  const labelS = { fontSize: 'var(--fs-body)', color: AMBER_TEXT, fontFamily: MONO, marginBottom: 4, display: 'block' }
+  const labelS = { fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontFamily: MONO, marginBottom: 4, display: 'block' }
 
   function submit() {
     // PATCH parcial: només els camps modificats vs l'estat inicial.
@@ -618,7 +635,7 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: 'var(--white)', borderRadius: 12, padding: '1.5rem',
+        background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.5rem',
         maxWidth: 460, width: '92%', maxHeight: '88vh', overflowY: 'auto',
         boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
       }}>
@@ -647,16 +664,16 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <input type="color" value={form.color_avatar}
                      onChange={e => set('color_avatar', e.target.value)}
-                     style={{ width: 48, height: 32, padding: 0, border: '0.5px solid var(--gray-l)',
-                              borderRadius: 6, background: 'var(--white)', cursor: 'pointer' }} />
+                     style={{ width: 48, height: 32, padding: 0, border: '1px solid var(--line-soft)',
+                              borderRadius: 'var(--r-ctrl)', background: 'var(--panel)', cursor: 'pointer' }} />
               <ColorDot color={form.color_avatar} size={24} />
-              <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{form.color_avatar}</span>
+              <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{form.color_avatar}</span>
             </div>
           </div>
           <div>
             <label style={labelS}>{t('usersRoles.ue_tasks')}</label>
             {isAdmin && (
-              <div style={{ fontSize: 'var(--fs-body)', color: AMBER_TEXT, marginBottom: 8 }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 8 }}>
                 {t('usersRoles.ue_bypass_note')}
               </div>
             )}
@@ -679,16 +696,16 @@ function UserEditModal({ t, user, roles, taskTypes, onClose, onSave, onSaved }) 
           </div>
         </div>
         {error && (
-          <div style={{ marginTop: 12, fontSize: 'var(--fs-body)', padding: '8px 10px', borderRadius: 6,
+          <div style={{ marginTop: 12, fontSize: 'var(--fs-body)', padding: '8px 10px', borderRadius: 'var(--r-ctrl)',
                         background: 'var(--err-bg)', color: 'var(--err)' }}>{error}</div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
           <button onClick={onClose} disabled={saving} style={{
-            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 6,
-            cursor: 'pointer', border: '0.5px solid var(--gray-l)', background: 'var(--white)', color: 'var(--gray)',
+            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 14px', borderRadius: 'var(--r-ctrl)',
+            cursor: 'pointer', border: '1px solid var(--line-soft)', background: 'var(--panel)', color: 'var(--text-soft)',
           }}>{t('usersRoles.cancel')}</button>
           <button onClick={submit} disabled={saving} style={{
-            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 6,
+            fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '8px 16px', borderRadius: 'var(--r-ctrl)',
             cursor: saving ? 'default' : 'pointer', border: 'none',
             background: 'var(--gold)', color: 'var(--text-main)', fontWeight: 600, opacity: saving ? 0.6 : 1,
           }}>{saving ? t('usersRoles.ue_saving') : t('usersRoles.ue_save')}</button>

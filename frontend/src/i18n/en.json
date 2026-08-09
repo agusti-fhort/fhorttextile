@@ -1744,7 +1744,8 @@
     "iban": "IBAN",
     "iban_hint": "Collection account. Shown in the footer of quotes and orders.",
     "payment_notes": "Payment notes",
-    "payment_notes_hint": "Free text (payment method, references). Shown in the document footer."
+    "payment_notes_hint": "Free text (payment method, references). Shown in the document footer.",
+    "back_title": "Back to dashboard"
   },
   "payment_terms": {
     "title": "Payment terms",
@@ -2107,7 +2108,8 @@
     "add_holiday": "Add holiday",
     "remove_holiday": "Remove holiday",
     "err_holiday_empty": "A holiday has no date.",
-    "err_holiday_dup": "There are duplicate holiday dates."
+    "err_holiday_dup": "There are duplicate holiday dates.",
+    "back_title": "Back to dashboard"
   },
   "usersRoles": {
     "title": "Users & roles",
@@ -2180,7 +2182,8 @@
       "product_manager": "Product manager",
       "manager": "Manager",
       "admin": "Admin"
-    }
+    },
+    "back_title": "Back to dashboard"
   },
   "kanban": {
     "temporades": {

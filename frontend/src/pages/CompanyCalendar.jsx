@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../store/auth'
 import { companyCalendar } from '../api/endpoints'
+import PageMenu from '../components/ui/PageMenu'
+import { apagat, botoPri } from '../components/ui/buttons'
 
 // Pantalla "Calendari d'empresa" (gated configure):
 //   - Tram 1A.2: editor de trams horaris per dia. Format `horaris`:
@@ -17,7 +19,7 @@ const DOW = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
 const inputS = {
   fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '5px 8px',
-  border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)',
+  border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', background: 'var(--panel)',
   color: 'var(--text-main)',
 }
 
@@ -100,51 +102,59 @@ export default function CompanyCalendar() {
       .finally(() => setSaving(false))
   }
 
-  if (me == null) {
-    return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>{t('companyCalendar.loading')}</div>
-  }
-  if (!canConfigure) {
-    return (
-      <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-        <i className="ti ti-lock" style={{ fontSize: 32, color: 'var(--gray)' }} />
-        <p style={{ marginTop: 12, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('companyCalendar.no_access')}</p>
-      </div>
-    )
-  }
+  // §8c · els dos estats sense contingut passen a la forma de la casa: frase tènue cursiva,
+  // «mai caixa buida muda». La icona de 32px no és cap de les tres mides de la §8.
+  const buit = (clau) => (
+    <div style={{ padding: 16, fontSize: 'var(--fs-body)', color: 'var(--text-faint)', fontStyle: 'italic', fontFamily: MONO }}>
+      {t(clau)}
+    </div>
+  )
+  if (me == null) return buit('companyCalendar.loading')
+  if (!canConfigure) return buit('companyCalendar.no_access')
 
   return (
-    <div style={{ minWidth: 0, maxWidth: 720 }}>
-      <div style={{ marginBottom: '1.2rem' }}>
-        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('companyCalendar.title')}</h1>
-        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('companyCalendar.subtitle')}</p>
+    <>
+      {/* §8b · menú de pantalla; sense seccions, queda la fletxa (§8b.2). L'acció primària
+          (Desar) viu al contingut, que és on la §8e la deixa. */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu backTo="/" backTitle={t('companyCalendar.back_title')} />
+      </div>
+
+    <div style={{ minWidth: 0, maxWidth: 720, paddingTop: 16 }}>
+      <div style={{ marginBottom: 16 }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 500, marginBottom: 4, color: 'var(--text-main)', fontFamily: MONO }}>{t('companyCalendar.title')}</h1>
+        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }}>{t('companyCalendar.subtitle')}</p>
       </div>
 
       {feedback && (
         <div style={{
-          fontSize: 'var(--fs-body)', padding: '8px 12px', borderRadius: 6, marginBottom: 12,
+          fontSize: 'var(--fs-body)', padding: '8px 12px', borderRadius: 'var(--r-ctrl)', marginBottom: 12,
           background: feedback.type === 'ok' ? 'var(--ok-bg)' : 'var(--err-bg)',
           color: feedback.type === 'ok' ? 'var(--ok)' : 'var(--err)',
         }}>{feedback.text}</div>
       )}
 
       {loading || horaris == null ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>{t('companyCalendar.loading')}</div>
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{t('companyCalendar.loading')}</div>
       ) : (
         <>
-          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflow: 'hidden' }}>
+          <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', overflow: 'hidden' }}>
             {DOW.map((day, di) => (
               <div key={day} style={{
                 display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px',
-                borderBottom: di < DOW.length - 1 ? '0.5px solid var(--gray-l)' : 'none',
+                borderBottom: di < DOW.length - 1 ? '1px solid var(--line)' : 'none',
               }}>
+                {/* §2 · un RÈTOL en majúscules amb tracking va a 10px (`--fs-label`), no a
+                    cos: 12 en majúscules és la mida d'un VALOR, i la mesura ho comptava com a
+                    incompliment (7 rètols per sobre del sostre). */}
                 <div style={{
-                  fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, textTransform: 'uppercase',
-                  letterSpacing: '.04em', width: 92, paddingTop: 6, color: 'var(--text-muted)',
+                  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
+                  letterSpacing: '.08em', width: 92, paddingTop: 6, color: 'var(--text-soft)',
                 }}>{t(`companyCalendar.days.${day}`)}</div>
 
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {(horaris[day] || []).length === 0 && (
-                    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontStyle: 'italic', paddingTop: 6 }}>
+                    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontStyle: 'italic', paddingTop: 6 }}>
                       {t('companyCalendar.no_work')}
                     </span>
                   )}
@@ -152,7 +162,7 @@ export default function CompanyCalendar() {
                     <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <input type="time" value={tr[0] || ''} style={inputS}
                              onChange={e => setTram(day, idx, 0, e.target.value)} />
-                      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>→</span>
+                      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>→</span>
                       <input type="time" value={tr[1] || ''} style={inputS}
                              onChange={e => setTram(day, idx, 1, e.target.value)} />
                       <button onClick={() => removeTram(day, idx)} title={t('companyCalendar.remove_tram')}
@@ -166,8 +176,8 @@ export default function CompanyCalendar() {
                   ))}
                   <button onClick={() => addTram(day)} style={{
                     alignSelf: 'flex-start', marginTop: 2, background: 'none',
-                    border: '0.5px dashed var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-                    padding: '4px 10px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
+                    border: '1px dashed var(--line)', borderRadius: 'var(--r-ctrl)', cursor: 'pointer',
+                    padding: '4px 10px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-soft)',
                     display: 'flex', alignItems: 'center', gap: 5,
                   }}>
                     <i className="ti ti-plus" style={{ fontSize: 13 }} />{t('companyCalendar.add_tram')}
@@ -180,12 +190,12 @@ export default function CompanyCalendar() {
           {/* ── Festius extra (Tram 1B) ───────────────────────────────── */}
           <div style={{ marginTop: 28, marginBottom: '1rem' }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('companyCalendar.holidays_title')}</h2>
-            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('companyCalendar.holidays_subtitle')}</p>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontWeight: 400 }}>{t('companyCalendar.holidays_subtitle')}</p>
           </div>
 
-          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: '14px 16px' }}>
+          <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', padding: '14px 16px' }}>
             {festius.length === 0 && (
-              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontStyle: 'italic' }}>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', fontStyle: 'italic' }}>
                 {t('companyCalendar.holidays_empty')}
               </span>
             )}
@@ -206,8 +216,8 @@ export default function CompanyCalendar() {
             </div>
             <button onClick={addFestiu} style={{
               marginTop: festius.length ? 8 : 10, background: 'none',
-              border: '0.5px dashed var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-              padding: '4px 10px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
+              border: '1px dashed var(--line)', borderRadius: 'var(--r-ctrl)', cursor: 'pointer',
+              padding: '4px 10px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-soft)',
               display: 'flex', alignItems: 'center', gap: 5,
             }}>
               <i className="ti ti-plus" style={{ fontSize: 13 }} />{t('companyCalendar.add_holiday')}
@@ -217,16 +227,19 @@ export default function CompanyCalendar() {
           <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
             <button onClick={save} disabled={saving} style={{
               display: 'flex', alignItems: 'center', gap: 6,
-              background: 'var(--gold)', color: 'var(--text-main)', border: 'none', borderRadius: 6,
+              background: 'var(--accio)', color: 'var(--panel)', borderWidth: 1, borderStyle: 'solid',
+              borderColor: 'var(--accio)', borderRadius: 'var(--r-ctrl)',
               padding: '8px 18px', fontSize: 'var(--fs-body)', fontWeight: 600,
-              cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: MONO,
+              cursor: saving ? 'not-allowed' : 'pointer', fontFamily: MONO,
+              ...(saving ? apagat : null),
             }}>
-              <i className="ti ti-device-floppy" style={{ fontSize: 14 }} />
+              <i className="ti ti-device-floppy" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
               {saving ? t('companyCalendar.saving') : t('companyCalendar.save')}
             </button>
           </div>
         </>
       )}
     </div>
+    </>
   )
 }

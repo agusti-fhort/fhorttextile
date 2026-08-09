@@ -91,6 +91,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from fhort.accounts.capabilities import CAPABILITIES, ROLES
+from fhort.accounts.models import TenantConfig
 from fhort.commerce.models import (DeliveryNote, DeliveryNoteLine, Product, Quote,
                                    SalesOrder, WorkOrder)
 from fhort.fitting.models import FittingSession, PieceFittingLine
@@ -229,6 +231,20 @@ def vocabulari_domini_view(request):
         # `Supplier.type` tenia els `choices` INLINE al camp, sense constant: era l'última
         # enumeració del lot comercial declarada al client, i és un select que ESCRIU.
         'tipus_proveidor': _llista(_choices_del_camp(Supplier, 'type')),
+        # PART B · MÒDUL SISTEMA. La capçalera d'aquest mòdul les tenia CENSADES-PENDENTS amb el
+        # motiu escrit («l'ordre les condicionava a que Mesures/Fitting les PINTESSIN, i no les
+        # pinten»). La condició que faltava s'ha complert per l'altra banda: les pantalles que SÍ
+        # que les pinten —Configuració general i l'Onboarding— passen conformitat en aquest lot.
+        # Capacitats i rols: NO són `choices` de cap camp (viuen a `accounts/capabilities.py`,
+        # que el propi fitxer declara «font de veritat única»), i **no tenen etiqueta al
+        # backend**: la pantalla les tradueix per codi des de sempre. S'emeten amb `etiqueta` =
+        # codi perquè la forma de l'endpoint no canviï, i qui pinta ja sap què fer-ne.
+        # ⚠️ L'ORDRE ÉS DADA: és l'ordre de les COLUMNES de la matriu de permisos. `ALL_CAPABILITIES`
+        # és un `frozenset` i no en té; per això la font ordenada és la tupla `CAPABILITIES`.
+        'capacitats': _llista([(c, c) for c in CAPABILITIES]),
+        'rols': _llista([(r, r) for r in ROLES]),
+        'unitats_mesura': _llista(_choices_del_camp(TenantConfig, 'unitat_mesura')),
+        'normes_referencia': _llista(_choices_del_camp(TenantConfig, 'norma_referencia')),
         'regims_fiscals_client': _llista(_choices_del_camp(Customer, 'tax_regime')),
         'metodes_pagament_client': _llista(_choices_del_camp(Customer, 'payment_method')),
         'estats_vincle_tenant': _llista(TenantLink.ESTAT_CHOICES),

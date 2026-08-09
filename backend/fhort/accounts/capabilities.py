@@ -11,10 +11,16 @@ CONFIGURE = "configure"
 VIEW_TEAM_TASKS = "view_team_tasks"   # veure les tasques de TOT l'equip (no només les pròpies)
 MANAGE_USERS = "manage_users"         # gestió d'usuaris/rols/permisos (matriu)
 
-ALL_CAPABILITIES = frozenset({
+#: L'ORDRE ÉS DADA. Aquesta tupla és l'ordre de les COLUMNES de la matriu de permisos
+#: (`/configuracio/usuaris`), i va de la capacitat més bàsica a la més àmplia. `ALL_CAPABILITIES`
+#: se'n deriva perquè hi hagi UNA sola llista: un `frozenset` no té ordre i no es pot publicar
+#: per a una pantalla que en depèn — el client en tenia la còpia, ordenada a mà, i el dia que
+#: aquí n'entrés una de nova la matriu no l'hauria ensenyada mai.
+CAPABILITIES = (
     EXECUTE_TASKS, DEFINE_TASKS, SCHEDULE_FITTINGS, CLOSE_GATES, CONFIGURE,
     VIEW_TEAM_TASKS, MANAGE_USERS,
-})
+)
+ALL_CAPABILITIES = frozenset(CAPABILITIES)
 
 # --- Rol → capacitats base (config; es clona amb la plantilla del tenant) ---
 ROLE_CAPABILITIES = {
@@ -26,6 +32,11 @@ ROLE_CAPABILITIES = {
 }
 
 DEFAULT_ROLE = "technician"
+
+#: Els ROLS, en l'ordre en què `ROLE_CAPABILITIES` els declara (de menys a més capacitats), que
+#: és l'ordre en què la pantalla els ofereix. Es deriva del mateix diccionari i no es reescriu:
+#: els `dict` de Python conserven l'ordre d'inserció des de la 3.7.
+ROLES = tuple(ROLE_CAPABILITIES)
 
 
 def get_capabilities(user) -> set:

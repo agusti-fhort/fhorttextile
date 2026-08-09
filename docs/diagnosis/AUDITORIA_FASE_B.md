@@ -398,6 +398,51 @@ En escurçar `CROM` a un sol hex (v. B3), la correguda següent va treure **12 v
 Corregides. **12 pantalles → 0 incompliments** amb la paleta escurçada, i la bidireccional sencera
 → **0 desviacions** llevat de la declarada (la tinta de la fletxa d'arrel).
 
+## B6 · Configuració general · B7 · Usuaris i rols · B8 · Calendari d'empresa (commit 256)
+
+Les tres pantalles del mòdul **Sistema** que ja eren al brief. Cap gest canvia a cap.
+
+### Cens dada → endpoint
+
+| Pantalla | Què es pinta | D'on surt |
+|---|---|---|
+| B6 | fitxa del tenant · logo | `GET/PATCH /api/v1/tenant-config/` · `POST …/logo/` |
+| B6 | **unitat de mesura · norma de referència** | **`/vocabulari/` → `unitats_mesura` · `normes_referencia` (NOUS)** |
+| B7 | matriu d'usuaris · permisos · tasques | `users/` · `taskTypes/` (+ `permisos.grant/revoke`) |
+| B7 | **columnes de la matriu · rols** | **`/vocabulari/` → `capacitats` · `rols` (NOUS)** |
+| B8 | horaris i festius del tenant | `GET/PUT /api/v1/company-calendar/` |
+
+### CENSAT-PENDENT exposats en aquest tram (4)
+
+`unitats_mesura` · `normes_referencia` (`TenantConfig`) · `capacitats` · `rols`
+(`accounts/capabilities.py`). Les dues primeres **la capçalera del mòdul de vocabulari les tenia
+censades amb el motiu escrit** —«l'ordre les condicionava a que Mesures/Fitting les PINTESSIN, i
+no les pinten»—: la condició s'ha complert per l'altra banda, la pantalla que SÍ que les pinta és
+la de Configuració general i passa conformitat ara.
+
+⚠️ **`capacitats` va obligar a canviar la FONT, no només a publicar-la.** `ALL_CAPABILITIES` és un
+`frozenset` i **un `frozenset` no té ordre**; l'ordre de les capacitats és l'ordre de les
+**columnes de la matriu de permisos**, o sigui DADA. S'hi afegeix la tupla `CAPABILITIES` (de la
+més bàsica a la més àmplia) i el `frozenset` se'n deriva: una sola llista. Amb la còpia local que
+el client tenia, el dia que hi entrés una capacitat nova **la matriu no l'hauria ensenyada mai**.
+`ROLES` es deriva de `ROLE_CAPABILITIES` (els `dict` conserven l'ordre d'inserció).
+Ni capacitats ni rols tenen **etiqueta** al backend: la pantalla els tradueix per codi des de
+sempre, i s'emeten amb `etiqueta` = codi perquè la forma de l'endpoint no canviï.
+
+### Desviacions trobades i corregides
+
+| Pantalla | Què | Ara |
+|---|---|---|
+| totes 3 | cap menú de pantalla | §8b (sense seccions: només la fletxa) |
+| B6 | el títol de pàgina anava a `--fs-h2` (18) | `--fs-h1` 22/500 (§2) |
+| B6 | el rètol de camp era **cos a 12 en MAJÚSCULES** | `--fs-label` 10 amb tracking (§2: 12 en majúscules és la mida d'un VALOR, no d'una etiqueta) |
+| B6 · B8 | «Desar» amb `opacity` en desactivar-se; a B8 a més **daurat ple** | primària blava + `apagat` (§5.1 · §5.7) |
+| **B7** | **LA PANTALLA SENCERA ERA TARONJA**: `--warn-bg` de fons a la columna fixa, a les capçaleres del bloc de tasques i a TOTES les etiquetes de formulari; `#ba7517` de filet, que no és a cap paleta | la columna fixa va al fons de pàgina (que és el que la distingeix del panell blanc que hi llisca per sota) i els filets a `--line`. **La §1 reserva el taronja a la DADA**; aquí no hi havia cap dada taronja, hi havia una pantalla pintada de taronja |
+| B7 | «Nou usuari» era un botó **daurat ple** a l'extrem de la barra de filtres | puja al menú i hi perd el color (§8e); i deixa de barrejar-se amb els filtres |
+| B7 · B8 | «sense accés» amb icona de 32px i `--gray` | frase `--text-faint` cursiva (§8c) |
+| **B8** | **els set noms de dia eren rètols en majúscules a 12px** | `--fs-label` 10 — **ho va trobar la mesura**: 7 rètols per sobre del sostre |
+| totes 3 | `--gray-l`, `--gray`, `--border`, `--text-muted`, `--white`, `--bg-card`, `0.5px`, radis literals, pes 300 | l'escala de la norma |
+
 ## CODES PER A LA S2 (backend i compartits · commits 250·204, 250·205, 250)
 
 ### `/customers` tornava a ordenar — DRF es menjava l'ordre en silenci
