@@ -158,6 +158,30 @@ JS = r"""
 """
 
 
+def _comprova_sessio(sess, quan):
+    """🚨 TANCA LA SEGONA TAPADORA: **el token caduca a mitja correguda.**
+
+    Quan passa, l'app cau a `/login` i l'arnès segueix mesurant — una altra pantalla, sense
+    dir-ho. Ho hem vist les tres sessions de la part B el mateix dia: una passada de la
+    bidireccional va donar «0 desviacions» amb els QUINZE casos morts, i un sondeig d'una altra
+    sessió va donar cinc rutes «netes» seguides amb 66 nodes cadascuna.
+
+    L'assercció va ABANS i DESPRÉS: abans perquè un token ja mort no arribi a produir cap
+    número, i després perquè el número que s'acaba de donar només val si la sessió seguia viva
+    quan es va prendre l'última mesura. **Un verd amb la sessió caiguda no és un verd feble: és
+    un verd d'una altra cosa.**
+    """
+    try:
+        r = sess.get(VIU + '/api/v1/me/', headers={'Host': HOST_TENANT,
+                                                   'Authorization': f'Bearer {TOKEN}'}, timeout=15)
+    except Exception as e:
+        sys.exit(f'🛑 SESSIÓ NO COMPROVABLE ({quan}): {e}')
+    if r.status_code != 200:
+        sys.exit(f'🛑 LA SESSIÓ NO ÉS VÀLIDA ({quan}): /me/ → {r.status_code}. '
+                 'El token ha caducat o no val per a aquest tenant; qualsevol número '
+                 "d'aquesta correguda seria d'una altra pantalla (v. la 2a tapadora).")
+
+
 def main():
     if not TOKEN:
         sys.exit("Falta FTT_QA_TOKEN.")
@@ -186,6 +210,7 @@ def main():
         route.fulfill(status=200, body=f.read_bytes(),
                       headers={'content-type': mimetypes.guess_type(f.name)[0] or 'text/html'})
 
+    _comprova_sessio(sess, 'abans de començar')
     incompliments = 0
     with sync_playwright() as p:
         nav = p.chromium.launch()
@@ -241,6 +266,7 @@ def main():
                 ex = next(m for m in grans if m['tipus'] == tipus and m['fs'] == fs)
                 print(f'    🔴 {tipus:6} {fs:.0f}px ×{n:<4} p.ex. «{ex["txt"]}»  {ex["cam"]}')
         nav.close()
+    _comprova_sessio(sess, "just després de l'última mesura")
     print(f'\n──────── {incompliments} incompliments ────────')
     sys.exit(1 if incompliments else 0)
 
