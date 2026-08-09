@@ -12,7 +12,8 @@ import useAuthStore from '../store/auth'
 import { models as modelsApi, modelTasks as modelTaskItems, users as usersApi, plan as planApi } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
-import { selS, primaryBtn } from '../components/ui/buttons'
+import PageMenu from '../components/ui/PageMenu'
+import { apagat, botoPri, botoTer, selS } from '../components/ui/buttons'
 import TaskAssignWizard from '../components/TaskAssignWizard'
 import DashboardGovPanel from '../components/planning/DashboardGovPanel'
 import ProjectGantt from '../components/planning/ProjectGantt'
@@ -26,16 +27,21 @@ import RegistreActivitat from './RegistreActivitat'
 // DATES: planned_* venen en UTC del serializer → es converteixen a LOCAL (Europe/Madrid) per pintar;
 // data_objectiu és una data de calendari. NO es barreja amb cap altra font.
 const MONO = 'IBM Plex Mono, monospace'
-const CREMA = 'var(--warn-bg)'
-const AMBER = 'var(--warn)'
+// §1 · LA SELECCIÓ DE LA CASA ÉS `--sel`, NO EL TARONJA. `CREMA`/`AMBER` eren `--warn-bg`/
+// `--warn` fent de fons de fila seleccionada i de rètol de carpeta: taronja de SEMÀFOR fent de
+// selecció, que és exactament el defecte que A4 va haver de treure de `/garment-types`. El
+// semàfor és per a la DADA (aquí, els tres estats de viabilitat), mai per a «on soc».
+const SEL = 'var(--sel)'
 const TZ = 'Europe/Madrid'
 
+// §2 · capçalera de llista = th 10px MAJÚSCULES tracking .08em «a tot arreu». I el filet intern
+// de taula és `--line-soft`, no mig píxel d'un àlies de farciment.
 const thS = {
-  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', textAlign: 'left',
-  padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.04em',
-  borderBottom: '0.5px solid var(--gray-l)', whiteSpace: 'nowrap',
+  fontFamily: MONO, fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-soft)', textAlign: 'left',
+  padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.08em',
+  borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap',
 }
-const tdS = { padding: '8px 10px', fontSize: 'var(--fs-body)', borderBottom: '0.5px solid var(--gray-l)', verticalAlign: 'middle' }
+const tdS = { padding: '8px 10px', fontSize: 'var(--fs-body)', borderBottom: '1px solid var(--line-soft)', verticalAlign: 'middle' }
 
 function localDateTime(iso) {
   if (!iso) return '—'
@@ -268,18 +274,29 @@ function PlanificacioPanel({ mode = 'pending' }) {
     <div style={{ minWidth: 0, maxWidth: '100%' }}>
       <Feedback feedback={feedback} />
 
-      {/* Capçalera de carpeta (la tria pending/assigned la fa el tab del shell) + cerca */}
+      {/* §8e · EL COMPTADOR MANA I LA CERCA HI VA AL COSTAT, mateixa línia — la forma canònica
+          de tota llista de la casa, la mateixa de `/models`. Aquí hi havia una PÍNDOLA TARONJA
+          (`--warn-bg` + `--warn` a pes 600) fent de rètol de carpeta amb el recompte a dins:
+          semàfor pintant una etiqueta de navegació, i un comptador amagat entre parèntesis
+          quan la §8e diu que «ELS VALORS MANEN». */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 600, color: 'var(--text-main)' }}>
+          {rows.filter(r => r.folder === tab).length}
+        </span>
         <span style={{
-          fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '7px 16px', borderRadius: 8,
-          background: CREMA, color: AMBER, fontWeight: 600,
-        }}>{t(`planning.${tab === 'assigned' ? 'tab_assigned' : 'tab_pending'}`)} ({rows.filter(r => r.folder === tab).length})</span>
+          fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600, letterSpacing: '.08em',
+          textTransform: 'uppercase', color: 'var(--text-soft)',
+        }}>{t(`planning.${tab === 'assigned' ? 'tab_assigned' : 'tab_pending'}`)}</span>
         <input value={search} onChange={e => setSearch(e.target.value)}
-               placeholder={t('planning.search_ph')} style={{ ...selS, flex: '0 1 280px', minWidth: 180 }} />
+               placeholder={t('planning.search_ph')} aria-label={t('planning.search_ph')}
+               style={{ ...selS, flex: '0 1 280px', minWidth: 180 }} />
+        {/* §5.1 · L'acció primària de la carpeta «pendents»: assignar és el que has vingut a fer
+            aquí. És l'ÚNIC blau de la pantalla i només apareix quan hi ha selecció. */}
         {tab === 'pending' && selected.size > 0 && (
           <button onClick={() => setModal({ modelIds: [...selected], single: selected.size === 1 ? rows.find(r => r.id === [...selected][0]) : null })}
-                  style={primaryBtn}>
-            <i className="ti ti-user-plus" style={{ fontSize: 14 }} />{t('planning.assign')} ({selected.size})
+                  style={{ ...botoPri, marginLeft: 'auto' }}>
+            <i className="ti ti-user-plus" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+            {t('planning.assign')} ({selected.size})
           </button>
         )}
       </div>
@@ -288,7 +305,7 @@ function PlanificacioPanel({ mode = 'pending' }) {
         : tab === 'pending' ? (
             filtered.length === 0 ? <Center>{t('planning.empty_pending')}</Center>
               : (
-                <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
+                <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', fontSize: 'var(--fs-body)', overflowX: 'auto' }}>
                   <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                     <thead><tr>
                       <th style={{ ...thS, width: 34 }}></th>
@@ -348,12 +365,12 @@ function PlanificacioPanel({ mode = 'pending' }) {
 // dins el grup). Reaprofita el patró @dnd-kit d'EditableTable.
 function TechGroup({ g, t, usersById, techOptions, sensors, expanded, onToggle, onDragEnd, onUnassign, onReassign, onDeleteTask, saving }) {
   return (
-    <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', overflowX: 'auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '0.5px solid var(--gray-l)' }}>
-        <i className="ti ti-user" style={{ fontSize: 14, color: 'var(--gray)' }} />
-        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600 }}>{g.name}</span>
-        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>· {g.rows.length} {t('planning.models_word')}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO }}>{t('planning.drag_hint')}</span>
+    <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', fontSize: 'var(--fs-body)', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
+        <i className="ti ti-user" aria-hidden="true" style={{ fontSize: 16, color: 'var(--text-soft)' }} />
+        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-main)' }}>{g.name}</span>
+        <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>· {g.rows.length} {t('planning.models_word')}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }}>{t('planning.drag_hint')}</span>
       </div>
       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead><tr>
@@ -386,14 +403,22 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
   const style = {
     transform: CSS.Transform.toString(transform), transition,
     opacity: isDragging ? 0.5 : 1,
-    background: isDragging ? CREMA : (expanded ? CREMA : 'transparent'),
+    // §1 · «on soc» = `--sel`. Era `--warn-bg` (taronja de semàfor) tant per a la fila que
+    // s'arrossega com per a la desplegada: el taronja és marca de DADA (aquí, la viabilitat de
+    // la fila), i fer-lo servir per a la selecció desdibuixa totes dues coses alhora.
+    background: isDragging || expanded ? SEL : 'transparent',
   }
   return (
     <>
       <tr ref={setNodeRef} style={style}>
         <td style={tdS}>
-          <span {...attributes} {...listeners} title={t('planning.drag_hint')}
-            style={{ cursor: 'grab', color: 'var(--text-muted)', fontSize: 'var(--fs-h3)', display: 'inline-block', lineHeight: 1 }}>⠿</span>
+          {/* §8 · icona Tabler de 16px, no un CARÀCTER tipogràfic. El `⠿` és un braille: no té
+              ni el traç ni la mida del sistema, i cada font el dibuixa d'una manera. Mateixa
+              correcció que A10 va fer amb el `▼` de les seccions plegables. */}
+          <span {...attributes} {...listeners} title={t('planning.drag_hint')} aria-label={t('planning.drag_hint')}
+            style={{ cursor: 'grab', color: 'var(--text-soft)', fontSize: 16, display: 'inline-flex', lineHeight: 1 }}>
+            <i className="ti ti-grip-vertical" aria-hidden="true" style={{ fontSize: 'inherit', color: 'currentColor' }} />
+          </span>
         </td>
         <td style={{ ...tdS, cursor: 'pointer' }} onClick={onToggle}>
           <i className={`ti ti-chevron-${expanded ? 'down' : 'right'}`} style={{ fontSize: 14 }} />
@@ -402,22 +427,28 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
           {r.reanchored_by_start && <i className="ti ti-plus" title={t('planning.gantt.reanchored')} style={{ color: 'var(--gold)', marginRight: 4 }} />}
           {r.codi}
           {r.viab?.semafor === 'critical' && <span style={{ marginLeft: 8, color: 'var(--err)', fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('planning.critical')}</span>}
-          {r.viab?.semafor === 'at_risk' && <span style={{ marginLeft: 8, color: 'var(--warn)', fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('planning.at_risk')}</span>}
+          {/* §1b(d) · el taronja de TEXT és `--warn-ink` (5.32:1), no `--warn-state`: com a text
+              sobre el seu fons, el taronja de marca dona 1.86:1 i contradiu el vet de C5. */}
+          {r.viab?.semafor === 'at_risk' && <span style={{ marginLeft: 8, color: 'var(--warn-ink)', fontSize: 'var(--fs-body)', fontWeight: 600 }}>{t('planning.at_risk')}</span>}
           {r.viab?.semafor === 'on_track' && <span style={{ marginLeft: 8, color: 'var(--ok)', fontSize: 'var(--fs-body)' }}>{t('planning.on_track')}</span>}
-          <div style={{ fontFamily: 'inherit', fontWeight: 400, color: 'var(--gray)', fontSize: 'var(--fs-body)' }}>{r.nom}</div>
+          <div style={{ fontFamily: 'inherit', fontWeight: 400, color: 'var(--text-soft)', fontSize: 'var(--fs-body)' }}>{r.nom}</div>
         </td>
         <td style={tdS}>{localDate(r.predStart)}</td>
         <td style={tdS}>{fmtMins(r.temps)}</td>
         <td style={{ ...tdS, color: r.risc ? 'var(--err)' : 'inherit' }}>{localDate(r.predEnd)}</td>
         <td style={tdS}>
-          <button onClick={onUnassign} disabled={saving} title={t('planning.unassign')} style={{
-            background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-            padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
-          }}>{t('planning.unassign')}</button>
+          {/* §5.4 · TERCIÀRIA: desassignar és un gest de la fila, no l'acció de la pantalla. */}
+          <button onClick={onUnassign} disabled={saving} title={t('planning.unassign')}
+            style={{ ...botoTer, padding: '4px 10px', ...(saving ? apagat : null) }}>{t('planning.unassign')}</button>
         </td>
       </tr>
+      {/* 🚨 AL FONS D'AQUESTA FILA HI HAVIA `var(--bg, #faf9f7)` I `--bg` NO EXISTEIX A `:root`:
+          el que es pintava era SEMPRE el literal de reserva, un crema que ningú havia decidit i
+          que cap cerca de tokens troba. El fons de pàgina de la norma és `--bg-page`.
+          (El comentari va AQUÍ i no dins del `{expanded && (…)}`: allà encara ets en context
+          d'expressió i les claus es llegirien com un OBJECTE literal, no com un comentari.) */}
       {expanded && (
-        <tr><td colSpan={7} style={{ padding: 0, background: 'var(--bg, #faf9f7)' }}>
+        <tr><td colSpan={7} style={{ padding: 0, background: 'var(--bg-page)' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <tbody>
               {r.tasks.map(tk => {
@@ -427,7 +458,7 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
                     <td style={{ ...tdS, paddingLeft: 40, width: 180, fontFamily: MONO }}>{tk.task_type_code}</td>
                     <td style={{ ...tdS, width: 200 }}>
                       {done ? (
-                        <span style={{ color: 'var(--gray)' }}>{t('planning.author')}: {usersById[tk.assignee] || '—'}</span>
+                        <span style={{ color: 'var(--text-soft)' }}>{t('planning.author')}: {usersById[tk.assignee] || '—'}</span>
                       ) : (
                         <select value={tk.assignee || ''} disabled={saving} onChange={e => onReassign(tk.id, Number(e.target.value))} style={{ ...selS, padding: '3px 6px' }}>
                           {!tk.assignee && <option value="">—</option>}
@@ -436,7 +467,7 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
                       )}
                     </td>
                     <td style={{ ...tdS, width: 110 }}>
-                      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: done ? 'var(--ok)' : 'var(--text-muted)' }}>{tk.status}</span>
+                      <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: done ? 'var(--ok)' : 'var(--text-soft)' }}>{tk.status}</span>
                     </td>
                     <td style={tdS}>
                       {done ? `${t('planning.done_at')}: ${localDate(tk.finished_at)}`
@@ -446,8 +477,9 @@ function SortableRowAssigned({ r, t, usersById, techOptions, expanded, onToggle,
                       {/* Esborrar només visible/actiu en tasques Pending (C3). */}
                       {tk.status === 'Pending' && (
                         <button onClick={() => onDeleteTask(tk.id)} disabled={saving} title={t('planning.delete_task')}
-                          style={{ background: 'none', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', color: 'var(--text-muted)', padding: 2, fontSize: 'var(--fs-h3)', lineHeight: 1 }}>
-                          <i className="ti ti-trash" />
+                          style={{ background: 'none', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', color: 'var(--err)', padding: 2, fontSize: 14, lineHeight: 1 }}>
+                          {/* §8 · tinta DESTRUCTIVA i 14px (icona dins d'un botó). */}
+                          <i className="ti ti-trash" aria-hidden="true" style={{ fontSize: 'inherit', color: 'currentColor' }} />
                         </button>
                       )}
                     </td>
@@ -477,35 +509,38 @@ export default function Planning() {
   const [activeTab, setActiveTab] = useState('dashboard')
 
   if (me == null) return <Center>{t('planning.loading')}</Center>
+  // §8c · l'estat sense accés era una caixa centrada amb una icona de 32px (fora de les tres
+  // mides de la §8) i tinta `--gray`. Passa a la forma de la casa: frase tènue cursiva.
   if (!canPlan) return (
-    <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-      <i className="ti ti-lock" style={{ fontSize: 32, color: 'var(--gray)' }} />
-      <p style={{ marginTop: 12, fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('planning.no_access')}</p>
+    <div style={{ padding: 16, fontSize: 'var(--fs-body)', color: 'var(--text-faint)', fontStyle: 'italic', fontFamily: MONO }}>
+      {t('planning.no_access')}
     </div>
   )
 
   return (
-    <div style={{ minWidth: 0, maxWidth: '100%' }}>
-      <div style={{ marginBottom: '1rem' }}>
-        <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('planning.title')}</h1>
-        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('planning.gov_subtitle')}</p>
+    <>
+      {/* §8b · MENÚ DE PANTALLA. Els sis tabs de govern eren botons amb l'ACTIU EN DAURAT PLE i
+          els altres sobre `--bg-muted`: daurat ple fent de navegació, que és el que la norma
+          prohibeix («ni blau ni daurat ple: navegar no és ni acció ni marca»). Són seccions
+          grans d'una mateixa entitat → píndoles del §8b-bis. La fletxa porta al tauler, que és
+          d'on penja aquesta pantalla al menú lateral. */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu
+          backTo="/"
+          backTitle={t('planning.back_title')}
+          items={GOV_TABS.map(tab => ({
+            key: tab, label: t(`planning.tabs.${tab}`),
+            active: activeTab === tab, onClick: () => setActiveTab(tab),
+          }))}
+        />
       </div>
 
-      <div style={{
-        display: 'flex', gap: 8, paddingBottom: '0.75rem', marginBottom: '1rem',
-        borderBottom: '0.5px solid var(--border)', flexWrap: 'wrap',
-      }}>
-        {GOV_TABS.map(tab => (
-          <button key={tab} type="button" onClick={() => setActiveTab(tab)} style={{
-            padding: '6px 16px', borderRadius: 6, border: 'none',
-            background: activeTab === tab ? 'var(--gold)' : 'var(--bg-muted)',
-            color: activeTab === tab ? 'var(--text-main)' : 'var(--text-muted)',
-            cursor: 'pointer', fontSize: 'var(--fs-body)', fontFamily: MONO,
-            fontWeight: activeTab === tab ? 500 : 400,
-          }}>
-            {t(`planning.tabs.${tab}`)}
-          </button>
-        ))}
+      <div style={{ minWidth: 0, maxWidth: '100%', paddingTop: 16 }}>
+      {/* §8b.3 · IDENTITAT sobre el fons de pàgina, sense contenidor. El subtítol baixa a
+          caption i deixa el pes 300, que no és cap pes de la casa (§2: 400 · 500 · 600). */}
+      <div style={{ marginBottom: 16 }}>
+        <h1 style={{ fontSize: 'var(--fs-h1)', lineHeight: '28px', fontWeight: 500, marginBottom: 4, color: 'var(--text-main)', fontFamily: MONO }}>{t('planning.title')}</h1>
+        <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }}>{t('planning.gov_subtitle')}</p>
       </div>
 
       {activeTab === 'dashboard' && <DashboardGovPanel me={me} />}
@@ -514,7 +549,8 @@ export default function Planning() {
       {activeTab === 'calendari_projecte' && <ProjectGantt t={t} />}
       {activeTab === 'informes' && <InformesPanel me={me} />}
       {activeTab === 'registre' && <RegistreActivitat />}
-    </div>
+      </div>
+    </>
   )
 }
 

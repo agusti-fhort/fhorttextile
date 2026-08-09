@@ -52,12 +52,14 @@ export default function CustomerModal({ mode, customer, t, onCancel, onSaved, on
 
 function TabBar({ tab, setTab, tabs }) {
   return (
-    <div style={{ display: 'flex', gap: 4, borderBottom: '0.5px solid var(--border)', marginBottom: 16 }}>
+    <div style={{ display: 'flex', gap: 4, borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: 'var(--line)', marginBottom: 16 }}>
       {tabs.map(([k, label]) => (
         <button key={k} onClick={() => setTab(k)} style={{
           fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 12px', cursor: 'pointer',
-          background: 'none', border: 'none', color: tab === k ? 'var(--gold)' : 'var(--text-muted)',
-          borderBottom: tab === k ? '2px solid var(--gold)' : '2px solid transparent', marginBottom: -1,
+          background: 'none', border: 'none',
+          color: tab === k ? 'var(--text-main)' : 'var(--text-soft)',
+          fontWeight: tab === k ? 600 : 400,
+          boxShadow: tab === k ? 'inset 0 -2px 0 var(--gold)' : 'none',
         }}>{label}</button>
       ))}
     </div>

@@ -23,8 +23,8 @@ const MONO = 'IBM Plex Mono, monospace'
 // que no és cap amplada ni cap token del sistema.
 const smallBtn = { ...botoSec, padding: '5px 10px' }
 const intentChip = {
-  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 12,
-  border: '0.5px solid var(--gray-l)', background: 'var(--gold-pale)', fontFamily: MONO,
+  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 'var(--r-card)',
+  borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', background: 'var(--sel)', fontFamily: MONO,
   fontSize: 'var(--fs-caption)', color: 'var(--gold)', fontWeight: 600,
 }
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
@@ -320,17 +320,17 @@ function LinesSection({ quote, editable, canIntents, products, t, reload, ok, er
 
       {/* E6 — vincle preparatori: models previstos per línia. Editable en DRAFT/SENT; read-only en ACCEPTED. */}
       {lines.length > 0 && (canIntents || anyIntent) && (
-        <div style={{ marginTop: 16, borderTop: '0.5px solid var(--gray-l)', paddingTop: 12 }}>
+        <div style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--line)' }}>
           <p style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, fontWeight: 600, marginBottom: 2 }}>{t('quotes.intents_title')}</p>
           <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginBottom: 10 }}>{t('quotes.intents_hint')}</p>
           {canIntents && pendingLines.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 10px',
-              padding: '8px 14px', background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+              padding: '8px 14px', background: 'var(--sel)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)', borderRadius: 'var(--r-ctrl)',
               fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
               <i className="ti ti-arrow-back-up" aria-hidden="true" />
               <span>{t('quotes.pending_lines', { n: pendingLines.length })}</span>
               <button onClick={() => goSelect(pendingLines[0].id)}
-                style={{ ...smallBtn, cursor: 'pointer', color: 'var(--gold)', border: '0.5px solid var(--gold)', fontWeight: 600 }}>
+                style={{ ...smallBtn, cursor: 'pointer', color: 'var(--gold)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)', fontWeight: 600 }}>
                 {t('quotes.continue_selecting')}
               </button>
             </div>

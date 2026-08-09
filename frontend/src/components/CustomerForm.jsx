@@ -53,7 +53,7 @@ export function Row({ children }) {
 export function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 14, flex: 1 }}>
-      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
+      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-soft)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   )

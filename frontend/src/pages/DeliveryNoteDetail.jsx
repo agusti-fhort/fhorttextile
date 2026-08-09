@@ -21,7 +21,7 @@ import { DNStatusBadge } from './DeliveryNotes'
 // (congela)→INVOICED. Comportament INTACTE respecte v2; només canvia el markup (components compartits).
 const MONO = 'IBM Plex Mono, monospace'
 const smallBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
+  background: 'none', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 6, cursor: 'pointer',
   padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-soft)',
   display: 'inline-flex', alignItems: 'center', gap: 4,
 }
@@ -378,8 +378,8 @@ export default function DeliveryNoteDetail() {
           alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 12, padding: '1.2rem 1.4rem',
-            maxWidth: 720, width: '100%', maxHeight: '85vh', overflowY: 'auto', border: '0.5px solid var(--gray-l)',
+            background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.2rem 1.4rem',
+            maxWidth: 720, width: '100%', maxHeight: '85vh', overflowY: 'auto', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
           }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>
               {t('deliverynotes.tray_title')}
@@ -408,7 +408,7 @@ export default function DeliveryNoteDetail() {
                     })}
                   </div>
                 )))}
-            <div style={{ display: 'flex', gap: 8, marginTop: 12, position: 'sticky', bottom: 0, background: 'var(--white)', paddingTop: 8 }}>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, position: 'sticky', bottom: 0, background: 'var(--panel)', paddingTop: 8 }}>
               <button onClick={addPicked} disabled={trayBusy || picked.size === 0} style={botoPri}>
                 {t('deliverynotes.tray_add', { n: picked.size })}
               </button>
@@ -425,8 +425,8 @@ export default function DeliveryNoteDetail() {
           alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 12, padding: '1.2rem 1.4rem',
-            maxWidth: 460, width: '100%', border: '0.5px solid var(--gray-l)',
+            background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.2rem 1.4rem',
+            maxWidth: 460, width: '100%', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
           }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
               {t('deliverynotes.issue_title')}

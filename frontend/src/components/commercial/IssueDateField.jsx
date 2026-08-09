@@ -24,7 +24,7 @@ export default function IssueDateField({ value, editable, onSave, t, label }) {
 
   return (
     <div style={{ marginBottom: 10 }}>
-      <label style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+      <label style={{ fontSize: 'var(--fs-label)', fontFamily: MONO, color: 'var(--text-soft)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
         {label || t('commerce.issued_at')}
       </label>
       {editable ? (
@@ -32,13 +32,13 @@ export default function IssueDateField({ value, editable, onSave, t, label }) {
           <input type="date" value={draft} disabled={saving}
             onChange={e => setDraft(e.target.value)}
             style={{
-              background: 'none', border: '0.5px solid var(--border)', borderRadius: 6,
+              background: 'none', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 6,
               padding: '5px 8px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text)',
             }} />
           {dirty && (
             <button onClick={save} disabled={saving} title={t('commerce.issued_at_save')} style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
-              background: 'none', border: '0.5px solid var(--gold)', borderRadius: 6,
+              background: 'none', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)', borderRadius: 6,
               padding: '5px 9px', cursor: saving ? 'default' : 'pointer',
               fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--gold)',
             }}>

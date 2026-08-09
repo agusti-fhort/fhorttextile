@@ -290,7 +290,7 @@ export default function WorkOrderDetail() {
       {/* Tasques */}
       <div style={sectionTitle}>{t('workorders.tasks')}</div>
       {tasks.length === 0 ? <p style={{ color: 'var(--text-soft)' }}>{t('workorders.tasks_empty')}</p> : (
-        <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 'var(--r-card)', overflow: 'hidden' }}>
           <LineTable columns={taskColumns} rows={tasks}
             rowStyle={tk => ({ borderLeft: tk.off_recipe ? '3px solid var(--err)' : '3px solid transparent' })} />
         </div>
@@ -299,7 +299,7 @@ export default function WorkOrderDetail() {
       {/* Despeses (línies externes) */}
       <div style={sectionTitle}>{t('workorders.expenses')}</div>
       {expenses.length > 0 && (
-        <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 10, overflow: 'hidden', marginBottom: 10 }}>
+        <div style={{ borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 'var(--r-card)', overflow: 'hidden', marginBottom: 10 }}>
           <LineTable columns={expColumns} rows={expenses} renderActions={expActions} />
         </div>
       )}
@@ -334,7 +334,7 @@ export default function WorkOrderDetail() {
       {isClosed && reviewRows.length > 0 && (
         <>
           <div style={sectionTitle}>{t('workorders.review')}</div>
-          <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 'var(--r-card)', overflow: 'hidden' }}>
             <LineTable columns={reviewColumns} rows={reviewTableRows} />
           </div>
           {canConfigure && (
@@ -352,9 +352,9 @@ export default function WorkOrderDetail() {
           alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 12, padding: '1.2rem 1.4rem',
+            background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.2rem 1.4rem',
             maxWidth: 520, width: '100%', maxHeight: '80vh', overflowY: 'auto',
-            border: '0.5px solid var(--gray-l)',
+            borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
           }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
               {t('workorders.close_title')}
@@ -396,9 +396,9 @@ export default function WorkOrderDetail() {
           alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 12, padding: '1.2rem 1.4rem',
+            background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1.2rem 1.4rem',
             maxWidth: 520, width: '100%', maxHeight: '80vh', overflowY: 'auto',
-            border: '0.5px solid var(--gray-l)',
+            borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
           }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
               {t('workorders.dn_title')}

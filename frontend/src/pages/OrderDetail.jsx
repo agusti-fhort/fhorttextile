@@ -212,12 +212,12 @@ export default function OrderDetail() {
 
       {canEdit && pendingLines.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 12px',
-          padding: '8px 14px', background: 'var(--gold-pale)', border: '0.5px solid var(--gold)', borderRadius: 8,
+          padding: '8px 14px', background: 'var(--sel)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)', borderRadius: 'var(--r-ctrl)',
           fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
           <i className="ti ti-arrow-back-up" aria-hidden="true" />
           <span>{t('orders.pending_lines', { n: pendingLines.length })}</span>
           <button onClick={() => goSelect(pendingLines[0])}
-            style={{ ...smallBtn, cursor: 'pointer', color: 'var(--gold)', border: '0.5px solid var(--gold)', fontWeight: 600 }}>
+            style={{ ...smallBtn, cursor: 'pointer', color: 'var(--gold)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)', fontWeight: 600 }}>
             {t('orders.continue_selecting')}
           </button>
         </div>
@@ -270,8 +270,8 @@ export default function OrderDetail() {
           alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: 'var(--white)', borderRadius: 12, padding: '1rem 1.2rem',
-            maxWidth: 440, width: '100%', border: '0.5px solid var(--gray-l)',
+            background: 'var(--panel)', borderRadius: 'var(--r-card)', padding: '1rem 1.2rem',
+            maxWidth: 440, width: '100%', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
           }}>
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 8, fontFamily: MONO }}>
               {t('orders.unassign_title')}
@@ -312,7 +312,7 @@ function Section({ title, children }) {
 }
 
 function Row({ children }) {
-  return <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderTop: '0.5px solid var(--bg-muted)' }}>{children}</div>
+  return <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--line-soft)' }}>{children}</div>
 }
 
 // P4 — panell read-only d'una línia: models assignats (via WO), tasques amb estat, % imputat.
@@ -346,7 +346,7 @@ function LineExpansion({ a, t, canEdit = false, onUnassign = null }) {
               {canEdit && wo.can_unassign && onUnassign && (
                 <button type="button" onClick={() => onUnassign(wo)} title={t('orders.unassign')}
                   style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4,
-                           background: 'none', border: '0.5px solid var(--err)', borderRadius: 8,
+                           background: 'none', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--err)', borderRadius: 'var(--r-ctrl)',
                            color: 'var(--err)', cursor: 'pointer', fontFamily: MONO, fontSize: 'var(--fs-caption)',
                            padding: '1px 8px' }}>
                   <i className="ti ti-unlink" style={{ fontSize: 12 }} />{t('orders.unassign')}
@@ -370,11 +370,11 @@ function LineExpansion({ a, t, canEdit = false, onUnassign = null }) {
     </div>
   )
 }
-const expBox = { padding: '10px 12px', margin: '0 0 2px', background: 'var(--bg-muted)', borderRadius: 8, fontSize: 'var(--fs-caption)' }
+const expBox = { padding: '10px 12px', margin: '0 0 2px', background: 'var(--bg-page)', borderRadius: 'var(--r-ctrl)', fontSize: 'var(--fs-caption)' }
 const expMuted = { fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }
 const expMeta = { fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }
-const woPill = { fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '0 6px', borderRadius: 10, border: '0.5px solid var(--gold)' }
-const taskChip = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 12, background: 'var(--white)', border: '0.5px solid var(--gray-l)', fontSize: 'var(--fs-caption)', fontFamily: MONO }
+const woPill = { fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '0 6px', borderRadius: 'var(--r-card)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--gold-border)' }
+const taskChip = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 'var(--r-card)', background: 'var(--panel)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', fontSize: 'var(--fs-caption)', fontFamily: MONO }
 
 // Línies del resum fiscal de la comanda (subtotal · desglossament IVA per tipus · total).
 function orderSummaryLines(order, t) {

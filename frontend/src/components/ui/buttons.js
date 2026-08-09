@@ -2,9 +2,22 @@
 // selS = input/botó secundari neutre · primaryBtn = acció primària daurada.
 const MONO = 'IBM Plex Mono, monospace'
 
+// EL CONTROL DE LA CASA (§8c: «filtres en línia — cerca, selects, dates: vora --line, radi 6,
+// focus daurat, alçada única, MAI blaus»). Es conforma AQUÍ i no pantalla per pantalla perquè
+// són **126 usos en 24 fitxers**: la vora era `0.5px solid var(--gray-l)`, i `--gray-l` (#f0f0f0)
+// és un àlies de FARCIMENT fent de vora, en gris fred, mentre la vora de la norma és `--line`.
+// Mig píxel, a més, no és de cap escala: el navegador l'arrodoneix i el resultat depèn del zoom.
+//
+// ⚠️ TOCA PANTALLES JA CONFORMADES (`/cataleg-peces`, `/garment-types`, l'`ActionsMenu` del
+// model). Va cap a la norma a totes, que és el mateix criteri amb què el bloc A va canviar
+// `GroupPills` i el bloc B `ui/Badge` per a tot el producte; i per això la bidireccional es
+// torna a córrer SENCERA sobre tot el que ja estava tancat. L'alçada NO s'hi fixa a posta:
+// hi ha usos que ajusten el `padding` per encabir-lo dins d'una cel·la de taula, i una alçada
+// única aquí els trencaria en silenci.
 export const selS = {
   fontFamily: MONO, fontSize: 'var(--fs-body)', padding: '6px 10px',
-  border: '0.5px solid var(--gray-l)', borderRadius: 6, background: 'var(--white)', color: 'var(--text-main)',
+  border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)',
+  background: 'var(--panel)', color: 'var(--text-main)',
 }
 
 // L'ACCIÓ PRIMÀRIA ÉS BLAVA (NORMA_LAYOUT §5, T0-bis.2). «Blau = el que has vingut a fer, UNA per
