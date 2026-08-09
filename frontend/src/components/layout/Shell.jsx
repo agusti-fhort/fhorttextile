@@ -35,7 +35,17 @@ export default function Shell() {
             flex: 1,
             minWidth: 0,          // no deixis que el contingut ample empenyi la columna
             padding: '1.5rem',
-            background: 'var(--gray-l)',
+            // §1 · EL FONS DE PÀGINA ÉS `--bg-page` (#fbfaf8, blanc càlid). Aquí hi havia
+            // `--gray-l` (#f0f0f0), que és un GRIS FRED i, a més, un àlies legacy que la casa
+            // fa servir per a vores i farciments de control — no per a la superfície on viuen
+            // totes les pantalles. El token de la norma existia des de T0.1 i aquest era
+            // l'últim lloc que no el consumia: mentre el `<main>` pintés gris, cap pantalla
+            // conforme podia acabar de casar amb la seva maqueta, que va tota sobre `--bg`.
+            //
+            // ⚠️ TOCA TOTES LES PANTALLES ALHORA, també les que encara no han passat
+            // conformitat. Va en commit AÏLLAT a posta (ordre d'Agus): si alguna pantalla
+            // vella se'n ressent, es revertreix una línia i prou.
+            background: 'var(--bg-page)',
             overflowY: 'auto',
           }}>
             <Outlet />
