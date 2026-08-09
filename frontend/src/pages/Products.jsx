@@ -1,20 +1,43 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import useAuthStore from '../store/auth'
 import { commerce } from '../api/endpoints'
-import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
 import Modal from '../components/ui/Modal'
 import Badge from '../components/ui/Badge'
-import { LineTable, RowBtn } from '../components/commercial'
-import { selS, primaryBtn } from '../components/ui/buttons'
+import PageMenu from '../components/ui/PageMenu'
+import TaulaLlista from '../components/ui/TaulaLlista'
 import TranslatableField, { pickTranslation } from '../components/ui/TranslatableField'
+import { useCodisEstat } from '../components/commercial/estats'
+import {
+  BotoMenu, SepMenu, Comptador, FilaIdentitat, EstatBuit, BotoEsborrar, Paginacio,
+  camp, forceBarra,
+} from '../components/llista/ChromLlista'
 
-// Mòdul Comercial Studio — B1 · Mestre d'articles (pàgina Productes). Sistema visual unificat
-// del mòdul comercial (LineTable + RowBtn + Badge, tipografia continguda).
-// Escriptura gated CONFIGURE (backend); el gate de tier del mòdul arriba a B5.
+// MESTRE D'ARTICLES (`Product`, B1) — LLISTA CANONICA DE LA CASA (NORMA_LAYOUT §8b + §8e).
+// Escriptura gated CONFIGURE; el gate de tier del modul arriba a B5.
+//
+// ── TRES COSES QUE ES DIUEN EN VEU ALTA ──────────────────────────────────────────────────
+//
+// 1 · **LA LLISTA DEIXA DE SER UNA `LineTable`.** `components/commercial/LineTable` es la taula
+//    de LINIES D'UN DOCUMENT —cel·les editables, accions a l'esquerra, columna de cost intern—
+//    i aixo es una LLISTA PRINCIPAL, que es una altra cosa: la §8e li dona la seva graella, amb
+//    capceleres ordenables, amplades per contingut i ellipsis. Que les dues fossin taules no les
+//    feia la mateixa taula.
+//
+// 2 · **LES QUATRE ACCIONS D'ICONA PER FILA ES REPARTEIXEN.** Hi havia quatre `RowBtn` a cada
+//    fila (obrir · editar · activar/desactivar · esborrar), i tres d'elles nomes es distingien
+//    per la icona. Ara: OBRIR es el clic de la fila (§8e), ESBORRAR es la paperera de la graella,
+//    i EDITAR i ACTIVAR/DESACTIVAR baixen a la FITXA del producte, que es on la pantalla parla
+//    d'un article i no de molts — la mateixa decisio que a Clients (commit 200).
+//
+// 3 · **LES DUES ENUMERACIONS VENEN DE `/vocabulari/`** (`natures_producte`, `modes_preu_producte`).
+//    N'hi havia una escrita a `NATURES` i l'altra en DOS `<option>` a pel dins del formulari, que
+//    es la forma mes silenciosa de totes: una llista que no sembla una llista.
 const MONO = 'IBM Plex Mono, monospace'
+const PAGE_SIZE = 25
+const ORDRE_DEFECTE = { camp: 'code', dir: 'asc' }
 
 export default function Products() {
   const { t, i18n } = useTranslation()
@@ -23,129 +46,212 @@ export default function Products() {
   const me = useAuthStore(s => s.user)
   const canEdit = !!me?.capabilities?.includes('configure')
 
+  const [items, setItems] = useState([])
+  const [count, setCount] = useState(0)
+  const [total, setTotal] = useState(null)
+  const [units, setUnits] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [items, setItems] = useState([])
-  const [units, setUnits] = useState([])
   const [feedback, setFeedback] = useState(null)
   const [saving, setSaving] = useState(false)
   const [modal, setModal] = useState(null)   // { mode:'create'|'edit', prod? }
 
-  const fetchList = () => commerce.products.list({ ordering: 'code', page_size: 500 })
-    .then(res => res.data?.results ?? (Array.isArray(res.data) ? res.data : []))
+  const { codis: natures } = useCodisEstat('natures_producte')
+
+  const [sp, setSp] = useSearchParams()
+  const natureF = sp.get('nature') || ''
+  const page = Math.max(1, parseInt(sp.get('page') || '1', 10))
+  const vista = sp.get('vista') === 'inactius' ? 'inactius' : 'actius'
+  const ordre = useMemo(() => {
+    const raw = sp.get('ordering')
+    if (!raw) return ORDRE_DEFECTE
+    const desc = raw.startsWith('-')
+    return { camp: desc ? raw.slice(1) : raw, dir: desc ? 'desc' : 'asc' }
+  }, [sp])
+
+  const setParams = useCallback((patch) => {
+    setSp(prev => {
+      const next = new URLSearchParams(prev)
+      Object.entries(patch).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === '') next.delete(k)
+        else next.set(k, v)
+      })
+      return next
+    }, { replace: true })
+  }, [setSp])
+
+  const ordenar = useCallback((c) => {
+    const dir = (ordre.camp === c && ordre.dir === 'asc') ? 'desc' : 'asc'
+    setParams({ ordering: dir === 'desc' ? `-${c}` : c, page: undefined })
+  }, [ordre, setParams])
 
   const load = useCallback(() => {
-    setError(false)
-    return fetchList().then(setItems).catch(() => setError(true))
+    setLoading(true); setError(false)
+    commerce.products.list({
+      active: vista === 'actius',
+      ...(natureF ? { nature: natureF } : {}),
+      ordering: ordre.dir === 'desc' ? `-${ordre.camp}` : ordre.camp,
+      page, page_size: PAGE_SIZE,
+    })
+      .then(res => {
+        const d = res.data
+        setItems(Array.isArray(d) ? d : (d.results || []))
+        setCount(d?.count ?? (Array.isArray(d) ? d.length : 0))
+      })
+      .catch(() => { setItems([]); setCount(0); setError(true) })
+      .finally(() => setLoading(false))
+  }, [vista, natureF, ordre, page])
+
+  const carregaTotal = useCallback(() => {
+    commerce.products.list({ page_size: 1 })
+      .then(r => setTotal(r.data?.count ?? null)).catch(() => setTotal(null))
   }, [])
 
+  useEffect(() => { carregaTotal() }, [carregaTotal])
+  useEffect(() => { const id = setTimeout(load, 150); return () => clearTimeout(id) }, [load])
+  // Les unitats són files d'una taula (no una enumeració de domini) i les necessita el modal.
   useEffect(() => {
     let alive = true
-    Promise.all([
-      fetchList(),
-      commerce.units.list({ active: true, page_size: 500 })
-        .then(res => res.data?.results ?? (Array.isArray(res.data) ? res.data : [])),
-    ])
-      .then(([rows, us]) => { if (alive) { setItems(rows); setUnits(us) } })
-      .catch(() => { if (alive) setError(true) })
-      .finally(() => { if (alive) setLoading(false) })
+    commerce.units.list({ active: true, page_size: 500 })
+      .then(res => res.data?.results ?? (Array.isArray(res.data) ? res.data : []))
+      .then(us => { if (alive) setUnits(us) })
+      .catch(() => { if (alive) setUnits([]) })
     return () => { alive = false }
   }, [])
 
-  const toggleActive = (prod) => {
-    setSaving(true); setFeedback(null)
-    commerce.products.update(prod.id, { active: !prod.active })
-      .then(() => load())
-      .then(() => setFeedback({ type: 'ok', text: t('products.saved') }))
-      .catch(() => setFeedback({ type: 'err', text: t('products.error') }))
-      .finally(() => setSaving(false))
-  }
+  const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
 
-  const remove = (prod) => {
+  const remove = (prod, e) => {
+    e.stopPropagation()
     if (!window.confirm(t('products.confirm_delete', { name: prod.code }))) return
     setSaving(true); setFeedback(null)
     commerce.products.remove(prod.id)
-      .then(() => load())
+      .then(() => { load(); carregaTotal() })
       .then(() => setFeedback({ type: 'ok', text: t('products.deleted') }))
-      .catch(e => setFeedback({ type: 'err', text: e?.response?.data?.detail || t('products.delete_protected') }))
+      .catch(err => setFeedback({ type: 'err', text: err?.response?.data?.detail || t('products.delete_protected') }))
       .finally(() => setSaving(false))
   }
 
-  const natureLabel = (n) => t(`products.nature_${n}`)
-  const priceSummary = (r) => {
-    if (r.price_mode === 'TIME_BASED') {
-      return r.sale_rate != null ? `${r.sale_rate} €/min` : '—'
-    }
+  const resumPreu = (r) => {
+    if (r.price_mode === 'TIME_BASED') return r.sale_rate != null ? `${r.sale_rate} €/min` : '—'
     return r.base_price != null ? `${r.base_price} €${r.unit_code ? ` / ${r.unit_code}` : ''}` : '—'
   }
 
-  const columns = [
-    { key: 'code', label: t('products.col_code'), width: 140, render: r => <span style={{ fontWeight: 600 }}>{r.code}</span> },
-    { key: 'name', label: t('products.col_name'), render: r => pickTranslation(r, 'name', lang) },
-    { key: 'nature', label: t('products.col_nature'), render: r => natureLabel(r.nature) },
-    { key: 'price', label: t('products.col_price'), align: 'right', width: 150, render: r => priceSummary(r) },
-    { key: 'active', label: t('products.col_active'), width: 110, render: r => (
-      <Badge variant={r.active ? 'ok' : 'gray'}>{r.active ? t('products.active') : t('products.inactive')}</Badge>
-    ) },
+  const cols = useMemo(() => [
+    {
+      // LA DADA REINA d'un mestre d'articles és el CODI: és el que viatja a la línia d'un
+      // document i el que es tecleja. Mateix cas que el catàleg de POMs.
+      key: 'code', label: t('products.col_code'), min: 120, max: 160, sort: 'code',
+      estil: { fontWeight: 600 }, titol: r => r.code,
+      render: r => r.code,
+    },
+    {
+      key: 'name', label: t('products.col_name'), min: 200, max: 320, sort: 'name',
+      titol: r => pickTranslation(r, 'name', lang),
+      render: r => pickTranslation(r, 'name', lang),
+    },
+    {
+      // La NATURA és una CLASSIFICACIÓ, no un semàfor: text pla, sense badge (§8e — la fase
+      // dels models va prendre exactament aquesta decisió pel mateix motiu).
+      key: 'nature', label: t('products.col_nature'), min: 130, max: 170, sort: 'nature',
+      estil: { fontSize: 11, color: 'var(--text-soft)' },
+      render: r => t(`products.nature_${r.nature}`, r.nature),
+    },
+    {
+      key: 'price', label: t('products.col_price'), min: 120, max: 160, align: 'right',
+      titol: r => resumPreu(r),
+      render: r => resumPreu(r),
+    },
+    {
+      key: 'active', label: t('products.col_active'), min: 86, max: 100, sort: 'active',
+      render: r => (
+        <Badge variant={r.active ? 'ok' : 'gray'}>
+          {r.active ? t('products.active') : t('products.inactive')}
+        </Badge>
+      ),
+    },
+    {
+      key: 'del', amplada: 36,
+      render: r => (canEdit
+        ? <BotoEsborrar onClick={(e) => remove(r, e)} title={t('products.delete')} disabled={saving} />
+        : null),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, lang, canEdit, saving])
+
+  const VISTES = [
+    ['actius', t('products.view_active')],
+    ['inactius', t('products.view_inactive')],
   ]
 
-  const renderActions = (r) => (
-    <>
-      <RowBtn icon="ti-arrow-right" title={t('products.open')} disabled={saving}
-        onClick={() => navigate(`/comercial/productes/${r.id}`)} />
-      {canEdit && <>
-        <RowBtn icon="ti-pencil" title={t('products.edit')} disabled={saving}
-          onClick={() => setModal({ mode: 'edit', prod: r })} />
-        <RowBtn icon={r.active ? 'ti-circle-check' : 'ti-circle'} active={r.active}
-          title={r.active ? t('products.deactivate') : t('products.activate')} disabled={saving}
-          onClick={() => toggleActive(r)} />
-        <RowBtn icon="ti-trash" danger title={t('products.delete')} disabled={saving} onClick={() => remove(r)} />
-      </>}
-    </>
-  )
-
   return (
-    <div style={{ minWidth: 0, maxWidth: 1000 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: '1rem' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--fs-h1)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>{t('products.title')}</h1>
-          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', fontWeight: 300 }}>{t('products.subtitle')}</p>
-        </div>
-        {canEdit && (
-          <button onClick={() => setModal({ mode: 'create' })} style={{ ...primaryBtn, marginLeft: 0 }}>
-            <i className="ti ti-plus" style={{ fontSize: 14 }} />{t('products.new')}
-          </button>
-        )}
+    <>
+      <div style={forceBarra}>
+        <PageMenu
+          backTo="/" backTitle={t('products.back_title')}
+          items={VISTES.map(([v, label]) => ({
+            key: v, label, active: vista === v,
+            onClick: () => setParams({ vista: v === 'actius' ? undefined : v, page: undefined }),
+          }))}
+        >
+          {canEdit && <>
+            <SepMenu />
+            <BotoMenu onClick={() => setModal({ mode: 'create' })} icona="ti-plus"
+              label={t('products.new')} />
+          </>}
+        </PageMenu>
       </div>
 
-      <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+      <div style={{ minWidth: 0, maxWidth: '100%' }}>
+        <FilaIdentitat>
+          <Comptador valor={count} total={total ?? count} etiqueta={t('products.entity')} />
+          <select value={natureF} onChange={e => setParams({ nature: e.target.value, page: undefined })}
+            aria-label={t('products.col_nature')} style={camp}>
+            <option value="">{t('products.filter_nature_all')}</option>
+            {(natures || []).map(n => <option key={n} value={n}>{t(`products.nature_${n}`)}</option>)}
+          </select>
+        </FilaIdentitat>
 
-      {loading ? <Center>{t('products.loading')}</Center>
-        : error ? <Center>{t('products.error')}</Center>
-          : items.length === 0 ? (
-            <div style={{ border: '0.5px solid var(--border)', borderRadius: 12, background: 'var(--white)', padding: 24, textAlign: 'center', color: 'var(--gray)', fontFamily: MONO, fontSize: 'var(--fs-body)' }}>
-              {t('products.empty')}
-            </div>
-          ) : (
-            <div style={{ border: '0.5px solid var(--border)', borderRadius: 12, background: 'var(--white)', overflow: 'hidden' }}>
-              <LineTable columns={columns} rows={items} renderActions={renderActions} />
-            </div>
-          )}
+        <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
+
+        {loading ? <EstatBuit>{t('products.loading')}</EstatBuit>
+          : error ? <EstatBuit>{t('products.error')}</EstatBuit>
+            : items.length === 0 ? <EstatBuit>{t('products.empty')}</EstatBuit>
+              : (
+                <TaulaLlista cols={cols} files={items} clau={(r) => r.id}
+                  ordre={ordre} onOrdenar={ordenar}
+                  onObrir={(r) => navigate(`/comercial/productes/${r.id}`)} />
+              )}
+
+        <Paginacio page={page} pages={pages} onPage={(p) => setParams({ page: p })}
+          labelPrev={t('products.prev')} labelNext={t('products.next')}
+          info={t('products.page_info', { page, pages })} />
+      </div>
 
       {modal && (
         <ProductModal mode={modal.mode} prod={modal.prod} units={units} t={t} saving={saving} setSaving={setSaving}
           onCancel={() => setModal(null)}
-          onSaved={(msg) => { setModal(null); load().then(() => setFeedback({ type: 'ok', text: msg })) }}
+          onSaved={(msg) => {
+            setModal(null)
+            load(); carregaTotal()
+            setFeedback({ type: 'ok', text: msg })
+          }}
           onError={(text) => setFeedback({ type: 'err', text })} />
       )}
-    </div>
+    </>
   )
 }
 
-const NATURES = ['INTERNAL_SERVICE', 'EXTERNAL_SERVICE', 'GOODS', 'PACK']
-
-function ProductModal({ mode, prod, units, t, saving, setSaving, onCancel, onSaved, onError }) {
+// S'EXPORTA: la FITXA de l'article el reobre des del seu «Editar» (les accions de govern han
+// baixat de la llista a la fitxa). Una sola definició del formulari d'un article — si visqués
+// dues vegades, els dos llocs on es crea un producte divergirien sense que fallés res.
+export function ProductModal({ mode, prod, units, t, saving, setSaving, onCancel, onSaved, onError }) {
   const isEdit = mode === 'edit'
+  // Les DUES enumeracions del formulari, de l'endpoint. Cap llista escrita aquí: ni la de
+  // natures ni la de modes de preu, que anava en dos `<option>` a pèl —la forma més silenciosa
+  // de totes, perquè una llista que no sembla una llista no la troba cap cens.
+  const { codis: natures } = useCodisEstat('natures_producte')
+  const { codis: modesPreu } = useCodisEstat('modes_preu_producte')
   const [code, setCode] = useState(prod?.code || '')
   const [name, setName] = useState(prod?.name || '')
   const [description, setDescription] = useState(prod?.description || '')
@@ -182,30 +288,29 @@ function ProductModal({ mode, prod, units, t, saving, setSaving, onCancel, onSav
     <Modal title={isEdit ? t('products.edit_title') : t('products.new_title')}
       cancelLabel={t('products.cancel')} confirmLabel={isEdit ? t('products.save') : t('products.create')}
       onCancel={onCancel} onConfirm={submit} confirmDisabled={saving || invalid}>
-      <Field label={t('products.col_code')}><input value={code} onChange={e => setCode(e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
+      <Field label={t('products.col_code')}><input value={code} onChange={e => setCode(e.target.value)} style={{ ...camp, width: '100%' }} /></Field>
       <TranslatableField label={t('products.col_name')} field="name" value={name} onChange={setName}
         translations={translations} onTranslationsChange={setTranslations} />
       <TranslatableField label={t('products.description')} field="description" value={description} onChange={setDescription}
         translations={translations} onTranslationsChange={setTranslations} multiline />
       <Field label={t('products.col_nature')}>
-        <select value={nature} onChange={e => setNature(e.target.value)} style={{ ...selS, width: '100%' }}>
-          {NATURES.map(n => <option key={n} value={n}>{t(`products.nature_${n}`)}</option>)}
+        <select value={nature} onChange={e => setNature(e.target.value)} style={{ ...camp, width: '100%' }}>
+          {(natures || []).map(n => <option key={n} value={n}>{t(`products.nature_${n}`)}</option>)}
         </select>
       </Field>
       <Field label={t('products.price_mode')}>
-        <select value={priceMode} onChange={e => setPriceMode(e.target.value)} style={{ ...selS, width: '100%' }}>
-          <option value="FIXED">{t('products.mode_FIXED')}</option>
-          <option value="TIME_BASED">{t('products.mode_TIME_BASED')}</option>
+        <select value={priceMode} onChange={e => setPriceMode(e.target.value)} style={{ ...camp, width: '100%' }}>
+          {(modesPreu || []).map(m => <option key={m} value={m}>{t(`products.mode_${m}`)}</option>)}
         </select>
       </Field>
       {priceMode === 'FIXED' ? (
-        <Field label={t('products.base_price')}><input type="text" inputMode="decimal" value={basePrice} onChange={e => setBasePrice(e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
+        <Field label={t('products.base_price')}><input type="text" inputMode="decimal" value={basePrice} onChange={e => setBasePrice(e.target.value)} style={{ ...camp, width: '100%' }} /></Field>
       ) : (
-        <Field label={t('products.sale_rate')}><input type="text" inputMode="decimal" value={saleRate} onChange={e => setSaleRate(e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
+        <Field label={t('products.sale_rate')}><input type="text" inputMode="decimal" value={saleRate} onChange={e => setSaleRate(e.target.value)} style={{ ...camp, width: '100%' }} /></Field>
       )}
-      <Field label={t('products.markup_pct')}><input type="text" inputMode="decimal" value={markup} onChange={e => setMarkup(e.target.value)} style={{ ...selS, width: '100%' }} /></Field>
+      <Field label={t('products.markup_pct')}><input type="text" inputMode="decimal" value={markup} onChange={e => setMarkup(e.target.value)} style={{ ...camp, width: '100%' }} /></Field>
       <Field label={t('products.unit')}>
-        <select value={unit} onChange={e => setUnit(e.target.value)} style={{ ...selS, width: '100%' }}>
+        <select value={unit} onChange={e => setUnit(e.target.value)} style={{ ...camp, width: '100%' }}>
           <option value="">{t('products.unit_none')}</option>
           {units.map(u => <option key={u.id} value={u.id}>{u.code}</option>)}
         </select>
@@ -220,8 +325,15 @@ function ProductModal({ mode, prod, units, t, saving, setSaving, onCancel, onSav
 function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>{label}</label>
+      <label style={etiquetaCamp}>{label}</label>
       {children}
     </div>
   )
+}
+
+// §2 · l'etiqueta d'un camp és un LABEL: 10px majúscules, tracking .08em, pes 600.
+const etiquetaCamp = {
+  display: 'block', marginBottom: 6, fontFamily: MONO,
+  fontSize: 'var(--fs-label)', lineHeight: '12px', letterSpacing: '.08em',
+  textTransform: 'uppercase', color: 'var(--text-soft)', fontWeight: 600,
 }
