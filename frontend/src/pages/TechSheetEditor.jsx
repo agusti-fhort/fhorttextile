@@ -8,13 +8,16 @@ import i18n from '../i18n'
 import { Stage, Layer, Rect, Text, Line, Arrow, Ellipse, Image as KonvaImage, Transformer, Group, Path, Circle } from 'react-konva'
 import Konva from 'konva'
 import { PDFDocument } from 'pdf-lib'
-import FhortLogo from '../components/brand/FhortLogo'
 import FilePicker from '../components/model/FilePicker'
 import ModalAcabarTasca from '../components/model/ModalAcabarTasca'
 import { modelTasks } from '../api/endpoints'
 import { minutsDeSessio } from '../utils/sessioActiva'
 import AssetNavigator from '../components/assets/AssetNavigator'
 import Contenidor from '../components/ui/Contenidor'
+import PageMenu from '../components/ui/PageMenu'
+import { botoSec } from '../components/ui/buttons'
+import { pindolesDeModel, ETIQUETA_SECCIO } from '../utils/modelSeccions'
+import useMolla from '../store/molla'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
 import { booleanOp } from './ftt/paperbool'
@@ -6355,13 +6358,33 @@ export default function TechSheetEditor() {
     { id: 'organize', label: t('tech_sheet.ribbon_organize') },
     { id: 'editar', label: t('tech_sheet.ribbon_edit') },
   ]
+  // LA TAB DE LA CINTA ÉS UNA PÍNDOLA DE NAVEGACIÓ, i la §8b li dona forma: l'activa va sobre
+  // `--sel` amb vora `--gold-border`, i **la tinta és `--text-main`**. Anava en daurat ple de
+  // vora i de text (`--gold`), que a la casa vol dir MARCA/ACCIÓ: aquí no s'acciona res, es
+  // canvia de què va la cinta. És la mateixa correcció que el menú de pantalla ja porta a les
+  // seves píndoles, i ara les dues files es llegeixen com el que són — dos nivells de
+  // navegació, no un menú i un rètol de marca.
+  // El pes 700 baixa a 600: el 700 el reservem al que ha de cridar, i una tab triada ja té
+  // fons i vora dient-ho.
   const ribbonTabStyle = (active) => ({
-    minWidth: 86, height: 28, border: `1px solid ${active ? COL.gold : 'transparent'}`,
-    // Una tab és una superfície SELECCIONADA, no una eina activa → goldPale (P-C).
-    borderBottomColor: active ? COL.gold : COL.border, borderRadius: '6px 6px 0 0',
-    background: active ? COL.goldPale : 'transparent', color: active ? COL.gold : COL.textMain,
-    fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: active ? 700 : 500,
+    minWidth: 86, height: 28,
+    border: `1px solid ${active ? 'var(--gold-border)' : 'transparent'}`,
+    borderBottomColor: active ? 'var(--gold-border)' : COL.border,
+    borderRadius: 'var(--r-ctrl) var(--r-ctrl) 0 0',
+    background: active ? COL.goldPale : 'transparent',
+    color: COL.textMain,
+    fontFamily: FONT, fontSize: 'var(--fs-body)', fontWeight: active ? 600 : 500,
     cursor: 'pointer',
+  })
+  // El menú «Edició» dins de la fila de tabs: ha de llegir-se com un MENÚ i no com una tab, o
+  // sembla la novena. Sense la vora inferior de continuïtat que porten les tabs, i amb la
+  // seva pròpia caixa de control (§3: radi 6).
+  const menuCintaStyle = (obert) => ({
+    display: 'inline-flex', alignItems: 'center', gap: 4, height: 24, padding: '0 8px',
+    border: `1px solid ${obert ? 'var(--gold-border)' : 'transparent'}`,
+    borderRadius: 'var(--r-ctrl)',
+    background: obert ? COL.goldPale : 'transparent',
+    color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)', cursor: 'pointer',
   })
   const ribbonToolStyle = (disabled = false, active = false) => ({
     width: 72, flexShrink: 0, minHeight: 50, display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -6437,8 +6460,14 @@ export default function TechSheetEditor() {
         // Interruptor del MODE PLANTILLA: canvia el `kind` del document (es desa al proper
         // autosave) i, amb ell, el render de placeholders i la disponibilitat del tab Camps.
         ribbonTool({ key: 'template-mode', icon: 'ti-forms', label: t('tech_sheet.template_mode'), onClick: () => setTemplateMode(v => !v), active: templateMode, title: t('tech_sheet.template_mode_title'), disabled: !locked }),
-        ribbonTool({ key: 'autosave', icon: saveState === 'error' ? 'ti-alert-triangle' : 'ti-device-floppy', label: saveLabel || t('tech_sheet.autosave'), disabled: true, title: t('tech_sheet.autosave_title') }),
-        ribbonTool({ key: 'version', icon: 'ti-history', label: `v${sheet?.versio ?? 1}`, disabled: true, title: t('tech_sheet.version_current') }),
+        // 🚩 L'ESTAT DE DESAT I LA VERSIÓ JA NO SÓN AQUÍ. Eren dos «botons» permanentment
+        // desactivats —no s'hi pot clicar, no fan res— fent de rètol dins d'una barra d'EINES,
+        // i ara el mateix estat es llegeix a l'extrem dret del menú de pantalla, on és visible
+        // des de les vuit tabs i no només des de Fitxer. Tenir-ho als dos llocs volia dir veure
+        // «Error desant» dues vegades a la mateixa pantalla, que és exactament la duplicació
+        // que aquest tram desmunta. El `title` explicatiu de l'autosave no es perd: la §8b no
+        // deixa posar-lo al menú, i on ha d'anar és a la documentació de la cinta, no en un
+        // botó fals. Anotat al report.
       ]
     }
     if (ribbonGroup === 'page') {
@@ -6682,11 +6711,36 @@ export default function TechSheetEditor() {
   // SORTIR. Sense tasca (consulta, plantilla) la sortida és directa, com sempre. Amb tasca,
   // primer es pregunta: la fila es demana ARA i només ara —una lectura, cap sondeig— perquè el
   // modal pugui dir el nom i el temps que s'està tancant.
-  const sortirDeLaFitxa = () => {
-    if (!taskId || acabant) { navigate(`/models/${id}`); return }
+  // §8b · EL MOLLA DE PA DE QUATRE SEGMENTS: **Tenant › Models › {NOM} › Fitxa tècnica**.
+  // La barra pròpia que aquest editor pintava ja duia un breadcrumb —model › «Editor de
+  // documents»—, i era una SEGONA còpia del camí, mantinguda a part i amb un vocabulari que
+  // no era el del menú («Editor de documents» no és cap secció del model). Ara el camí el
+  // pinta la top bar de la casa, i l'editor només publica el tros que la ruta no pot dir:
+  // `/models/1319/ftt/758` no sap com es diu el model ni que això és la fitxa tècnica.
+  // Qui la publica, la neteja: una cua òrfena escriuria el nom d'aquest model a la barra de
+  // la pantalla següent.
+  const setCua = useMolla(s => s.setCua)
+  const netejaCua = useMolla(s => s.netejaCua)
+  useEffect(() => {
+    if (!model) return
+    setCua([
+      { text: model.nom_prenda || model.codi_intern, to: `/models/${id}` },
+      { text: t(ETIQUETA_SECCIO['Fitxa tècnica']) },
+    ])
+  }, [model, id, t, setCua])
+  useEffect(() => () => netejaCua(), [netejaCua])
+
+  // 🚨 EL DESTÍ ÉS UN PARÀMETRE DES QUE HI HA MENÚ DE PANTALLA. Abans hi havia UNA sola sortida
+  // —la fletxa de la barra pròpia— i el destí podia ser una constant. Ara el menú comú ofereix
+  // NOU sortides més (les seccions del model), i totes són sortides de l'editor: si alguna
+  // navegués pel seu compte, es faria fora de la fitxa amb la tasca oberta i el temps corrent,
+  // que és exactament el que aquest modal existeix per no deixar passar. Una sola porta, i el
+  // que canvia és cap a on dona.
+  const sortirDeLaFitxa = (desti = `/models/${id}`) => {
+    if (!taskId || acabant) { navigate(desti); return }
     modelTasks.get(taskId)
-      .then(({ data }) => setAcabant(data))
-      .catch(() => navigate(`/models/${id}`))   // si no es pot llegir, no es reté ningú aquí
+      .then(({ data }) => setAcabant({ ...data, desti }))
+      .catch(() => navigate(desti))   // si no es pot llegir, no es reté ningú aquí
   }
 
   const viewportCursor = !locked ? 'default'
@@ -6697,73 +6751,106 @@ export default function TechSheetEditor() {
     : 'default'
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
+    // DINS DEL BASTIMENT COMÚ ja no és `100vw × 100vh`: aquelles dues mides deien «sóc tota la
+    // finestra», i era veritat quan la ruta vivia fora del Shell. Ara l'editor és una secció
+    // més i ha d'omplir el que queda sota el crom, ni un píxel més — `100vh` aquí faria una
+    // pantalla més alta que el seu forat i el llenç se n'aniria per sota del plec.
+    // `flex: 1` + `minHeight: 0` ho diu sense saber quant fa el crom, que és cosa del Shell
+    // (§8b-quater: «el crom del sistema es declara un sol cop»). El `minHeight: 0` no és
+    // decoració: sense ell, un fill flex no baixa del seu min-content i la columna del llenç
+    // —que té el seu propi scroll— empenyeria la pàgina en comptes de desplaçar-se.
+    // I EL PADDING DEL `<main>` ES CANCEL·LA PELS QUATRE COSTATS, no per tres. Les pàgines
+    // normals només en cancel·len tres (el menú de pantalla s'ha de menjar el de dalt i els
+    // laterals) i deixen el de sota, que és l'aire del final de la pàgina. Aquí no hi ha final
+    // de pàgina: l'editor ÉS la superfície, i aquells 24 px de sota li sobraven per fora del
+    // plec — el document desbordava per 2 px i sortia una barra de desplaçament a una eina que
+    // per definició no se'n va enlloc.
+    <div style={{ flex: 1, minHeight: 0, marginBottom: '-1.5rem', display: 'flex', flexDirection: 'column', background: COL.bg, fontFamily: FONT }}>
       {acabant && (
         <ModalAcabarTasca
           taskId={acabant.id}
           nomTasca={acabant.task_type_name}
           minutsSessio={minutsDeSessio(acabant)}
           minutsTotal={acabant.temps_consumit_min ?? 0}
-          onFet={() => { tascaResolta.current = true; navigate(`/models/${id}`) }}
+          onFet={() => { tascaResolta.current = true; navigate(acabant.desti || `/models/${id}`) }}
           onCancel={() => setAcabant(null)} />
       )}
-      {/* ── Topbar (patró navbar del dashboard: blanc, logo + breadcrumb, gold per a l'acció
-            principal) ── */}
-      <header style={{ flexShrink: 0, height: 56, display: 'flex', alignItems: 'center', gap: 14, padding: '0 1.2rem', borderBottom: `1px solid ${COL.border}`, background: COL.sidebar, color: COL.textMain }}>
-        <button onClick={sortirDeLaFitxa} title={t('tech_sheet.back_to_model')}
-          style={{ ...headerBtn, padding: '5px 8px' }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 15 }} />
-        </button>
-        <FhortLogo width={92} />
-        <span style={{ width: 1, height: 24, background: COL.border }} />
-        {/* Breadcrumb: model → editor (com "Models → Blusa CALLIE" al dashboard) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)', color: COL.textMuted, minWidth: 0 }}>
-          <span onClick={sortirDeLaFitxa} style={{ cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {model?.codi_intern || `#${id}`}{model?.nom_prenda ? ` · ${model.nom_prenda}` : ''}
-          </span>
-          <i className="ti ti-chevron-right" style={{ fontSize: 14 }} />
-          <strong style={{ color: COL.textMain, fontWeight: 600, whiteSpace: 'nowrap' }}>{t('tech_sheet.doc_editor')}</strong>
-          {/* En mode plantilla el llenç menteix a posta (mostra {codi} en lloc del codi real):
-              cal dir-ho a la barra, o algú pensarà que la fitxa ha perdut les dades. */}
-          {templateMode && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '2px 8px', borderRadius: 6, background: COL.goldPale, border: `1px solid ${COL.gold}`, color: COL.gold, fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
-              <i className="ti ti-forms" aria-hidden="true" style={{ fontSize: 12 }} />{t('tech_sheet.template_mode_badge')}
-            </span>
-          )}
-        </div>
-        {/* Dreta: context reaprofitat (pàgina, versió, save) + acció principal gold */}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted, whiteSpace: 'nowrap' }}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
-          <span style={{ fontSize: 'var(--fs-body)', color: COL.textMuted }}>v{sheet?.versio ?? 1}</span>
-          {saveLabel && <span style={{ fontSize: 'var(--fs-label)', color: COL.textMuted }}>{saveLabel}</span>}
-          <button onClick={onExport} disabled={exporting}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: COL.gold, color: 'var(--white)', border: 'none', borderRadius: 8, padding: '0 0.9rem', height: 32, fontSize: 'var(--fs-body)', fontWeight: 500, cursor: exporting ? 'default' : 'pointer', opacity: exporting ? 0.5 : 1, fontFamily: FONT }}>
-            <i className="ti ti-file-download" style={{ fontSize: 15 }} />
-            {exporting ? t('tech_sheet.exporting') : t('tech_sheet.export_pdf')}
-          </button>
-        </div>
-      </header>
-
-      {/* ── E3: barra de menús en text (Fitxer/Edició/Objecte/Visualització) — cortines desplegables ── */}
-      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', height: 26, background: COL.sidebar, borderBottom: `1px solid ${COL.border}`, padding: '0 8px', fontFamily: FONT, fontSize: 'var(--fs-body)' }}>
-        {menuBar.map(m => (
-          <div key={m.id} data-menu style={{ position: 'relative' }}>
-            <button type="button" onClick={() => setMenuOpen(o => o === m.id ? null : m.id)}
-              style={{ border: 'none', background: menuOpen === m.id ? COL.goldPale : 'transparent', color: menuOpen === m.id ? COL.gold : COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-body)', padding: '0 10px', height: 26, cursor: 'pointer' }}>
-              {m.label}
-            </button>
-            {menuOpen === m.id && (
-              <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 70, minWidth: 210, background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '4px 0' }}>
-                {m.items}
-              </div>
+      {/* §8b · EL MENÚ DE PANTALLA COMÚ substitueix la barra pròpia de l'editor.
+          Agus hi veia TRES capçaleres pròpies apilades i, de fet, l'editor era l'única
+          superfície del producte que es pintava el seu propi bastiment: logo `FhortLogo` +
+          breadcrumb que repetia el que la top bar global ja diu, i que a més havia d'anar-se
+          mantenint en paral·lel. Tot això marxa: la identitat i el camí són del Shell, i
+          l'editor es queda amb el que és seu de debò —les seccions del model (les mateixes
+          que Mesures o Fitting, de la llista canònica) i el crom del DOCUMENT.
+          El `<div>` de marge negatiu cancel·la el padding del `<main>` i es queda buit: la
+          barra es teletransporta al forat del crom (§8b-quater). */}
+      <div style={{ margin: '-1.5rem -1.5rem 0' }}>
+        <PageMenu
+          backTo={`/models/${id}`}
+          backTitle={t('tech_sheet.back_to_model')}
+          onBack={() => sortirDeLaFitxa()}
+          items={pindolesDeModel({
+            activa: 'Fitxa tècnica',
+            // Cap secció no navega pel seu compte: totes surten de l'editor, i sortir de
+            // l'editor amb una tasca oberta ha de passar pel modal d'acabar.
+            onTria: (seccio) => sortirDeLaFitxa(`/models/${id}?tab=${encodeURIComponent(seccio)}`),
+            t,
+          })}
+          rightChildren={<>
+            {/* En mode plantilla el llenç menteix a posta (mostra {codi} en lloc del codi
+                real): cal dir-ho, o algú pensarà que la fitxa ha perdut les dades. */}
+            {templateMode && (
+              <span style={badgePlantilla}>
+                <i className="ti ti-forms" aria-hidden="true" style={{ fontSize: 12, color: 'currentColor' }} />
+                {t('tech_sheet.template_mode_badge')}
+              </span>
             )}
-          </div>
-        ))}
+            <span style={cromDoc}>{t('tech_sheet.page_of', { n: currentPage + 1, total: pages.length })}</span>
+            <span style={cromDoc}>v{sheet?.versio ?? 1}</span>
+            {saveLabel && <span style={cromDoc}>{saveLabel}</span>}
+            {/* 🔑 «EXPORTAR PDF» DEIXA DE SER UN DAURAT PLE, i no per haver decidit la pregunta
+                gran del §5 (blau contra daurat a l'acció primària), que segueix oberta i és
+                d'Agus per a tot el producte. És per POSICIÓ: la §8b diu que a l'extrem dret del
+                menú de pantalla hi van PORTES en secundari petit, MAI l'acció primària. En
+                pujar aquí, el botó deixa de ser l'acció primària d'una barra pròpia i passa a
+                ser una porta del menú comú — i les portes de la casa són `botoSec`. */}
+            <button type="button" onClick={onExport} disabled={exporting}
+              style={{ ...botoSec, opacity: exporting ? 0.5 : 1, cursor: exporting ? 'default' : 'pointer' }}>
+              <i className="ti ti-file-download" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
+              {exporting ? t('tech_sheet.exporting') : t('tech_sheet.export_pdf')}
+            </button>
+          </>}
+        />
       </div>
 
       {/* ── Ribbon SolidWorks: fila 1 grups, fila 2 comandaments ── */}
       <div style={{ flexShrink: 0, background: CTX_BG, borderBottom: `1px solid ${CTX_BORDER}`, color: CTX_TEXT }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, minHeight: 31, padding: '3px 12px 0' }}>
+          {/* «EDICIÓ» S'ABSORBEIX AQUÍ, i el nivell sencer que ocupava desapareix.
+              Era una franja pròpia de 26px per a UN sol desplegable —dels quatre menús
+              originals en van quedar tres de buits (F7)—, o sigui un pis de crom per a un
+              botó. Baixa a la fila de tabs de la cinta, que és el nivell d'EINA on li toca.
+              🚨 EL QUE NO ES POT FER ÉS ESBORRAR-LO. Les seves cinc entrades —desfés, refés,
+              copia, enganxa, duplica— són l'ÚNICA superfície VISIBLE d'aquestes accions: a
+              tot arreu més només existeixen com a drecera de teclat, i una drecera que ningú
+              anuncia no existeix per a qui no la sap. Es mou de lloc; no es perd.
+              Va abans de les tabs i separat: no és una tab (no canvia de què va la cinta),
+              és un menú, i barrejar-lo amb les vuit el faria semblar la novena. */}
+          {menuBar.map(m => (
+            <div key={m.id} data-menu style={{ position: 'relative', alignSelf: 'center' }}>
+              <button type="button" onClick={() => setMenuOpen(o => o === m.id ? null : m.id)}
+                style={menuCintaStyle(menuOpen === m.id)}>
+                {m.label}
+                <i className="ti ti-chevron-down" aria-hidden="true" style={{ fontSize: 12, color: 'currentColor' }} />
+              </button>
+              {menuOpen === m.id && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 70, minWidth: 210, background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 'var(--r-ctrl)', boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '4px 0' }}>
+                  {m.items}
+                </div>
+              )}
+            </div>
+          ))}
+          <span style={{ ...ribbonSep, height: 20, alignSelf: 'center', margin: '0 6px' }} />
           {ribbonTabs.map(tab => (
             <button key={tab.id} type="button" onClick={() => setRibbonGroup(tab.id)}
               style={ribbonTabStyle(ribbonGroup === tab.id)}>
@@ -8074,6 +8161,20 @@ const NODE_TOOL_ITEMS = [
 ]
 // C1 — fila de la biblioteca d'inserció: mateixa geometria que la fila de POM (radi 4, filet
 // subtil) perquè les cinc persianes es llegeixin com una sola llista i no com cinc widgets.
+// EL CROM DE DOCUMENT a l'extrem dret del menú de pantalla: pàgina, versió i estat de desat.
+// Són DADES d'estat, no accions ni etiquetes de secció → cos (12px, §2), tinta secundària, i
+// mai per sota del sostre de la norma.
+const cromDoc = { fontSize: 'var(--fs-body)', color: COL.textMuted, whiteSpace: 'nowrap' }
+// El badge de mode plantilla, amb la forma de badge de la casa (§1): fons suau + tinta + vora
+// fina del mateix to, píndola SEMPRE. Abans anava a `--fs-label` amb `textTransform: uppercase`
+// i tracking — o sigui un RÈTOL de 10px en majúscules fent de badge; la §2 vol el badge a
+// caption i el rètol és una altra cosa. Es queda a caption i deixa les majúscules.
+const badgePlantilla = {
+  display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+  padding: '2px 8px', borderRadius: 'var(--r-pill)',
+  background: 'var(--warn-state-bg)', border: '1px solid var(--warn-state)',
+  color: 'var(--warn-ink)', fontSize: 'var(--fs-caption)', fontWeight: 600, whiteSpace: 'nowrap',
+}
 const libRow = { display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '0.3rem 0.5rem', marginBottom: 3, border: `1px solid ${COL.border}`, borderRadius: 'var(--r-ctrl)', background: COL.bg, color: COL.textMain, fontFamily: FONT, fontSize: 'var(--fs-label)', cursor: 'pointer' }
 const libIcon = { fontSize: 14, color: COL.gold, flexShrink: 0 }
 const libName = { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }

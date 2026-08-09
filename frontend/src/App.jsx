@@ -378,12 +378,6 @@ export default function App() {
             <FttResolver />
           </ProtectedRoute>
         } />
-        {/* Editor de document .ftt (ModelFitxer tipus TECHSHEET): mateix editor, font .ftt. */}
-        <Route path="/models/:id/ftt/:fitxerId" element={
-          <ProtectedRoute>
-            <TechSheetEditor />
-          </ProtectedRoute>
-        } />
         {/* C5-UI/P5 — FULL DE FITTING per imprimir. FORA del Shell a posta: el que s'imprimeix
             és el full, i el menú lateral i la barra de dalt no hi tenen res a fer. La ruta porta
             sessió I model perquè una sessió de grup té més d'una peça i el full és d'una sola. */}
@@ -419,6 +413,17 @@ export default function App() {
           {/* Escalat: l'edició viu DINS el ModelSheet (tab Escalat en mode edició). La ruta de tasca
               hi entra directament (defaultTab+autoEdit), sense pàgina externa ni overlay. */}
           <Route path="models/:id/escalat" element={<ModelSheet defaultTab="Escalat" autoEdit="Escalat" />} />
+          {/* EDITOR DE DOCUMENT .ftt — DINS DEL SHELL des de la fusió de capçaleres (Agus,
+              09/08). Era una de les tres rutes de «pantalla completa» declarades fora, amb el
+              mateix argument que el Taller de patró: «és una eina, el canvas mana». L'argument
+              es va tornar en contra: en no tenir bastiment, l'editor se'l va pintar ell mateix
+              —logo, breadcrumb, barra pròpia— i el que Agus veia a pantalla eren TRES
+              capçaleres apilades i una fitxa tècnica que no s'assemblava a cap altra secció
+              del model. Dins del Shell, la identitat i el camí els posa la casa, l'editor
+              només posa la seva cinta d'eina, i el llenç segueix manant a tot el que queda.
+              ⚠️ El Taller de patró es queda fora de moment: mateix cas, però no és d'aquest
+              tram i moure'l sense mesurar-lo seria fer-ho a cegues. */}
+          <Route path="models/:id/ftt/:fitxerId" element={<TechSheetEditor />} />
           <Route path="models/:id/teixit" element={<ModelFabric />} />
           <Route path="models/:id/fitxers" element={<ModelSheet defaultTab="Fitxers" />} />
           {/* v2: Size Check jubilat → redirigeix a l'edició nova de mesures (conserva task_id). */}
