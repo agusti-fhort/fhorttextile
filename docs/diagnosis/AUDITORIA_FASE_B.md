@@ -590,6 +590,7 @@ a la pròxima correguda. El canvi és semàntic (classificació vs semàfor), no
 | Control | Resultat |
 |---|---|
 | `npx eslint src` | ✅ **0 errors** (el control de porta de la casa; `eslint .` compta `dist-tenants/` i menteix) |
+| Auditoria de computats · **correguda de tancament** | ✅ **0 incompliments · 13 rutes**, amb la llista d'exempcions ja ESCURÇADA a un sol hex |
 | Cens de tokens deprecats al perímetre | ✅ **0** ocurrències en codi |
 | Claus de `/vocabulari/` consumides pel client vs publicades | ✅ **15/15 existeixen** — creuament contra l'endpoint viu |
 
@@ -597,16 +598,43 @@ a la pròxima correguda. El canvi és semàntic (classificació vs semàfor), no
 publicada i no la consumia ningú perquè el mapa local havia sobreviscut a la meva pròpia neteja.
 **Una declaració a un missatge de commit no és una comprovació.**
 
-### ❌ Bidireccional — NO correguda, i el motiu
+### `ops/qa/qa_s2_bidireccional.py` (nou) — **16 casos · 13 casen · 3 desvien**
 
-`ops/qa/qa_bidireccional.py` compara pantalla ↔ **MAQUETA**. Les maquetes ratificades cobreixen
-el camí del model i la configuració tècnica (`NORMA_LLISTA_canonica`, `maqueta_mesures_carril`,
-`maqueta_fitting`, `PROPOSTA_resum_wizard_partit`…); **cap pantalla del lot comercial en té una**.
-La referència d'aquest lot no és una maqueta pròpia sinó **la germana conformada**: `/clients`,
-`/proveïdors`, `/productes`… es fan com `/models`, i les fitxes com la del model. Afegir casos
-comparant les meves pantalles contra `NORMA_LLISTA_canonica` **sí que és possible i seria el pas
-correcte**; ho deixo proposat i no fet, perquè el fitxer de casos és compartit i la sessió germana
-l'està tocant. 🚩 **Obert.**
+Cap pantalla del lot comercial té maqueta pròpia: la seva referència és **la germana conformada**.
+Però la §8e diu, amb aquestes paraules, que la graella canònica **«no és un patró opcional de la
+pantalla Models: és LA graella de llista de la casa»**. Si això és cert, `NORMA_LLISTA_canonica`
+ha de poder verificar una pantalla que **no** sigui Models — i **fins avui no ho havia fet mai**.
+Aquesta correguda n'és la prova, i ha donat fruit al primer intent.
+
+**Les tres desviacions són de la MAQUETA o del component compartit. Cap és de les pantalles.**
+
+#### 🚨 DUES DEFINICIONS DEL BADGE NEUTRE convivint, totes dues a pantalles conformades
+```
+maqueta  .b.neutral      → --bg      + --ink-soft   + --line
+Models.jsx `badgeNeutre` → --bg-page + --text-soft  + --line    ← casa amb la maqueta
+ui/Badge  variant `gray` → --sel     + --text-main  + --line    ← NO casa
+```
+`Models.jsx` (A5) es va quedar una **còpia local** del badge neutre; `ui/Badge` (bloc B, **21
+fitxers**) en té una altra. Dues còpies d'una decisió, divergides sense que falli res.
+
+**I la raó per la qual no s'havia vist mai és el que ho fa valuós: la graella de `/models` no
+pinta cap badge d'estat.** La columna ESTAT hi és buida amb «—» esperant el Kanban i FASE és text
+pla (§8e); l'únic badge és el `SetBadge`, una marca condicional que gairebé cap fila porta. La
+bidireccional d'A5 **no va comparar `.b.neutral` amb res, mai**. El lot comercial és el primer que
+pinta de debò els badges d'estat de la canònica.
+
+🚩 **Decisió d'Agus**, amb els dos arguments: a favor de `ui/Badge`, que un estat ha de ser
+llegible i `--text-main` és la tinta principal. A favor de la maqueta —i és NORMA literal— que
+**`--sel` és la SELECCIÓ** («fila/contenidor triat, sempre amb filet d'or»): un badge neutre sobre
+`--sel` li roba el significat, desapareix dins d'una fila triada i diu «triat» dins d'una que no
+ho és. Si mana la maqueta, és **una línia** a `ui/Badge` i la còpia local de `Models.jsx` mor tot
+seguit.
+
+#### La tercera, sense dos costats
+`.b.warn` de la maqueta encara fa servir `--warn`/`--warn-bg`, **els tokens anteriors a la
+§1b(d)** — que va partir el token precisament perquè `#ff9942` com a text dona **1.86:1**.
+`ui/Badge` ja fa `--warn-ink`. Aquí la pantalla té raó i **la maqueta dibuixa una cosa que no
+compleix AA**. Sembla esmena de maqueta a la font, amb acta.
 
 ## [S2] 🚨 ERROR DE MÈTODE, escrit perquè consti
 
@@ -618,3 +646,22 @@ alhora, un `add` de directori no afegeix «els meus canvis», afegeix **tot el q
 El contingut de la sessió germana és **intacte** (el meu script no els tocava; només han quedat
 mal etiquetats). No s'ha reescrit història: hi ha commits a sobre i un `rebase` amb dues sessions
 vives és pitjor que un commit mal etiquetat. Avisat de seguida a S1.
+
+
+### [S2] LA TERCERA MANERA QUE UN VERD TÉ DE NO VOLER DIR EL QUE SEMBLA
+
+La sessió germana va escurçar `CROM` —la llista d'exempcions de l'auditoria— de tres hex a un:
+dos eren de la **top bar**, que ja havia passat conformitat i no en fa servir cap. Deixar-los
+absolia **qualsevol pantalla** que els pintés, i havia passat de debò (`/fittings` sortia verd amb
+quatre vores de `ui/Card` tapades). **Una excepció que sobreviu al seu motiu és una tapadora.**
+
+Amb això ja en són tres, i totes tres són el mateix mal amb tres cares:
+
+| Tapadora | Com es veu | Com es descobreix |
+|---|---|---|
+| **El bundle ranci** | verd o vermell sobre codi que ja no existeix | mirar la data del `dist` abans de creure's el número |
+| **El token caducat** a mitja correguda | l'app cau a `/login` i es mesura contra una altra pantalla | correguda de tancament sencera, sense filtres |
+| **L'excepció caducada** | el defecte hi és i l'eina l'absol | revisar per què existeix cada exempció, no només si hi és |
+
+La xifra de tancament d'aquest lot (**0/13**) està presa amb les tres tancades: bundle que porta
+l'últim commit, token fresc, i la llista d'exempcions ja escurçada.
