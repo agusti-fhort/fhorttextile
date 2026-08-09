@@ -117,8 +117,18 @@ def search_poms_view(request):
     Search POMs in the tenant catalog by code or name.
     """
     q = request.query_params.get('q', '').strip()
-    if not q:
-        return Response({'results': []})
+
+    # ⚠️ **SENSE TEXT NO ES TORNAVA RES, I AIXÒ NO ÉS «CERCAR»: ÉS OBLIGAR A ENDEVINAR.**
+    # (QA Agus 09/08, segona volta.) Era `if not q: return {'results': []}`, o sigui que el
+    # catàleg només existia per a qui ja en sabia el nom. Qui obre el carril per veure QUÈ hi ha
+    # —el cas de qui encara no coneix la nomenclatura d'aquest client— es trobava un buit i en
+    # deduïa que no hi havia catàleg. És la mateixa cadena que va fabricar el duplicat: el que no
+    # es veu es torna a crear.
+    #
+    # Amb la consulta buida no es filtra res i es torna el CATÀLEG SENCER (els 142 + els àlies
+    # del client), amb el mateix sostre declarat que la resta: `count` i `truncat` diuen quants
+    # n'hi ha i si en falten. Ordenar no és amagar (D-31.3).
+    cataleg_sencer = not q
 
     # ⚠️ **EL MÍNIM DE DOS CARÀCTERS FEIA INABASTABLE MIG CATÀLEG** (QA Agus 09/08).
     #
@@ -187,6 +197,7 @@ def search_poms_view(request):
         # (a) EL CATÀLEG DE LA CASA — sempre. Codi i nom propis, i el canònic del sector si el POM
         #     hi està lligat.
         filtre_canonic = (
+            Q() if cataleg_sencer else
             Q(codi_client__istartswith=q) if nomes_codi else
             Q(codi_client__icontains=q) |
             Q(nom_client__icontains=q) |
@@ -207,6 +218,7 @@ def search_poms_view(request):
         ids_alies = []
         if customer_id:
             filtre_alies = (
+                Q() if cataleg_sencer else
                 Q(client_code__istartswith=q) if nomes_codi else
                 Q(client_code__icontains=q) |
                 Q(description_en__icontains=q) |

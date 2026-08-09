@@ -1921,13 +1921,24 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
   // Quants n'hi ha de debò i si el sostre n'ha tallat (el backend ho diu des de la QA del 09/08).
   const [total, setTotal] = useState(0)
   const [truncat, setTruncat] = useState(false)
+  // ⚠️ **EL CATÀLEG NOMÉS EXISTIA PER A QUI JA EN SABIA EL NOM** (QA Agus 09/08, segona volta).
+  // Amb el camp buit no es cercava res, i qui obre el carril per veure QUÈ hi ha —el cas de qui
+  // encara no coneix la nomenclatura d'aquest client— es trobava un buit i en deduïa que no hi
+  // havia catàleg. D'aquesta mateixa cadena en va sortir un duplicat fet a mà.
+  //
+  // Amb el focus posat i el camp buit es demana el catàleg SENCER (el backend ja el serveix, amb
+  // `count`/`truncat`). Va lligat al FOCUS i no al muntatge a posta: cada fila de la taula
+  // n'instancia un, i disparar-ho tot en pintar la taula serien tantes crides com files.
+  const [focusat, setFocusat] = useState(false)
 
   useEffect(() => {
     // ⚠️ EL MÍNIM ERA DE DOS I DEIXAVA FORA ELS CODIS D'UNA LLETRA. El catàleg v4 de Brownie
     // en té 22 (A, B, C, D, E, **F**…): escriure «F» —que és com es diu aquella cota— no
     // tornava res i el POM semblava no existir. Amb un sol caràcter el backend cerca només per
     // CODI i posa l'exacte al davant, o sigui que la llista segueix sent curta i útil.
-    if (cerca.length < 1) { setResults([]); setObert(false); setTotal(0); setTruncat(false); return }
+    if (cerca.length < 1 && !focusat) {
+      setResults([]); setObert(false); setTotal(0); setTruncat(false); return
+    }
     const timer = setTimeout(() => {
       // El sostre el mana el client i el backend el respecta (abans n'hi havia dos: aquest,
       // que ningú llegia, i un `[:20]` incrustat que tallava en silenci).
@@ -1941,7 +1952,7 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
         .catch(() => { setResults([]); setObert(false); setTotal(0); setTruncat(false) })
     }, 300)
     return () => clearTimeout(timer)
-  }, [cerca, modelId])
+  }, [cerca, modelId, focusat])
 
   const tria = (p) => {
     if (!p) return
@@ -2000,6 +2011,11 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
         ref={el => { inputRef.current = el; registerFinder?.(el) }}
         value={query} onChange={e => setQuery(e.target.value)}
         placeholder={t('editable_table.finder_ph')}
+        // Entrar al camp ja és demanar el catàleg: amb el text buit, la llista mostra què hi ha.
+        // El `blur` NO tanca res per si mateix (el desplegable ja es tanca amb `Esc`, amb la
+        // fletxa amunt i en triar): només deixa de demanar-lo si el camp torna a quedar buit.
+        onFocus={() => setFocusat(true)}
+        onBlur={() => setFocusat(false)}
         onKeyDown={e => {
           if (e.key === 'ArrowDown') {
             e.preventDefault()
