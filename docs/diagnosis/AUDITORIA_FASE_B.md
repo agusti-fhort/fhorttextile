@@ -755,6 +755,64 @@ La sortida no és trencar la regla: és `FTT_QA_DIST`, que mesura contra un `out
 **sense publicar**. Existia i no es va fer servir a l'última correguda. **La regla es queda; el
 que s'aprèn és que «no publico» i «no mesuro» no poden ser la mateixa decisió.**
 
+### LA SISENA TAPADORA · el canvi que no mou cap valor mesurat però mou la pàgina
+
+Va sortir al final, amb una petició de la sessió de fitxa tècnica: fer del `<main>` una columna
+flex perquè l'editor a pantalla completa pogués omplir l'alçada restant. **Les dues sessions vam
+raonar que era zero risc** amb un argument correcte en tot el que deia (un fill de bloc s'estira;
+amb un sol fill arrel no hi ha marges amb què col·lapsar) — i **incomplet en el que no deia**.
+
+`ops/qa/qa_diff_layout.py` (nou) va prendre una foto geomètrica de les 26 rutes amb el canvi i
+sense, aïllat de debò (base neta → build → foto; canvi → build → foto): **8 de 26 es movien.**
+
+| Ruta | Què |
+|---|---|
+| A6 · A7 · A8 · A10 · C2 | el primer fill del `<main>` **baixa 24px**: el `<div>` de marge negatiu del menú **deixa de pujar** com a element flex |
+| A3 i els dos wizards | la caixa centrada (`maxWidth` + `margin: 0 auto`) perd l'`align-items: stretch` i cau a mida de CONTINGUT: **1312 → 1064 · 600 → 505.7 · 920 → 561.6** |
+| C1 | l'editor creix 67px i el document desborda 2 |
+
+**Cap dels vuit canvia un sol color ni una sola mida de lletra: les tres eines li haurien donat
+verd.** El canvi **no entra**; el que entra és `--chrome-h`.
+
+### `--chrome-h` · i per què es MESURA i no s'escriu
+
+L'editor l'ha de poder llegir per fer `height: calc(100vh - var(--chrome-h))`. La pregunta que
+calia respondre abans de publicar-la —i la va fer la sessió que la demanava— és **si el bloc de
+crom fa sempre el mateix alt**. Mesurat, cinc amplades × tres rutes:
+
+```
+1600 → /models 106 · /models/1319 107 · /perfil 106      900 → /models 140 · /models/1319 143
+1200 → /models 106 · /models/1319 143                    520 → /models 210 · /models/1319 245
+```
+
+**De 106 a 245 px** (el menú porta `flexWrap`). Una constant hauria estat correcta **només en una
+finestra ampla**. Es publica en viu amb `ResizeObserver` —i no amb `resize` de finestra, perquè el
+bloc també canvia quan canvia el CONTINGUT del menú— sobre `documentElement`, perquè la llegeixi
+també el que es pinta per portal. Verificat: 15 combinacions **i el redimensionat en viu** → 0
+desacords.
+
+### 🛑 LA SUITE · dues vermelles, i totes dues diuen alguna cosa
+
+Primera correguda de `fhort.tasks fhort.models_app fhort.accounts fhort.tenants`: **966 tests ·
+1 fallida · 1 error**.
+
+**1 · FAIL `test_les_sis_llistes_hi_son_i_van_en_lordre_del_model` — MEVA, i la prova tenia raó
+a mitges.** Comprovava `assertEqual(set(d.keys()), …)`: «les sis hi són» escrit com a **«NOMÉS hi
+ha aquestes sis»**. L'endpoint ha passat de 6 a 27 llistes seguint la política escrita a la
+capçalera del seu propi mòdul (cada enumeració s'hi publica quan la SEVA pantalla passa
+conformitat) — o sigui que **la prova prohibia el creixement que el disseny preveu**. Passa a
+subconjunt + una comprovació NOVA que abans no hi era: **cap llista pot arribar buida** (publicar
+una clau sense membres és pitjor que no publicar-la; el client no distingeix «no n'hi ha» de «no
+ho sé»). *Una prova que impedeix el que el disseny preveu no és una xarxa: és un cable.*
+
+**2 · ERROR `test_additiu_clau_ambigua_al_desti` — NO és meva, i portava mesos vermella.**
+`IntegrityError` sobre `uniq_pommaster_codi_client_ci`: la prova ha de fabricar dos POMs amb el
+mateix `codi_client` i **la BD ho rebutja des de la migració `pom/0075`** (bloc A). El bloc A ja
+va caçar aquesta família i li va fer l'eina —`pom/catalog_testing.desactiva_unicitat_codi_client()`,
+amb el motiu escrit— però **la va aplicar només a `fhort.pom`**: aquesta viu a `fhort.tasks`, una
+app que aquell bloc **no va córrer**. **Una prova vermella en una app que ningú corre és una
+prova que no existeix.** Remei: el de la casa, sense inventar-ne cap.
+
 ### 🚩 A LA TAULA D'AGUS
 
 1. **La fletxa de l'ARREL** — proposta conjunta de dues sessions: la barra es queda i la fletxa

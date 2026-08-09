@@ -46,7 +46,17 @@ class VocabulariDominiTests(TenantTestCase):
     # ── forma ────────────────────────────────────────────────────────────────
 
     def test_les_sis_llistes_hi_son_i_van_en_lordre_del_model(self):
-        """L'ORDRE és part de la dada: reordenar-lo al client trencaria qualsevol stepper."""
+        """L'ORDRE és part de la dada: reordenar-lo al client trencaria qualsevol stepper.
+
+        ⚠️ **AQUESTA COMPROVACIÓ ERA D'IGUALTAT I HAVIA DE SER DE SUBCONJUNT**, i la part B ho
+        va destapar: l'endpoint ha passat de 6 llistes a 27 —cada enumeració s'hi publica quan
+        la SEVA pantalla passa conformitat, que és la política escrita a la capçalera del
+        mòdul— i un `assertEqual(set(d.keys()), …)` convertia «les sis hi són» en «NOMÉS hi ha
+        aquestes sis». O sigui que la prova prohibia el creixement que el mòdul preveu.
+        El que aquesta prova vol dir —i el que diu el seu propi nom i el seu docstring— és que
+        les sis hi SÓN i que hi van EN L'ORDRE DEL MODEL. Això és el que es comprova ara.
+        Una prova que impedeix el que el disseny preveu no és una xarxa: és un cable.
+        """
         d = self._get()
         esperat = {
             'regims_graduacio': GradingRule.LOGICA_CHOICES,
@@ -56,7 +66,12 @@ class VocabulariDominiTests(TenantTestCase):
             'estats_sessio_fitting': FittingSession.ESTAT_CHOICES,
             'veredictes_fitting': PieceFittingLine.DECISIO_CHOICES,
         }
-        self.assertEqual(set(d.keys()), set(esperat.keys()))
+        self.assertLessEqual(set(esperat.keys()), set(d.keys()))
+        # Cap llista pot arribar BUIDA: publicar una clau sense membres és pitjor que no
+        # publicar-la (el client no distingeix «no n'hi ha» de «no ho sé»).
+        for clau, files in d.items():
+            self.assertTrue(files, f'{clau} arriba buida')
+            self.assertTrue(all(x.get('codi') for x in files), clau)
         for clau, choices in esperat.items():
             self.assertEqual([x['codi'] for x in d[clau]], [c for c, _ in choices], clau)
             self.assertTrue(all(x['etiqueta'] for x in d[clau]), clau)
