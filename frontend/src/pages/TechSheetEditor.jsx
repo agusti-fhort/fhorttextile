@@ -15,7 +15,7 @@ import { minutsDeSessio } from '../utils/sessioActiva'
 import AssetNavigator from '../components/assets/AssetNavigator'
 import Contenidor from '../components/ui/Contenidor'
 import PageMenu from '../components/ui/PageMenu'
-import { botoSec } from '../components/ui/buttons'
+import { botoSec, apagat } from '../components/ui/buttons'
 import { pindolesDeModel, ETIQUETA_SECCIO } from '../utils/modelSeccions'
 import useMolla from '../store/molla'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
@@ -6818,8 +6818,14 @@ export default function TechSheetEditor() {
                 menú de pantalla hi van PORTES en secundari petit, MAI l'acció primària. En
                 pujar aquí, el botó deixa de ser l'acció primària d'una barra pròpia i passa a
                 ser una porta del menú comú — i les portes de la casa són `botoSec`. */}
+            {/* §5.7 · deshabilitat = **baixa el fons, no la tinta** (`apagat`). Aquí hi havia
+                un `opacity: 0.5` que va viatjar amb el botó des de la barra pròpia: en canviar
+                el daurat ple per `botoSec` em vaig endur el color i **l'opacitat de sota es va
+                quedar**. I justament aquest botó no es pot permetre apagar el text, perquè
+                mentre exporta el que diu és «Exportant…» — l'única cosa que explica per què no
+                respon. Una migració de color no s'emporta l'`opacity` que hi havia a sota. */}
             <button type="button" onClick={onExport} disabled={exporting}
-              style={{ ...botoSec, opacity: exporting ? 0.5 : 1, cursor: exporting ? 'default' : 'pointer' }}>
+              style={{ ...botoSec, ...(exporting ? apagat : null) }}>
               <i className="ti ti-file-download" aria-hidden="true" style={{ fontSize: 14, color: 'currentColor' }} />
               {exporting ? t('tech_sheet.exporting') : t('tech_sheet.export_pdf')}
             </button>
