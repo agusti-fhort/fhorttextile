@@ -889,11 +889,35 @@ píndoles + fletxa amb destí), menú amb una ACCIÓ pujada que **perd el color*
 B7), i menú de **NOMÉS FLETXA** (B4, §8b.2). **6 casos nous · 6 casen · 0 desvien.**
 La bidireccional sencera passa de 56 a **64 casos: 61 casen · 1 desvia · 2 no toquen res.**
 
-⚠️ **I un matís d'honestedat sobre els dos silencis:** **no són sempre els mateixos**. En una
-correguda va sortir l'estat buit d'A2 i en la següent la capa de restricció triada — tots dos
-d'A2, i tots dos perquè el **gest** de la maqueta o de la pantalla depèn de les dades vives del
-run que l'arnès obre. **El límit és real i estava declarat des del bloc A, però no és estable
-cas a cas**, i dir-ho és més honest que fixar-ne un i donar l'altre per bo.
+### 🚨 EL NÚMERO ÉS ESTABLE I EL CONJUNT NO — i això és pitjor
+
+Els dos silencis **no són sempre els mateixos**. Quatre corregudes seguides del mateix bundle:
+
+| | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|
+| recompte | 61·1·**2** | 62·1·**1** | 61·1·**2** | 61·1·**2** |
+| silenci A5 (badge neutre) | ✔ | ✔ | ✔ | ✔ — **estable** |
+| silenci A2 | estat buit | — | estat buit | **capa triada** — **canvia de cas** |
+
+**En balla UN, no dos**, i la distinció importa perquè **tenen causes diferents i només una és
+arreglable**: el d'A5 és un selector que no troba (es tanca amb un selector millor o amb dades);
+el d'A2 depèn de l'estat en què obre el run que l'arnès tria, i **no es tanca sense fixar les
+dades del banc**.
+
+🔑 **La volta de rosca, i és de la sessió de patrons:** *el recompte no es mou i el conjunt sí*.
+Qui segueixi el número veurà una estabilitat perfecta mentre **cada correguda deixa un cas
+DIFERENT sense mesurar**. No és «un verd que es dona per fet» — és **un número estable que amaga
+un conjunt que balla**, i és pitjor, perquè **l'estabilitat mateixa és el que et convenç de no
+mirar-hi**.
+**Conseqüència per a la lectura d'aquest report: el recompte de silencis NO ES POT LLEGIR SOL.**
+La línia que els ENUMERA és la dada; el recompte n'és el resum, i aquí el resum menteix per
+omissió.
+
+**I s'ha descartat la causa fàcil.** `_gestos` s'engolia TOTES les excepcions (`except Exception:
+pass`): un clic que falla per temps deixa la pantalla en un altre estat, el selector no troba
+res, i el cas surt com a «no toca res» — **indistingible d'un estat que de debò no és assolible**.
+Ara els gestos fallits **es diuen** (amb `timeout` explícit). Resultat: **cap correguda reporta
+cap gest fallit**, o sigui que **l'arnès no és la causa**: ho són les dades vives.
 
 ### 🚩 A LA TAULA D'AGUS
 

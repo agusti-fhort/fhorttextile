@@ -358,15 +358,27 @@ JS_UN = """
 
 
 def _gestos(pag, gestos):
+    """Executa els gestos i **torna els que han fallat**.
+
+    🚨 ABANS S'ENGOLIEN TOTS (`except Exception: pass`) i això feia el recompte NO REPRODUÏBLE:
+    un clic que falla per temps deixa la pantalla en un estat que no és el del cas, el selector
+    no troba res, i el cas surt com a «NO TOCA RES» — **indistingible d'un estat que de debò no
+    és assolible amb les dades vives**. Mesurat: dues corregudes seguides del mateix bundle van
+    donar `61 · 1 · 2` i `62 · 1 · 1`. **Un número que balla no és un número**, i un verd no
+    reproduïble és germà del verd que es dona per fet.
+    El gest se segueix tolerant (n'hi ha d'opcionals segons les dades), però ara **es diu**.
+    """
+    fallits = []
     for g in gestos:
         try:
             if g[0] == 'click':
-                pag.locator(g[1]).first.click()
+                pag.locator(g[1]).first.click(timeout=5000)
             elif g[0] == 'fill':
-                pag.locator(g[1]).first.fill(g[2])
+                pag.locator(g[1]).first.fill(g[2], timeout=5000)
             pag.wait_for_timeout(600)
-        except Exception:
-            pass
+        except Exception as e:
+            fallits.append(f'{g[0]} {g[1]} → {type(e).__name__}')
+    return fallits
 
 
 def _mesura(pag, sel):
@@ -490,11 +502,11 @@ def main():
                 tram_actual = tram
             m = llegeix_maqueta(fitxer, sel_maq, gestos_maq)
 
-            pant = None
+            pant, fallits = None, []
             if sel_pant:
                 pag.goto(BASE + ruta, wait_until='networkidle')
                 pag.wait_for_timeout(1400)
-                _gestos(pag, gestos)
+                fallits = _gestos(pag, gestos)
                 pant = _mesura(pag, sel_pant)
 
             print(f'\n  · {què}   [maqueta `{sel_maq}`]')
@@ -503,8 +515,12 @@ def main():
                 morts.append(f'{tram} · {què} · NO HI ÉS A LA MAQUETA (`{sel_maq}`)')
                 continue
             if pant is None:
-                print('      ⚠️  NO MESURAT a la pantalla (estat no assolible amb les dades vives)')
-                morts.append(f'{tram} · {què} · NO MESURAT a la pantalla (`{sel_pant}`)')
+                # Es distingeix el que no s'ha pogut MESURAR del que no s'ha pogut FER: un gest
+                # fallit no és una limitació del banc, és una correguda que no val.
+                motiu = (f'GEST FALLIT ({"; ".join(fallits)})' if fallits
+                         else 'estat no assolible amb les dades vives')
+                print(f'      ⚠️  NO MESURAT a la pantalla — {motiu}')
+                morts.append(f'{tram} · {què} · NO MESURAT — {motiu} (`{sel_pant}`)')
                 continue
             for prop in PROPS:
                 a, b = m.get(prop), pant.get(prop)
