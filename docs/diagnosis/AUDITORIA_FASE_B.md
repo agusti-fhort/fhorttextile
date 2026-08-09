@@ -904,11 +904,19 @@ arreglable**: el d'A5 és un selector que no troba (es tanca amb un selector mil
 el d'A2 depèn de l'estat en què obre el run que l'arnès tria, i **no es tanca sense fixar les
 dades del banc**.
 
-🔑 **La volta de rosca, i és de la sessió de patrons:** *el recompte no es mou i el conjunt sí*.
-Qui segueixi el número veurà una estabilitat perfecta mentre **cada correguda deixa un cas
-DIFERENT sense mesurar**. No és «un verd que es dona per fet» — és **un número estable que amaga
-un conjunt que balla**, i és pitjor, perquè **l'estabilitat mateixa és el que et convenç de no
-mirar-hi**.
+🔑 **La volta de rosca, de la sessió de patrons — i CORREGIDA amb aquestes quatre corregudes.**
+La primera formulació era «el recompte no es mou i el conjunt sí», treta de **dues** corregudes.
+**Les quatre de sobre la falsen**: el recompte fa `2 · 1 · 2 · 2`. Era certa a la seva mostra i
+**falsa com a afirmació** — generalitzar des de n=2, que és la falta que hem anat assenyalant tot
+el dia, comesa a la CONCLUSIÓ que en trèiem. Es corregeix aquí perquè **el que hi ha escrit a
+sobre, la taula, ja la contradeia**: un report que es contradiu a si mateix a dos paràgrafs de
+distància és pitjor que un que no diu res.
+
+**I corregida surt PITJOR, no millor:**
+
+> Un recompte que aguanta **tres de cada quatre** vegades és **més convincent** com a estabilitat
+> que un que balla a la vista — i per tant **amaga MILLOR** el conjunt que hi ha a sota. Un
+> número gairebé estable no és un número estable amb soroll: **és una trampa més bona.**
 **Conseqüència per a la lectura d'aquest report: el recompte de silencis NO ES POT LLEGIR SOL.**
 La línia que els ENUMERA és la dada; el recompte n'és el resum, i aquí el resum menteix per
 omissió.
