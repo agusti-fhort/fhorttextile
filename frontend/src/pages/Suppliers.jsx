@@ -10,7 +10,7 @@ import PageMenu from '../components/ui/PageMenu'
 import TaulaLlista from '../components/ui/TaulaLlista'
 import {
   BotoMenu, SepMenu, Comptador, FilaIdentitat, EstatBuit, BotoEsborrar, Paginacio,
-  camp, buit, forceBarra,
+  camp, forceBarra,
 } from '../components/llista/ChromLlista'
 
 // CATALEG DE PROVEIDORS (tallers/fabrica) — LLISTA CANONICA DE LA CASA (NORMA_LAYOUT §8b + §8e).
@@ -22,12 +22,13 @@ import {
 //
 // ── TRES COSES QUE ES DIUEN EN VEU ALTA ──────────────────────────────────────────────────
 //
-// 1 · 🛑 **NO HI HA CERCADOR, i no es un oblit: es que no funcionaria.** `SupplierViewSet` no
-//    declara `search_fields`, i el `SearchFilter` de DRF sense `search_fields` deixa passar el
-//    queryset SENCER. Mesurat contra l'API viva: `?search=zzzz` torna `count: 1`, exactament el
-//    mateix que sense cap filtre. Un camp de cerca aqui seria un control que sembla que fa una
-//    cosa i no en fa cap — el germa exacte de l'`ordering` que /clients demanava i que DRF es
-//    menjava. BLOQUEJAT-PER-S1: cal `search_fields = ['name', 'nif', 'ciutat']` al ViewSet.
+// 1 · **EL CERCADOR VA HAVER D'ARREGLAR-SE AL BACKEND, i el defecte era el GERMA INVERS del de
+//    /clients.** Alla se substituien els `filter_backends` i queia l'`OrderingFilter`; aqui el
+//    `SearchFilter` hi era i el que faltava era `search_fields` — i DRF, sense `search_fields`,
+//    **deixa passar el queryset SENCER**. Dos silencis diferents amb la mateixa cara: no falla,
+//    no avisa, i el control sembla que funciona. Mesurat abans (`?search=zzzz` → count 1, el
+//    mateix que sense filtre) i DESPRES que S1 hi posés `['name','nif','ciutat']`:
+//    sense filtre → count 1 · `?search=zzzz` → **count 0** · `?search=Syt` → count 1.
 //
 // 2 · **LES CAPCALERES ORDENEN, pero no s'ha pogut VEURE.** El ViewSet no sobreescriu
 //    `filter_backends`, o sigui que hereta l'`OrderingFilter` del `DEFAULT_FILTER_BACKENDS`, i
@@ -67,6 +68,8 @@ export default function Suppliers() {
   const [modal, setModal] = useState(null)   // { mode:'create'|'edit', sup? }
 
   const [sp, setSp] = useSearchParams()
+  const search = sp.get('search') || ''
+  const [searchInput, setSearchInput] = useState(search)
   const page = Math.max(1, parseInt(sp.get('page') || '1', 10))
   // §8e · filtres ràpids de VISTA al menú. Com a Clients, el criteri no s'endevina: `active` és
   // un camp de debò i el backend ja el filtra (`filterset_fields = ['active', 'type']`).
@@ -100,6 +103,7 @@ export default function Suppliers() {
     setLoading(true); setError(false)
     suppliers.list({
       active: vista === 'actius',
+      ...(search ? { search } : {}),
       ordering: ordre.dir === 'desc' ? `-${ordre.camp}` : ordre.camp,
       page, page_size: PAGE_SIZE,
     })
@@ -110,7 +114,7 @@ export default function Suppliers() {
       })
       .catch(() => { setItems([]); setCount(0); setError(true) })
       .finally(() => setLoading(false))
-  }, [vista, ordre, page])
+  }, [vista, search, ordre, page])
 
   // El DENOMINADOR del comptador: el cens sencer, sense el filtre de vista. Una sola fila
   // demanada — l'únic que se'n vol és el `count` (§8e: «no es dedueix d'una pàgina»).
@@ -118,6 +122,12 @@ export default function Suppliers() {
     suppliers.list({ page_size: 1 }).then(r => setTotal(r.data?.count ?? null)).catch(() => setTotal(null))
   }, [])
   useEffect(() => { carregaTotal() }, [carregaTotal])
+  // Cerca: mirall local per a la resposta de teclat, a la URL amb debounce (patró d'A5).
+  useEffect(() => { setSearchInput(search) }, [search])
+  useEffect(() => {
+    const id = setTimeout(() => { if (searchInput !== search) setParams({ search: searchInput, page: undefined }) }, 250)
+    return () => clearTimeout(id)
+  }, [searchInput])   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const id = setTimeout(load, 150); return () => clearTimeout(id) }, [load])
 
   const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
@@ -194,16 +204,19 @@ export default function Suppliers() {
       </div>
 
       <div style={{ minWidth: 0, maxWidth: '100%' }}>
-        {/* §8e · comptador + (aquí no hi va cerca: v. el punt 1 de la capçalera del fitxer). */}
+        {/* §8e · el comptador mana i la cerca hi va al costat, mateixa línia. */}
         <FilaIdentitat>
           <Comptador valor={count} total={total ?? count} etiqueta={t('suppliers.entity')} />
+          <input value={searchInput} onChange={e => setSearchInput(e.target.value)}
+            placeholder={t('suppliers.search_ph')} aria-label={t('suppliers.search_ph')}
+            style={{ ...camp, flex: 1, minWidth: 220 }} />
         </FilaIdentitat>
 
         <Feedback feedback={feedback} onDismiss={() => setFeedback(null)} />
 
         {loading ? <EstatBuit>{t('suppliers.loading')}</EstatBuit>
           : error ? <EstatBuit>{t('suppliers.error')}</EstatBuit>
-            : items.length === 0 ? <EstatBuit>{t('suppliers.empty')}</EstatBuit>
+            : items.length === 0 ? <EstatBuit>{search ? t('suppliers.empty_filtered') : t('suppliers.empty')}</EstatBuit>
               : (
                 <TaulaLlista cols={cols} files={items} clau={(r) => r.id}
                   ordre={ordre} onOrdenar={ordenar}
@@ -212,10 +225,6 @@ export default function Suppliers() {
                   // oferir-ho seria prometre una edició que el backend rebutjaria.
                   onObrir={canEdit ? (r) => setModal({ mode: 'edit', sup: r }) : null} />
               )}
-
-        {/* §8c · una capacitat que falta també s'explica: aquesta llista no es pot cercar, i el
-            motiu no es llegeix mirant-la. */}
-        <div style={{ ...buit, margin: '4px 0 16px 2px' }}>{t('suppliers.search_pending')}</div>
 
         <Paginacio page={page} pages={pages} onPage={(p) => setParams({ page: p })}
           labelPrev={t('suppliers.prev')} labelNext={t('suppliers.next')}
