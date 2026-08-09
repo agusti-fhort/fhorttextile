@@ -646,7 +646,7 @@ mig de la pàgina una passada). Cas normal sense parpelleig; cas anòmal, **degr
 | Eina | Resultat |
 |---|---|
 | `qa_auditoria_computats.py` · **27 rutes** (24 d'aquest lot + 3 de la sessió de patrons) | ✅ **0 incompliments** |
-| `qa_bidireccional.py` · **56 casos, sencera i sense filtres** | **53 CASEN · 1 DESVIA · 2 NO TOQUEN RES** |
+| `qa_bidireccional.py` · **64 casos, sencera i sense filtres** | **61 CASEN · 1 DESVIA · 2 NO TOQUEN RES** |
 | `qa_8bquater_crom.py` · 5 rutes × 2 tenants | ✅ **0 incompliments** |
 | `npx eslint src` | ✅ 0 errors |
 | `npm run build` | ✅ net i **desplegat** (`frontend/dist` és el que serveix staging) |
@@ -869,6 +869,31 @@ Allà encara ets en context d'EXPRESSIÓ i les claus es llegeixen com un **objec
 l'error surt com a `Unexpected token` **a la línia SEGÜENT**, no a la del comentari — que és el
 que el fa car de trobar. **Quatre vegades avui entre les quatre sessions.** El comentari ha
 d'anar FORA, o com a `//` abans del `return`.
+
+### 🚩 UN GATE QUE JO HAVIA ASSUMIT · el menú de pantalla, verificat a CADA pantalla
+
+Ho va destapar la sessió de patrons al seu tancament: havia despatxat la bidireccional amb «les
+meves pantalles no tenen maqueta». **És mig fals, i a mi em passava igual.** No hi ha maqueta de
+Planificació ni de Fittings — però **`PROPOSTA_menu_pantalla_v3.html` és l'evidència ratificada
+del §8b**, i **catorze pantalles d'aquest lot hi munten un `PageMenu`**. Només B1 el tenia
+verificat.
+
+🔑 **Que el component sigui meu i ja estigui verificat NO és la prova.** Cada pantalla el declara
+en un context diferent —`children` propis, `rightChildren`, un pare amb altres estils— i si el
+context li canviés la pell (una herència de `fontFamily`, un `color` del contenidor), **la
+maqueta ho diria i el cens de paleta no**, perquè el color seguiria sent de la llista.
+**Verificar un component una vegada no verifica els llocs on es declara.**
+
+Hi entren les **tres variants estructurals** del lot (commit 275): menú amb SECCIONS (B2, 6
+píndoles + fletxa amb destí), menú amb una ACCIÓ pujada que **perd el color** per la §8e (B3,
+B7), i menú de **NOMÉS FLETXA** (B4, §8b.2). **6 casos nous · 6 casen · 0 desvien.**
+La bidireccional sencera passa de 56 a **64 casos: 61 casen · 1 desvia · 2 no toquen res.**
+
+⚠️ **I un matís d'honestedat sobre els dos silencis:** **no són sempre els mateixos**. En una
+correguda va sortir l'estat buit d'A2 i en la següent la capa de restricció triada — tots dos
+d'A2, i tots dos perquè el **gest** de la maqueta o de la pantalla depèn de les dades vives del
+run que l'arnès obre. **El límit és real i estava declarat des del bloc A, però no és estable
+cas a cas**, i dir-ho és més honest que fixar-ne un i donar l'altre per bo.
 
 ### 🚩 A LA TAULA D'AGUS
 
