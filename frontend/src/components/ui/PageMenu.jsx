@@ -110,7 +110,15 @@ export default function PageMenu({ backTo, backTitle, items = [], children = nul
   // Cap literal de cara a l'usuari en aquest fitxer: les etiquetes i el títol de la fletxa
   // arriben ja traduïts des de la pantalla, que és qui sap de què parla.
   return (
-    <div style={{
+    // `data-ftt-pagemenu` no és decoració: és l'ÀNCORA del §8b-quater (Agus 09/08) — «top bar
+    // + menú de pantalla fixos en scroll, com un sol bloc enganxat». La regla que ho fa viu a
+    // `index.css` i s'aplica al CONTENIDOR d'aquesta barra, no a la barra: un element enganxós
+    // només es pot moure DINS del seu contenidor, i el contenidor d'aquí fa exactament
+    // l'alçada de la barra — o sigui, recorregut zero i sticky mort. Per això la regla puja un
+    // nivell amb `:has(> [data-ftt-pagemenu])` i cap pantalla no ha de re-declarar res.
+    // El fons ja és `--panel` OPAC i el filet inferior ja és `--line`: la norma els demanava
+    // des del §8b i és el que fa que el contingut hi passi per sota sense transparentar-se.
+    <div data-ftt-pagemenu="" style={{
       background: 'var(--panel)',
       borderTop: '1px solid var(--line)',
       borderBottom: '1px solid var(--line)',

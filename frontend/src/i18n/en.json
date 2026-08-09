@@ -448,6 +448,10 @@
     "next": "Next",
     "previous": "Previous"
   },
+  "topbar": {
+    "unit_switch": "Switch to {{unitat}}",
+    "profile": "My profile"
+  },
   "lang": {
     "ca": "Catalan",
     "es": "Spanish",

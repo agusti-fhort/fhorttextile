@@ -83,17 +83,26 @@ export default function Topbar() {
   const hora = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(now)
 
   return (
+    // §8b-quater (Agus 09/08) · LA TOP BAR I EL MENÚ DE PANTALLA, ENGANXATS COM UN SOL BLOC.
+    // Aquesta barra ja era `sticky`; el que hi entra ara és (a) la pell de la norma —fons
+    // `--panel` OPAC i filet inferior `--line`, on hi havia `#e8e8e8`, un dels tres colors fora
+    // de paleta que els blocs A i B ja tenien anotats— i (b) la geometria compartida: el `top`
+    // el diu el Shell amb `--topbar-top` i el menú de pantalla s'atura a `--chrome-top`, o sigui
+    // que les dues alçades surten del MATEIX lloc i no poden derivar l'una de l'altra.
+    // La z: per sobre del contingut i per SOTA del menú lateral (100) i dels modals (150,
+    // `ui/overlay.js`). Va un pèl per sobre del menú de pantalla (20) perquè, si mai un
+    // arrodoniment de subpíxel els fes solapar, qui tapa és la barra de dalt.
     <header style={{
       height: 56,
-      background: 'var(--white)',
-      borderBottom: '1px solid #e8e8e8',
+      background: 'var(--panel)',
+      borderBottom: '1px solid var(--line)',
       display: 'flex',
       alignItems: 'center',
       padding: '0 1.5rem',
       gap: '1rem',
       position: 'sticky',
-      top: import.meta.env.VITE_STAGING === 'true' ? '28px' : '0',
-      zIndex: 10,
+      top: 'var(--topbar-top)',
+      zIndex: 30,
     }}>
       {/* Tenant › SECCIÓ › pantalla (decisió Agus 08/08). La secció és la del menú lateral, o
           sigui que el molla i el ressaltat del menú no poden dir coses diferents. Els segments
@@ -125,11 +134,16 @@ export default function Topbar() {
         )}
       </div>
       <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.8rem'}}>
+        {/* §1b(b)(c) · MIGRACIÓ DE TOKENS DE LA BARRA, que passa conformitat en aquest tram.
+            `--gray` (#868685) és un àlies legacy que dona **3.64:1** sobre blanc: per sota d'AA,
+            i aquí hi anava la data i l'hora, que es llegeixen. L'escala de la norma és de tres
+            nivells i el rol d'aquest text és secundari → `--text-soft` (5.37:1). `--charcoal`
+            és el mateix hex que `--text-main`, i el nom de rol és el que la norma nomena. */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          fontSize: 'var(--fs-body)', color: 'var(--gray)', whiteSpace: 'nowrap',
+          fontSize: 'var(--fs-body)', color: 'var(--text-soft)', whiteSpace: 'nowrap',
         }}>
-          {nom && <span style={{color: 'var(--charcoal)', fontWeight: 500}}>{nom}</span>}
+          {nom && <span style={{color: 'var(--text-main)', fontWeight: 500}}>{nom}</span>}
           {nom && <span style={{opacity: 0.45}}>·</span>}
           <span>{data}</span>
           <span style={{opacity: 0.45}}>·</span>
@@ -137,20 +151,27 @@ export default function Topbar() {
         </div>
         <UnitToggle />
         <LanguageSwitcher />
+        {/* §8b-quater · mateixa migració que el commutador d'idioma. I la icona baixa de 17px
+            —que no és cap de les tres mides de la §8— a 20, que és la que la norma dona a una
+            icona STANDALONE. El botó no tenia ni títol ni `aria-label`: un botó que només és
+            una icona no diu on porta a ningú que no el vegi. */}
         <button
           onClick={() => navigate('/perfil')}
+          title={t('topbar.profile')}
+          aria-label={t('topbar.profile')}
           style={{
             width: 32, height: 32,
-            border: '0.5px solid #e4e4e2',
-            borderRadius: 8,
-            background: 'none',
+            border: '1px solid var(--line)',
+            borderRadius: 'var(--r-ctrl)',
+            background: 'var(--panel)',
             cursor: 'pointer',
-            color: 'var(--gray)',
-            fontSize: 17,
+            color: 'var(--text-soft)',
+            fontSize: 20,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
-          <i className="ti ti-user" />
+          <i className="ti ti-user" aria-hidden="true"
+            style={{ fontSize: 'inherit', color: 'currentColor', lineHeight: 1 }} />
         </button>
         {showNewModel && (
           <button

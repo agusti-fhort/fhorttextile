@@ -20,6 +20,18 @@ export default function Shell() {
         display: 'flex',
         minHeight: '100vh',
         paddingTop: import.meta.env.VITE_STAGING === 'true' ? '28px' : 0,
+        // §8b-quater (Agus 09/08) · EL CROM DEL SISTEMA ES DECLARA UN SOL COP, AQUÍ.
+        // La top bar i el menú de pantalla han de quedar enganxats en scroll «com un sol
+        // bloc», i per a això el menú —que viu dins del `<main>`, dins de cada pàgina— ha de
+        // saber a quina alçada s'atura. Aquesta és l'única cosa que ha de saber, i no la pot
+        // deduir: depèn de la franja de staging, que és una decisió de BUILD (`VITE_STAGING`).
+        // Va com a variable CSS i no com a constant JS a posta: així la regla del §8b-quater
+        // (index.css) i el `top` de la top bar la llegeixen tots dos del MATEIX lloc, i cap
+        // pantalla no ha de re-declarar res.
+        //   --topbar-top : on s'atura la top bar (sota la franja de staging, si n'hi ha)
+        //   --chrome-top : on s'atura el menú de pantalla (= sota la top bar)
+        '--topbar-top': import.meta.env.VITE_STAGING === 'true' ? '28px' : '0px',
+        '--chrome-top': import.meta.env.VITE_STAGING === 'true' ? '84px' : '56px',
       }}>
         <Sidebar />
         <div style={{
@@ -46,7 +58,14 @@ export default function Shell() {
             // conformitat. Va en commit AÏLLAT a posta (ordre d'Agus): si alguna pantalla
             // vella se'n ressent, es revertreix una línia i prou.
             background: 'var(--bg-page)',
-            overflowY: 'auto',
+            // ⚠️ AQUÍ HI HAVIA `overflowY: 'auto'` I ERA EL QUE MATAVA EL STICKY (§8b-quater).
+            // El `<main>` no ha tingut mai scroll propi: la seva columna té `minHeight: 100vh`
+            // i cap alçada màxima, o sigui que el `<main>` creix amb el contingut i qui es
+            // desplaça és el document. Però `overflow-y: auto` **crea igualment una caixa de
+            // desplaçament** i, per a `position: sticky`, la caixa de desplaçament més propera
+            // és la referència: qualsevol element enganxós de dins del `<main>` quedava
+            // ancorat a un scrollport que no es desplaça MAI, o sigui mort sense fer soroll.
+            // Treure-ho torna la referència al document, que és qui es desplaça de debò.
           }}>
             <Outlet />
           </main>

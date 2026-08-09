@@ -15,14 +15,17 @@ export default function LanguageSwitcher() {
       value={current}
       onChange={change}
       aria-label={t('lang.ca')}
+      /* §8b-quater · pell de la top bar, que passa conformitat en aquest tram: `#e4e4e2` era
+         un dels tres colors fora de paleta que els blocs A i B ja tenien anotats, la vora de
+         mig píxel no és de cap escala i el radi de la casa per a un control és 6, no 8. */
       style={{
         height: 32,
-        background: 'var(--white)',
-        border: '0.5px solid #e4e4e2',
-        borderRadius: 8,
+        background: 'var(--panel)',
+        border: '1px solid var(--line)',
+        borderRadius: 'var(--r-ctrl)',
         padding: '0 8px',
         fontSize: 'var(--fs-body)',
-        color: 'var(--charcoal)',
+        color: 'var(--text-main)',
         cursor: 'pointer',
         outline: 'none',
       }}

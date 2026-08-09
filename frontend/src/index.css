@@ -166,6 +166,35 @@ body {
   color: var(--text-main);
 }
 
+/* ═══ §8b-quater (Agus, 09/08) · TOP BAR + MENÚ DE PANTALLA, UN SOL BLOC ENGANXAT ═══════════
+   L'ordre: en desplaçar-se, la top bar i el menú de pantalla es queden fixos, com un sol bloc.
+   La top bar ja ho feia (`Topbar.jsx`, `top: var(--topbar-top)`); el que faltava era el menú.
+
+   PER QUÈ LA REGLA VIU AQUÍ I NO DINS DEL COMPONENT. Un element `sticky` només es pot desplaçar
+   DINS del seu contenidor, i el contenidor de la barra —el `<div>` de marge negatiu que cada
+   pantalla hi posa perquè vagi de costat a costat— fa exactament l'alçada de la barra: recorregut
+   zero, sticky mort. Qui s'ha d'enganxar, doncs, és el CONTENIDOR, que sí que és fill directe del
+   `<main>` i té tota la pàgina per recórrer. Com que aquest contenidor el declara cada pantalla,
+   l'única manera de dir-ho UN SOL COP —«cap pantalla ho re-declara»— és pujar un nivell des de
+   l'àncora del component amb `:has()`. Cap pantalla, ni les ja conformades, no s'ha de tocar.
+
+   EL `top` VA SENSE COMPENSAR EL MARGE NEGATIU, I AIXÒ ES VA MESURAR. El contenidor porta
+   `margin-top: -1.5rem` (és el que treu la barra dels 24px de padding del `<main>`), i la
+   primera versió d'aquesta regla el compensava amb `calc(… + 1.5rem)` llegint l'especificació,
+   que ancora la CAIXA DE MARGE. `ops/qa/qa_8bquater_crom.py` va mesurar el contrari: amb la
+   compensació, la barra queda **24px per sota de la top bar ja en repòs** (un forat pel qual
+   es veu el fons de pàgina). El navegador ancora aquí la caixa de VORA. Per això el `top` és
+   el valor net — i per això la regla porta la seva pròpia prova al costat.
+
+   La z (20): per sobre del contingut, per sota de la top bar (30), del menú lateral (100) i dels
+   modals (150 · `components/ui/overlay.js`). El fons opac i el filet inferior els porta el
+   component (`--panel` / `--line`), que és on toca: són pell de la barra, no del seu ancoratge. */
+main > *:has(> [data-ftt-pagemenu]) {
+  position: sticky;
+  top: var(--chrome-top, 56px);
+  z-index: 20;
+}
+
 /* Spinner global (icones de càrrega: afegir animation: spin 0.8s linear infinite). */
 @keyframes spin { to { transform: rotate(360deg); } }
 

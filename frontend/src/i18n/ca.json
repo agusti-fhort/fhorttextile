@@ -448,6 +448,10 @@
     "next": "Següent",
     "previous": "Anterior"
   },
+  "topbar": {
+    "unit_switch": "Canviar a {{unitat}}",
+    "profile": "El meu perfil"
+  },
   "lang": {
     "ca": "Català",
     "es": "Castellà",
