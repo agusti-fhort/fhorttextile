@@ -270,6 +270,27 @@ def traspassa(brand_codi, studio_codi, commit=False, limit=None, codis=None):
     return report
 
 
+#: ELS DOS ESTATS LOCALS D'UN MODEL DE LA SAFATA, declarats **al mòdul que els calcula**.
+#:
+#: No són un `choices` ni un camp: `estat_local` és una COMPARACIÓ (v. el docstring de
+#: `safata_del_studio`), i és a posta —així no es pot desincronitzar de la realitat. Però un
+#: conjunt tancat de valors que una pantalla ha de saber pintar **és una enumeració de domini**
+#: encara que no visqui en una columna, i la llei d'Agus (08/08) diu que aquestes no es
+#: declaren al frontend: `pages/Encarrecs.jsx` en tenia la còpia. Es publica per
+#: `/api/v1/vocabulari/` → `estats_locals_encarrec`.
+#:
+#: Els literals estaven inline dins de la comprensió i dels dos recomptes de sota (quatre
+#: aparicions de dues cadenes). Pujar-los aquí no canvia cap valor —és mecànic i verificable—
+#: i dona a l'endpoint una font que és la MATEIXA que el càlcul, no una còpia seva. El dia que
+#: aparegui un tercer estat (p.ex. «traspassat però divergent»), la pantalla el rebrà sola.
+ESTAT_LOCAL_PENDENT = 'PENDENT'
+ESTAT_LOCAL_TRASPASSAT = 'TRASPASSAT'
+ESTATS_LOCALS_ENCARREC = [
+    (ESTAT_LOCAL_PENDENT, 'Pendent'),
+    (ESTAT_LOCAL_TRASPASSAT, 'Traspassat'),
+]
+
+
 def safata_del_studio(studio_codi, limit_per_brand=500):
     """El que un Studio té a la safata: els models que cada Brand vinculat li ha assignat.
 
@@ -313,15 +334,16 @@ def safata_del_studio(studio_codi, limit_per_brand=500):
             'nom_prenda': r['nom_prenda'],
             'any': r['any'],
             'temporada': r['temporada'],
-            'estat_local': 'TRASPASSAT' if r['codi_intern'] in ja_hi_son else 'PENDENT',
+            'estat_local': (ESTAT_LOCAL_TRASPASSAT if r['codi_intern'] in ja_hi_son
+                            else ESTAT_LOCAL_PENDENT),
         } for r in rows]
 
         grups.append({
             'brand_codi': brand.codi_tenant,
             'brand_nom': brand.nom,
             'models': models,
-            'n_pendents': sum(1 for m in models if m['estat_local'] == 'PENDENT'),
-            'n_traspassats': sum(1 for m in models if m['estat_local'] == 'TRASPASSAT'),
+            'n_pendents': sum(1 for m in models if m['estat_local'] == ESTAT_LOCAL_PENDENT),
+            'n_traspassats': sum(1 for m in models if m['estat_local'] == ESTAT_LOCAL_TRASPASSAT),
         })
 
     return grups

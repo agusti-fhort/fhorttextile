@@ -91,11 +91,15 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from fhort.commerce.models import (DeliveryNote, DeliveryNoteLine, Product, Quote,
+                                   SalesOrder, WorkOrder)
 from fhort.fitting.models import FittingSession, PieceFittingLine
 from fhort.fitting.services import SEALED_SESSION_ESTATS
 from fhort.models_app.models import Model
-from fhort.pom.models import GradingRule
-from fhort.tasks.models import TaskType
+from fhort.pom.models import CustomerPOMAlias, GradingRule
+from fhort.tasks.models import Customer, ModelTask, TaskType
+from fhort.tenants.federation_service import ESTATS_LOCALS_ENCARREC
+from fhort.tenants.models import TenantLink
 
 #: Règims que existeixen com a DADA però que cap camí d'autoria pot escriure. El raonament de
 #: cadascun és a la capçalera del mòdul; aquí només hi ha la llista, perquè hi hagi UN sol lloc
@@ -104,6 +108,23 @@ REGIMS_NO_AUTORABLES = frozenset({
     GradingRule.LOGICA_EXCEPTION,
     GradingRule.LOGICA_ZERO,
 })
+
+
+def _choices_del_camp(model, camp):
+    """Els `choices` que el CAMP accepta de debò, preguntats al `_meta` del model.
+
+    NO ÉS UN PREÀMBUL: és la defensa contra l'error que aquest mòdul persegueix. Els tres
+    documents comercials hereten `AbstractDocument.STATUS_CHOICES` (DRAFT·SENT·ACCEPTED·
+    REJECTED·EXPIRED) i **dos dels tres el sobreescriuen** amb el seu propi cicle
+    (`SalesOrder.SO_STATUS_CHOICES` OPEN·COMPLETED·CANCELLED · `DeliveryNote.DN_STATUS_CHOICES`
+    DRAFT·ISSUED·INVOICED). Escrivint `SalesOrder.STATUS_CHOICES` s'obté l'heretada —cinc valors
+    que aquell camp no accepta— i el codi sembla correcte. El mateix problema, amb la mateixa
+    cara, que va fer que un cens comptés els `ORIGEN_CHOICES` equivocats de `pom/models.py`, que
+    en té QUATRE blocs diferents (:147, :214, :282, :513).
+
+    Preguntar-ho al camp no es pot equivocar: és exactament el que la BD validarà.
+    """
+    return model._meta.get_field(camp).choices
 
 
 def _llista(choices, marca=None):
@@ -129,8 +150,12 @@ def vocabulari_domini_view(request):
     """
     GET /api/v1/vocabulari/
 
-    → {regims_graduacio, fases_model, estats_model, fases_tasca,
-       estats_sessio_fitting, veredictes_fitting}
+    → FASE A: {regims_graduacio, fases_model, estats_model, fases_tasca,
+               estats_sessio_fitting, veredictes_fitting}
+      PART B · lot comercial: {estats_oferta, estats_comanda, estats_albara, estats_encarrec,
+               tipus_encarrec, origens_encarrec, tipus_linia_albara, natures_producte,
+               modes_preu_producte, estats_tasca, origens_alias_pom, regims_fiscals_client,
+               metodes_pagament_client, estats_vincle_tenant, estats_locals_encarrec}
 
     Cada element: `{codi, etiqueta}`. El `codi` és el que es desa i el que viatja a l'API;
     l'`etiqueta` és la del `choices` i és per als ulls. Dues llistes porten una marca de més
@@ -164,4 +189,46 @@ def vocabulari_domini_view(request):
         # FASE A · el veredicte de la modista (D-31.21). Codis crus: van en anglès a totes les
         # llengües perquè són el que el full imprès porta cap al fabricant.
         'veredictes_fitting': _llista(PieceFittingLine.DECISIO_CHOICES),
+
+        # ══ PART B · LOT COMERCIAL ═══════════════════════════════════════════════════════
+        # Entren ara perquè les SEVES pantalles passen conformitat ara (§ «partició per fase»
+        # de la capçalera): Clients · fitxa del client · Proveïdors · Productes · Ofertes ·
+        # Comandes · Encàrrecs · WorkOrderDetail · Albarans · Orfes · Condicions de pagament.
+        # Cens fet pel lot comercial, contrastat aquí contra el `_meta` de cada camp.
+        #
+        # ELS TRES ESTATS DE DOCUMENT VAN PEL CAMP, no per la constant: v. `_choices_del_camp`.
+        'estats_oferta': _llista(_choices_del_camp(Quote, 'status')),
+        'estats_comanda': _llista(_choices_del_camp(SalesOrder, 'status')),
+        'estats_albara': _llista(_choices_del_camp(DeliveryNote, 'status')),
+        'estats_encarrec': _llista(_choices_del_camp(WorkOrder, 'status')),
+        'tipus_encarrec': _llista(_choices_del_camp(WorkOrder, 'kind')),
+        'origens_encarrec': _llista(_choices_del_camp(WorkOrder, 'origin')),
+        # ⚠️ EL CAMP ES DIU `line_kind`, NO `kind` — i preguntar-ho al `_meta` és el que ho ha
+        # dit: amb `kind` això explotava amb `FieldDoesNotExist`. Publicar la constant
+        # `LINE_KIND_CHOICES` a cegues hauria funcionat i hauria estat igual de correcte per
+        # casualitat; el dia que la constant i el camp divergeixin, aquesta forma peta i l'altra
+        # menteix.
+        'tipus_linia_albara': _llista(_choices_del_camp(DeliveryNoteLine, 'line_kind')),
+        'natures_producte': _llista(_choices_del_camp(Product, 'nature')),
+        'modes_preu_producte': _llista(_choices_del_camp(Product, 'price_mode')),
+        'estats_tasca': _llista(_choices_del_camp(ModelTask, 'status')),
+        # 🚨 LA QUE JA HAVIA DERIVAT, i és el cas de manual del perquè existeix aquest endpoint.
+        # `CustomerDetail.jsx` en declarava QUATRE valors amb el comentari «els QUATRE choices
+        # d'origen del model»; el model en declara CINC des que el cercador de Definició POM va
+        # estrenar el camí «Crear POM propi del model» (`pom/wizard_views.py:694` escriu
+        # `origen='MODEL'`, provinença PERMANENT). Ningú va tornar al fitxer del client, i el
+        # resultat és visible a pantalla AVUI: un àlies nascut d'un model pinta la clau i18n
+        # crua a la cel·la, perquè l'etiqueta es construeix per interpolació del codi.
+        'origens_alias_pom': _llista(_choices_del_camp(CustomerPOMAlias, 'origen')),
+        'regims_fiscals_client': _llista(_choices_del_camp(Customer, 'tax_regime')),
+        'metodes_pagament_client': _llista(_choices_del_camp(Customer, 'payment_method')),
+        'estats_vincle_tenant': _llista(TenantLink.ESTAT_CHOICES),
+        # L'ÚNICA QUE NO SURT DE CAP `choices` I ENTRA IGUAL. `estat_local` d'un model de la
+        # safata és una COMPARACIÓ, no un camp (`federation_service.safata_del_studio`: el
+        # `codi_intern` del Brand ¿ja existeix al meu schema?), i això és a posta —així no es
+        # pot desincronitzar. Però el conjunt de valors que una pantalla ha de saber pintar és
+        # una enumeració de domini encara que la dada sigui derivada, i `Encarrecs.jsx` en
+        # tenia la còpia. Es publica des de la constant del MÒDUL QUE LA CALCULA, mai d'una
+        # llista escrita aquí: si algun dia n'hi ha un tercer, arriba sol.
+        'estats_locals_encarrec': _llista(ESTATS_LOCALS_ENCARREC),
     })

@@ -360,6 +360,7 @@
     "origen_MANUAL": "Manual",
     "origen_MIGRACIO": "Migración",
     "origen_DICCIONARI": "Diccionario",
+    "origen_MODEL": "Nacido de un modelo",
     "grading_title": "Graduaciones del cliente",
     "grading_empty": "Ninguna graduación propia de este cliente.",
     "rules": "reglas",
