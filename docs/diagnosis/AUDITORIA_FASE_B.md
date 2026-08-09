@@ -618,6 +618,110 @@ comprova `isConnected` **després** del muntatge (no durant el render: dins del 
 `commit` després que els fills hagin renderitzat, i comprovar-ho al render pintaria la barra al
 mig de la pàgina una passada). Cas normal sense parpelleig; cas anòmal, **degradació visible**.
 
+## 🛑 STOP DE LOT · S1 (lot tècnic + secció Sistema + compartits + backend)
+
+### Les 24 pantalles, i on són
+
+| # | Pantalla | Ruta | Commit |
+|---|---|---|---|
+| 1 | Desenvolupament (la home) | `/` | 251 |
+| 2 | Planificació + Gantt + 4 panells + Registre | `/planificacio` | 252 |
+| 3 | Fittings | `/fittings` | 253 |
+| 4 | Documents | `/disseny/documents` | 254 |
+| 5 | Fitxa tècnica (porta + crom de l'editor) | `/fitxa-tecnica` | 254 |
+| 6 | Configuració general | `/configuracio/general` | 256 |
+| 7 | Usuaris i rols | `/configuracio/usuaris` | 256 |
+| 8 | Calendari d'empresa | `/configuracio/calendari` | 256 |
+| 9 | Catàleg de tasques | `/task-types` | 258 |
+| 10 | El meu perfil | `/perfil` | 258 |
+| 11 | Recursos | `/recursos` | 258 |
+| 12 | Safata d'encàrrecs | `/encarrecs` | **S2 · 212** (verificada, no refeta) |
+| 13 | Configuració inicial | `/onboarding` | 259 |
+| 14 | Import massiu | `/models/importar-colleccio` | 259 |
+| 15 | Size Map Setup (el `Wizard`; la llista és codi mort) | — | 259 |
+| — | + les 9 pantalles ja conformades dels blocs A i B, re-mesurades senceres | | |
+
+### Les tres eines, a la correguda de tancament
+
+| Eina | Resultat |
+|---|---|
+| `qa_auditoria_computats.py` · **27 rutes** (24 d'aquest lot + 3 de la sessió de patrons) | ✅ **0 incompliments** |
+| `qa_bidireccional.py` · **56 casos, sencera i sense filtres** | **53 CASEN · 1 DESVIA · 2 NO TOQUEN RES** |
+| `qa_8bquater_crom.py` · 5 rutes × 2 tenants | ✅ **0 incompliments** |
+| `npx eslint src` | ✅ 0 errors |
+| `npm run build` | ✅ net i **desplegat** (`frontend/dist` és el que serveix staging) |
+| `manage.py check` | ✅ net |
+
+**L'única desviació és la declarada** (la tinta de la fletxa d'arrel, que espera Agus). **Els dos
+casos sense mesura estan explicats**: l'estat «cap capa declarada» d'A2 —que el bloc A ja va
+deixar anotat com a no assolible amb les dades del run que l'arnès obre— i el badge de conjunt
+d'A5: **cap model de cap dels dos tenants té `garment_set`** (0/1 a `fhort`, 0/51 a `los`).
+
+### El vocabulari: de 6 llistes a 27
+
+`/api/v1/vocabulari/` ha passat de **6** a **27** llistes en aquest lot. **21 enumeracions de
+domini** han sortit del client. Les del lot tècnic: `temporades` · `unitats_mesura` ·
+`normes_referencia` · `capacitats` · `rols`. Les altres 16, per al lot comercial.
+
+**Dues van obligar a canviar la FONT, no només a publicar-la:**
+- **`capacitats`**: `ALL_CAPABILITIES` és un `frozenset` i **un `frozenset` no té ordre** — i
+  l'ordre de les capacitats és l'ordre de les COLUMNES de la matriu de permisos, o sigui DADA.
+- **`estats_locals_encarrec`**: no surt de cap `choices` (és una COMPARACIÓ), i els dos literals
+  vivien inline en quatre punts de `federation_service`.
+
+### LES CINC TAPADORES · el verd que no vol dir el que sembla
+
+Totes cinc trobades avui entre les tres sessions. **Cap es veu llegint codi.**
+
+| # | Tapadora | Com es veu | Com es tanca |
+|---|---|---|---|
+| 1 | **Bundle ranci** | verd o vermell sobre codi que ja no existeix | mirar la data del `dist`; `FTT_QA_DIST` per mesurar sense publicar |
+| 2 | **Token caducat** | l'app cau a `/login` i mesures una altra pantalla | correguda sencera + **el tri-estat, que ho delata** (15/15 morts de cop) |
+| 3 | **Excepció caducada** | el defecte hi és i l'eina l'absol | revisar *per què* existeix cada exempció |
+| 4 | **Cas que no toca res** | verd perquè el selector no troba l'element | **el veredicte de tres columnes** |
+| 5 | **Un sol motor** | la mesura passa on l'usuari no mira | `:has()` ✓ a Chromium, ✗ a Firefox < 121 → §8b-quater(2) |
+
+I dues variants seves que van sortir al tancament:
+- **L'element que NO HI ÉS**: `SessioActiva` és crom **global** però només es pinta amb una tasca
+  oberta. El banc no en tenia cap i les 24 pantalles donaven 0 amb un element de crom global
+  **sense mesurar mai**. Quan una altra sessió en va obrir una, va aparèixer a totes alhora.
+- **El selector que es mou**: el cas d'A1 anava per `div[style*="sticky"] >> nth=0` i, en fer del
+  crom un sol bloc enganxat, va passar a mesurar **la top bar** i a acusar la pantalla equivocada
+  (5 desviacions falses).
+
+### `var()` QUE NO EXISTEIXEN — el patró, batejat
+
+Tres al lot, i **cap fallava**: una `var()` inexistent no peta, cau a l'heretat i **es veu bé per
+accident**.
+
+| On | Què | Efecte real |
+|---|---|---|
+| `DissenyPlaceholder` | `var(--fs-title)` | el títol queia als **32px de l'agent d'usuari** per a un `h1` |
+| `Planning` | `var(--bg, #faf9f7)` | **amb fallback**: pinta un crema que ningú ha decidit i **cap eina el veu** |
+| `IssueDateField` | `var(--text)` | el color queia a l'heretat i es veia negre |
+
+### 🚩 A LA TAULA D'AGUS
+
+1. **La fletxa de l'ARREL** — proposta conjunta de dues sessions: la barra es queda i la fletxa
+   TAMBÉ, **deshabilitada** (`--text-faint`). Una línia si es vol d'una altra manera.
+2. **El daurat ple de l'acció primària** contra el §5 «la primària és blava». Queda obert a
+   `COL.gold` (editor .ftt), a «Buscar propostes» (Taller) i a la variant `gold` d'`ui/Badge`.
+   **És una decisió per a TOT el producte i s'ha de prendre una sola vegada**, no pantalla a
+   pantalla. Cap de les tres sessions l'ha presa.
+3. **`components/EstatBadge.jsx` és CODI MORT** (zero imports) amb 5 hex literals: candidat a
+   esborrar. **`SizeMapSetup`** (l'`export default`) tampoc té ruta.
+4. **`Models.jsx` conserva `badgeNeutre`?** No: mort al 257. El que queda obert és si la variant
+   `gold` d'`ui/Badge` ha de deixar `--sel` com ha fet la `gray`.
+5. **El codi de colors de les 4 columnes del board** (Desenvolupament): la §8e només nomena TRES
+   estats i el board en té QUATRE. Dir de quin color és «pausat» és domini.
+6. **La VIABILITAT es calcula al client** (Planificació) amb 420 min/dia i dl-dv escrits a mà,
+   mentre el Gantt de la mateixa pantalla llegeix el CompanyCalendar. Dues respostes a la
+   mateixa pregunta.
+7. **19 ViewSets més perden l'`OrderingFilter`** pel mateix patró que `/customers`.
+8. **INFRA · `backend/media/` amb directoris `root:root`** i gunicorn com a www-data → 500 a tot
+   upload. **El directori del mes és nou cada mes**: arreglar l'agost no arregla el setembre.
+   Demana un `umask`/propietari al desplegament, no un `chown` cada trenta dies.
+
 ## CODES PER A LA S2 (backend i compartits · commits 250·204, 250·205, 250)
 
 ### `/customers` tornava a ordenar — DRF es menjava l'ordre en silenci
