@@ -1716,11 +1716,25 @@ Corregut dos cops, i el resultat afina l'avís:
 | Silenci A5 | badge NEUTRE | badge NEUTRE — **estable** |
 | Silenci A2 | «estat buit» | **«capa de restricció TRIADA»** — **ha canviat de cas** |
 
-🔑 **I aquí hi ha la part que l'avís no deia: el RECOMPTE no es mou (2 silencis les dues
-vegades) i el CONJUNT sí.** Qui segueixi el número veurà una estabilitat perfecta mentre **cada
+🔑 **I aquí hi ha la part que l'avís no deia: el RECOMPTE amb prou feines es mou i el CONJUNT
+sí.**
+
+> ⚠️ **CORRECCIÓ, i és del mateix dia.** Aquí hi deia «el recompte NO es mou», i ho vaig
+> escriure amb **dues** corregudes. La sessió 1 en va fer **quatre** i el número es mou una
+> vegada: `2 · 1 · 2 · 2`. La frase era certa a la meva mostra i falsa com a afirmació.
+> **Corregida, i el que en surt és pitjor del que jo deia, no millor:** un recompte que
+> aguanta tres de cada quatre vegades **és més convincent com a estabilitat** que un que
+> balla a la vista, i per tant amaga millor el conjunt que hi ha a sota. Un número gairebé
+> estable no és un número estable amb soroll: és una trampa més bona. Qui segueixi el número veurà una estabilitat perfecta mentre **cada
 correguda deixa un cas DIFERENT sense mesurar**. És la família del dia amb una volta més: no és
 un verd que es dona per fet, és **un número estable que amaga un conjunt que balla**. Un
 recompte reproduïble no vol dir una mesura reproduïble.
+
+**I la causa fàcil està descartada, que és el que fa que «depèn de les dades» sigui una
+conclusió i no una hipòtesi:** `_gestos` s'engolia TOTES les excepcions (`except Exception:
+pass`), o sigui que un clic fallit per temps deixava la pantalla en un altre estat i el cas
+sortia com a «no toca res», **indistingible d'un estat que de debò no és assolible**. La sessió 1
+ho va fer parlar (commit 276) i en quatre corregudes **cap gest falla**. L'arnès no és la causa.
 
 **Conseqüència pràctica:** el número de silencis no es pot llegir sol. La línia que els enumera
 —que l'arnès ja imprimeix— **és la dada; el recompte n'és el resum, i el resum aquí menteix per
