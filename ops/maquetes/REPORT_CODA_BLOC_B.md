@@ -1,7 +1,8 @@
 # CODA DEL BLOC B — quatre retocs vistos a pantalla real
 
-> 09/08/2026 · commits **192 → 195** (cap push) · build **desplegat** · `npx eslint src` **0
-> errors** · `node --test` **218 · 0 fallides** · bidireccional **0 desviacions** (49 casos).
+> 09/08/2026 · commits **192 → 196** (cap push) · build **desplegat** · `npx eslint src` **0
+> errors** · `node --test` **218 · 0 fallides** · bidireccional **0 desviacions** · auditoria de
+> computats **0 incompliments**.
 
 ---
 
@@ -103,8 +104,17 @@ de captures que hi entri **escriu al domini**.
 | `npx eslint src` | ✅ **0 errors** |
 | `npm run build` + desplegat a `frontend/dist` | ✅ |
 | `node --test "src/**/*.test.js"` | ✅ **218 · 0 fallides** |
-| `ops/qa/qa_bidireccional.py` (re-executada sencera, 49 casos) | ✅ **0 desviacions** |
+| `ops/qa/qa_bidireccional.py` (re-executada sencera) | ✅ **49 casos mesurats · 0 desviacions** — v. la nota |
 | `ops/qa/qa_auditoria_computats.py` (6 pantalles) | ✅ **0 incompliments** |
 
 **Backend no tocat** → cap suite nova: l'última correguda de tancament segueix valent
 (913 tests · OK).
+
+> ⚠️ **I la re-execució va ensenyar una cosa que val la pena**: dos casos van passar de mesurats
+> a **NO MESURATS**, i no per cap canvi de pell — anaven ancorats al literal **«Pendent»**, i la
+> fase del banc s'havia mogut (v. l'efecte secundari de sobre). **Un selector que depèn d'un
+> ESTAT DE DOMINI deixa de mesurar sense avisar, i el silenci s'assembla massa a un verd.** Els
+> dos casos s'ancoren ara a **qualsevol** de les sis fases del vocabulari (A5) i al `title` del
+> badge (A6), que no es mouen amb la dada. **Verificat**: els dos tornen a mesurar-se i casen —
+> 49 casos mesurats, 0 desviacions. L'únic `⚠️` que queda és el de sempre (la capa de restricció
+> d'A2, estat no assolible amb les dades vives; el bloc A ja el va anotar).

@@ -129,9 +129,14 @@ CASOS = [
     ('A5', 'columna de referència (secundària)', 'NORMA_LLISTA_canonica.html',
      'td.c-refi', [],
      '/models', [], 'td:has-text("FTT-SS26-0001")'),
+    # ⚠️ LA FASE ES MOU. Aquest cas anava ancorat al literal «Pendent» i va deixar de mesurar-se
+    # el dia que el model del banc va avançar de fase: un selector que depèn d'un ESTAT DE DOMINI
+    # deixa de mesurar sense avisar, i el silenci s'assembla massa a un verd. S'ancora a
+    # QUALSEVOL de les sis fases del vocabulari, que és el que la columna sempre pinta.
     ('A5', 'columna de FASE (text pla, sense badge)', 'NORMA_LLISTA_canonica.html',
      'td.c-fase', [],
-     '/models', [], 'td:has-text("Pendent")'),
+     '/models', [],
+     'td:text-matches("^(Pendent|Desenvolupament|Prototip|Joc de talles|Preproducció|Producció)$")'),
     ('A5', 'fila SELECCIONADA («on soc»)', 'NORMA_LLISTA_canonica.html',
      'tr.on td.c-nom', [],
      '/models', [('click', 'input[aria-label="FTT-SS26-0001"]')], 'td:has-text("Pantalo test")'),
@@ -170,9 +175,11 @@ CASOS = [
     ('A6', 'nom de la identitat (22/500)', 'PROPOSTA_menu_pantalla_v3.html',
      '.ident .name', [],
      '/models/1319', [], 'h1'),
+    # Mateix motiu que a A5: el badge s'ancora pel seu `title` («Fase»), que no es mou amb la
+    # dada. Pel camí, això també desfà l'ambigüitat amb el «Pendent» del bloc «On sóc».
     ('A6', 'badge de FASE (neutre, §8c)', 'PROPOSTA_menu_pantalla_v3.html',
      '.b.fase', [],
-     '/models/1319', [], 'span:text-is("Pendent")'),
+     '/models/1319', [], 'span[title="Fase"]'),
     ('A6', 'acció secundària («Accions ▾»)', 'PROPOSTA_menu_pantalla_v3.html',
      '.ident .right .btn', [],
      '/models/1319', [], 'button:has-text("Accions")'),
