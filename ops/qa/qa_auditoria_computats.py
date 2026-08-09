@@ -73,9 +73,11 @@ PANTALLES = [
     # —barres d'eines, panells laterals, modals, botons— i el llenç no aporta ni vores del
     # DOM ni text amb `fontSize` computat, perquè és un `<canvas>`: un sol node opac per a
     # l'auditor. O sigui que la mesura d'aquestes rutes és, literalment, la del crom.
-    ('C1 · Editor .ftt', '/models/1319/ftt/758'),
-    ('C2 · Patró (tab del model)', '/models/1319?tab=Patr%C3%B3'),
-    ('C3 · Taller de patró', '/models/1319/patro/taller'),
+    # El 3r element és el SENYAL: el selector que ha d'existir perquè la mesura valgui. V. el
+    # bloc de `senyal` al bucle — les tres pantalles poden muntar-se «a mitges» sense fallar.
+    ('C1 · Editor .ftt', '/models/1319/ftt/758', '[data-ftt-screen="ftt-editor"]'),
+    ('C2 · Patró (tab del model)', '/models/1319?tab=Patr%C3%B3', '[data-ftt-screen="patro-tab"]'),
+    ('C3 · Taller de patró', '/models/1319/patro/taller', '[data-ftt-screen="taller-patro"]'),
     # 🛑 SizeMapSetup NO TÉ RUTA: el seu `export default` no el munta ningú (v. el report). El
     # que SÍ que és viu és el seu `Wizard`, que munta `SizeAuthoringDrawer` des de la Size
     # Library — i s'audita allà, no aquí. Posar-hi una ruta inventada hauria mesurat un 404.
@@ -193,11 +195,28 @@ def main():
         pag.goto(BASE + '/', wait_until='domcontentloaded')
         pag.evaluate("([t]) => { localStorage.setItem('access_token', t);"
                      " localStorage.setItem('fhort.lang','ca') }", [TOKEN])
-        for nom, ruta in PANTALLES:
+        for entrada in PANTALLES:
+            nom, ruta = entrada[0], entrada[1]
+            senyal = entrada[2] if len(entrada) > 2 else None
             pag.goto(BASE + ruta, wait_until='networkidle')
             pag.wait_for_timeout(1800)
-            d = pag.evaluate(JS)
             print(f'\n═══ {nom}  ({ruta}) ═══   [url={pag.url}]')
+            # 🚨 LA QUARTA TAPADORA, APLICADA A LA LLISTA DE RUTES. Una pantalla que no s'ha
+            # muntat no dona incompliments: en dona ZERO, i zero és el que volem veure. Aquí
+            # ha estat REPRODUÏT, no imaginat: `/models/:id/ftt/<id-inexistent>` NO falla —
+            # l'editor es munta en mode consulta— i `?tab=<qualsevol>` cau al tab per defecte
+            # sense dir res. Els dos casos mesuren una pantalla diferent de la que anomenen i
+            # la donen per conforme.
+            # El `senyal` és opcional a posta (els casos que no en porten es comporten com
+            # sempre), però on hi és, MANA: sense ell no es mesura, es CRIDA. I és un
+            # `data-ftt-screen`, no un text ni un `nth`: un literal deixa de casar el dia que
+            # es tradueix, i una posició, el dia que algú posa un element al davant.
+            if senyal and pag.locator(senyal).count() == 0:
+                incompliments += 1
+                print(f'    🛑 SENYAL ABSENT ({senyal}) — la pantalla NO s\'ha muntat.')
+                print('       No es mesura: un verd aquí voldria dir «no hi havia res a mirar».')
+                continue
+            d = pag.evaluate(JS)
             print('  VORES')
             for color, info in sorted(d['vores'].items(), key=lambda kv: -kv[1]['n']):
                 if color in VORES_OK:

@@ -1091,8 +1091,9 @@ export default function TallerPatro() {
 
   const tornar = () => navigate(`/models/${modelId}?tab=Patró`)
 
+  // ÀNCORA DE MESURA (§8d) — v. el motiu llarg a `components/pattern/PatternTab.jsx`.
   return (
-    <div style={{
+    <div data-ftt-screen="taller-patro" style={{
       width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column',
       background: 'var(--bg-page)', overflow: 'hidden',
     }}>

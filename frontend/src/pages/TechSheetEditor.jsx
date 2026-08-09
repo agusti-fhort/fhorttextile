@@ -6822,8 +6822,14 @@ export default function TechSheetEditor() {
             Aquesta columna passa a ser el que el llenç necessita a mà: QUÈ es pot posar al
             document. Mateixes persianes que el Taller de Patró (Contenidor compartit, capçalera
             fosca), perquè les dues pantalles s'assemblin de veritat i no per casualitat. */}
+        {/* ÀNCORA DE MESURA (§8d) — i aquí el senyal ha d'anar A L'ASIDE, no a l'arrel de
+            l'editor. Un `fitxerId` que no existeix NO dona error: l'editor es munta igualment
+            en MODE CONSULTA, amb 33k de DOM i sense aquest panell. Una auditoria ancorada a
+            l'arrel hi entraria, mesuraria la closca de només-lectura i la reportaria com
+            «editor .ftt: conforme». El panell hi és quan el document és real i editable, que
+            és exactament la pantalla que aquest cas diu que mesura. */}
         {locked && (
-          <aside style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: `1px solid ${COL.border}`, background: 'var(--bg-page)' }}>
+          <aside data-ftt-screen="ftt-editor" style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: `1px solid ${COL.border}`, background: 'var(--bg-page)' }}>
           {/* CONTENIDOR DE POMS. Calca la fila del Taller de Patró (ModelPomList): semàfor
               de borderLeft, codi de client en mono manant, nom canònic EN al costat, badge
               amb el nom_fitxa. És la primera persiana de la biblioteca i ve

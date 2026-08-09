@@ -217,8 +217,14 @@ export default function PatternTab({ modelId }) {
     </p>
   }
 
+  // ÀNCORA DE MESURA (§8d). Un tab del ModelSheet no es distingeix d'un altre des de fora: amb
+  // `?tab=` desconegut la pantalla cau al tab per defecte **sense dir res**, i una auditoria que
+  // hi entri mesura una altra pantalla i la reporta amb aquest nom. Verificat: `?tab=Patró` i
+  // `?tab=Inventat` donaven el MATEIX comptatge d'`aside`/`header`, o sigui que no hi havia cap
+  // senyal estructural per separar-los. Aquest atribut és el senyal, i no és text —un literal
+  // traduïble deixaria de casar el dia que es tradueixi— ni una posició, que es pot moure.
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+    <div data-ftt-screen="patro-tab" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {error && <ErrorParse error={error} onTanca={() => setError(null)} />}
 
       {!actual ? (
