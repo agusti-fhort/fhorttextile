@@ -134,7 +134,27 @@ class Command(BaseCommand):
                         f'SEMBRA_2a línia {i} ({cc}): pom_canonic {canon!r} no és al '
                         'catàleg canònic → FORA')
                     continue
+                # ⚠️ **`descripcions_cobertes` NO ÉS UN NOM: ÉS UNA LLISTA** (QA Agus 09/08).
+                #
+                # La columna del full diu quines redaccions del document cobreix aquest codi, i
+                # en porta diverses separades per `;`. Anava sencera a `description_en`, que és
+                # el camp de PRESENTACIÓ: és el que `nomenclatura.alies_per_pom` serveix com a
+                # `client_name_en` i el que el carril de mesures pinta com a nom de la fila. Per
+                # això la fila del POM «A» del model 1320 es llegia
+                #   «1/2 chest width (armpit to armpit); 1/2 front chest width (armpit to armpit)»
+                # —totes les possibilitats del matcher concatenades— en comptes del nom de la
+                # cota. Sis àlies de Brownie van quedar així.
+                #
+                # Una llista de candidats no es pot triar per la persona ni per nosaltres: la
+                # que mana quan no hi ha UNA redacció del client és la CANÒNICA, i deixar el
+                # camp buit és exactament el que la fa manar (la presentació ja fa el fallback).
+                # Quan la columna porta una sola redacció, aquella SÍ que és el nom del client.
                 desc = r['descripcions_cobertes'].strip()
+                if ';' in desc:
+                    excepcions.append(f'SEMBRA_2a línia {i} ({cc}): `descripcions_cobertes` porta '
+                                      f'{desc.count(";") + 1} redaccions → àlies SENSE '
+                                      'description_en (mana el nom canònic)')
+                    desc = ''
                 if len(desc) > 200:
                     excepcions.append(f'SEMBRA_2a línia {i} ({cc}): descripció de {len(desc)} '
                                       'caràcters (max 200) → FORA')
