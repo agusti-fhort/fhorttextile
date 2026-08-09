@@ -1511,18 +1511,25 @@ meva a mitges**:
 
 ## 🚩 Punts oberts
 
-1. **~16 directoris `root:root` sota `media/`** (`brg/`, `test/`, `los/document_templates/2026/07/`).
-   El `chown -R` el bloqueja el classificador de permisos d'aquesta sessió; els crítics
-   (`fhort/model_fitxers/2026/08`, `los/`, `los/document_templates/`) sí que estan fets. Per a Agus:
-   `chown -R www-data:www-data /var/www/ftt-staging/backend/media`.
-2. **El daurat ple de l'acció primària** (`COL.gold` a l'editor, «Buscar propostes» al Taller)
-   contra el §5 «un blau per pantalla». La sessió 1 ja el va marcar com a pregunta al 254; **no
-   el toco unilateralment**: és la mateixa decisió i l'ha de prendre Agus una sola vegada.
-3. **Ni l'editor .ftt ni el Taller de patró munten `PageMenu`** — les dues rutes són fora del
-   Shell a posta («és una eina a pantalla completa, el canvas mana»). Si la §8b els ha d'arribar,
-   és decisió de navegació, no de tokens. ⚠️ I si algun dia hi munten `PageMenu`, el portal se
-   n'anirà a un node **desenganxat** i la barra no es pintarà EN SILENCI: `FORAT_CROM` és un node
-   de mòdul i existeix igualment, o sigui que el fallback `FORAT_CROM ? … : barra` no salta.
+1. ~~**~16 directoris `root:root` sota `media/`**~~ — ✅ **TANCAT D'ARREL, i millor que com jo
+   ho demanava.** Jo deixava aquí un `chown -R` per a Agus, o sigui **una feina manual que
+   tornaria a caldre cada mes** (el subdirectori del mes és nou cada mes). La coda C1
+   (`86cb640c`) va anar a la causa: `chgrp -R` + **setgid** a `media/` perquè el grup s'hereti
+   sol, més `FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o2775` a `settings.py`. Verificat ara:
+   **0 directoris sense grup `www-data` i 0 sense setgid.** 🚩 Queda que **PROD no té la meitat
+   de sistema de fitxers** — no viatja amb el codi.
+2. ~~**El daurat ple de l'acció primària**~~ — ✅ **RATIFICAT PER AGUS** el mateix dia (commit
+   C2 `57dc3683`), i tal com les tres sessions demanàvem: **una sola vegada per a tot el
+   producte**. Primària → `--accio` · portes i secundàries → `--panel` + `--gold-border` · i el
+   que **no és acció** (selecció, píndoles, toggles d'eina) es queda daurat. Els toggles de la
+   cinta de l'editor i «Buscar propostes» cauen a la darrera categoria i **es queden**.
+3. ⚠️ **SUPERAT EN PART PEL MEU PROPI TRAM DEL MATEIX DIA** (v. «Fusió de capçaleres»):
+   **l'editor .ftt ja és DINS del Shell i munta `PageMenu`**. Aquí hi deia que les dues rutes
+   eren fora «a posta», i era la lectura correcta del dia abans i la falsa vuit hores després.
+   **El Taller de patró segueix fora i sense menú**, i el parany segueix viu NOMÉS per a ell:
+   si algun dia hi munta `PageMenu`, el portal anirà a un node **desenganxat** i la barra no es
+   pintarà EN SILENCI — `FORAT_CROM` és un node de mòdul i existeix igualment, o sigui que el
+   fallback `FORAT_CROM ? … : barra` no salta.
 4. **El `catch` de les plantilles** segueix mut (crea en blanc en comptes d'oferir la plantilla).
 5. **No s'hi ha construït res.** El Motor de Patrons v2 és disseny sense implementació
    (`MOTOR_DE_PATRONS_V2.md`, `PLA_IMPLEMENTACIO_MOTOR_PATRONS.md`, cap dels dos commitats).
