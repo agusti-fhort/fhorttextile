@@ -1130,11 +1130,25 @@ superfície i 8 de tinta; un `replace` global n'hauria fet un sol munt.
 
 ## VERIFICACIÓ MESURADA · `qa_auditoria_computats.py`, tres rutes noves
 
+Tres corregudes: abans del tram · després de la meva passada · després de la coda de la
+sessió 1 (commit 261, les tres vores de `ui/*`).
+
 | | Ruta | `--border` | `--gray-l` | Mides |
 |---|---|---|---|---|
-| C1 | `/models/1319/ftt/758` | 14 → **14** ⚠️ | 0 → 4 ⚠️ | 7 · 0 per sobre |
-| C2 | `/models/1319?tab=Patró` | 4 → **0** ✅ | 12 ⚠️ | 15 · 0 per sobre |
-| C3 | `/models/1319/patro/taller` | 32 → **6** ⚠️ | 4 ⚠️ | 9 · 0 per sobre |
+| C1 | `/models/1319/ftt/758` | 14 → 14 → **0** ✅ | 0 → 4 → **0** ✅ | 7 · 0 per sobre |
+| C2 | `/models/1319?tab=Patró` | 4 → 0 → **0** ✅ | 12 → **0** ✅ | 15 · 0 per sobre |
+| C3 | `/models/1319/patro/taller` | 32 → 6 → **0** ✅ | 4 → **0** ✅ | 9 · 0 per sobre |
+
+🟢 **TANCAT: 0 incompliments a l'auditoria SENCERA** (les 17 pantalles de la llista, no només
+les tres meves). Les úniques vores que queden a C1·C2·C3 són `--line`, `--gold`, `--gold-border`,
+`--err` i transparent.
+
+🔑 **I la peça de mètode d'aquest tancament: el zero no me l'he pogut donar jo.** Les meves tres
+rutes van quedar-se a mig conformar durant una hora perquè el que faltava era de `ui/*`, i el
+camí no va ser arreglar-ho «de passada» —hauria propagat el meu criteri a 24 fitxers d'una altra
+sessió— sinó **mesurar-ho, dir de qui era amb fitxer i línia, i esperar**. Amb dues sessions
+sobre el mateix disc, la propietat de fitxers no és burocràcia: és el que fa que un verd
+signifiqui alguna cosa.
 
 Les tres hi entren **tot i tenir llenç, i a posta**: un `<canvas>` és un sol node opac per a
 l'auditor —ni vores del DOM ni `fontSize` computat—, o sigui que mesurar aquestes rutes és,
@@ -1150,11 +1164,13 @@ Sense la variable es comporta com sempre.
 missatge amb la mesura; s'escriu aquí perquè **el zero que falta tingui amo i no sembli feina
 meva a mitges**:
 
-| Fitxer | Línia | Token | On es veu |
-|---|---|---|---|
-| `ui/Contenidor.jsx` | 36, 44 | `--border` | 6 vores a C3, 14 a C1 (capçalera de secció col·lapsable) |
-| `ui/FileDropCard.jsx` | 78 | `--gray-l` | 12 a C2, 4 a C1/C3 («Fitxer DXF obligatori») |
-| `ui/TranslatableField.jsx` | 51 | `--gray-l` | fora de les meves rutes; mateix token |
+| Fitxer | Línia | Token | On es veia | |
+|---|---|---|---|---|
+| `ui/Contenidor.jsx` | 36, 44 | `--border` | 6 vores a C3, 14 a C1 (capçalera de secció col·lapsable) | ✅ 261 |
+| `ui/FileDropCard.jsx` | 78 | `--gray-l` | 12 a C2, 4 a C1/C3 («Fitxer DXF obligatori») | ✅ 261 |
+| `ui/TranslatableField.jsx` | 51 | `--gray-l` | fora de les meves rutes; mateix token | ✅ 261 |
+
+**Tancat per la sessió 1 al commit 261**, ~40 minuts després d'enviar-li la mesura.
 
 ## 🚩 Punts oberts
 
