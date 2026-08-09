@@ -118,3 +118,64 @@ de captures que hi entri **escriu al domini**.
 > badge (A6), que no es mouen amb la dada. **Verificat**: els dos tornen a mesurar-se i casen —
 > 49 casos mesurats, 0 desviacions. L'únic `⚠️` que queda és el de sempre (la capa de restricció
 > d'A2, estat no assolible amb les dades vives; el bloc A ja el va anotar).
+
+
+---
+
+# APÈNDIX · TANCAMENT DEL TRAM 0
+
+## Restauració del banc (model 1319 · `FTT-SS26-0001`) — **feta a mitges, i pel circuit**
+
+| Gest | Circuit | Resultat |
+|---|---|---|
+| **Fase → `Pending`** | `POST /models/1319/regress/` (l'endpoint de retrocés: només toca `fase_actual` i deixa un `GateEvent kind=regress` amb la nota del motiu) | ✅ **`Dev` → `Pending`** |
+| **Retirar les tasques 358 i 359** | `DELETE /model-task-items/{id}/` | 🛑 **EL SISTEMA HI DIU QUE NO**, i ho diu bé |
+
+El `DELETE` respon **409** amb aquest text, que és una regla de domini i no una avaria:
+
+> «Només es poden esborrar tasques pendents (`Pending`). Una tasca iniciada, pausada o feta
+> **conserva la seva història** i no s'esborra.»
+
+I la màquina d'estats tampoc no ofereix cap sortida neta: des de `Paused` l'única transició legal
+és `InProgress`, i d'allà `Done`. **Marcar-les `Done` diria que «Definició POM» i «Mesurar prenda»
+estan FETES al banc** — una mentida al llibre, i pitjor que deixar-les pausades. Amb «no SQL a mà»
+com a condició, **el circuit s'ha acabat aquí**.
+
+**Estat final verificat:**
+
+```
+fase: Pending  ·  estat: Nou
+base: L  ·  run: XS·S·M·L·XL·XXL·3XL  ·  sistema: 30
+peça: 19  ·  joc: cap
+tasques: 358 pom Paused (1 min) · 359 size_check Paused (0 min)  →  CAP RELLOTGE CORRENT
+```
+
+**La causa, per a tota QA futura:** l'adreça `?tab=Mesures&mode=entry` **no és una vista, és un
+gest**. El codi ja ho declara (`PARAMS_DE_TREBALL = ['mode', 'task_id', 'fitting_session']`): els
+tres «diuen *entra a treballar*, no *mira aquesta pantalla*». **Un arnès de captures que hi entri
+escriu al domini.** Si cal fotografiar aquelles superfícies, s'ha de sembrar un model de sacrifici,
+no fer-ho sobre el banc.
+
+## «＋ Afegir POM» — 🛑 **ATURADA, per la porta que el mateix brief deixa oberta**
+
+El brief demanava «la via mínima que el motor admeti… si triar-ne una és decisió d'abast, ATURA i
+descriu-les». **N'hi ha tres, i triar canvia l'abast.** La diagnosi sencera —amb els cinc fets que
+manen i el preu de cada via— és a **`docs/diagnosis/DIAGNOSI_AFEGIR_POM.md`**. El resum:
+
+El motiu que el bloc A va escriure al botó **era mitja veritat**. Hi ha **dues** parets, no una:
+`rule_set` és `read_only` (una línia) **i `talla_base` és una FK NOT NULL** — que és la de debò,
+perquè demana **una dada que ningú té i que el motor no llegeix mai** (`grading_utils.py:72`:
+«mer metadata del seed»). I **46 dels 47 jocs de `fhort` no tenen cap regla**, o sigui que no hi ha
+ni una regla germana d'on copiar-la.
+
+| Via | Backend | Obre el botó a | Preu |
+|---|---|---|---|
+| **A** · exigir `talla_base` al client | 1 línia, cap migració | 40 de 47 jocs | pregunta a la pantalla **una talla base que la maqueta v4 no té i el motor ignora** |
+| **B** · derivar-la al backend | 1 línia, cap migració | 40 de 47 | **no hi ha res d'on derivar-la** en un joc buit |
+| **C** · FK **nullable** (CAT2.1 pas (b), versió mínima) | **migració d'una columna** + guard de `None` | **47 de 47** | hi ha migració, i el brief deia que no n'hauria de caldre |
+
+I una quarta, que no és tècnica: **amb 46 jocs buits, potser el botó no ha d'obrir-se ara** sinó
+amb la sembra del corpus.
+
+**El que sí que es pot fer avui sense decidir res**: corregir el motiu escrit al botó, que avui
+amaga la paret que de debò mana. Un gest, si el vols.
