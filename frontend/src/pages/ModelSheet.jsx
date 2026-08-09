@@ -128,6 +128,28 @@ const btnSecondary = {
  * servir la maqueta v8.1, no un token del `index.css`), i inventar-lo aquí crearia un token
  * fantasma que ningú manté.
  */
+// ── EL STEPPER DE LES QUATRE PORTES DE MESURES (§6 · Agus 09/08) ──────────────────────────
+// Les quatre eren idèntiques i no deien on ets: amb el POM gravat i la graduació posada, «Editar
+// POM» i «Graduació» segueixen sent feina PER FER a la vista, i «Mesurar prenda» sembla
+// disponible fins que t'hi refusa. Els tres estats de la §6, aplicats a una porta:
+//
+//   FET        `--ok-bg` + vora i tinta `--ok` + ✓. La feina hi és; s'hi torna a entrar per
+//              CANVIAR-LA, no per fer-la.
+//   DISPONIBLE la porta de sempre (§5.3: blanc, vora de la casa, tinta principal).
+//   BLOQUEJAT  tènue **i amb el motiu escrit** al `title` i al costat. Un botó apagat i mut és
+//              una avaria; el que no es pot fer encara ha de dir per què (és la mateixa llei que
+//              el subespai bloquejat del Resum).
+const btnPas = (estat, deshabilitat = false) => ({
+  ...btnSecondary,
+  ...(estat === 'fet'
+    ? { background: 'var(--ok-bg)', borderColor: 'var(--ok)', color: 'var(--ok)', fontWeight: 600 }
+    : null),
+  ...(estat === 'blocat' || deshabilitat
+    ? { background: 'var(--bg-page)', borderColor: 'var(--line)', color: 'var(--text-faint)',
+        cursor: 'default' }
+    : { cursor: 'pointer' }),
+})
+
 const btnAccio = (deshabilitat = false) => ({
   ...btnSecondary,
   // §5.4 — EL GHOST DAURAT ES JUBILA COM A BOTÓ: la tinta daurada sobre blanc arrossegava el
@@ -719,6 +741,20 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // (segellada/producció → es perden dades; o substitució simple), pas 2 universal de confirmació. Sobre
   // segellada s'envia allow_reopen_sealed (deixa un watchpoint de traça).
   const [propagating, setPropagating] = useState(false)
+  // L'ESTAT DEL CIRCUIT DE MESURES, per pintar el stepper de les quatre portes (§6). Ve del
+  // MATEIX endpoint que Propagar ja consultava (`grading-status`): no se n'estrena cap, perquè
+  // dos endpoints per a la mateixa pregunta acabarien donant dues respostes.
+  const [estatPas, setEstatPas] = useState(null)
+  useEffect(() => {
+    if (activeTab !== 'Mesures' || !id) return undefined
+    let viu = true
+    models.gradingStatus(parseInt(id))
+      .then(r => { if (viu) setEstatPas(r.data || null) })
+      .catch(() => { if (viu) setEstatPas(null) })
+    return () => { viu = false }
+    // `editing` hi entra a posta: en sortir d'una superfície de treball l'estat pot haver
+    // canviat (gravar POM genera la taula) i el stepper ha de dir la veritat NOVA, no la vella.
+  }, [activeTab, id, editing])
   const [propStatus, setPropStatus] = useState(null)   // {te_dades_propagades, segellada, version_number}
   const [propStep, setPropStep] = useState(0)           // 0 cap modal · 1 avís adaptat · 2 confirmació final
   const [propagarEnCua, setPropagarEnCua] = useState(false)
@@ -1131,8 +1167,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                   /* ① EDITAR POM — Definició de POMs i talla base. «Importar taula» hi viu a
                      dins com a via d'entrada (`MeasuresEntryPanel`), no aquí. */
                   <button type="button" disabled={openingTask}
-                    onClick={() => enterEdit('Mesures', 'pom')} style={btnAccio(openingTask)}>
-                    <i className="ti ti-ruler-2" style={{ fontSize: 14 }} />
+                    onClick={() => enterEdit('Mesures', 'pom')}
+                    style={btnPas(estatPas?.te_mesures ? 'fet' : 'ara', openingTask)}>
+                    <i className={`ti ti-${estatPas?.te_mesures ? 'check' : 'ruler-2'}`}
+                       style={{ fontSize: 14 }} />
                     {t('model_sheet.edit_pom')}
                   </button>
                 )}
@@ -1144,8 +1182,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                     Quan la pantalla nova de P0.5d existeixi, el que canvia és on porta —no com
                     s'hi entra. */}
                 <button type="button" disabled={openingTask}
-                  onClick={() => enterEdit('Mesures', 'grading')} style={btnAccio(openingTask)}>
-                  <i className="ti ti-chart-arrows-vertical" style={{ fontSize: 14 }} />
+                  onClick={() => enterEdit('Mesures', 'grading')}
+                  style={btnPas(estatPas?.te_regles ? 'fet' : 'ara', openingTask)}>
+                  <i className={`ti ti-${estatPas?.te_regles ? 'check' : 'chart-arrows-vertical'}`}
+                     style={{ fontSize: 14 }} />
                   {t('graduacio.button')}
                 </button>
                 {/* ③ MESURAR PRENDA — NOU. La superfície ja existia (`CheckMeasureEditor` en mode
@@ -1154,11 +1194,25 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                     tasca és `size_check`, i `obreDeDebo` ja el porta a `editing='Mesures'`, que
                     és exactament la presa. Si el model ve amb `?fitting_session=`, la sessió ja
                     resolta mana i la presa s'hi lliga sola (font `fitting`). */}
-                <button type="button" disabled={openingTask}
-                  onClick={() => enterEdit('Mesures', 'size_check')} style={btnAccio(openingTask)}>
+                {/* El gate el mana el backend (`create-piece` exigeix versió activa amb specs).
+                    Aquí NO es reimplementa: es DEMANA a `grading-status` i es diu abans, en
+                    comptes de deixar prémer i contestar amb un error. El motiu va escrit. */}
+                <button type="button"
+                  disabled={openingTask || (estatPas != null && !estatPas.te_taula)}
+                  title={estatPas != null && !estatPas.te_taula
+                    ? t('model_sheet.pas_sense_taula') : undefined}
+                  onClick={() => enterEdit('Mesures', 'size_check')}
+                  style={btnPas(estatPas != null && !estatPas.te_taula ? 'blocat' : 'ara',
+                                openingTask)}>
                   <i className="ti ti-ruler-measure" style={{ fontSize: 14 }} />
                   {t('presa.titol')}
                 </button>
+                {estatPas != null && !estatPas.te_taula && (
+                  <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+                                 alignSelf: 'center' }}>
+                    {t('model_sheet.pas_sense_taula')}
+                  </span>
+                )}
                 {/* ④ PROPAGAR a grading (origen): inicia fase nova sobre llenç net i porta a
                     Escalat. Mira abans i adverteix (2 passos) si ja hi ha propagació.
                     NO OBRE TASCA PRÒPIA, i és deliberat: v. la nota de `onPropagarClick`. */}

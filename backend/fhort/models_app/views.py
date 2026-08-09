@@ -2313,7 +2313,18 @@ def gravar_pom_view(request, model_id):
                 model=model, is_active=True, base_value_cm__isnull=False,
             ).exists()
 
-            for m, value, capa, instancia in prepared:
+            # ⚠️ **L'ORDRE DE LES FILES ÉS DADA DE L'USUARI, I AQUESTA PORTA EL LLENÇAVA**
+            # (QA Agus 09/08). El carril té drag&drop i la tècnica ordena les cotes per
+            # conveniència de mesura —l'ordre en què les prendrà amb la peça a la mà—, però
+            # `gravar-pom` no escrivia `ordre` enlloc: totes les files del 1320 tenien `ordre=0`,
+            # el default del camp. L'endpoint de reordenar (`base-measurements/reorder/`) sí que
+            # el desa, però només el crida la superfície de PRESA; el carril de gènesi desa per
+            # aquí, i per aquí l'ordre no existia.
+            #
+            # `measurements` ja arriba en l'ordre de la taula (és el que el client pinta), o sigui
+            # que la posició a la llista ÉS l'ordre: no cal cap camp nou al payload ni cap gest
+            # més. `enumerate` sobre `prepared`, que conserva l'ordre d'entrada.
+            for pos, (m, value, capa, instancia) in enumerate(prepared):
                 try:
                     pom = POMMaster.objects.get(id=m.get('pom_id'))
                 except POMMaster.DoesNotExist:
@@ -2344,6 +2355,7 @@ def gravar_pom_view(request, model_id):
                 bm.base_value_cm = value
                 bm.notes = m.get('notes', '') or ''
                 bm.nom_fitxa = m.get('nom_fitxa', '') or ''
+                bm.ordre = pos                      # v. la nota del `for`: la posició ÉS l'ordre
                 bm.is_active = True
                 bm._changed_by = request.user
                 bm._motiu = 'gravar_pom'
@@ -2422,6 +2434,35 @@ def gravar_pom_view(request, model_id):
     except ValueError as e:
         return Response({'error': str(e)}, status=400)
 
+    # ⚠️ **LA TAULA DE TALLES NO LA GENERAVA NINGÚ DEL FLUX** (QA Agus 09/08, bloquejant).
+    #
+    # «Mesurar prenda» refusa amb «el model no té cap GradingVersion activa» un model que té run,
+    # talla base, mesures i graduació: tot el que cal per graduar-lo. Qui la generava era
+    # `generar-grading`, i al front l'ÚNIC que el crida és el botó **Propagar** — o sigui que la
+    # taula existia només si algú premia un botó que no diu que serveixi per a això. Al wizard
+    # vell el recorregut hi passava per damunt; el Resum partit no hi passa, i el pas va quedar
+    # orfe. No és que el gate estigui mal posat: és que ningú no complia la seva condició.
+    #
+    # El moment que toca és AQUEST i no el de desar talles ni el de desar graduació: graduar
+    # necessita les TRES coses alhora —regles, run i mesures base—, i les mesures base neixen
+    # aquí. Als altres dos moments el model encara no en té cap i generar seria generar el buit.
+    # És idempotent (`generate_graded_specs` reutilitza la versió vigent, no fa bump: propagar
+    # segueix sent l'acte conscient que crea la v+1) i **no pot tombar el desat**: la gènesi POM
+    # ja ha quedat persistida i commitada més amunt; si graduar peta, es diu al payload i s'entra
+    # a Mesures pel camí de sempre, no es perd la feina de la tècnica.
+    taula = None
+    try:
+        if _te_regles(model) and model.size_run_model and model.base_size_label:
+            from fhort.pom.services import generate_graded_specs, get_or_create_size_fitting
+            sf = get_or_create_size_fitting(model, actor_profile_id=getattr(profile, 'id', None))
+            taula = {'size_fitting': sf.id, 'specs': generate_graded_specs(sf.id)}
+    except Exception as e:                       # noqa: BLE001 — mai ha de tombar el desat
+        import logging
+        logging.getLogger(__name__).warning(
+            'gravar_pom: no s\'ha pogut generar la taula de talles del model %s: %s',
+            model.codi_intern, e)
+        taula = {'error': str(e)}
+
     return Response({
         'created': created,
         'updated': updated,
@@ -2429,6 +2470,8 @@ def gravar_pom_view(request, model_id):
         'rules_saved': rules_saved,
         'reseed': had_base_before,
         'pom_task': pom_task,
+        #: La taula de talles generada en el mateix acte (o el motiu pel qual no s'ha pogut).
+        'taula_talles': taula,
     }, status=200)
 
 
@@ -3519,7 +3562,20 @@ def grading_status_view(request, model_id):
     # mut del 400. És EL MATEIX predicat que el gate dur de `generate_grading_view` (:2354) i que
     # el del motor: un sol `_te_regles`, com mana G6/0b — dos predicats serien dues veritats.
     from fhort.pom.services import _te_regles
+    # STEPPER DE MESURES (§6 · Agus 09/08). Les quatre portes de Mesures es pinten pel seu ESTAT
+    # —fet · disponible · bloquejat amb motiu— i l'estat el sap el backend, no la pantalla. Es
+    # diuen aquí i no en un endpoint nou perquè aquesta ja és LA vista d'estat d'aquest circuit:
+    # dos endpoints per a la mateixa pregunta acabarien donant dues respostes.
+    #   · te_mesures — hi ha alguna mesura base amb valor (el pas «Editar POM» està fet);
+    #   · te_taula   — hi ha versió activa amb specs, que és el que «Mesurar prenda» exigeix i el
+    #                  que el model 1320 no tenia (el gate deia la veritat: no hi era).
+    te_mesures = BaseMeasurement.objects.filter(
+        model=model, is_active=True, base_value_cm__isnull=False).exists()
+    te_taula = bool(gv and gv.is_active and GradedSpec.objects.filter(
+        grading_version=gv, is_active=True).exists())
     return Response({
+        'te_mesures': te_mesures,
+        'te_taula': te_taula,
         'te_dades_propagades': te_dades,
         'segellada': bool(gv and gv.aprovada),
         'version_number': gv.version_number if gv else None,

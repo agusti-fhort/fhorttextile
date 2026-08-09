@@ -976,7 +976,8 @@
     "set_badge": "SET {{n}}/{{total}} · {{codi}}",
     "measures_view_table": "Measurement table",
     "measures_view_repas": "Fitting review",
-    "back_title": "Back to Models"
+    "back_title": "Back to Models",
+    "pas_sense_taula": "Save the POM to generate the size table"
   },
   "model_wizard": {
     "customer": "Customer",

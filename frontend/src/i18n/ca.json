@@ -976,7 +976,8 @@
     "set_badge": "SET {{n}}/{{total}} · {{codi}}",
     "measures_view_table": "Taula de mesures",
     "measures_view_repas": "Repàs de fittings",
-    "back_title": "Tornar a Models"
+    "back_title": "Tornar a Models",
+    "pas_sense_taula": "Cal gravar el POM per generar la taula de talles"
   },
   "model_wizard": {
     "customer": "Client",

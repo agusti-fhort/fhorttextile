@@ -571,10 +571,20 @@ def base_measurements_view(request, model_id):
         from fhort.models_app.models import BaseMeasurement, Model
         from fhort.pom.nomenclatura import alies_per_pom
 
+        # ⚠️ **AQUEST LECTOR LLENÇAVA L'ORDRE DE L'USUARI** (QA Agus 09/08). Ordenava per
+        # `categoria + codi` —alfabètic—, i per tant una taula que la tècnica havia ordenat amb
+        # el drag&drop del carril tornava a sortir per ordre de codi a la següent càrrega. La
+        # feina d'ordenar-la no es perdia «de vegades»: es perdia SEMPRE, i en silenci.
+        #
+        # `ordre` mana, com a la resta de lectors de mesures (`views.py` 860, 1278, 1359, 1590) i
+        # com la docstring de `base_measurements_reorder_view` ja donava per fet quan deia «totes
+        # les taules llegeixen order_by('ordre')» — era cert a tot arreu menys aquí.
+        # Categoria i codi es queden DARRERE, de desempat: amb `ordre` empatat (files nascudes
+        # abans que la porta el desés, totes a 0) la llista segueix sent la d'abans i no balla.
         bms = BaseMeasurement.objects.filter(
             model_id=model_id, is_active=True
         ).select_related('pom', 'pom__pom_global', 'pom__categoria').order_by(
-            'pom__categoria__display_order', 'pom__codi_client'
+            'ordre', 'pom__categoria__display_order', 'pom__codi_client'
         )
 
         # F1 (cota viva) — àlies de client per pom_id, resolt amb UN sol prefetch (mai
