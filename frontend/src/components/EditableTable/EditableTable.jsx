@@ -334,6 +334,20 @@ export default function EditableTable({
     setLocalRows(prev => [...prev, newRow])
     marcaNeix(newRow.id)
     setDirty(true)
+    // CONFIRMAR ÉS PASSAR EL TORN A LA FILA NOVA (Agus, 09/08). El carril de teclat és
+    // confirmar → escriure el valor → ↓ → següent, i entremig no hi ha d'haver cap viatge amb
+    // el ratolí: el focus se'n va al camp de talla base de la fila que acaba de néixer, amb el
+    // que hi hagi seleccionat perquè escriure-hi el substitueixi.
+    //
+    // El `requestAnimationFrame` no és un pedaç de temps: la fila encara no és al DOM quan
+    // aquesta funció acaba —`setLocalRows` és asíncron— i `valRefs` no la té registrada fins
+    // que React l'ha pintada. Enfocar-la abans seria enfocar un element que no existeix.
+    requestAnimationFrame(() => {
+      const el = valRefs.current[newRow.id]
+      if (!el) return
+      el.focus()
+      el.select?.()
+    })
   }
 
   // LA CAPA ES TRIA A LA FILA (v8.1 `select.cell` :56-58 · ordre d'Agus 05/08). Era LECTURA amb
@@ -1921,10 +1935,9 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
   const eixos = m ? resolSufix(dicc, m[2]) : null
   const cerca = eixos ? m[1] : query.trim()
 
-  // Quants n'hi ha de debò i si el sostre n'ha tallat (el backend ho diu des de la QA del 09/08).
-  const [total, setTotal] = useState(0)
-  const [truncat, setTruncat] = useState(false)
-  // El sostre DE CADA SECCIÓ: amb dues poblacions, un total sol no diu quina s'ha tallat.
+  // EL SOSTRE, PER SECCIÓ. Hi havia també un `total`/`truncat` globals, i amb dues poblacions
+  // sumaven dues coses que ningú no suma: qui mira el catàleg de la casa vol saber què li queda
+  // ALLÀ. Un sol comptador, al rètol de cada secció (Agus, 09/08).
   const [seccions, setSeccions] = useState(null)
   // ⚠️ **EL CATÀLEG NOMÉS EXISTIA PER A QUI JA EN SABIA EL NOM** (QA Agus 09/08, segona volta).
   // Amb el camp buit no es cercava res, i qui obre el carril per veure QUÈ hi ha —el cas de qui
@@ -1942,7 +1955,7 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
     // tornava res i el POM semblava no existir. Amb un sol caràcter el backend cerca només per
     // CODI i posa l'exacte al davant, o sigui que la llista segueix sent curta i útil.
     if (cerca.length < 1 && !focusat) {
-      setResults([]); setObert(false); setTotal(0); setTruncat(false); setSeccions(null); return
+      setResults([]); setObert(false); setSeccions(null); return
     }
     const timer = setTimeout(() => {
       // El sostre el mana el client i el backend el respecta (abans n'hi havia dos: aquest,
@@ -1955,22 +1968,32 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
       })
         .then(r => {
           setResults(r.data?.results || [])
-          setTotal(r.data?.count ?? (r.data?.results || []).length)
-          setTruncat(!!r.data?.truncat)
           setSeccions(r.data?.seccions || null)
           setSel(0); setObert(true); setCreaSel(false)
         })
-        .catch(() => {
-          setResults([]); setObert(false); setTotal(0); setTruncat(false); setSeccions(null)
-        })
+        .catch(() => { setResults([]); setObert(false); setSeccions(null) })
     }, 300)
     return () => clearTimeout(timer)
   }, [cerca, modelId, focusat])
 
   const tria = (p) => {
     if (!p) return
+    // ⚠️ **CONFIRMAR NO POT TORNAR A OBRIR EL CATÀLEG.** En buidar el camp, l'efecte de cerca
+    // el tornava a trobar buit amb el focus encara posat i reobria el desplegable amb els 142 a
+    // sobre de la fila que s'acabava de crear — el contrari del que demana el gest. «Camp buit =
+    // catàleg sencer» val quan l'usuari HI ENTRA, no quan n'acaba de sortir confirmant.
+    //
+    // Per això `focusat` es baixa AQUÍ i el camp es desenfoca de debò: el `blur` sol no bastaria
+    // —el `onMouseDown` amb `preventDefault` que dispara aquesta funció manté el focus a
+    // l'input a posta, per no perdre el carril— i sense baixar la bandera l'efecte tornaria a
+    // córrer igualment.
+    setFocusat(false)
+    setQuery(''); setResults([]); setObert(false); setSeccions(null)
+    inputRef.current?.blur()
+    // L'ORDRE IMPORTA: primer es tanca el cercador, després neix la fila. `onAdd` se'n porta el
+    // focus al camp de valor de la fila nova, i fer-ho abans del `blur` faria que el `blur` l'hi
+    // prengués tot seguit.
     onAdd(p, eixos || {})
-    setQuery(''); setResults([]); setObert(false)
   }
 
   const perSeccio = SECCIONS
@@ -2070,7 +2093,7 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
       </span>
 
       {obert && pos && createPortal(
-        <div style={{
+        <div data-cercador-llista="1" style={{
           position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, zIndex: 1200,
           background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 7,
           boxShadow: '0 -8px 24px rgba(0,0,0,0.12)', minWidth: 410,
@@ -2139,16 +2162,11 @@ function CercadorPOM({ dicc, modelId, onAdd, registerFinder, onSurt, onCrearProp
               })}
             </div>
           ))}
-          {/* EL SOSTRE ES DIU. Una llista tallada en silenci fa creure que el POM no existeix, i
-              d'aquí surt un duplicat creat a mà (QA Agus 09/08). Si n'hi ha més dels que caben,
-              es diu quants i que cal afinar la cerca — mai es deixa endevinar. */}
-          {truncat && (
-            <div style={{ padding: '6px 12px', fontSize: 'var(--fs-caption)',
-                          color: 'var(--text-muted)', borderTop: '1px solid var(--border)',
-                          fontStyle: 'italic' }}>
-              {t('editable_table.cerca_truncada', { mostrats: results.length, total })}
-            </div>
-          )}
+          {/* EL SOSTRE ES DIU, PERÒ UN SOL COP. Amb dues poblacions el comptador global («10 de
+              27») deia la suma de dues coses que ningú no suma: qui mira el catàleg de la casa
+              vol saber què li queda ALLÀ, i això ja ho diu el rètol de la seva secció («5/16»).
+              Dos comptadors per a la mateixa pregunta obliguen a triar quin val (Agus, 09/08).
+              La clau i18n `cerca_truncada` es queda: la fa servir el cas sense seccions. */}
           {results.length === 0 && (
             <div style={{ padding: '8px 12px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
               {t('editable_table.no_pom_found', { query: cerca })}

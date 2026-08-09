@@ -38,12 +38,14 @@ def comprova(nom, cond, detall=''):
 
 
 def desplegable(pag):
-    """El text del portal obert (el desplegable va per `position:fixed`, fora de la taula)."""
-    return pag.evaluate("""() => {
-        const c = [...document.body.querySelectorAll('div')]
-          .filter(d => d.style && d.style.position === 'fixed' && d.innerText.length > 3)
-        return c.length ? c[c.length - 1].innerText : ''
-    }""")
+    """El text del desplegable, o '' si és tancat.
+
+    ⚠️ Anava a buscar «l'últim div `position:fixed` amb text», i amb el desplegable TANCAT això
+    cau damunt del rellotge de la tasca (que també és fix): el detector deia «obert» sempre i el
+    cicle de confirmació donava un fals vermell. Ara la llista es marca a l'origen
+    (`data-cercador-llista`) i aquí es pregunta per ella, no per la seva forma."""
+    el = pag.query_selector('[data-cercador-llista]')
+    return el.inner_text() if el else ''
 
 
 def main():
@@ -175,6 +177,47 @@ def main():
             primera = ''
         comprova('«F» → la fila F canònica encapçala la secció de la casa',
                  'Centre front length from HPS' in primera, primera[:80])
+
+        # ── EL CICLE DE CONFIRMACIÓ · TRES POMs SEGUITS ──────────────────────────────────
+        #
+        # ⚠️ Aquest tram existeix per una REGRESSIÓ que va entrar amb «camp buit = catàleg
+        # sencer»: en confirmar, el camp es buida, i com que el focus hi seguia posat l'efecte
+        # de cerca el tornava a trobar buit i **reobria el desplegable amb els 142 a sobre de la
+        # fila que s'acabava de crear**. El gest correcte és el contrari: confirmar tanca, buida,
+        # desenfoca i passa el torn al camp de valor de la fila nova.
+        #
+        # Es fan TRES seguits perquè el defecte es veu en la cadena, no en un sol tret: amb el
+        # desplegable reobrint-se, el segon POM ja no es pot ni buscar.
+        camp.nth(idx).press('Escape')
+        pag.wait_for_timeout(500)
+        files_abans = pag.locator('tr[data-fila]').count()
+        reobertures = []
+        for n, (q, _casa, _canonic) in enumerate((
+            ('EB', 'EB', 'Neck binding width'),
+            ('EKK', 'EKK', 'Back neckline width'),
+            ('CR', 'CR', None),
+        ), start=1):
+            camp.nth(idx).click()
+            camp.nth(idx).fill(q)
+            pag.wait_for_timeout(1500)
+            pag.keyboard.press('Enter')                 # confirma el primer resultat
+            pag.wait_for_timeout(1200)
+            obert_despres = len(desplegable(pag)) > 40
+            if obert_despres:
+                reobertures.append(f'{n}r ({q})')
+            # El focus ha d'haver saltat al camp de valor de la fila nova (el carril).
+            al_carril = pag.evaluate(
+                "() => !!document.activeElement?.matches?.('input[data-carril]')")
+            comprova(f'POM {n} («{q}») → el focus va al camp de valor de la fila nova', al_carril)
+            pag.keyboard.type('12')                     # escriure el valor, sense tocar el ratolí
+            pag.wait_for_timeout(400)
+
+        comprova('el desplegable NO es reobre sol després de confirmar',
+                 not reobertures, f'reobert després de: {reobertures}')
+        files_despres = pag.locator('tr[data-fila]').count()
+        comprova('els 3 POMs han entrat com a 3 files noves',
+                 files_despres == files_abans + 3, f'{files_abans} → {files_despres}')
+        pag.screenshot(path=str(OUT / 'cerca_cicle_3poms.png'), full_page=True)
 
         # ⚠️ El carril ESCRIU EN OBRIR-SE (`open-task` salta només d'entrar-hi): el que s'ha de
         # comprovar no és que no n'hi hagi cap —n'hi haurà— sinó que TOTES han quedat retingudes
