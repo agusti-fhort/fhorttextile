@@ -46,11 +46,11 @@ export default function TranslatableField({
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-        <label style={labelS}>{label} <span style={{ color: 'var(--gray)' }}>· EN</span></label>
+        <label style={labelS}>{label} <span style={{ color: 'var(--text-soft)' }}>· EN</span></label>
         <button type="button" onClick={() => setOpen(o => !o)} style={{
-          background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
+          background: 'none', border: '1px solid var(--line)', borderRadius: 'var(--r-ctrl)', cursor: 'pointer',
           padding: '3px 8px', fontSize: 'var(--fs-label)', fontFamily: MONO,
-          color: filled ? 'var(--gold)' : 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4,
+          color: filled ? 'var(--gold)' : 'var(--text-soft)', display: 'inline-flex', alignItems: 'center', gap: 4,
         }}>
           <i className="ti ti-language" style={{ fontSize: 13 }} />
           {t('i18n_field.languages')}{filled ? ` · ${filled}` : ''}

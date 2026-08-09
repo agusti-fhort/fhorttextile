@@ -33,7 +33,10 @@ export default function Contenidor({ titol, icona, pes = 1, defaultOpen = true, 
       // Plegat NO creix: deixa tota la seva alçada als altres, que és per això que es plega.
       flex: fitContent ? '0 0 auto' : (plegat ? '0 0 auto' : `${pes} 1 0`),
       minHeight: 0, display: 'flex', flexDirection: 'column',
-      borderBottom: '1px solid var(--border)',
+      // §1b(b) · `--border` és DEPRECAT; la vora de la norma és `--line`. Aquest contenidor
+      // és qui pinta les capçaleres de secció col·lapsable del Taller de patró i de l'editor
+      // .ftt (6 i 14 vores mesurades per la sessió de patrons).
+      borderBottom: '1px solid var(--line)',
     }}>
       <button
         onClick={() => setPlegat(p => !p)}
@@ -41,7 +44,7 @@ export default function Contenidor({ titol, icona, pes = 1, defaultOpen = true, 
         style={{
           flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.4rem',
           padding: '0.45rem 0.7rem', background: 'var(--charcoal)',
-          border: 'none', borderBottom: '1px solid var(--border)',
+          border: 'none', borderBottom: '1px solid var(--line)',
           cursor: 'pointer', textAlign: 'left', width: '100%',
           fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
           letterSpacing: '0.03em', color: 'var(--white)',

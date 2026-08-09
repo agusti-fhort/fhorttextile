@@ -33,7 +33,11 @@ export default function IssueDateField({ value, editable, onSave, t, label }) {
             onChange={e => setDraft(e.target.value)}
             style={{
               background: 'none', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 6,
-              padding: '5px 8px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text)',
+              padding: '5px 8px', fontSize: 'var(--fs-body)', fontFamily: MONO, // 🚨 `var(--text)` NO EXISTEIX a `:root` (el token és `--text-main`): la declaració queda
+              // invàlida al càlcul i el color cau a l'heretat — es veia negre PER ACCIDENT.
+              // Germà del `var(--fs-title)` de la pantalla de Documents; s'assembla massa a
+              // `--text-main` per cridar l'atenció llegint. Trobat per la sessió de patrons.
+              color: 'var(--text-main)',
             }} />
           {dirty && (
             <button onClick={save} disabled={saving} title={t('commerce.issued_at_save')} style={{
