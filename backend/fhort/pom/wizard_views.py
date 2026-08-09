@@ -113,17 +113,37 @@ def suggested_poms_view(request):
 @permission_classes([IsAuthenticated])
 def search_poms_view(request):
     """
-    GET /api/v1/poms/cerca/?q=chest
+    GET /api/v1/poms/cerca/?q=chest[&model=<id>][&page_size=N]
     Search POMs in the tenant catalog by code or name.
-    Return max 20 results for autocomplete.
     """
     q = request.query_params.get('q', '').strip()
-    if len(q) < 2:
+    if not q:
         return Response({'results': []})
+
+    # ⚠️ **EL MÍNIM DE DOS CARÀCTERS FEIA INABASTABLE MIG CATÀLEG** (QA Agus 09/08).
+    #
+    # Era `len(q) < 2 → cap resultat`, i el catàleg v4 de Brownie té **22 POMs amb codi d'UN sol
+    # caràcter** (A, B, C, D, E, **F**, I, J, K…) més 13 àlies igual de curts. Escriure «F» al
+    # carril —que és exactament com es diu aquella cota— no tornava res, i el POM semblava no
+    # existir. D'aquí va sortir un duplicat creat a mà.
+    #
+    # Amb un sol caràcter la cerca es fa NOMÉS PER CODI (i per prefix): qui escriu «F» en un
+    # carril que va per nomenclatura demana el codi F, no totes les mesures que porten una efa
+    # al mig del nom. Amb dos o més, la cerca és la de sempre, per codi I per nom.
+    nomes_codi = len(q) == 1
+
+    # EL SOSTRE ES DIU I ES POT MOURE. Era `[:20]` incrustat dues vegades i el client n'enviava
+    # un altre (`page_size=10`) que ningú llegia: la llista es tallava en silenci i no hi havia
+    # manera de saber si el que buscaves no hi era o només no hi cabia. Ara el `page_size` mana
+    # i la resposta diu `count`/`truncat` (v. el final de la vista).
+    try:
+        limit = max(1, min(int(request.query_params.get('page_size') or 25), 100))
+    except (TypeError, ValueError):
+        limit = 25
 
     try:
         from fhort.pom.models import CustomerPOMAlias, POMMaster
-        from django.db.models import Q
+        from django.db.models import Case, IntegerField, Q, Value, When
 
         # ─────────────────────────────────────────────────────────────────────────────────
         # ELS POMS ES VAN A BUSCAR AL CATÀLEG DEL CLIENT. ENLLOC MÉS. (Agus, 06/08)
@@ -136,13 +156,27 @@ def search_poms_view(request):
         # li oferien `U1 JETTING WIDTH` (de LOS) i `U1 Height sequins piece` (un orfe creat per
         # un import), però NO `BTN SP Button spacing`, que és el que Brownie anomena U1.
         #
-        # Amb `?model=` (el cas del cercador de Definició POM) la cerca passa a resoldre contra
-        # els àlies del client D'AQUEST MODEL: el seu codi, la seva descripció internacional i
-        # la seva descripció local. Això no és un filtre a sobre del catàleg de la casa —és una
-        # altra pregunta: «quines mesures coneix aquest client?».
+        # Amb `?model=` (el cas del cercador de Definició POM) la cerca resol TAMBÉ contra els
+        # àlies del client D'AQUEST MODEL: el seu codi, la seva descripció internacional i la
+        # seva descripció local. Això respon una pregunta que el catàleg de la casa sol no pot
+        # respondre: «com anomena aquest client aquesta mesura?».
         #
-        # Sense `?model=` es manté el comportament de sempre (catàleg del tenant): hi ha
-        # superfícies que cerquen sense model al davant i no tenen client de qui parlar.
+        # ⚠️ **PERÒ ÉS UNA UNIÓ, NO UN FILTRE** (QA Agus 09/08, i és un defecte pagat en dades).
+        #
+        # Amb `?model=` la cerca es feia NOMÉS contra els àlies, i llavors un POM del catàleg
+        # que aquest client encara no ha batejat **no existeix per al cercador**. Mesurat al
+        # schema `fhort` amb el catàleg v4: 143 POMs actius i només 64 amb àlies de Brownie →
+        # **79 invisibles**. Entre ells `EK · Neck width`, que és exactament el que es va anar a
+        # buscar, no es va trobar, i es va acabar creant un duplicat (POM 1047). El cercador que
+        # amaga dos terços del catàleg no protegeix de res: FABRICA duplicats.
+        #
+        # I hi havia un segon forat de la mateixa forma: contra els àlies només es miraven els
+        # camps de l'àlies, o sigui que un POM SÍ batejat pel client tampoc no es trobava pel
+        # seu nom canònic. Qui escriu «neck» al carril vol totes dues coses.
+        #
+        # Per això ara sempre hi ha les DUES consultes i el resultat és la seva unió, amb els
+        # àlies al davant: la proximitat ordena, no exclou. Sense `?model=` només hi ha la
+        # canònica, perquè no hi ha client de qui parlar.
         model_id = request.query_params.get('model')
         customer_id = None
         if model_id:
@@ -150,29 +184,50 @@ def search_poms_view(request):
             customer_id = (ModelPeça.objects.filter(pk=model_id)
                            .values_list('customer_id', flat=True).first())
 
+        # (a) EL CATÀLEG DE LA CASA — sempre. Codi i nom propis, i el canònic del sector si el POM
+        #     hi està lligat.
+        filtre_canonic = (
+            Q(codi_client__istartswith=q) if nomes_codi else
+            Q(codi_client__icontains=q) |
+            Q(nom_client__icontains=q) |
+            Q(pom_global__nom_ca__icontains=q) |
+            Q(pom_global__nom_en__icontains=q)
+        )
+        ids_canonic = list(POMMaster.objects.filter(actiu=True).filter(filtre_canonic)
+                           # El codi EXACTE primer: qui escriu «F» vol la F, i després les seves
+                           # germanes (F1, F2, FB…). Sense això la F queia enmig d'una llista
+                           # alfabètica de setze codis que comencen igual.
+                           .annotate(_exacte=Case(When(codi_client__iexact=q, then=Value(0)),
+                                                  default=Value(1), output_field=IntegerField()))
+                           .order_by('_exacte', 'codi_client').values_list('id', flat=True))
+
+        # (b) EL VOCABULARI DEL CLIENT — només amb model al davant. Un client pot tenir diversos
+        #     codis per al mateix POM (la unicitat és (customer, client_code)), així que es
+        #     dedupliquen per `pom_id` conservant l'ordre d'aparició.
+        ids_alies = []
         if customer_id:
-            # Els POMs que aquest client anomena d'alguna manera que casa amb `q`. Un client pot
-            # tenir diversos codis per al mateix POM (la unicitat és (customer, client_code)),
-            # així que es dedupliquen per `pom_id` conservant l'ordre d'aparició.
-            alias_hits = (CustomerPOMAlias.objects
-                          .filter(customer_id=customer_id, pom__isnull=False)
-                          .filter(Q(client_code__icontains=q) |
-                                  Q(description_en__icontains=q) |
-                                  Q(description_local__icontains=q))
-                          .order_by('pendent_revisio', 'client_code')
-                          .values_list('pom_id', flat=True))
-            ids = list(dict.fromkeys(alias_hits))[:20]
-            poms = list(POMMaster.objects.filter(id__in=ids, actiu=True)
-                        .select_related('pom_global', 'categoria'))
-        else:
-            poms = list(POMMaster.objects.filter(
-                actiu=True
-            ).filter(
-                Q(codi_client__icontains=q) |
-                Q(nom_client__icontains=q) |
-                Q(pom_global__nom_ca__icontains=q) |
-                Q(pom_global__nom_en__icontains=q)
-            ).select_related('pom_global', 'categoria')[:20])
+            filtre_alies = (
+                Q(client_code__istartswith=q) if nomes_codi else
+                Q(client_code__icontains=q) |
+                Q(description_en__icontains=q) |
+                Q(description_local__icontains=q)
+            )
+            ids_alies = list(CustomerPOMAlias.objects
+                             .filter(customer_id=customer_id, pom__isnull=False)
+                             .filter(filtre_alies)
+                             .annotate(_exacte=Case(When(client_code__iexact=q, then=Value(0)),
+                                                    default=Value(1), output_field=IntegerField()))
+                             .order_by('_exacte', 'pendent_revisio', 'client_code')
+                             .values_list('pom_id', flat=True))
+
+        # La unió, amb els àlies primer i sense repetits. El tall es fa AQUÍ i es diu a la
+        # resposta; l'ordre final el posa la proximitat, més avall.
+        ids_units = list(dict.fromkeys([*ids_alies, *ids_canonic]))
+        total = len(ids_units)
+        ids = ids_units[:limit]
+        per_id = {p.id: p for p in POMMaster.objects.filter(id__in=ids, actiu=True)
+                  .select_related('pom_global', 'categoria')}
+        poms = [per_id[i] for i in ids if i in per_id]
 
         # EL NIVELL DE PROXIMITAT (v8.1 · cercador agrupat). Amb `?model=`, cada resultat diu si
         # el POM ve de l'ITEM d'aquest model, de la seva FAMÍLIA (un altre item del mateix
@@ -229,7 +284,9 @@ def search_poms_view(request):
         ordre = {'item': 0, 'type': 1, 'cataleg': 2}
         data.sort(key=lambda r: (ordre[r['nivell']], (r['codi_client'] or '')))
 
-        return Response({'results': data})
+        # `count` és el total REAL de la unió i `truncat` diu si el sostre ha tallat. Sense
+        # això, «no hi és» i «no hi cabia» es deien igual — que és com es fabrica un duplicat.
+        return Response({'results': data, 'count': total, 'truncat': total > len(data)})
     except Exception as e:
         return Response({'error': str(e)}, status=500)
 
@@ -650,15 +707,35 @@ def create_model_pom_view(request, model_id):
             'message': f'«{codi}» ja és {etiqueta} al catàleg d\'aquest client.',
         }, status=409)
 
-    # El codi de la CASA no és el del client, i copiar-hi el del client és exactament el que va
-    # fabricar els 12 duplicats de `POMMaster.codi_client` que hi ha avui. S'hi posa el codi del
-    # client si a la casa és lliure i, si no, es qualifica amb el del customer perquè es pugui
-    # llegir d'on ve. La nomenclatura del client viu a l'àlies i no depèn d'aquesta tria.
+    # ── EL CODI DE LA COTA VA NET, I SI ESTÀ OCUPAT ES DIU ─────────────────────────────────
+    #
+    # ⚠️ Aquí es qualificava el codi amb el del client quan la casa ja el tenia: `EK` ocupat →
+    # la cota naixia com a **`BRW-EK`**. Està prohibit (Agus, 09/08): **el prefix de client
+    # pertany a la FITXA —a l'àlies, que ja hi és— i mai a la nomenclatura de la cota**. Un codi
+    # de casa qualificat amb un client és una tercera nomenclatura que ningú no ha demanat, i es
+    # llegeix a totes les pantalles com si formés part del nom de la mesura.
+    #
+    # Però el prefix no era estètica: tapava la constraint `uniq_pommaster_codi_client_ci`. Sense
+    # ell, `POMMaster.objects.create` peta amb IntegrityError i la persona rep un 500 sense saber
+    # per què. Així que la sortida no és inventar un codi: és **DIR AMB QUÈ XOCA**, que és el
+    # mateix consentiment informat que ja fa la validació de sobre contra el catàleg del client.
+    #
+    # I és la resposta ÚTIL, perquè el cas real és aquest: `EK · Neck width` ja existia i el
+    # cercador no el trobava (el mínim de dos caràcters i la cerca només per àlies). Qui arriba
+    # aquí amb un codi ocupat, la immensa majoria de vegades, està a punt de duplicar un POM que
+    # ja hi és — i el que necessita no és un codi nou, és que li ensenyin l'existent.
     codi_casa = codi[:30]
-    if POMMaster.objects.filter(codi_client__iexact=codi_casa).exists():
-        from fhort.tasks.models import Customer
-        cust = Customer.objects.filter(pk=customer_id).values_list('codi', flat=True).first()
-        codi_casa = f'{cust}-{codi}'[:30] if cust else f'M{model_id}-{codi}'[:30]
+    ja_hi_es = POMMaster.objects.filter(codi_client__iexact=codi_casa).first()
+    if ja_hi_es is not None:
+        etiqueta_casa = (ja_hi_es.nom_client or codi_casa).strip()
+        return Response({
+            'codi': 'CODI_CASA_OCUPAT',
+            'nomenclatura': codi,
+            'pom_id': ja_hi_es.pk,
+            'pom_nom': etiqueta_casa,
+            'message': f'«{codi}» ja és {etiqueta_casa} al catàleg. Fes-lo servir des del '
+                       f'cercador, o dona-li una nomenclatura diferent.',
+        }, status=409)
 
     with transaction.atomic():
         pom = POMMaster.objects.create(
