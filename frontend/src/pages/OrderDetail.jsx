@@ -5,20 +5,21 @@ import useAuthStore from '../store/auth'
 import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
+import { useCodisEstat } from '../components/commercial/estats'
+import PageMenu from '../components/ui/PageMenu'
+import { camp, forceBarra } from '../components/llista/ChromLlista'
 import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
 import IssueDateField from '../components/commercial/IssueDateField'
-import { selS, primaryBtn } from '../components/ui/buttons'
+import { botoSec, botoTer, botoDestructiuPle, apagat } from '../components/ui/buttons'
 import { DocumentHeader, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { OrderStatusBadge, allocatedPct } from './Orders'
 
 // Mòdul Comercial — B3b · fitxa de comanda (read-only). Línies i venciments congelats (neixen de
 // la conversió); l'única mutació és el `status` (OPEN/COMPLETED/CANCELLED) i el PDF. Plantilla QuoteDetail.jsx.
 const MONO = 'IBM Plex Mono, monospace'
-const smallBtn = {
-  background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
-}
-const STATUSES = ['OPEN', 'COMPLETED', 'CANCELLED']
+// §5.2 · el botó petit d'aquesta fitxa, amb la família de la casa. Anava amb `0.5px --gray-l`,
+// que no és cap amplada ni cap token del sistema.
+const smallBtn = { ...botoSec, padding: '5px 10px' }
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
 const fmtDate = (d) => d || '—'
 
@@ -49,6 +50,10 @@ export default function OrderDetail() {
   // Idioma del PDF: default = el del client destinatari, canviable per document.
   const [pdfLang, setPdfLang] = usePdfLang(order?.customer_language)
   const [feedback, setFeedback] = useState(null)
+  // El select d'estat de la comanda ESCRIU: la seva llista ve de l'endpoint, mai d'una constant.
+  // Mentre no ha arribat no ofereix cap opció — i això és correcte: oferir-ne una d'endevinada
+  // seria deixar escriure un estat que potser no existeix.
+  const { codis: estatsComanda } = useCodisEstat('estats_comanda')
   const [busy, setBusy] = useState(false)
   // P4 — desplegable read-only per línia: models assignats + tasques + % imputat (lazy).
   const [expanded, setExpanded] = useState(() => new Set())
@@ -152,9 +157,9 @@ export default function OrderDetail() {
   const orderColumns = [
     { key: 'desc', label: t('orders.col_concept'), render: l => l.description || l.product_name },
     { key: 'alloc', label: t('orders.col_import_imputat'), align: 'right', width: 100,
-      render: l => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }} title={t('orders.allocated')}>{Number(l.qty_allocated).toFixed(2)}/{Number(l.quantity).toFixed(2)}</span> },
+      render: l => <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }} title={t('orders.allocated')}>{Number(l.qty_allocated).toFixed(2)}/{Number(l.quantity).toFixed(2)}</span> },
     { key: 'price', label: t('orders.col_price'), align: 'right', width: 100,
-      render: l => <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{money(l.unit_price)}</span> },
+      render: l => <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>{money(l.unit_price)}</span> },
     { key: 'total', label: t('orders.col_import'), align: 'right', width: 100,
       render: l => <span style={{ fontFamily: MONO, fontWeight: 600 }}>{money(l.line_total)}</span> },
   ]
@@ -172,10 +177,16 @@ export default function OrderDetail() {
   }
 
   return (
-    <div style={{ minWidth: 0, maxWidth: 900 }}>
-      <button onClick={() => navigate('/comercial/comandes')} style={{ ...smallBtn, marginBottom: 12 }}>
-        <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('orders.back')}
-      </button>
+    <>
+      {/* §8b.2 · MENÚ DE PANTALLA. El botó-fletxa solt de sobre el títol se'n va: la fletxa té
+          UN lloc a tot el producte, i és aquest. El destí és EXPLÍCIT — mai `history.back()`,
+          que no pot garantir on porta si s'hi ha arribat per enllaç, per recàrrega o per una
+          pestanya nova. */}
+      <div style={forceBarra}>
+        <PageMenu backTo="/comercial/comandes" backTitle={t('orders.back')} />
+      </div>
+
+      <div style={{ minWidth: 0, maxWidth: 900 }}>
 
       <DocumentHeader
         reference={order.document_number}
@@ -185,10 +196,10 @@ export default function OrderDetail() {
           <PdfButton onClick={doPdf} disabled={busy} label={t('orders.download_pdf')}
             lang={pdfLang} onLangChange={setPdfLang} t={t} />
           {canEdit && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-soft)' }}>
               {t('orders.status')}:
-              <select value={order.status} onChange={e => changeStatus(e.target.value)} disabled={busy} style={{ ...selS }}>
-                {STATUSES.map(s => <option key={s} value={s}>{t(`orders.status_${s}`)}</option>)}
+              <select value={order.status} onChange={e => changeStatus(e.target.value)} disabled={busy} style={camp}>
+                {(estatsComanda || []).map(s => <option key={s} value={s}>{t(`orders.status_${s}`)}</option>)}
               </select>
             </label>
           )}
@@ -212,7 +223,7 @@ export default function OrderDetail() {
         </div>
       )}
 
-      <p style={{ fontSize: 'var(--fs-label)', color: 'var(--gray)', marginBottom: 12 }}>{t('orders.readonly_note')}</p>
+      <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', marginBottom: 12 }}>{t('orders.readonly_note')}</p>
 
       {/* Traçabilitat + imputació */}
       <Section title={t('orders.details')}>
@@ -228,7 +239,7 @@ export default function OrderDetail() {
       {/* Línies (read-only, desplegables) */}
       <Section title={t('orders.lines')}>
         {lines.length === 0
-          ? <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('orders.lines_empty')}</p>
+          ? <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('orders.lines_empty')}</p>
           : <LineTable columns={orderColumns} rows={lines} renderActions={renderLineActions}
               renderExpansion={l => expanded.has(l.id)
                 ? <LineExpansion a={alloc[l.id]} t={t} canEdit={canEdit}
@@ -242,11 +253,11 @@ export default function OrderDetail() {
       {/* Venciments materialitzats */}
       <Section title={t('orders.due_dates')}>
         {dueDates.length === 0
-          ? <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)' }}>{t('orders.due_dates_empty')}</p>
+          ? <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('orders.due_dates_empty')}</p>
           : dueDates.map(d => (
             <Row key={d.id}>
               <span style={{ flex: 1, fontFamily: MONO }}>{Number(d.percentage)}%</span>
-              <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{fmtDate(d.due_date)}</span>
+              <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>{fmtDate(d.due_date)}</span>
               <span style={{ fontFamily: MONO, fontWeight: 600, minWidth: 90, textAlign: 'right' }}>{money(d.amount)}</span>
             </Row>
           ))}
@@ -269,22 +280,31 @@ export default function OrderDetail() {
               {t('orders.unassign_confirm', { codi: confirmUnassign.codi })}
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={() => setConfirmUnassign(null)} disabled={busy} style={selS}>{t('common.cancel')}</button>
-              <button onClick={doUnassign} disabled={busy}
-                style={{ ...primaryBtn, background: 'var(--err)', borderColor: 'var(--err)' }}>
+              {/* §5.4 · cancel·lar és TERCIÀRIA: text sol. Anava amb l'estil d'un INPUT, que és
+                  el que passa quan un botó s'aprofita d'un estil de camp perquè «queda discret».
+                  §5.5 · i el de confirmar porta el vermell PLE, que existeix NOMÉS aquí —dins
+                  d'un modal, al botó que confirma— perquè desassignar és irreversible.
+                  `botoDestructiuPle` és la forma de la casa per a exactament aquest cas: abans es
+                  fabricava sobreescrivint el fons del botó primari, que és com es guanyen dos
+                  vermells plens diferents al mateix producte. */}
+              <button type="button" onClick={() => setConfirmUnassign(null)} disabled={busy}
+                style={{ ...botoTer, ...(busy ? apagat : null) }}>{t('common.cancel')}</button>
+              <button type="button" onClick={doUnassign} disabled={busy}
+                style={{ ...botoDestructiuPle, ...(busy ? apagat : null) }}>
                 {t('orders.unassign')}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }
 
 function Section({ title, children }) {
   return (
-    <div style={{ border: '0.5px solid var(--gray-l)', borderRadius: 12, background: 'var(--white)', padding: 16, marginBottom: 16 }}>
+    <div style={{ borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)', borderRadius: 'var(--r-card)', background: 'var(--panel)', padding: 16, marginBottom: 16 }}>
       <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, fontFamily: MONO, marginBottom: 10 }}>{title}</h2>
       {children}
     </div>
@@ -296,7 +316,13 @@ function Row({ children }) {
 }
 
 // P4 — panell read-only d'una línia: models assignats (via WO), tasques amb estat, % imputat.
-const TASK_COL = { Done: 'var(--ok)', InProgress: 'var(--gold)', Paused: 'var(--warn)', Pending: 'var(--gray)' }
+// El PUNT de color d'una tasca. Era la SEGONA còpia de `ModelTask.status` al client —l'altra
+// vivia a `WorkOrderDetail:23`, amb un mapa de color DIFERENT—, i cap de les dues sabia que
+// l'altra existia. Ara la llista de codis ve de `/vocabulari/` (`estats_tasca`) i el color surt
+// de `components/commercial/estats`, que és on viu la decisió, un sol cop, amb el motiu escrit.
+// El punt és una marca de DADA (§1: la dada porta el color) i per això es queda; el que canvia
+// és que el daurat deixa de fer d'estat («en curs» és taronja a l'escala de la §8e).
+const PUNT_TASCA = { Pending: 'var(--text-faint)', Paused: 'var(--text-faint)', InProgress: 'var(--warn-state)', Done: 'var(--ok)' }
 function LineExpansion({ a, t, canEdit = false, onUnassign = null }) {
   if (!a || a.loading) return <div style={expBox}><span style={expMuted}>{t('orders.alloc_loading')}</span></div>
   if (a.error) return <div style={expBox}><span style={expMuted}>{t('orders.alloc_error')}</span></div>
@@ -315,7 +341,7 @@ function LineExpansion({ a, t, canEdit = false, onUnassign = null }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
               <span style={{ fontFamily: MONO, fontWeight: 700, color: 'var(--gold)', fontSize: 'var(--fs-caption)' }}>{wo.model ? wo.model.codi_intern : '—'}</span>
               {wo.model?.nom_prenda && <span style={{ fontSize: 'var(--fs-caption)' }}>{wo.model.nom_prenda}</span>}
-              <span style={{ fontFamily: MONO, color: 'var(--gray)', fontSize: 'var(--fs-caption)' }}>· {wo.number}</span>
+              <span style={{ fontFamily: MONO, color: 'var(--text-soft)', fontSize: 'var(--fs-caption)' }}>· {wo.number}</span>
               <span style={{ ...woPill, borderColor: wo.status === 'CLOSED' ? 'var(--ok)' : 'var(--gold)', color: wo.status === 'CLOSED' ? 'var(--ok)' : 'var(--gold)' }}>{t(`orders.wo_${wo.status}`, wo.status)}</span>
               {canEdit && wo.can_unassign && onUnassign && (
                 <button type="button" onClick={() => onUnassign(wo)} title={t('orders.unassign')}
@@ -332,10 +358,10 @@ function LineExpansion({ a, t, canEdit = false, onUnassign = null }) {
                 ? <span style={expMuted}>—</span>
                 : wo.tasks.map(tk => (
                   <span key={tk.id} style={taskChip} title={tk.code}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: TASK_COL[tk.status] || 'var(--gray)', flex: 'none' }} />
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: PUNT_TASCA[tk.status] || 'var(--text-faint)', flex: 'none' }} />
                     {tk.name}
                     {tk.off_recipe && <span style={{ color: 'var(--gold)', fontWeight: 600 }}>· {t('orders.alloc_extra')}</span>}
-                    <span style={{ color: TASK_COL[tk.status] || 'var(--gray)', fontWeight: 600 }}>{t(`model_sheet.dashboard.task_status.${tk.status}`, tk.status)}</span>
+                    <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{t(`model_sheet.dashboard.task_status.${tk.status}`, tk.status)}</span>
                   </span>
                 ))}
             </div>
@@ -345,8 +371,8 @@ function LineExpansion({ a, t, canEdit = false, onUnassign = null }) {
   )
 }
 const expBox = { padding: '10px 12px', margin: '0 0 2px', background: 'var(--bg-muted)', borderRadius: 8, fontSize: 'var(--fs-caption)' }
-const expMuted = { fontSize: 'var(--fs-caption)', color: 'var(--gray)', fontFamily: MONO }
-const expMeta = { fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', fontFamily: MONO }
+const expMuted = { fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }
+const expMeta = { fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontFamily: MONO }
 const woPill = { fontFamily: MONO, fontSize: 'var(--fs-caption)', fontWeight: 600, padding: '0 6px', borderRadius: 10, border: '0.5px solid var(--gold)' }
 const taskChip = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 12, background: 'var(--white)', border: '0.5px solid var(--gray-l)', fontSize: 'var(--fs-caption)', fontFamily: MONO }
 
@@ -367,7 +393,7 @@ function orderSummaryLines(order, t) {
 function Meta({ label, value }) {
   return (
     <div>
-      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)', fontFamily: MONO, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
       <div style={{ fontFamily: MONO }}>{value}</div>
     </div>
   )

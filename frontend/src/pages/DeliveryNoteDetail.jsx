@@ -5,10 +5,12 @@ import useAuthStore from '../store/auth'
 import { commerce } from '../api/endpoints'
 import Center from '../components/ui/Center'
 import Feedback from '../components/ui/Feedback'
-import Badge from '../components/ui/Badge'
+import { ClassificacioBadge } from '../components/commercial/estats'
+import PageMenu from '../components/ui/PageMenu'
+import { camp, forceBarra } from '../components/llista/ChromLlista'
 import PdfButton, { usePdfLang } from '../components/ui/PdfButton'
 import IssueDateField from '../components/commercial/IssueDateField'
-import { selS, primaryBtn } from '../components/ui/buttons'
+import { botoPri } from '../components/ui/buttons'
 import { DocumentHeader, ModelCard, LineTable, RowBtn, DocumentSummary } from '../components/commercial'
 import { DNStatusBadge } from './DeliveryNotes'
 
@@ -20,12 +22,16 @@ import { DNStatusBadge } from './DeliveryNotes'
 const MONO = 'IBM Plex Mono, monospace'
 const smallBtn = {
   background: 'none', border: '0.5px solid var(--gray-l)', borderRadius: 6, cursor: 'pointer',
-  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-muted)',
+  padding: '4px 9px', fontSize: 'var(--fs-body)', fontFamily: MONO, color: 'var(--text-soft)',
   display: 'inline-flex', alignItems: 'center', gap: 4,
 }
-const inp = { ...selS, minWidth: 0 }
+const inp = { ...camp, minWidth: 0 }
 const money = (v) => `${Number(v ?? 0).toFixed(2)} €`
-const KIND_VARIANT = { TASK: 'ok', EXTRA: 'gold', DEDUCTION: 'err', EXPENSE: 'warn', MANUAL: 'gray' }
+// ⚠️ `line_kind` I `kind` SÓN EL MATEIX VOCABULARI AMB DOS NOMS SEGONS D'ON VE LA FILA: la
+// línia DESADA el porta a `line_kind` (`commerce/models.py:752`) i l'ítem PROPOSAT per la
+// safata, a `kind`. No és un error: són dues formes, la del model i la del càlcul. Es diu aquí
+// perquè un mapa keyed pel nom equivocat no falla — simplement pinta tothom neutre, i això
+// s'assembla massa a estar bé.
 
 function downloadBlob(blob, filename) {
   const link = document.createElement('a')
@@ -222,7 +228,7 @@ export default function DeliveryNoteDetail() {
   // Columnes de línia (sistema unificat). Cel·les editables amb el patró save-on-blur (INTACTE).
   const columns = [
     { key: 'kind', label: t('deliverynotes.line_kind'),
-      render: l => <Badge variant={KIND_VARIANT[l.line_kind] || 'gray'}>{t(`deliverynotes.kind_${l.line_kind}`)}</Badge> },
+      render: l => <ClassificacioBadge>{t(`deliverynotes.kind_${l.line_kind}`)}</ClassificacioBadge> },
     { key: 'desc', label: t('deliverynotes.line_desc'),
       render: l => editable
         ? <input value={editVal(l, 'description')} disabled={busy}
@@ -234,7 +240,7 @@ export default function DeliveryNoteDetail() {
         ? <input type="number" step="0.01" value={editVal(l, 'quantity')} disabled={busy}
             onChange={e => setEdit(l.id, 'quantity', e.target.value)} onBlur={() => saveLine(l)}
             style={{ ...inp, width: 70, textAlign: 'right' }} />
-        : <span style={{ fontFamily: MONO, color: 'var(--text-muted)' }}>{Number(l.quantity ?? 0)}</span> },
+        : <span style={{ fontFamily: MONO, color: 'var(--text-soft)' }}>{Number(l.quantity ?? 0)}</span> },
     { key: 'price', label: t('deliverynotes.line_price'), align: 'right', width: 110,
       render: l => editable
         ? <input type="number" step="0.01" value={editVal(l, 'unit_price')} disabled={busy}
@@ -270,12 +276,12 @@ export default function DeliveryNoteDetail() {
         </button>
       )}
       {editable && (
-        <button onClick={() => setConfirmIssue(true)} disabled={busy || visibleCount === 0} style={{ ...primaryBtn, marginLeft: 0 }}>
+        <button onClick={() => setConfirmIssue(true)} disabled={busy || visibleCount === 0} style={botoPri}>
           <i className="ti ti-send" style={{ fontSize: 14 }} />{t('deliverynotes.issue_action')}
         </button>
       )}
       {isIssued && canConfigure && (
-        <button onClick={doMarkInvoiced} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>
+        <button onClick={doMarkInvoiced} disabled={busy} style={botoPri}>
           <i className="ti ti-checkbox" style={{ fontSize: 14 }} />{t('deliverynotes.mark_invoiced')}
         </button>
       )}
@@ -288,10 +294,16 @@ export default function DeliveryNoteDetail() {
   )
 
   return (
-    <div style={{ minWidth: 0, maxWidth: 1000 }}>
-      <button onClick={() => navigate('/comercial/albarans')} style={{ ...smallBtn, marginBottom: 12 }}>
-        <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> {t('deliverynotes.back')}
-      </button>
+    <>
+      {/* §8b.2 · MENÚ DE PANTALLA. El botó-fletxa solt de sobre el títol se'n va: la fletxa té
+          UN lloc a tot el producte, i és aquest. El destí és EXPLÍCIT — mai `history.back()`,
+          que no pot garantir on porta si s'hi ha arribat per enllaç, per recàrrega o per una
+          pestanya nova. */}
+      <div style={forceBarra}>
+        <PageMenu backTo="/comercial/albarans" backTitle={t('deliverynotes.back')} />
+      </div>
+
+      <div style={{ minWidth: 0, maxWidth: 1000 }}>
 
       <DocumentHeader
         reference={dn.document_number}
@@ -311,7 +323,7 @@ export default function DeliveryNoteDetail() {
 
       {/* Blocs per model */}
       {lines.length === 0 && (
-        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gray)', margin: '18px 0' }}>{t('deliverynotes.empty_lines')}</p>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', margin: '18px 0' }}>{t('deliverynotes.empty_lines')}</p>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '16px 0' }}>
         {blocks.map(block => {
@@ -372,32 +384,32 @@ export default function DeliveryNoteDetail() {
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 4, fontFamily: MONO }}>
               {t('deliverynotes.tray_title')}
             </h2>
-            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 14 }}>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 14 }}>
               {t('deliverynotes.tray_hint')}
             </p>
             {!tray ? <Center>{t('deliverynotes.loading')}</Center>
-              : (tray.groups || []).length === 0 ? <div style={{ color: 'var(--text-muted)', padding: '10px 0' }}>{t('deliverynotes.tray_empty')}</div>
+              : (tray.groups || []).length === 0 ? <div style={{ color: 'var(--text-soft)', padding: '10px 0' }}>{t('deliverynotes.tray_empty')}</div>
                 : (tray.groups.map(g => (
                   <div key={g.model.id ?? 'general'} style={{ marginBottom: 12 }}>
                     <div style={{ fontFamily: MONO, fontWeight: 600, fontSize: 'var(--fs-body)', marginBottom: 4 }}>
                       {g.model.codi_intern || t('deliverynotes.general_block')}
-                      {g.model.nom_prenda && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {g.model.nom_prenda}</span>}
+                      {g.model.nom_prenda && <span style={{ color: 'var(--text-soft)', fontWeight: 400 }}> · {g.model.nom_prenda}</span>}
                     </div>
                     {g.items.map(it => {
                       const k = itemKey(it)
                       return (
                         <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', cursor: 'pointer', borderRadius: 6 }}>
                           <input type="checkbox" checked={picked.has(k)} onChange={() => togglePick(it)} />
-                          <Badge variant={KIND_VARIANT[it.kind] || 'gray'}>{t(`deliverynotes.kind_${it.kind}`)}</Badge>
+                          <ClassificacioBadge>{t(`deliverynotes.kind_${it.kind}`)}</ClassificacioBadge>
                           <span style={{ flex: 1, fontSize: 'var(--fs-body)' }}>{it.description}</span>
-                          <span style={{ fontFamily: MONO, color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>{money(it.proposed_price)}</span>
+                          <span style={{ fontFamily: MONO, color: 'var(--text-soft)', fontSize: 'var(--fs-label)' }}>{money(it.proposed_price)}</span>
                         </label>
                       )
                     })}
                   </div>
                 )))}
             <div style={{ display: 'flex', gap: 8, marginTop: 12, position: 'sticky', bottom: 0, background: 'var(--white)', paddingTop: 8 }}>
-              <button onClick={addPicked} disabled={trayBusy || picked.size === 0} style={{ ...primaryBtn, marginLeft: 0 }}>
+              <button onClick={addPicked} disabled={trayBusy || picked.size === 0} style={botoPri}>
                 {t('deliverynotes.tray_add', { n: picked.size })}
               </button>
               <button onClick={() => setTrayOpen(false)} disabled={trayBusy} style={smallBtn}>{t('deliverynotes.issue_cancel')}</button>
@@ -419,16 +431,17 @@ export default function DeliveryNoteDetail() {
             <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 500, marginBottom: 10, fontFamily: MONO }}>
               {t('deliverynotes.issue_title')}
             </h2>
-            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)', marginBottom: 16 }}>
               {t('deliverynotes.issue_warning')}
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={doIssue} disabled={busy} style={{ ...primaryBtn, marginLeft: 0 }}>{t('deliverynotes.issue_confirm')}</button>
+              <button onClick={doIssue} disabled={busy} style={botoPri}>{t('deliverynotes.issue_confirm')}</button>
               <button onClick={() => setConfirmIssue(false)} disabled={busy} style={smallBtn}>{t('deliverynotes.issue_cancel')}</button>
             </div>
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }
