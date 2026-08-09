@@ -397,7 +397,15 @@
     "vincle_confirm_treure": "Disconnect this client from tenant «{{codi}}»? The link itself is not deleted: the brand governs it.",
     "vincle_ok": "Client connected with its tenant.",
     "vincle_tret": "Client disconnected.",
-    "vincle_no_connectat": "This client is not connected with any tenant."
+    "vincle_no_connectat": "This client is not connected with any tenant.",
+    "back_title": "Back to dashboard",
+    "view_active": "Active clients",
+    "view_inactive": "Inactive clients",
+    "entity": "clients",
+    "empty_filtered": "No clients match this search.",
+    "prev": "Previous",
+    "next": "Next",
+    "page_info": "Page {{page}} of {{pages}}"
   },
   "dictionary": {
     "title": "Nomenclature dictionary",
@@ -1357,7 +1365,15 @@
     "condicions_compra": "Purchase conditions",
     "email_contacte": "Contact email",
     "persona_contacte": "Contact person",
-    "telefon_contacte": "Contact phone"
+    "telefon_contacte": "Contact phone",
+    "back_title": "Back to dashboard",
+    "view_active": "Active suppliers",
+    "view_inactive": "Inactive suppliers",
+    "entity": "suppliers",
+    "search_pending": "This list is not searchable yet.",
+    "prev": "Previous",
+    "next": "Next",
+    "page_info": "Page {{page}} of {{pages}}"
   },
   "recursos": {
     "title": "Resources",

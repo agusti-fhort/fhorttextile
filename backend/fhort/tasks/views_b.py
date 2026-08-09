@@ -747,6 +747,19 @@ class SupplierViewSet(viewsets.ModelViewSet):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
     filterset_fields = ['active', 'type']
+    # ⚠️ NO HI HAVIA `search_fields`, I ÉS EL GERMÀ EXACTE DEL DEFECTE DE `CustomerViewSet`, AL
+    # REVÉS: aquí el `SearchFilter` sí que hi és (els backends no se sobreescriuen) i el que
+    # faltava era la llista de camps. Sense `search_fields`, el `SearchFilter` de DRF **deixa
+    # passar el queryset sencer**: mesurat pel lot comercial, `?search=zzzz` retornava
+    # exactament el mateix `count` que sense filtrar. `/proveïdors` va quedar sense cercador
+    # amb el motiu escrit a la pantalla, perquè un camp de cerca que no filtra és pitjor que
+    # no tenir-ne. Els tres camps són els presentables de la fitxa.
+    search_fields = ['name', 'nif', 'ciutat']
+    # ORDENACIÓ EXPLÍCITA. Avui ja ordenava —hereta l'`OrderingFilter` del defecte i DRF
+    # accepta els camps del serializer com a implícits—, però l'implícit és justament el
+    # contracte que es trenca en silenci el dia que algú toca el serializer. Escrit, no.
+    ordering_fields = ['name', 'type', 'active']
+    ordering = ['name']
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):

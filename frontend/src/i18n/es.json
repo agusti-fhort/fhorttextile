@@ -397,7 +397,15 @@
     "vincle_confirm_treure": "¿Desconectar este cliente del tenant «{{codi}}»? El vínculo no se borra: lo gobierna la marca.",
     "vincle_ok": "Cliente conectado con su tenant.",
     "vincle_tret": "Cliente desconectado.",
-    "vincle_no_connectat": "Este cliente no está conectado con ningún tenant."
+    "vincle_no_connectat": "Este cliente no está conectado con ningún tenant.",
+    "back_title": "Volver al panel",
+    "view_active": "Clientes activos",
+    "view_inactive": "Clientes inactivos",
+    "entity": "clientes",
+    "empty_filtered": "Ningún cliente con esta búsqueda.",
+    "prev": "Anterior",
+    "next": "Siguiente",
+    "page_info": "Página {{page}} de {{pages}}"
   },
   "dictionary": {
     "title": "Diccionario de nomenclatura",
@@ -1357,7 +1365,15 @@
     "condicions_compra": "Condiciones de compra",
     "email_contacte": "Email de contacto",
     "persona_contacte": "Persona de contacto",
-    "telefon_contacte": "Teléfono de contacto"
+    "telefon_contacte": "Teléfono de contacto",
+    "back_title": "Volver al panel",
+    "view_active": "Proveedores activos",
+    "view_inactive": "Proveedores inactivos",
+    "entity": "proveedores",
+    "search_pending": "Esta lista aún no se puede buscar.",
+    "prev": "Anterior",
+    "next": "Siguiente",
+    "page_info": "Página {{page}} de {{pages}}"
   },
   "recursos": {
     "title": "Recursos",

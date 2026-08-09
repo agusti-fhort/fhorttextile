@@ -397,7 +397,15 @@
     "vincle_confirm_treure": "Desconnectar aquest client del tenant «{{codi}}»? El vincle no s'esborra: el governa la marca.",
     "vincle_ok": "Client connectat amb el seu tenant.",
     "vincle_tret": "Client desconnectat.",
-    "vincle_no_connectat": "Aquest client no està connectat amb cap tenant."
+    "vincle_no_connectat": "Aquest client no està connectat amb cap tenant.",
+    "back_title": "Tornar al tauler",
+    "view_active": "Clients actius",
+    "view_inactive": "Clients inactius",
+    "entity": "clients",
+    "empty_filtered": "Cap client amb aquesta cerca.",
+    "prev": "Anterior",
+    "next": "Següent",
+    "page_info": "Pàgina {{page}} de {{pages}}"
   },
   "dictionary": {
     "title": "Diccionari de nomenclatura",
@@ -1357,7 +1365,15 @@
     "condicions_compra": "Condicions de compra",
     "email_contacte": "Email de contacte",
     "persona_contacte": "Persona de contacte",
-    "telefon_contacte": "Telèfon de contacte"
+    "telefon_contacte": "Telèfon de contacte",
+    "back_title": "Tornar al tauler",
+    "view_active": "Proveïdors actius",
+    "view_inactive": "Proveïdors inactius",
+    "entity": "proveïdors",
+    "search_pending": "Aquesta llista encara no es pot cercar.",
+    "prev": "Anterior",
+    "next": "Següent",
+    "page_info": "Pàgina {{page}} de {{pages}}"
   },
   "recursos": {
     "title": "Recursos",
