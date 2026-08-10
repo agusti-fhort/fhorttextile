@@ -34,6 +34,13 @@ class Command(BaseCommand):
                             help='username o email del tècnic (responsable del model + assignee de la tasca)')
         parser.add_argument('--recreate', action='store_true',
                             help='Si ja existeix un clon QA, el purga i en crea un de nou.')
+        # SET-2 (2026-08-10) — la marca deixa de ser una constant del fitxer. Dos sprints
+        # poden necessitar bancs de QA amb propòsits distints alhora, i amb un sol tag el
+        # guard idempotent de l'un purgaria el de l'altre. El default no canvia res del que
+        # ja hi havia: qui no el passi segueix fent servir `[QA-SC]`.
+        parser.add_argument('--tag', default=QA_TAG,
+                            help=f"Marca al nom_prenda que identifica el banc (def: {QA_TAG}). "
+                                 f"El guard idempotent i --recreate operen NOMÉS sobre aquest tag.")
 
     def handle(self, *args, **o):
         with schema_context(o['schema']):
@@ -57,7 +64,8 @@ class Command(BaseCommand):
             raise CommandError(f"Tècnic {o['assignee']!r} no trobat (UserProfile).")
 
         # --- Guard idempotent ---
-        existing = list(Model.objects.filter(customer=src.customer, nom_prenda__startswith=QA_TAG))
+        tag = o.get('tag') or QA_TAG
+        existing = list(Model.objects.filter(customer=src.customer, nom_prenda__startswith=tag))
         if existing:
             if not o['recreate']:
                 self.stdout.write(self.style.WARNING(
@@ -75,7 +83,7 @@ class Command(BaseCommand):
         clone.id = None
         clone.codi_intern = ''        # → generate_model_code el regenera (+ sequencial + codi_tenant)
         clone.codi_tenant = ''
-        clone.nom_prenda = f"{QA_TAG} {src.nom_prenda or src.codi_intern}"
+        clone.nom_prenda = f"{tag} {src.nom_prenda or src.codi_intern}"
         clone.measurements_version = 1
         clone.responsable = prof      # imprescindible: sync_size_fitting crea el SF si hi ha responsable
         clone.fase_actual = 'Proto'
