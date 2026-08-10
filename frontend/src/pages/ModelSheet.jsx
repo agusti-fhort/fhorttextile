@@ -392,6 +392,36 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     return r.data
   }, [id, t])
 
+  // ON ATERRA UNA TASCA — el TIPUS decideix la superfície, i ho decideix EN UN SOL LLOC.
+  //
+  // B3 (Agus, 09/08): entrar per `?tab=Mesures&task_id=<Mesurar prenda>` aterrava al CARRIL
+  // D'ENTRADA de POMs. El motiu: el consum de la tasca entrant (J1b, més avall) feia
+  // `setEditing('Mesures')` i prou —sense mirar de quina tasca es tractava—, i el
+  // `CheckMeasureEditor` sense sessió cau a la font `check`, que és la taula de Definició POM.
+  // La superfície de fitting existia i el botó ③ hi arribava bé; el que no hi arribava era
+  // l'entrada per URL, que és la que fa servir el WorkPlan.
+  //
+  // El repartiment ja el sabia `obreDeDebo` i vivia dins seu. Ara és aquesta funció, i la
+  // criden ELS DOS camins: així un tipus de tasca no pot aterrar en dues pantalles diferents
+  // segons per on s'hi entri.
+  const aterraSegonsTipus = useCallback((tab, code) => {
+    // Una tasca 'pom' obre el tab Mesures en mode ENTRADA (el carril), no edició de graella.
+    if (tab === 'Mesures' && code === 'pom') setMesuresEntry(true)
+    // GRADUACIÓ DES DE MESURES: la tasca és `grading` però la superfície NO és el tab Escalat.
+    // Sense aquesta branca s'obriria la presa —que no té res a veure amb graduar— amb el
+    // rellotge de graduació al damunt.
+    else if (tab === 'Mesures' && code === 'grading') {
+      setSp(prev => {
+        const net = new URLSearchParams(prev)
+        net.set('mode', 'graduacio')
+        return net
+      }, { replace: true })
+    }
+    // `size_check` i la resta: la superfície de treball del tab. Per a `size_check` la font la
+    // decideix `fittingSession`, que qui crida ha d'haver resolt ABANS (v. `sessioDeFitting`).
+    else setEditing(tab)
+  }, [setSp])
+
   const obreDeDebo = useCallback((tab, code) => {
     setOpeningTask(true)
     // D'ON VENIM, abans d'obrir res: el tab on l'usuari és ARA. Les quatre portes del tab Mesures
@@ -417,27 +447,13 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         if (!res) return
         setEditTaskId(res.data.task_id)
         activeTaskRef.current = res.data.task_id   // open-task la deixa En curs → viva per pausar després
-        // PUNT COMÚ: una tasca 'pom' obre el tab Mesures en mode ENTRADA (wizard), no edició de graella.
-        // `size_check` sobre Mesures passa per `editing='Mesures'` → la superfície de PRESA
-        // (`CheckMeasureEditor` editable). Hi arribava només per URL; des del 06/08 també pel
-        // botó ③ «Mesurar prenda», pel mateix camí i sense mecanisme nou.
-        if (tab === 'Mesures' && code === 'pom') setMesuresEntry(true)
-        // GRADUACIÓ DES DE MESURES: la tasca és `grading` però la superfície NO és el tab
-        // Escalat. Sense aquesta branca el `setEditing('Mesures')` de sota obriria la presa —una
-        // superfície que no té res a veure amb graduar— amb el rellotge de graduació al damunt.
+        // PUNT COMÚ: el repartiment per tipus de tasca viu a `aterraSegonsTipus`, que és el
+        // mateix que fa servir l'entrada per URL (J1b). `size_check` sobre Mesures passa per
+        // `editing='Mesures'` → la superfície de PRESA, amb la sessió ja resolta aquí sobre.
         //
-        // P0.5d — ON PORTA, que és l'únic que canvia (com s'hi entra ja era això). Abans obria el
-        // CONTENIDOR de tria de joc; ara porta a la SUPERFÍCIE DE GRADUACIÓ, i el contenidor
-        // s'obre des d'allà si el model no té joc o se'n vol canviar. Triar joc era només el
-        // primer pas de graduar, i era l'únic que tenia pantalla.
-        else if (tab === 'Mesures' && code === 'grading') {
-          setSp(prev => {
-            const net = new URLSearchParams(prev)
-            net.set('mode', 'graduacio')
-            return net
-          }, { replace: true })
-        }
-        else setEditing(tab)
+        // P0.5d — la graduació porta a la SUPERFÍCIE DE GRADUACIÓ i no al contenidor de tria de
+        // joc: triar joc era només el primer pas de graduar, i era l'únic que tenia pantalla.
+        aterraSegonsTipus(tab, code)
         reloadTasks()
       })
       // EL TOAST DIU LA PARET, no «no s'ha pogut». Un 409 amb `code` porta el motiu del servidor
@@ -453,7 +469,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         else setFeedback({ type: 'err', text: motiuOpenTask(e, t) })
       })
       .finally(() => setOpeningTask(false))
-  }, [activeTab, id, t, reloadTasks, tascaVigentDe, setSp, sessioDeFitting])
+  }, [activeTab, id, t, reloadTasks, tascaVigentDe, sessioDeFitting, aterraSegonsTipus])
 
   // F2.2 · D-1 — LA PORTA DE LA FITXA. Era el forat original de tota aquesta feina: «Modificar»
   // navegava sense `task_id`, l'editor autodesava cada 2 s i el temps d'editar la fitxa no
@@ -662,6 +678,19 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // (compta-temps + origen de watchpoints), SENSE encunyar-ne una de nova (a diferència del botó "Editar
   // mides", que crida openTask). La tasca ja ve En curs des del Kanban/WorkPlan; aquí es consumeix i, BLOC 1,
   // es REGISTRA a activeTaskRef (PUNT COMÚ) perquè pauseActiveTask la pausi en sortir/desmuntar. Un sol cop.
+  //
+  // B3 (10/08) — I EL TIPUS DE TASCA DECIDEIX ON S'ATERRA. Aquí hi havia un `setEditing('Mesures')`
+  // pelat: fos quina fos la tasca, s'obria la superfície de treball del tab, i com que la font
+  // del `CheckMeasureEditor` és `fittingSession ? fittingSource : null`, sense sessió queia a la
+  // font `check` — o sigui, el CARRIL D'ENTRADA DE POMs. Entrar per
+  // `?tab=Mesures&task_id=<Mesurar prenda>` (que és com hi porta el WorkPlan) aterrava a la
+  // pantalla de definir POMs amb el rellotge de mesurar la peça corrent al damunt.
+  //
+  // Ara es demana la tasca i mana el seu `task_type_code`, pel MATEIX repartidor que el botó
+  // (`aterraSegonsTipus`). Per a `size_check` cal la sessió ABANS d'entrar, i es prefereix la
+  // que la tasca ja porta (`fitting_session`): la tasca oberta des d'una convocatòria en sap la
+  // seva, i endevinar-la amb `sessioDeFitting` podria enganxar-ne una altra o crear-ne una de
+  // nova sense que ningú ho hagi demanat.
   const autoTaskRef = useRef(false)
   useEffect(() => {
     if (autoTaskRef.current || loading) return
@@ -670,9 +699,26 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       const tid = parseInt(taskParam)
       setEditTaskId(tid)
       activeTaskRef.current = tid   // BLOC 1: tasca viva → pausada en sortir (abans no es feia: GAP P3 size_check)
-      setEditing('Mesures')
+      modelTasks.get(tid)
+        .then(async res => {
+          const code = res.data?.task_type_code || null
+          if (code !== 'size_check') { aterraSegonsTipus('Mesures', code); return }
+          // La sessió ja resolta per `?fitting_session=` té el seu propi efecte; no la toquem.
+          if (fittingSessionParam) { aterraSegonsTipus('Mesures', code); return }
+          const propia = res.data?.fitting_session
+          const sessio = propia
+            ? await fittingSessions.get(propia).then(r => r.data).catch(() => null)
+            : await sessioDeFitting()
+          // Sense sessió no hi ha pantalla de fitting, i val més no entrar que entrar a una
+          // ALTRA taula que se li assembla — la mateixa llei que el botó ③.
+          if (!sessio) { setFeedback({ type: 'err', text: t('presa.sense_sessio') }); return }
+          setFittingSession(sessio)
+          aterraSegonsTipus('Mesures', code)
+        })
+        // Sense resposta no s'endevina el tipus: s'obre la superfície de treball com abans.
+        .catch(() => aterraSegonsTipus('Mesures', null))
     }
-  }, [loading, activeTab, taskParam])
+  }, [loading, activeTab, taskParam, fittingSessionParam, aterraSegonsTipus, sessioDeFitting, t])
 
   // Sprint Y — resol la sessió de fitting entrant (?fitting_session=) perquè la font fitting la rebi.
   // Es fa un cop; la sessió és el contenidor, el treball i el compta-temps van per la tasca (task_id).
@@ -1197,14 +1243,20 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 {/* El gate el mana el backend (`create-piece` exigeix versió activa amb specs).
                     Aquí NO es reimplementa: es DEMANA a `grading-status` i es diu abans, en
                     comptes de deixar prémer i contestar amb un error. El motiu va escrit. */}
+                {/* B4 — I QUAN JA S'HA MESURAT, LA PORTA HO DIU. El Dashboard deia «Mesurar
+                    prenda: Feta» i aquesta porta es pintava normal: no és que discrepessin, és
+                    que el stepper no tenia cap fet per a aquest pas. Ara `te_presa` el porta —hi
+                    ha algun fitting amb contingut—, i l'ordre de precedència és: BLOQUEJAT (no
+                    hi ha taula) → FET (s'hi ha mesurat) → disponible. */}
                 <button type="button"
                   disabled={openingTask || (estatPas != null && !estatPas.te_taula)}
                   title={estatPas != null && !estatPas.te_taula
                     ? t('model_sheet.pas_sense_taula') : undefined}
                   onClick={() => enterEdit('Mesures', 'size_check')}
-                  style={btnPas(estatPas != null && !estatPas.te_taula ? 'blocat' : 'ara',
-                                openingTask)}>
-                  <i className="ti ti-ruler-measure" style={{ fontSize: 14 }} />
+                  style={btnPas(estatPas != null && !estatPas.te_taula ? 'blocat'
+                    : (estatPas?.te_presa ? 'fet' : 'ara'), openingTask)}>
+                  <i className={`ti ti-${estatPas != null && estatPas.te_taula && estatPas.te_presa
+                    ? 'check' : 'ruler-measure'}`} style={{ fontSize: 14 }} />
                   {t('presa.titol')}
                 </button>
                 {estatPas != null && !estatPas.te_taula && (
@@ -1216,9 +1268,16 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 {/* ④ PROPAGAR a grading (origen): inicia fase nova sobre llenç net i porta a
                     Escalat. Mira abans i adverteix (2 passos) si ja hi ha propagació.
                     NO OBRE TASCA PRÒPIA, i és deliberat: v. la nota de `onPropagarClick`. */}
+                {/* B4 — el quart pas també es pinta pel seu FET (`te_propagacio`). És el
+                    llenguatge de la §6: FET vol dir «la feina hi és; s'hi torna a entrar per
+                    CANVIAR-LA», que és exactament el que fa Propagar sobre una propagació que
+                    ja existeix —i per això n'avisa en dos passos abans d'esborrar-la. */}
                 <button type="button" disabled={openingTask || propagating}
-                  onClick={onPropagarClick} style={btnAccio(openingTask || propagating)}>
-                  <i className="ti ti-git-branch" style={{ fontSize: 14 }} />
+                  onClick={onPropagarClick}
+                  style={btnPas(estatPas?.te_propagacio ? 'fet' : 'ara',
+                                openingTask || propagating)}>
+                  <i className={`ti ti-${estatPas?.te_propagacio ? 'check' : 'git-branch'}`}
+                     style={{ fontSize: 14 }} />
                   {propagating ? t('grading_propagate.running') : t('grading_propagate.button')}
                 </button>
               </div>
