@@ -799,7 +799,12 @@ class BaseMeasurement(models.Model):
         # columnes + una, amb `instancia` constant ('') a totes les files → estrictament més
         # permissiva, 0 duplicats latents possibles. Qui impedeix la segona instància avui és
         # la comporta `_instancia_gate_cins`, no aquesta clau.
-        unique_together = [('model', 'pom', 'capa', 'instancia')]
+        #
+        # SET-2/T2 — i ara també el GARMENT, pel mateix argument literal per tercera vegada:
+        # mateixes columnes + una, amb `garment` constant ('') a totes les files →
+        # estrictament més permissiva, 0 duplicats latents possibles. Qui impedeix la segona
+        # peça avui és la comporta `_garment_gate_set2`, no aquesta clau.
+        unique_together = [('model', 'pom', 'capa', 'instancia', 'garment')]
         # `capa` entra a l'ordre entre el model i l'ordre de fitxa: quan hi hagi més d'una
         # capa, la fitxa les vol AGRUPADES, no barrejades per `ordre`. Avui és un no-op
         # observable —amb una sola capa el valor és constant i l'ordre relatiu no es mou—,
@@ -861,6 +866,33 @@ class BaseMeasurement(models.Model):
             models.CheckConstraint(
                 condition=~models.Q(instancia__gt='', nom_fitxa=''),
                 name='models_app_basemeasurement_instancia_exigeix_nom',
+            ),
+            # ── SET-2/T2 — LA TERCERA COMPORTA. Declaració canònica; les altres cinc taules
+            # de la família en porten una d'igual i apunten aquí.
+            #
+            # Mateixa bastida, mateix motiu, eix nou. L'esquema ja sap dir «el pit del top» i
+            # «el pit de la calceta», però la cadena de consumidors —motor, escriptors,
+            # import, graella, Resum, federació— encara assumeix una mesura per
+            # `(model, POM, capa, instancia)` i no s'adapta fins a T4/T5. Entre T2 i T5 hi ha
+            # una finestra en què l'esquema ja admetria una segona peça i el codi encara no
+            # la sabria llegir: una fila '02' escrita per accident en aquesta finestra no
+            # petaria enlloc —es fondria dins les llistes com si fos de la mare— i corrompria
+            # en silenci mesures que són el producte.
+            #
+            # Va a la BD i no a l'aplicació pel mateix motiu que les seves dues germanes: és
+            # l'únic lloc que un `bulk_create`, un `update()`, un loader de paquet o un
+            # `psql` a mà no poden esquivar.
+            #
+            # **QUI LA RETIRA, I QUÈ HA D'ESTAR VERD ABANS.** La retirada NO es fa sense el
+            # test de R3 verd: `germanes_de` (`services_derivacio.py`) filtra per
+            # `(model, pom)` + «un eix diferent» i ESCRIU a les germanes (`aplica()`). Amb
+            # dues peces i el filtre curt, corregir el pit del top mouria el de la calceta
+            # —el mateix valor, en silenci, i creuant peces—: un bug de creuament
+            # indetectable. Mentre aquesta comporta visqui, cap '02' pot existir i el filtre
+            # de R3 és un no-op; per això la comporta és el gate i no la data.
+            models.CheckConstraint(
+                condition=models.Q(garment=''),
+                name='models_app_basemeasurement_garment_gate_set2',
             ),
         ]
 
@@ -951,6 +983,14 @@ class MeasurementChangeLog(models.Model):
             # a `BaseMeasurement`). Aquesta taula va al MATEIX grup que la mesura perquè el
             # signal F1 hi escriu dins de la mateixa transacció: separar-les deixaria una
             # alta de germana escrivint un apunt que la comporta del log rebutjaria.
+            # SET-2/T2 — la comporta del garment (v. `BaseMeasurement.Meta`). Aquesta taula
+            # va al MATEIX grup que la mesura, i pel mateix motiu de sempre: el signal F1 hi
+            # escriu dins de la mateixa transacció, o sigui que separar-les deixaria una alta
+            # de peça escrivint un apunt que la comporta del log rebutjaria.
+            models.CheckConstraint(
+                condition=models.Q(garment=''),
+                name='models_app_measurementchangelog_garment_gate_set2',
+            ),
         ]
 
     def __str__(self):
@@ -1024,9 +1064,15 @@ class ModelGradingOverride(models.Model):
         verbose_name = 'Override de grading (model)'
         verbose_name_plural = 'Overrides de grading (model)'
         # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA (v. `BaseMeasurement.Meta`).
-        unique_together = [('model', 'pom', 'size_label', 'capa', 'instancia')]
+        # SET-2/T2 — i el GARMENT (v. `BaseMeasurement.Meta`): mateixes columnes + una.
+        unique_together = [('model', 'pom', 'size_label', 'capa', 'instancia', 'garment')]
         ordering = ['model', 'pom', 'size_label']
         constraints = [
+            # SET-2/T2 — la comporta del garment (v. `BaseMeasurement.Meta`).
+            models.CheckConstraint(
+                condition=models.Q(garment=''),
+                name='models_app_modelgradingoverride_garment_gate_set2',
+            ),
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
             # ✅ C4/G3 (04/08) — retirada per la migració 0078. L'override és l'ajust MANUAL
             # d'una cel·la: pinar la talla M de la sisa dreta no pot moure l'esquerra, i
@@ -1361,8 +1407,17 @@ class SizeCheckLine(models.Model):
         verbose_name_plural = 'Línies de validació de talla'
         ordering = ['size_check', 'pom']
         # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA (v. `BaseMeasurement.Meta`).
-        unique_together = [('size_check', 'pom', 'capa', 'instancia')]
+        # SET-2/T2 — i el GARMENT (v. `BaseMeasurement.Meta`): mateixes columnes + una.
+        unique_together = [('size_check', 'pom', 'capa', 'instancia', 'garment')]
         constraints = [
+            # SET-2/T2 — la comporta del garment (v. `BaseMeasurement.Meta`). El SizeCheck
+            # segueix penjant del MODEL i sense eix (D6): mesurar una prenda és mesurar tot
+            # el model, i el veredicte es compta per FILA sobre el model sencer. L'eix és de
+            # la LÍNIA, que és la presa, no del check.
+            models.CheckConstraint(
+                condition=models.Q(garment=''),
+                name='models_app_sizecheckline_garment_gate_set2',
+            ),
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
             # ✅ C4/G2 (04/08) — retirada per la migració 0077. La línia de check és una
             # PRESA: la modista mesura la sisa dreta i l'esquerra per separat, i el veredicte

@@ -258,7 +258,11 @@ class GradedSpec(models.Model):
         verbose_name_plural = 'Specs generats'
         # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA
         # (v. `models_app.BaseMeasurement.Meta`).
-        unique_together = [('grading_version', 'pom', 'size_label', 'capa', 'instancia')]
+        # SET-2/T2 — i el GARMENT (v. `models_app.BaseMeasurement.Meta`): mateixes columnes
+        # + una. La VERSIÓ no hi entra (D6): una sola `GradingVersion` conté els specs de
+        # totes les peces, i el segell és del model per decisió de domini.
+        unique_together = [('grading_version', 'pom', 'size_label', 'capa', 'instancia',
+                            'garment')]
         ordering = ['grading_version', 'pom', 'size_label']
         # ✅ C4/G1 (04/08) — LES DUES COMPORTES S'HAN RETIRAT (migració fitting/0022).
         # Aquesta taula va al MATEIX grup que `BaseMeasurement` i no a un de posterior, i el
@@ -266,7 +270,16 @@ class GradedSpec(models.Model):
         # (`generate_graded_specs`), que hi escriu els specs dins de la mateixa crida. Amb la
         # comporta d'aquí viva i la de la mesura retirada, `escalat/ajustar-talla` petava amb
         # `CheckViolation` — v. el commit `959147a5`, on va sortir de cara.
-        constraints = []
+        constraints = [
+            # SET-2/T2 — la comporta del garment (v. `models_app.BaseMeasurement.Meta`).
+            # Aquesta taula torna a anar al MATEIX grup que la mesura, i pel motiu que ja es
+            # va MESURAR amb capa i instància: escriure una base de peça encadena cap al
+            # motor, que hi escriu els specs dins de la mateixa crida.
+            models.CheckConstraint(
+                condition=models.Q(garment=''),
+                name='fitting_gradedspec_garment_gate_set2',
+            ),
+        ]
 
     def __str__(self):
         return f'v{self.grading_version_id} · {self.pom.codi_client} @ {self.size_label} = {self.graded_value_cm}cm'
@@ -481,13 +494,22 @@ class PieceFittingLine(models.Model):
         ordering = ['piece_fitting', 'pom', 'size_label']
         # C1/T3 + C1-ins/T3 — la clau incorpora la CAPA i la INSTÀNCIA
         # (v. `models_app.BaseMeasurement.Meta`).
-        unique_together = [('piece_fitting', 'pom', 'size_label', 'capa', 'instancia')]
+        # SET-2/T2 — i el GARMENT (v. `models_app.BaseMeasurement.Meta`): mateixes columnes
+        # + una. La `PieceFitting` i la `FittingSession` es queden SENSE eix (D6).
+        unique_together = [('piece_fitting', 'pom', 'size_label', 'capa', 'instancia',
+                            'garment')]
         # ✅ C4/G2 (04/08) — les dues comportes retirades (migració fitting/0023). La línia
         # de fitting és on es MESURA la peça real: si la fitxa demana la sisa dreta i
         # l'esquerra, la modista pren dues xifres i aquí hi ha d'haver dues línies. El sembrat
         # les clona de l'spec amb els seus eixos (`fitting/services.py:339`), o sigui que amb
         # germanes vives crear una PieceFitting hauria petat aquí.
-        constraints = []
+        constraints = [
+            # SET-2/T2 — la comporta del garment (v. `models_app.BaseMeasurement.Meta`).
+            models.CheckConstraint(
+                condition=models.Q(garment=''),
+                name='fitting_piecefittingline_garment_gate_set2',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.piece_fitting_id} · {self.pom.codi_client} @ {self.size_label}'
