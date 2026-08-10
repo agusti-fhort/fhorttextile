@@ -153,29 +153,42 @@ def main():
             pag.evaluate("([t]) => { localStorage.setItem('access_token', t);"
                          " localStorage.setItem('fhort.lang', 'ca') }", [token])
 
-            # ── V1 · L'ESCOPETA JA NO HI ÉS ──────────────────────────────────────────────
-            print('\n── V1 · l\'escopeta ──')
+            # ── V1 · L'ESCOPETA JA NO HI ÉS, I LA BARRA ÉS NETA ─────────────────────────
+            print('\n── V1 · l\'escopeta i la barra neta ──')
             alpha = banc['alpha']
             abans = foto_regles(sess, token, alpha['id'])
             obre_joc(pag, 'ZZ-QA-BREAK-ALPHA')
             pag.screenshot(path=str(OUT / 'break_01_pantalla_joc.png'), full_page=True)
 
-            # La barra és el bloc que porta el rètol «Talles que cobreix». Les seves talles han
-            # de ser text, no controls: si hi queda cap `<button>`, l'escopeta hi és encara.
             barra = pag.locator('div', has=pag.locator(
                 'span:text-is("Talles que cobreix")')).last
-            etiquetes = [e.strip() for e in barra.locator('span[title]').all_inner_texts()]
-            botons_talla = 0
-            for et in alpha['talles']:
-                botons_talla += barra.locator(f'button:text-is("{et}")').count()
+            botons_talla = sum(barra.locator(f'button:text-is("{et}")').count()
+                               for et in alpha['talles'])
             comprova('cap talla de la barra és un botó', botons_talla == 0,
                      f'{botons_talla} botons trobats')
-            comprova('la barra segueix ensenyant les 8 talles del sistema',
-                     all(any(t in e for e in etiquetes) for t in alpha['talles']),
-                     f'{len(etiquetes)} etiquetes')
+            text_barra = barra.inner_text()
+            comprova('la barra ensenya les 8 talles del run',
+                     all(et in text_barra for et in alpha['talles']))
+            # 🚨 CAP COMPTADOR (ordre d'Agus 10/08): les talles amb break en portaven un («S 4»).
+            # Es mira XIP A XIP i no el text del bloc: el bloc conté també el desplegable de runs,
+            # i els seus noms («LOS Baby 3-36M») porten xifres que no tenen res a veure amb això.
+            import re as _re
+            xips = [x.strip() for x in barra.locator(
+                'xpath=.//span[span[text()="Talles que cobreix"]]/span[last()]/span'
+            ).all_inner_texts()]
+            comprova('cap comptador al costat de cap talla',
+                     xips == alpha['talles'], f'{xips}')
+            # 🚨 CAP PROSA (ordre 4): ni el text llarg de la dreta ni les notes del peu.
+            for tros in ('Les talles surten del run', 'ancoren per etiqueta',
+                         'El break és de CADA regla', 'Requereix una talla base'):
+                comprova(f'fora la prosa: «{tros[:28]}…»',
+                         pag.locator(f'text=/{_re.escape(tros)}/').count() == 0)
+            comprova('la ⓘ ocupa el lloc de la prosa',
+                     pag.locator('i.ti-info-circle').count() >= 2,
+                     f'{pag.locator("i.ti-info-circle").count()} ⓘ')
 
-            # I la prova de foc: clicar-hi a sobre no ha de deixar cap edició pendent ni escriure.
-            barra.locator('span[title]').nth(4).click(force=True)   # la talla «L» de la barra
+            # Clicar una talla no ha de deixar edició pendent ni escriure.
+            barra.locator('span').filter(has_text=_re.compile(r'^L$')).first.click(force=True)
             pag.wait_for_timeout(500)
             desar = pag.locator('button:has-text("Gravar regles")').first
             comprova('clicar una talla no deixa cap edició pendent',
@@ -183,24 +196,31 @@ def main():
             comprova('clicar una talla no ha escrit res a la BD',
                      foto_regles(sess, token, alpha['id']) == abans)
 
-            # ── V2 · EL BREAK ÉS PER FILA ────────────────────────────────────────────────
-            print('\n── V2 · canviar el break d\'UNA regla ──')
+            # ── V2 · BREAK PER FILA, EN CONVENCIÓ DE DOCUMENT ───────────────────────────
+            print('\n── V2 · el break per fila, en convenció de document ──')
             files = pag.locator('table tbody tr')
             pickers = pag.locator('table tbody tr select[aria-label="Talla break"]')
             comprova('cada fila té el seu picker de talla break',
                      pickers.count() == files.count() == 6,
                      f'{pickers.count()} pickers / {files.count()} files')
-            # Les 2 files sense Δ break el tenen TANCAT: un ancoratge sense increment no diu res.
             tancats = sum(1 for i in range(pickers.count()) if pickers.nth(i).is_disabled())
             comprova('les 2 regles sense Δ break tenen el picker tancat', tancats == 2,
                      f'{tancats} tancats')
-            # Les opcions són les del sistema del joc (8 talles) + el buit.
-            opcions = pickers.first.locator('option').all_inner_texts()
-            comprova('les opcions són les talles d\'ALPHA_EU_W + el buit',
-                     [o.strip() for o in opcions] == ['—'] + alpha['talles'], f'{opcions}')
 
-            # El gest: UNA fila, de S a L.
-            pickers.first.select_option('L')
+            # 🔑 LES OPCIONS SÓN LES DEL DOCUMENT: totes MENYS l'última talla (un break a 3XL no
+            # té talla següent on començar el tram gran, i per tant no és representable).
+            opcions = [o.strip() for o in pickers.first.locator('option').all_inner_texts()]
+            comprova('les opcions van en convenció de document (sense l\'última talla)',
+                     opcions == ['—'] + alpha['talles'][:-1], f'{opcions}')
+            # El banc desa el break a la 3a talla (S); en convenció de document s'ha de LLEGIR XS.
+            desat_bd = alpha['trenca']
+            doc_esperat = alpha['talles'][alpha['talles'].index(desat_bd) - 1]
+            comprova(f'la BD desa {desat_bd!r} i la pantalla mostra {doc_esperat!r}',
+                     pickers.first.input_value() == doc_esperat,
+                     f'mostra {pickers.first.input_value()!r}')
+
+            # El gest: UNA fila. Es tria «M» (document) → s'ha de desar «L» (motor).
+            pickers.first.select_option('M')
             pag.wait_for_timeout(300)
             pag.locator('button:has-text("Gravar regles")').first.click()
             pag.wait_for_timeout(2000)
@@ -211,52 +231,72 @@ def main():
                      f'{len(canviades)} canviades: {canviades}')
             if len(canviades) == 1:
                 i = canviades[0]
-                comprova('la que ha canviat ho ha fet a L (i només el break)',
+                comprova('triar «M» al document ha desat «L» al motor (+1)',
                          despres[i][2] == 'L' and despres[i][:2] == abans[i][:2],
                          f'{abans[i]} → {despres[i]}')
             intactes = [i for i in abans if i not in canviades]
             comprova('les altres 5 regles són BYTE A BYTE les d\'abans',
                      all(abans[i] == despres[i] for i in intactes), f'{len(intactes)} intactes')
+            comprova('i el que es rellegeix a pantalla torna a ser el del document',
+                     pickers.first.input_value() == 'M', pickers.first.input_value())
             pag.screenshot(path=str(OUT / 'break_02_una_fila_canviada.png'), full_page=True)
 
-            # ── V3 · EL SELECTOR DEL SISTEMA DE TALLES ───────────────────────────────────
-            print('\n── V3 · el selector del sistema ──')
+            # ── V3 · EL SISTEMA DE TALLES ES POT CANVIAR ────────────────────────────────
+            print('\n── V3 · el sistema de talles, editable ──')
             selector = pag.locator('select#joc-run-barra')
-            comprova('el selector existeix a la barra (abans no hi era enlloc)',
-                     selector.count() == 1)
+            comprova('el selector existeix a la barra', selector.count() == 1)
             comprova('apunta al sistema del joc',
                      selector.first.input_value() == str(
                          api(sess, token, f'/api/v1/grading-rule-sets/{alpha["id"]}/')['size_system']))
-            comprova('amb regles va TANCAT', selector.first.is_disabled())
-            motiu = pag.locator('text=/No es pot canviar en un conjunt amb regles/')
-            comprova('i el motiu és VISIBLE, no un `title` amagat',
-                     motiu.count() > 0 and motiu.first.is_visible())
+            # 🚨 AMB REGLES JA NO VA TANCAT (ordre 3): el 400 dur ha caigut.
+            comprova('amb 6 regles el selector va OBERT', not selector.first.is_disabled())
 
-            # Les opcions del picker surten del SISTEMA DEL JOC: al joc numèric, talles numèriques.
+            # Canviar a un run on les etiquetes NO existeixen → 409 amb la llista, i es DECLINA.
             num = banc['num']
-            obre_joc(pag, 'ZZ-QA-BREAK-NUM')
+            selector.first.select_option(label='NUMERIC_EU_W · Numeric EU — Women')
+            pag.wait_for_timeout(1500)
+            dialeg = pag.locator('text=/Talles de trencament fora del run nou/')
+            comprova('un run incompatible demana CONFIRMACIÓ (409), no peta',
+                     dialeg.count() > 0 and dialeg.first.is_visible())
+            comprova('el diàleg ENUMERA les etiquetes que no casen',
+                     pag.locator('text=/trenquen a talles que NUMERIC_EU_W no té/').count() > 0)
+            pag.screenshot(path=str(OUT / 'break_03_confirmacio_409.png'), full_page=True)
+            pag.locator('button:has-text("Cancel")').first.click()
+            pag.wait_for_timeout(1200)
+            comprova('declinar NO canvia el sistema',
+                     api(sess, token, f'/api/v1/grading-rule-sets/{alpha["id"]}/')['size_system_codi']
+                     == 'ALPHA_EU_W')
+
+            # I confirmant, s'aplica.
+            pag.locator('select#joc-run-barra').first.select_option(
+                label='NUMERIC_EU_W · Numeric EU — Women')
+            pag.wait_for_timeout(1500)
+            pag.locator('button:has-text("Continuar")').first.click()
+            pag.wait_for_timeout(2500)
+            desat_nou = api(sess, token, f'/api/v1/grading-rule-sets/{alpha["id"]}/')
+            comprova('confirmant, el sistema CANVIA amb les regles posades',
+                     desat_nou['size_system_codi'] == 'NUMERIC_EU_W',
+                     desat_nou['size_system_codi'])
+            comprova('i cap regla no s\'ha tocat (només el joc)',
+                     foto_regles(sess, token, alpha['id']) == despres)
             op_num = [o.strip() for o in pag.locator(
                 'table tbody tr select[aria-label="Talla break"]').first.locator(
                 'option').all_inner_texts()]
-            comprova('al joc NUMERIC_EU_W el picker ofereix les SEVES talles',
-                     op_num == ['—'] + num['talles'], f'{op_num}')
-            pag.screenshot(path=str(OUT / 'break_03_sistema_numeric.png'), full_page=True)
+            comprova('els pickers ja ofereixen les talles del run NOU',
+                     op_num == ['—'] + num['talles'][:-1], f'{op_num}')
+            pag.screenshot(path=str(OUT / 'break_04_sistema_canviat.png'), full_page=True)
 
-            # I en un joc SENSE regles el selector va obert i canviar-lo canvia les talles.
+            # Un run COMPATIBLE no ha de preguntar res.
             obre_joc(pag, 'ZZ-QA-BREAK-BUIT')
             sel_buit = pag.locator('select#joc-run-barra').first
-            comprova('sense regles el selector va OBERT', not sel_buit.is_disabled())
             sel_buit.select_option(label='NUMERIC_EU_W · Numeric EU — Women')
             pag.wait_for_timeout(2500)
-            desat = api(sess, token, f'/api/v1/grading-rule-sets/{banc["buit"]["id"]}/')
-            comprova('el canvi s\'ha DESAT (no només pintat)',
-                     desat['size_system_codi'] == 'NUMERIC_EU_W', desat['size_system_codi'])
-            barra2 = pag.locator('div', has=pag.locator(
-                'span:text-is("Talles que cobreix")')).last
-            et2 = ' '.join(barra2.locator('span[title]').all_inner_texts())
-            comprova('i la barra ja ensenya les talles noves',
-                     all(t in et2 for t in num['talles']) and 'XXS' not in et2)
-            pag.screenshot(path=str(OUT / 'break_04_selector_canviat.png'), full_page=True)
+            comprova('sense etiquetes orfes no hi ha cap confirmació',
+                     pag.locator('text=/Talles de trencament fora del run nou/').count() == 0)
+            comprova('i el canvi s\'ha DESAT',
+                     api(sess, token, f'/api/v1/grading-rule-sets/{banc["buit"]["id"]}/')
+                     ['size_system_codi'] == 'NUMERIC_EU_W')
+            pag.screenshot(path=str(OUT / 'break_05_sense_confirmacio.png'), full_page=True)
 
             nav.close()
     finally:
