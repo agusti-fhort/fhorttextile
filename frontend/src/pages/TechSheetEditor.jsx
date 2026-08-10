@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
+import { Fragment, useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 // Els builders de prims són funcions de mòdul (les comparteixen el canvas i el generador de
@@ -35,7 +35,7 @@ import { sufixIdentitat } from '../utils/capaInstancia'
 import { useDiccionariMesures } from '../utils/diccionariMesuresFont'
 // F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
 import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
-import { GARMENT_MARE, garmentDeFila } from '../utils/garmentFitxa'
+import { GARMENT_MARE, agrupaPerGarment, calArbrePerGarment, garmentDeFila, partirTaules } from '../utils/garmentFitxa'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -2701,6 +2701,9 @@ export default function TechSheetEditor() {
   // F3 — partició opcional de les taules de mesures per secció d'origen. Default false: la
   // fitxa d'una peça (la immensa majoria) no ha de notar que això existeix.
   const [partirPerSeccio, setPartirPerSeccio] = useState(false)
+  // SET-2/T9 — i per PRENDA, l'eix de sobre. Mateix default i mateixa raó: qui compon una
+  // fitxa d'un model d'una peça no ha de saber ni que això existeix.
+  const [partirPerPeca, setPartirPerPeca] = useState(false)
   const [notice, setNotice] = useState(null)        // toast efímer (p.ex. "ja hi ha capçalera")
   const [thumbnails, setThumbnails] = useState([])
   const [exporting, setExporting] = useState(false)
@@ -4963,6 +4966,26 @@ export default function TechSheetEditor() {
     return vistes
   }
 
+  // ── SET-2/T9 · UNA TAULA PER PRENDA ─────────────────────────────────────────
+  // L'eix de la PEÇA és el de DALT i el de la secció el de dins: una prenda pot portar
+  // diverses seccions («cos», «caputxa» d'una dessuadora), mai al revés. Per això es parteix
+  // primer per prenda i, dins de cada prenda, per secció exactament com abans.
+  //
+  // ⚠️ DATAT 2026-08-10 — inert sobre el corpus actual: amb totes les files a la mare
+  // `agrupaPerGarment` torna UN grup, la casella ni tan sols es pinta i el resultat és, fila
+  // per fila i objecte per objecte, el d'abans d'aquest tram. Re-verificar amb:
+  //   SELECT DISTINCT garment FROM <tenant>.models_app_basemeasurement;
+  //
+  // La T1b hi passa igual, però les seves files vénen de `graded-table/`, que encara NO
+  // serveix la peça: cauen totes a la mare i la taula no es parteix mai. És el comportament
+  // correcte mentre l'endpoint no la porti (i el dia que la porti, això ja hi és).
+  //
+  // La LLEI de partir viu a `utils/garmentFitxa` (`partirTaules`), amb les seves proves: aquí
+  // només s'hi lliguen les dues caselles i el criteri de secció que ja tenia la casa.
+  const partirEnTaules = (files) => partirTaules(files, {
+    perPeca: partirPerPeca, perSeccio: partirPerSeccio, seccionsDe: seccionsDeFiles,
+  })
+
   // Col·locació ESGLAONADA: N taules a la mateixa x/y naixerien exactament l'una damunt de
   // l'altra i semblaria que només se n'ha inserit una. El desplaçament és petit a propòsit
   // (prou per veure-les totes, prou poc per no sortir de la pàgina amb 3-4 peces).
@@ -5099,15 +5122,12 @@ export default function TechSheetEditor() {
       fmtMeasure(bm.base_value_cm, unit) ?? '',
       '', '',                                  // mesura nova · comentaris: per omplir a mà
     ])
-    // F3 — una taula per secció NOMÉS si el tècnic ho ha demanat I el document en té més
-    // d'una. Amb una sola secció (o cap) el resultat és exactament el d'abans.
-    const seccions = seccionsDeFiles(bms)
-    const grups = (partirPerSeccio && seccions.length > 1)
-      ? seccions.map(s => ({ seccio: s, files: bms.filter(b => (b.seccio || '').trim() === s) }))
-      : [{ seccio: null, files: bms }]
+    // F3 (secció) + T9 (peça) — cap partició s'aplica mai sola: totes dues les demana el
+    // tècnic i totes dues callen si el model no té més d'una branca del seu eix.
+    const grups = partirEnTaules(bms)
     const n = inserirTaules(grups, g => ({
       id: uid(), type: 'table', layer: 'free',
-      kind: 'pom_fitting', garmentId: GARMENT_MARE, columns, rows: filesDe(g.files),
+      kind: 'pom_fitting', garmentId: g.garment, columns, rows: filesDe(g.files),
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
       snapshot: {
         model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString(),
@@ -5161,14 +5181,12 @@ export default function TechSheetEditor() {
       nomDeTaula(row, dicc, docLang),
       ...sizeLabels.map(sl => cellForSize(row, sl)),
     ])
-    // F3 — mateix criteri que a la T1a: opcional, i només si el document té més d'una secció.
-    const seccions = seccionsDeFiles(data.rows)
-    const grups = (partirPerSeccio && seccions.length > 1)
-      ? seccions.map(s => ({ seccio: s, files: data.rows.filter(r => (r.seccio || '').trim() === s) }))
-      : [{ seccio: null, files: data.rows }]
+    // F3/T9 — mateix criteri que a la T1a. Les files de `graded-table/` encara no porten la
+    // peça: cauen totes a la mare i la partició per prenda no s'activa (v. `partirEnTaules`).
+    const grups = partirEnTaules(data.rows)
     const n = inserirTaules(grups, g => ({
       id: uid(), type: 'table', layer: 'free',
-      kind: 'pom_grading', garmentId: GARMENT_MARE, columns, rows: filesDe(g.files),
+      kind: 'pom_grading', garmentId: g.garment, columns, rows: filesDe(g.files),
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
       snapshot: {
         model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString(),
@@ -5534,6 +5552,17 @@ export default function TechSheetEditor() {
   // F3 — les seccions que el model porta de l'import. Surten de pomRows (base-measurements,
   // ja carregat en obrir), no d'una crida nova.
   const seccionsDelModel = seccionsDeFiles(pomRows)
+  // SET-2/T9 — I LES PECES, que NO són el mateix que les seccions: `seccio` és un rètol de
+  // text lliure de l'import i pot partir una sola peça en zones («cos», «caputxa»); `garment`
+  // és la prenda del model. Mateixa font (pomRows), cap crida nova, i cap ordre alterat.
+  //
+  // ⚠️ DATAT 2026-08-10: avui això dona SEMPRE una sola branca (la mare) perquè la comporta
+  // CHECK de T2 no deixa entrar cap altre valor i `ModelGarment` encara no existeix. Re-verificar
+  // amb: `grep -rn "class ModelGarment" backend/` — el dia que en surti, aquestes dues línies
+  // ja porten l'arbre engegat sense tocar res més.
+  const grupsPom = agrupaPerGarment(pomRows)
+  const arbrePom = calArbrePerGarment(grupsPom)
+  const pecesDelModel = grupsPom.map(g => g.garment).filter(g => g !== GARMENT_MARE)
   // T0 — la porta és la seva pròpia: NO demana graduació (és justament la taula que no en
   // porta). L'únic que necessita és que hi hagi almenys una mesura de talla base AMB XIFRA;
   // un model amb només POMs materialitzats buits produiria una taula de cel·les buides.
@@ -7036,140 +7065,156 @@ export default function TechSheetEditor() {
               )}
               {f2Msg && <p style={{ fontSize: 'var(--fs-caption)', color: COL.textMain, margin: '0 0 6px' }}>{f2Msg}</p>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {pomRows.map(bm => {
-                  // F1 (cota viva): etiqueta = la nomenclatura del model (cotaLabelDe, mateix
-                  // criteri que Mesures); el vincle viatja per pom_id/bm_id, no pel text.
-                  const etiqueta = cotaLabelDe(bm)
-                  const canonic = bm.pom_code_global || ''
-                  // CONTENIDOR A DUES LÍNIES, la convenció de presentació vigent (MeasureGrid ·
-                  // NomCell): L1 = nomenclatura en pes fort + nom canònic EN · L2 = nom en llengua
-                  // d'usuari, petit, gris i en cursiva. El xip amb el codi canònic ha marxat: era
-                  // un tercer vocabulari competint amb la nomenclatura a la mateixa línia (el
-                  // canònic segueix al tooltip i viatja amb la cota com a metadada).
-                  // Sprint NOMS-POM (30/07) — el BATEIG DEL MODEL mana sobre el catàleg, aquí
-                  // NOMÉS EN LECTURA: el nom es bateja a la taula de Mesures, que és qui té la
-                  // superfície d'edició (i el permís). Buit → el catàleg, exactament com abans.
-                  const nomLocal = bm.nom_traduit_model || bm.nom_ca || bm.nom_client || ''
-                  const nomCanonic = bm.nom_canonic_model || bm.nom_en || nomLocal
-                  const nomSota = nomCanonic && nomLocal !== nomCanonic ? nomLocal : ''
-                  // A3 — LA IDENTITAT SENCERA, i tots els estats indexats per ella. Amb `pom_id`
-                  // pelat, col·locar la cota d'`A` deixava `A-FOL` en verd i sense casella: el
-                  // folre no es podia acotar mai, i res no ho deia.
-                  const ident = identitatDeFila(bm)
-                  const sufix = sufixIdentitat(bm, dicc, docLang)
-                  const colocat = bm.pom_id != null && cotesColocades.has(ident)
-                  const armat = cotaPreset?.bmId === bm.id && tool === 'cota_pom'
-                  // PROPOSADA-IA: hi ha una cota de visió pendent de revisió per aquesta mesura.
-                  const iaProp = !colocat && bm.pom_id != null && iaCotesPerMesura.has(ident)
-                  // PROPOSABLE (precedent): la cascada en té col·locació i la cota encara no hi és.
-                  // Fiabilitat: exacte (precedent del mateix item) > germana (transposat).
-                  const prop = !colocat && !iaProp && bm.pom_id != null ? propostes.get(bm.pom_id) : null
-                  const exacte = prop && !prop.derivat
-                  // Semàfor: col·locat (verd) · IA/proposable/armat (gold) · pendent (gris).
-                  const accent = colocat ? COL.ok : (armat || iaProp || prop) ? COL.gold : COL.border
-                  const stateIcon = colocat ? 'ti-circle-check' : armat ? 'ti-crosshair' : iaProp ? 'ti-sparkles' : prop ? 'ti-copy' : 'ti-circle-dashed'
-                  const stateCol = colocat ? COL.ok : (armat || iaProp || prop) ? COL.gold : COL.textMuted
-                  return (
-                    <div key={bm.id} style={{ display: 'flex', alignItems: 'stretch', gap: 4 }}>
-                      {/* La casella és a TOTA fila que encara no té cota: serveix per triar què
-                          col·loca el botó automàtic, i res més. Estava lligada a l'estat
-                          PROPOSABLE, que és una propietat del precedent, no una condició per
-                          poder acotar. */}
-                      {!colocat && bm.pom_id != null && (
-                        <label title={t('tech_sheet.pom_sel_una')}
-                          style={{ display: 'flex', alignItems: 'center', flexShrink: 0, cursor: 'pointer' }}>
-                          <input type="checkbox" checked={propSel.has(ident)}
-                            onChange={() => alternaTriat(ident)} style={{ cursor: 'pointer' }} />
-                        </label>
-                      )}
-                      <button type="button"
-                        // C3 · GUARD DE DUPLICATS: un POM amb cota viva al document no es pot
-                        // re-acotar. La fila COL·LOCAT queda no-clicable (el «selector» de l'eina
-                        // Cota POM l'exclou); esborrar la cota el torna PENDENT/PROPOSABLE. No es fa
-                        // servir `disabled` per no perdre el tooltip explicatiu (Chrome l'amaga en
-                        // botons disabled): click a buit + cursor per defecte.
-                        onClick={colocat ? undefined : () => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, capa: bm.capa, instancia: bm.instancia, garmentId: garmentDeFila(bm), canonical: canonic }); setTool('cota_pom') }}
-                        aria-pressed={armat}
-                        title={colocat
-                          ? t('tech_sheet.pom_cota_ja_colocat')
-                          : canonic
-                            ? `${t('tech_sheet.pom_cota_hint', { nom: etiqueta })} · ${t('tech_sheet.pom_canonical_tip', { codi: canonic })}`
-                            : t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
-                        style={{
-                          textAlign: 'left', flex: 1, minWidth: 0, cursor: colocat ? 'default' : 'pointer',
-                          // COL·LOCAT en verd suau: l'estat es DERIVA del document del servidor
-                          // (cotesColocades = cotes vives amb pomId a les pàgines desades), mai
-                          // d'un rastre local — per això sobreviu a refrescar la pàgina.
-                          background: colocat ? COL.placedBg : armat ? COL.goldPale : COL.bg,
-                          border: `1px solid ${armat ? COL.gold : COL.border}`,
-                          borderLeft: `3px solid ${accent}`,
-                          borderRadius: 4, padding: '0.3rem 0.5rem',
-                          display: 'flex', alignItems: 'center', gap: '0.4rem',
-                          fontFamily: FONT,
-                        }}>
-                        <i className={`ti ${stateIcon}`} style={{ color: stateCol, flexShrink: 0, fontSize: 14 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
-                            <span style={{ flexShrink: 0 }}>{etiqueta}</span>
-                            {/* El nom pot no cabre-hi: es retalla amb ellipsis i el tooltip el diu sencer.
-                                A3 — el SUFIX D'IDENTITAT («· Esquerra», «· Folre») va enganxat al nom i
-                                en pes fort: no és una etiqueta al costat, és que aquesta mesura ES DIU
-                                així (mateixa llei que `NomCanonic` a la taula de Mesures). Sense ell,
-                                dues files del panell es llegien exactament igual. */}
-                            <span title={`${nomCanonic}${sufix}`} style={{ fontWeight: 500, color: COL.textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {nomCanonic}{sufix && <span style={{ fontWeight: 600 }}>{sufix}</span>}
-                            </span>
-                            {/* La ⓘ: el nom en la llengua de qui llegeix, a demanda. La segona línia
-                                permanent es queda per als casos on hi cap; això és el que la maqueta
-                                v8.1 va decidir per a la taula, i aquí val el mateix criteri. */}
-                            {nomSota && (
-                              <i className="ti ti-info-circle" title={nomSota} aria-label={nomSota}
-                                style={{ fontSize: 12, color: COL.textMuted, flexShrink: 0, cursor: 'help' }} />
-                            )}
-                            {/* Badge PROPOSADA-IA (pendent de revisió): distint d'exacte/germana. */}
-                            {iaProp && (
-                              <span title={t('tech_sheet.ia_badge_tip')}
-                                style={{ fontSize: 'var(--fs-caption)', fontWeight: 500, color: COL.gold, border: `1px solid ${COL.gold}`, borderRadius: 8, padding: '0 5px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                <i className="ti ti-sparkles" style={{ fontSize: 11 }} />{t('tech_sheet.ia_badge')}
-                              </span>
-                            )}
-                            {/* Badge de fiabilitat DISCRET (mai percentatge): exacte vs germana. */}
-                            {prop && (
-                              <span title={t(exacte ? 'tech_sheet.pom_rel_exacte_tip' : 'tech_sheet.pom_rel_germana_tip')}
-                                style={{ fontSize: 'var(--fs-caption)', fontWeight: 500, color: exacte ? COL.gold : COL.textMuted, border: `1px solid ${exacte ? COL.gold : COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
-                                {t(exacte ? 'tech_sheet.pom_rel_exacte' : 'tech_sheet.pom_rel_germana')}
-                              </span>
-                            )}
-                          </div>
-                          {/* L2 — nom en llengua d'usuari: petit, gris, cursiva. Al token
-                              --fs-label (10px) i no al de captions (8px), la mateixa correcció
-                              que ja es va fer a la taula del wizard de POMs: per sota del nom
-                              (--fs-body), però llegible. */}
-                          {nomSota && (
-                            <div title={nomSota} style={{ fontSize: 'var(--fs-label)', fontStyle: 'italic', color: COL.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {nomSota}
+                {/* SET-2/T9 · UN NIVELL PER PRENDA. La llista era plana perquè fins avui tot
+                    model és d'una peça; ara s'itera per grups i el capçal només surt amb més
+                    d'un (`calArbrePerGarment`). Amb una sola peça el resultat és EXACTAMENT
+                    el d'abans: cap rètol, cap clic, cap fila moguda de lloc —l'agrupació
+                    conserva l'ordre de `pomRows`, que és el que la tècnica ha ordenat. */}
+                {grupsPom.map(grup => (
+                  <Fragment key={`g-${grup.garment}`}>
+                    {arbrePom && (
+                      <p style={{ margin: '4px 0 0', fontSize: 'var(--fs-caption)', fontWeight: 600, color: COL.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {grup.garment === GARMENT_MARE
+                          ? t('tech_sheet.garment_mare')
+                          : t('tech_sheet.garment_codi', { codi: grup.garment })}
+                      </p>
+                    )}
+                    {grup.items.map(bm => {
+                      // F1 (cota viva): etiqueta = la nomenclatura del model (cotaLabelDe, mateix
+                      // criteri que Mesures); el vincle viatja per pom_id/bm_id, no pel text.
+                      const etiqueta = cotaLabelDe(bm)
+                      const canonic = bm.pom_code_global || ''
+                      // CONTENIDOR A DUES LÍNIES, la convenció de presentació vigent (MeasureGrid ·
+                      // NomCell): L1 = nomenclatura en pes fort + nom canònic EN · L2 = nom en llengua
+                      // d'usuari, petit, gris i en cursiva. El xip amb el codi canònic ha marxat: era
+                      // un tercer vocabulari competint amb la nomenclatura a la mateixa línia (el
+                      // canònic segueix al tooltip i viatja amb la cota com a metadada).
+                      // Sprint NOMS-POM (30/07) — el BATEIG DEL MODEL mana sobre el catàleg, aquí
+                      // NOMÉS EN LECTURA: el nom es bateja a la taula de Mesures, que és qui té la
+                      // superfície d'edició (i el permís). Buit → el catàleg, exactament com abans.
+                      const nomLocal = bm.nom_traduit_model || bm.nom_ca || bm.nom_client || ''
+                      const nomCanonic = bm.nom_canonic_model || bm.nom_en || nomLocal
+                      const nomSota = nomCanonic && nomLocal !== nomCanonic ? nomLocal : ''
+                      // A3 — LA IDENTITAT SENCERA, i tots els estats indexats per ella. Amb `pom_id`
+                      // pelat, col·locar la cota d'`A` deixava `A-FOL` en verd i sense casella: el
+                      // folre no es podia acotar mai, i res no ho deia.
+                      const ident = identitatDeFila(bm)
+                      const sufix = sufixIdentitat(bm, dicc, docLang)
+                      const colocat = bm.pom_id != null && cotesColocades.has(ident)
+                      const armat = cotaPreset?.bmId === bm.id && tool === 'cota_pom'
+                      // PROPOSADA-IA: hi ha una cota de visió pendent de revisió per aquesta mesura.
+                      const iaProp = !colocat && bm.pom_id != null && iaCotesPerMesura.has(ident)
+                      // PROPOSABLE (precedent): la cascada en té col·locació i la cota encara no hi és.
+                      // Fiabilitat: exacte (precedent del mateix item) > germana (transposat).
+                      const prop = !colocat && !iaProp && bm.pom_id != null ? propostes.get(bm.pom_id) : null
+                      const exacte = prop && !prop.derivat
+                      // Semàfor: col·locat (verd) · IA/proposable/armat (gold) · pendent (gris).
+                      const accent = colocat ? COL.ok : (armat || iaProp || prop) ? COL.gold : COL.border
+                      const stateIcon = colocat ? 'ti-circle-check' : armat ? 'ti-crosshair' : iaProp ? 'ti-sparkles' : prop ? 'ti-copy' : 'ti-circle-dashed'
+                      const stateCol = colocat ? COL.ok : (armat || iaProp || prop) ? COL.gold : COL.textMuted
+                      return (
+                        <div key={bm.id} style={{ display: 'flex', alignItems: 'stretch', gap: 4 }}>
+                          {/* La casella és a TOTA fila que encara no té cota: serveix per triar què
+                              col·loca el botó automàtic, i res més. Estava lligada a l'estat
+                              PROPOSABLE, que és una propietat del precedent, no una condició per
+                              poder acotar. */}
+                          {!colocat && bm.pom_id != null && (
+                            <label title={t('tech_sheet.pom_sel_una')}
+                              style={{ display: 'flex', alignItems: 'center', flexShrink: 0, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={propSel.has(ident)}
+                                onChange={() => alternaTriat(ident)} style={{ cursor: 'pointer' }} />
+                            </label>
+                          )}
+                          <button type="button"
+                            // C3 · GUARD DE DUPLICATS: un POM amb cota viva al document no es pot
+                            // re-acotar. La fila COL·LOCAT queda no-clicable (el «selector» de l'eina
+                            // Cota POM l'exclou); esborrar la cota el torna PENDENT/PROPOSABLE. No es fa
+                            // servir `disabled` per no perdre el tooltip explicatiu (Chrome l'amaga en
+                            // botons disabled): click a buit + cursor per defecte.
+                            onClick={colocat ? undefined : () => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, capa: bm.capa, instancia: bm.instancia, garmentId: garmentDeFila(bm), canonical: canonic }); setTool('cota_pom') }}
+                            aria-pressed={armat}
+                            title={colocat
+                              ? t('tech_sheet.pom_cota_ja_colocat')
+                              : canonic
+                                ? `${t('tech_sheet.pom_cota_hint', { nom: etiqueta })} · ${t('tech_sheet.pom_canonical_tip', { codi: canonic })}`
+                                : t('tech_sheet.pom_cota_hint', { nom: etiqueta })}
+                            style={{
+                              textAlign: 'left', flex: 1, minWidth: 0, cursor: colocat ? 'default' : 'pointer',
+                              // COL·LOCAT en verd suau: l'estat es DERIVA del document del servidor
+                              // (cotesColocades = cotes vives amb pomId a les pàgines desades), mai
+                              // d'un rastre local — per això sobreviu a refrescar la pàgina.
+                              background: colocat ? COL.placedBg : armat ? COL.goldPale : COL.bg,
+                              border: `1px solid ${armat ? COL.gold : COL.border}`,
+                              borderLeft: `3px solid ${accent}`,
+                              borderRadius: 4, padding: '0.3rem 0.5rem',
+                              display: 'flex', alignItems: 'center', gap: '0.4rem',
+                              fontFamily: FONT,
+                            }}>
+                            <i className={`ti ${stateIcon}`} style={{ color: stateCol, flexShrink: 0, fontSize: 14 }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
+                                <span style={{ flexShrink: 0 }}>{etiqueta}</span>
+                                {/* El nom pot no cabre-hi: es retalla amb ellipsis i el tooltip el diu sencer.
+                                    A3 — el SUFIX D'IDENTITAT («· Esquerra», «· Folre») va enganxat al nom i
+                                    en pes fort: no és una etiqueta al costat, és que aquesta mesura ES DIU
+                                    així (mateixa llei que `NomCanonic` a la taula de Mesures). Sense ell,
+                                    dues files del panell es llegien exactament igual. */}
+                                <span title={`${nomCanonic}${sufix}`} style={{ fontWeight: 500, color: COL.textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {nomCanonic}{sufix && <span style={{ fontWeight: 600 }}>{sufix}</span>}
+                                </span>
+                                {/* La ⓘ: el nom en la llengua de qui llegeix, a demanda. La segona línia
+                                    permanent es queda per als casos on hi cap; això és el que la maqueta
+                                    v8.1 va decidir per a la taula, i aquí val el mateix criteri. */}
+                                {nomSota && (
+                                  <i className="ti ti-info-circle" title={nomSota} aria-label={nomSota}
+                                    style={{ fontSize: 12, color: COL.textMuted, flexShrink: 0, cursor: 'help' }} />
+                                )}
+                                {/* Badge PROPOSADA-IA (pendent de revisió): distint d'exacte/germana. */}
+                                {iaProp && (
+                                  <span title={t('tech_sheet.ia_badge_tip')}
+                                    style={{ fontSize: 'var(--fs-caption)', fontWeight: 500, color: COL.gold, border: `1px solid ${COL.gold}`, borderRadius: 8, padding: '0 5px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                    <i className="ti ti-sparkles" style={{ fontSize: 11 }} />{t('tech_sheet.ia_badge')}
+                                  </span>
+                                )}
+                                {/* Badge de fiabilitat DISCRET (mai percentatge): exacte vs germana. */}
+                                {prop && (
+                                  <span title={t(exacte ? 'tech_sheet.pom_rel_exacte_tip' : 'tech_sheet.pom_rel_germana_tip')}
+                                    style={{ fontSize: 'var(--fs-caption)', fontWeight: 500, color: exacte ? COL.gold : COL.textMuted, border: `1px solid ${exacte ? COL.gold : COL.border}`, borderRadius: 8, padding: '0 5px', flexShrink: 0 }}>
+                                    {t(exacte ? 'tech_sheet.pom_rel_exacte' : 'tech_sheet.pom_rel_germana')}
+                                  </span>
+                                )}
+                              </div>
+                              {/* L2 — nom en llengua d'usuari: petit, gris, cursiva. Al token
+                                  --fs-label (10px) i no al de captions (8px), la mateixa correcció
+                                  que ja es va fer a la taula del wizard de POMs: per sota del nom
+                                  (--fs-body), però llegible. */}
+                              {nomSota && (
+                                <div title={nomSota} style={{ fontSize: 'var(--fs-label)', fontStyle: 'italic', color: COL.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {nomSota}
+                                </div>
+                              )}
                             </div>
+                            {/* Valor a la dreta, 1 decimal + unitat, com la taula (punt decimal). La
+                                xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
+                            {bm.base_value_cm != null && (
+                              <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0, textAlign: 'right' }}>
+                                {`${Number(bm.base_value_cm).toFixed(1)} cm`}
+                              </span>
+                            )}
+                          </button>
+                          {/* «Posar»: col·loca LA cota des del precedent (queda viva F1, arrossegable). */}
+                          {prop && (
+                            <button type="button" onClick={() => posarProposta(bm)}
+                              title={t('tech_sheet.pom_posar')}
+                              style={{ flexShrink: 0, width: 32, cursor: 'pointer', border: `1px solid ${COL.gold}`, borderRadius: 4, background: COL.goldPale, color: COL.gold, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <i className="ti ti-copy" style={{ fontSize: 15 }} />
+                            </button>
                           )}
                         </div>
-                        {/* Valor a la dreta, 1 decimal + unitat, com la taula (punt decimal). La
-                            xifra no es tenyeix mai: el color el porta el semàfor de l'esquerra. */}
-                        {bm.base_value_cm != null && (
-                          <span style={{ fontSize: 'var(--fs-label)', color: COL.textMain, flexShrink: 0, textAlign: 'right' }}>
-                            {`${Number(bm.base_value_cm).toFixed(1)} cm`}
-                          </span>
-                        )}
-                      </button>
-                      {/* «Posar»: col·loca LA cota des del precedent (queda viva F1, arrossegable). */}
-                      {prop && (
-                        <button type="button" onClick={() => posarProposta(bm)}
-                          title={t('tech_sheet.pom_posar')}
-                          style={{ flexShrink: 0, width: 32, cursor: 'pointer', border: `1px solid ${COL.gold}`, borderRadius: 4, background: COL.goldPale, color: COL.gold, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <i className="ti ti-copy" style={{ fontSize: 15 }} />
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
+                      )
+                    })}
+                  </Fragment>
+                ))}
               </div>
             </Contenidor>
           )}
@@ -7197,6 +7242,21 @@ export default function TechSheetEditor() {
                   <span style={libName}>{v.label}</span>
                 </button>
               ))}
+              {/* SET-2/T9 — la partició per PRENDA, sobre la de secció perquè és l'eix de
+                  dalt. Mateixa llei: només surt si el model té més d'una peça, i avui no en
+                  té cap (la comporta CHECK de T2 congela `garment` a ''), de manera que
+                  aquesta casella no es pinta enlloc. Mai forçada. */}
+              {pecesDelModel.length > 0 && (
+                <label style={{ ...libRow, cursor: 'pointer', gap: 6 }}
+                  title={t('tech_sheet.split_by_garment_hint', { peces: pecesDelModel.join(' · ') })}>
+                  <input type="checkbox" checked={partirPerPeca}
+                    onChange={e => setPartirPerPeca(e.target.checked)}
+                    style={{ flexShrink: 0, cursor: 'pointer' }} />
+                  <span style={libName}>
+                    {t('tech_sheet.split_by_garment', { count: pecesDelModel.length + 1 })}
+                  </span>
+                </label>
+              )}
               {/* F3 — la partició per secció NOMÉS surt si el model en té més d'una: en una
                   fitxa d'una sola peça seria una casella que no vol dir res. Mai forçada. */}
               {seccionsDelModel.length > 1 && (

@@ -65,3 +65,43 @@ export function agrupaPerGarment(items, llegeix = garmentDeFila) {
  * degradar a EXACTAMENT el que es veia abans d'aquest tram.
  */
 export const calArbrePerGarment = (grups) => (grups || []).length > 1
+
+/** Una taula que abraça diverses prendes és del MODEL, o sigui de la mare: l'ancoratge d'un
+ *  objecte és UN codi, mai una llista. */
+export const garmentComu = (files) => {
+  const grups = agrupaPerGarment(files)
+  return grups.length === 1 ? grups[0].garment : GARMENT_MARE
+}
+
+/**
+ * LA LLEI DE PARTIR UNA TAULA DE MESURES EN DIVERSES, en un sol lloc (T1a i T1b la
+ * comparteixen). Dos eixos, i l'ordre importa:
+ *
+ *   PRENDA (`garment`) — l'eix de DALT. És la peça del model.
+ *   SECCIÓ (`seccio`)  — l'eix de DINS. És un rètol de text lliure de l'import, i pot partir
+ *                        UNA sola prenda en zones («cos», «caputxa» d'una dessuadora).
+ *
+ * Cap partició s'aplica sola: totes dues les demana qui compon la fitxa, i totes dues callen
+ * si el seu eix no té més d'una branca. Amb tot d'una prenda i sense seccions —el corpus
+ * d'avui, 2026-08-10— torna UN sol grup amb totes les files, que és exactament el que hi
+ * havia abans d'aquest tram.
+ *
+ * @param {Array} files
+ * @param {{perPeca?: boolean, perSeccio?: boolean, seccionsDe: (files:Array)=>string[]}} opcions
+ * @returns {Array<{garment: string, seccio: string|null, files: Array}>}
+ */
+export function partirTaules(files, { perPeca = false, perSeccio = false, seccionsDe }) {
+  const perGarment = agrupaPerGarment(files)
+  const prendes = (perPeca && calArbrePerGarment(perGarment))
+    ? perGarment.map(g => ({ garment: g.garment, files: g.items }))
+    : [{ garment: garmentComu(files), files: files || [] }]
+  return prendes.flatMap(p => {
+    const seccions = seccionsDe(p.files)
+    return (perSeccio && seccions.length > 1)
+      ? seccions.map(sec => ({
+        garment: p.garment, seccio: sec,
+        files: p.files.filter(f => (f?.seccio || '').trim() === sec),
+      }))
+      : [{ garment: p.garment, seccio: null, files: p.files }]
+  })
+}
