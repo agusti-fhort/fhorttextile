@@ -19,9 +19,14 @@ import Modal from '../ui/Modal'
 // reintenta amb el seu flag. Si els dos concorren, el backend els retorna d'un en un i aquí es
 // demanen d'un en un: qui accepta fer servir el grading d'un altre client no ha acceptat, amb el
 // mateix clic, que se li esborrin 88 regles pròpies.
+// 🔑 EL TERCER CAS (10/08) no és d'assignar un joc a un model, sinó d'EDITAR-LO: canviar-li el
+// sistema de talles quan alguna `talla_break_label` de les seves regles no existeix al run nou.
+// Viu aquí igualment perquè el mecanisme és el mateix —409 amb `tipus`, un flag per cas— i
+// tenir-ne dos de bessons en dos fitxers és exactament el que aquest hook va venir a acabar.
 export const FLAG_PER_TIPUS = {
   ruleset_altre_client: 'confirmar_altre_client',
   esborrat_residents: 'confirmar_esborrat_residents',
+  etiquetes_fora_del_run: 'confirmar_etiquetes_fora_del_run',
 }
 
 function ResumResidents({ dades, t }) {
@@ -95,6 +100,20 @@ export default function useConfirmacioRuleset() {
       <p style={{ fontSize: 'var(--fs-body)', marginBottom: 12 }}>{peticio.dades.message}</p>
       {peticio.dades.tipus === 'esborrat_residents' && (
         <ResumResidents dades={peticio.dades} t={t} />
+      )}
+      {/* Les etiquetes que no casen, ENUMERADES. «3 regles no casen» no es pot decidir; amb els
+          codis a la vista, sí: qui llegeix sap si són les que no li importen o les que sí. */}
+      {peticio.dades.tipus === 'etiquetes_fora_del_run' && !!peticio.dades.etiquetes?.length && (
+        <ul style={{ margin: 0, paddingLeft: 20, fontSize: 'var(--fs-body)', lineHeight: 1.7 }}>
+          {peticio.dades.etiquetes.map(e => (
+            <li key={e.etiqueta}>
+              <strong>{e.etiqueta}</strong>
+              {' — '}
+              {t('graduacio.confirma.etiquetes_fora_del_run.regles', { count: e.regles })}
+              {!!e.poms?.length && <span style={{ color: 'var(--text-muted)' }}> ({e.poms.join(' · ')})</span>}
+            </li>
+          ))}
+        </ul>
       )}
     </Modal>
   ) : null

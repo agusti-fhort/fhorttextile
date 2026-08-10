@@ -1,4 +1,7 @@
-from rest_framework import serializers
+from collections import defaultdict
+
+from rest_framework import serializers, status
+from rest_framework.exceptions import APIException
 
 from .size_labels import _tipus_de_les_etiquetes
 
@@ -235,6 +238,22 @@ class GarmentTypeSerializer(serializers.ModelSerializer):
         read_only_fields = ['is_system']
 
 
+class ConflicteConfirmable(APIException):
+    """Un 409 amb cos PROPI: un avís que es pot confirmar, no un error.
+
+    ⚠️ `self.detail` s'assigna DIRECTAMENT i no es passa per `APIException.__init__`, que
+    normalitza tot el payload amb `_get_error_details` i converteix els enters en cadenes
+    (`'regles': 3` → `'3'`). El front hi compta plurals amb aquests nombres, i un «3» de text
+    no és un 3. DRF ja retorna els `dict` tal qual (`exception_handler`), o sigui que no cal
+    res més perquè el cos arribi sencer.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self, payload):
+        self.detail = payload
+
+
 class GradingRuleSerializer(serializers.ModelSerializer):
     pom_codi = serializers.CharField(source='pom.codi_client', read_only=True)
     pom_nom = serializers.CharField(source='pom.nom_client', read_only=True)
@@ -359,19 +378,73 @@ class GradingRuleSetSerializer(serializers.ModelSerializer):
     def get_fit_type_codi(self, obj):
         return obj.fit_type.codi if obj.fit_type else None
 
+    # ── CANVIAR EL SISTEMA DE TALLES D'UN CONJUNT AMB REGLES ─────────────────────────────
+    #
+    # 🚨 AQUÍ HI HAVIA UN GUARD DUR (400) i el seu motiu era FALS (Agus, 2026-08-10). Deia:
+    # «no es pot canviar: les talles base de les regles pertanyen al run actual». Però
+    # `GradingRule.talla_base` és **mer metadata del seed** i el motor no la llegeix mai —ho
+    # té escrit `grading_utils.grading_rules_match`: «_apply_rule ancora a
+    # model.base_size_label, no a rule.talla_base»—, i el trencament es resol per ETIQUETA
+    # (`_break_idx_de` compara `talla_break_label` amb les etiquetes del run). O sigui que un
+    # conjunt NO pertany al seu run: hi apunta, i el pot canviar.
+    #
+    # El que sí que és real és una etiqueta que desapareix: si una regla trenca a `S` i el run
+    # nou no té cap `S`, `_break_idx_de` torna `None` i **aquella regla es gradua sense
+    # trencament**, en silenci. Això no és per bloquejar-ho —hi ha casos legítims— sinó per
+    # PREGUNTAR-HO, amb els noms a la vista.
+    #
+    # 🔑 EL CRITERI DE COMPARACIÓ ÉS EL DEL MOTOR I NO UN ALTRE: `_norm` (upper+strip), mai
+    # `canonical_size_label`. Afinar-lo aquí faria que la porta i el càlcul diguessin coses
+    # diferents, que és pitjor que tenir-los tots dos estrictes.
+    def _validar_canvi_de_run(self, inst, nou):
+        from fhort.pom.grading_utils import _norm
+
+        nou_id = getattr(nou, 'id', None)
+        if nou_id == inst.size_system_id:
+            return
+        # Treure el run (`None`) no deixa cap etiqueta orfe: el conjunt passa a no apuntar
+        # enlloc i el motor el resol contra el run del MODEL, que és cap on va CAT2.1.
+        if nou is None:
+            return
+
+        etiquetes_noves = {_norm(e) for e in nou.talles.values_list('etiqueta', flat=True)}
+        orfes = defaultdict(list)
+        for r in inst.regles.select_related('pom').all():
+            lbl = (r.talla_break_label or '').strip()
+            if lbl and _norm(lbl) not in etiquetes_noves:
+                orfes[lbl].append(r.pom.codi_client if r.pom_id else f'#{r.id}')
+        if not orfes:
+            return
+
+        if str(self.initial_data.get('confirmar_etiquetes_fora_del_run', '')).lower() in (
+                'true', '1', 'yes', 'on'):
+            return
+
+        n_regles = sum(len(v) for v in orfes.values())
+        raise ConflicteConfirmable({
+            'conflict': True,
+            'tipus': 'etiquetes_fora_del_run',
+            'codi': 'GRADING_BREAK_LABELS_OUTSIDE_RUN',
+            'grading_rule_set_id': inst.id,
+            'grading_rule_set_nom': inst.nom,
+            'size_system_nou': nou.codi,
+            # Els POMs, TALLATS a 8 per etiqueta: la llista és per reconèixer-les, no per
+            # auditar-les, i 86 codis en un diàleg no es llegeixen — es tanquen.
+            'etiquetes': [
+                {'etiqueta': lbl, 'regles': len(poms), 'poms': sorted(poms)[:8]}
+                for lbl, poms in sorted(orfes.items(), key=lambda kv: -len(kv[1]))
+            ],
+            'regles_afectades': n_regles,
+            'message': (
+                f"{n_regles} regles de «{inst.nom}» trenquen a talles que {nou.codi} no té "
+                f"({', '.join(sorted(orfes))}). Si continues, aquestes regles graduaran SENSE "
+                f"trencament fins que se'ls doni una talla del run nou."),
+        })
+
     def validate(self, attrs):
         inst = self.instance
-        # GUARD DUR: si el conjunt té regles, el `size_system` és IMMUTABLE — les talla_base de les
-        # regles hi pertanyen. El front el desactiva (UX); la seguretat real viu aquí. Sortida: clonar
-        # el conjunt al sistema correcte (el clon ja hereta targets + abast) o buidar-ne les regles.
         if inst is not None and 'size_system' in attrs:
-            new_id = getattr(attrs['size_system'], 'id', None)
-            if new_id != inst.size_system_id and inst.regles.exists():
-                actual = inst.size_system.codi if inst.size_system_id else '—'
-                raise serializers.ValidationError({'size_system': (
-                    f"No es pot canviar el sistema de talles d'un conjunt amb regles: les talles base "
-                    f"de les {inst.regles.count()} regles pertanyen a {actual}. Clona el conjunt al "
-                    f"sistema correcte o buida'n les regles.")})
+            self._validar_canvi_de_run(inst, attrs['size_system'])
         # F-5 — GUARD DUR: un seed ISO (is_system_default) NO pot canviar d'eixos. El `disabled`
         # del front és UX; la seguretat real viu aquí (protegeix contra PATCH directes a l'API).
         if inst is not None and inst.is_system_default:
