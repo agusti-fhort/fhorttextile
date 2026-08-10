@@ -189,8 +189,20 @@ tasques. El stepper dirà el fet; el Kanban, el gest.
 
 ## Arnesos
 
-| Arnès | Cobreix |
-|---|---|
-| `ops/qa/qa_b1_comprovacio_logica.py` | B1 · 11 afirmacions contra la BD viva, re-derivades des de les taules d'origen |
-| `backend/fhort/fitting/test_repas.py::RepasB2Test` | B2 · 13 proves: entrada, cens sencer, columnes buides, dedupe d'etapa, marcatge |
-| `ops/qa/qa_b34_router_i_estat.py` | B3 · els dos camins d'entrada · B4 · les quatre portes |
+| Arnès | Cobreix | Estat |
+|---|---|---|
+| `ops/qa/qa_b1_comprovacio_logica.py` | B1 · 11 afirmacions contra la BD viva, **re-derivades des de les taules d'origen** (mai llegint el codi que s'audita) | ✅ 11/11 |
+| `ops/qa/qa_b12_pantalles.py` | B1+B2 · el que la consulta resol arriba a la pantalla, i el marcatge es mesura al NAVEGADOR (pes i color computats) | ✅ 10/10 |
+| `ops/qa/qa_b34_router_i_estat.py` | B3 · els dos camins d'entrada · B4 · les quatre portes i el contrast amb el Kanban | ✅ 18/18 |
+| `fitting/test_repas.py` + `models_app/test_c4_germanes…` + `…/test_base_stages_no_regressio` | B2 · el contracte sencer, amb 13 proves noves (`RepasB2Test`) | ✅ 78/78 |
+
+⚠️ **La suite sencera** (`fhort.pom fhort.fitting fhort.models_app`, ~1 h) **no s'ha corregut en
+aquest tram**: el banc l'ocupava S1. S'han corregut els tres mòduls que aquest tram toca.
+
+## Un forat que van trobar les proves (i que no era del brief)
+
+Les talles oferibles del Repàs sortien **només** de les línies de fitting i de les etapes. Un
+model amb mesures entrades i **cap fitting** es quedava sense cap talla —i per tant sense cap
+columna—, i el Repàs deia «cap fitting fet» **amagant justament la columna d'origen que havia
+d'ensenyar**. Al 1320 no es veia perquè hi ha un fitting. Arreglat al mateix tram
+(`c6862883`): l'entrada viu a la talla base i, com les etapes, fa que la base sigui oferible.
