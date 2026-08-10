@@ -60,16 +60,36 @@ class Derivacio:
 
 
 def germanes_de(bm, *, nomes_actives=True):
-    """Les files germanes de `bm`: mateix (model, POM) i EXACTAMENT un eix diferent.
+    """Les files germanes de `bm`: mateix (model, POM, GARMENT) i EXACTAMENT un eix diferent.
 
     No inclou `bm`. Retorna un queryset ordenat per (capa, instancia) — l'ordre explícit no és
     decoratiu: el `Meta.ordering` de `BaseMeasurement` no inclou `instancia`, de manera que
     entre dues germanes de la mateixa capa el desempat el faria el planner de Postgres.
+
+    🔑 SET-2/R3 — EL GARMENT NO ÉS UN EIX DE GERMANOR: ÉS UNA FRONTERA.
+    `capa` i `instancia` són els dos eixos pels quals dues files SÓN germanes (i per tant
+    es deriven l'una de l'altra). El `garment` no: dues files de peces diferents no són
+    dues cares de la mateixa mesura, són **dues mesures de dues prendes distintes**. Per
+    això entra al filtre d'IGUALTAT, al costat de `model` i `pom`, i no a la `Q` dels eixos.
+
+    Sense això el mal era silenciós i doble. La `Q` de sota demana «comparteixen instància
+    O comparteixen capa»: dues files amb la MATEIXA capa i la MATEIXA instància en peces
+    diferents passarien **les dues** branques, o sigui que el top i la calceta serien
+    germanes l'un de l'altre. I com que `deriva()` alimenta `aplica()`, que ESCRIU
+    (`:124`, invocada des de `services_size_check.py:255-257`), corregir el pit del top
+    n'hi hauria sumat l'increment al de la calceta — el mateix valor, sense cap avís, i
+    creuant peces. Un bug de creuament indetectable pel lector.
+
+    Aquest filtre és la condició que ha d'estar VERDA abans de retirar les comportes
+    `*_garment_gate_set2` de T2. Mentre les comportes visquin, `garment` és '' a tot arreu
+    i aquesta línia és un no-op observable.
     """
     from django.db.models import Q
     from fhort.models_app.models import BaseMeasurement
 
-    qs = BaseMeasurement.objects.filter(model_id=bm.model_id, pom_id=bm.pom_id).exclude(pk=bm.pk)
+    qs = (BaseMeasurement.objects
+          .filter(model_id=bm.model_id, pom_id=bm.pom_id, garment=bm.garment)
+          .exclude(pk=bm.pk))
     if nomes_actives:
         qs = qs.filter(is_active=True)
     # Exactament un eix diferent: o comparteixen instància i canvien de capa, o a l'inrevés.
