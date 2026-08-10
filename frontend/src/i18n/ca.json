@@ -3747,7 +3747,6 @@
     "field_construction_ref": "Construction",
     "field_fit_ref": "Fit Type",
     "field_size_system": "Size System",
-    "size_system_locked": "No es pot canviar en un conjunt amb regles ({{count}}). Clona'l al sistema correcte.",
     "coherence_warn": "Desat. ⚠️ El cas {{axes}} ara casa amb {{count}} joc(s) de regles ({{names}}). Revisa la coherència.",
     "modal_note": "Els seeds del sistema (ISO) no permeten editar els eixos.",
     "col": {
@@ -4749,6 +4748,7 @@
     "count_pending": "{{n}} per prendre",
     "count_taken": "{{n}} preses",
     "kbd_buit": "buit = encara no presa",
+    "sense_sessio": "No s'ha pogut obrir cap sessió de fitting: sense sessió no hi ha pantalla de mesurar prenda.",
     "row_pending": "Encara no s’ha pres aquesta mesura.",
     "subtitol": "La presa es compara amb la base vigent del model. La base no canvia fins que es resol la comprovació.",
     "titol": "Mesurar prenda"
