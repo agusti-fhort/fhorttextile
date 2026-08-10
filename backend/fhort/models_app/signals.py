@@ -289,6 +289,12 @@ def log_measurement_change(sender, instance, created, raw=False, **kwargs):
             # atribuïda diu que s'ha esborrat una mesura que segueix viva.
             capa=instance.capa,
             instancia=instance.instancia,
+            # SET-2/T5 — el garment es COPIA, igual que els altres dos eixos i pel mateix
+            # motiu, que aquí és el més urgent de tots: aquesta taula és APPEND-ONLY i NO té
+            # unicitat, o sigui que una fila escrita sense l'eix no es pot corregir després.
+            # Una poda mal atribuïda diria que s'ha esborrat una mesura d'una peça que
+            # segueix viva. El log no ha d'endevinar res: ha de copiar.
+            garment=instance.garment,
             base_measurement=instance,
             valor_anterior=instance.base_value_cm,
             # `valor_nou` no és nullable i la poda no canvia el valor: 0.0 vol dir
@@ -337,6 +343,10 @@ def log_measurement_change(sender, instance, created, raw=False, **kwargs):
         pom=instance.pom,
         capa=instance.capa,
         instancia=instance.instancia,
+        # SET-2/T5 — el tercer eix, copiat de la `instance` com els altres dos. Append-only
+        # i sense unicitat: sense això, el lector no podrà dir MAI de quina peça parlava un
+        # canvi ja registrat, i la pèrdua és irreversible.
+        garment=instance.garment,
         base_measurement=instance,
         valor_anterior=old_value,
         valor_nou=instance.base_value_cm,

@@ -20,12 +20,18 @@ EL MAL QUE VIGILA, que eren tres nodes encadenats i tots silenciosos:
 
 Amb les comportes de T2 vives el cas no es pot ni construir: totes les files són `garment=''`.
 Per això s'alcen dins d'un savepoint que sempre es desfà (patró `test_lectors_capa_onada1`),
-i se n'alcen TRES i no una, cadascuna pel seu motiu:
+i se n'alcen QUATRE i no una, cadascuna pel seu motiu:
   · `models_app_basemeasurement`      — per poder escriure la mesura de la segona peça.
   · `models_app_modelgradingrule`     — per poder-li donar la SEVA llei (això és nou de T4: a
                                         C3 la regla no travessava cap eix i no calia alçar-la).
   · `fitting_gradedspec`              — és ON HA D'ATERRAR el resultat: sense alçar-la, el
                                         motor calcularia bé i Postgres refusaria l'escriptura.
+  · `models_app_measurementchangelog` — des de T5 (2026-08-10): el signal F1 ja copia el
+                                        garment al log, i aquella taula porta la seva pròpia
+                                        comporta. Eren TRES fins llavors, i la quarta va
+                                        aparèixer quan el signal va deixar d'estampar-hi el
+                                        tram buit — v. el mateix cas per a la capa a
+                                        `test_c3_b_dues_germanes`.
 """
 import contextlib
 import datetime
@@ -40,7 +46,12 @@ from fhort.pom.models import POMMaster, SizeDefinition, SizeSystem
 
 MARE = ''
 SEGONA = '02'
-TAULES = ('models_app_basemeasurement', 'models_app_modelgradingrule', 'fitting_gradedspec')
+TAULES = ('models_app_basemeasurement', 'models_app_modelgradingrule', 'fitting_gradedspec',
+          # SET-2/T5 (2026-08-10) — la quarta: el signal F1 ja copia el garment al log, i
+          # aquella taula porta la seva pròpia comporta. Escriure la base de la 02 fa néixer
+          # un apunt de la 02. Mateix motiu que `test_c3_b_dues_germanes` documenta per a la
+          # capa; abans de T5 no calia perquè el signal hi estampava sempre el tram buit.
+          'models_app_measurementchangelog')
 
 
 @contextlib.contextmanager

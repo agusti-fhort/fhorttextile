@@ -34,6 +34,15 @@ MARE = ''
 SEGONA = '02'
 FOLRE = 'folre'
 
+#: S'alcen DUES taules i no una. La segona és `MeasurementChangeLog`, i el motiu és el mateix
+#: que `test_c3_b_dues_germanes` ja documenta per a la capa: el **signal F1 estampa l'eix de la
+#: fila que s'escriu**, i aquella taula porta la SEVA pròpia comporta. Mentre el signal no
+#: copiava el garment (abans de T5) n'hi havia prou amb la de la mesura; des que el copia
+#: —que és el que ha de fer, perquè el log és append-only i una atribució errònia no es pot
+#: corregir— escriure una mesura de la 02 fa néixer un apunt de la 02, i sense alçar aquesta
+#: comporta el `create` peta amb CheckViolation. (2026-08-10)
+TAULES = ('models_app_basemeasurement', 'models_app_measurementchangelog')
+
 
 @contextlib.contextmanager
 def comporta_garment_alcada(*taules):
@@ -85,7 +94,7 @@ class GermanesNoCreuenElGarmentTest(TenantTestCase):
         separa és la peça. No són dues cares de la mateixa mesura; són dues mesures de dues
         prendes distintes.
         """
-        with comporta_garment_alcada('models_app_basemeasurement'):
+        with comporta_garment_alcada(*TAULES):
             mare = self._mesura(garment=MARE, nom_fitxa='A-MARE')
             segona = self._mesura(garment=SEGONA, valor=60.0, nom_fitxa='A-02')
 
@@ -100,7 +109,7 @@ class GermanesNoCreuenElGarmentTest(TenantTestCase):
         Si el creuament sobrevisqués, aquí sortiria una `Derivacio` apuntant a la fila de
         l'altra peça —i `aplica()` l'hi escriuria.
         """
-        with comporta_garment_alcada('models_app_basemeasurement'):
+        with comporta_garment_alcada(*TAULES):
             mare = self._mesura(garment=MARE, nom_fitxa='A-MARE')
             segona = self._mesura(garment=SEGONA, valor=60.0, nom_fitxa='A-02')
 
@@ -119,7 +128,7 @@ class GermanesNoCreuenElGarmentTest(TenantTestCase):
         sent un eix de germanor exactament com sempre —si això caigués, la derivació
         quedaria morta per a tota peça que no fos la mare, i el símptoma seria un silenci.
         """
-        with comporta_garment_alcada('models_app_basemeasurement'):
+        with comporta_garment_alcada(*TAULES):
             ext = self._mesura(garment=SEGONA, capa='exterior', nom_fitxa='B-EXT')
             fol = self._mesura(garment=SEGONA, capa=FOLRE, valor=98.0, nom_fitxa='B-FOL')
 

@@ -2147,15 +2147,17 @@ def set_measurements_view(request, model_id):
                 # C4/BLOC 1-BIS — la fila es resol per la IDENTITAT SENCERA (els eixos vénen
                 # del payload; qui no els digui rep el literal de sempre). Amb el literal fix
                 # que hi havia, dues germanes queien sobre la mateixa fila.
-                capa, instancia = _identitat_de_mesura(m)
+                capa, instancia, garment = _identitat_de_mesura(m)
                 # L'ORIGEN I LES TOLERÀNCIES NO SÓN EFECTE SECUNDARI D'AQUESTA ESCRIPTURA
                 # (v. `_procedencia_de_mesura`): abans anaven als `defaults` de l'upsert i
                 # això les reescrivia a CADA fila del payload, canviés el valor o no.
                 bm = BaseMeasurement.objects.filter(
-                    model=model, pom=pom, capa=capa, instancia=instancia).first()
+                    model=model, pom=pom, capa=capa, instancia=instancia,
+                    garment=garment).first()
                 es_nova = bm is None
                 if es_nova:
-                    bm = BaseMeasurement(model=model, pom=pom, capa=capa, instancia=instancia)
+                    bm = BaseMeasurement(model=model, pom=pom, capa=capa,
+                                         instancia=instancia, garment=garment)
                 valor_nou = float(value)
                 _procedencia_de_mesura(bm, m, pom, valor_nou, es_nova)
                 bm.base_value_cm = valor_nou
@@ -2260,8 +2262,8 @@ def gravar_pom_view(request, model_id):
             continue
 
         # C4/BLOC 1-BIS — LA IDENTITAT DE LA FILA SURT DEL PAYLOAD (v. `_identitat_de_mesura`).
-        capa, instancia = _identitat_de_mesura(m)
-        ident = (int(pom_id), capa, instancia)
+        capa, instancia, garment = _identitat_de_mesura(m)
+        ident = (int(pom_id), capa, instancia, garment)
         if ident in identitats:
             # 🔴 DUES ENTRADES DEL MATEIX REQUEST QUE ESCRIUEN A LA MATEIXA FILA. Executar-ho
             # seria «l'última guanya» dins del propi bucle —el valor de la primera no arribaria
@@ -3227,7 +3229,7 @@ def escalat_ajustar_talla_view(request, model_id):
     # talla de la sisa dreta movia la base de l'esquerra, li esborrava els overrides i deixava
     # l'apunt del canvi atribuït a l'altra al registre append-only.
     # Punt únic compartit amb els dos upserts, les dues podes i `desactivar_pom`.
-    capa, instancia = _identitat_de_mesura(data)
+    capa, instancia, garment = _identitat_de_mesura(data)
     talla = (data.get('talla') or '').strip()
     valor = data.get('valor')
     if pom_id is None or not talla:
@@ -3413,12 +3415,22 @@ def _poda_mesures(model, keep_mesures, keep_pom_ids):
         # `.exclude()` no pot expressar una clau composta: es resol en Python sobre les files
         # vives del model, que són poques i ja s'han de llegir igualment.
         baixes = [bm.id for bm in vives
-                  if (bm.pom_id, bm.capa, bm.instancia) not in conserva]
+                  if (bm.pom_id, bm.capa, bm.instancia, bm.garment) not in conserva]
         return BaseMeasurement.objects.filter(id__in=baixes).update(is_active=False) if baixes else 0
 
+    # ── SET-2/T5 · LA BRANCA DE LA CLAU CURTA, I PER QUÈ HI ENTRA `garment=''` ─────────
+    # Aquesta branca DESACTIVA tot el que no sigui a `keep_pom_ids`, i el cridador que hi
+    # arriba només sap dir POMs: no sap de capes, ni d'instàncies, ni de peces. Per això ja
+    # s'acotava a l'exterior de la instància única — desactivar la germana d'un eix que el
+    # client no ha nomenat seria decidir per ell.
+    # El `garment=''` és la MATEIXA llei amb l'eix nou, i sense ell el dany era el més gros
+    # del tram: una crida amb clau curta —les que fa avui el 100% del corpus— hauria donat
+    # de baixa les files de TOTES les peces del model, no només les de la mare. Esborra
+    # feina i no crida: ningú peta, les mesures simplement deixen de comptar.
+    # Una llista de POMs no diu que cap peça s'hagi de treure.
     keep = [int(x) for x in keep_pom_ids]
     return (vives
-            .filter(capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+            .filter(capa=MeasurementLayer.SLUG_DEFECTE, instancia='', garment='')
             .exclude(pom_id__in=keep)
             .update(is_active=False))
 
@@ -3446,7 +3458,9 @@ def _identitat_de_mesura(m):
     columnes són NOT NULL amb default i un client que enviï `null` vol dir «la de sempre».
     """
     from fhort.pom.models import MeasurementLayer
-    return (m.get('capa') or MeasurementLayer.SLUG_DEFECTE, m.get('instancia') or '')
+    return (m.get('capa') or MeasurementLayer.SLUG_DEFECTE,
+            m.get('instancia') or '',
+            m.get('garment') or '')
 
 
 #: Sentinella per distingir «el payload no en diu res» de «el payload diu None».
@@ -4765,10 +4779,10 @@ def desactivar_pom_view(request, model_id, pom_id):
     """
     from fhort.models_app.models import BaseMeasurement
 
-    capa, instancia = _identitat_de_mesura(request.data)
+    capa, instancia, garment = _identitat_de_mesura(request.data)
     bm = (BaseMeasurement.objects
           .filter(model_id=model_id, pom_id=pom_id, is_active=True,
-                  capa=capa, instancia=instancia)
+                  capa=capa, instancia=instancia, garment=garment)
           .select_related('pom').first())
     if bm is None:
         return Response({'detail': 'Mesura no trobada (o ja inactiva) per a aquest model.'},
