@@ -664,7 +664,22 @@ def base_measurements_view(request, model_id):
             'origen': bm.origen or '',
             # F3 — secció d'origen ('01.- DRESS', 'Bodice:'…). '' quan el document no en
             # tenia. La fitxa tècnica la fa servir per partir la taula en una per peça.
+            #
+            # ⚠️ LA SECCIÓ NO ÉS LA PEÇA, i no s'han de confondre mai: `seccio` és un rètol de
+            # TEXT LLIURE que ve del document importat i que sovint parteix UNA sola peça en
+            # zones («cos», «caputxa» d'una dessuadora); `garment` (aquí sota) és la PEÇA del
+            # model. Que a molts documents la secció sembli la peça és una coincidència del
+            # corpus, no una equivalència.
             'seccio': bm.seccio or '',
+            # SET-2/T9 — LA PEÇA d'aquesta mesura (`models_app/models.py:781`): '' és la mare,
+            # que és el Model mateix. Es serveix perquè la fitxa tècnica pugui ancorar-hi les
+            # cotes i agrupar-hi el desplegable de POMs; cap consumidor existent la llegeix.
+            #
+            # ⚠️ AFIRMACIÓ D'ESTAT DATADA — 2026-08-10: avui TOTES les files valen '' (la
+            # comporta CHECK de T2 no en deixa passar cap altra), de manera que el camp és
+            # inert sobre el corpus actual. Re-verificar amb:
+            #   SELECT DISTINCT garment FROM <tenant>.models_app_basemeasurement;
+            'garment': bm.garment,
             'pom_abbreviation': bm.pom.pom_global.abbreviation if bm.pom.pom_global_id else '',
             'pom_code_global': bm.pom.pom_global.codi if bm.pom.pom_global_id else '',
             'pom_is_key': bool(bm.pom.pom_global.is_key) if bm.pom.pom_global_id else False,
