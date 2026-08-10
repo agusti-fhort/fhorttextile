@@ -3569,6 +3569,25 @@ def grading_status_view(request, model_id):
     #   · te_mesures — hi ha alguna mesura base amb valor (el pas «Editar POM» està fet);
     #   · te_taula   — hi ha versió activa amb specs, que és el que «Mesurar prenda» exigeix i el
     #                  que el model 1320 no tenia (el gate deia la veritat: no hi era).
+    #
+    # B4 (10/08) — I ELS DOS FETS QUE FALTAVEN, que és el que feia que el stepper i el Dashboard
+    # es contradiguessin. El Dashboard deia «Mesurar prenda: Feta» i «Escalat: Feta» i el stepper
+    # pintava les dues portes com si res: no és que discrepessin, és que el stepper **no tenia
+    # cap fet per a aquests dos passos** i per tant no podia dir-ne res. Cap dels dos mentia.
+    #
+    # QUINA MANA, ara que totes dues poden parlar: **el FET del model**. Una `ModelTask` és el
+    # testimoni de la FEINA —algú la pot marcar Feta sense que hi hagi res al model, i el seu
+    # llistat va escopat per `view_team_tasks`, o sigui que depèn de qui mira—; el stepper diu
+    # ON ÉS EL MODEL, i això no pot dependre ni d'un gest ni d'un permís. És la mateixa llei que
+    # ja mana al gate d'entrada del tab Mesures (`pom_task_done` del MODEL, no de la llista) i
+    # la que diu `CLAUDE.md`: la conformitat es mesura.
+    #   · te_presa      — hi ha algun fitting amb contingut (algú ha mesurat una peça de debò,
+    #                     no una graella oberta i no tocada). MATEIX predicat que el Repàs i la
+    #                     Comprovació: `fitting.esdeveniments`.
+    #   · te_propagacio — àlies de `te_dades_propagades` per al stepper, perquè el pas ④ es
+    #                     pinti amb el mateix vocabulari que els altres tres i no calgui que la
+    #                     pantalla sàpiga que dos noms són la mateixa cosa.
+    from fhort.fitting.esdeveniments import peces_amb_contingut
     te_mesures = BaseMeasurement.objects.filter(
         model=model, is_active=True, base_value_cm__isnull=False).exists()
     te_taula = bool(gv and gv.is_active and GradedSpec.objects.filter(
@@ -3576,6 +3595,8 @@ def grading_status_view(request, model_id):
     return Response({
         'te_mesures': te_mesures,
         'te_taula': te_taula,
+        'te_presa': bool(peces_amb_contingut(model.id)),
+        'te_propagacio': te_dades,
         'te_dades_propagades': te_dades,
         'segellada': bool(gv and gv.aprovada),
         'version_number': gv.version_number if gv else None,
