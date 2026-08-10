@@ -168,9 +168,16 @@ class DuesGermanesC3BTest(TenantTestCase):
 
             bases = _load_base_measurements(self.model.pk)
 
+            # SET-2/T4 (2026-08-10) — LA CLAU TÉ UN TRAM MÉS: el `garment`, darrere de la
+            # instància. Aquest assert ha caigut a posta en fer créixer la identitat, que és
+            # justament la feina que se li havia encarregat: pinar la FORMA de la clau perquè
+            # el dia que creixi es vegi caure aquí. Els VALORS no s'han mogut ni un decimal
+            # —100.0 i 98.0, les mateixes dues files—; només s'hi ha afegit el tram nou, i el
+            # seu valor és el buit perquè aquestes dues germanes són de la peça mare.
+            # Re-verificable: `_load_base_measurements` a `pom/services.py`.
             self.assertEqual(bases, {
-                (self.pom.pk, EXTERIOR, ''): 100.0,
-                (self.pom.pk, FOLRE, ''): 98.0,
+                (self.pom.pk, EXTERIOR, '', ''): 100.0,
+                (self.pom.pk, FOLRE, '', ''): 98.0,
             }, 'la clau és la identitat sencera; abans això era {pom_id: 98.0}')
 
     def test_el_preview_diu_el_mateix_que_el_generador_amb_germanes(self):

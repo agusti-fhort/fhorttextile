@@ -177,3 +177,75 @@ class MotorPerGarmentTest(TenantTestCase):
         self.assertEqual(self._specs(), {
             (MARE, 'S'): 99.0, (MARE, 'M'): 100.0, (MARE, 'L'): 101.0,
         })
+
+
+class ContracteDeLesFonsTest(TenantTestCase):
+    """Els dos pins nascuts del vermell de T4 (2026-08-10). Cap dels dos existia abans.
+
+    Tots dos vigilen el MATEIX error, comès de dues maneres: canviar la forma d'una cosa que
+    algú altre ja llegia. La paritat del golden no els podia veure —només exercita el motor— i
+    per això van arribar fins a la suite.
+    """
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Tenant'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TST'
+        tenant.vat_number = 'X0000000X'
+        tenant.tipus_client = 'STANDARD'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        self.pom = POMMaster.objects.create(codi_client='CH', nom_client='Pit')
+        self.ss = SizeSystem.objects.create(codi='SS_T4C', nom='SS T4C', base_unit='ALPHA')
+        for i, et in enumerate(['S', 'M', 'L']):
+            SizeDefinition.objects.create(size_system=self.ss, etiqueta=et, ordre=i)
+        self.model = Model.objects.create(
+            codi_intern='TST-T4C', codi_tenant='TST', any=2026, sequencial=1,
+            temporada='SS26', size_system=self.ss, size_run_model='S·M·L',
+            base_size_label='M',
+        )
+        ModelGradingRule.objects.create(
+            model=self.model, pom=self.pom, logica='LINEAR', increment=1.0, actiu=True)
+
+    def test_load_grading_rules_serveix_la_clau_PLANA_als_seus_sis_consumidors(self):
+        """El contracte públic. Sis lectors fora del motor hi fan `.get(pom_id)` pelat.
+
+        Quan T4 li va canviar la clau a `(pom_id, garment)` tots sis van rebre `None` EN
+        SILENCI: `propagat` a False, `talla_break_label` buit, règim per POM desaparegut.
+        Aquest pin diu que la funció pública serveix `{pom_id: regla}` i que la font per
+        garment és una ALTRA (`_load_grading_rules_per_garment`), de la qual aquesta deriva.
+        """
+        from fhort.pom.services import (_load_grading_rules,
+                                        _load_grading_rules_per_garment)
+
+        plana = _load_grading_rules(self.model)
+        self.assertEqual(list(plana), [self.pom.pk],
+                         'la clau pública ha de ser el pom_id pelat, no una tupla')
+        self.assertIsNotNone(plana.get(self.pom.pk),
+                             "`.get(pom_id)` —el que fan els sis consumidors— ha de trobar-la")
+
+        per_garment = _load_grading_rules_per_garment(self.model)
+        self.assertEqual(list(per_garment), [(self.pom.pk, '')])
+        # La vista DERIVA de la font i totes dues serveixen la MATEIXA fila. Es compara la
+        # PK i no la identitat de l'objecte: són dues crides i cadascuna fa la seva consulta,
+        # o sigui que `assertIs` provaria una cosa que no és certa ni ha de ser-ho.
+        self.assertEqual(plana[self.pom.pk].pk, per_garment[(self.pom.pk, '')].pk)
+
+    def test_una_clau_de_TRES_trams_dun_cos_HTTP_no_peta(self):
+        """Bug de PRODUCCIÓ, no de test: `preview_graded_specs` rep `base_values` d'un cos
+        HTTP (el wizard d'import), o sigui que un client encara pot enviar la clau de tres
+        trams d'abans de SET-2. `_identitat` la deixava passar sencera i el desempaquetat de
+        quatre petava amb `ValueError: not enough values to unpack (expected 4, got 3)`.
+        Ara s'hi normalitza l'aritat, i les tres formes han de donar el MATEIX.
+        """
+        from fhort.pom.services import preview_graded_specs
+
+        escalar = preview_graded_specs(self.model, {self.pom.pk: 100.0})
+        tres = preview_graded_specs(self.model, {(self.pom.pk, 'exterior', ''): 100.0})
+        quatre = preview_graded_specs(self.model, {(self.pom.pk, 'exterior', '', ''): 100.0})
+
+        self.assertEqual(escalar, tres, 'la clau de tres trams ha de seguir funcionant')
+        self.assertEqual(tres, quatre, 'les dues formes completes han de donar el mateix')
