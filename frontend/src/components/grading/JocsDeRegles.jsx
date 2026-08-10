@@ -8,6 +8,8 @@ import { useEixos } from './eixosFont'
 import { useGarmentGroups } from './garmentCatalog'
 import { useElements } from '../../utils/vocabulariDominiFont'
 import { isDegenerateLinear } from '../../utils/gradingRegime'
+import { aDocument, aMotor, etiquetesDelRun, opcionsDocument } from '../../utils/breakConvention'
+import useConfirmacioRuleset from '../model/useConfirmacioRuleset'
 
 // A3 · GRADING RULES — la LLISTA de jocs i la PANTALLA del joc amb dos tabs
 // (maqueta_grading_rules_v4 + esmena v4.1).
@@ -273,6 +275,19 @@ function MenuDesplegable({ etiqueta, icona, items }) {
   )
 }
 
+/**
+ * LA ⓘ — l'única prosa que la pantalla tolera (Agus, 10/08: «la pantalla no porta prosa; si
+ * cal, una ⓘ i prou»). El text viu al `title`, que és on es va a buscar quan es vol, i no
+ * ocupa una línia permanent explicant el que la majoria de dies ja se sap.
+ */
+function Info({ text }) {
+  return (
+    <i className="ti ti-info-circle" title={text} aria-label={text} tabIndex={0}
+       style={{ fontSize: 14, color: 'var(--text-faint)', cursor: 'help', verticalAlign: 'middle',
+                marginLeft: 4 }} />
+  )
+}
+
 /** El valor d'un input numèric: `null`/`undefined` han de deixar el camp BUIT, no escriure «null». */
 const valorCamp = (v) => (v === null || v === undefined ? '' : String(v))
 
@@ -441,6 +456,10 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
   // que es desa) no ha de poder trepitjar el que s'està editant en aquesta pantalla.
   const [regles, setRegles] = useState(() => joc.regles || [])
   const [gravant, setGravant] = useState(false)
+  // El valor VIST del selector de sistema. Va a part de `joc.size_system` perquè el gest ha de
+  // poder REVERTIR-SE sencer si la confirmació es declina o el backend refusa.
+  const [runTriat, setRunTriat] = useState(joc.size_system ?? '')
+  const confirmacio = useConfirmacioRuleset()
   // {targets, construction, fit, grup} en CODIS
   const [relacions, setRelacions] = useState(() => ({
     targets: [...(joc.targets_codis || [])],
@@ -511,20 +530,23 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
   // EL SISTEMA DE TALLES DEL JOC. Desa SOL (no espera «Gravar»): no és una edició de files, és
   // un camp del joc, i és el que decideix quines opcions ofereixen els pickers de break de sota.
   //
-  // ⚠️ GUARD DUR AL BACKEND, NO 409: `GradingRuleSetSerializer.validate` (serializers.py:367)
-  // refusa amb **400** canviar el sistema d'un joc que ja té regles —les talles base hi
-  // pertanyen— i la sortida que hi proposa és clonar. No és cap dels dos avisos confirmables de
-  // `useConfirmacioRuleset` (`ruleset_altre_client`, `esborrat_residents`), que són d'ASSIGNAR un
-  // joc a un model. Per això aquí no hi ha confirmació que valgui: el control va tancat quan hi
-  // ha regles, amb el motiu escrit al costat, i si el 400 arriba igualment es pinta tal qual.
-  const runBloquejat = regles.length > 0
+  // 🔑 ES POT CANVIAR AMB REGLES (Agus, 10/08). Abans el serializer ho refusava amb un 400 dur
+  // «les talles base hi pertanyen»; però les regles ancoren per ETIQUETA —`_break_idx_de` i
+  // `_apply_rule` resolen per `talla_break_label`, i `talla_base` és mer metadata del seed que
+  // el motor no llegeix mai— o sigui que canviar de run és legal sempre que les etiquetes hi
+  // segueixin existint. El backend ho valida de debò i, si alguna no casa, torna un **409
+  // `etiquetes_fora_del_run`** amb la llista; aquí es confirma i es reintenta amb el flag.
   const canviaRun = async (v) => {
     setGravant(true)
     try {
-      const { data } = await gradingRuleSets.update(joc.id, { size_system: v ? Number(v) : null })
+      const data = await confirmacio.executa(flags => gradingRuleSets
+        .update(joc.id, { size_system: v ? Number(v) : null, ...flags })
+        .then(r => r.data))
       onCanviat({ tipus: 'run', joc: data })
     } catch (e) {
-      onError(missatgeError(e, t('grading.jocs.save_error')))
+      // Un 409 declinat no és una avaria: l'usuari ha dit que no i el selector es queda com era.
+      if (e?.response?.status !== 409) onError(missatgeError(e, t('grading.jocs.save_error')))
+      setRunTriat(joc.size_system ?? '')
     } finally { setGravant(false) }
   }
 
@@ -557,11 +579,10 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
 
   const talles = useMemo(
     () => [...(run?.talles || [])].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0)), [run])
-  const ambBreak = regles.filter(r => {
-    const v = viu(r, 'talla_break_label')
-    return v !== null && v !== undefined && String(v).trim() !== ''
-  }).length
-  const potBreak = regles.filter(r => potRebreBreak({ ...r, ...(edicions.get(r.id) || {}) })).length
+  // El run en ETIQUETES ordenades — l'única forma que la traducció de convenció accepta.
+  const etiquetesRun = useMemo(() => etiquetesDelRun(talles), [talles])
+  // (Els recomptes de regles amb break i de candidates a rebre'n van marxar amb les notes del
+  // peu: eren l'únic que se'n servia i el peu ja no porta prosa.)
 
   const previsualitzacio = useMemo(() => {
     const et = (llista, codi) => (llista || []).find(x => x.codi === codi)?.etiqueta || codi
@@ -651,23 +672,17 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
               <span>
                 <label style={{ ...cx.lab, display: 'block', marginBottom: 4 }} htmlFor="joc-run-barra">
                   {t('grading.jocs.field_run')}
+                  <Info text={t('grading.jocs.run_help')} />
                 </label>
-                <select id="joc-run-barra" value={joc.size_system ?? ''}
-                        disabled={runBloquejat || gravant}
-                        onChange={e => canviaRun(e.target.value)}
+                <select id="joc-run-barra" value={runTriat ?? ''} disabled={gravant}
+                        onChange={e => { setRunTriat(e.target.value); canviaRun(e.target.value) }}
                         style={{ ...cx.selr, width: 'auto', minWidth: 240,
-                                 ...(runBloquejat || gravant ? off : null) }}>
+                                 ...(gravant ? off : null) }}>
                   <option value="">{t('grading.jocs.run_none')}</option>
                   {(runs || []).map(r => (
                     <option key={r.id} value={r.id}>{r.codi} · {r.nom}</option>
                   ))}
                 </select>
-                {/* Un control apagat sense motiu llegible no és un estat, és una avaria (§8c). */}
-                <div style={{ ...cx.note, flex: 'none', maxWidth: 300, marginTop: 4 }}>
-                  {runBloquejat
-                    ? t('grading.size_system_locked', { count: regles.length })
-                    : t('grading.jocs.run_help')}
-                </div>
               </span>
 
               <span>
@@ -679,38 +694,20 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                     {run ? t('grading.jocs.run_no_sizes') : t('grading.jocs.no_run')}
                   </span>
                 )}
-                {/* LECTURA, NO CONTROL: `<span>`, no `<button>`. Diuen quines talles porta el
-                    sistema i quantes regles trenquen a cadascuna; qui vulgui CANVIAR un break
-                    va a la seva fila. Un element que no escriu no ha de semblar clicable. */}
+                {/* LECTURA NETA: les talles del run i prou. Cap comptador (ningú no l'ha
+                    demanat) i cap marca: qui vol saber on trenca una regla mira la SEVA fila.
+                    `<span>`, no `<button>` — el que no escriu no ha de semblar clicable. */}
                 <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {talles.map(s => {
-                    const n = regles.filter(r => viu(r, 'talla_break_label') === s.etiqueta).length
-                    return (
-                      <span key={s.id ?? s.etiqueta}
-                            title={n ? t('grading.jocs.break_count', { count: n, size: s.etiqueta })
-                              : t('grading.jocs.break_count_none', { size: s.etiqueta })}
-                            style={{
-                              fontSize: 'var(--fs-body)', padding: '4px 12px',
-                              borderRadius: 'var(--r-ctrl)', fontVariantNumeric: 'tabular-nums',
-                              border: `1px solid ${n ? 'var(--gold-border)' : 'var(--line)'}`,
-                              background: n ? 'var(--sel)' : 'var(--panel)',
-                              color: 'var(--text-main)', fontWeight: n ? 600 : 400,
-                              ...(n ? { boxShadow: 'inset 0 -2px 0 var(--gold)' } : null),
-                            }}>
-                        {s.etiqueta}
-                        {!!n && (
-                          <span style={{ color: 'var(--text-soft)', fontWeight: 400, marginLeft: 6 }}>
-                            {n}
-                          </span>
-                        )}
-                      </span>
-                    )
-                  })}
+                  {talles.map(s => (
+                    <span key={s.id ?? s.etiqueta}
+                          style={{
+                            fontSize: 'var(--fs-body)', padding: '4px 12px',
+                            borderRadius: 'var(--r-ctrl)', fontVariantNumeric: 'tabular-nums',
+                            border: '1px solid var(--line)', background: 'var(--panel)',
+                            color: 'var(--text-main)',
+                          }}>{s.etiqueta}</span>
+                  ))}
                 </span>
-              </span>
-              {/* 🚩 CAT2.1 · el text diu la VERITAT D'AVUI, no la del pas (b). */}
-              <span style={cx.hint}>
-                {run ? t('grading.jocs.sizes_hint', { run: run.codi }) : t('grading.jocs.sizes_hint_norun')}
               </span>
             </div>
 
@@ -727,7 +724,11 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                     {[
                       ['#', 'left'], [t('grading.col.code'), 'left'], [t('grading.col.pom_name'), 'left'],
                       [t('grading.jocs.col_regime'), 'left'], [t('grading.jocs.col_delta'), 'right'],
-                      [t('grading.col.delta_break'), 'right'], [t('grading.jocs.col_break_size'), 'right'], ['', 'left'],
+                      [t('grading.col.delta_break'), 'right'],
+                      // L'ÚNICA ⓘ de la taula, i va aquí perquè és aquí que es decideix: diu en
+                      // quina convenció es llegeix i s'escriu aquesta columna.
+                      [<>{t('grading.jocs.col_break_size')}<Info text={t('grading.jocs.break_size_help')} /></>, 'right'],
+                      ['', 'left'],
                     ].map(([txt, al], i) => (
                       <th key={i} style={{
                         ...cx.th, padding: '8px 12px', textAlign: al, background: 'var(--panel)',
@@ -760,15 +761,17 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                     // —`null` inclòs—; només si no s'ha tocat es llegeix la dada.
                     const deltaVal = editada && 'increment_base' in editada
                       ? editada.increment_base : deltaLlegit(r)
-                    // LA TALLA DEL BREAK, PER FILA. Només té sentit si la fila té Δ break: un
-                    // ancoratge sense increment no diu res (mateixa llei que aplicava l'antiga
-                    // barra). El valor DESAT sempre és a la llista encara que no sigui del
-                    // sistema d'ara —mateix criteri que el desplegable de règim— perquè canviar
-                    // de sistema no ha de fer desaparèixer sota els dits el que hi ha a la BD.
+                    // LA TALLA DEL BREAK, PER FILA I EN CONVENCIÓ DE DOCUMENT. Només té sentit
+                    // si la fila té Δ break: un ancoratge sense increment no diu res.
+                    //
+                    // 🔑 EL QUE ES VEU I EL QUE ES DESA NO SÓN LA MATEIXA ETIQUETA. La BD desa la
+                    // primera talla del tram gran; aquí es pinta l'ÚLTIMA DEL PETIT, que és com
+                    // l'anomena el full del client. `aDocument`/`aMotor` (utils/breakConvention)
+                    // fan la volta i la desfan; cap dels dos sentits es fa a mà en aquest fitxer.
                     const potBrk = potRebreBreak({ ...r, ...(editada || {}) })
-                    const breakActual = viu(r, 'talla_break_label') || ''
+                    const breakDoc = aDocument(viu(r, 'talla_break_label'), etiquetesRun) || ''
                     const opcionsBreak = [...new Set(
-                      [...talles.map(s => s.etiqueta), breakActual].filter(Boolean))]
+                      [...opcionsDocument(etiquetesRun), breakDoc].filter(Boolean))]
                     return (
                       // ⚠️ CONDUCTA AFEGIDA (llistada): la fila amb canvis PENDENTS DE DESAR porta
                       // un filet taronja. No fa servir `--sel`: `--sel` és «on soc» i el verd és
@@ -819,12 +822,11 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                         </td>
                         {/* LA TALLA DE TRENCAMENT S'EDITA AQUÍ, i només aquí (Agus, 10/08). */}
                         <td style={{ ...cx.td, textAlign: 'right' }}>
-                          <select value={breakActual} disabled={!potBrk}
+                          <select value={breakDoc} disabled={!potBrk}
                                   aria-label={t('grading.jocs.col_break_size')}
-                                  title={potBrk ? t('grading.jocs.break_size_help')
-                                    : t('grading.jocs.break_size_needs_delta')}
+                                  title={potBrk ? undefined : t('grading.jocs.break_size_needs_delta')}
                                   onChange={e => edita(r.id, {
-                                    talla_break_label: e.target.value || null })}
+                                    talla_break_label: aMotor(e.target.value, etiquetesRun) })}
                                   style={{ ...cx.selr, fontVariantNumeric: 'tabular-nums',
                                            ...(potBrk ? null : off) }}>
                             <option value="">—</option>
@@ -856,30 +858,17 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
                   corpus i la migració es fan juntes. Avui 46 dels 47 jocs no tenen cap regla:
                   obrir el botó seria obrir una porta a una sala buida.
                   Les tres vies i el seu preu: `docs/diagnosis/DIAGNOSI_AFEGIR_POM.md`. */}
-              <Boto disabled title={t('grading.jocs.add_pom_blocked')}>
-                <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 14 }} />
-                {t('grading.jocs.add_pom')}
-              </Boto>
-              {/* EL MOTIU, SEMPRE VISIBLE i al costat del botó que apaga. Abans només sortia
-                  escrit quan el joc no tenia cap regla; amb regles se n'anava al `title`, i un
-                  motiu que s'ha de descobrir amb el ratolí és mig amagat. Un control apagat
-                  sense motiu llegible no és un estat: és una avaria (§8c). */}
-              <span style={{ ...cx.note, flex: 'none', maxWidth: 420, fontStyle: 'italic',
-                             color: 'var(--text-faint)' }}>
-                {t('grading.jocs.add_pom_blocked')}
+              {/* EL MOTIU, A LA ⓘ. Hi era com a nota permanent al peu; el peu ja no porta prosa
+                  (Agus, 10/08) i un control apagat segueix necessitant motiu llegible (§8c):
+                  la ⓘ el dona a qui el vulgui sense ocupar-hi una línia cada dia. */}
+              <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                <Boto disabled>
+                  <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 14 }} />
+                  {t('grading.jocs.add_pom')}
+                </Boto>
+                <Info text={t('grading.jocs.add_pom_blocked')} />
               </span>
-              {/* I la nota del trencament segueix sent la seva: parla de les regles que hi ha,
-                  no del botó. Sense cap regla seria certa i buida, i per això calla.
-                  ⚠️ Hi va enganxada LA LLEI DE LA TRADUCCIÓ (+1), que fins ara només vivia a la
-                  capçalera de `sembra_cataleg_v4` i que és l'única manera d'evitar que qui
-                  compari la pantalla amb el full del client «corregeixi» les 98 regles una talla
-                  enrere. Va a la vista perquè és aquí on es pren la decisió. */}
-              <span style={cx.note}>
-                {!regles.length ? ''
-                  : ambBreak ? t('grading.jocs.note_break', { count: ambBreak, total: regles.length })
-                    : t('grading.jocs.note_no_break')}
-                {!!potBreak && ` ${t('grading.jocs.break_size_help')}`}
-              </span>
+              <span style={cx.note} />
               <Boto onClick={onTanca}>{t('grading.jocs.back')}</Boto>
               <Boto variant="pri" onClick={gravaRegles} disabled={!edicions.size || gravant}>
                 {gravant ? t('common.saving') : t('grading.jocs.save_rules')}
@@ -930,6 +919,8 @@ function Joc({ joc, run, runs, vocabularis, regimsAutorables, accions, onTanca, 
           </>
         )}
       </div>
+      {/* El diàleg del 409 (etiquetes que no casen amb el run nou). El redacta el BACKEND. */}
+      {confirmacio.dialeg}
     </div>
   )
 }

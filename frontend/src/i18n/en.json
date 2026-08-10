@@ -112,7 +112,12 @@
       },
       "continuar": "Continue",
       "residents_total": "Own rules that will be deleted",
-      "imported_avis": "{{n}} come from the customer document (IMPORTED): they can be imported again, but they will be lost now."
+      "imported_avis": "{{n}} come from the customer document (IMPORTED): they can be imported again, but they will be lost now.",
+      "etiquetes_fora_del_run": {
+        "titol": "Break sizes outside the new run",
+        "regles_one": "{{count}} rule",
+        "regles_other": "{{count}} rules"
+      }
     },
     "contenidor": {
       "intro": "Choose the rule set this model will be graded with. The customer’s come first; none are left out of the list.",
@@ -2497,7 +2502,9 @@
       "gate_motiu": "Gate reason",
       "no_sessions": "This model has no fittings yet.",
       "empty": "No POM measured in these sessions.",
-      "des_de_mesures": "Reading entered in the measurements table"
+      "des_de_mesures": "Reading entered in the measurements table",
+      "col_entrada": "POM entry",
+      "empty_all": "This model has no measurements yet."
     },
     "print": {
       "load_err": "Could not load the fitting sheet.",
@@ -3796,23 +3803,17 @@
       "badge_no_origen": "ORIGIN NOT CLASSIFIED",
       "badge_no_rules": "NO RULES",
       "sizes_covered": "Sizes covered",
-      "sizes_hint": "The sizes come from run {{run}}, which this set still points to. The rules, however, are anchored by label: the engine resolves them against the model's run.",
-      "sizes_hint_norun": "This set points to no size system, so the “Break size” pickers have no label to offer. Rules are anchored by label and the engine resolves them against the model's run.",
       "no_run": "no run declared",
       "run_no_sizes": "the run has no sizes",
       "col_regime": "Regime",
       "col_delta": "Δ",
       "col_break_size": "Break size",
-      "break_count_one": "{{count}} rule breaks at {{size}}.",
-      "break_count_other": "{{count}} rules break at {{size}}.",
-      "break_count_none": "No rule breaks at {{size}}.",
-      "break_size_help": "The break size is the FIRST size of the large step (where the Δ break starts), not the last one of the small step: a sheet saying “breaks at XS” is stored here as S.",
+      "break_size_help": "Document convention: the LAST size of the small step is shown and picked, the way the client’s sheet names it. The database stores the first size of the large step.",
       "break_size_needs_delta": "With no Δ break there is nothing to anchor: enter the increment first.",
       "degenerate": "= FIXED",
       "degenerate_help": "LINEAR with Δ 0 and no break grades nothing: everywhere in the house it is shown as FIXED.",
       "empty_rules_title": "No rules yet",
       "empty_rules_body": "An empty set cannot be assigned to any model.",
-      "note_no_break": "No rule has a break: the increment is constant across the run. Only rules with a Δ break can receive one.",
       "add_pom": "＋ Add POM",
       "add_pom_blocked": "Requires a base size the engine never reads (seed metadata). It opens with CAT2.1, in the new-catalogue package.",
       "save_rules": "Save rules",
@@ -3843,7 +3844,7 @@
       "modal_edit": "Set identity",
       "field_run": "Size run",
       "run_none": "— no run —",
-      "run_help": "This is where the sizes in the break bar come from. Rules are anchored by label.",
+      "run_help": "The set’s size system. Rules are anchored by label, so changing it is legal as long as the break sizes exist in the new run.",
       "act_identity": "Identity…",
       "act_retire": "Retire",
       "act_revive": "Reactivate",
@@ -3857,8 +3858,6 @@
       "count_other": "{{count}} sets",
       "rules_saved_one": "{{count}} rule saved.",
       "rules_saved_other": "{{count}} rules saved.",
-      "note_break_one": "{{count}} of {{total}} rules has a break. The break belongs to EACH rule, not to the set: the “Break size” column shows the one on its own row.",
-      "note_break_other": "{{count}} of {{total}} rules have a break. The break belongs to EACH rule, not to the set: the “Break size” column shows the one on its own row.",
       "back_title": "Back to Technical configuration"
     }
   },

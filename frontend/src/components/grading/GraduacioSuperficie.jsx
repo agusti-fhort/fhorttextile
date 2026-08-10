@@ -5,6 +5,7 @@ import { models } from '../../api/endpoints'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { useElements } from '../../utils/vocabulariDominiFont'
+import { aDocument, aMotor, opcionsDocument } from '../../utils/breakConvention'
 import { InfoTraduccio, AMPLADES } from '../EditableTable/EditableTable'
 
 // LA GRADUACIÓ ÉS UNA SUPERFÍCIE PRÒPIA (P0.5d · Agus, 06/08, a pantalla).
@@ -342,12 +343,13 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
             style={{ ...inputStyle(ko), opacity: deltes ? 1 : 0.4 }} />
         </td>
         <td style={tdS}>
-          <select value={regla.talla_break_label || ''} disabled={!deltes}
-            onChange={e => canvia(row, 'talla_break_label', e.target.value || null)}
+          {/* CONVENCIÓ DE DOCUMENT a la vista, MOTOR a la dada (v. utils/breakConvention). */}
+          <select value={aDocument(regla.talla_break_label, sizeRun) || ''} disabled={!deltes}
+            onChange={e => canvia(row, 'talla_break_label', aMotor(e.target.value, sizeRun))}
             style={{ ...inputStyle(ko), textAlign: 'left', cursor: deltes ? 'pointer' : 'default',
                      opacity: deltes ? 1 : 0.4 }}>
             <option value="">—</option>
-            {sizeRun.map(s => <option key={s} value={s}>{s}</option>)}
+            {opcionsDocument(sizeRun).map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </td>
       </tr>

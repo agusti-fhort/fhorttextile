@@ -13,6 +13,7 @@ import Badge from '../components/ui/Badge'
 import PageMenu from '../components/ui/PageMenu'
 import { botoPri, selS } from '../components/ui/buttons'
 import { useElements } from '../utils/vocabulariDominiFont'
+import { aDocument } from '../utils/breakConvention'
 
 // Size Map Setup — wizard de 5 passos per derivar un SizeSystem (+GradingRuleSet +SizingProfiles)
 // a partir d'una taula de mides de client, i mode llista dels sistemes existents.
@@ -832,7 +833,11 @@ export function Wizard({ t, prefill = null, onComplete, onClose, showReturnBanne
                                 ? <span style={{ fontFamily: MONO, fontSize: 'var(--fs-body)' }}>{g.valors_step_text}</span>
                                 : <span style={{ color: 'var(--text-soft)' }}>—</span>)
                             : (g.increment_break != null
-                                ? <span>+{g.increment_base} · +{g.increment_break} {t('size_map_g_break_from')} {g.talla_break_label}</span>
+                                /* El break, en convenció de DOCUMENT: aquesta previsualització
+                                   es llegeix contra el full del client, que és qui l'anomena.
+                                   El run és `wiz.gradingRun`, el mateix sobre el qual s'ha
+                                   derivat la regla (v. la nota de :415). */
+                                ? <span>+{g.increment_base} · +{g.increment_break} {t('size_map_g_break_from')} {aDocument(g.talla_break_label, wiz.gradingRun) || '—'}</span>
                                 : <span>+{g.increment_base}</span>)}
                         </td>
                         {/* Paritat R7 (NOMÉS display): valors originals del document per talla + toleràncies

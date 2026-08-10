@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines } from '../../api/endpoints'
 import { effectiveRegime } from '../../utils/gradingRegime'
+import { aDocument, aMotor, etiquetaRegla, opcionsDocument } from '../../utils/breakConvention'
 import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 import { finestraHistoric } from './fittingGridAdapter'
 import MeasureGrid from './MeasureGrid'
@@ -123,16 +124,14 @@ function Tecla({ children }) {
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
 const modal = { background: 'var(--white)', borderRadius: 8, padding: 24, maxWidth: 460, fontFamily: MONO, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }
 
-// Etiqueta compacta de regla (delta · trencament), com el fitting (MeasureTable.regleLabel).
-function regleLabel(row, t) {
+// Etiqueta compacta de regla (delta · trencament), com el fitting (fittingGridAdapter.regleLabel).
+// El trencament es diu en CONVENCIÓ DE DOCUMENT: el ±1 el fa `utils/breakConvention`, mai aquí.
+function regleLabel(row, t, sizeRun) {
   if (row.logica == null) return ''
   if (row.logica === 'STEP') return t('fitting.grid.rule_free')
   // LINEAR+0 sense break = FIXED: no té delta a ensenyar (§LLEI a utils/gradingRegime).
   if (effectiveRegime(row) === 'FIXED') return ''
-  if (row.increment_base == null) return ''
-  if (row.increment_break != null && row.talla_break_label)
-    return `+${row.increment_base} · ${t('fitting.grid.break')} ${row.talla_break_label} +${row.increment_break}`
-  return `+${row.increment_base}`
+  return etiquetaRegla(row, sizeRun, t('fitting.grid.break'))
 }
 
 // P3 — editor de la REGLA VIVA del model (delta + break) a la talla base. La regla és patrimoni del
@@ -202,12 +201,15 @@ function RegleEditCell({ modelId, row, sizeRun, onFeedback }) {
           disabled={!brkSize} onChange={e => setBrk(e.target.value)} onBlur={() => save(delta, brk, brkSize)}
           style={{ ...regleInput, opacity: brkSize ? 1 : 0.5 }} />
         <span>{t('measuregrid.regle_from')}</span>
-        <select value={brkSize} aria-label={t('measuregrid.regle_from')}
-          onChange={e => { const v = e.target.value; setBrkSize(v); save(delta, brk, v) }}
+        {/* ⚠️ `brkSize` es queda en convenció de MOTOR (és el que viatja a `save` i a `desat`);
+            l'única cosa que canvia és el que es VEU i el que s'hi tria. Traduir l'estat sencer
+            hauria obligat a repassar la comparació de brut del `save`, que no és d'aquest tram. */}
+        <select value={aDocument(brkSize, sizeRun) || ''} aria-label={t('measuregrid.regle_from')}
+          onChange={e => { const v = aMotor(e.target.value, sizeRun) || ''; setBrkSize(v); save(delta, brk, v) }}
           style={{ font: 'inherit', fontSize: 'var(--fs-caption)', padding: '1px 2px', border: `1px solid ${BORDER}`,
                    borderRadius: 3, background: 'var(--white)', color: 'var(--text-main)' }}>
           <option value="">{t('measuregrid.regle_none')}</option>
-          {(sizeRun || []).map(s => <option key={s} value={s}>{s}</option>)}
+          {opcionsDocument(sizeRun).map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </label>
     </div>
@@ -333,8 +335,8 @@ const checkSource = {
       render: (row) => (lockRegle ? (
         <div>
           <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-main)' }}>{row.logica ?? '—'}</div>
-          {regleLabel(row, ctx.t) && (
-            <div style={{ fontSize: 'var(--fs-caption)', color: TEXT_2, whiteSpace: 'nowrap', marginTop: 1 }}>{regleLabel(row, ctx.t)}</div>
+          {regleLabel(row, ctx.t, ctx.sizeRun) && (
+            <div style={{ fontSize: 'var(--fs-caption)', color: TEXT_2, whiteSpace: 'nowrap', marginTop: 1 }}>{regleLabel(row, ctx.t, ctx.sizeRun)}</div>
           )}
         </div>
       ) : (

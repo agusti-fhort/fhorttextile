@@ -112,7 +112,12 @@
       },
       "continuar": "Continuar",
       "residents_total": "Regles pròpies que s’esborraran",
-      "imported_avis": "{{n}} vénen del document del client (IMPORTED): es poden tornar a importar, però es perdran ara."
+      "imported_avis": "{{n}} vénen del document del client (IMPORTED): es poden tornar a importar, però es perdran ara.",
+      "etiquetes_fora_del_run": {
+        "titol": "Talles de trencament fora del run nou",
+        "regles_one": "{{count}} regla",
+        "regles_other": "{{count}} regles"
+      }
     },
     "contenidor": {
       "intro": "Tria el joc de regles amb què es graduarà aquest model. Els del client van primer; cap no queda fora de la llista.",
@@ -2497,7 +2502,9 @@
       "gate_motiu": "Motiu del gate",
       "no_sessions": "Aquest model encara no té cap fitting fet.",
       "empty": "Cap POM pres en aquestes sessions.",
-      "des_de_mesures": "Presa escrita a la taula de mesures"
+      "des_de_mesures": "Presa escrita a la taula de mesures",
+      "col_entrada": "Entrada de POMs",
+      "empty_all": "Aquest model encara no té cap mesura."
     },
     "print": {
       "load_err": "No s'ha pogut carregar el full de fitting.",
@@ -3796,23 +3803,17 @@
       "badge_no_origen": "SENSE ORIGEN CLASSIFICAT",
       "badge_no_rules": "SENSE REGLES",
       "sizes_covered": "Talles que cobreix",
-      "sizes_hint": "Les talles surten del run {{run}}, al qual aquest joc encara apunta. Les regles, en canvi, ancoren per etiqueta: el motor les resol contra el run del model.",
-      "sizes_hint_norun": "Aquest joc no apunta a cap sistema de talles i per això els pickers de «Talla break» no tenen cap etiqueta per oferir. Les regles ancoren per etiqueta i el motor les resol contra el run del model.",
       "no_run": "cap run declarat",
       "run_no_sizes": "el run no té cap talla",
       "col_regime": "Règim",
       "col_delta": "Δ",
       "col_break_size": "Talla break",
-      "break_count_one": "{{count}} regla trenca a {{size}}.",
-      "break_count_other": "{{count}} regles trenquen a {{size}}.",
-      "break_count_none": "Cap regla no trenca a {{size}}.",
-      "break_size_help": "La talla del break és la PRIMERA del tram gran (on comença el Δ break), no l'última del tram petit: un full que diu «trenca a XS» es desa aquí com a S.",
+      "break_size_help": "Convenció del document: es mostra i es tria l'ÚLTIMA talla del tram petit, com l'anomena el full del client. La BD hi desa la primera del tram gran.",
       "break_size_needs_delta": "Sense Δ break no hi ha res a ancorar: posa-hi primer l'increment.",
       "degenerate": "= FIXED",
       "degenerate_help": "LINEAR amb Δ 0 i sense trencament no gradua res: a tota la casa es presenta com a FIXED.",
       "empty_rules_title": "Encara no té cap regla",
       "empty_rules_body": "Un joc buit no es pot assignar a cap model.",
-      "note_no_break": "Cap regla amb trencament: l'increment és constant a tot el run. Només les regles amb Δ break en poden rebre un.",
       "add_pom": "＋ Afegir POM",
       "add_pom_blocked": "Requereix una talla base que el motor no llegeix mai (metadata del seed). S'obre amb CAT2.1, al paquet del catàleg nou.",
       "save_rules": "Gravar regles",
@@ -3843,7 +3844,7 @@
       "modal_edit": "Identitat del joc",
       "field_run": "Run de talles",
       "run_none": "— cap run —",
-      "run_help": "D'aquí surten les talles de la barra de trencament. Les regles ancoren per etiqueta.",
+      "run_help": "El sistema de talles del joc. Les regles ancoren per etiqueta: canviar-lo és legal mentre les talles de trencament existeixin al run nou.",
       "act_identity": "Identitat…",
       "act_retire": "Jubilar",
       "act_revive": "Reactivar",
@@ -3857,8 +3858,6 @@
       "count_other": "{{count}} jocs",
       "rules_saved_one": "{{count}} regla desada.",
       "rules_saved_other": "{{count}} regles desades.",
-      "note_break_one": "{{count}} de {{total}} regles té trencament. El break és de CADA regla, no del joc: la columna «Talla break» diu el de la seva fila.",
-      "note_break_other": "{{count}} de {{total}} regles tenen trencament. El break és de CADA regla, no del joc: la columna «Talla break» diu el de la seva fila.",
       "back_title": "Tornar a Configuració tècnica"
     }
   },

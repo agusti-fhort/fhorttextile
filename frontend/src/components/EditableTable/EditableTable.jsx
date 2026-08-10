@@ -21,6 +21,7 @@ import AvisDiccionari from '../ui/AvisDiccionari'
 import { boto, botoTer } from '../ui/buttons'
 import BateigInput from '../model/BateigInput'
 import { baseMeasurements, poms } from '../../api/endpoints'
+import { aDocument } from '../../utils/breakConvention'
 
 // LA REGLA DE GRADUACIÓ NO ÉS AQUÍ (ordre d'Agus, 05/08 · la maqueta que mana és la v8.1).
 //
@@ -66,8 +67,10 @@ const COLS_GRADING = [
     valor: r => (r.increment_base == null ? null : r.increment_base) },
   { clau: 'delta_break', i18n: 'editable_table.col.delta_break', ample: AMPLADES.delta_break,
     valor: r => (r.increment_break == null ? null : r.increment_break) },
+  // La talla del break es pinta com l'anomena el DOCUMENT del client (l'última del tram petit),
+  // no com la desa el motor. La volta viu a `utils/breakConvention` i enlloc més.
   { clau: 'talla_break', i18n: 'editable_table.col.talla_break', ample: AMPLADES.talla_break,
-    valor: r => r.talla_break_label || null },
+    valor: (r, sizeRun) => aDocument(r.talla_break_label, sizeRun) },
 ]
 
 const FS_HEAD = '9.5px'   // capçaleres, versaletes
@@ -920,6 +923,7 @@ export default function EditableTable({
                   <SortableRow
                     key={row.id}
                     row={row}
+                    sizeRun={sizeRun}
                     // El número de fila és la POSICIÓ a la pantalla, no `row.ordre`. Les germanes
                     // d'un mateix POM comparteixen `ordre` (l'exterior i el folre del pit són la
                     // mateixa posició de fitxa), i pintar-lo cru donava «1 · 1 · 1 · 1 · 2 · 3…»:
@@ -1093,7 +1097,7 @@ export default function EditableTable({
 function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete,
                        onBateig, widths, registerVal, onNav, esPresa,
                        dicc, dims, dimState, onParteix, onDesfa, onMesInstancia, onGermanaCapa,
-                       capesLliures, onCapa, mostraGrading = false }) {
+                       capesLliures, onCapa, mostraGrading = false, sizeRun = [] }) {
   const { t, i18n } = useTranslation()
   // Idioma per als literals del diccionari (les capes en porten tres). F2.2.
   const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
@@ -1356,7 +1360,7 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
             style={{ ...tdS, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
                      color: 'var(--text-main)',
                      borderLeft: i === 0 ? '1px solid var(--border)' : '0.5px solid var(--border)' }}>
-          {c.valor(row) ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
+          {c.valor(row, sizeRun) ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
       ))}
       {!readOnly && (

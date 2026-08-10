@@ -632,6 +632,8 @@ export default function FittingDetail() {
   const model = grid?.model || {}
   // Trim perquè base_size_label coincideixi amb les etiquetes de talla (poden venir amb espais).
   const baseLabel = (model.base_size_label || '').trim()
+  // El run del MODEL, per traduir la talla de break a convenció de document (v. breakConvention).
+  const sizeRunModel = (model.size_run_model || '').split('·').map(x => x.trim()).filter(Boolean)
 
   // Identificació (codi/nom): del grid si hi ha peça; si no, de la primera peça.
   const idCodi = model.codi || pieces[0]?.model_codi || null
@@ -762,7 +764,7 @@ export default function FittingDetail() {
                     key={activePieceId}
                     editable={false}
                     rows={gridRows} groups={gridGroups}
-                    leadCols={[regimeLeadCol(t, onRegimChange, true)]}
+                    leadCols={[regimeLeadCol(t, onRegimChange, true, { sizeRun: sizeRunModel })]}
                   />
                 )}
           </div>

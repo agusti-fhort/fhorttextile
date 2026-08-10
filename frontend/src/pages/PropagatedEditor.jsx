@@ -151,7 +151,7 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   }
 
   const unit = useUnit()
-  const leadCols = escalatRuleLeadCols(t, onRegimChange, readOnly, unit)
+  const leadCols = escalatRuleLeadCols(t, onRegimChange, readOnly, unit, sizes)
 
   // inline=true: incrustat com a contingut de pestanya (sense overlay fix ni botó tancar).
   const outerStyle = inline

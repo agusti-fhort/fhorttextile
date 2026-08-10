@@ -14,6 +14,7 @@ import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 import { pieceFittingLines } from '../../api/endpoints'
 import { effectiveRegime } from '../../utils/gradingRegime'
 import { formatDelta } from '../../utils/format'
+import { aDocument, etiquetaRegla } from '../../utils/breakConvention'
 
 // Etiqueta d'una versió: la primera (v1) és Base; les següents són Fit N amb N = version_number - 1.
 const versionLabel = (vn, idx, t) =>
@@ -253,17 +254,19 @@ export function NotaFittingCell({ lineId, valor, onDesa }) {
   )
 }
 
-// Etiqueta compacta de regla (delta · trencament). Còpia local (igual a MeasureTable/CheckMeasureEditor;
-// triplicació anotada per a una unificació futura — extreure-la tocaria el check, fora de l'abast P5).
-function regleLabel(row, t) {
+// Etiqueta compacta de regla (delta · trencament).
+//
+// 🔑 EL TRENCAMENT ES DIU EN CONVENCIÓ DE DOCUMENT (Agus, 10/08): la BD desa la primera talla
+// del tram gran i aquí es pinta l'ÚLTIMA DEL PETIT, que és com l'anomena el full del client.
+// La volta la fa `utils/breakConvention`, que és l'únic lloc de la casa on viu el ±1 — abans
+// aquesta funció era una còpia calcada de la de `CheckMeasureEditor` i totes dues pintaven
+// `talla_break_label` cru.
+function regleLabel(row, t, sizeRun) {
   if (row.logica == null) return ''
   if (row.logica === 'STEP') return t('fitting.grid.rule_free')
   // LINEAR+0 sense break = FIXED: no té delta a ensenyar (§LLEI a utils/gradingRegime).
   if (effectiveRegime(row) === 'FIXED') return ''
-  if (row.increment_base == null) return ''
-  if (row.increment_break != null && row.talla_break_label)
-    return `+${row.increment_base} · ${t('fitting.grid.break')} ${row.talla_break_label} +${row.increment_break}`
-  return `+${row.increment_base}`
+  return etiquetaRegla(row, sizeRun, t('fitting.grid.break'))
 }
 
 // leadCol Règim del fitting (sticky): a diferència del check (lectura), aquí el règim és EDITABLE
@@ -272,7 +275,7 @@ function regleLabel(row, t) {
 // `compacte` (FIX-4): amaga la llegenda de regla de sota el desplegable. La fa servir Escalat,
 // on el delta i el break ja tenen COLUMNA pròpia — repetir-los aquí seria la mateixa dada dues
 // vegades, i és precisament la lletra petita el que ningú llegia.
-export function regimeLeadCol(t, onRegimChange, readOnly = false, { compacte = false } = {}) {
+export function regimeLeadCol(t, onRegimChange, readOnly = false, { compacte = false, sizeRun = [] } = {}) {
   return {
     key: 'regim', label: t('fitting.grid.regime'), width: compacte ? 100 : 118,
     render: (row) => {
@@ -300,9 +303,9 @@ export function regimeLeadCol(t, onRegimChange, readOnly = false, { compacte = f
             {regim === 'FIXED' && <option value="FIXED">FIXED</option>}
           </select>
         )}
-        {!compacte && regleLabel(row, t) && (
+        {!compacte && regleLabel(row, t, sizeRun) && (
           <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', whiteSpace: 'nowrap', marginTop: 1 }}>
-            {regleLabel(row, t)}
+            {regleLabel(row, t, sizeRun)}
           </div>
         )}
       </div>
@@ -381,13 +384,13 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel) {
 //
 // Els deltes es pinten SEMPRE amb signe (`formatDelta`) i les capçaleres porten Δ; les cel·les de
 // talla, planes amb la seva unitat. Cap cel·la de talla mostra mai un '+'.
-export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = 'CM') {
+export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = 'CM', sizeRun = []) {
   const cap = { fontSize: 'var(--fs-body)', color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }
   const buit = { fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }
   // Un règim sense delta (FIXED, o STEP amb valors lliures) no té Δ que ensenyar: guió, no zero.
   const mostraDelta = (row) => effectiveRegime(row) === 'LINEAR'
   return [
-    regimeLeadCol(t, onRegimChange, readOnly, { compacte: true }),
+    regimeLeadCol(t, onRegimChange, readOnly, { compacte: true, sizeRun }),
     {
       key: 'delta', label: t('measuregrid.regla_delta'), width: 72,
       render: (row) => (mostraDelta(row) && row.increment_base != null
@@ -402,10 +405,14 @@ export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = '
     },
     {
       key: 'talla_break', label: t('measuregrid.regla_talla_break'), width: 92,
-      // Etiqueta de talla: DADA de domini (XS, 3XL) — no es tradueix ni porta signe.
-      render: (row) => (mostraDelta(row) && row.talla_break_label
-        ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>{row.talla_break_label}</span>
-        : <span style={buit}>—</span>),
+      // Etiqueta de talla: DADA de domini (XS, 3XL) — no es tradueix ni porta signe. El que sí
+      // que se li fa és la volta de CONVENCIÓ: es pinta la del document, no la desada.
+      render: (row) => {
+        const doc = mostraDelta(row) ? aDocument(row.talla_break_label, sizeRun) : null
+        return doc
+          ? <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>{doc}</span>
+          : <span style={buit}>—</span>
+      },
     },
   ]
 }

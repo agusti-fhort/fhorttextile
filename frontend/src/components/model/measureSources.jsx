@@ -114,6 +114,6 @@ export const fittingSource = {
   // Règim a la capçalera de fila. En mode sessió (lockRules) va READ-ONLY (3r arg true): els deltes
   // s'editen a Escalat, no en presa. regimeLeadCol ja gestiona la branca de lectura.
   buildLeadCols(raw, ctx) {
-    return [regimeLeadCol(ctx.t, () => {}, true)]
+    return [regimeLeadCol(ctx.t, () => {}, true, { sizeRun: ctx.sizeRun })]
   },
 }
