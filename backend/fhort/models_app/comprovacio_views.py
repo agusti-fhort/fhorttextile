@@ -30,6 +30,13 @@ from fhort.models_app.models import (BaseMeasurement, MeasurementChangeLog, Mode
 #: una escriptura d'autoria. Són els que fan que una base «quedi enrere» quan es mou després.
 CONTEXTOS_DE_PRESA = ('fitting', 'checked')
 
+#: LA FINESTRA D'UN DESAT. El log és append-only i una sola desada n'hi escriu N files: la
+#: presa, i darrere seu les germanes que la regla bidireccional deriva. Al 1320 tot el desat
+#: del fitting 152 cap en 81 mil·lisegons. Dues desades HUMANES separades per menys de dos
+#: segons no existeixen; agrupar per aquesta finestra és el que permet distingir «la base es
+#: va moure DESPRÉS» de «això ÉS el resultat de la presa» (v. `_events`).
+FINESTRA_DESAT = timedelta(seconds=2)
+
 
 def _nom(bm):
     """El nom que es llegeix a la pantalla: el bateig del model mana, el catàleg fa de fons."""
@@ -64,6 +71,23 @@ def _seccio_bloquegen(model, mesures, poms_amb_regla):
     return punts
 
 
+def _events(logs):
+    """Talla el log del model en ESDEVENIMENTS D'ESCRIPTURA: un desat = un event.
+
+    `logs` ha d'arribar en ordre cronològic. Es talla per la `FINESTRA_DESAT`, no per fila:
+    una fila del log no és un acte, és una CONSEQÜÈNCIA d'un acte, i la mateixa desada en
+    genera tantes com mesures toca (la presa + les germanes derivades).
+    """
+    events = []
+    for l in logs:
+        if events and (l.created_at - events[-1]['fi']) <= FINESTRA_DESAT:
+            events[-1]['fi'] = l.created_at
+            events[-1]['files'].append(l)
+        else:
+            events.append({'fi': l.created_at, 'files': [l]})
+    return events
+
+
 def _seccio_enrere(model, mesures):
     """VAN QUEDAR ENRERE QUAN LA BASE ES VA MOURE.
 
@@ -71,34 +95,60 @@ def _seccio_enrere(model, mesures):
     descobrir sol: un valor que falta el veus a la taula; una mesura que es va prendre i que
     després va quedar desalineada perquè la base es va moure, no.
 
-    Es resol NOMÉS amb el log (append-only): l'última PRESA d'aquella mesura contra l'últim
-    canvi de qualsevol mena. Si el canvi és posterior i el valor ja no és el que es va prendre,
-    la presa ha quedat enrere. Els dies es diuen perquè «fa 9 dies» i «fa 3 hores» no volen dir
-    el mateix a qui ha de decidir si cal tornar a mesurar.
+    🚨 EL DEFECTE QUE AQUESTA VERSIÓ TANCA (Agus, 09/08, model 1320): la secció acusava YT de
+    «van quedar enrere · mesurat 19 · base d'ara 13 · la base es va moure 0 DIES després de la
+    darrera presa». Zero dies perquè no s'havia mogut després de res: dins del MATEIX desat del
+    fitting 152, el tècnic va entrar YT=19 i tot seguit YB=25, i la regla bidireccional
+    (YT = YB − 6) va reescriure YT a 13 vint-i-dos mil·lisegons més tard. La versió anterior
+    llegia FILA A FILA —l'última fila `fitting` contra l'última fila de qualsevol mena— i una
+    derivació de la pròpia presa li semblava un moviment posterior.
+
+    LA REGLA, ara (decisió d'Agus, 10/08): **un canvi derivat dins de la mateixa desada no és
+    una base que s'ha mogut: és el resultat de la presa.** Per tant
+      · l'acte de comparació és l'EVENT, no la fila (`_events`);
+      · el que es va prendre és el que l'event va deixar ESCRIT a la mesura —l'última paraula
+        del desat, derivacions incloses—, no la xifra que la mà va teclejar pel camí;
+      · només un event ESTRICTAMENT POSTERIOR pot deixar una presa enrere.
+    Amb això, un punt d'aquesta secció ja no pot dir mai «fa 0 dies».
+
+    Els dies es diuen perquè «fa 9 dies» i «fa 3 hores» no volen dir el mateix a qui ha de
+    decidir si cal tornar a mesurar.
     """
-    punts = []
     logs = (MeasurementChangeLog.objects
             .filter(model=model)
-            .order_by('base_measurement_id', '-created_at'))
+            .order_by('created_at', 'id'))
+    # Per mesura, el rastre event a event: [(ordre_event, valor_final_a_l_event, es_presa, quan)].
     per_mesura = {}
-    for l in logs:
-        per_mesura.setdefault(l.base_measurement_id, []).append(l)
+    for i, ev in enumerate(_events(logs)):
+        toc = {}
+        for l in ev['files']:
+            if l.valor_nou is None:
+                continue
+            t = toc.setdefault(l.base_measurement_id, {'valor': None, 'presa': False})
+            t['valor'] = l.valor_nou          # l'ÚLTIMA paraula del desat sobre aquesta mesura
+            t['presa'] = t['presa'] or l.context in CONTEXTOS_DE_PRESA
+        for bm_id, t in toc.items():
+            per_mesura.setdefault(bm_id, []).append((i, t['valor'], t['presa'], ev['fi']))
+
+    punts = []
     for bm in mesures:
         historia = per_mesura.get(bm.id) or []
-        if not historia:
+        presa = next((h for h in reversed(historia) if h[2]), None)
+        if presa is None:
             continue
-        ultim = historia[0]
-        presa = next((l for l in historia if l.context in CONTEXTOS_DE_PRESA), None)
-        if presa is None or presa is ultim:
+        posteriors = [h for h in historia if h[0] > presa[0]]
+        if not posteriors:
             continue
-        if bm.base_value_cm is None or presa.valor_nou is None:
+        mesurat = presa[1]
+        if bm.base_value_cm is None or mesurat is None:
             continue
-        if float(bm.base_value_cm) == float(presa.valor_nou):
+        if float(bm.base_value_cm) == float(mesurat):
             continue
-        dies = (ultim.created_at - presa.created_at) / timedelta(days=1)
+        ultim = posteriors[-1]
+        dies = (ultim[3] - presa[3]) / timedelta(days=1)
         punts.append(_fila(
-            bm, mesurat=presa.valor_nou, base_ara=bm.base_value_cm,
-            dies=round(dies, 1), presa_at=presa.created_at, mogut_at=ultim.created_at))
+            bm, mesurat=mesurat, base_ara=bm.base_value_cm,
+            dies=round(dies, 1), presa_at=presa[3], mogut_at=ultim[3]))
     return punts
 
 
@@ -132,32 +182,71 @@ def _seccio_tolerancia(model, mesures):
     La banda és la de la FILA (`tolerancia_minus/plus`), no la del catàleg: és la que algú ha
     afinat per a aquesta mesura d'aquest model. Sense banda declarada no s'acusa ningú —una
     tolerància que no existeix no es pot superar.
+
+    🚨 TRES DEFECTES DE CONSULTA que feien que els números no lliguessin amb el model (Agus,
+    09/08, model 1320 — «E2 teòric 29 / real 31 quan la base d'E2 és 31»):
+
+    1. **CAP FILTRE DE TALLA.** La secció compara contra `BaseMeasurement`, que ÉS la talla
+       base, però llegia les línies de totes les talles i es quedava amb la primera que
+       Postgres tornés. El 29/31 d'E2 era la fila **XXS**; la fila S —la base— deia 31/33.
+       Files diferents del mateix quadre acabaven citant talles diferents.
+    2. **«EL DARRER FITTING» NO ERA EL DARRER.** Recorria TOTES les peces per id descendent i
+       es quedava amb el primer encert de cada mesura: barrejava fittings i, a més, l'id de
+       peça és l'ordre en què es van OBRIR les graelles, no el dia de la prova. Ara la peça la
+       resol `fitting.esdeveniments`, que a més descarta les graelles obertes i no tocades.
+    3. **L'EIX D'INSTÀNCIA, ESCRIT A MÀ A `''`.** `clau.get((pom, capa, ''))` no podia trobar
+       cap germana: al 1320 això deixava CINC mesures fora de tota vigilància, entre elles
+       J1·extended, que se n'anava 2 cm amb una banda de 0,60.
+
+    EL TEÒRIC ÉS L'HISTÒRIC (decisió d'Agus, 10/08): «el valor de l'última data disponible,
+    que és sobre el que es va mesurar». O sigui `PieceFittingLine.valor_teoric` d'aquella peça
+    —el número que la modista tenia al davant—, i no la base d'ara ni l'spec d'ara. La secció
+    explica un fet datat i no es desdiu quan després es propaga.
     """
-    from fhort.fitting.models import PieceFittingLine
-    punts = []
-    per_bm = {bm.id: bm for bm in mesures}
+    from fhort.fitting.esdeveniments import darrera_peca_amb_contingut
+
+    peca = darrera_peca_amb_contingut(model.id)
+    if peca is None:
+        return []
+    # La talla és LA BASE, perquè és contra la base que es compara. Una desviació d'una altra
+    # talla no es pot mesurar amb la banda d'aquesta fila: parlen de peces diferents.
+    talla = (model.base_size_label or '').strip()
     clau = {(bm.pom_id, bm.capa or 'exterior', bm.instancia or ''): bm for bm in mesures}
-    linies = (PieceFittingLine.objects
-              .filter(piece_fitting__model=model, valor_real__isnull=False)
-              .select_related('piece_fitting', 'pom')
-              .order_by('-piece_fitting__id'))
-    vistes = set()
-    for l in linies:
-        bm = clau.get((l.pom_id, l.capa or 'exterior', ''))
-        if bm is None or bm.id in vistes:
+    punts = []
+    for l in (peca.linies
+              .filter(size_label=talla, valor_real__isnull=False)
+              .select_related('pom')):
+        bm = clau.get((l.pom_id, l.capa or 'exterior', l.instancia or ''))
+        if bm is None:
             continue
         if l.valor_teoric is None or bm.tolerancia_minus is None or bm.tolerancia_plus is None:
             continue
         desviacio = float(l.valor_real) - float(l.valor_teoric)
         if -float(bm.tolerancia_minus) <= desviacio <= float(bm.tolerancia_plus):
             continue
-        vistes.add(bm.id)
         punts.append(_fila(bm, teoric=l.valor_teoric, real=l.valor_real,
                            desviacio=round(desviacio, 2),
                            tol_minus=float(bm.tolerancia_minus),
                            tol_plus=float(bm.tolerancia_plus),
-                           talla=l.size_label))
+                           talla=l.size_label,
+                           # El VEREDICTE de la cel·la viatja: una desviació que la modista ja
+                           # ha ajustat i una que ningú no ha mirat no són el mateix punt.
+                           veredicte=l.decisio or ''))
     return punts
+
+
+def _darrer_fitting(peca):
+    """La capçalera de la secció de tolerància: DE QUIN fitting parlen aquests números.
+
+    Sense això la secció cita xifres sense dir de quin dia ni de quina talla són, i és
+    exactament el que va fer que no «lliguessin» amb res del que es veu a la taula.
+    """
+    if peca is None:
+        return None
+    s = peca.session
+    return {'session_id': peca.session_id, 'piece_fitting_id': peca.id,
+            'data': s.data.isoformat() if s.data else None,
+            'fase': s.fase, 'estat': s.estat}
 
 
 def _families(mesures):
@@ -231,10 +320,13 @@ def comprovacio_view(request, model_id):
                          .filter(model=model)
                          .values_list('pom_id', flat=True))
 
+    from fhort.fitting.esdeveniments import darrera_peca_amb_contingut
+
     bloquegen = _seccio_bloquegen(model, mesures, poms_amb_regla)
     enrere = _seccio_enrere(model, mesures)
     descartades = _seccio_descartades(model, per_clau)
     tolerancia = _seccio_tolerancia(model, mesures)
+    peca = darrera_peca_amb_contingut(model.id)
 
     a_revisar = len(enrere) + len(descartades) + len(tolerancia)
     # CORRECTES = les mesures que no surten a cap punt. Es compta per FILA i no per POM: dues
@@ -254,6 +346,10 @@ def comprovacio_view(request, model_id):
             'descartades': descartades,
             'tolerancia': tolerancia,
         },
+        # DE QUIN FITTING I DE QUINA TALLA parlen els números de la secció de tolerància. Anava
+        # mut, i uns números sense procedència són el primer motiu perquè no «lliguin» amb res.
+        'darrer_fitting': _darrer_fitting(peca),
+        'talla_base': (model.base_size_label or '').strip() or None,
         'families': _families(mesures),
         # El que aquesta versió NO pot dir, dit a la resposta i no només al report: el client
         # ha de poder explicar per què una secció no ensenya el que la maqueta promet.

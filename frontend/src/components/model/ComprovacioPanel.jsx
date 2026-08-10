@@ -59,6 +59,16 @@ const xip = (buida) => ({
 })
 
 const fmt = (n) => (n == null || n === '' ? '—' : String(n).replace('.', ','))
+const fmtDia = (iso) => {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+// El VEREDICTE DE LA MODISTA amb el color de sempre. És literalment la paleta de `MeasureGrid`
+// (`VERDICTE_COL`) i es replica el CRITERI, no el codi: importar-lo faria que aquesta pantalla
+// de consulta pura pengés de la graella d'edició. Ha de dir el mateix als dos llocs.
+const VERDICTE_COL = { ACCEPTED: 'var(--ok)', ADJUSTED: 'var(--warn-ink)', REJECTED: 'var(--err)' }
 
 // Secció plegable. El capçal és un `button` de debò (no un div amb `role`): la maqueta ja el
 // fa focusable amb teclat i aquí surt gratis, amb el seu `aria-expanded`.
@@ -149,7 +159,8 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
     return <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('common.loading')}</p>
   }
 
-  const { veredicte, seccions, families, limitacions = [] } = dades
+  const { veredicte, seccions, families, limitacions = [],
+          darrer_fitting: darrerFitting = null, talla_base } = dades
   const bloqueja = veredicte.bloquegen > 0
   const enllac = (p) => (onVeureFila && p.bm_id != null ? (
     <button type="button" onClick={() => onVeureFila(p)}
@@ -206,23 +217,47 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
         ))}
       </Taula>
     ),
+    // D'ON SURTEN AQUESTS NÚMEROS, dit abans de la taula. La secció els citava muts —ni de quin
+    // fitting ni de quina talla— i era el primer motiu perquè no «lliguessin» amb res del que
+    // es veu a la taula de mesures. El TEÒRIC és el valor contra el qual es va mesurar aquell
+    // dia (decisió d'Agus, 10/08), no la base d'ara: sense la data, dir-ho és impossible.
     tolerancia: (punts) => (
-      <Taula columnes={[{ txt: t('comprovacio.col_pom') }, { txt: '' },
-                        { txt: t('comprovacio.col_teoric'), num: true },
-                        { txt: t('comprovacio.col_real'), num: true },
-                        { txt: t('comprovacio.col_desviacio') }]}>
-        {punts.map(p => (
-          <tr key={p.bm_id}>
-            <Identitat p={p} dicc={dicc} />
-            <td style={tdNum}>{fmt(p.teoric)}</td>
-            <td style={tdNum}>{fmt(p.real)}</td>
-            <td style={{ ...tdS, ...perqueS }}>
-              {p.desviacio > 0 ? '+' : '−'}{fmt(Math.abs(p.desviacio))}
-              {' · '}{t('comprovacio.tolerancia_banda', { minus: p.tol_minus, plus: p.tol_plus })}
-            </td>
-          </tr>
-        ))}
-      </Taula>
+      <>
+        {darrerFitting && (
+          <p style={{ margin: '4px 0 10px', ...perqueS }}>
+            {t('comprovacio.tolerancia_font', {
+              fase: darrerFitting.fase || '—',
+              data: fmtDia(darrerFitting.data),
+              talla: talla_base || '—',
+            })}
+          </p>
+        )}
+        <Taula columnes={[{ txt: t('comprovacio.col_pom') }, { txt: '' },
+                          { txt: t('comprovacio.col_teoric'), num: true },
+                          { txt: t('comprovacio.col_real'), num: true },
+                          { txt: t('comprovacio.col_desviacio') },
+                          { txt: t('comprovacio.col_veredicte') }]}>
+          {punts.map(p => (
+            <tr key={p.bm_id}>
+              <Identitat p={p} dicc={dicc} />
+              <td style={tdNum}>{fmt(p.teoric)}</td>
+              <td style={tdNum}>{fmt(p.real)}</td>
+              <td style={{ ...tdS, ...perqueS }}>
+                {p.desviacio > 0 ? '+' : '−'}{fmt(Math.abs(p.desviacio))}
+                {' · '}{t('comprovacio.tolerancia_banda', { minus: p.tol_minus, plus: p.tol_plus })}
+              </td>
+              {/* El veredicte de la modista és DADA DE DOMINI i no es tradueix (D-31.21), com
+                  LINEAR/STEP: és el que va cap al fabricant al full imprès. El color és el de
+                  sempre (`VERDICTE_COL` de MeasureGrid), perquè el mateix fet es llegeixi
+                  igual a les dues superfícies. */}
+              <td style={{ ...tdS, ...perqueS, color: VERDICTE_COL[p.veredicte] || 'var(--text-soft)',
+                           fontWeight: p.veredicte ? 600 : 400 }}>
+                {p.veredicte || '—'}
+              </td>
+            </tr>
+          ))}
+        </Taula>
+      </>
     ),
   }
 
