@@ -269,8 +269,14 @@ class FittingRepasView(APIView):
         # sessió l'hagi tocada mai: si no, un model amb només etapes no tindria on pintar-les.
         etapes, etapa_celles = _etapes_de_fitting(model.id)
         base = (model.base_size_label or '').strip()
+        # L'ENTRADA DE POMs, resolta abans de triar la talla: com les etapes, viu NOMÉS a la
+        # base, i per tant la base ha de ser una talla oferible encara que cap sessió l'hagi
+        # tocada mai. Sense això, un model amb mesures entrades i CAP fitting es quedava sense
+        # cap talla —i per tant sense cap columna—, i el Repàs deia «cap fitting fet» amagant
+        # justament la columna d'origen que havia d'ensenyar.
+        entrada_de_poms = _entrada_de_poms(model.id)
         labels = {l.size_label for l in linies}
-        if etapes and base:
+        if (etapes or entrada_de_poms) and base:
             labels.add(base)
         talles = _ordena_talles(labels, model.size_run_model)
 
@@ -340,7 +346,7 @@ class FittingRepasView(APIView):
         # front no n'hagi d'estrenar cap camí, i amb `origen='ENTRADA'`, que és el que la
         # distingeix. Només a la talla BASE: la columna d'origen és `BaseMeasurement`, i a una
         # altra talla ensenyar-la seria mentir sobre quina talla es va entrar.
-        entrada_celles = _entrada_de_poms(model.id) if talla == base else {}
+        entrada_celles = entrada_de_poms if talla == base else {}
         if entrada_celles:
             sessions.insert(0, {
                 'id': COL_ENTRADA, 'origen': 'ENTRADA', 'piece_fitting_id': None,

@@ -92,6 +92,29 @@ class FittingRepasTest(TenantTestCase):
     def _entrada(self, data):
         return next((c for c in data['sessions'] if c['origen'] == 'ENTRADA'), None)
 
+    def _etapa(self, pom, valor, origen='MANUAL', dia=15, anterior=50.0, motiu=''):
+        """Una re-mesura escrita a la taula de mesures, amb data controlada.
+
+        Es fabrica el `MeasurementChangeLog` DIRECTAMENT en comptes de desar la
+        BaseMeasurement: així la prova fixa el contracte que el Repàs llegeix, sense dependre
+        del camí que l'hagi escrit (fitting, size check o edició a mà).
+        """
+        from fhort.models_app.models import MeasurementChangeLog
+
+        ctx = {'MANUAL': 'manual', 'CHECKED': 'checked', 'FITTED': 'fitting'}[origen]
+        log = MeasurementChangeLog.objects.create(
+            model=self.model, pom=pom, valor_anterior=anterior, valor_nou=valor,
+            context=ctx, motiu=motiu)
+        quan = datetime.datetime(2026, 6, dia, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        MeasurementChangeLog.objects.filter(pk=log.pk).update(created_at=quan)
+        return log
+
+    def _neteja_log(self):
+        """El signal registra un canvi per cada BaseMeasurement del setUp: fora, perquè cada
+        prova digui exactament quines etapes hi ha."""
+        from fhort.models_app.models import MeasurementChangeLog
+        MeasurementChangeLog.objects.filter(model=self.model).delete()
+
     # ── Forma de la resposta ─────────────────────────────────────────────────
     def test_forma_i_ordre_cronologic(self):
         # Alta en ordre INVERS al cronològic: l'ordre l'ha de posar la data, no la creació.
@@ -211,29 +234,6 @@ class FittingRepasEtapesTest(FittingRepasTest):
     taula, i —igual d'important— que NO reculli el que no ho és.
     """
 
-    def _etapa(self, pom, valor, origen='MANUAL', dia=15, anterior=50.0, motiu=''):
-        """Una re-mesura escrita a la taula de mesures, amb data controlada.
-
-        Es fabrica el `MeasurementChangeLog` DIRECTAMENT en comptes de desar la
-        BaseMeasurement: així la prova fixa el contracte que el Repàs llegeix, sense dependre
-        del camí que l'hagi escrit (fitting, size check o edició a mà).
-        """
-        from fhort.models_app.models import MeasurementChangeLog
-
-        ctx = {'MANUAL': 'manual', 'CHECKED': 'checked', 'FITTED': 'fitting'}[origen]
-        log = MeasurementChangeLog.objects.create(
-            model=self.model, pom=pom, valor_anterior=anterior, valor_nou=valor,
-            context=ctx, motiu=motiu)
-        quan = datetime.datetime(2026, 6, dia, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        MeasurementChangeLog.objects.filter(pk=log.pk).update(created_at=quan)
-        return log
-
-    def _neteja_log(self):
-        """El signal registra un canvi per cada BaseMeasurement del setUp: fora, perquè cada
-        prova digui exactament quines etapes hi ha."""
-        from fhort.models_app.models import MeasurementChangeLog
-        MeasurementChangeLog.objects.filter(model=self.model).delete()
-
     # ── Cas TATE: model amb NOMÉS etapes, cap sessió ──────────────────────────
     def test_model_sense_cap_sessio_pero_amb_etapes_treu_columnes(self):
         self._neteja_log()
@@ -261,7 +261,9 @@ class FittingRepasEtapesTest(FittingRepasTest):
         Repàs s'ompliria de columnes que no són fittings."""
         self._neteja_log()
         self._etapa(self.pom_a, 60.0, anterior=None)
-        self.assertEqual(self._get().data['sessions'], [])
+        # B2 — es mira que no faci FITTING. La columna d'ENTRADA sí que hi pot ser, i és
+        # justament el que una alta inicial és: el punt de partida, no una presa.
+        self.assertEqual(self._fittings(self._get().data), [])
 
     def test_els_contextos_que_no_son_mesura_queden_fora(self):
         from fhort.models_app.models import MeasurementChangeLog
@@ -273,7 +275,7 @@ class FittingRepasEtapesTest(FittingRepasTest):
             MeasurementChangeLog.objects.filter(pk=log.pk).update(
                 created_at=datetime.datetime(2026, 6, 15, 12, 0, 0,
                                              tzinfo=datetime.timezone.utc))
-        self.assertEqual(self._get().data['sessions'], [],
+        self.assertEqual(self._fittings(self._get().data), [],
                          'moure dades no és mesurar una peça')
 
     def test_els_tres_contextos_de_mesura_hi_entren(self):
@@ -514,7 +516,9 @@ class RepasB2Test(FittingRepasTest):
         _, pf2 = self._sessio(20)
         self._linia(pf2, self.pom_b, 'M', 40.0, teoric=38.0)   # aquest no toca el pit
         _, pf3 = self._sessio(30)
-        self._linia(pf3, self.pom_a, 'M', 60.0, teoric=60.0)   # confirma el 60 de la 1a
+        # La 3a sessió ha de tenir CONTINGUT o no fa columna (és el predicat d'aquest
+        # tram): el seu teòric ve de l'spec vella (58) i el real confirma el 60 de la 1a.
+        self._linia(pf3, self.pom_a, 'M', 60.0, teoric=58.0)
 
         valors = self._fila(self._get().data, self.pom_a)['valors']
         self.assertTrue(valors[str(pf1.session_id)]['canvi'], '58 → 60')
