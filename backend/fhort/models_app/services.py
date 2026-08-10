@@ -270,8 +270,14 @@ def joc_classificat(rule_set) -> bool:
     return bool(rule_set) and (getattr(rule_set, 'origen', None) or '') in _ORIGEN_RS_A_MGR
 
 
-def poms_manual_a_preservar(model, joc_anterior):
+def poms_manual_a_preservar(model, joc_anterior, garment=''):
     """Els `pom_id` de les residents `MANUAL` que han de sobreviure al wipe (set, possiblement buit).
+
+    ── SET-2/T3 · `garment` ─────────────────────────────────────────────────────────────────
+    La preservació és **de la peça que es re-sembra, no del model sencer**. Una `MANUAL` del
+    top no pot fer que la sembra de la calceta salti el seu POM: el que es preserva ha de
+    correspondre a les files que aquest mateix wipe esborraria, i el wipe ara és per
+    `(model, garment)`. Amb el default `''` el comportament és exactament el d'abans.
 
     ── DECISIÓ 6.1 (2026-08-06 nit), VERSIÓ MÍNIMA REVERSIBLE ────────────────────────────────
     La regla és **estricta i literal**: es preserva NOMÉS si el joc del qual venien les
@@ -300,7 +306,8 @@ def poms_manual_a_preservar(model, joc_anterior):
     """
     if motiu_no_preserva(joc_anterior):
         return set()
-    return set(model.grading_rules.filter(origen='MANUAL').values_list('pom_id', flat=True))
+    return set(model.grading_rules.filter(origen='MANUAL', garment=garment)
+               .values_list('pom_id', flat=True))
 
 
 def motiu_no_preserva(joc_anterior):
@@ -324,14 +331,24 @@ def motiu_no_preserva(joc_anterior):
 
 
 def materialize_model_grading_rules(model, source_rules, origen,
-                                    joc_anterior=JOC_ANTERIOR_NO_INFORMAT):
+                                    joc_anterior=JOC_ANTERIOR_NO_INFORMAT, garment=''):
     """Materialitza regles de grading residents al model des d'un iterable de
     GradingRule. Wipe-and-recreate: el set resultant és source_rules **més les `MANUAL`
     preservades** (decisió 6.1; v. `poms_manual_a_preservar`).
 
     NO copia valor_base ni talla_base (viuen a BaseMeasurement / model.base_size_label).
-    Idempotent per (model): esborra les regles residents prèvies abans de recrear.
+    Idempotent per **(model, garment)**: esborra les regles residents prèvies d'AQUESTA PEÇA
+    abans de recrear.
     origen: 'IMPORTED' (W5) | 'CANONICAL' (wizard) | 'MANUAL'.
+
+    ── SET-2/T3 · PER QUÈ EL WIPE ÉS PER PEÇA I NO PER MODEL ────────────────────────────────
+    Era per MODEL, i amb dues peces això feia dos mals a la vegada. El primer, destructiu:
+    sembrar la calceta **esborrava les regles del top** —tot el model—, de manera que la
+    darrera peça sembrada era l'única que en tenia. El segon, immediat: el `bulk_create` no
+    porta conflict-handling, i amb la clau vella `('model','pom')` dues peces que
+    compartissin un POM petaven amb `IntegrityError` abans i tot d'arribar a l'anterior.
+    Amb el default `garment=''` tots els camins que encara no la informen es comporten
+    EXACTAMENT com abans: esborren i recreen la peça mare, que és l'únic que existeix.
 
     `joc_anterior`: el `GradingRuleSet` que el model tenia ABANS d'aquest gest (l'objecte, no
     l'id), o `None` si no en tenia cap. Sense aquest argument el motor esborra tot, com sempre:
@@ -339,15 +356,16 @@ def materialize_model_grading_rules(model, source_rules, origen,
     """
     from fhort.models_app.models import ModelGradingRule
     from fhort.pom.grading_regime import normalitza_logica
-    preservats = poms_manual_a_preservar(model, joc_anterior)
+    preservats = poms_manual_a_preservar(model, joc_anterior, garment)
+    del_qs = model.grading_rules.filter(garment=garment)
     if preservats:
-        model.grading_rules.exclude(origen='MANUAL').delete()
+        del_qs.exclude(origen='MANUAL').delete()
     else:
-        model.grading_rules.all().delete()
+        del_qs.delete()
     source_rules = [r for r in source_rules if r.pom_id not in preservats]
     objs = [
         ModelGradingRule(
-            model=model, pom_id=r.pom_id,
+            model=model, pom_id=r.pom_id, garment=garment,
             # A3 (2026-07-22) — LINEAR+0 sense break s'etiqueta FIXED en sembrar. Aquest camí
             # NO és autoria (no hi ha ningú a qui preguntar i rebutjar trencaria l'import):
             # es normalitza. La conversió és neutra — cap valor graduat canvia.
@@ -370,24 +388,31 @@ def materialize_model_grading_rules(model, source_rules, origen,
 
 
 def materialize_model_grading_rules_from_specs(model, specs, origen,
-                                               joc_anterior=JOC_ANTERIOR_NO_INFORMAT):
+                                               joc_anterior=JOC_ANTERIOR_NO_INFORMAT,
+                                               garment=''):
     """Com materialize_model_grading_rules però des d'SPECS (dicts uniformes de grading_utils),
     no objectes GradingRule. Permet barrejar regles de CONTENIDOR i residents-només-de-model
     (conflictes resolts 'model_resident' / camí sense contenidor) en una sola sembra selectiva.
-    Wipe-and-recreate idempotent per (model): el set resultant és `specs` **més les `MANUAL`
-    preservades** (decisió 6.1; v. `poms_manual_a_preservar`).
-    origen: 'IMPORTED' (W5) | 'CANONICAL' | 'MANUAL'."""
+    Wipe-and-recreate idempotent per **(model, garment)**: el set resultant és `specs` **més
+    les `MANUAL` preservades** (decisió 6.1; v. `poms_manual_a_preservar`).
+    origen: 'IMPORTED' (W5) | 'CANONICAL' | 'MANUAL'.
+
+    SET-2/T3 — el `garment` hi entra pel mateix motiu i amb la mateixa forma que a la seva
+    germana (v. l'argument sencer allà). Aquesta funció NO surt citada al brief del tram, però
+    porta el wipe idèntic: deixar-la per MODEL hauria fet que el camí d'specs —el de l'import
+    i el dels conflictes resolts— seguís esborrant les regles de les altres peces."""
     from fhort.models_app.models import ModelGradingRule
     from fhort.pom.grading_regime import normalitza_logica
-    preservats = poms_manual_a_preservar(model, joc_anterior)
+    preservats = poms_manual_a_preservar(model, joc_anterior, garment)
+    del_qs = model.grading_rules.filter(garment=garment)
     if preservats:
-        model.grading_rules.exclude(origen='MANUAL').delete()
+        del_qs.exclude(origen='MANUAL').delete()
     else:
-        model.grading_rules.all().delete()
+        del_qs.delete()
     specs = [s for s in specs if s['pom_id'] not in preservats]
     objs = [
         ModelGradingRule(
-            model=model, pom_id=s['pom_id'],
+            model=model, pom_id=s['pom_id'], garment=garment,
             # A3 — mateixa normalització que materialize_model_grading_rules (vegeu-hi la nota).
             logica=normalitza_logica(s['logica'], s.get('increment_base'), s.get('increment'),
                                      s.get('increment_break'), s.get('talla_break_label')),

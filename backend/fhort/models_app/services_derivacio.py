@@ -41,6 +41,25 @@ ORIGEN_DERIVAT = 'DERIVAT'
 EIX_CAPA = 'capa'
 EIX_INSTANCIA = 'instancia'
 
+#: ELS EIXOS DE GERMANOR, com a col·lecció i en un sol lloc.
+#:
+#: Un eix de germanor és aquell pel qual dues files SÓN dues cares de la mateixa mesura: el
+#: mateix POM de la mateixa prenda, mesurat sobre una altra matèria (capa) o en una altra de
+#: les seves repeticions (instància). Dues germanes comparteixen la LLEI D'INCREMENTS i és
+#: per això que `ModelGradingRule` no en travessa cap: la sisa dreta i l'esquerra gradúen
+#: igual, i el folre creix el mateix que l'exterior.
+#:
+#: ⚠️ `garment` NO hi és, i no és un oblit: el garment és una FRONTERA, no un eix. Dues files
+#: de peces diferents no són dues cares d'una mesura, són dues mesures de dues prendes, i
+#: poden tenir lleis d'increments distintes (D4). Per això `garment` SÍ que entra a la clau
+#: de la regla i `capa`/`instancia` no.
+#:
+#: Aquesta tupla és la que llegeix el pin de `ModelGradingRule` per vigilar EL PRINCIPI en
+#: comptes de dos noms de columna literals: el dia que el sistema aprengui un tercer eix de
+#: germanor, afegir-lo aquí ja fa que el pin el vigili — que és exactament el que no va
+#: passar amb `capa` i `instancia`, escrits a mà a cada test.
+EIXOS_DE_GERMANOR = (EIX_CAPA, EIX_INSTANCIA)
+
 
 @dataclass(frozen=True)
 class Derivacio:

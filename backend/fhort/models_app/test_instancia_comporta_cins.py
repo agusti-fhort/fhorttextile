@@ -200,21 +200,58 @@ class ComportaInstanciaCinsTest(_BaseInstanciaTest):
         self.assertEqual(noms_de_check('%_exigeix_nom'), {INVARIANT},
                          'la invariant de domini ha caigut amb les comportes')
 
-    def test_la_regla_de_grading_no_te_ni_instancia_ni_comporta(self):
+    def test_cap_regla_de_grading_travessa_un_eix_de_germanor(self):
         """Decisió Montse: la sisa dreta i l'esquerra GRADÚEN IGUAL. Una regla és una llei
-        d'increments, no un valor. Si algú li afegeix `instancia` sense passar per la decisió
-        d'arquitectura, aquest test l'atura — igual que el seu germà ho fa per a la capa."""
+        d'increments, no un valor.
+
+        SET-2/T3 — com el seu germà de capa, ara vigila EL PRINCIPI i no un nom: itera
+        `EIXOS_DE_GERMANOR` en comptes de comprovar `instancia` literal. `garment` no hi és a
+        posta (és una frontera, no un eix: v. D4 i l'acta de `ModelGradingRule`).
+        """
+        from fhort.models_app.services_derivacio import EIXOS_DE_GERMANOR
+
         with connection.cursor() as cur:
             for taula in ('models_app_modelgradingrule', 'pom_gradingrule'):
-                cur.execute(
-                    "SELECT 1 FROM information_schema.columns "
-                    "WHERE table_schema = %s AND table_name = %s "
-                    "AND column_name = 'instancia'",
-                    [connection.schema_name, taula])
-                self.assertIsNone(
-                    cur.fetchone(),
-                    f'{taula} ha rebut una columna `instancia`: és decisió '
-                    "d'arquitectura (Patró C), no una peça d'sprint")
+                for eix in EIXOS_DE_GERMANOR:
+                    with self.subTest(taula=taula, eix=eix):
+                        cur.execute(
+                            "SELECT 1 FROM information_schema.columns "
+                            "WHERE table_schema = %s AND table_name = %s "
+                            "AND column_name = %s",
+                            [connection.schema_name, taula, eix])
+                        self.assertIsNone(
+                            cur.fetchone(),
+                            f'{taula} ha rebut una columna `{eix}`, que és un eix de '
+                            "GERMANOR: és decisió d'arquitectura (Patró C), no una peça "
+                            "d'sprint")
+
+    def test_el_ruleset_del_cataleg_no_travessa_CAP_eix_DE_MODEL(self):
+        """LA LÍNIA QUE SEPARA EL CATÀLEG DEL MODEL, i el pin que la vigila.
+
+        `pom.GradingRule` viu dins d'un `GradingRuleSet`: una llei REUTILITZABLE, que existeix
+        per poder-se aplicar a molts models alhora. No és propietat de cap d'ells. Per això no
+        pot portar CAP eix de model —i `garment` menys que cap altre—: un joc que digués «això
+        és per a la peça 02» ja no seria un joc del catàleg, seria una regla d'un model amb
+        aparença de catàleg, i el dia que s'apliqués a un segon model voldria dir una cosa
+        diferent a cada casa.
+
+        Aquest pin es REFORÇA amb SET-2 en comptes de relaxar-se: D4 reobre la clau de
+        `models_app.ModelGradingRule` —la resident, que SÍ és del model— i no toca aquesta.
+        Si algú fa créixer les dues alhora perquè «es diuen igual», aquest test l'atura.
+        """
+        with connection.cursor() as cur:
+            for eix in ('garment', 'model_id', 'garment_type_item_id'):
+                with self.subTest(eix=eix):
+                    cur.execute(
+                        "SELECT 1 FROM information_schema.columns "
+                        "WHERE table_schema = %s AND table_name = 'pom_gradingrule' "
+                        "AND column_name = %s",
+                        [connection.schema_name, eix])
+                    self.assertIsNone(
+                        cur.fetchone(),
+                        f'pom.GradingRule ha rebut `{eix}`, que és un eix DE MODEL: un '
+                        'ruleset és una llei reutilitzable del catàleg, mai propietat '
+                        "d'un model")
 
 
 class ComportaInstanciaExigeixNomTest(_BaseInstanciaTest):

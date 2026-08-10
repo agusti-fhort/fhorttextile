@@ -1114,6 +1114,34 @@ class ModelGradingRule(models.Model):
     cicle que **no** travessa CAP dels dos eixos, i és a posta a les dues bandes. El pin que
     ho vigila: `test_instancia_comporta_cins.py` (columna absent a `information_schema`),
     germà del que ja hi ha per a `capa`. El mateix val per a `pom.GradingRule`.
+
+    ── SET-2/T3 (2026-08-10) · **REOBERTURA CONSCIENT DE L'ACTA: LA CLAU CREIX AMB `garment`.**
+
+    Això NO desmenteix res del que hi ha escrit a sobre; n'acota l'abast. L'acta de la Montse
+    parla de **germanes DINS d'una mateixa peça** i segueix sent certa paraula per paraula: la
+    sisa dreta i l'esquerra d'una mateixa prenda gradúen igual, i el folre d'un pit creix el
+    mateix que el seu exterior. El que l'acta no diu —perquè quan es va escriure un model era
+    una sola prenda— és que **un top i una calceta hagin de graduar igual**.
+
+    I no ho fan. Una peça pot tenir el seu propi `grading_rule_set` (D5): un top per talla
+    alfa i una calceta per mesos són dues lleis d'increments que ni tan sols parlen el mateix
+    idioma de talles. Amb la clau `('model','pom')`, dues peces que compartissin un POM no
+    podien tenir regles distintes — i, abans d'arribar-hi, **la sembra petava**: el wipe era
+    per MODEL i el `bulk_create` indexava per `pom_id` sol.
+
+    LA DISTINCIÓ, EN UNA LÍNIA: `capa` i `instancia` són **eixos de germanor** (dues cares de
+    la mateixa mesura → una sola llei); `garment` és una **frontera** (dues mesures de dues
+    prendes → dues lleis possibles). Per això aquesta clau creix amb el tercer i no amb els
+    dos primers. La col·lecció canònica dels eixos de germanor viu a
+    `services_derivacio.EIXOS_DE_GERMANOR`, i és la que llegeix el pin.
+
+    EL PIN, ARA, VIGILA EL PRINCIPI. Els dos que hi havia comprovaven `column_name = 'capa'` i
+    `= 'instancia'` literalment: una columna nova hi passava sense fer-los vermells, i la
+    diagnosi SET-2 ho va demostrar. Ara iteren `EIXOS_DE_GERMANOR`, o sigui que el dia que el
+    sistema aprengui un tercer eix de germanor el pin el vigilarà sol.
+    ⚠️ **`pom.GradingRule` NO es reobre i el seu pin es REFORÇA**: un ruleset és una llei
+    REUTILITZABLE del catàleg, mai propietat d'un model, i per tant no pot portar cap eix de
+    model —`garment` inclòs—. És la línia que separa el catàleg del model.
     """
     # R8 (2026-07-21) — 'CLIENT_RUN' hi faltava. El vocabulari de GradingRuleSet.origen
     # (CANONICAL/CLIENT_RUN/IMPORT) i el d'aquí no s'alineaven, i el wizard resolia la
@@ -1186,11 +1214,36 @@ class ModelGradingRule(models.Model):
     actiu = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # ── SET-2/T3 — EL GARMENT, i és l'ÚNIC eix que aquesta taula travessa (D4).
+    # L'argument sencer viu a l'acta de la classe: `capa` i `instancia` són eixos de GERMANOR
+    # (dues cares de la mateixa mesura → una sola llei d'increments) i per això no hi entren;
+    # `garment` és una FRONTERA (dues prendes → dues lleis possibles) i per això hi entra.
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Regla grading (model)'
         verbose_name_plural = 'Regles grading (model)'
-        unique_together = [('model', 'pom')]
+        # SET-2/T3 — la clau creix amb el garment (D4). Mateixes columnes + una →
+        # estrictament més permissiva, amb `garment` constant ('') a totes les files.
+        unique_together = [('model', 'pom', 'garment')]
+        constraints = [
+            # SET-2/T3 — la comporta, amb el mateix argument que les sis de T2 (v.
+            # `BaseMeasurement.Meta`) i tancant una finestra que aquí és MÉS estreta i més
+            # perillosa: `_load_grading_rules` indexa `{r.pom_id: r}` (`pom/services.py:749`),
+            # un escalar SENSE cap eix. Amb dues peces que comparteixin un POM, la segona
+            # regla no petaria: **sobreescriuria la primera en memòria** i el motor graduaria
+            # tota una peça amb la llei de l'altra, sense un sol log. T4 és qui ensenya al
+            # motor a distingir-les; fins llavors, aquí no hi pot haver cap '02'.
+            models.CheckConstraint(
+                condition=models.Q(garment=''),
+                name='models_app_modelgradingrule_garment_gate_set2',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.model} · {self.pom.codi_client} ({self.logica})'

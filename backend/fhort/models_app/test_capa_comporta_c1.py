@@ -124,14 +124,34 @@ class ComportaCapaC1Test(TenantTestCase):
         self.assertEqual(trobades, set(),
                          f'comportes de capa vives després de C4: {sorted(trobades)}')
 
-    def test_la_regla_de_grading_no_te_ni_capa_ni_comporta(self):
-        """§3c: la regla es comparteix entre capes («mateixos deltes»). Si algú li afegeix
-        `capa` sense passar per la decisió d'arquitectura, aquest test l'atura."""
-        with connection.cursor() as cur:
-            cur.execute(
-                "SELECT 1 FROM information_schema.columns "
-                "WHERE table_schema = %s AND table_name = %s AND column_name = 'capa'",
-                [connection.schema_name, 'models_app_modelgradingrule'])
-            self.assertIsNone(cur.fetchone(),
-                              'ModelGradingRule ha rebut una columna `capa`: és decisió '
-                              "d'arquitectura (Patró C), no una peça d'sprint")
+    def test_la_regla_de_grading_no_travessa_CAP_eix_de_germanor(self):
+        """§3c: la regla es comparteix entre germanes («mateixos deltes»). Si algú li afegeix
+        un eix de GERMANOR sense passar per la decisió d'arquitectura, aquest test l'atura.
+
+        ── SET-2/T3 · ARA VIGILA EL PRINCIPI, NO UN NOM ─────────────────────────────────────
+        Abans comprovava `column_name = 'capa'`, literal. La diagnosi SET-2 va demostrar que
+        una columna NOVA hi passava sense fer-lo vermell: el guardià protegia un nom, no la
+        llei. Ara itera `EIXOS_DE_GERMANOR`, la col·lecció canònica —i única— dels eixos pels
+        quals dues files són dues cares de la MATEIXA mesura. El dia que el sistema n'aprengui
+        un tercer, afegir-lo allà ja fa que aquest test el vigili.
+
+        ⚠️ `garment` NO hi és A POSTA, i la seva absència d'aquesta llista és la decisió D4:
+        és una FRONTERA, no un eix de germanor. Dues peces poden tenir lleis d'increments
+        distintes (un top alfa i una calceta per mesos), i per això la clau SÍ que el
+        travessa. Que aquest test no el vigili és el que el fa possible.
+        """
+        from fhort.models_app.services_derivacio import EIXOS_DE_GERMANOR
+
+        for eix in EIXOS_DE_GERMANOR:
+            with self.subTest(eix=eix):
+                with connection.cursor() as cur:
+                    cur.execute(
+                        "SELECT 1 FROM information_schema.columns "
+                        "WHERE table_schema = %s AND table_name = %s AND column_name = %s",
+                        [connection.schema_name, 'models_app_modelgradingrule', eix])
+                    self.assertIsNone(
+                        cur.fetchone(),
+                        f'ModelGradingRule ha rebut una columna `{eix}`, que és un eix de '
+                        "GERMANOR: una regla és una llei d'increments i les germanes en "
+                        "comparteixen una de sola. És decisió d'arquitectura (Patró C), no "
+                        "una peça d'sprint.")
