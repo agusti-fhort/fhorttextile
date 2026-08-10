@@ -751,6 +751,39 @@ class BaseMeasurement(models.Model):
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
     )
+    # ── SET-2/T2 — EL GARMENT (la peça dins del model). Declaració canònica del camp; les
+    # altres cinc taules de la família en porten una d'igual i apunten aquí.
+    #
+    # TERCER EIX, ORTOGONAL ALS DOS ANTERIORS. La capa diu de quina MATÈRIA parla la mesura;
+    # la instància, de quina de les REPETICIONS del mateix POM sobre la mateixa matèria; el
+    # garment diu de quina PRENDA del model parla — el top i la calceta d'un bikini, la
+    # jaqueta i el pantaló d'un pijama. Fins avui un model era una sola prenda: la segona
+    # mesura de «pit» no podia existir perquè xocava amb la primera.
+    #
+    # ⚠️ «GARMENT», NO «PEÇA» (D2): «peça» ja vol dir un Model sencer a `PieceFitting`, a
+    # `Model.piece_number` i a `GarmentTypeItemPart.nom_peca`. La col·lisió és de codi; a la
+    # UI en català se'n segueix dient «peça».
+    #
+    # CODI, MAI FK — i pel mateix motiu que `capa` i `instancia` (llei G9: per slug/codi, mai
+    # per PK). El codi és el de `ModelGarment.codi` ('02', '03'…), que viatja entre tenants i
+    # entre versions; una PK no viatja. La FK real petaria a `public` com la de la capa.
+    #
+    # `''` (cadena buida, MAI NULL) és la PEÇA MARE: el que fins avui era «el model», sense
+    # qualificar. NULL voldria dir «no se sap», i aquí sempre se sap. (D1, i és la mateixa
+    # llei que ja governa `instancia` just aquí a sobre.)
+    #
+    # CONVENCIÓ MANDROSA (D3): la mare NO té mai fila pròpia a `ModelGarment` — els seus
+    # valors ja viuen als camps de `Model`, i materialitzar-la seria duplicar la font de
+    # veritat. Només es materialitza a partir de la 02.
+    #
+    # La VALIDACIÓ contra `ModelGarment` NO és aquí: arriba amb el tram T2-bis. Fins llavors
+    # mana la COMPORTA — un CHECK a BD que només deixa passar ''.
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Mesura base'
@@ -892,6 +925,16 @@ class MeasurementChangeLog(models.Model):
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
     )
+    # SET-2/T2 — el garment (declaració canònica a `BaseMeasurement.garment`).
+    # Aquesta taula és APPEND-ONLY i no té cap unicitat: si l'eix no neix aquí, el lector
+    # no podrà dir mai de quina peça parlava un canvi ja registrat, i la pèrdua és
+    # IRREVERSIBLE. Per això hi entra al mateix grup que la mesura, com capa i instància.
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Canvi de mesura'
@@ -968,6 +1011,13 @@ class ModelGradingOverride(models.Model):
         max_length=60, default='', db_index=True,
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
+    # SET-2/T2 — el garment (declaració canònica a `BaseMeasurement.garment`).
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
     )
 
     class Meta:
@@ -1297,6 +1347,13 @@ class SizeCheckLine(models.Model):
         max_length=60, default='', db_index=True,
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
+    # SET-2/T2 — el garment (declaració canònica a `BaseMeasurement.garment`).
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
     )
 
     class Meta:

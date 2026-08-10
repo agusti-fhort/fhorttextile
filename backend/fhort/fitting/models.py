@@ -240,6 +240,18 @@ class GradedSpec(models.Model):
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
     )
+    # SET-2/T2 — el garment (declaració canònica a `models_app.BaseMeasurement.garment`).
+    # L'spec és el RESULTAT d'aplicar la regla a un valor base, i el valor base ja porta els
+    # tres eixos: si el pit del top i el de la calceta són dues bases, en surten dos specs.
+    # ⚠️ La VERSIÓ, en canvi, NO travessa l'eix (D6): el fitting és del model sencer, i una
+    # sola `GradingVersion` conté els specs de TOTES les peces. Un segell per peça no
+    # existeix, i que no existeixi és decisió de domini, no limitació tècnica.
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
+    )
 
     class Meta:
         verbose_name = 'Spec generat'
@@ -450,6 +462,17 @@ class PieceFittingLine(models.Model):
         max_length=60, default='', db_index=True,
         help_text="Instància del POM dins la capa: slug compost canònic (p.ex. 'left-relaxed'). "
                   "'' és la instància única. Fins a C4-ins només s'admet '' (comporta CHECK a BD).",
+    )
+    # SET-2/T2 — el garment (declaració canònica a `models_app.BaseMeasurement.garment`).
+    # La línia de fitting és on es MESURA la prenda real: si el model és un pijama, la
+    # modista pren les xifres de la jaqueta i les del pantaló, i aquí hi ha d'haver dues
+    # línies. ⚠️ La SESSIÓ i el veredicte segueixen sent del MODEL SENCER (D6): mesurar una
+    # prenda és mesurar tot el model, i no existeix «tancar el fitting del dalt».
+    garment = models.CharField(
+        max_length=20, default='', db_index=True,
+        help_text="Peça (garment) dins del model: codi de ModelGarment ('02', '03'…). "
+                  "'' és la peça mare, que és el Model mateix. Fins a la retirada de la "
+                  "comporta només s'admet '' (comporta CHECK a BD).",
     )
 
     class Meta:
