@@ -99,7 +99,7 @@ def main():
                  (peca.session.data, peca.session_id) == max(
                      (p.session.data, p.session_id) for p in peces))
 
-        tol = _seccio_tolerancia(model, mesures)
+        tol = _seccio_tolerancia(model, mesures, peca)
         print(f'\nV2/V4 · fora de tolerància: {len(tol)} punts')
         for p in tol:
             print(f'    {p["codi"]:<4} inst={p["instancia"]!r:<12} teòric={p["teoric"]:<7} '

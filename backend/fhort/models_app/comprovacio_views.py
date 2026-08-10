@@ -176,8 +176,12 @@ def _seccio_descartades(model, mesures_per_clau):
     return punts
 
 
-def _seccio_tolerancia(model, mesures):
+def _seccio_tolerancia(model, mesures, peca):
     """FORA DE TOLERÀNCIA AL DARRER FITTING.
+
+    `peca` la resol la vista i s'hi passa: la secció i la capçalera que diu de quin fitting
+    parla han de referir-se a LA MATEIXA, i resoldre-la dos cops és obrir la porta que un dia
+    no ho siguin.
 
     La banda és la de la FILA (`tolerancia_minus/plus`), no la del catàleg: és la que algú ha
     afinat per a aquesta mesura d'aquest model. Sense banda declarada no s'acusa ningú —una
@@ -203,9 +207,6 @@ def _seccio_tolerancia(model, mesures):
     —el número que la modista tenia al davant—, i no la base d'ara ni l'spec d'ara. La secció
     explica un fet datat i no es desdiu quan després es propaga.
     """
-    from fhort.fitting.esdeveniments import darrera_peca_amb_contingut
-
-    peca = darrera_peca_amb_contingut(model.id)
     if peca is None:
         return []
     # La talla és LA BASE, perquè és contra la base que es compara. Una desviació d'una altra
@@ -322,11 +323,13 @@ def comprovacio_view(request, model_id):
 
     from fhort.fitting.esdeveniments import darrera_peca_amb_contingut
 
+    # LA PEÇA DEL «DARRER FITTING», resolta UN COP: la secció de tolerància i la capçalera que
+    # diu de quin fitting parla han de referir-se a la mateixa.
+    peca = darrera_peca_amb_contingut(model.id)
     bloquegen = _seccio_bloquegen(model, mesures, poms_amb_regla)
     enrere = _seccio_enrere(model, mesures)
     descartades = _seccio_descartades(model, per_clau)
-    tolerancia = _seccio_tolerancia(model, mesures)
-    peca = darrera_peca_amb_contingut(model.id)
+    tolerancia = _seccio_tolerancia(model, mesures, peca)
 
     a_revisar = len(enrere) + len(descartades) + len(tolerancia)
     # CORRECTES = les mesures que no surten a cap punt. Es compta per FILA i no per POM: dues
