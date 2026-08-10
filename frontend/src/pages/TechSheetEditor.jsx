@@ -5556,10 +5556,12 @@ export default function TechSheetEditor() {
   // text lliure de l'import i pot partir una sola peça en zones («cos», «caputxa»); `garment`
   // és la prenda del model. Mateixa font (pomRows), cap crida nova, i cap ordre alterat.
   //
-  // ⚠️ DATAT 2026-08-10: avui això dona SEMPRE una sola branca (la mare) perquè la comporta
-  // CHECK de T2 no deixa entrar cap altre valor i `ModelGarment` encara no existeix. Re-verificar
-  // amb: `grep -rn "class ModelGarment" backend/` — el dia que en surti, aquestes dues línies
-  // ja porten l'arbre engegat sense tocar res més.
+  // ⚠️ DATAT 2026-08-10: avui això dona SEMPRE una sola branca (la mare) per dues raons
+  // independents —la comporta CHECK de T2 no deixa entrar cap altre valor a la columna, i el
+  // payload de `base-measurements/` encara NO serveix l'eix (ho farà quan existeixi
+  // `ModelGarment`, que és qui resol `garment.X or model.X` en un sol punt; T9 no ho anticipa).
+  // Re-verificar amb: `grep -rn "class ModelGarment" backend/`. El dia que la vora el porti,
+  // aquestes dues línies ja tenen l'arbre engegat sense tocar res més.
   const grupsPom = agrupaPerGarment(pomRows)
   const arbrePom = calArbrePerGarment(grupsPom)
   const pecesDelModel = grupsPom.map(g => g.garment).filter(g => g !== GARMENT_MARE)

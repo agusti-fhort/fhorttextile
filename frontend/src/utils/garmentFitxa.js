@@ -32,7 +32,12 @@ export const garmentIdDe = (obj) => {
 }
 
 /** L'eix d'una FILA de dades (`base-measurements`, `graded-table`): allà la clau es diu
- *  `garment`, com la columna. Un payload que encara no la serveixi = la mare. */
+ *  `garment`, com la columna. Un payload que encara no la serveixi = la mare.
+ *
+ *  ⚠️ DATAT 2026-08-10 — AVUI CAP PAYLOAD LA SERVEIX, i T9 no l'anticipa: la clau arribarà
+ *  quan existeixi `ModelGarment`, perquè la resolució `garment.X or model.X` ha de viure en
+ *  un sol punt (D5) i el payload és una de les vores on s'ha de veure. Per això aquest lector
+ *  no és una tolerància provisional: és el contracte mentre la vora no la porti. */
 export const garmentDeFila = (fila) => {
   const g = fila?.garment
   return typeof g === 'string' ? g : GARMENT_MARE
