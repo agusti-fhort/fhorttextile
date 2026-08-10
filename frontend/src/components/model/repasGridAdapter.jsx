@@ -42,6 +42,18 @@ const origenAccent = (origen) => ({
 // Si l'esdeveniment porta comentari propi (notes o motiu del gate), l'indicador viu aquí: és un
 // comentari de SESSIÓ, no de cel·la.
 function EsdevenimentLabel({ session, t }) {
+  // B2 — L'ENTRADA DE POMs és la primera columna i NO és un esdeveniment de fitting: és d'on
+  // es parteix. Per això no porta ni punt d'estat ni data —la data d'una entrada de fitxa no
+  // diu res a qui repassa— sinó la icona de la taula i el seu nom, traduït.
+  if (session.origen === 'ENTRADA') {
+    return (
+      <span>
+        <i className="ti ti-table-plus" aria-hidden="true"
+          style={{ fontSize: 12, marginRight: 4, color: 'var(--text-muted)', verticalAlign: 'middle' }} />
+        {t('fitting.repas.col_entrada')}
+      </span>
+    )
+  }
   const esEtapa = session.origen && session.origen !== 'SESSIO'
   const comentari = [
     session.notes && `${t('fitting.repas.session_notes')}: ${session.notes}`,
@@ -111,7 +123,13 @@ export function buildRepasRows(rows, sessions) {
       const v = row.valors?.[String(s.id)]
       // Objecte {value, nota} SEMPRE: és el contracte que fa aparèixer l'indicador de comentari
       // a MeasureGrid. Sense presa en aquell esdeveniment, la cel·la queda a null (surt '—').
-      history[String(s.id)] = v ? { value: v.valor_real, nota: v.nota } : null
+      //
+      // B2 — `canvi` i `veredicte` els decideix EL BACKEND (`repas_views`), que és qui coneix
+      // l'ordre de les columnes. Aquí no es recalcula res: un front que comparés cel·les seria
+      // un segon lloc capaç de dir una cosa diferent sobre el mateix parell de números.
+      history[String(s.id)] = v
+        ? { value: v.valor_real, nota: v.nota, canvi: !!v.canvi, veredicte: v.veredicte || null }
+        : null
     }
     const v = row.valors?.[String(ultima.id)]
     // C4/BLOC 3 — l'identificador de línia porta els dos eixos. El repàs ja agrupa per
@@ -132,7 +150,12 @@ export function buildRepasRows(rows, sessions) {
       cells: {
         repas: {
           history,
-          active: v ? { lineId: ident, value: v.valor_real ?? '', baseValue: null, nota: v.nota, readonly: true } : null,
+          // El VEREDICTE només tenyeix la cel·la quan hi ha CANVI (ordre d'Agus: «els canvis es
+          // marquen; la resta, normal»). Una presa que confirma el número anterior es llegeix
+          // com el que és —res de nou— i la taula es queda quieta.
+          active: v ? { lineId: ident, value: v.valor_real ?? '', baseValue: null, nota: v.nota,
+                        readonly: true, canvi: !!v.canvi,
+                        veredicte: v.canvi ? (v.veredicte || null) : null } : null,
           trail: { coment: <UltimComentari ultim={row.ultim_comentari} /> },
         },
       },

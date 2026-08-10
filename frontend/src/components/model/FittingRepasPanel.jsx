@@ -36,12 +36,17 @@ export default function FittingRepasPanel({ model }) {
 
   const sessions = data?.sessions || []
   if (!sessions.length) {
+    // Sense CAP columna no hi ha res a repassar, però el motiu no és sempre el mateix: un model
+    // sense mesures i un model amb mesures i cap fitting són dues situacions diferents, i des que
+    // la primera columna és l'ENTRADA DE POMs (B2) el segon cas ja no arriba mai aquí.
     return (
       <div style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-soft)', padding: '8px 0' }}>
-        {t('fitting.repas.no_sessions')}
+        {t((data?.rows || []).length ? 'fitting.repas.no_sessions' : 'fitting.repas.empty_all')}
       </div>
     )
   }
+  // El recompte és de FITTINGS, i la columna d'entrada no n'és cap: és d'on es parteix.
+  const nFittings = sessions.filter(s => s.origen !== 'ENTRADA').length
 
   const groups = buildRepasGroups(sessions, data.talla, data.model?.base_size_label, t)
   const rows = buildRepasRows(data.rows, sessions)
@@ -53,7 +58,7 @@ export default function FittingRepasPanel({ model }) {
           {t('fitting.repas.title')}
         </h3>
         <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
-          {t('fitting.repas.count', { n: sessions.length })}
+          {t('fitting.repas.count', { n: nFittings })}
           {data.talla && ` · ${t('fitting.repas.size', { talla: data.talla })}`}
         </span>
       </div>

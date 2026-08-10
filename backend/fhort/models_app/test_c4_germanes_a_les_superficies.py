@@ -317,8 +317,14 @@ class GermanesALesSuperficiesC4Test(TenantTestCase):
             files = resp.data['rows']
             self.assertEqual({f['nom_fitxa'] for f in files}, NOMS,
                              'el Repàs ha de tenir una fila per germana')
-            reals = [list(f['valors'].values())[0]['valor_teoric'] for f in files
-                     if f['valors']]
+            # B2 (10/08) — la PRIMERA columna del Repàs és l'ENTRADA DE POMs, que no es mesura
+            # contra res i per tant no porta teòric. El que aquesta prova mira és que cada
+            # germana conservi el SEU teòric a la columna del fitting: es demana per columna,
+            # no per posició.
+            fitting = next(str(c['id']) for c in resp.data['sessions']
+                           if c['origen'] != 'ENTRADA')
+            reals = [f['valors'][fitting]['valor_teoric'] for f in files
+                     if fitting in f['valors']]
             self._quatre(reals, 'repàs')
 
     # ── 4 · serializers_size_check ───────────────────────────────────────────────────

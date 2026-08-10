@@ -140,7 +140,10 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     return (
       <td style={{ ...cellTd(true, false, false),
                    color: colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)'),
-                   fontWeight: verdicte ? 600 : undefined,
+                   // `active.canvi` (B2) posa la negreta a la columna activa amb el mateix
+                   // criteri que a les d'història: un canvi es marca encara que ningú no li
+                   // hagi posat veredicte. Qui no l'envia, com abans.
+                   fontWeight: verdicte || active.canvi ? 600 : undefined,
                    textDecoration: verdicte === 'REJECTED' ? 'line-through' : undefined }}>
         {fmtMeasure(value, unit) ?? '—'}
         <NotaDot nota={active.nota} />
@@ -635,8 +638,24 @@ export default function MeasureGrid({
                     const hv = cell.history?.[h.key]
                     const obj = hv && typeof hv === 'object'
                     const v = obj ? hv.value : hv
+                    // EL CANVI ES MARCA (B2 · Agus, 10/08). Una columna d'història pintava tota
+                    // en negre i el que hi passava —quin número s'havia mogut respecte de
+                    // l'anterior— s'havia de trobar comparant xifra a xifra amb el dit.
+                    // NEGRETA quan la cel·la canvia, i el color el posa el VEREDICTE de la
+                    // modista (la paleta de sempre, `VERDICTE_COL`); sense veredicte, negreta
+                    // sola. La resta, normal.
+                    //
+                    // Additiu a posta: qui no envia `canvi`/`veredicte` (fitting, escalat) pinta
+                    // exactament igual que abans.
+                    const canviat = obj && !!hv.canvi
+                    const colVerd = canviat && hv.veredicte ? VERDICTE_COL[hv.veredicte] : null
                     return (
-                      <td key={`${g.key}-h-${h.key}`} style={{ ...cellTd(false, idx === 0, false), color: 'var(--text-main)' }}>
+                      <td key={`${g.key}-h-${h.key}`}
+                        style={{ ...cellTd(false, idx === 0, false),
+                                 color: colVerd || 'var(--text-main)',
+                                 fontWeight: canviat ? 600 : undefined,
+                                 textDecoration: canviat && hv.veredicte === 'REJECTED'
+                                   ? 'line-through' : undefined }}>
                         {fmtMeasure(v, unit) ?? '—'}
                         {obj && <NotaDot nota={hv.nota} />}
                       </td>
