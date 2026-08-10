@@ -35,6 +35,7 @@ import { sufixIdentitat } from '../utils/capaInstancia'
 import { useDiccionariMesures } from '../utils/diccionariMesuresFont'
 // F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
 import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
+import { GARMENT_MARE, garmentDeFila } from '../utils/garmentFitxa'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -404,7 +405,7 @@ export function cotaLabelOffset(dx, dy, halfW, halfH) {
 // doble punta + etiqueta de TEXT VERMELL sense requadre) a partir dels extrems en mm. Un precedent
 // de peça GERMANA es marca amb traç discontinu (`derivat`).
 export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, capa, instancia,
-  canonical, viewSlot, derivat }) {
+  garmentId, canonical, viewSlot, derivat }) {
   const col = KONVA_COL.pom
   const dash = derivat ? [3, 2] : undefined
   const TW = measureTextWidthMm({ text: label, fontSize: 9, fontFamily: FONT, fontStyle: 'bold' })
@@ -438,6 +439,12 @@ export function buildLiveCota({ ax, ay, dx, dy, label, pomId, bmId, capa, instan
     pomId, bmId,
     ...(capa && capa !== 'exterior' ? { capa } : {}),
     ...(instancia ? { instancia } : {}),
+    // SET-2/T9 — LA PEÇA de la cota. A diferència de capa/instància, aquest SÍ que s'escriu
+    // sempre (també quan és la mare): és l'ANCORATGE de l'objecte, i escrit sempre distingeix
+    // «aquesta cota és de la mare» de «aquesta cota és anterior a T9 i no ho declara». Les
+    // dues es LLEGEIXEN igual (`garmentIdDe` → la mare), que és el que fa que les fitxes
+    // vives no s'hagin de migrar.
+    garmentId: garmentId ?? GARMENT_MARE,
     pomCanonical: canonical || '', viewSlot, precedentGermana: !!derivat,
     children: [linia, text],
   }
@@ -4305,6 +4312,10 @@ export default function TechSheetEditor() {
         pomId: pom.pomId, bmId: pom.bmId, pomCanonical: pom.canonical || '',
         ...(pom.capa && pom.capa !== 'exterior' ? { capa: pom.capa } : {}),
         ...(pom.instancia ? { instancia: pom.instancia } : {}),
+        // SET-2/T9 — la peça, sempre escrita, com a `buildLiveCota`. Va DINS d'aquest spread
+        // a propòsit: una cota LLIURE (sense POM) no és de cap prenda —és una anotació del
+        // dibuix— i es desa exactament com abans.
+        garmentId: pom.garmentId ?? GARMENT_MARE,
       } : {}),
       children: [linia, text],
     })
@@ -4568,7 +4579,9 @@ export default function TechSheetEditor() {
                        IMG_BOX_W, IMG_BOX_H)
     } catch { /* mida natural il·legible → caixa nominal (comportament d'abans) */ }
     // F2: `extra` pot portar sourceItemFitxer (procedència de catàleg de l'sketch importat).
-    const obj = { id: uid(), type: 'image', layer: 'free', x: 50, y: 50, ...box, src: dataURL, ...extra }
+    // SET-2/T9: i la PEÇA a la qual pertany el croquis. `extra` va DARRERE per poder-la
+    // sobreescriure el dia que qui l'insereix en sàpiga una altra (avui no: cap camí en porta).
+    const obj = { id: uid(), type: 'image', layer: 'free', x: 50, y: 50, ...box, src: dataURL, garmentId: GARMENT_MARE, ...extra }
     addObject(obj)
   }
   // Camí LEGACY (editor sense document .ftt al darrere): no hi ha cap document on penjar
@@ -4693,7 +4706,10 @@ export default function TechSheetEditor() {
       svg: svgText,
     }
     const obj = await convertLegacySketchSvgObject(source)
-    addObject({ ...obj, ...extra })   // addObject ja deixa l'objecte SELECCIONAT
+    // SET-2/T9 — un croquis NOU neix de la peça mare. El camí de dalt (reemplaçar l'SVG d'un
+    // objecte que ja hi era) NO hi passa a propòsit: canviar el dibuix no canvia de quina
+    // prenda és, i el merge d'`updateObject` li conserva el `garmentId` que ja tingués.
+    addObject({ ...obj, garmentId: GARMENT_MARE, ...extra })   // addObject ja deixa l'objecte SELECCIONAT
     // Un import amb rols separats retorna un GRUP. Un grup NO és editable per nodes directament
     // (cal entrar-hi i triar un fill-path); deixar-hi `editingFlatId` posava l'editor en mode
     // node SENSE objectiu vàlid (`editingFlat` no resol un 'group'), i aquest estat suprimeix el
@@ -4904,6 +4920,9 @@ export default function TechSheetEditor() {
       const objId = uid()
       const obj = {
         id: objId, type: 'data_block', kind: 'graded_table', size_fitting_id: sfId,
+        // SET-2/T9 — també la taula LEGACY porta l'ancoratge: encara és inserible des del
+        // sub-selector de fitting (:8011) i un objecte inserible avui no pot néixer sense eix.
+        garmentId: GARMENT_MARE,
         layer: 'data', x: 10, y: 14, scale,
         width: wMm * scale, height: hMm * scale,
       }
@@ -5017,7 +5036,9 @@ export default function TechSheetEditor() {
     ])
     addObject(fitTableObj({
       id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
-      kind: 'base_measures', columns, rows,
+      // SET-2/T9 — la taula surt de TOTES les mesures del model, o sigui de la prenda mare.
+      // Quan la partició per peça tingui més d'una branca, cada objecte portarà la seva.
+      kind: 'base_measures', garmentId: GARMENT_MARE, columns, rows,
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
       snapshot: {
         model_id: model.id, talla_base: model?.base_size_label || null,
@@ -5086,7 +5107,7 @@ export default function TechSheetEditor() {
       : [{ seccio: null, files: bms }]
     const n = inserirTaules(grups, g => ({
       id: uid(), type: 'table', layer: 'free',
-      kind: 'pom_fitting', columns, rows: filesDe(g.files),
+      kind: 'pom_fitting', garmentId: GARMENT_MARE, columns, rows: filesDe(g.files),
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
       snapshot: {
         model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString(),
@@ -5147,7 +5168,7 @@ export default function TechSheetEditor() {
       : [{ seccio: null, files: data.rows }]
     const n = inserirTaules(grups, g => ({
       id: uid(), type: 'table', layer: 'free',
-      kind: 'pom_grading', columns, rows: filesDe(g.files),
+      kind: 'pom_grading', garmentId: GARMENT_MARE, columns, rows: filesDe(g.files),
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
       snapshot: {
         model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString(),
@@ -5219,7 +5240,7 @@ export default function TechSheetEditor() {
     // guarda el builder (`Math.max(8, style.fontSize)`).
     addObject(fitTableObj({
       id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
-      kind: 'fitting_history', columns, rows,
+      kind: 'fitting_history', garmentId: GARMENT_MARE, columns, rows,
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
       snapshot: {
         model_id: model.id, talla: data.talla || null,
@@ -5242,7 +5263,7 @@ export default function TechSheetEditor() {
     const rows = Array.from({ length: 4 }, () => columns.map(() => ''))
     const obj = fitTableObj({
       id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
-      kind: 'bom', columns, rows,
+      kind: 'bom', garmentId: GARMENT_MARE, columns, rows,
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
       snapshot: { model_id: model.id, snapshot_at: new Date().toISOString() },
     })
@@ -5259,7 +5280,7 @@ export default function TechSheetEditor() {
     const rows = Array.from({ length: nRows }, () => columns.map(() => ''))
     const obj = fitTableObj({
       id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
-      kind: 'custom', columns, rows,
+      kind: 'custom', garmentId: GARMENT_MARE, columns, rows,
       style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
       snapshot: { model_id: model.id, snapshot_at: new Date().toISOString() },
     })
@@ -5673,6 +5694,9 @@ export default function TechSheetEditor() {
       ax, ay, dx: bx - ax, dy: by - ay,
       label: cotaLabelDe(bm) || p.codi, pomId: bm.pom_id, bmId: bm.id,
       capa: bm.capa, instancia: bm.instancia,
+      // SET-2/T9 — la peça surt de la MESURA (que és qui la sap), mai del precedent: un
+      // precedent de catàleg és d'un ItemFitxer i no sap res de les peces d'aquest model.
+      garmentId: garmentDeFila(bm),
       canonical: p.codi, viewSlot: host.viewSlot, derivat: prop.derivat,
       // C1-fix: l'etiqueta es col·loca amb l'offset perpendicular automàtic (buildLiveCota), no
       // amb la posició normalitzada del precedent → mai sobre el traç.
@@ -5748,7 +5772,7 @@ export default function TechSheetEditor() {
         nous.push(buildLiveCota({
           ...geo, label: cotaLabelDe(bm) || bm.pom_code_global || '',
           pomId: bm.pom_id, bmId: bm.id,
-          capa: bm.capa, instancia: bm.instancia,
+          capa: bm.capa, instancia: bm.instancia, garmentId: garmentDeFila(bm),
           canonical: bm.pom_code_global || '',
         }))
       })
@@ -5879,7 +5903,7 @@ export default function TechSheetEditor() {
         const cota = buildLiveCota({
           ax, ay, dx: bx - ax, dy: by - ay,
           label: cotaLabelDe(bm) || bm.pom_code_global || '', pomId: bm.pom_id, bmId: bm.id,
-          capa: bm.capa, instancia: bm.instancia,
+          capa: bm.capa, instancia: bm.instancia, garmentId: garmentDeFila(bm),
           canonical: bm.pom_code_global || '', viewSlot: host.viewSlot,
           // C1-fix: offset perpendicular automàtic (buildLiveCota), no la posició proposada per la IA.
         })
@@ -6340,7 +6364,13 @@ export default function TechSheetEditor() {
       if (!esPecaInserible(vector)) { flash(t('tech_sheet.piece_insert_error')); return }
       // `piece_name` i `pattern_file_id` es conserven: són la traça de d'on ve el dibuix, i
       // el descongelat de plantilla ja els sap despenjar (`_unfreeze_pattern_piece`).
-      addObject({ ...vector, piece_name: peca.nom_block, pattern_file_id: patternFile.id })
+      // SET-2/T9 — `piece_name` és la peça del PATRÓ (el davanter, l'esquena) i `garmentId` és
+      // la prenda del MODEL: dos eixos que no s'han de confondre mai. Un patró sencer pot ser
+      // d'una sola prenda i tenir-hi vuit peces.
+      addObject({
+        ...vector, piece_name: peca.nom_block, pattern_file_id: patternFile.id,
+        garmentId: GARMENT_MARE,
+      })
     } catch {
       flash(t('tech_sheet.piece_insert_error'))
     }
@@ -7058,7 +7088,7 @@ export default function TechSheetEditor() {
                         // Cota POM l'exclou); esborrar la cota el torna PENDENT/PROPOSABLE. No es fa
                         // servir `disabled` per no perdre el tooltip explicatiu (Chrome l'amaga en
                         // botons disabled): click a buit + cursor per defecte.
-                        onClick={colocat ? undefined : () => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, capa: bm.capa, instancia: bm.instancia, canonical: canonic }); setTool('cota_pom') }}
+                        onClick={colocat ? undefined : () => { setCotaPreset({ text: etiqueta, pomId: bm.pom_id, bmId: bm.id, capa: bm.capa, instancia: bm.instancia, garmentId: garmentDeFila(bm), canonical: canonic }); setTool('cota_pom') }}
                         aria-pressed={armat}
                         title={colocat
                           ? t('tech_sheet.pom_cota_ja_colocat')
