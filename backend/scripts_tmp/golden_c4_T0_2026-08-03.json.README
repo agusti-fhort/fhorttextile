@@ -1,3 +1,27 @@
+⚠️⚠️ SUPERAT 2026-08-10 — AQUESTA REFERÈNCIA JA NO ES POT CÓRRER. HISTÒRIC. ⚠️⚠️
+================================================================================
+EL CORPUS D'AQUEST GOLDEN NO EXISTEIX. Els set models que el sostenen —162, 163, 174,
+182, 186, 268, 269— van desaparèixer amb la SEMBRA V4 del catàleg; el 10/08/2026,
+demanant-los un per un, tots set responen NO EXISTEIX. A `fhort` només queda un model
+amb graduació viva: el 1320.
+
+Per tant la cadena de continuïtat que aquest README presumeix més avall («no és una
+suposició, és el hash») **queda TRENCADA**, i cal llegir-la com el que és: la prova que
+entre C3 i C4 no es va moure res, no una referència contra la qual comparar avui.
+El md5 4e34859c… segueix sent cert sobre un corpus que ja no hi és.
+
+NO s'esborra: es marca. El que aquest fitxer documenta —que la referència es COMMITEJA i
+sobreviu entre sessions— segueix sent la llei bona, i és justament per això que se li
+posa aquest avís en comptes de deixar-lo dir una cosa que ja no és certa.
+
+➡️ EL GOLDEN VIU és `golden_set2_T0_2026-08-10.json` (+ el seu README), amb 2 models
+   (1320 i el banc de QA 1322) i 280+280 cel·les. Hi va també la recepta per refer-lo.
+
+(Lliçó, perquè és la tercera vegada aquest sprint que mossega el mateix: una afirmació
+que ningú re-verifica es torna rància en silenci i després es llegeix com a viva.
+V. també `models_app/models.py:670`.)
+
+--------------------------------------------------------------------------------
 GOLDEN T0 DE C4 — 03/08/2026, corpus de staging
 ================================================
 
