@@ -516,7 +516,9 @@ class BaseMeasurementViewSet(viewsets.ModelViewSet):
         .all()
     )
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['model', 'pom', 'is_active', 'origen']
+    # SET-2/T5 — `garment` entra al filtre perquè el client pugui demanar les mesures d'UNA
+    # peça. Sense ell, l'única manera de separar-les seria filtrar a mà a la vora del payload.
+    filterset_fields = ['model', 'pom', 'is_active', 'origen', 'garment']
     ordering_fields = ['updated_at', 'id']
     ordering = ['model', 'id']
 
@@ -1667,12 +1669,15 @@ def copiar_de_model_view(request, model_id, src_id):
             # literal. Un model copiat d'un altre ha de tenir les mateixes mesures, i «les
             # mateixes» inclou de quina matèria i de quina repetició parla cadascuna.
             existent = BaseMeasurement.objects.filter(
-                model=dst, pom_id=bm.pom_id, capa=bm.capa, instancia=bm.instancia).first()
+                model=dst, pom_id=bm.pom_id, capa=bm.capa, instancia=bm.instancia,
+                garment=bm.garment).first()
 
             if existent is None:
                 nova = BaseMeasurement(
                     model=dst, pom_id=bm.pom_id,
-                    capa=bm.capa, instancia=bm.instancia,
+                    # SET-2/T5 — el tercer eix segueix el mateix rastre: la còpia COPIA, i
+                    # «les mateixes mesures» inclou de quina PRENDA parla cadascuna.
+                    capa=bm.capa, instancia=bm.instancia, garment=bm.garment,
                     base_value_cm=bm.base_value_cm if te_valor else None,
                     # `notes` NO viatja: és text lliure escrit SOBRE l'altre model (p.ex. «el
                     # proveïdor va confirmar 62 cm en aquesta peça») i copiat aquí seria una

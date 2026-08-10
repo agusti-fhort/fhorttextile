@@ -660,6 +660,15 @@ def _llegeix_patrimoni(model):
     (memòria `ftt-media-namespace-tenant`), de manera que obrir el fitxer un cop ja som a
     l'altre schema el buscaria al calaix equivocat.
 
+    🚨 SET-2/T5 (2026-08-10) — L'ÀNCORA CREIX AMB `garment=''`, i és la MATEIXA contenció
+    declarada aquí sota, amb l'eix nou. NO s'obre cap segona via: `_clau_natural_pom` segueix
+    sense saber dir la peça, o sigui que dues peces del mateix POM emetrien la mateixa clau i
+    el destí en desaria una. Fins que la clau natural creixi i els paquets es versionin
+    —contracte EXTERN, i per tant decisió humana— **el patrimoni que viatja és el de la peça
+    mare**. Es deixa de dir el que no se sap dir, exactament com es va fer amb capa/instancia.
+    Re-verificable: `_clau_natural_pom` a `tenants/federation_service.py` i el format de
+    paquet, que ja porta versionat de clau.
+
     🚨 FASE_2/C1-ins — ÀNCORA `capa='exterior', instancia=''` a les mesures, que aquesta
     lectura no havia tingut mai (la federació no es va mirar a l'Onada 1). El motiu és el
     mateix que fa que aquesta funció existeixi: el que en surt és el que VIATJA, i la clau
@@ -678,7 +687,7 @@ def _llegeix_patrimoni(model):
     mesures = []
     for bm in (BaseMeasurement.objects.filter(
                    model=model, is_active=True,
-                   capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+                   capa=MeasurementLayer.SLUG_DEFECTE, instancia='', garment='')
                .select_related('pom__pom_global').order_by('ordre', 'pom_id')):
         mesures.append({
             'clau': _clau_natural_pom(bm.pom, bm.capa, bm.instancia),
@@ -785,12 +794,15 @@ def _escriu_a_la_marca(brand_schema, codi_intern, patrimoni):
                 _g, _c, capa_row, instancia_row = _clau_amb_eixos(row['clau'])
                 te_valor = (not talla_divergent) and row['base_value_cm'] is not None
                 existent = BaseMeasurement.objects.filter(
-                    model=twin, pom=pom, capa=capa_row, instancia=instancia_row).first()
+                    model=twin, pom=pom, capa=capa_row, instancia=instancia_row,
+                    # SET-2/T5 — la clau que viatja no sap dir la peça (v. l'àncora de la
+                    # lectura): el que arriba és, per construcció, patrimoni de la mare.
+                    garment='').first()
 
                 if existent is None:
                     BaseMeasurement.objects.create(
                         model=twin, pom=pom,
-                        capa=capa_row, instancia=instancia_row,
+                        capa=capa_row, instancia=instancia_row, garment='',
                         base_value_cm=row['base_value_cm'] if te_valor else None,
                         # `notes` NO viatja: és text lliure escrit sobre l'altra fila i portat
                         # aquí seria una afirmació amb aparença d'auditoria (mateix criteri

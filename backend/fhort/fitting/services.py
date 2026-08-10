@@ -497,7 +497,11 @@ def consolidate_base_from_fitting(pf, *, auth_user=None):
         # els ha de dir també, o la rectificació d'una germana aterraria sobre l'altra i el
         # `get()` intern petaria amb MultipleObjectsReturned el dia que n'hi hagi dues.
         bm, _created = BaseMeasurement.objects.get_or_create(
+            # SET-2/T5 — el tercer eix, i la línia el sap dir com sap dir els altres dos
+            # (l'ha heretat de l'spec): la rectificació d'una peça ha d'aterrar a la SEVA
+            # mesura base, no a la de l'altra.
             model=model, pom=line.pom, capa=line.capa, instancia=line.instancia,
+            garment=line.garment,
             defaults={'base_value_cm': line.valor_real, 'origen': 'FITTED'},
         )
         # C3/E1 — el valor d'ABANS, capturat abans de trepitjar-lo: és el que fa calculable

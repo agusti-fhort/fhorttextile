@@ -627,7 +627,7 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
         STEP/FIXED/ZERO/EXCEPTION o sense regla → només desa la cel·la (germanes intactes).
         Permís = el del viewset (IsAuthenticated), igual que l'autosave."""
         from django.db import transaction
-        from fhort.pom.services import _load_grading_rules
+        from fhort.pom.services import (_load_grading_rules_per_garment, _regla_de)
         from fhort.pom.grading_utils import propaga_ancoratges
 
         line = self.get_object()
@@ -673,7 +673,12 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
             return _resp(False, 'linia_rebutjada')
 
         # 3. Regla resident → fallback (cadena de _load_grading_rules).
-        rule = _load_grading_rules(pf.model).get(line.pom_id)
+        # SET-2/T5 — AQUEST DELS SIS S'ADAPTA, i no per simetria: és l'únic que no és
+        # presentació sinó que decideix una ESCRIPTURA (propaga el valor mesurat cap a la
+        # base). Amb la regla de la mare, propagar una línia de la peça 02 hi aplicaria una
+        # llei que no és la seva —i D4 diu que poden divergir—. La línia sap dir la peça.
+        rule = _regla_de(_load_grading_rules_per_garment(pf.model),
+                         line.pom_id, line.garment)
         if rule is None:
             return _resp(False, 'sense_regla')
 

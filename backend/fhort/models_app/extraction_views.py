@@ -2574,7 +2574,10 @@ def import_session_confirmar_view(request, token):
             # instància única, i ho declara aquí en comptes de deixar-ho al default implícit.
             BaseMeasurement.objects.update_or_create(
                 model=model, pom=pm,
-                capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                # SET-2/T5 — el garment es declara igual que els altres dos eixos: aquest
+                # camí escriu SEMPRE a la peça mare. Sense el tram al lookup, l'update_or_create
+                # petaria amb MultipleObjectsReturned el dia que hi hagi una segona peça.
+                capa=MeasurementLayer.SLUG_DEFECTE, instancia='', garment='',
                 defaults=_defaults)
             n_bm += 1
             if base_val is not None:

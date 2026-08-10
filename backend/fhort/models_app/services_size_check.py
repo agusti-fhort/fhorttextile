@@ -50,7 +50,7 @@ def _materialize_lines(size_check, model) -> int:
     ja_hi_son = set(
         SizeCheckLine.objects
         .filter(size_check=size_check)
-        .values_list('pom_id', 'capa', 'instancia')
+        .values_list('pom_id', 'capa', 'instancia', 'garment')
     )
     bms = (
         BaseMeasurement.objects
@@ -59,13 +59,17 @@ def _materialize_lines(size_check, model) -> int:
     )
     n = 0
     for bm in bms:
-        if (bm.pom_id, bm.capa, bm.instancia) in ja_hi_son:
+        # SET-2/T5 — l'aparellament porta el garment: sense ell, la primera peça
+        # BLOQUEJARIA la materialització de les altres i la seva fila quedaria inerta
+        # a l'editor (mateix mode de fallada que el `pom_id` pelat tenia abans de C4).
+        if (bm.pom_id, bm.capa, bm.instancia, bm.garment) in ja_hi_son:
             continue
         SizeCheckLine.objects.create(
             size_check=size_check,
             pom=bm.pom,
             capa=bm.capa,
             instancia=bm.instancia,
+            garment=bm.garment,
             valor_teoric=bm.base_value_cm,   # snapshot del vigent en crear la línia
             valor_real=None,                 # el tècnic l'anota
         )
@@ -232,7 +236,10 @@ def resolve_size_check(size_check_id: int, estat: str, missatge: str = '',
             # néixer, a `_materialize_lines`): el lookup els diu també, o el valor acceptat
             # d'una germana aterraria sobre l'altra.
             bm, _created = BaseMeasurement.objects.get_or_create(
+                # SET-2/T5 — el tercer eix: el valor acceptat d'una peça no pot aterrar
+                # sobre la mesura base d'una altra.
                 model=model, pom=line.pom, capa=line.capa, instancia=line.instancia,
+                garment=line.garment,
                 defaults={'base_value_cm': line.valor_real, 'origen': 'CHECKED'},
             )
             # Guarda contra el valor VIGENT: no escriure canvis nuls.

@@ -481,6 +481,13 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
             'pom': attrs.get('pom', getattr(inst, 'pom', None)),
             'capa': attrs.get('capa', getattr(inst, 'capa', '') or ''),
             'instancia': attrs.get('instancia', getattr(inst, 'instancia', '') or ''),
+            # SET-2/T5 — el tercer eix entra al filtre de germanes. Sense ell el guard donava
+            # un 400 FALS: la fila d'una ALTRA peça casava amb aquests camps i es denunciava
+            # com a duplicat d'aquesta. El default explícit (`''`) segueix el patró de R12 ja
+            # resolt a `pom/test_u2_r2_capa_instancia_api`: un camp amb `default` de model
+            # arriba a DRF només com a `required=False`, i confiar-hi convertiria en 400 tota
+            # crida que avui funciona.
+            'garment': attrs.get('garment', getattr(inst, 'garment', '') or ''),
         }
         if camps['model'] and camps['pom']:
             germanes = BaseMeasurement.objects.filter(**camps)
@@ -488,7 +495,7 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
                 germanes = germanes.exclude(pk=inst.pk)
             if germanes.exists():
                 raise serializers.ValidationError({'instancia': (
-                    'Aquesta mesura ja té una fila en aquesta capa i instància.'
+                    'Aquesta mesura ja té una fila en aquesta capa, instància i peça.'
                 )})
         # `models_app_basemeasurement_instancia_exigeix_nom`: amb instància, el nom és obligatori.
         nom = attrs.get('nom_fitxa', getattr(inst, 'nom_fitxa', '') or '')

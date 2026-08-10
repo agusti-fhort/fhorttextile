@@ -412,7 +412,12 @@ def save_base_size_view(request, model_id):
                     # sota, que ja ho feia.
                     bm = BaseMeasurement.objects.filter(
                         model=model, pom_id=pom_id,
-                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                        # SET-2/T5 — i el garment. Sense ell, amb una segona peça viva el
+                        # `.first()` triava a l'atzar: el `Meta.ordering` de `BaseMeasurement`
+                        # (`['model','capa','ordre','pom']`) NO inclou ni la instància ni la
+                        # peça, o sigui que el desempat el feia el pla de Postgres. Aquest
+                        # camí escriu a la mare i ara ho diu.
+                        capa=MeasurementLayer.SLUG_DEFECTE, instancia='', garment='',
                     ).first()
                     if bm is None:
                         continue
@@ -453,6 +458,8 @@ def save_base_size_view(request, model_id):
                         pom_id=pom_id,
                         capa=MeasurementLayer.SLUG_DEFECTE,
                         instancia='',
+                        # SET-2/T5 — declarat, no implícit (v. `_identitat_de_mesura`).
+                        garment='',
                         defaults={
                             'base_value_cm': float(value),
                             'is_active': True,

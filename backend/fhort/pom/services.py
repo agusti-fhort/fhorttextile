@@ -761,6 +761,31 @@ def _load_grading_rules(model) -> dict:
     És una VISTA de `_load_grading_rules_per_garment`, no una segona consulta: la font és
     aquella i aquí només se'n filtra la peça mare. Dues implementacions paral·leles de la
     mateixa consulta divergirien el dia que se'n toqui una.
+
+    ── SET-2/T5 (2026-08-10) · DECISIÓ PRESA PER ALS SIS CONSUMIDORS ────────────────────
+    Un s'ha ADAPTAT i cinc es queden LLEGINT LA MARE, i la línia que els separa no és
+    l'app on viuen sinó **si escriuen**:
+
+      · ADAPTAT — `fitting/views.py` (propagació). No és presentació: decideix una
+        ESCRIPTURA cap a la mesura base. Amb la llei de la mare, propagar una línia de la
+        02 hi aplicaria una llei que no és la seva, i D4 diu que poden divergir. La línia
+        sap dir la peça, o sigui que no hi havia excusa.
+
+      · LLEGEIXEN LA MARE, a posta — `fitting/serializers.py` (règim per POM del
+        desplegable) · `fitting/graded_spec_views.py` (etiqueta de regla de la taula) ·
+        `models_app/views.py` ×2 (quina regla serveix cada fila; ordre de fitxa) ·
+        `models_app/serializers_size_check.py` (etiqueta de règim de la línia).
+        Tots sis pinten un RÈTOL, cap no decideix ni escriu res. Mentre les comportes
+        visquin, `garment` és '' a tot arreu i la mare és l'única llei que hi ha: llegir-la
+        no és una aproximació, és la resposta exacta.
+
+    QUAN ES REVISA, i és una condició, no una data: **el dia que es retirin les comportes
+    `*_garment_gate_set2`**. A partir d'aquell punt un '02' pot existir i aquests cinc
+    rètols podrien anunciar la llei de la mare sobre una fila que en té una altra — un
+    error de presentació, no de dada, però un error. La feina és mecànica (canviar la crida
+    per `_regla_de(_load_grading_rules_per_garment(...), pom_id, garment)`, com ja fa el
+    sisè) i el que la fa segura és que la font ja existeix.
+    Re-verificable: `grep -rn "_load_grading_rules(" --include=*.py backend/fhort/`.
     """
     return {pom_id: regla
             for (pom_id, garment), regla in _load_grading_rules_per_garment(model).items()

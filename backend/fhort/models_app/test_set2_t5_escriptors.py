@@ -174,3 +174,69 @@ class ElRegistreCopiaLaPecaTest(TenantTestCase):
                       .filter(model=self.model, pom=self.pom)
                       .values_list('garment', 'valor_nou'))
         self.assertIn((MARE, 103.0), apunts)
+
+
+class LaCopiaCopiaLaPecaTest(TenantTestCase):
+    """T5b — els col·lapses silenciosos: la còpia model→model i la materialització del check.
+
+    Tots dos seguien un rastre que ja hi era («la còpia COPIA: els eixos surten de la fila
+    d'origen, no de cap literal») i només els faltava el tercer eix.
+    """
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Tenant'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TST'
+        tenant.vat_number = 'X0000000X'
+        tenant.tipus_client = 'STANDARD'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        self.pom = POMMaster.objects.create(codi_client='CH', nom_client='Pit')
+        self.model = Model.objects.create(
+            codi_intern='TST-T5C', codi_tenant='TST', any=2026, sequencial=1,
+            temporada='SS26', size_run_model='S·M·L', base_size_label='M',
+        )
+
+    def test_la_materialitzacio_del_check_no_deixa_cap_peca_fora(self):
+        """`_materialize_lines` aparellava per (pom, capa, instancia): la PRIMERA peça
+        bloquejava la materialització de les altres i la seva fila quedava INERTA a
+        l'editor —el tècnic la veia i no la podia omplir—.
+
+        EL CAS DE CONTROL TRENCA LA COINCIDÈNCIA: les dues files són del MATEIX POM, la
+        MATEIXA capa i la MATEIXA instància. L'única cosa que les separa és la peça, o sigui
+        que si l'aparellament no la mira, la segona no es materialitza.
+        """
+        from fhort.models_app.models import SizeCheck, SizeCheckLine
+        from fhort.models_app.services_size_check import _materialize_lines
+
+        with comportes_alcades('models_app_basemeasurement',
+                               'models_app_measurementchangelog',
+                               'models_app_sizecheckline'):
+            BaseMeasurement.objects.create(
+                model=self.model, pom=self.pom, base_value_cm=100.0, ordre=1,
+                nom_fitxa='A-MARE', garment=MARE)
+            BaseMeasurement.objects.create(
+                model=self.model, pom=self.pom, base_value_cm=60.0, ordre=2,
+                nom_fitxa='A-02', garment=SEGONA)
+            check = SizeCheck.objects.create(model=self.model, talla_base_label='M')
+            # ⚠️ LA LÍNIA DE LA MARE JA HI ÉS. Sense això el test no provava res: `ja_hi_son`
+            # es construeix de les línies EXISTENTS, i amb un check nou el conjunt és buit i
+            # l'aparellament no s'arriba a consultar mai. Amb la línia de la mare present, la
+            # clau curta la fa casar amb la fila de la 02 —mateix POM, mateixa capa, mateixa
+            # instància— i la 02 es queda sense materialitzar. (Mutant supervivent caçat
+            # 2026-08-10: el primer sospitós era el test, i ho era.)
+            SizeCheckLine.objects.create(
+                size_check=check, pom=self.pom, capa='exterior', instancia='',
+                garment=MARE, valor_teoric=100.0)
+
+            _materialize_lines(check, self.model)
+
+            files = set(SizeCheckLine.objects
+                        .filter(size_check=check)
+                        .values_list('garment', 'valor_teoric'))
+            self.assertEqual(
+                files, {(MARE, 100.0), (SEGONA, 60.0)},
+                'la primera peça ha bloquejat la materialització de la segona')
