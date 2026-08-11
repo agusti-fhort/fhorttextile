@@ -279,7 +279,22 @@ def generate_graded_specs(size_fitting_id: int) -> int:
                 # Segueix valent per a les talles del run que el POM només-override no cobreix:
                 # el rescat de dalt és NOMÉS la base. Un POM que gradua pels seus overrides no
                 # és cobertura parcial per manca de regla → no entra a `sense_regla`.
-                if (pom_id, capa, instancia) not in poms_nomes_override:
+                # SET-2/T6a (2026-08-11) — LA TUPLA SENCERA, i és el germà exacte de la
+                # línia 264. `_poms_amb_override` retorna claus de QUATRE trams des de T4
+                # (`_poms_amb_override`, aquí sota) i aquesta comparació en portava tres: no
+                # coincidia MAI, el `not in` era sempre cert, i tot POM només-override entrava
+                # a `sense_regla` —el conjunt que compta l'avís de cobertura parcial de sota—,
+                # que és exactament el que el comentari d'aquí sobre diu que no ha de passar.
+                #
+                # SEGONA PORTA del dany de 31e05db7, trobada seguint la llei del cens: allà
+                # l'aritat es va restaurar a `_load_grading_rules` i a `_identitat`, i aquest
+                # predicat va quedar enrere. No mou cap cel·la —el `continue` és el mateix per
+                # totes dues branques— i per això ni la paritat ni cap assert de valors el
+                # podien veure: només menteix a la traça.
+                #
+                # Re-verificable: `grep -n "poms_nomes_override" pom/services.py` — les DUES
+                # comparacions han de tenir els quatre trams.
+                if (pom_id, capa, instancia, garment) not in poms_nomes_override:
                     sense_regla.add(pom_id)
                 continue
             else:

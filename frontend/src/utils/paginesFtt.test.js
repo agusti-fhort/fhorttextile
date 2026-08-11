@@ -42,6 +42,21 @@ test('la hidratació no perd res més de la pàgina: objects i guides tornen', (
   assert.deepEqual(reobert[0], { id: 'p1', objects: [{ id: 'o1' }], guides: [{ pos: 5 }], format: 'A3L' })
 })
 
+// SET-2/T9 — L'ASIMETRIA que fa barat ancorar la peça: la PÀGINA es reconstrueix camp a camp
+// (i per això el `format` s'hi havia perdut), però l'OBJECTE passa SENCER. `garmentId` viu a
+// l'objecte justament per això. Aquest test és el pin: si algú «millora» la hidratació
+// reconstruint també els objectes clau a clau, l'ancoratge de la peça cau en silenci i aquí
+// es veurà. (El round-trip complet, del navegador a la BD, el prova
+// `backend/fhort/models_app/test_ftt_garment_roundtrip.py`.)
+test('la hidratació passa l\'OBJECTE sencer: una clau nova d\'objecte no s\'hi perd', () => {
+  const objecte = { id: 'o1', type: 'table', kind: 'pom_grading', garmentId: '02', rows: [] }
+  const reobert = hidratarPagines([{ id: 'p1', objects: [objecte] }], uid)
+  assert.deepEqual(reobert[0].objects[0], objecte)
+  // I la fitxa que no en porta no en guanya cap: cap document viu s'ha de migrar.
+  const senseEix = hidratarPagines([{ id: 'p1', objects: [{ id: 'o1', type: 'table' }] }], uid)
+  assert.equal('garmentId' in senseEix[0].objects[0], false)
+})
+
 test('documents antics sense id: se n\'hi genera un, i el format es manté igual', () => {
   const reobert = hidratarPagines([{ objects: [{ type: 'text' }], format: 'A4P' }], uid)
   assert.match(reobert[0].id, /^gen-/)
