@@ -4918,7 +4918,8 @@
     "need_ruleset": "Tria un joc de regles",
     "model_base": "Model base",
     "inherits": "Hereta del model",
-    "rename_piece": "Reanomenar"
+    "rename_piece": "Reanomenar",
+    "from_model": "Del model"
   },
   "disseny": {
     "back_title": "Tornar al tauler"

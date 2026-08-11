@@ -49,6 +49,7 @@ import useConfirmacioRuleset from './useConfirmacioRuleset'
 import { models, sizeSystems, gradingRuleSets, garmentGroups, customers } from '../../api/endpoints'
 import PecaDefinicioContenidor, { BotoCanviar, FilaDefinicio, ValorCamp }
   from './PecaDefinicioContenidor'
+import { ORIGEN, origenDeLaFila } from '../../utils/pecaDefinicio'
 import { ordenaPerProximitat } from '../../utils/proximitatRun'
 import { labelsOf, ordenaPelSistema } from '../../utils/talles'
 import Feedback from '../ui/Feedback'
@@ -318,7 +319,7 @@ export default function ResumWizardPartit({ model, onUpdated }) {
                     desa={desa} onCancel={() => setObert(null)} />
                 </>
               ) : (
-                <FilesDeLaPeca peca={peca} />
+                <FilesDeLaPeca model={model} peca={peca} />
               )}
             </PecaDefinicioContenidor>
           ))}
@@ -333,21 +334,35 @@ export default function ResumWizardPartit({ model, onUpdated }) {
 // Es pinta el que el CONTRACTE serveix, i res més. `CAMPS_HERETABLES` són quatre —sistema, joc
 // de regles, run i talla base—, o sigui que una peça té fila de TALLES i de GRADUACIÓ.
 //
-// ⚠️ NO HI HA FILA DE «PEÇA», i és una diferència amb el brief que s'ha de saber: el contracte
-// NEGA que els eixos i el `garment_type_item` baixin a la prenda (`ElGarmentTypeItemNoHiEsTest`
-// ho fixa perquè no torni per inèrcia). Pintar-hi els del model marcats com a heretats seria el
-// front decidint una herència que el servidor no afirma, que és exactament el que aquesta
-// superfície té prohibit. Decisió reportada a l'Agus.
+// LA FILA DE «PEÇA» HI ÉS, I NO ÉS UNA FILA HERETADA (decisió d'Agus, 11/08). L'ull del tècnic
+// busca les tres files iguals a totes les targetes, i una targeta que no diu QUÈ ÉS la peça no
+// li serveix encara que no ho pugui canviar. Però el contracte NEGA que els eixos i el
+// `garment_type_item` baixin a la prenda (`ElGarmentTypeItemNoHiEsTest` ho fixa), o sigui que
+// això NO és herència: és informació DEL MODEL a títol de context, amb el seu propi origen
+// (`ORIGEN.DEL_MODEL`) i sense «Canviar». Dir-ne «hereta» prometria una porta d'edició que no
+// ha d'arribar mai — la distinció la guarda el banc de `pecaDefinicio`.
 //
 // El «Canviar» hi és i està APAGAT: la porta d'escriptura d'una peça encara no existeix, i un
 // botó viu que no desa és pitjor que un d'apagat.
-function FilesDeLaPeca({ peca }) {
+function FilesDeLaPeca({ model, peca }) {
   const { t } = useTranslation()
   const cap = t('resum_wizard.no_value')
+  const gt = [model.garment_type_nom, model.garment_type_item_nom].filter(Boolean).join(' · ')
   return (
     <>
+      {/* Fixa, apagada i sense acció: la peça no pot canviar això mai. */}
+      <FilaDefinicio etiqueta={t('resum_wizard.step_piece')} origen={ORIGEN.DEL_MODEL}>
+        <span>
+          {[model.target && t(`model_wizard.target_${model.target}`, model.target),
+            model.construction && t(`model_wizard.construction_${model.construction}`, model.construction),
+            model.fit_type && t(`model_wizard.fit_${model.fit_type}`, model.fit_type)]
+            .filter(Boolean).join(' · ')}
+        </span>
+        {gt ? <div style={{ marginTop: 2 }}>{gt}</div> : null}
+      </FilaDefinicio>
+
       <FilaDefinicio etiqueta={t('resum_wizard.step_sizes')}
-        heretat={peca.size_run_model?.heretat === true}
+        origen={origenDeLaFila(peca.size_run_model)}
         accio={<BotoCanviar disabled>{t('resum_wizard.change')}</BotoCanviar>}>
         <div><ValorCamp camp={peca.size_system} buit={cap} /></div>
         <div style={{ marginTop: 4 }}>
@@ -361,7 +376,7 @@ function FilesDeLaPeca({ peca }) {
       </FilaDefinicio>
 
       <FilaDefinicio etiqueta={t('resum_wizard.step_grading')}
-        heretat={peca.grading_rule_set?.heretat === true}
+        origen={origenDeLaFila(peca.grading_rule_set)}
         accio={<BotoCanviar disabled>{t('resum_wizard.change')}</BotoCanviar>}>
         <ValorCamp camp={peca.grading_rule_set} buit={cap} />
       </FilaDefinicio>

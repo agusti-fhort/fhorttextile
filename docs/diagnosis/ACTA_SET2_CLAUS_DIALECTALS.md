@@ -43,3 +43,20 @@ qualsevol d'aquestes dues superfícies, hi entra amb aquesta acta a la mà.
 quatre trams (T6a). Conseqüència pràctica: **Mesures i Escalat ja poden distingir prendes;
 Comprovació i Fitting, no** — i el `clauDeFila` d'aquestes dues cau al tram buit fins que el
 payload el porti. No és un defecte d'avui (no hi ha peces), és el següent micro-tram de backend.
+
+---
+
+# ACTA — B5: el cens de crides amb el subespai tancat queda TANCAT (2026-08-11)
+
+Dues crides censades. **Una gatejada, una legítima per disseny** — i el cens es tanca amb les dues
+resoltes, no amb una pendent.
+
+| crida | veredicte |
+|---|---|
+| `customers.get` (`ResumWizardPartit`, pas Talles) | **GATEJADA a subespai obert.** Només serveix per ordenar per proximitat els runs candidats en el moment de triar-ne un; amb el pas tancat no hi ha cap llista a ordenar i el run que el model ja té ve al detall. |
+| `gradingRuleSets.get` (pas Graduació) | **ES QUEDA COM ESTÀ, i és correcte.** Alimenta la fila compacta que B1 demana: el joc en negreta i el «· N regles». Gatejar-la a obert deixaria muda la fila. |
+
+**El motiu de fons** (validat per Agus, 11/08): no és una crida «per subespai obert», és una crida
+**AL MUNTATGE DE LA TARGETA** — una per prenda. Amb N peces en seran N, i cadascuna parla del joc
+de la seva peça, que és exactament el que ha de passar. El que la feia semblar sospitosa al cens
+era llegir-la com a dependent de l'estat obert/tancat, i no ho és.

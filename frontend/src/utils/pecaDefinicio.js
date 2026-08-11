@@ -58,3 +58,25 @@ export function nomDeLaPeca(peca, etiquetaMare) {
 export function anclaDeLaPeca(peca) {
   return `peca-${peca?.es_mare || !peca?.codi ? 'base' : peca.codi}`
 }
+
+/**
+ * D'ON VE el que una fila ensenya. TRES estats, i el tercer no és una variant del segon.
+ *
+ *   `propi`      la peça ho declara.
+ *   `heretat`    el contracte diu `heretat: true` — el valor és del model I EL SEGUIRÀ: si el
+ *                model canvia, això canvia. És un vincle viu, i el pinta el mecanisme d'herència.
+ *   `del_model`  informació DEL MODEL mostrada a títol de CONTEXT, en una fila que la peça no
+ *                pot canviar mai perquè el contracte nega que aquell camp hi baixi (els eixos i
+ *                el `garment_type_item`: v. `ElGarmentTypeItemNoHiEsTest`).
+ *
+ * ⚠️ LA DIFERÈNCIA NO ÉS DE MATÍS. «Hereta» és una FRASE SOBRE UN OVERRIDE que existeix i que
+ * ara mateix és NULL —i que algun dia pot deixar de ser-ho—. «Del model» és una frase sobre un
+ * camp que NO existeix a la peça i que no en tindrà. Dir «hereta» d'això últim prometria una
+ * porta d'edició que no ha d'arribar mai, i el dia que algú la busqués no la trobaria.
+ */
+export const ORIGEN = { PROPI: 'propi', HERETAT: 'heretat', DEL_MODEL: 'del_model' }
+
+export function origenDeLaFila(camp, { delModel = false } = {}) {
+  if (delModel) return ORIGEN.DEL_MODEL
+  return presentacioCamp(camp).heretat ? ORIGEN.HERETAT : ORIGEN.PROPI
+}

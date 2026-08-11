@@ -17,7 +17,7 @@
 // la llei del vocabulari (F22) ja va tancar en una altra superfície.
 import { useTranslation } from 'react-i18next'
 
-import { anclaDeLaPeca, nomDeLaPeca, presentacioCamp } from '../../utils/pecaDefinicio'
+import { ORIGEN, anclaDeLaPeca, nomDeLaPeca, presentacioCamp } from '../../utils/pecaDefinicio'
 import useToc, { anellFocus } from '../ui/toc'
 
 const MONO = 'IBM Plex Mono, monospace'
@@ -74,8 +74,14 @@ function Llapis({ onEditar, titol }) {
  * mateix text. Quan és cert, la fila ho escriu i abaixa la tinta del valor — el valor segueix
  * sent el que governa, però la seva autoria és d'un altre lloc.
  */
-export function FilaDefinicio({ etiqueta, heretat = false, accio, children }) {
+export function FilaDefinicio({ etiqueta, origen = ORIGEN.PROPI, accio, children }) {
   const { t } = useTranslation()
+  // Tres origens, tres lectures, i «del model» NO és una variant d'«hereta»: la primera parla
+  // d'un override que existeix i ara és NULL, la segona d'un camp que la peça no té i no tindrà.
+  // Pintar-les igual prometria una porta d'edició que no ha d'arribar mai.
+  const heretat = origen === ORIGEN.HERETAT
+  const delModel = origen === ORIGEN.DEL_MODEL
+  const apagat = heretat || delModel
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start',
@@ -92,7 +98,12 @@ export function FilaDefinicio({ etiqueta, heretat = false, accio, children }) {
             {t('resum_wizard.inherits')}
           </span>
         )}
-        <div style={{ marginTop: 4, color: heretat ? 'var(--text-soft)' : 'var(--text-main)' }}>
+        <div style={{ marginTop: 4, color: apagat ? 'var(--text-soft)' : 'var(--text-main)' }}>
+          {/* El prefix va DINS de la línia del valor, no al rètol: qualifica el que es llegeix
+              a continuació, no el nom de l'apartat. */}
+          {delModel && (
+            <span style={{ color: 'var(--text-soft)' }}>{t('resum_wizard.from_model')} · </span>
+          )}
           {children}
         </div>
       </div>

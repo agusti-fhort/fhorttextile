@@ -4918,7 +4918,8 @@
     "need_ruleset": "Elige un conjunto de reglas",
     "model_base": "Modelo base",
     "inherits": "Hereda del modelo",
-    "rename_piece": "Renombrar"
+    "rename_piece": "Renombrar",
+    "from_model": "Del modelo"
   },
   "disseny": {
     "back_title": "Volver al panel"

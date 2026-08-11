@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { anclaDeLaPeca, nomDeLaPeca, presentacioCamp } from './pecaDefinicio.js'
+import { ORIGEN, anclaDeLaPeca, nomDeLaPeca, origenDeLaFila, presentacioCamp } from './pecaDefinicio.js'
 
 test('el mateix text amb herències distintes NO és el mateix estat', () => {
   const declarat = presentacioCamp({ valor: 'S·M·L', etiqueta: 'S·M·L', heretat: false })
@@ -53,4 +53,21 @@ test('la MARE no és una peça sense nom: és el model', () => {
 test('l\'ancla de la mare no és `#peca-`', () => {
   assert.equal(anclaDeLaPeca({ es_mare: true, codi: '' }), 'peca-base')
   assert.equal(anclaDeLaPeca({ es_mare: false, codi: '02' }), 'peca-02')
+})
+
+test('«del model» NO és «hereta», ni tan sols quan el camp diu heretat', () => {
+  // La distinció que l'Agus va demanar explícitament (11/08). «Hereta» parla d'un override que
+  // existeix i que ara és NULL; «del model» parla d'un camp que la peça NO té i no tindrà. Si
+  // es pintessin igual, la fila de «Peça» prometria una porta d'edició que no ha d'arribar mai.
+  const heretat = { valor: 'S·M·L', etiqueta: 'S·M·L', heretat: true }
+
+  assert.equal(origenDeLaFila(heretat), ORIGEN.HERETAT)
+  assert.equal(origenDeLaFila(heretat, { delModel: true }), ORIGEN.DEL_MODEL)
+  assert.notEqual(ORIGEN.DEL_MODEL, ORIGEN.HERETAT)
+})
+
+test('els tres origens són tres, i el propi és el que no diu res', () => {
+  assert.equal(origenDeLaFila({ valor: '3M·6M', etiqueta: '3M·6M', heretat: false }), ORIGEN.PROPI)
+  assert.equal(origenDeLaFila(null), ORIGEN.PROPI)              // sense camp, no s'afirma herència
+  assert.equal(new Set(Object.values(ORIGEN)).size, 3)
 })

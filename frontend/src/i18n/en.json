@@ -4918,7 +4918,8 @@
     "need_ruleset": "Pick a rule set",
     "model_base": "Base model",
     "inherits": "Inherited from the model",
-    "rename_piece": "Rename"
+    "rename_piece": "Rename",
+    "from_model": "From the model"
   },
   "disseny": {
     "back_title": "Back to dashboard"
