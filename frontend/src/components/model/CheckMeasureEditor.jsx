@@ -692,7 +692,8 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           línies més amunt, i `Base: S` + el run, que ara baixen al contenidor de peça dits amb
           tipografia. El que NO era redundant —el botó de tornar, que hi vivia a dins— es queda:
           `EditorHeader` només el pintava quan li arribava `onBack`, i aquí es pinta igual.
-          (`EditorHeader` segueix VIU: el consumeixen `PropagatedEditor` i `FittingDetail`.) */}
+          (`EditorHeader` segueix VIU amb UN consumidor: `FittingDetail`, que és una altra
+          pàgina —`/fittings/:id`— i queda fora de l'abast d'aquest tram.) */}
       {onBack && <div style={{ marginBottom: 8 }}><BackButton onClick={onBack} /></div>}
       {/* Sprint Y — en mode sessió (font fitting), el panell de la sessió: context + Canvis/Observacions/Imatges. */}
       {ctx.fittingSession && <SessionPanel session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} grid={raw?.grid} modelId={model.id} />}
