@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { clauDeFila } from '../../utils/identitatMesura'
 import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines } from '../../api/endpoints'
@@ -281,7 +282,11 @@ const checkSource = {
       return {
         pom_id: r.pom_id,
         // Clau de fila per a MeasureGrid: la PK de la mesura, que `base_stages` ja serveix.
-        rowKey: r.base_measurement_id ?? r.pom_id,
+        // SET-2/T6b — el pla B era el `pom_id` sol, i col·lapsava germanes AVUI: dues files
+        // del mateix POM a dues capes compartien clau i React reconciliava una amb l'estat de
+        // l'altra. Ara el pla B és la identitat sencera, per la mateixa porta que els altres
+        // dos adaptadors.
+        rowKey: clauDeFila(r, r.base_measurement_id),
         // C4/BLOC 2 — els eixos viatgen amb la fila perquè la PODA pugui dir quina germana
         // treu (`onPodar`, més avall). `base_stages` els serveix des de `6e259c8b`.
         capa: r.capa, instancia: r.instancia,

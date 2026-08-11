@@ -35,3 +35,19 @@
 export function identitatMesura(fila) {
   return `${fila.pom_id}|${fila.capa || ''}|${fila.instancia || ''}|${fila.garment || ''}`
 }
+
+/**
+ * La clau de FILA per a `MeasureGrid`: la identitat més forta que el payload dona.
+ *
+ * La PK de `BaseMeasurement` mana quan hi és —la taula és única per (model, pom, capa,
+ * instancia, garment), o sigui que la PK ja és tot això resolt i no cal recompondre res—, i
+ * quan el payload no la serveix, el pla B són els quatre eixos. MAI el `pom_id` sol: aquell
+ * era el pla B d'abans que una mesura pogués tenir dues cares, i col·lapsa germanes AVUI.
+ *
+ * La PK s'hi passa a part perquè cada payload li diu d'una manera (`bm_id` al fitting,
+ * `base_measurement_id` al check): la regla viu aquí, el nom del camp al lloc que el llegeix.
+ * I es compara amb `??` i no amb `||` perquè una PK no és mai «falsa»: només absent.
+ */
+export function clauDeFila(fila, pk) {
+  return pk ?? identitatMesura(fila)
+}

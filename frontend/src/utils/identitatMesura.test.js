@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { identitatMesura } from './identitatMesura.js'
+import { clauDeFila, identitatMesura } from './identitatMesura.js'
 
 test('dues files idèntiques en tot MENYS el garment no col·lapsen', () => {
   // EL CAS QUE OBRE SET-2: la mateixa mesura, la mateixa capa i la mateixa instància, a dues
@@ -59,6 +59,27 @@ test('CONTROL — amb una sola peça, l\'agrupació és la d\'avui', () => {
     identitatMesura({ pom_id: 12, capa: 'exterior', instancia: '', size_label: 'S' }),
     identitatMesura({ pom_id: 12, capa: 'exterior', instancia: '', size_label: 'M' }),
   )
+})
+
+test('la PK mana sobre els eixos quan el payload la dona', () => {
+  // `BaseMeasurement` és únic per (model, pom, capa, instancia, garment): la seva PK és una
+  // identitat MÉS FORTA que els quatre trams, i no cal recompondre res per fer-la servir.
+  assert.equal(clauDeFila({ pom_id: 12, capa: 'exterior' }, 881), 881)
+  assert.equal(clauDeFila({ pom_id: 12, capa: 'exterior' }, 0), 0)   // una PK 0 seguiria sent PK
+})
+
+test('sense PK, el pla B és la CLAU SENCERA i no el pom_id', () => {
+  // EL DEFECTE D'AVUI, i no espera les peces per fer mal: amb `?? pom_id`, dues germanes
+  // —la mateixa mesura a l'exterior i al folre— comparteixen clau de fila, i React reconcilia
+  // una amb l'estat de l'altra (cel·la enfocada, ordre en arrossegar).
+  const exterior = { pom_id: 12, capa: 'exterior', instancia: '' }
+  const folre = { pom_id: 12, capa: 'folre', instancia: '' }
+
+  assert.notEqual(clauDeFila(exterior, null), clauDeFila(folre, null))
+  assert.notEqual(clauDeFila(exterior, undefined), 12)
+  assert.equal(clauDeFila(exterior, null), '12|exterior||')
+  // I la peça, quan arribi, hi és pel mateix camí.
+  assert.notEqual(clauDeFila({ ...exterior, garment: '02' }, null), clauDeFila(exterior, null))
 })
 
 test('un camp absent i un camp buit són la MATEIXA fila', () => {

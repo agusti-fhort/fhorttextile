@@ -15,7 +15,7 @@ import { pieceFittingLines } from '../../api/endpoints'
 import { effectiveRegime } from '../../utils/gradingRegime'
 import { formatDelta } from '../../utils/format'
 import { aDocument, etiquetaRegla } from '../../utils/breakConvention'
-import { identitatMesura } from '../../utils/identitatMesura'
+import { clauDeFila } from '../../utils/identitatMesura'
 
 // Etiqueta d'una versió: la primera (v1) és Base; les següents són Fit N amb N = version_number - 1.
 const versionLabel = (vn, idx, t) =>
@@ -159,7 +159,7 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) 
       // quatre trams, de manera que aquesta còpia s'hauria quedat a tres EN SILENCI i dues
       // germanes de dues prendes haurien compartit clau de fila. Substituïda, no migrada al
       // costat: una còpia que es pot tornar a desincronitzar no és un arranjament.
-      rowKey: row.bm_id || identitatMesura(row),
+      rowKey: clauDeFila(row, row.bm_id),
       nom_en: row.nom_en, nom_local: row.nom_local,
       nom_fitxa: row.nom_fitxa, bm_id: row.bm_id,   // P4 — autoria de nom a nivell model
       logica: row.logica, increment_base: row.increment_base,
