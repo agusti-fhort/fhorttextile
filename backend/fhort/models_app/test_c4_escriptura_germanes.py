@@ -400,7 +400,13 @@ class EscripturaGermanesTest(TenantTestCase):
 
             self.assertEqual(resp.status_code, 200, getattr(resp, 'data', None))
             ids = [l['id'] for l in resp.data['linies']]
-            self.assertTrue(all(i.startswith(f'{self.pom.id}|{FOLRE}|:') for i in ids),
+            # SET-2/T6a (2026-08-11) — un tram més a la clau (`{pom}|{capa}|{inst}|{garment}`)
+            # i per tant un `|` més al prefix. La germana ajustada segueix sent EXACTAMENT la
+            # mateixa —el folre de la instància única de la peça mare— i les tres talles
+            # tornades són les mateixes: el pin va caure per la forma, no pel contingut.
+            # L'escalar és una vora d'ESCRIPTURA i el seu contracte no diu la peça: la mare és
+            # el default explícit, i el tram buit del prefix és justament això.
+            self.assertTrue(all(i.startswith(f'{self.pom.id}|{FOLRE}||:') for i in ids),
                             f'l\'id ha de ser `{{clau}}:{{talla}}` de LA germana ajustada: {ids}')
 
     # ── L'ONZENA SUPERFÍCIE (C4/BLOC 2 · `generar-grading`) ─────────────────────────

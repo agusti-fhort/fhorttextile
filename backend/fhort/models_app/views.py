@@ -1935,7 +1935,12 @@ def measurements_table_view(request, model_id):
             gv = vigent_grading_version(sf)
             if gv:
                 for spec in GradedSpec.objects.filter(grading_version=gv):
-                    ident = (spec.pom_id, spec.capa, spec.instancia)
+                    # SET-2/T6a — l'eix de la peça entra al mapa alhora que a la `clau` de la
+                    # fila (just a sota): si un cresqués i l'altre no, la fila de la 02
+                    # buscaria amb quatre trams en un mapa de tres i es quedaria sense corba
+                    # graduada, o —pitjor— dues peces es disputarien la mateixa entrada i una
+                    # ensenyaria la corba de l'altra com si fos seva.
+                    ident = (spec.pom_id, spec.capa, spec.instancia, spec.garment)
                     if ident not in graded_by_pom:
                         graded_by_pom[ident] = {}
                     graded_by_pom[ident][spec.size_label] = (
@@ -1992,7 +1997,9 @@ def measurements_table_view(request, model_id):
             # dos camps més la `clau` de sota (la que enllaça amb `deltes`).
             'capa': bm.capa,
             'instancia': bm.instancia,
-            'clau': clau_mesura(pom.id, bm.capa, bm.instancia),
+            'clau': clau_mesura(pom.id, bm.capa, bm.instancia, bm.garment),
+            # SET-2/T6a — l'eix de la fila al contracte, al costat dels dos de germanor.
+            'garment': bm.garment,
             'pom_code': pom.codi_client,
             **camps_de(alias_by_pom, pom.id),
             'nom_fitxa': bm.nom_fitxa or '',
@@ -2014,7 +2021,7 @@ def measurements_table_view(request, model_id):
             'is_key': bm.is_key,
             'origen': bm.origen,
             'notes': bm.notes or '',
-            'graded': graded_by_pom.get((pom.id, bm.capa, bm.instancia), {}),
+            'graded': graded_by_pom.get((pom.id, bm.capa, bm.instancia, bm.garment), {}),
             # Règim (additiu; consumidors antics ignoren camps desconeguts).
             'logica': getattr(rule, 'logica', None) if rule else None,
             'increment_base': _flt(getattr(rule, 'increment_base', None)) if rule else None,
@@ -3365,15 +3372,26 @@ def escalat_ajustar_talla_view(request, model_id):
     #    l'escriptura es feia, la corba es re-derivava, i les cel·les germanes es quedaven amb
     #    el valor vell fins a recarregar. Sense error i sense avís.
     #    La forma la decideix `pom/identitat.clau_mesura`, l'únic lloc que sap com s'aplana.
+    #
+    # ③ SET-2/T6a — LA PEÇA. Aquesta vora és d'ESCRIPTURA i el seu contracte d'identitat
+    #    (`_identitat_de_mesura`) porta capa i instància però NO el garment: el cos de la
+    #    petició no en diu res. El default explícit és, doncs, la PEÇA MARE, igual que
+    #    l'exterior i la instància única — i el filtre l'ha de dir també, o amb dues peces
+    #    vives els specs de totes dues cauen al mateix `graded[size_label]` i la resposta
+    #    tornaria la corba de l'última llegida: el defecte ① d'aquí sobre, un eix més tard.
+    #    Obrir el contracte d'ESCRIPTURA al garment és un tram propi (necessita `ModelGarment`
+    #    i una superfície que el sàpiga dir); això NO ho és, i el que no es fa mai és mirar
+    #    quines peces hi ha i triar-ne una.
     from fhort.pom.identitat import clau_mesura
     gv = vigent_grading_version(sf)
     graded = {}
     if gv:
         for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom,
-                                              capa=capa, instancia=instancia):
+                                              capa=capa, instancia=instancia,
+                                              garment=''):
             graded[spec.size_label] = (
                 float(spec.graded_value_cm) if spec.graded_value_cm is not None else None)
-    clau = clau_mesura(pom.id, capa, instancia)
+    clau = clau_mesura(pom.id, capa, instancia, '')   # explícit: la mare, v. ③ aquí sobre
     linies = [{'id': f'{clau}:{s}', 'valor_real': graded.get(s)} for s in size_run]
     return Response({'ok': True, 'propagat': propagat, 'motiu': motiu,
                      'grading_version_id': gv.id if gv else None, 'linies': linies}, status=200)

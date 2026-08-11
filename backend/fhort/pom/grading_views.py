@@ -53,7 +53,7 @@ def regenerate_sizes_view(request, sf_id):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-def clau_ordre_taula(pom, capa, instancia=''):
+def clau_ordre_taula(pom, capa, instancia='', garment=''):
     """L'ordre de la taula de mesures, decidit i TOTAL (Agus, 2026-08-01).
 
     Ordre del catàleg → capa (exterior primer) → instància (la única primer) → codi del POM.
@@ -71,9 +71,26 @@ def clau_ordre_taula(pom, capa, instancia=''):
     Els últims trams són desempats que no es veuen però fan la clau total: el `slug` de la
     capa (entre dues que no són l'exterior), el de la instància, i l'`id` del POM (perquè el
     codi tampoc no és únic — dos POMMaster del tenant poden compartir `codi_client`).
+
+    SET-2/T6a (2026-08-11) — la PEÇA hi entra, i entra AL DAVANT DE TOT. Els dos motius són
+    diferents i tots dos calen:
+
+      · TOTALITAT, que és la raó de ser d'aquesta funció: amb dues peces del mateix POM a la
+        mateixa capa i instància, tots els trams anteriors empataven i el desempat tornava a
+        ser l'ordre del pla de Postgres — exactament el bug que aquesta clau existeix per
+        matar, un eix més tard.
+      · JERARQUIA: aquí sí que mana, al revés que als trams de `clau_mesura`. La llei de T9
+        és «la prenda a fora, la secció a dins», o sigui que les files d'una peça van
+        JUNTES i no intercalades amb les d'una altra. Per això el `garment` va davant del
+        `display_order` del catàleg i no darrere.
+
+    La mare primer (`0`), la resta per codi: mateix idioma que la capa per defecte i que la
+    instància única, i no depèn de cap dada externa per ordenar.
     """
     from fhort.pom.models import MeasurementLayer
     return (
+        0 if not garment else 1,
+        garment or '',
         pom.display_order,
         0 if capa == MeasurementLayer.SLUG_DEFECTE else 1,
         capa or '',
@@ -144,15 +161,20 @@ def measurements_table_view(request, sf_id):
             ).order_by('pom__categoria__display_order', 'capa', 'instancia', 'size_label')
 
             for spec in specs:
-                clau = clau_mesura(spec.pom_id, spec.capa, spec.instancia)
+                clau = clau_mesura(spec.pom_id, spec.capa, spec.instancia, spec.garment)
                 if clau not in poms_seen:
                     poms_seen.add(clau)
-                    ordre_pom[clau] = clau_ordre_taula(spec.pom, spec.capa, spec.instancia)
+                    ordre_pom[clau] = clau_ordre_taula(
+                        spec.pom, spec.capa, spec.instancia, spec.garment)
                     poms_info.append({
                         'id': spec.pom_id,
                         'clau': clau,
                         'capa': spec.capa,
                         'instancia': spec.instancia,
+                        # SET-2/T6a — L'EIX DE LA FILA al contracte, com ja hi són els dos de
+                        # germanor. És dada FACTUAL de la fila (de quina peça és), no una
+                        # definició resolta contra el model: v. l'acta de `graded_spec_views`.
+                        'garment': spec.garment,
                         'codi': spec.pom.pom_code,
                         'nom_cat': spec.pom.name_cat,
                         'nom_en': spec.pom.name_en,
@@ -175,15 +197,17 @@ def measurements_table_view(request, sf_id):
                     model=model, is_active=True
                 ).select_related('pom', 'pom__pom_global', 'pom__categoria')
                 for bm in base_ms:
-                    clau = clau_mesura(bm.pom_id, bm.capa, bm.instancia)
+                    clau = clau_mesura(bm.pom_id, bm.capa, bm.instancia, bm.garment)
                     if clau not in poms_seen:
                         poms_seen.add(clau)
-                        ordre_pom[clau] = clau_ordre_taula(bm.pom, bm.capa, bm.instancia)
+                        ordre_pom[clau] = clau_ordre_taula(
+                            bm.pom, bm.capa, bm.instancia, bm.garment)
                         poms_info.append({
                             'id': bm.pom_id,
                             'clau': clau,
                             'capa': bm.capa,
                             'instancia': bm.instancia,
+                            'garment': bm.garment,
                             'codi': bm.pom.pom_code,
                             'nom_cat': bm.pom.name_cat,
                             'nom_en': bm.pom.name_en,

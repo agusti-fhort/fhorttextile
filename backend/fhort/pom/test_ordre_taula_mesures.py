@@ -126,6 +126,13 @@ class OrdreTaulaMesuresTest(TenantTestCase):
         manera de creuar-les quan `pom_id` deixa de ser únic."""
         resp = self._taula(self._sf(amb_graduacio=True))
 
+        # SET-2/T6a (2026-08-11) — LA CLAU TÉ UN TRAM MÉS: el `garment`, darrere de la
+        # instància (`pom/identitat.py`). Aquest pin és de FORMA i era el seu ofici caure avui:
+        # va caure amb «'11|exterior||' != '11|exterior|'», o sigui un separador de diferència
+        # i cap valor mogut — les mateixes files, la mateixa capa, la mateixa instància.
+        # S'actualitza conscientment, no s'afluixa: segueix exigint la forma EXACTA i segueix
+        # exigint que la clau enllaci amb `cells`.
         for p in resp.data['poms']:
-            self.assertEqual(p['clau'], f"{p['id']}|{p['capa']}|{p['instancia']}")
+            self.assertEqual(
+                p['clau'], f"{p['id']}|{p['capa']}|{p['instancia']}|{p['garment']}")
             self.assertIn(p['clau'], resp.data['cells'])
