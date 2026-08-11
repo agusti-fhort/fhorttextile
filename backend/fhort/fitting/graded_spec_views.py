@@ -48,11 +48,32 @@ class GradedSpecTableView(APIView):
         # fora, la germana no es col·lapsaria —quedaria FORA del `filter`—, i la fitxa sortiria
         # coherent amb una fila de menys. Absència silenciosa, que és pitjor de veure que un
         # valor equivocat.
+        # SET-2/T6a (2026-08-11) — LA FILA SERVEIX L'EIX DE LA PEÇA, i cal dir per què això
+        # NO contradiu el revert de `7cc133b5` (que va TREURE una clau `garment` del payload
+        # de `base-measurements/`). Els dos motius d'aquell revert no apliquen aquí:
+        #
+        #   (a) Allà el que s'hi servia era una DEFINICIÓ HEREDABLE (run, ruleset, talla base):
+        #       un valor que la peça pot NO tenir i que s'ha de resoldre contra el model. La
+        #       resolució `garment.X or model.X` ha de viure en UN SOL PUNT (D5), i servir-la
+        #       crua des d'una vora n'obria una segona via. Aquí NO hi ha cap resolució: el
+        #       `garment` d'una fila és l'eix PROPI de la fila, dada factual —de quina peça és
+        #       aquesta mesura—, no heretada de ningú.
+        #   (b) Allà la clau no tenia cap lector i era bastida sense funció. Aquí en té un de
+        #       NOMENAT: la partició de la T1b per prenda (D7), i el camí ja existeix —
+        #       `TechSheetEditor.jsx` passa `data.rows` per `partirEnTaules`→`garmentDeFila`,
+        #       que avui llegeix la mare perquè el payload no la porta.
+        #
+        # 🔑 LA REGLA QUE SE'N DERIVA, i val per a tot el sprint: **servir l'EIX D'UNA FILA és
+        # sempre legítim; servir una DEFINICIÓ RESOLTA, només des del punt únic.**
+        #
+        # L'`order_by` el porta també: sense ell, dues peces del mateix POM a la mateixa capa i
+        # instància empataven a tots els camps i el desempat el decidia `id`, o sigui l'ordre
+        # d'inserció dels specs.
         specs = (
             GradedSpec.objects
             .filter(grading_version=gv, is_active=True)
             .select_related('pom__pom_global')
-            .order_by('pom_id', 'capa', 'instancia', 'id')
+            .order_by('pom_id', 'capa', 'instancia', 'garment', 'id')
         )
 
         # size_labels en ordre d'aparició (no alfabètic: respecta l'ordre dels specs).
@@ -70,10 +91,14 @@ class GradedSpecTableView(APIView):
 
             pom = s.pom
             pg = pom.pom_global  # pot ser None → fallback als camps *_client del POMMaster
-            ident = (pom.id, s.capa, s.instancia)
+            ident = (pom.id, s.capa, s.instancia, s.garment)
             if ident not in rows_by_pom:
                 rows_by_pom[ident] = {
                     'pom_id': pom.id,
+                    # SET-2/T6a — L'EIX DE LA FILA (v. l'acta del queryset, a sobre). El
+                    # consumidor és `partirEnTaules`→`garmentDeFila`, que fins avui llegia la
+                    # mare per a totes les files perquè aquest camp no hi era.
+                    'garment': s.garment,
                     # C4 — ELS DOS EIXOS AL CONTRACTE. `pom_id` es queda i no canvia de
                     # significat (consumidors antics segueixen llegint-lo); el que canvia és que
                     # ja no és únic dins de `rows`, i aquests dos camps són el que ho desempata.
@@ -114,7 +139,7 @@ class GradedSpecTableView(APIView):
         # sortiria a la fitxa amb el nom del catàleg i al final de la taula.
         bms = BaseMeasurement.objects.filter(
             model_id=sf.model_id).values(
-            'pom_id', 'capa', 'instancia', 'ordre', 'nom_fitxa', 'seccio',
+            'pom_id', 'capa', 'instancia', 'garment', 'ordre', 'nom_fitxa', 'seccio',
             # R1 (31/07) — el BATEIG viatja pel MATEIX camí que `ordre`/`nom_fitxa`: surt de la
             # BaseMeasurement del model, perquè és del MODEL i no de la graduació. Sense això,
             # la taula T1b de la fitxa imprimia el nom del catàleg d'un POM que el tècnic havia
@@ -122,7 +147,10 @@ class GradedSpecTableView(APIView):
             'nom_canonic_model', 'nom_traduit_model')
 
         def _ident(bm):
-            return (bm['pom_id'], bm['capa'], bm['instancia'])
+            # SET-2/T6a — ELS QUATRE MAPES CREIXEN ALHORA, i segueix sent la llei de C2/Onada 1
+            # que ja obligava amb capa i instància: amb un eix més són vuit maneres de barrejar
+            # l'ordre d'una peça amb el nom de l'altra, no quatre.
+            return (bm['pom_id'], bm['capa'], bm['instancia'], bm['garment'])
 
         ordre_map = {_ident(bm): bm['ordre'] for bm in bms}
         nom_fitxa_map = {_ident(bm): bm['nom_fitxa'] for bm in bms}
@@ -165,7 +193,14 @@ class GradedSpecTableView(APIView):
         # Ordre de fitxa (mesures sense BaseMeasurement → al final). El desempat pels dos eixos
         # no és decoratiu: dues germanes comparteixen `ordre` (és el del POM a la fitxa), i
         # sense ell l'ordre entre elles el decidiria el pla de Postgres i es mouria sol.
-        rows.sort(key=lambda r: (ordre_map.get((r['pom_id'], r['capa'], r['instancia']), 10 ** 9),
+        # SET-2/T6a — la PEÇA encapçala el desempat, mateix criteri que `clau_ordre_taula`
+        # (`pom/grading_views.py`): la llei de T9 és «la prenda a fora», o sigui que les files
+        # d'una peça van JUNTES i no intercalades amb les d'una altra. La mare primer (`0`).
+        # I sense ella la clau tornava a ser parcial: dues peces comparteixen `ordre` —és el
+        # del POM a la fitxa— i el seu ordre relatiu el decidiria el pla de Postgres.
+        rows.sort(key=lambda r: (0 if not r['garment'] else 1, r['garment'],
+                                 ordre_map.get((r['pom_id'], r['capa'], r['instancia'],
+                                                r['garment']), 10 ** 9),
                                  r['capa'], r['instancia']))
 
         return Response({
