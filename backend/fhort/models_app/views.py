@@ -23,7 +23,8 @@ from fhort.tasks.services_batec import (SUP_ESCALAT, SUP_FITXA, SUP_MESURES, SUP
                                         bat_escriptura, batec_de_request)
 from fhort.pom.models import MeasurementLayer
 from fhort.pom.plausibilitat import CODI_MESURA_FORA_RANG, mesura_fora_de_rang
-from .models import BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer, Watchpoint
+from .models import (BaseMeasurement, ConsumptionRecord, GarmentSet, Model, ModelFitxer,
+                     ModelGarment, Watchpoint)
 from .services_fitxers import DOWNLOAD_SALT, DOWNLOAD_TTL
 from .serializers import (
     BaseMeasurementSerializer,
@@ -1609,6 +1610,41 @@ def copiar_de_model_view(request, model_id, src_id):
 
     warnings = []
 
+    # ── SET-2/T10 · LES PECES VIATGEN PRIMER, i abans que res que les anomeni.
+    #
+    # `BaseMeasurement.garment` ja viatja des de T5 («la còpia COPIA»), però el codi que
+    # hi ha a dins no volia dir res al destí: `ModelGarment` no es copiava, o sigui que
+    # el model copiat es quedava amb mesures de la peça '02' i CAP peça '02' — codis
+    # orfes, i amb ells els overrides de run/ruleset/talla base de la peça, que
+    # silenciosament queien als del model.
+    #
+    # VIATGEN AMB QUALSEVOL DELS TRES FLAGS que les poden anomenar (run, valors,
+    # graduació) i no amb un de sol: són l'ESQUELET del model —quines prendes té—, i
+    # copiar-ne les mesures o la configuració sense elles és el que fabrica l'orfe.
+    # `copy_files` no hi entra: un croquis no parla de peces.
+    #
+    # Idempotent per `(model, codi)`, com la unicitat: una segona còpia ACTUALITZA la
+    # peça existent al destí en comptes de petar. No s'esborra cap peça que el destí
+    # tingui i l'origen no: esborrar-la deixaria òrfenes les SEVES mesures, i aquesta
+    # porta és MUDA (no demana permís) — el que no sap desfer, no ho desfà.
+    if copy_run or copy_values or copy_grading:
+        for peca in src.garments.all():
+            ModelGarment.objects.update_or_create(
+                model=dst, codi=peca.codi,
+                defaults={
+                    'nom': peca.nom,
+                    'ordre': peca.ordre,
+                    # Els overrides van SENCERS, NULL inclòs: un NULL no és «no ho sé»,
+                    # és «hereta del model», i és una declaració tan copiable com
+                    # qualsevol altra. Copiar-ne només els informats convertiria una
+                    # herència en una declaració.
+                    'size_system_id': peca.size_system_id,
+                    'grading_rule_set_id': peca.grading_rule_set_id,
+                    'size_run_model': peca.size_run_model,
+                    'base_size_label': peca.base_size_label,
+                },
+            )
+
     # ── copy_run. El destí amb mesures pròpies és sobirà del seu marc: el flag s'ignora.
     dst_te_mesures = BaseMeasurement.objects.filter(model=dst).exists()
     run_copied = False
@@ -1718,6 +1754,7 @@ def copiar_de_model_view(request, model_id, src_id):
             from fhort.models_app.services import (materialize_model_grading_rules,
                                                    origen_mgr_des_de_ruleset,
                                                    poms_manual_a_preservar)
+            from fhort.models_app.services_garment import valor_efectiu
             # 6.1 — el joc que el DESTÍ tenia, capturat abans del `save()` (a partir d'aquí ja
             # porta el de l'origen). Aquesta porta és MUDA —no compta residents, no demana
             # permís, no deixa Watchpoint—, i per això la preservació hi val doble: és l'única
@@ -1727,10 +1764,27 @@ def copiar_de_model_view(request, model_id, src_id):
             dst.grading_rule_set_id = src.grading_rule_set_id
             dst.save(update_fields=['grading_rule_set'])
             grading_set = src.grading_rule_set_id
+            # SET-2/T10 — UNA MATERIALITZACIÓ PER PEÇA. `materialize_model_grading_rules`
+            # ja fa el wipe per `(model, garment)` des de T3, però aquí se li deia una
+            # sola vegada amb el `garment` per defecte: només la MARE quedava sembrada, i
+            # les peces del model copiat es quedaven sense cap regla resident —mudes— o,
+            # pitjor, amb les que el destí ja tingués d'una còpia anterior.
+            #
+            # Cada peça se sembra des del SEU joc EFECTIU (`valor_efectiu`, el punt únic
+            # de D5): si la peça no en declara cap, hereta el del model —que és el que
+            # acabem de copiar de l'origen— i queda sembrada igual que la mare.
             n_regles = materialize_model_grading_rules(
                 dst, src.grading_rule_set.regles.all(),
                 origen=origen_mgr_des_de_ruleset(src.grading_rule_set),
                 joc_anterior=grs_dst_abans)
+            for peca in dst.garments.all():
+                joc_peca = valor_efectiu(dst, peca, 'grading_rule_set')
+                if joc_peca is None:
+                    continue
+                n_regles += materialize_model_grading_rules(
+                    dst, joc_peca.regles.all(),
+                    origen=origen_mgr_des_de_ruleset(joc_peca),
+                    joc_anterior=grs_dst_abans, garment=peca.codi)
             if n_preservades_dst:
                 warnings.append(
                     f"{n_preservades_dst} regles de graduació escrites a mà (MANUAL) al model "

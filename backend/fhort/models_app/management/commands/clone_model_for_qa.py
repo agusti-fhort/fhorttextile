@@ -48,7 +48,7 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def _run(self, o):
-        from fhort.models_app.models import Model, BaseMeasurement, ModelGradingRule
+        from fhort.models_app.models import Model, BaseMeasurement, ModelGarment, ModelGradingRule
         from fhort.fitting.models import SizeFitting, GradingVersion, GradedSpec
         from fhort.pom.services import generate_graded_specs
         from fhort.tasks.models import ModelTask, TaskType
@@ -94,6 +94,19 @@ class Command(BaseCommand):
         clone.save()   # reusa grading_rule_set/size_system/garment_type per valor de FK; signal crea SF 'Proto'
         self.stdout.write(f"Model clon: pk={clone.pk} codi={clone.codi_intern} ruleset={clone.grading_rule_set_id} "
                           f"size_run={clone.size_run_model!r} base={clone.base_size_label!r}")
+
+        # --- 1-bis) SET-2/T10 · Clona les PECES, i abans que res que les anomeni ---
+        # Les sis taules de mesura porten el `garment` i aquí viatja sol (la còpia és
+        # `pk=None` genèrica, no una llista de camps a mà). El que NO viatjava és la fila
+        # que dona SENTIT a aquell codi: el clon es quedava amb mesures de la peça '02' i
+        # cap peça '02', i els seus overrides de run/ruleset queien als del model. Per a un
+        # banc de QA això és pitjor que en una còpia normal: el veredicte «grading
+        # equivalent» de sota compararia dues coses que no ho són pel motiu equivocat.
+        n_peces = 0
+        for peca in ModelGarment.objects.filter(model=src):
+            peca.pk = None; peca.id = None; peca.model = clone; peca.save()
+            n_peces += 1
+        self.stdout.write(f"Peces (ModelGarment) clonades: {n_peces}")
 
         # --- 2) Clona BaseMeasurements (ABANS del grading: el motor llegeix la base) ---
         n_bm = 0
