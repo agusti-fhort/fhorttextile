@@ -140,7 +140,11 @@ class PomNomesOverrideGraduaTest(_D2Base):
         generate_graded_specs(self.sf.id)
         prev = preview_graded_specs(
             self.model, {self.pom_regla.id: 100.0, self.pom_ovr.id: 58.5})
-        unica = (MeasurementLayer.SLUG_DEFECTE, '')
+        # SET-2/T6a (2026-08-11) — LA CLAU DE SORTIDA DEL PREVIEW TÉ UN TRAM MÉS: el
+        # `garment`, darrere de la instància, igual que la d'ENTRADA i igual que la del
+        # generador. Pin de FORMA i era el seu ofici caure avui: els VALORS no s'han
+        # mogut ni un decimal (la mateixa fila, les mateixes talles) — només la clau.
+        unica = (MeasurementLayer.SLUG_DEFECTE, '', '')
         self.assertEqual(prev[(self.pom_ovr.id, *unica)], self._taula(self.pom_ovr))
         self.assertEqual(prev[(self.pom_regla.id, *unica)], self._taula(self.pom_regla))
 

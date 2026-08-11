@@ -90,7 +90,17 @@ with schema_context(SCHEMA):
         bases = _load_base_measurements(model_id)
         specs = preview_graded_specs(m, bases)
         n_prev = 0
-        for (pom_id, capa, instancia), fila in specs.items():
+        # SET-2/T6a (2026-08-11) — la clau del preview té QUATRE trams (`garment` darrere de
+        # la instància), i abans se'n desempaquetaven tres: sense això l'arnès peta amb
+        # `ValueError: too many values to unpack` i la paritat no es pot ni prendre.
+        #
+        # ⚠️ EL `garment` NO ENTRA A LA CLAU EMESA, i és deliberat: aquest golden és la
+        # referència de NO-REGRESSIÓ del camí `garment=''` (v. el README, «l'abast d'aquesta
+        # paritat»), i afegir-lo al `_clau` en canviaria l'md5 sense que cap cel·la s'hagi
+        # mogut — es perdria la comparació amb 165d6701… justament al tram que l'ha de
+        # conservar. Estendre la clau a la peça és una decisió per al dia que es retirin les
+        # comportes, i demana refer el banc i segellar un md5 nou.
+        for (pom_id, capa, instancia, _garment), fila in specs.items():
             for size_label, val in fila.items():
                 preview_cells[_clau(model_id, pom_id, capa, instancia, size_label)] = {
                     'v': val,

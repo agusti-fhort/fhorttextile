@@ -1988,7 +1988,13 @@ def import_session_grading_preview_view(request, token):
     # frontend espera. Avui és una equivalència exacta —les comportes de C1/C1-ins garanteixen
     # una sola germana per POM— i per això el col·lapse no perd res.
     # Fer créixer aquest payload és INTERFÍCIE i va a C4 amb maqueta (llei 3c.5).
-    grading = {str(pom_id): row for (pom_id, _capa, _instancia), row in grading.items()}
+    # SET-2/T6a — la clau que arriba té QUATRE trams (el `garment` darrere de la instància).
+    # El col·lapse a `pom_id` es queda tal com era i pel mateix argument: avui el wizard
+    # d'import treballa sempre sobre la peça MARE —cap fila '02' pot existir mentre visquin
+    # les comportes— i el payload del front no pot expressar una clau composta. El dia que
+    # l'import s'iniciï des d'una peça (T8), aquest col·lapse és INTERFÍCIE i va amb maqueta.
+    grading = {str(pom_id): row
+               for (pom_id, _capa, _instancia, _garment), row in grading.items()}
     return Response({'grading': grading, 'base_size': model.base_size_label,
                      'size_run': (model.size_run_model or '').split('·'),
                      'avisos': grading_avisos}, status=200)

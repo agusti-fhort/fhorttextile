@@ -375,9 +375,19 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
     SizeFitting/GradingVersion/GradedSpec. Pensat per omplir talles buides a la taula del
     wizard abans del desament definitiu (W5).
 
-    base_values: {(pom_id, capa, instancia): base_value_cm}
-    Retorna: {(pom_id, capa, instancia): {size_label: graded_value}} (buit si manquen
-    regles/run/base).
+    base_values: {(pom_id, capa, instancia, garment): base_value_cm} — o una clau ESCALAR
+    (`pom_id`), o de menys trams: `_identitat` normalitza l'aritat, perquè això arriba d'un
+    COS HTTP i el contracte d'entrada no és nostre.
+    Retorna: {(pom_id, capa, instancia, garment): {size_label: graded_value}} (buit si
+    manquen regles/run/base).
+
+    SET-2/T6a (2026-08-11) — LA SORTIDA CREIX ALS MATEIXOS QUATRE TRAMS QUE L'ENTRADA, i
+    fins avui no ho feia: `_identitat` en desempaquetava quatre i `out` se n'indexava tres.
+    Amb dues peces vives, les dues files del mateix POM cauen a la mateixa entrada i
+    l'última guanya — o sigui que el PREVIEW ensenyaria una fila on el GENERADOR n'escriurà
+    dues. La paritat preview↔generador és la invariant que aquest fitxer declara i que el
+    test de D2 comprova (`test_preview_diu_el_mateix_que_el_generador`): una clau més curta
+    a un dels dos costats la trenca en silenci.
 
     C3/B5 — LA CLAU CREIX AMB LA DEL GENERADOR, i ha de créixer alhora: hi ha tests que
     exigeixen que el preview i el generador diguin exactament el mateix (`test_g6_grading_gates
@@ -472,7 +482,7 @@ def preview_graded_specs(model, base_values: dict, warnings: list | None = None)
         # D2 — POM que no emet cap cel·la no apareix a la taula (fila ABSENT, no fila buida):
         # el generador tampoc no en crearà cap GradedSpec.
         if row:
-            out[(pom_id, capa, instancia)] = row
+            out[(pom_id, capa, instancia, garment)] = row
     return out
 
 

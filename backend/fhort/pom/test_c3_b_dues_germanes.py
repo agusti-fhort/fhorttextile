@@ -190,7 +190,10 @@ class DuesGermanesC3BTest(TenantTestCase):
             generat = self._specs()
 
             aplanat = {(capa, ins, talla): val
-                       for (_pom, capa, ins), fila in preview.items()
+                       # SET-2/T6a — quatre trams a la clau del preview; l'aplanat
+                       # segueix comparant (capa, instància, talla) i el resultat és
+                       # cel·la a cel·la EL MATEIX que abans.
+                       for (_pom, capa, ins, _garment), fila in preview.items()
                        for talla, val in fila.items()}
             self.assertEqual(aplanat, generat,
                              'preview i generador han de coincidir cel·la a cel·la')
@@ -201,9 +204,14 @@ class DuesGermanesC3BTest(TenantTestCase):
         """`extraction_views` li passa JSON `{pom_id: valor}`, que no pot dir tuples."""
         preview = preview_graded_specs(self.model, {self.pom.pk: 100.0})
 
-        self.assertEqual(preview, {(self.pom.pk, EXTERIOR, ''): {'S': 99.0, 'M': 100.0,
-                                                                 'L': 101.0}},
-                         "una clau escalar és la mesura única del POM: ('exterior', '')")
+        # SET-2/T6a (2026-08-11) — LA CLAU DE SORTIDA DEL PREVIEW TÉ UN TRAM MÉS: el
+        # `garment`, darrere de la instància, igual que la d'ENTRADA i igual que la del
+        # generador. Pin de FORMA i era el seu ofici caure avui: els VALORS no s'han
+        # mogut ni un decimal (la mateixa fila, les mateixes talles) — només la clau.
+        self.assertEqual(preview, {(self.pom.pk, EXTERIOR, '', ''): {'S': 99.0,
+                                                                     'M': 100.0,
+                                                                     'L': 101.0}},
+                         "una clau escalar és la mesura única del POM a la peça MARE")
 
     def test_la_clau_escalar_i_la_completa_donen_el_MATEIX(self):
         escalar = preview_graded_specs(self.model, {self.pom.pk: 100.0})

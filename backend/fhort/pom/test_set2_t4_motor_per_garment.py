@@ -260,3 +260,21 @@ class ContracteDeLesFonsTest(TenantTestCase):
 
         self.assertEqual(escalar, tres, 'la clau de tres trams ha de seguir funcionant')
         self.assertEqual(tres, quatre, 'les dues formes completes han de donar el mateix')
+
+    def test_la_SORTIDA_del_preview_te_els_mateixos_quatre_trams_que_lentrada(self):
+        """SET-2/T6a — `_identitat` en desempaquetava quatre i `out` se n'indexava tres.
+
+        No petava i no movia cap xifra: senzillament tornava una clau més curta de la que
+        havia rebut. El dany és la PARITAT PREVIEW↔GENERADOR, que és la invariant que
+        `pom/services.py` declara i que el test de D2 comprova: el generador escriu per
+        `(pom, capa, instancia, garment)` i el preview responia per tres trams, o sigui que
+        amb dues peces vives el wizard ensenyaria UNA fila on el motor n'escriurà DUES.
+        """
+        from fhort.pom.services import preview_graded_specs
+
+        out = preview_graded_specs(self.model, {self.pom.pk: 100.0})
+
+        self.assertTrue(out, 'el preview no ha emès cap fila: el fixture no serveix')
+        for clau in out:
+            self.assertEqual(len(clau), 4, f'la clau del preview ha de tenir 4 trams: {clau}')
+        self.assertEqual(list(out), [(self.pom.pk, 'exterior', '', '')])
