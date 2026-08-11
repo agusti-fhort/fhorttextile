@@ -9,8 +9,8 @@ import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 import { finestraHistoric } from './fittingGridAdapter'
 import MeasureGrid from './MeasureGrid'
 import EditableTable from '../EditableTable/EditableTable'
-import EditorHeader from './EditorHeader'
-import DependencyPanel from './DependencyPanel'
+import BackButton from '../BackButton'
+import PecaContenidor from './PecaContenidor'
 import WatchpointsPanel from './WatchpointsPanel'
 import SessionPanel from './SessionPanel'
 import SessionActions from './SessionActions'
@@ -687,8 +687,13 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
 
   return (
     <div>
-      <EditorHeader model={model} onBack={onBack} />
-      <DependencyPanel model={model} />
+      {/* SET-2/T7-A · LA BARRA CREMA DE RESUM DEL MODEL SE'N VA (maqueta d'Agus, 10/08).
+          Deia `codi_intern` i `nom_prenda`, que la capçalera de la pàgina ja diu en gran dues
+          línies més amunt, i `Base: S` + el run, que ara baixen al contenidor de peça dits amb
+          tipografia. El que NO era redundant —el botó de tornar, que hi vivia a dins— es queda:
+          `EditorHeader` només el pintava quan li arribava `onBack`, i aquí es pinta igual.
+          (`EditorHeader` segueix VIU: el consumeixen `PropagatedEditor` i `FittingDetail`.) */}
+      {onBack && <div style={{ marginBottom: 8 }}><BackButton onClick={onBack} /></div>}
       {/* Sprint Y — en mode sessió (font fitting), el panell de la sessió: context + Canvis/Observacions/Imatges. */}
       {ctx.fittingSession && <SessionPanel session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} grid={raw?.grid} modelId={model.id} />}
       {/* AQUÍ HI HAVIA «Promoure com a estàndard de l'item» (Agus, 06/08: FORA).
@@ -712,6 +717,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           des de fa temps (↓/Enter i ↑ recorren el carril; A · J · R posen el veredicte sense
           treure la mà del número) i no ho deia res: qui obria la sessió les havia de saber
           d'abans. Només s'hi anuncia el que funciona en aquesta pantalla. */}
+      <PecaContenidor model={model}>
       {!esPresa && !readOnly && rows.length > 0 && (
         <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)',
                     margin: '0 0 10px', lineHeight: 1.8 }}>
@@ -757,6 +763,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           )
         } />
       )}
+      </PecaContenidor>
 
       {/* v3 (`.bar` :193-198) — LA BARRA DE RECOMPTES. La graella diu QUÈ té cada fila; això diu
           on és la sessió sencera, que és la pregunta de qui la tanca. «Sense decidir» és el que
