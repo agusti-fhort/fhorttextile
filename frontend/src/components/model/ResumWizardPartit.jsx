@@ -627,14 +627,20 @@ function PasTalles({ model, estat, onObrir, desa, onCancel }) {
   // proximitat el necessita: sense ell, el run DEL CLIENT d'aquest model no pot anar primer i
   // la llista queda ordenada com si el model no fos de ningú (el parany del model 174).
   const [codiClient, setCodiClient] = useState(null)
+  //
+  // SET-2/T7-B5 — I NOMÉS AMB EL SUBESPAI OBERT. Aquest codi només serveix per ORDENAR els runs
+  // candidats en el moment de triar-ne un: amb el pas tancat no hi ha cap llista a ordenar, i la
+  // crida es feia igualment a cada fitxa de model que s'obria. El pas tancat pinta el run que el
+  // model ja té, que ve al detall i no necessita ningú.
+  const obertTalles = estat === 'ara'
   useEffect(() => {
-    if (!model.customer) { setCodiClient(null); return undefined }
+    if (!obertTalles || !model.customer) { setCodiClient(null); return undefined }
     let viu = true
     customers.get(model.customer)
       .then(r => { if (viu) setCodiClient(r.data?.codi ?? null) })
       .catch(() => { if (viu) setCodiClient(null) })
     return () => { viu = false }
-  }, [model.customer])
+  }, [obertTalles, model.customer])
 
   // Triar un sistema NO substitueix el run en silenci: si el que el model té hi cap, es
   // conserva (i amb ell la talla base). És la mateixa llei F1.2 del wizard.
