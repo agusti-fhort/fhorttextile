@@ -4915,7 +4915,10 @@
     "year_season": "Año · Temporada",
     "save_grading": "Guardar graduación",
     "grading_saved": "Graduación guardada.",
-    "need_ruleset": "Elige un conjunto de reglas"
+    "need_ruleset": "Elige un conjunto de reglas",
+    "model_base": "Modelo base",
+    "inherits": "Hereda del modelo",
+    "rename_piece": "Renombrar"
   },
   "disseny": {
     "back_title": "Volver al panel"

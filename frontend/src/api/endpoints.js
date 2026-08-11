@@ -70,6 +70,10 @@ export const models = {
   nextRef: (params) => client.get('/api/v1/models/next-ref/', { params }),       // ?year&season
   createWizard: (data) => client.post('/api/v1/models/create-wizard/', data),    // esquelet COMPLET
   updateStep2: (id, data) => client.patch(`/api/v1/models/${id}/update-step2/`, data),
+  // SET-2/T2-bis — LES PRENDES D'UN MODEL, amb el valor EFECTIU i el flag d'herència per camp.
+  // La mare hi ve sintètica i sempre primera (`id: null`, `codi: ''`). NOMÉS LECTURA: l'autoria
+  // (crear, batejar, ordenar) encara no té porta. Contracte al docstring de `garment_views.py`.
+  peces: (id) => client.get(`/api/v1/models/${id}/peces/`),
   destroy: (id) => client.delete(`/api/v1/models/${id}/delete/`),
   taskLog: (id) => client.get(`/api/v1/models/${id}/task-log/`),   // 5B-fix: log de transicions
   // Capa de Projecte: definir tasques d'un model i avançar fase (gate del responsable).

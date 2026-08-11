@@ -4915,7 +4915,10 @@
     "year_season": "Year · Season",
     "save_grading": "Save grading",
     "grading_saved": "Grading saved.",
-    "need_ruleset": "Pick a rule set"
+    "need_ruleset": "Pick a rule set",
+    "model_base": "Base model",
+    "inherits": "Inherited from the model",
+    "rename_piece": "Rename"
   },
   "disseny": {
     "back_title": "Back to dashboard"

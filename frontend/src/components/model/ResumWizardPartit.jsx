@@ -47,6 +47,8 @@ import { useEixos } from '../grading/eixosFont'
 import RuleSetPicker from '../grading/RuleSetPicker'
 import useConfirmacioRuleset from './useConfirmacioRuleset'
 import { models, sizeSystems, gradingRuleSets, garmentGroups, customers } from '../../api/endpoints'
+import PecaDefinicioContenidor, { BotoCanviar, FilaDefinicio, ValorCamp }
+  from './PecaDefinicioContenidor'
 import { ordenaPerProximitat } from '../../utils/proximitatRun'
 import { labelsOf, ordenaPelSistema } from '../../utils/talles'
 import Feedback from '../ui/Feedback'
@@ -224,6 +226,10 @@ export default function ResumWizardPartit({ model, onUpdated }) {
   // = l'usuari ha premut «Canviar» sobre un pas ja fet i vol tornar-hi.
   const [obert, setObert] = useState(null)
   const [editantInfo, setEditantInfo] = useState(false)
+  // LES PRENDES DEL MODEL, servides pel contracte de T2-bis. La mare hi ve sintètica i sempre
+  // primera, de manera que aquest estat mai és buit un cop carregat i la pantalla no ha de
+  // saber si el model té peces per saber què pintar: recorre la llista i prou.
+  const [peces, setPeces] = useState([])
 
   const id = model?.id
   // ── L'ESTAT DE CADA PAS, llegit del MODEL (mai d'estat local paral·lel) ───────────────
@@ -266,6 +272,19 @@ export default function ResumWizardPartit({ model, onUpdated }) {
     }
   }, [id, onUpdated, t])
 
+  // Es rellegeix quan el model canvia: un desat de talles pot moure el valor EFECTIU d'una
+  // peça que l'hereta, i el contracte només el resol al servidor.
+  useEffect(() => {
+    if (!id) return
+    let viu = true
+    models.peces(id)
+      .then(r => { if (viu) setPeces(r.data?.peces || []) })
+      // Una llista buida no és cap avaria visible: sense peces, la definició es pinta com
+      // sempre s'ha pintat. El que no pot passar és que la pantalla peti per això.
+      .catch(() => { if (viu) setPeces([]) })
+    return () => { viu = false }
+  }, [id, model])
+
   if (!model) return null
 
   return (
@@ -280,17 +299,72 @@ export default function ResumWizardPartit({ model, onUpdated }) {
           definicioCompleta={fets === 3} onDesat={() => { setEditantInfo(false); onUpdated?.() }}
           onError={(text) => setFeedback({ type: 'err', text })} />
 
-        <Targeta titol={t('resum_wizard.definition')}
-          nota={t('resum_wizard.steps_of', { n: fets, total: 3 })} cos={false}>
-          <PasPeca model={model} estat={estatDe(2)} onObrir={() => setObert(2)}
-            catTargets={catTargets} catConstructions={catConstructions} catFits={catFits}
-            desa={desa} onCancel={() => setObert(null)} />
-          <PasTalles model={model} estat={estatDe(3)} onObrir={() => setObert(3)}
-            desa={desa} onCancel={() => setObert(null)} />
-          <PasGraduacio model={model} estat={estatDe(4)} onObrir={() => setObert(4)}
-            desa={desa} onCancel={() => setObert(null)} />
-        </Targeta>
+        {/* SET-2/T7-B1 · UN CONTENIDOR PER PRENDA, apilats. La mare hi és la primera i és
+            SINTÈTICA: no té fila (D3), i el mateix endpoint que serveix les peces la serveix a
+            ella amb els valors del model. Amb un model d'una sola prenda —el 100% del corpus
+            d'avui— això és exactament un contenidor, i la pantalla és la d'abans amb la
+            capçalera de la peça al davant. */}
+        <div style={{ display: 'grid', gap: 16 }}>
+          {peces.map(peca => (
+            <PecaDefinicioContenidor key={peca.codi || 'base'} peca={peca} fet={fets === 3}>
+              {peca.es_mare ? (
+                <>
+                  <PasPeca model={model} estat={estatDe(2)} onObrir={() => setObert(2)}
+                    catTargets={catTargets} catConstructions={catConstructions} catFits={catFits}
+                    desa={desa} onCancel={() => setObert(null)} />
+                  <PasTalles model={model} estat={estatDe(3)} onObrir={() => setObert(3)}
+                    desa={desa} onCancel={() => setObert(null)} />
+                  <PasGraduacio model={model} estat={estatDe(4)} onObrir={() => setObert(4)}
+                    desa={desa} onCancel={() => setObert(null)} />
+                </>
+              ) : (
+                <FilesDeLaPeca peca={peca} />
+              )}
+            </PecaDefinicioContenidor>
+          ))}
+        </div>
       </div>
+    </>
+  )
+}
+
+// ── LES FILES D'UNA PEÇA QUE NO ÉS LA MARE ────────────────────────────────────────────────
+//
+// Es pinta el que el CONTRACTE serveix, i res més. `CAMPS_HERETABLES` són quatre —sistema, joc
+// de regles, run i talla base—, o sigui que una peça té fila de TALLES i de GRADUACIÓ.
+//
+// ⚠️ NO HI HA FILA DE «PEÇA», i és una diferència amb el brief que s'ha de saber: el contracte
+// NEGA que els eixos i el `garment_type_item` baixin a la prenda (`ElGarmentTypeItemNoHiEsTest`
+// ho fixa perquè no torni per inèrcia). Pintar-hi els del model marcats com a heretats seria el
+// front decidint una herència que el servidor no afirma, que és exactament el que aquesta
+// superfície té prohibit. Decisió reportada a l'Agus.
+//
+// El «Canviar» hi és i està APAGAT: la porta d'escriptura d'una peça encara no existeix, i un
+// botó viu que no desa és pitjor que un d'apagat.
+function FilesDeLaPeca({ peca }) {
+  const { t } = useTranslation()
+  const cap = t('resum_wizard.no_value')
+  return (
+    <>
+      <FilaDefinicio etiqueta={t('resum_wizard.step_sizes')}
+        heretat={peca.size_run_model?.heretat === true}
+        accio={<BotoCanviar disabled>{t('resum_wizard.change')}</BotoCanviar>}>
+        <div><ValorCamp camp={peca.size_system} buit={cap} /></div>
+        <div style={{ marginTop: 4 }}>
+          <ValorCamp camp={peca.size_run_model} buit={cap} />
+          {peca.base_size_label?.etiqueta
+            ? <span style={{ marginLeft: 8, color: 'var(--text-soft)' }}>
+                {peca.base_size_label.etiqueta} · {t('resum_wizard.base')}
+              </span>
+            : null}
+        </div>
+      </FilaDefinicio>
+
+      <FilaDefinicio etiqueta={t('resum_wizard.step_grading')}
+        heretat={peca.grading_rule_set?.heretat === true}
+        accio={<BotoCanviar disabled>{t('resum_wizard.change')}</BotoCanviar>}>
+        <ValorCamp camp={peca.grading_rule_set} buit={cap} />
+      </FilaDefinicio>
     </>
   )
 }
@@ -460,9 +534,9 @@ function PasPeca({ model, estat, onObrir, catTargets, catConstructions, catFits,
 
   if (!obert) {
     return (
-      <Subespai num={2} titol={t('resum_wizard.step_piece')} estat={estat} onObrir={onObrir}
-        accions={estat === 'fet'
-          ? <Boto variant="sec" onClick={onObrir} style={{ padding: '6px 12px' }}>{t('resum_wizard.change')}</Boto>
+      <FilaDefinicio etiqueta={t('resum_wizard.step_piece')}
+        accio={estat === 'fet'
+          ? <BotoCanviar onClick={onObrir}>{t('resum_wizard.change')}</BotoCanviar>
           : null}>
         {estat === 'fet' && (
           // ELECCIONS FIXADES I VISIBLES (§8f): els tres eixos en chips verds d'inclusió i el
@@ -481,7 +555,7 @@ function PasPeca({ model, estat, onObrir, catTargets, catConstructions, catFits,
             </div>
           </div>
         )}
-      </Subespai>
+      </FilaDefinicio>
     )
   }
 
@@ -612,9 +686,9 @@ function PasTalles({ model, estat, onObrir, desa, onCancel }) {
 
   if (!obert) {
     return (
-      <Subespai num={3} titol={t('resum_wizard.step_sizes')} estat={estat} onObrir={onObrir}
-        accions={estat === 'fet'
-          ? <Boto variant="sec" onClick={onObrir} style={{ padding: '6px 12px' }}>{t('resum_wizard.change')}</Boto>
+      <FilaDefinicio etiqueta={t('resum_wizard.step_sizes')}
+        accio={estat === 'fet'
+          ? <BotoCanviar onClick={onObrir}>{t('resum_wizard.change')}</BotoCanviar>
           : null}>
         {estat === 'fet' && (
           <div>
@@ -632,7 +706,7 @@ function PasTalles({ model, estat, onObrir, desa, onCancel }) {
             </div>
           </div>
         )}
-      </Subespai>
+      </FilaDefinicio>
     )
   }
 
@@ -802,16 +876,20 @@ function PasGraduacio({ model, estat, onObrir, desa, onCancel }) {
 
   if (!obert) {
     return (
-      <Subespai num={4} titol={t('resum_wizard.step_grading')} estat={estat}
-        motiu={t('resum_wizard.needs_sizes')} onObrir={onObrir}
-        accions={estat === 'blocat' ? null : (
+      <FilaDefinicio etiqueta={t('resum_wizard.step_grading')}
+        accio={estat === 'blocat' ? null : (
           // El pas ACTUAL ja s'obre sol (i llavors el blau és el seu «Desar graduació»); aquí
           // només s'hi arriba amb el pas FET o amb un altre subespai obert, i en tots dos casos
           // l'acció és secundària: el blau és d'un pas de sol (§8f).
-          <Boto variant="sec" onClick={onObrir} style={{ padding: '6px 12px' }}>
+          <BotoCanviar onClick={onObrir}>
             {grsId ? t('resum_wizard.change') : t('model_sheet.define_grading')}
-          </Boto>
+          </BotoCanviar>
         )}>
+        {/* BLOQUEJAT amb el MOTIU escrit (§6): un pas apagat i mut no és un estat, és una
+            avaria. Abans el portava el `Subespai`; a la fila compacta hi va aquí. */}
+        {estat === 'blocat' && (
+          <span style={{ ...buitText, fontSize: 'var(--fs-caption)' }}>{t('resum_wizard.needs_sizes')}</span>
+        )}
         {estat !== 'blocat' && grsId && (
           <div>
             <span style={retolCamp}>{t('dependency.ruleset')}</span>
@@ -828,7 +906,7 @@ function PasGraduacio({ model, estat, onObrir, desa, onCancel }) {
             </div>
           </div>
         )}
-      </Subespai>
+      </FilaDefinicio>
     )
   }
 

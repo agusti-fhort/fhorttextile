@@ -4915,7 +4915,10 @@
     "year_season": "Any · Temporada",
     "save_grading": "Desar graduació",
     "grading_saved": "Graduació desada.",
-    "need_ruleset": "Tria un joc de regles"
+    "need_ruleset": "Tria un joc de regles",
+    "model_base": "Model base",
+    "inherits": "Hereta del model",
+    "rename_piece": "Reanomenar"
   },
   "disseny": {
     "back_title": "Tornar al tauler"
