@@ -1,4 +1,9 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
+
+import { anclaDeLaPeca, nomDeLaPeca } from '../../utils/pecaDefinicio'
+import useToc, { anellFocus } from '../ui/toc'
 
 // SET-2/T7-A · EL CONTENIDOR DE PEÇA de la superfície de Mesures.
 //
@@ -8,11 +13,15 @@ import { useTranslation } from 'react-i18next'
 // la barra crema de resum desapareix perquè el que deia ja és a la capçalera de la pàgina
 // (referència + nom) o baixa aquí (el run de talles).
 //
-// ⚠️ FASE A (avui) — AMB UNA SOLA PEÇA, que és el 100% del corpus, NO hi ha fila superior de
-// nom/caret/llapis: aquesta pàgina ha de quedar funcionalment idèntica a la d'abans, només
-// més neta. La fila superior és de la Fase B i neix quan el model té 2+ peces, cosa que avui
-// no pot passar (13 comportes CHECK congelen `garment` a '' i `ModelGarment` no existeix).
-// Re-verificar amb: `grep -rn "class ModelGarment" backend/`.
+// ⚠️ LA FILA SUPERIOR NEIX AMB LA SEGONA PEÇA (SET-2/T7-B2), no abans. Amb una sola prenda
+// —el 100% del corpus d'avui— aquesta pàgina ha de quedar funcionalment IDÈNTICA a la d'abans:
+// posar-hi un nom i un caret quan no hi ha res a distingir seria decorar. El predicat no el
+// dedueix aquesta pantalla: el resol el servidor (`te_mes_duna_peca`, un sol lloc) i arriba per
+// `mesDunaPeca`.
+//
+// EL LLAPIS D'AQUÍ NO EDITA: NAVEGA. El nom d'una prenda s'autoritza al Resum, que és on viu la
+// definició; tenir-ne dos llocs d'edició seria tenir dues autories del mateix camp. Porta a
+// l'ancla de la peça (`#peca-<codi>`) perquè s'obri on toca i no al capdamunt de la fitxa.
 //
 // ⚠️ EL QUE NO HI ÉS, I PER DECISIÓ (Agus, 2026-08-11): `target` i `construction` («Dona»,
 // «Teixit pla»). Els deia la barra crema i NO tornen a cap superfície de treball — són
@@ -28,9 +37,17 @@ import { useTranslation } from 'react-i18next'
 // (Graduació hi posa «Canviar joc»). És opcional: a Mesures i a Escalat la fila és de lectura,
 // i el rètol italic ja ho diu. En Fase B cada contenidor de peça portarà el SEU, perquè cada
 // peça va a la seva elecció de graduació.
-export default function PecaContenidor({ model, children, accioJoc = null }) {
+export default function PecaContenidor({ model, children, accioJoc = null,
+                                        peca = null, mesDunaPeca = false }) {
   const { t } = useTranslation()
+  const [obert, setObert] = useState(true)
   if (!model) return null
+
+  // La fila només existeix quan hi ha més d'una prenda: `peca` sense `mesDunaPeca` és el cas
+  // d'avui —la mare sola— i llavors no hi ha res a encapçalar.
+  const fila = mesDunaPeca && peca ? (
+    <FilaPeca model={model} peca={peca} obert={obert} onCommutar={() => setObert(v => !v)} />
+  ) : null
 
   const gtItem = model.garment_type_item_nom
     ? `${model.garment_type_item_nom}${model.garment_type_item_code ? ` (${model.garment_type_item_code})` : ''}`
@@ -49,6 +66,7 @@ export default function PecaContenidor({ model, children, accioJoc = null }) {
       border: '1px solid var(--line)', borderRadius: 'var(--r-card)',
       background: 'var(--panel)', marginBottom: 12,
     }}>
+      {fila}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         padding: '9px 14px', borderBottom: '1px solid var(--line)',
@@ -86,7 +104,53 @@ export default function PecaContenidor({ model, children, accioJoc = null }) {
           </span>
         )}
       </div>
-      <div style={{ padding: '10px 12px 12px' }}>{children}</div>
+      {/* Col·lapsar amaga LA TAULA i prou. La dependència, el joc de regles i el run es
+          queden: són el que et diu de quina prenda parla la fila que has plegat. */}
+      {obert && <div style={{ padding: '10px 12px 12px' }}>{children}</div>}
+    </div>
+  )
+}
+
+/**
+ * LA FILA SUPERIOR DEL CONTENIDOR: caret, nom i llapis.
+ *
+ * El caret plega la TAULA, no el contenidor: la identitat de la peça i el que la governa
+ * (dependència, joc, run) es queden a la vista, que és el que fa que plegar sigui útil quan hi
+ * ha tres prendes obertes alhora.
+ */
+function FilaPeca({ model, peca, obert, onCommutar }) {
+  const { t } = useTranslation()
+  const [toc, gestos] = useToc()
+  const nom = nomDeLaPeca(peca, t('resum_wizard.model_base'))
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '9px 14px', borderBottom: '1px solid var(--line)',
+    }}>
+      <button type="button" onClick={onCommutar} {...gestos}
+        title={t(obert ? 'peca.collapse' : 'peca.expand')}
+        aria-expanded={obert}
+        style={{
+          width: 24, height: 24, flex: 'none', display: 'inline-flex',
+          alignItems: 'center', justifyContent: 'center', padding: 0,
+          borderRadius: 'var(--r-ctrl)', borderWidth: 1, borderStyle: 'solid',
+          borderColor: toc.hover ? 'var(--gold)' : 'var(--line)',
+          background: 'var(--panel)', color: 'var(--text-soft)', cursor: 'pointer',
+          outline: 'none', ...(toc.focus ? anellFocus : null),
+        }}>
+        <i className={obert ? 'ti ti-chevron-down' : 'ti ti-chevron-right'} style={{ fontSize: 14 }} />
+      </button>
+      <span style={{ fontSize: 13, fontWeight: 600 }}>{nom}</span>
+      {/* NAVEGA, no edita: el nom d'una prenda s'autoritza al Resum. */}
+      <Link to={`/models/${model.id}#${anclaDeLaPeca(peca)}`} title={t('resum_wizard.rename_piece')}
+        style={{
+          marginLeft: 'auto', width: 24, height: 24, display: 'inline-flex',
+          alignItems: 'center', justifyContent: 'center',
+          borderRadius: 'var(--r-ctrl)', border: '1px solid var(--line)',
+          color: 'var(--text-soft)', textDecoration: 'none',
+        }}>
+        <i className="ti ti-pencil" style={{ fontSize: 13 }} />
+      </Link>
     </div>
   )
 }

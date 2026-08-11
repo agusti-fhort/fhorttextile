@@ -4951,5 +4951,9 @@
   "size_map_conf_MEDIUM": "media",
   "size_map_conf_LOW": "baja",
   "size_map_conf_NO_MATCH": "sin correspondencia",
-  "size_map_back_title": "Volver al panel"
+  "size_map_back_title": "Volver al panel",
+  "peca": {
+    "collapse": "Plegar",
+    "expand": "Desplegar"
+  }
 }

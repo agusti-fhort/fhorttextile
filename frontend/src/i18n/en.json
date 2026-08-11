@@ -4951,5 +4951,9 @@
   "size_map_conf_MEDIUM": "medium",
   "size_map_conf_LOW": "low",
   "size_map_conf_NO_MATCH": "no match",
-  "size_map_back_title": "Back to dashboard"
+  "size_map_back_title": "Back to dashboard",
+  "peca": {
+    "collapse": "Collapse",
+    "expand": "Expand"
+  }
 }

@@ -4951,5 +4951,9 @@
   "size_map_conf_MEDIUM": "mitjana",
   "size_map_conf_LOW": "baixa",
   "size_map_conf_NO_MATCH": "sense correspondència",
-  "size_map_back_title": "Tornar al tauler"
+  "size_map_back_title": "Tornar al tauler",
+  "peca": {
+    "collapse": "Plegar",
+    "expand": "Desplegar"
+  }
 }
