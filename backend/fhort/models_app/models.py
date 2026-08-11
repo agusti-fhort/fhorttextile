@@ -1685,3 +1685,105 @@ class POMPlacement(models.Model):
 
     def __str__(self):
         return f'{self.item_fitxer_id} · POM {self.pom_id} @ {self.view_slot}'
+
+
+class ModelGarment(models.Model):
+    """UNA PEÇA DINS D'UN MODEL — l'entitat que D5 pressuposava i que SET-2/T2 no va crear.
+
+    ── QUÈ ÉS, I QUÈ NO ÉS ────────────────────────────────────────────────────────────
+    Un model pot ser més d'una prenda: un pijama té jaqueta i pantaló, i cadascuna té les
+    seves mesures, la seva graduació i potser fins i tot la seva escala de talles (un top
+    per talla alfa i una calceta per mesos són dues lleis d'increments que ni parlen el
+    mateix idioma). El `garment` que les sis taules de mesura porten des de T2 és el CODI
+    d'una d'aquestes peces; aquesta taula és on aquell codi finalment existeix.
+
+    ⚠️ NO CONFONDRE AMB `GarmentSet`, i el paranys és que en llenguatge de domini totes dues
+    són «peces». Són dues ALÇADES distintes:
+      · `GarmentSet.peces` → els MODELS d'un producte comercial (un twin set = 2 models
+        independents, cadascun amb la seva fitxa).
+      · `ModelGarment` → les prendes DINS d'un sol model (un pijama = 1 model, 2 peces, 1
+        fitxa).
+    Per això el `related_name` d'aquí és `garments` i no `peces`: dos atributs amb el mateix
+    nom a dues alçades diferents és la mena de coincidència que fabrica el bug que ningú no
+    veu. El rètol de pantalla sí que dirà «peces»; l'atribut, no.
+
+    ── D3 · LA MARE NO TÉ FILA, I ÉS DELIBERAT ────────────────────────────────────────
+    El `garment=''` de les taules de mesura és la PEÇA MARE, i la peça mare **és el model
+    mateix**: el seu run, la seva talla base i el seu joc de graduació ja viuen als camps de
+    `Model`. Materialitzar-li una fila aquí duplicaria la font de veritat i obriria la
+    pregunta «quin dels dos mana» a cada lectura. Per això hi ha una comporta CHECK que
+    prohibeix `codi=''`: no és una validació de formulari, és la llei D3 escrita a Postgres.
+
+    ── D5 · ELS OVERRIDES SÓN NULLABLES, I NULL VOL DIR «HERETA» ──────────────────────
+    Els quatre camps heretables neixen `NULL`. NULL **no és** «buit» ni «cap»: és «pregunta-ho
+    al model». Una peça acabada de crear no ha de re-declarar res per començar a funcionar, i
+    canviar el run del model el canvia a totes les peces que no l'hagin sobreescrit.
+
+    🔑 La resolució viu en UN SOL PUNT —`services_garment.valor_efectiu`— i enlloc més. És la
+    raó per la qual es va revertir `7cc133b5`: una vora que serveixi el valor CRU al costat
+    d'una altra que serveixi el RESOLT són dos orígens per al mateix camp, i acaben divergint.
+    Qui necessiti el valor efectiu, que passi per allà.
+
+    ── EL QUE AQUESTA TAULA NO PORTA, I PER QUÈ ───────────────────────────────────────
+    `garment_type_item` NO hi és. El brief el demanava «nullable i sense cap lector», i un
+    camp sense lector és exactament la bastida que aquest sprint ha après a no construir: la
+    clau `garment` de `base-measurements/` es va revertir el 10/08 amb aquest argument literal
+    («bastida sense funció; barata de treure ara i cara de treure després»). A més, la decisió
+    de domini és que **el GTI no baixa a la peça**, o sigui que la columna codificaria una
+    capacitat que el domini nega. Censat: cap dels lectors actuals de `garment_type_item`
+    (`patterns/views.py`, `patterns/services.py`, `patterns/serializers.py`) pregunta per una
+    peça — tots resolen la propietat d'un `PatternFile`, que penja d'un model O d'un item.
+    Si algun dia el GTI ha de baixar, és una migració d'una línia i una decisió humana.
+    """
+
+    #: Els camps que una peça pot sobreescriure. Font única: el resolutor, el serializer i
+    #: les proves en surten tots d'aquí, de manera que afegir-ne un és un sol canvi.
+    CAMPS_HERETABLES = ('size_system', 'grading_rule_set', 'size_run_model', 'base_size_label')
+
+    model = models.ForeignKey(
+        'models_app.Model',
+        on_delete=models.CASCADE,
+        related_name='garments',
+        help_text='El model del qual aquesta peça forma part.',
+    )
+    codi = models.CharField(
+        max_length=20,
+        help_text="Codi de la peça dins del model ('02', '03'…). Mai '': la peça mare és el "
+                  "model mateix i no té fila (D3).",
+    )
+    nom = models.CharField(
+        max_length=200, blank=True, default='',
+        help_text='Bateig del tècnic («Pantaló», «Caputxa»). Buit = encara sense batejar.',
+    )
+    ordre = models.PositiveSmallIntegerField(
+        default=0, help_text='Ordre de presentació dins del model.')
+
+    # ── Overrides (D5). NULL = hereta del model. ──────────────────────────────────────
+    size_system = models.ForeignKey(
+        'pom.SizeSystem', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='garments_override',
+    )
+    grading_rule_set = models.ForeignKey(
+        'pom.GradingRuleSet', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='garments_override',
+    )
+    size_run_model = models.CharField(max_length=200, null=True, blank=True)
+    base_size_label = models.CharField(max_length=20, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Peça de model'
+        verbose_name_plural = 'Peces de model'
+        ordering = ['model_id', 'ordre', 'codi']
+        unique_together = [('model', 'codi')]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(codi=''),
+                name='models_app_modelgarment_codi_no_buit',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.model_id} · peça {self.codi}{f" ({self.nom})" if self.nom else ""}'
