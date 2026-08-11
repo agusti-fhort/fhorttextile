@@ -90,3 +90,186 @@ def peces_del_model(model):
 def te_mes_duna_peca(model):
     """El predicat que decideix si l'eix de peça és visible enlloc. En UN sol lloc, també."""
     return model.garments.exists()
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════
+# L'ESCRIPTURA — SET-2/R11 (2026-08-11)
+#
+# Viu aquí i no a la vista: tota la lògica de peça en un mòdul, al costat de la resolució que
+# la llegeix. Les vistes són primes i només tradueixen a HTTP.
+# ═════════════════════════════════════════════════════════════════════════════════════════
+
+#: Les taules que porten l'eix de la peça, amb el camí des del Model. **SÓN SET, no sis** —
+#: els briefs d'aquest sprint n'han dit sempre «les 6 taules» i el cens del 2026-08-11 en
+#: compta set: a les cinc de `models_app` s'hi sumen `GradedSpec` i `PieceFittingLine`, que
+#: viuen a `fitting`. Cap d'elles pot quedar fora del guard d'esborrat: la que en quedés
+#: deixaria files apuntant a una peça que ja no existeix.
+#: Re-verificable: buscar `garment = models.CharField` a `models_app/models.py` i
+#: `fitting/models.py`.
+TAULES_AMB_GARMENT = (
+    ('BaseMeasurement', lambda m: m.base_measurements),
+    ('MeasurementChangeLog', lambda m: m.measurement_changes),
+    ('ModelGradingOverride', lambda m: m.grading_overrides),
+    ('ModelGradingRule', lambda m: m.grading_rules),
+)
+
+
+def mesures_penjades_de(model, codi):
+    """Quantes files de cada taula pengen d'aquesta peça. `{}` = la peça està neta.
+
+    És el guard de l'esborrat, i per això compta TOTES les taules i no només les mesures
+    base: esborrar la peça deixaria files de qualsevol d'elles apuntant a un codi que ja no
+    existeix — el mateix orfe que T10 va tancar a les còpies, fabricat des de l'altra banda.
+    """
+    from fhort.fitting.models import GradedSpec, PieceFittingLine
+    from fhort.models_app.models import SizeCheckLine
+
+    penjades = {}
+    for nom, rel in TAULES_AMB_GARMENT:
+        n = rel(model).filter(garment=codi).count()
+        if n:
+            penjades[nom] = n
+    # Les tres que no pengen del Model directament: hi arriben per la seva cadena.
+    per_cadena = (
+        ('SizeCheckLine', SizeCheckLine.objects.filter(size_check__model=model, garment=codi)),
+        ('GradedSpec', GradedSpec.objects.filter(
+            grading_version__size_fitting__model=model, garment=codi)),
+        ('PieceFittingLine', PieceFittingLine.objects.filter(
+            piece_fitting__model=model, garment=codi)),
+    )
+    for nom, qs in per_cadena:
+        n = qs.count()
+        if n:
+            penjades[nom] = n
+    return penjades
+
+
+def crea_peca(model, dades):
+    """Crea una peça. → `(peca, error)`; `error` és `(payload, status)` o `None`.
+
+    Els overrides NO s'accepten a la creació: una peça neix HERETANT-HO TOT (D5, NULL a tot
+    arreu) i es desheretaal PATCH. Neixer amb overrides seria demanar a qui crea la peça que
+    decideixi coses que encara no sap, i el camí de canviar-les ja existeix.
+
+    MANDROSA (D3): crear la '02' no materialitza res més. La sembra de regles per
+    `(model, garment)` la fa la porta que ja existeix quan toqui; disparar-la des d'aquí
+    seria una segona via cap al mateix efecte.
+    """
+    from fhort.models_app.models import ModelGarment
+
+    codi = (dades.get('codi') or '').strip()
+    if not codi:
+        # D3 escrita també a la vora: la comporta CHECK ho refusaria igualment, però amb un
+        # 500 d'IntegrityError. Qui demana la mare per aquesta porta mereix saber per què no.
+        return None, ({'error': "El codi de la peça no pot ser buit: la peça mare és el model "
+                                "mateix i no té fila pròpia.",
+                       'codi': 'garment_mare_no_te_fila'}, 400)
+    if ModelGarment.objects.filter(model=model, codi=codi).exists():
+        return None, ({'error': f"El model ja té una peça amb el codi «{codi}».",
+                       'codi': 'garment_duplicat', 'garment': codi}, 409)
+
+    peca = ModelGarment.objects.create(
+        model=model, codi=codi,
+        nom=(dades.get('nom') or '').strip(),
+        ordre=dades.get('ordre') or 0,
+    )
+    return peca, None
+
+
+#: Sentinella: distingeix «el payload no diu res del camp» de «el payload hi diu `null`».
+_NO_DIT = object()
+
+
+def actualitza_peca(model, peca, dades):
+    """Modifica una peça. → `(peca, error)`.
+
+    🔑 LA DISTINCIÓ QUE HO SOSTÉ TOT: **`null` explícit vol dir «torna a heretar»; el camp
+    ABSENT vol dir «no toquis»**. Sense ella, desheretar és impossible — un PATCH que envia
+    només el camp que canvia no podria mai buidar-ne un altre, i un que els enviés tots
+    convertiria cada herència en una declaració. És el mateix mecanisme que
+    `_procedencia_de_mesura` ja fa servir amb el seu sentinella, i per la mateixa raó.
+
+    El RUN i el SISTEMA passen per la PORTA ÚNICA del model (`_resolve_garment_def`, llei
+    S24b): la peça es comporta com el model, amb les mateixes condicions i els mateixos
+    avisos. No hi ha cap política nova per a les peces — si el model avui refusa un run amb
+    talles que el seu sistema no coneix, la peça també.
+    """
+    from fhort.pom.models import GradingRuleSet, SizeSystem
+    from fhort.models_app.views import _resolve_garment_def
+
+    canvis = []
+    if 'nom' in dades:
+        peca.nom = (dades['nom'] or '').strip()
+        canvis.append('nom')
+    if 'ordre' in dades:
+        peca.ordre = dades['ordre'] or 0
+        canvis.append('ordre')
+
+    # Els FK: `null` → hereta; un id → declara.
+    for camp, Model_ in (('size_system', SizeSystem), ('grading_rule_set', GradingRuleSet)):
+        valor = dades.get(camp, _NO_DIT)
+        if valor is _NO_DIT:
+            continue
+        if valor is None:
+            setattr(peca, f'{camp}_id', None)
+        else:
+            obj = Model_.objects.filter(pk=valor).first()
+            if obj is None:
+                return None, ({'error': f'{Model_.__name__} no trobat',
+                               'codi': 'referencia_no_trobada', 'camp': camp}, 400)
+            setattr(peca, f'{camp}_id', obj.pk)
+        canvis.append(camp)
+
+    for camp in ('size_run_model', 'base_size_label'):
+        valor = dades.get(camp, _NO_DIT)
+        if valor is _NO_DIT:
+            continue
+        setattr(peca, camp, valor)
+        canvis.append(camp)
+
+    # PORTA ÚNICA: es valida el run EFECTIU contra el sistema EFECTIU (tots dos ja resolts
+    # amb els canvis d'aquest PATCH aplicats a l'objecte en memòria, encara no desat).
+    if 'size_run_model' in canvis or 'size_system' in canvis:
+        run_efectiu = valor_efectiu(model, peca, 'size_run_model')
+        ss_efectiu = valor_efectiu(model, peca, 'size_system')
+        if run_efectiu:
+            _fields, err = _resolve_garment_def({
+                'size_run': run_efectiu,
+                'size_system_id': ss_efectiu.pk if ss_efectiu is not None else None,
+            })
+            if err:
+                return None, (err, 400)
+            # El run normalitzat (ordenat per l'ordre del sistema) NOMÉS es desa si la peça
+            # el declara: si l'hereta, el que s'ha validat és el del model i tocar-lo aquí
+            # seria escriure a la peça una declaració que no ha fet.
+            if peca.size_run_model is not None:
+                peca.size_run_model = _fields['size_run_model']
+
+    peca.save()
+    return peca, None
+
+
+def esborra_peca(model, peca):
+    """Esborra una peça. → `(None, error)`.
+
+    🛑 409 SI TÉ RES PENJAT, i és la garantia PER CONSTRUCCIÓ que aquesta porta no toca cap
+    de les set taules de mesura: si n'hi ha una sola fila, no s'esborra. Decisió d'Agus
+    (2026-08-11): esborrat de debò, no arxivat — una peça que mai no ha tingut res mesurat
+    és un error de teclat, i arxivar-la deixaria brossa que la pantalla hauria d'explicar.
+
+    El payload diu QUANTES files i DE QUINA taula: «no pots» sense el motiu obliga qui ho
+    llegeix a endevinar per on buidar-la.
+    """
+    penjades = mesures_penjades_de(model, peca.codi)
+    if penjades:
+        total = sum(penjades.values())
+        return None, ({
+            'error': (f"La peça «{peca.codi}» té {total} files de dades penjades i no es pot "
+                      f"esborrar. Cal buidar-la abans."),
+            'codi': 'garment_amb_dades',
+            'garment': peca.codi,
+            'penjades': penjades,
+            'total': total,
+        }, 409)
+    peca.delete()
+    return None, None

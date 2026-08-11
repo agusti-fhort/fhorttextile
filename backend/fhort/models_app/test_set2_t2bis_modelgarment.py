@@ -14,6 +14,7 @@ QUÈ ES FIXA AQUÍ, i cada cosa pel seu motiu:
     dos camps calen: `heretat` diu D'ON VE el valor, no si n'hi ha. Una pantalla que editi una
     peça ha de poder distingir «hereta S·M·L» de «declara S·M·L».
 """
+import contextlib
 import datetime
 
 from django.contrib.auth import get_user_model
@@ -21,10 +22,26 @@ from django.db import IntegrityError, connection, transaction
 from django_tenants.test.cases import TenantTestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from fhort.models_app.garment_views import peces_del_model_view
+from fhort.models_app.garment_views import peca_del_model_view, peces_del_model_view
 from fhort.models_app.models import Model, ModelGarment
 from fhort.models_app.services_garment import GARMENT_MARE, valor_efectiu
 from fhort.pom.models import GradingRuleSet, SizeDefinition, SizeSystem
+
+
+@contextlib.contextmanager
+def comportes_alcades(*taules):
+    """Alça les comportes `*_garment_gate_set2` dins d'un savepoint que SEMPRE es desfà."""
+    sid = transaction.savepoint()
+    try:
+        with connection.cursor() as cur:
+            for taula in taules:
+                cur.execute(
+                    f'ALTER TABLE "{connection.schema_name}"."{taula}" '
+                    f'DROP CONSTRAINT IF EXISTS "{taula}_garment_gate_set2"'
+                )
+        yield
+    finally:
+        transaction.savepoint_rollback(sid)
 
 
 class _T2bisBase(TenantTestCase):
@@ -212,3 +229,177 @@ class ElGarmentTypeItemNoHiEsTest(_T2bisBase):
         camps = {f.name for f in ModelGarment._meta.get_fields()}
         self.assertNotIn('garment_type_item', camps)
         self.assertNotIn('garment_type_item', ModelGarment.CAMPS_HERETABLES)
+
+
+class LaPortaDescripturaTest(_T2bisBase):
+    """SET-2/R11 — POST/PATCH/DELETE. El contracte que S2 llegirà, amb el docstring de la vista.
+
+    L'ordre dels tests segueix el de la vida d'una peça: neix heretant-ho tot, es deshereta,
+    torna a heretar, i s'esborra només si està neta.
+    """
+
+    def _post(self, cos):
+        req = self.factory.post('/peces/', cos, format='json')
+        force_authenticate(req, user=self.user)
+        return peces_del_model_view(req, self.model.id)
+
+    def _patch(self, peca_id, cos):
+        req = self.factory.patch(f'/peces/{peca_id}/', cos, format='json')
+        force_authenticate(req, user=self.user)
+        return peca_del_model_view(req, self.model.id, peca_id)
+
+    def _delete(self, peca_id):
+        req = self.factory.delete(f'/peces/{peca_id}/')
+        force_authenticate(req, user=self.user)
+        return peca_del_model_view(req, self.model.id, peca_id)
+
+    # ── POST ─────────────────────────────────────────────────────────────────────────────
+    def test_la_peca_neix_HERETANT_HO_TOT(self):
+        """D5: una peça acabada de crear no ha de re-declarar res per funcionar."""
+        resp = self._post({'codi': '02', 'nom': 'Pantaló', 'ordre': 1})
+
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual((resp.data['codi'], resp.data['nom']), ('02', 'Pantaló'))
+        for camp in ModelGarment.CAMPS_HERETABLES:
+            self.assertIs(resp.data[camp]['heretat'], True, camp)
+        # I el valor efectiu ja és el del model: la peça funciona des del primer instant.
+        self.assertEqual(resp.data['size_run_model']['valor'], 'S·M·L')
+
+    def test_el_POST_torna_la_peca_amb_la_MATEIXA_forma_que_el_GET(self):
+        """Qui pinta no ha de saber dos formats."""
+        creada = self._post({'codi': '02'}).data
+        del_get = [p for p in self._peces()['peces'] if p['codi'] == '02'][0]
+
+        self.assertEqual(creada, del_get)
+
+    def test_codi_buit_es_400_i_no_un_500_dintegritat(self):
+        resp = self._post({'codi': ''})
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['codi'], 'garment_mare_no_te_fila')
+
+    def test_codi_duplicat_es_409(self):
+        self._post({'codi': '02'})
+
+        resp = self._post({'codi': '02'})
+
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data['codi'], 'garment_duplicat')
+        self.assertEqual(ModelGarment.objects.filter(model=self.model).count(), 1)
+
+    def test_crear_una_peca_NO_materialitza_res_mes(self):
+        """Mandrosa (D3): la sembra de regles la fa la porta que ja existeix, quan toqui.
+        Disparar-la des d'aquí seria una segona via cap al mateix efecte."""
+        from fhort.models_app.models import ModelGradingRule
+
+        self._post({'codi': '02'})
+
+        self.assertEqual(ModelGradingRule.objects.filter(model=self.model).count(), 0)
+
+    # ── PATCH · la distinció que ho sosté tot ────────────────────────────────────────────
+    def test_un_valor_DESHERETA(self):
+        peca_id = self._post({'codi': '02'}).data['id']
+
+        resp = self._patch(peca_id, {'size_run_model': 'S·M'})
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data['size_run_model'], {'valor': 'S·M', 'etiqueta': 'S·M',
+                                                       'heretat': False})
+
+    def test_un_NULL_EXPLICIT_torna_a_HERETAR(self):
+        """🔑 LA DIRECCIÓ QUE NOMÉS EXISTEIX AMB LA DISTINCIÓ. Sense ella, desheretar és un
+        camí d'anada sense tornada: un cop declarat, el valor no es podria buidar mai."""
+        peca_id = self._post({'codi': '02'}).data['id']
+        self._patch(peca_id, {'size_run_model': 'S·M'})
+
+        resp = self._patch(peca_id, {'size_run_model': None})
+
+        self.assertEqual(resp.data['size_run_model'], {'valor': 'S·M·L', 'etiqueta': 'S·M·L',
+                                                       'heretat': True})
+
+    def test_un_camp_ABSENT_no_es_toca(self):
+        """L'altra direcció, i el control que trenca la coincidència: si «absent» i «null»
+        es tractessin igual, aquest PATCH —que només parla del nom— desheretaria el run."""
+        peca_id = self._post({'codi': '02'}).data['id']
+        self._patch(peca_id, {'size_run_model': 'S·M'})
+
+        resp = self._patch(peca_id, {'nom': 'Pantaló curt'})
+
+        self.assertEqual(resp.data['nom'], 'Pantaló curt')
+        self.assertEqual(resp.data['size_run_model'],
+                         {'valor': 'S·M', 'etiqueta': 'S·M', 'heretat': False})
+
+    def test_el_run_de_la_peca_passa_per_la_PORTA_UNICA_del_model(self):
+        """Cap política nova per a les peces: si el model refusa un run amb talles que el seu
+        sistema no coneix, la peça també, i amb el MATEIX codi d'error."""
+        peca_id = self._post({'codi': '02'}).data['id']
+
+        resp = self._patch(peca_id, {'size_run_model': 'S·XXL'})
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['codi'], 'talles_desconegudes')
+        self.assertEqual(resp.data['etiquetes_desconegudes'], ['XXL'])
+
+    def test_una_referencia_inexistent_es_400_amb_el_camp(self):
+        peca_id = self._post({'codi': '02'}).data['id']
+
+        resp = self._patch(peca_id, {'size_system': 10 ** 9})
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual((resp.data['codi'], resp.data['camp']),
+                         ('referencia_no_trobada', 'size_system'))
+
+    def test_la_peca_dun_ALTRE_model_es_404(self):
+        altre = Model.objects.create(
+            codi_intern='TST-ALTRE', codi_tenant='TST', any=2026, sequencial=9,
+            nom_prenda='Altre', size_system=self.ss, size_run_model='S·M·L',
+            base_size_label='M')
+        forana = ModelGarment.objects.create(model=altre, codi='02')
+
+        self.assertEqual(self._patch(forana.pk, {'nom': 'x'}).status_code, 404)
+        self.assertEqual(self._delete(forana.pk).status_code, 404)
+
+    # ── DELETE ───────────────────────────────────────────────────────────────────────────
+    def test_una_peca_NETA_sesborra(self):
+        peca_id = self._post({'codi': '02'}).data['id']
+
+        resp = self._delete(peca_id)
+
+        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(ModelGarment.objects.filter(model=self.model).count(), 0)
+
+    def test_una_peca_AMB_DADES_es_409_i_diu_quantes_i_don(self):
+        """🛑 EL GUARD QUE GARANTEIX PER CONSTRUCCIÓ que aquesta porta no toca cap de les set
+        taules de mesura: si n'hi ha una sola fila, no s'esborra."""
+        from fhort.models_app.models import BaseMeasurement
+        from fhort.pom.models import POMMaster
+
+        peca_id = self._post({'codi': '02'}).data['id']
+        pom = POMMaster.objects.create(codi_client='CH', nom_client='Pit')
+        with comportes_alcades('models_app_basemeasurement', 'models_app_measurementchangelog'):
+            BaseMeasurement.objects.create(
+                model=self.model, pom=pom, base_value_cm=50.0, ordre=1, garment='02')
+
+            resp = self._delete(peca_id)
+
+            self.assertEqual(resp.status_code, 409)
+            self.assertEqual(resp.data['codi'], 'garment_amb_dades')
+            # DUES taules, no una: crear la mesura dispara el signal que escriu al
+            # `MeasurementChangeLog` amb el MATEIX garment. No és soroll — és la prova
+            # que el guard mira més d'una taula i que el registre de canvis també queda
+            # penjat de la peça, que és exactament el que impedeix esborrar-la.
+            self.assertEqual(resp.data['penjades'],
+                             {'BaseMeasurement': 1, 'MeasurementChangeLog': 1})
+            self.assertEqual(resp.data['total'], 2)
+            self.assertTrue(ModelGarment.objects.filter(pk=peca_id).exists())
+
+    def test_el_guard_mira_les_SET_taules_no_nomes_les_mesures_base(self):
+        """El cens del 2026-08-11: són SET taules amb `garment`, no sis com deien els briefs
+        (les cinc de `models_app` més `GradedSpec` i `PieceFittingLine`). La que en quedés
+        fora deixaria files apuntant a una peça que ja no existeix."""
+        from fhort.models_app.services_garment import TAULES_AMB_GARMENT, mesures_penjades_de
+
+        noms = {n for n, _ in TAULES_AMB_GARMENT} | {'SizeCheckLine', 'GradedSpec',
+                                                     'PieceFittingLine'}
+        self.assertEqual(len(noms), 7)
+        self.assertEqual(mesures_penjades_de(self.model, '02'), {})

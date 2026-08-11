@@ -40,7 +40,7 @@ from .views import (
 )
 
 from .comprovacio_views import comprovacio_view
-from .garment_views import peces_del_model_view
+from .garment_views import peca_del_model_view, peces_del_model_view
 from .vocabulari_views import vocabulari_domini_view
 from .views_size_check import SizeCheckViewSet, SizeCheckLineViewSet
 from .ftt_template_views import DocumentTemplateViewSet
@@ -223,6 +223,7 @@ urlpatterns = (
         # SET-2/T2-bis — les prendes d'un model amb els seus valors EFECTIUS. Només
         # lectura: l'autoria de peces és T7. El contracte viu al docstring de la vista.
         path('models/<int:model_id>/peces/', peces_del_model_view),
+        path('models/<int:model_id>/peces/<int:peca_id>/', peca_del_model_view),
         path('models/<int:model_id>/taula-mesures/', measurements_table_view),
         path('models/<int:model_id>/set-measurements/', set_measurements_view),
         path('models/<int:model_id>/reorder-measurements/', reorder_measurements_view),
