@@ -165,7 +165,8 @@ def _seccio_descartades(model, mesures_per_clau):
               .select_related('size_check', 'pom', 'pom__pom_global')
               .order_by('-size_check__id'))
     for l in linies:
-        bm = mesures_per_clau.get((l.pom_id, l.capa or 'exterior', l.instancia or ''))
+        bm = mesures_per_clau.get(
+            (l.pom_id, l.capa or 'exterior', l.instancia or '', l.garment))
         base = {'pom_id': l.pom_id,
                 'codi': (bm and _codi(bm)) or l.pom.codi_client or '',
                 'nom': (bm and _nom(bm)) or getattr(getattr(l.pom, 'pom_global', None), 'nom_en', '') or '',
@@ -212,12 +213,13 @@ def _seccio_tolerancia(model, mesures, peca):
     # La talla és LA BASE, perquè és contra la base que es compara. Una desviació d'una altra
     # talla no es pot mesurar amb la banda d'aquesta fila: parlen de peces diferents.
     talla = (model.base_size_label or '').strip()
-    clau = {(bm.pom_id, bm.capa or 'exterior', bm.instancia or ''): bm for bm in mesures}
+    clau = {(bm.pom_id, bm.capa or 'exterior', bm.instancia or '', bm.garment): bm
+            for bm in mesures}
     punts = []
     for l in (peca.linies
               .filter(size_label=talla, valor_real__isnull=False)
               .select_related('pom')):
-        bm = clau.get((l.pom_id, l.capa or 'exterior', l.instancia or ''))
+        bm = clau.get((l.pom_id, l.capa or 'exterior', l.instancia or '', l.garment))
         if bm is None:
             continue
         if l.valor_teoric is None or bm.tolerancia_minus is None or bm.tolerancia_plus is None:
@@ -312,7 +314,11 @@ def comprovacio_view(request, model_id):
                    .filter(model=model, is_active=True)
                    .select_related('pom', 'pom__pom_global')
                    .order_by('ordre', 'id'))
-    per_clau = {(b.pom_id, b.capa or 'exterior', b.instancia or ''): b for b in mesures}
+    # SET-2/T6a — la PEÇA a la clau, i als tres mapes d'aquest fitxer alhora: tots tres
+    # creuen una línia (de size check o de fitting) amb la seva mesura base, i amb la clau
+    # curta la línia d'una prenda es jutjava contra la base i la tolerància de l'altra.
+    per_clau = {(b.pom_id, b.capa or 'exterior', b.instancia or '', b.garment): b
+                for b in mesures}
 
     # Un POM «té regla» si el MODEL n'hi ha materialitzada una de resident. La proposta del
     # catàleg no compta a posta: el 1302 va ensenyar què passa quan una proposta que ningú ha

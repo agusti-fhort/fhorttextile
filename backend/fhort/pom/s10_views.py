@@ -61,7 +61,9 @@ def _tolerance_map(model):
     for bm in BaseMeasurement.objects.filter(model=model, is_active=True):
         tm = float(bm.tolerancia_minus) if bm.tolerancia_minus is not None else TOL_FALLBACK
         tp = float(bm.tolerancia_plus) if bm.tolerancia_plus is not None else TOL_FALLBACK
-        tol[(bm.pom_id, bm.capa, bm.instancia)] = (tm, tp)
+        # SET-2/T6a — la PEÇA hi entra: un veredicte PASS/FAIL decidit amb la tolerància
+        # d'una altra prenda és pitjor que no tenir-ne, i d'aquí en surten POMAlerts.
+        tol[(bm.pom_id, bm.capa, bm.instancia, bm.garment)] = (tm, tp)
     return tol
 
 
@@ -96,8 +98,9 @@ def fitting_vs_spec_view(request, pf_id):
         for line in lines:
             spec_cm = float(line.valor_teoric) if line.valor_teoric is not None else None
             val_cm = float(line.valor_real) if line.valor_real is not None else None
-            tol_minus, tol_plus = tol_map.get((line.pom_id, line.capa, line.instancia),
-                                              (TOL_FALLBACK, TOL_FALLBACK))
+            tol_minus, tol_plus = tol_map.get(
+                (line.pom_id, line.capa, line.instancia, line.garment),
+                (TOL_FALLBACK, TOL_FALLBACK))
 
             desv = None
             passa = None

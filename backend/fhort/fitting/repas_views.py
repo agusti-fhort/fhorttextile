@@ -114,13 +114,14 @@ def _notes_de_check(model_id):
     fora = {}
     for l in (SizeCheckLine.objects
               .filter(size_check__model_id=model_id)
-              .only('size_check_id', 'pom_id', 'capa', 'instancia', 'decisio', 'nota')):
+              .only('size_check_id', 'pom_id', 'capa', 'instancia', 'garment',
+                    'decisio', 'nota')):
         text = ' · '.join(filter(None, [
             etiquetes.get(l.decisio) if l.decisio else None,
             (l.nota or '').strip() or None,
         ]))
         if text:
-            fora[(l.size_check_id, l.pom_id, l.capa, l.instancia)] = text
+            fora[(l.size_check_id, l.pom_id, l.capa, l.instancia, l.garment)] = text
     return fora
 
 
@@ -197,9 +198,10 @@ def _etapes_de_fitting(model_id):
         if sid is not None:
             next(e for e in etapes if e['key'] == clau)['sessions'].add(sid)
         check_id = _check_id_del_motiu(c.motiu)
-        celles[clau][(c.pom_id, c.capa, c.instancia)] = {
+        celles[clau][(c.pom_id, c.capa, c.instancia, c.garment)] = {
             'valor_real': float(c.valor_nou),
-            'nota': notes.get((check_id, c.pom_id, c.capa, c.instancia), '') if check_id else '',
+            'nota': notes.get((check_id, c.pom_id, c.capa, c.instancia, c.garment), '')
+                    if check_id else '',
         }
     return etapes, celles
 
@@ -226,15 +228,14 @@ def _entrada_de_poms(model_id):
               .filter(model_id=model_id)
               .order_by('-created_at', '-id')):     # descendent: l'última assignació guanya
         if c.valor_anterior is not None:
-            entrada[(c.pom_id, c.capa, c.instancia)] = float(c.valor_anterior)
+            entrada[(c.pom_id, c.capa, c.instancia, c.garment)] = float(c.valor_anterior)
         elif c.valor_nou is not None:
-            entrada[(c.pom_id, c.capa, c.instancia)] = float(c.valor_nou)
-    for pom_id, capa, instancia, valor in (BaseMeasurement.objects
-                                           .filter(model_id=model_id, is_active=True,
-                                                   base_value_cm__isnull=False)
-                                           .values_list('pom_id', 'capa', 'instancia',
-                                                        'base_value_cm')):
-        entrada.setdefault((pom_id, capa, instancia), valor)
+            entrada[(c.pom_id, c.capa, c.instancia, c.garment)] = float(c.valor_nou)
+    for pom_id, capa, instancia, garment, valor in (
+            BaseMeasurement.objects
+            .filter(model_id=model_id, is_active=True, base_value_cm__isnull=False)
+            .values_list('pom_id', 'capa', 'instancia', 'garment', 'base_value_cm')):
+        entrada.setdefault((pom_id, capa, instancia, garment), valor)
     # Un model on ningú no ha entrat cap valor no té columna d'origen: `{}` la fa desaparèixer
     # sencera. Una columna de guionets diria que l'entrada existeix i és buida, que és mentida.
     return entrada
@@ -370,16 +371,22 @@ class FittingRepasView(APIView):
         # que fa servir el corpus de cotes `.ftt`, o sigui que perdre'l no és cosmètic.
         bm_data = list(BaseMeasurement.objects
                        .filter(model_id=model.id)
-                       .values_list('pom_id', 'capa', 'instancia', 'ordre', 'nom_fitxa', 'id',
+                       .values_list('pom_id', 'capa', 'instancia', 'garment',
+                                    'ordre', 'nom_fitxa', 'id',
                                     'nom_canonic_model', 'nom_traduit_model', 'is_active'))
-        ordre_map = {(p, c, i): o for p, c, i, o, _, _, _, _, _ in bm_data}
-        nom_fitxa_map = {(p, c, i): nf for p, c, i, _, nf, _, _, _, _ in bm_data}
-        bm_id_map = {(p, c, i): bid for p, c, i, _, _, bid, _, _, _ in bm_data}
-        bateig_map = {(p, c, i): (nc or '', nt or '')
-                      for p, c, i, _, _, _, nc, nt, _ in bm_data}
+        # SET-2/T6a — la PEÇA entra a TOTS els mapes d'aquesta vista alhora. La identitat
+        # d'una fila del Repàs és la de la mesura, i amb la clau curta les dues peces del
+        # mateix POM es fonien en una fila: una prenda desapareixia sencera de la taula i
+        # la supervivent ensenyava el `bm_id`, el `nom_fitxa`, el bateig i els valors per
+        # sessió de l'altra. Creixen JUNTS o no creixen: és la llei de C2/Onada 1.
+        ordre_map = {(p, c, i, g): o for p, c, i, g, o, _, _, _, _, _ in bm_data}
+        nom_fitxa_map = {(p, c, i, g): nf for p, c, i, g, _, nf, _, _, _, _ in bm_data}
+        bm_id_map = {(p, c, i, g): bid for p, c, i, g, _, _, bid, _, _, _ in bm_data}
+        bateig_map = {(p, c, i, g): (nc or '', nt or '')
+                      for p, c, i, g, _, _, _, nc, nt, _ in bm_data}
         # Les mesures VIVES del model, en ordre de fitxa. És el cens que la taula ha de portar
         # sencer (v. la sembra de files, aquí sota).
-        actives = [(p, c, i) for p, c, i, _, _, _, _, _, act in bm_data if act]
+        actives = [(p, c, i, g) for p, c, i, g, _, _, _, _, _, act in bm_data if act]
 
         # B2 — LA TAULA PORTA SEMPRE TOTES LES MESURES DEL MODEL (ordre d'Agus, 10/08).
         #
@@ -394,15 +401,18 @@ class FittingRepasView(APIView):
         files = {}
 
         def _fila(ident, pom):
-            """`ident` és `(pom_id, capa, instancia)` — la identitat de la mesura, no el POM."""
+            """`ident` és `(pom_id, capa, instancia, garment)` — la identitat de la mesura,
+            no el POM."""
             fila = files.get(ident)
             if fila is None:
-                pom_id, capa, instancia = ident
+                pom_id, capa, instancia, garment = ident
                 fila = files[ident] = {
                     'pom_id': pom_id,
                     # C4 — els dos eixos al contracte: `pom_id` ja no desempata dues germanes.
                     'capa': capa,
                     'instancia': instancia,
+                    # SET-2/T6a — i el TERCER, l'eix de la peça.
+                    'garment': garment,
                     'codi': nom_fitxa_map.get(ident) or (pom.pom_code if pom else ''),
                     'pom_code': pom.pom_code if pom else '',
                     'nom_en': pom.name_en if pom else '',
@@ -447,7 +457,7 @@ class FittingRepasView(APIView):
             # La línia de fitting SAP de quina germana parla: porta els dos eixos des de C1 i
             # C1-ins. Abans es col·lapsaven aquí, a `files[pom_id]`, i l'última llegida
             # guanyava la cel·la de la sessió.
-            _fila((l.pom_id, l.capa, l.instancia), l.pom)['valors'][
+            _fila((l.pom_id, l.capa, l.instancia, l.garment), l.pom)['valors'][
                 str(l.piece_fitting.session_id)] = {
                 'valor_real': l.valor_real,
                 'valor_teoric': l.valor_teoric,
@@ -517,9 +527,12 @@ class FittingRepasView(APIView):
         # C4 — l'ordre es demana amb la clau sencera i desempata pels dos eixos: dues germanes
         # comparteixen `ordre` (és el del POM a la fitxa) i, sense desempat, qui va primer ho
         # decidiria l'ordre d'inserció al dict, que ve del pla de Postgres.
+        # SET-2/T6a — la PEÇA encapçala el desempat (llei de T9: «la prenda a fora»), i sense
+        # ella la clau tornava a ser parcial: dues peces comparteixen `ordre`.
         rows = sorted(files.values(),
-                      key=lambda r: (ordre_map.get((r['pom_id'], r['capa'], r['instancia']),
-                                                   10 ** 9),
+                      key=lambda r: (0 if not r['garment'] else 1, r['garment'],
+                                     ordre_map.get((r['pom_id'], r['capa'], r['instancia'],
+                                                    r['garment']), 10 ** 9),
                                      r['pom_id'], r['capa'], r['instancia']))
 
         return Response({

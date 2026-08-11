@@ -169,11 +169,17 @@ def check_tolerances_view(request, model_id):
         # cobrir els dos eixos: el `base_map` s'indexa per `pom_id` pelat i, sense el segon
         # filtre, la base de la sisa esquerra podria jutjar una presa de la dreta.
         from fhort.pom.models import MeasurementLayer
+        # SET-2/T6a — la PEÇA entra a l'ÀNCORA, no a la clau, i és a posta: aquí el
+        # `measurements` arriba d'un cos HTTP que només sap dir `pom_id`, o sigui que la
+        # mesura de què parla és la de la peça MARE —el mateix default explícit que ja hi
+        # ha per a la capa i la instància—. Sense el filtre, `base_map[pom_id]` es quedava
+        # amb l'última fila llegida i una presa manual es jutjava contra la base d'una
+        # altra prenda, creant-ne un POMAlert.
         base_map = {
             bm.pom_id: float(bm.base_value_cm)
             for bm in BaseMeasurement.objects.filter(
                 model=model, is_active=True,
-                capa=MeasurementLayer.SLUG_DEFECTE, instancia='')
+                capa=MeasurementLayer.SLUG_DEFECTE, instancia='', garment='')
             if bm.base_value_cm is not None
         }
 

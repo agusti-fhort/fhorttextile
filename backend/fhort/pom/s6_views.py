@@ -183,13 +183,15 @@ def graded_specs_with_units_view(request, sf_id):
             'pom', 'pom__pom_global', 'pom__categoria'
         ).order_by(
             'pom__categoria__display_order', 'pom__codi_client', 'capa', 'instancia',
-            'size_label'
+            'garment', 'size_label'
         )
 
         pom_dict = {}
         talles = []
         for spec in specs:
-            ident = (spec.pom_id, spec.capa, spec.instancia)
+            # SET-2/T6a — la PEÇA: sense ella les dues files graduades del mateix POM es
+            # fonen en una entrada i les cel·les de la segona sobreescriuen les de la primera.
+            ident = (spec.pom_id, spec.capa, spec.instancia, spec.garment)
             pom = spec.pom
             if ident not in pom_dict:
                 categoria_nom = ''

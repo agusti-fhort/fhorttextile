@@ -117,8 +117,12 @@ class LectorsCapaOnada1Test(TenantTestCase):
             tol = _tolerance_map(self.model)
 
             self.assertEqual(len(tol), 2, 'les dues capes han de tenir entrada pròpia')
-            self.assertEqual(tol[(self.pom.id, EXTERIOR, '')], (0.5, 0.5))
-            self.assertEqual(tol[(self.pom.id, FOLRE, '')], (2.0, 2.0))
+            # SET-2/T6a (2026-08-11) — LA CLAU DEL MAPA TÉ UN TRAM MÉS: el `garment`. Pin
+            # de FORMA i era el seu ofici caure avui — les toleràncies no s'han mogut
+            # (0.5/2.0/9.0, les mateixes germanes), només la clau. Segueix exigint una
+            # entrada PRÒPIA per germana, que és el que aquest test defensa.
+            self.assertEqual(tol[(self.pom.id, EXTERIOR, '', '')], (0.5, 0.5))
+            self.assertEqual(tol[(self.pom.id, FOLRE, '', '')], (2.0, 2.0))
 
     # ── C5 · el serializer de Size Check ─────────────────────────────────────────────
 
