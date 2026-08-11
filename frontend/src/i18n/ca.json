@@ -117,7 +117,11 @@
         "titol": "Talles de trencament fora del run nou",
         "regles_one": "{{count}} regla",
         "regles_other": "{{count}} regles"
-      }
+      },
+      "peca_mare": "Model base",
+      "peca_codi": "Peça {{codi}}",
+      "per_garment_titol": "Per peça",
+      "avis_de_la_peca": "Aquest avís és de {{peca}}."
     },
     "contenidor": {
       "intro": "Tria el joc de regles amb què es graduarà aquest model. Els del client van primer; cap no queda fora de la llista.",

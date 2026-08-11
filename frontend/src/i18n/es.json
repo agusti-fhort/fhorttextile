@@ -117,7 +117,11 @@
         "titol": "Tallas de ruptura fuera del run nuevo",
         "regles_one": "{{count}} regla",
         "regles_other": "{{count}} reglas"
-      }
+      },
+      "peca_mare": "Modelo base",
+      "peca_codi": "Pieza {{codi}}",
+      "per_garment_titol": "Por pieza",
+      "avis_de_la_peca": "Este aviso es de {{peca}}."
     },
     "contenidor": {
       "intro": "Elige el juego de reglas con el que se graduará este modelo. Los del cliente van primero; ninguno queda fuera de la lista.",

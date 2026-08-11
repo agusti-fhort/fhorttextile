@@ -117,7 +117,11 @@
         "titol": "Break sizes outside the new run",
         "regles_one": "{{count}} rule",
         "regles_other": "{{count}} rules"
-      }
+      },
+      "peca_mare": "Base model",
+      "peca_codi": "Piece {{codi}}",
+      "per_garment_titol": "By piece",
+      "avis_de_la_peca": "This warning is about {{peca}}."
     },
     "contenidor": {
       "intro": "Choose the rule set this model will be graded with. The customer’s come first; none are left out of the list.",
