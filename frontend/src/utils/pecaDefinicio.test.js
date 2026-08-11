@@ -6,7 +6,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { ORIGEN, anclaDeLaPeca, nomDeLaPeca, origenDeLaFila, presentacioCamp } from './pecaDefinicio.js'
+import { ORIGEN, anclaDeLaPeca, nomDeLaPeca, origenDeLaFila, presentacioCamp,
+  seguentCodiDePeca } from './pecaDefinicio.js'
 
 test('el mateix text amb herències distintes NO és el mateix estat', () => {
   const declarat = presentacioCamp({ valor: 'S·M·L', etiqueta: 'S·M·L', heretat: false })
@@ -70,4 +71,29 @@ test('els tres origens són tres, i el propi és el que no diu res', () => {
   assert.equal(origenDeLaFila({ valor: '3M·6M', etiqueta: '3M·6M', heretat: false }), ORIGEN.PROPI)
   assert.equal(origenDeLaFila(null), ORIGEN.PROPI)              // sense camp, no s'afirma herència
   assert.equal(new Set(Object.values(ORIGEN)).size, 3)
+})
+
+// ── SET-2/T7-B3 · el codi que es proposa ─────────────────────────────────────────────────
+
+test('la primera peça de debò és la 02: la mare ocupa l\'1 encara que no tingui fila', () => {
+  assert.equal(seguentCodiDePeca([{ es_mare: true, codi: '' }]), '02')
+  assert.equal(seguentCodiDePeca([]), '02')
+  assert.equal(seguentCodiDePeca(null), '02')
+})
+
+test('es proposa el següent del MÀXIM, no el següent del recompte', () => {
+  // El cas que trencaria comptar: la '02' s'ha esborrat i la '03' viu. Amb el recompte es
+  // proposaria '03' i el desat xocaria amb un 409 `garment_duplicat` que ningú ha buscat.
+  const ambForat = [{ es_mare: true, codi: '' }, { es_mare: false, codi: '03' }]
+
+  assert.equal(seguentCodiDePeca(ambForat), '04')
+})
+
+test('un codi no numèric no participa del càlcul però tampoc el trenca', () => {
+  const barreja = [{ es_mare: true, codi: '' }, { es_mare: false, codi: '02' },
+    { es_mare: false, codi: 'CAPUTXA' }]
+
+  assert.equal(seguentCodiDePeca(barreja), '03')
+  // I si NOMÉS n'hi ha de no numèrics, es torna a la primera lliure.
+  assert.equal(seguentCodiDePeca([{ es_mare: false, codi: 'CAPUTXA' }]), '02')
 })

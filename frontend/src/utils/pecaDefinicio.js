@@ -80,3 +80,28 @@ export function origenDeLaFila(camp, { delModel = false } = {}) {
   if (delModel) return ORIGEN.DEL_MODEL
   return presentacioCamp(camp).heretat ? ORIGEN.HERETAT : ORIGEN.PROPI
 }
+
+/**
+ * El codi que es PROPOSA per a la peça següent — SET-2/T7-B3.
+ *
+ * La mare és conceptualment la '01' i no té fila (D3), o sigui que la primera peça de debò és
+ * la '02'. Es proposa el següent del MÀXIM numèric, no el següent del recompte: en un model on
+ * la '02' s'ha esborrat i la '03' viu, comptar donaria '03' i xocaria (409 `garment_duplicat`).
+ *
+ * ⚠️ ÉS UNA PROPOSTA, NO UNA RESERVA. El camp queda editable i el codi el valida el servidor:
+ * dues pestanyes obertes poden proposar el mateix i la segona rebrà el seu 409, que és
+ * exactament el que aquell codi d'error existeix per dir. Aquí no s'hi endevina res més.
+ *
+ * Els codis no numèrics ('CAP', 'MANIGA') no participen del càlcul —no tenen «següent»— però
+ * tampoc el trenquen: es proposa a partir dels que sí que en tenen.
+ */
+export function seguentCodiDePeca(peces) {
+  const nums = (peces || [])
+    .filter(p => !p?.es_mare)
+    .map(p => String(p?.codi ?? ''))
+    .filter(c => /^\d+$/.test(c))
+    .map(Number)
+  // L'1 hi entra sempre com a terra: la mare l'ocupa encara que no tingui fila.
+  const seguent = Math.max(1, ...nums) + 1
+  return String(seguent).padStart(2, '0')
+}

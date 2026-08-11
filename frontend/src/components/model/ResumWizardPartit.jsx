@@ -39,7 +39,7 @@
 // i un que no parla de graduació no toca cap regla (el predicat `canvia_joc` mira que el joc
 // entri al payload **i** que sigui un altre). O sigui que partir el desat no demana endpoint
 // nou: demana enviar menys.
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import CascadeFinder from '../CascadeSelector/CascadeFinder'
 import CustomerSelector from '../CustomerSelector'
@@ -49,10 +49,11 @@ import useConfirmacioRuleset from './useConfirmacioRuleset'
 import { models, sizeSystems, gradingRuleSets, garmentGroups, customers } from '../../api/endpoints'
 import PecaDefinicioContenidor, { BotoCanviar, FilaDefinicio, ValorCamp }
   from './PecaDefinicioContenidor'
-import { ORIGEN, origenDeLaFila } from '../../utils/pecaDefinicio'
+import { ORIGEN, origenDeLaFila, seguentCodiDePeca } from '../../utils/pecaDefinicio'
 import { ordenaPerProximitat } from '../../utils/proximitatRun'
 import { labelsOf, ordenaPelSistema } from '../../utils/talles'
 import Feedback from '../ui/Feedback'
+import Modal from '../ui/Modal'
 import useToc, { anellFocus } from '../ui/toc'
 
 const MONO = 'IBM Plex Mono, monospace'
@@ -137,6 +138,20 @@ const retolCamp = {
   textTransform: 'uppercase', color: 'var(--text-soft)',
 }
 const buitText = { color: 'var(--text-faint)', fontStyle: 'italic' }
+
+/**
+ * El text d'un error de vora, tal com el servidor el redacta.
+ *
+ * L'ordre no és casual: la porta de peces posa la frase humana a `error` i el CODI a `codi`
+ * (`garment_duplicat`, `talles_desconegudes`…). El codi és el contracte i el text pot canviar,
+ * o sigui que aquí es MOSTRA el text i no es tradueix el codi: reescriure'l a la pantalla faria
+ * que API i pantalla expliquessin el mateix de dues maneres, que és el defecte que
+ * `useConfirmacioRuleset` ja va tancar amb el seu `message`.
+ */
+function missatgeError(e, t) {
+  const d = e?.response?.data
+  return d?.error || d?.message || d?.detail || t('resum_wizard.save_error')
+}
 
 // La targeta contenidora dels dos costats (§8b·4: blanca, filet --line, radi 12).
 function Targeta({ titol, nota, accions, children, cos = true }) {
@@ -231,6 +246,8 @@ export default function ResumWizardPartit({ model, onUpdated }) {
   // primera, de manera que aquest estat mai és buit un cop carregat i la pantalla no ha de
   // saber si el model té peces per saber què pintar: recorre la llista i prou.
   const [peces, setPeces] = useState([])
+  // La peça que s'està mirant d'esborrar. `null` = cap diàleg obert.
+  const [aEsborrar, setAEsborrar] = useState(null)
 
   const id = model?.id
   // ── L'ESTAT DE CADA PAS, llegit del MODEL (mai d'estat local paral·lel) ───────────────
@@ -274,9 +291,13 @@ export default function ResumWizardPartit({ model, onUpdated }) {
   }, [id, onUpdated, t])
 
   // Es rellegeix quan el model canvia: un desat de talles pot moure el valor EFECTIU d'una
-  // peça que l'hereta, i el contracte només el resol al servidor.
+  // peça que l'hereta, i el contracte només el resol al servidor. I es rellegeix també a cada
+  // escriptura de peça (`versio`): el POST torna la peça creada, però el que la pantalla pinta
+  // és LA LLISTA —amb la mare sintètica al davant— i qui la sap fer és el servidor.
+  const [versio, setVersio] = useState(0)
+  const recarregaPeces = useCallback(() => setVersio(v => v + 1), [])
   useEffect(() => {
-    if (!id) return
+    if (!id) return undefined
     let viu = true
     models.peces(id)
       .then(r => { if (viu) setPeces(r.data?.peces || []) })
@@ -284,7 +305,28 @@ export default function ResumWizardPartit({ model, onUpdated }) {
       // sempre s'ha pintat. El que no pot passar és que la pantalla peti per això.
       .catch(() => { if (viu) setPeces([]) })
     return () => { viu = false }
-  }, [id, model])
+  }, [id, model, versio])
+
+  // EL BATEIG DE TOTES LES TARGETES, INCLOSA LA MARE — i són dues portes, no una. La mare no té
+  // fila (D3): el seu nom és el `nom_prenda` del MODEL i s'escriu allà on sempre s'ha escrit.
+  // Una peça té la seva. Qui pinta la targeta no ha de saber quina de les dues és, i per això la
+  // tria es fa aquí i no al contenidor.
+  const desaNom = useCallback(async (peca, nou) => {
+    try {
+      if (peca.es_mare) {
+        await models.update(id, { nom_prenda: nou })
+        onUpdated?.()          // el nom de la mare viu al model: qui el rellegeix és la fitxa
+      } else {
+        await models.actualitzarPeca(id, peca.id, { nom: nou })
+        recarregaPeces()
+      }
+      setFeedback({ type: 'ok', text: t('resum_wizard.piece_renamed') })
+      return true
+    } catch (e) {
+      setFeedback({ type: 'err', text: missatgeError(e, t) })
+      return false
+    }
+  }, [id, onUpdated, recarregaPeces, t])
 
   if (!model) return null
 
@@ -307,7 +349,10 @@ export default function ResumWizardPartit({ model, onUpdated }) {
             capçalera de la peça al davant. */}
         <div style={{ display: 'grid', gap: 16 }}>
           {peces.map(peca => (
-            <PecaDefinicioContenidor key={peca.codi || 'base'} peca={peca} fet={fets === 3}>
+            <PecaDefinicioContenidor key={peca.codi || 'base'} peca={peca} fet={fets === 3}
+              onDesarNom={nou => desaNom(peca, nou)}
+              // La mare no en porta: no té fila i el que s'esborraria seria el model.
+              onEsborrar={peca.es_mare ? undefined : () => setAEsborrar(peca)}>
               {peca.es_mare ? (
                 <>
                   <PasPeca model={model} estat={estatDe(2)} onObrir={() => setObert(2)}
@@ -319,13 +364,194 @@ export default function ResumWizardPartit({ model, onUpdated }) {
                     desa={desa} onCancel={() => setObert(null)} />
                 </>
               ) : (
-                <FilesDeLaPeca model={model} peca={peca} />
+                <FilesDeLaPeca model={model} peca={peca}
+                  onDesat={okKey => { recarregaPeces(); setFeedback({ type: 'ok', text: t(okKey) }) }}
+                  onError={text => setFeedback({ type: 'err', text })} />
               )}
             </PecaDefinicioContenidor>
           ))}
+
+          {/* SET-2/T7-B3 · LA PORTA D'ENTRADA D'UNA PRENDA NOVA. Va AL FINAL de la pila i no a la
+              capçalera del contenidor: la llista de peces es llegeix de dalt a baix i el lloc on
+              se n'afegeix una és allà on acabaria. */}
+          <AfegirPeca modelId={id} peces={peces} onCreada={recarregaPeces}
+            onFeedback={setFeedback} />
         </div>
       </div>
+
+      {aEsborrar && (
+        <EsborrarPecaDialeg modelId={id} peca={aEsborrar}
+          onTancar={() => setAEsborrar(null)}
+          onEsborrada={() => {
+            setAEsborrar(null)
+            recarregaPeces()
+            setFeedback({ type: 'ok', text: t('resum_wizard.piece_deleted') })
+          }} />
+      )}
     </>
+  )
+}
+
+// ── LA PORTA D'ENTRADA D'UNA PRENDA (SET-2/T7-B3) ─────────────────────────────────────────
+//
+// Fantasma en repòs —filet discontinu, sense fons—, formulari en obrir-se. El gest mínim és
+// escriure el nom i prémer: el CODI ve proposat (`seguentCodiDePeca`) perquè és el que la casa
+// numera i no el que el tècnic tria, i el FOCUS va al nom, que és el que sí que ha de dir.
+//
+// ⚠️ EL CODI PROPOSAT ÉS UNA PROPOSTA I NO UNA RESERVA, i per això el camp queda editable i els
+// dos errors del contracte es mostren tal com arriben: `409 garment_duplicat` (dues pestanyes
+// obertes n'han proposat el mateix) i `400 garment_mare_no_te_fila` (s'ha buidat el camp — la
+// mare és el model i no té fila, D3). Cap dels dos es pot evitar validant al client: el segon
+// sí, però amagar-lo faria creure que el camp és opcional.
+function AfegirPeca({ modelId, peces, onCreada, onFeedback }) {
+  const { t } = useTranslation()
+  const [obert, setObert] = useState(false)
+  const [codi, setCodi] = useState('')
+  const [nom, setNom] = useState('')
+  const [desant, setDesant] = useState(false)
+  const [error, setError] = useState(null)
+  const refNom = useRef(null)
+
+  const obre = () => {
+    setCodi(seguentCodiDePeca(peces))
+    setNom('')
+    setError(null)
+    setObert(true)
+  }
+  useEffect(() => { if (obert) refNom.current?.focus() }, [obert])
+
+  const crea = async () => {
+    if (desant) return
+    setDesant(true)
+    setError(null)
+    try {
+      // `ordre` va darrere de l'última: la pila es llegeix en l'ordre en què s'ha construït.
+      await models.crearPeca(modelId, {
+        codi: codi.trim(), nom: nom.trim(), ordre: peces.filter(p => !p.es_mare).length + 1,
+      })
+      setObert(false)
+      onCreada()
+      onFeedback({ type: 'ok', text: t('resum_wizard.piece_created') })
+    } catch (e) {
+      // L'error es queda DINS de la targeta, al costat del camp que l'ha provocat: el formulari
+      // segueix obert i amb el que s'havia escrit, que és on l'usuari l'ha deixat.
+      setError(missatgeError(e, t))
+    } finally { setDesant(false) }
+  }
+
+  if (!obert) {
+    return (
+      <button type="button" onClick={obre} style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        padding: '14px 16px', width: '100%',
+        background: 'none', borderWidth: 1, borderStyle: 'dashed', borderColor: 'var(--line)',
+        borderRadius: 'var(--r-card)', cursor: 'pointer',
+        fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-soft)',
+      }}>
+        <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 14 }} />
+        {t('resum_wizard.add_piece')}
+      </button>
+    )
+  }
+
+  return (
+    <section style={{
+      background: 'var(--panel)', borderWidth: 1, borderStyle: 'solid',
+      borderColor: 'var(--gold-border)', borderRadius: 'var(--r-card)', padding: '14px 16px',
+      fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-main)',
+    }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '96px 1fr', gap: 10 }}>
+        <label style={{ display: 'block' }}>
+          <span style={retolCamp}>{t('resum_wizard.piece_code')}</span>
+          <input value={codi} onChange={e => setCodi(e.target.value)} disabled={desant}
+            style={{ ...camp, marginTop: 4 }} />
+        </label>
+        <label style={{ display: 'block' }}>
+          <span style={retolCamp}>{t('resum_wizard.piece_name')}</span>
+          <input ref={refNom} value={nom} onChange={e => setNom(e.target.value)} disabled={desant}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); crea() }
+              if (e.key === 'Escape') { e.preventDefault(); setObert(false) }
+            }}
+            placeholder={t('resum_wizard.piece_name_ph')}
+            style={{ ...camp, marginTop: 4 }} />
+        </label>
+      </div>
+      {error && (
+        <p style={{ margin: '10px 0 0', color: 'var(--err)', fontSize: 'var(--fs-caption)' }}>{error}</p>
+      )}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+        <Boto variant="ter" onClick={() => setObert(false)}>{t('model_wizard.cancel')}</Boto>
+        {/* SECUNDÀRIA: el blau d'aquesta columna és del pas obert (§8f), i afegir una prenda no
+            és el pas que completa la definició del model — és una porta al costat. */}
+        <Boto variant="sec" onClick={crea} disabled={desant || !codi.trim()}>
+          {desant ? t('model_wizard.saving') : t('resum_wizard.add_piece')}
+        </Boto>
+      </div>
+    </section>
+  )
+}
+
+// ── L'ESBORRAT D'UNA PRENDA (SET-2/T7-B3) ─────────────────────────────────────────────────
+//
+// 🛑 EL 409 ES MOSTRA TAL COM ARRIBA, amb el desglossament que el payload porta. «No pots» sense
+// el motiu obliga qui ho llegeix a endevinar per on buidar la peça, i el servidor ja diu QUANTES
+// files i DE QUINA taula. Aquí no es tradueixen els noms de taula: són el vocabulari del domini
+// (com els codis POM), i inventar-ne un de pantalla trencaria el pont entre el que es llegeix
+// aquí i el que hi ha a la base.
+//
+// El diàleg NO es tanca amb el 409: es queda obert dient per què no s'ha pogut, perquè un modal
+// que desapareix amb un toast vermell fa que el motiu s'hagi de recordar de memòria.
+function EsborrarPecaDialeg({ modelId, peca, onTancar, onEsborrada }) {
+  const { t } = useTranslation()
+  const [bloqueig, setBloqueig] = useState(null)
+  const [esborrant, setEsborrant] = useState(false)
+
+  const esborra = async () => {
+    if (esborrant) return
+    setEsborrant(true)
+    try {
+      await models.esborrarPeca(modelId, peca.id)
+      onEsborrada()
+    } catch (e) {
+      const d = e?.response?.data
+      if (e?.response?.status === 409 && d?.codi === 'garment_amb_dades') setBloqueig(d)
+      else setBloqueig({ error: missatgeError(e, t) })
+    } finally { setEsborrant(false) }
+  }
+
+  const nom = peca.nom || peca.codi
+  return (
+    <Modal
+      title={bloqueig ? t('resum_wizard.delete_piece_blocked') : t('resum_wizard.delete_piece')}
+      subtitle={t('resum_wizard.piece_named', { peca: nom })}
+      // AMB EL BLOQUEIG, EL PRIMARI SEGUEIX SENT ESBORRAR, i és una acció de debò: qui buida la
+      // peça en una altra pestanya ha de poder tornar-hi sense reobrir el diàleg. Dos botons que
+      // fessin tots dos el mateix (tancar) serien una tria falsa.
+      confirmLabel={esborrant ? t('model_wizard.saving') : t('resum_wizard.delete_piece')}
+      cancelLabel={bloqueig ? t('app.close') : t('model_wizard.cancel')}
+      confirmDisabled={esborrant}
+      onCancel={onTancar} onConfirm={esborra}>
+      {bloqueig ? (
+        <>
+          <p style={{ fontSize: 'var(--fs-body)', marginBottom: 12 }}>{bloqueig.error}</p>
+          {bloqueig.penjades && (
+            <div style={{
+              borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--line)',
+              borderRadius: 8, padding: '10px 12px', fontSize: 'var(--fs-body)',
+            }}>
+              {Object.entries(bloqueig.penjades).sort(([a], [b]) => a.localeCompare(b)).map(([taula, n]) => (
+                <div key={taula} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontFamily: MONO }}>{taula}</span><strong>{n}</strong>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <p style={{ fontSize: 'var(--fs-body)', margin: 0 }}>{t('resum_wizard.delete_piece_warn')}</p>
+      )}
+    </Modal>
   )
 }
 
@@ -342,12 +568,45 @@ export default function ResumWizardPartit({ model, onUpdated }) {
 // (`ORIGEN.DEL_MODEL`) i sense «Canviar». Dir-ne «hereta» prometria una porta d'edició que no
 // ha d'arribar mai — la distinció la guarda el banc de `pecaDefinicio`.
 //
-// El «Canviar» hi és i està APAGAT: la porta d'escriptura d'una peça encara no existeix, i un
-// botó viu que no desa és pitjor que un d'apagat.
-function FilesDeLaPeca({ model, peca }) {
+// EL «CANVIAR» JA ÉS VIU (SET-2/T7-B3): la porta d'escriptura existeix i desa amb un PATCH que
+// parla NOMÉS del que s'ha tocat.
+//
+// 🔑 I «TORNA A HERETAR» ÉS UN `null` EXPLÍCIT, no un camp absent. La distinció és del contracte
+// («`null` vol dir torna a heretar; el camp ABSENT vol dir no toquis») i sense ella desheretar
+// seria un camí d'anada sense tornada. Per això aquest component no construeix mai un payload
+// sencer amb el que la peça té: envia el que l'usuari ha mogut, i prou.
+function FilesDeLaPeca({ model, peca, onDesat, onError }) {
   const { t } = useTranslation()
   const cap = t('resum_wizard.no_value')
   const gt = [model.garment_type_nom, model.garment_type_item_nom].filter(Boolean).join(' · ')
+  // Quin editor està obert dins d'AQUESTA targeta. És estat local de la peça i no del Resum:
+  // dues targetes obertes alhora són dues edicions independents, com dues peces són dues peces.
+  const [obert, setObert] = useState(null)
+
+  const desa = async (dades, okKey) => {
+    try {
+      await models.actualitzarPeca(model.id, peca.id, dades)
+      setObert(null)
+      onDesat(okKey)
+      return true
+    } catch (e) {
+      // El 400 de `talles_desconegudes` ve de la PORTA ÚNICA del model (S24b): la peça es
+      // comporta exactament com el model i el missatge és el mateix. No es reinterpreta.
+      onError(missatgeError(e, t))
+      return false
+    }
+  }
+
+  // Declara = el contracte diu `heretat: false` en algun dels camps del grup. La fila de talles
+  // n'agrupa tres, i tornar a heretar-la els ha de buidar tots tres: deixar-ne un de declarat
+  // faria una peça que hereta el run però no el sistema, que és un estat que ningú ha demanat.
+  const declaraTalles = [peca.size_system, peca.size_run_model, peca.base_size_label]
+    .some(c => c && c.heretat === false)
+  const declaraGraduacio = peca.grading_rule_set?.heretat === false
+
+  const heretaDeNou = (camps, okKey) => desa(
+    Object.fromEntries(camps.map(c => [c, null])), okKey)
+
   return (
     <>
       {/* Fixa, apagada i sense acció: la peça no pot canviar això mai. */}
@@ -363,22 +622,61 @@ function FilesDeLaPeca({ model, peca }) {
 
       <FilaDefinicio etiqueta={t('resum_wizard.step_sizes')}
         origen={origenDeLaFila(peca.size_run_model)}
-        accio={<BotoCanviar disabled>{t('resum_wizard.change')}</BotoCanviar>}>
-        <div><ValorCamp camp={peca.size_system} buit={cap} /></div>
-        <div style={{ marginTop: 4 }}>
-          <ValorCamp camp={peca.size_run_model} buit={cap} />
-          {peca.base_size_label?.etiqueta
-            ? <span style={{ marginLeft: 8, color: 'var(--text-soft)' }}>
-                {peca.base_size_label.etiqueta} · {t('resum_wizard.base')}
-              </span>
-            : null}
-        </div>
+        accio={obert === 'talles' ? null : (
+          <BotoCanviar onClick={() => setObert('talles')}>{t('resum_wizard.change')}</BotoCanviar>
+        )}>
+        {obert === 'talles' ? (
+          <EditorTalles model={model}
+            // Es parteix dels valors EFECTIUS: s'edita des del que governa ara, heretat o no.
+            inicial={{ size_system_id: peca.size_system?.valor ?? null,
+              size_run_model: peca.size_run_model?.valor ?? '',
+              base_size_label: peca.base_size_label?.valor ?? null }}
+            onDesar={p => desa({ size_system: p.size_system_id, size_run_model: p.size_run,
+              base_size_label: p.base_size }, 'resum_wizard.sizes_saved')}
+            onCancel={() => setObert(null)}
+            extra={declaraTalles ? (
+              <Boto variant="ter" onClick={() => heretaDeNou(
+                ['size_system', 'size_run_model', 'base_size_label'], 'resum_wizard.inherits_again')}>
+                {t('resum_wizard.inherit_again')}
+              </Boto>
+            ) : null} />
+        ) : (
+          <>
+            <div><ValorCamp camp={peca.size_system} buit={cap} /></div>
+            <div style={{ marginTop: 4 }}>
+              <ValorCamp camp={peca.size_run_model} buit={cap} />
+              {peca.base_size_label?.etiqueta
+                ? <span style={{ marginLeft: 8, color: 'var(--text-soft)' }}>
+                    {peca.base_size_label.etiqueta} · {t('resum_wizard.base')}
+                  </span>
+                : null}
+            </div>
+          </>
+        )}
       </FilaDefinicio>
 
       <FilaDefinicio etiqueta={t('resum_wizard.step_grading')}
         origen={origenDeLaFila(peca.grading_rule_set)}
-        accio={<BotoCanviar disabled>{t('resum_wizard.change')}</BotoCanviar>}>
-        <ValorCamp camp={peca.grading_rule_set} buit={cap} />
+        accio={obert === 'graduacio' ? null : (
+          <BotoCanviar onClick={() => setObert('graduacio')}>{t('resum_wizard.change')}</BotoCanviar>
+        )}>
+        {obert === 'graduacio' ? (
+          <EditorGraduacio model={model} inicialId={peca.grading_rule_set?.valor ?? null}
+            // El PATCH d'una peça NO passa per `useConfirmacioRuleset`: aquesta porta no valida
+            // el joc ni esborra regles residents —`actualitza_peca` només mou el FK— i per tant
+            // no emet cap dels 409 que aquell hook confirma. Embolcallar-lo hi prometria una
+            // pregunta que no arribarà mai.
+            onDesar={id => desa({ grading_rule_set: id }, 'resum_wizard.grading_saved')}
+            onCancel={() => setObert(null)}
+            extra={declaraGraduacio ? (
+              <Boto variant="ter" onClick={() => heretaDeNou(['grading_rule_set'],
+                'resum_wizard.inherits_again')}>
+                {t('resum_wizard.inherit_again')}
+              </Boto>
+            ) : null} />
+        ) : (
+          <ValorCamp camp={peca.grading_rule_set} buit={cap} />
+        )}
       </FilaDefinicio>
     </>
   )
@@ -628,10 +926,22 @@ function EixFila({ etiqueta, opcions, valor, onTria, tradueix }) {
   )
 }
 
-// ── DRETA · PAS 3 · TALLES ────────────────────────────────────────────────────────────────
-function PasTalles({ model, estat, onObrir, desa, onCancel }) {
+// ── L'EDITOR DE TALLES, COMPARTIT PER LA MARE I PER QUALSEVOL PRENDA (SET-2/T7-B3) ────────
+//
+// Era el cos del pas 3 i prou. Des que una peça pot declarar les seves talles, el MATEIX gest
+// existeix a dues alçades —el model i la prenda— i el que canvia no és la tria: és ON es desa.
+// Per això surt d'aquí un component i no una segona còpia. La llei de la casa és explícita
+// («no més pedaços: unificar el ja construït»), i duplicar-lo hauria estrenat una segona manera
+// de triar un run el mateix dia que la primera va aprendre a viure dins d'una peça.
+//
+// ES MUNTA NOMÉS QUAN S'OBRE, i això és el que abans feia un `if (!obert)` dins de cada efecte:
+// muntar = obrir vol dir que l'estat neix del que hi ha desat cada vegada, i un formulari que
+// recorda el que hi havia dues obertures enrere és un formulari que menteix.
+//
+// `inicial` són els valors DE PARTIDA, i per a una peça són els EFECTIUS (el que governa ara,
+// heretat o no): s'edita des del que es veu, no des d'un buit que amagaria el que mana.
+function EditorTalles({ model, inicial, onDesar, onCancel, extra }) {
   const { t } = useTranslation()
-  const obert = estat === 'ara'
   const [systems, setSystems] = useState([])
   const [sel, setSel] = useState(null)
   const [run, setRun] = useState([])
@@ -641,40 +951,42 @@ function PasTalles({ model, estat, onObrir, desa, onCancel }) {
   // EL CODI DEL CLIENT del model. El detall no el porta (només `customer_nom`) i la
   // proximitat el necessita: sense ell, el run DEL CLIENT d'aquest model no pot anar primer i
   // la llista queda ordenada com si el model no fos de ningú (el parany del model 174).
-  const [codiClient, setCodiClient] = useState(null)
   //
-  // SET-2/T7-B5 — I NOMÉS AMB EL SUBESPAI OBERT. Aquest codi només serveix per ORDENAR els runs
+  // SET-2/T7-B5 — I NOMÉS AMB L'EDITOR OBERT. Aquest codi només serveix per ORDENAR els runs
   // candidats en el moment de triar-ne un: amb el pas tancat no hi ha cap llista a ordenar, i la
-  // crida es feia igualment a cada fitxa de model que s'obria. El pas tancat pinta el run que el
-  // model ja té, que ve al detall i no necessita ningú.
-  const obertTalles = estat === 'ara'
+  // crida es feia igualment a cada fitxa de model que s'obria. El pas tancat pinta el run que ja
+  // hi ha, que ve al detall i no necessita ningú. Muntar-se en obrir ho garanteix per construcció.
+  const [codiClient, setCodiClient] = useState(null)
   useEffect(() => {
-    if (!obertTalles || !model.customer) { setCodiClient(null); return undefined }
+    if (!model.customer) { setCodiClient(null); return undefined }
     let viu = true
     customers.get(model.customer)
       .then(r => { if (viu) setCodiClient(r.data?.codi ?? null) })
       .catch(() => { if (viu) setCodiClient(null) })
     return () => { viu = false }
-  }, [obertTalles, model.customer])
+  }, [model.customer])
 
-  // Triar un sistema NO substitueix el run en silenci: si el que el model té hi cap, es
+  // Triar un sistema NO substitueix el run en silenci: si el que hi ha desat hi cap, es
   // conserva (i amb ell la talla base). És la mateixa llei F1.2 del wizard.
   const triaSistema = (s, rehidratant = false) => {
     setSel(s)
     const labels = labelsOf(s)
-    const desat = (model.size_run_model || '').split(/[·,;]/).map(x => x.trim()).filter(Boolean)
+    const desat = (inicial.size_run_model || '').split(/[·,;]/).map(x => x.trim()).filter(Boolean)
     const conserva = rehidratant && desat.length && desat.every(l => labels.includes(l))
     const nou = conserva ? desat : labels
     setRun(nou)
-    setBase(conserva && model.base_size_label && nou.includes(model.base_size_label)
-      ? model.base_size_label
+    setBase(conserva && inicial.base_size_label && nou.includes(inicial.base_size_label)
+      ? inicial.base_size_label
       : (nou[Math.floor(nou.length / 2)] || nou[0] || null))
   }
 
   // Els sistemes s'ORDENEN PER PROXIMITAT i NO S'AMAGA CAP (D-31.3 · `utils/proximitatRun`,
   // el mateix mòdul que el pas 3 del wizard). El run del client d'aquest model, primer.
+  //
+  // ELS EIXOS DE L'ORDRE SÓN ELS DEL MODEL fins i tot editant una peça, i no és un descuit: el
+  // contracte NEGA que els eixos i el `garment_type_item` baixin a la prenda
+  // (`ElGarmentTypeItemNoHiEsTest`). La peça no en té de propis dels quals ordenar.
   useEffect(() => {
-    if (!obert) return undefined
     let viu = true
     sizeSystems.list({ actiu: true, page_size: 100 })
       .then(r => {
@@ -685,13 +997,13 @@ function PasTalles({ model, estat, onObrir, desa, onCancel }) {
             grup: model.garment_type_grup },
           codiClient)
         setSystems(rows)
-        const seu = rows.find(s => s.id === model.size_system)
+        const seu = rows.find(s => s.id === inicial.size_system_id)
         if (seu) triaSistema(seu, true)
       })
       .catch(() => { if (viu) setSystems([]) })
     return () => { viu = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [obert, model.size_system, codiClient])
+  }, [inicial.size_system_id, codiClient])
 
   const toggleTalla = (label) => setRun(prev => (
     prev.includes(label) ? prev.filter(x => x !== label) : ordenaPelSistema([...prev, label], labelsOf(sel))
@@ -700,10 +1012,65 @@ function PasTalles({ model, estat, onObrir, desa, onCancel }) {
   const valid = !!(sel && run.length > 0 && base && run.includes(base))
   const desar = async () => {
     setDesant(true)
-    await desa({ size_system_id: sel.id, size_run: run.join('·'), base_size: base },
-      'resum_wizard.sizes_saved')
+    await onDesar({ size_system_id: sel.id, size_run: run.join('·'), base_size: base })
     setDesant(false)
   }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div>
+        <span style={retolCamp}>
+          {model.target
+            ? t('resum_wizard.systems_for', { target: t(`model_wizard.target_${model.target}`, model.target) })
+            : t('model_wizard.size_systems_label')}
+        </span>
+        {/* ORDENA, MAI AMAGA (D-31.3): hi són TOTS, i el que fa el `maxHeight` és no menjar-se
+            la pàgina amb vint runs — desplaçar-se no és ocultar. */}
+        <div style={{ marginTop: 4, maxHeight: 320, overflowY: 'auto' }}>
+          {systems.length === 0 && <span style={buitText}>{t('model_wizard.no_sizes')}</span>}
+          {systems.map(s => (
+            <FilaRun key={s.id} sistema={s} triat={sel?.id === s.id} onTria={() => triaSistema(s)} t={t} />
+          ))}
+        </div>
+      </div>
+      {sel && (
+        <div>
+          <span style={retolCamp}>{t('resum_wizard.run_and_base')}</span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+            {labelsOf(sel).map(l => (
+              <Xip key={l} marcat={run.includes(l)} onClick={() => toggleTalla(l)}>{l}</Xip>
+            ))}
+          </div>
+          {run.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <span style={retolCamp}>{t('model_wizard.base_size')}</span>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                {run.map(l => (
+                  <Xip key={l} marcat={base === l} onClick={() => setBase(l)}>
+                    {l}{base === l ? ` · ${t('resum_wizard.base')}` : ''}
+                  </Xip>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', paddingTop: 4 }}>
+        {!valid && <span style={{ ...buitText, fontSize: 'var(--fs-caption)' }}>{t('resum_wizard.need_base')}</span>}
+        {extra}
+        <Boto variant="ter" onClick={onCancel}>{t('model_wizard.cancel')}</Boto>
+        <Boto variant="pri" onClick={desar} disabled={desant || !valid}>
+          {desant ? t('model_wizard.saving') : t('resum_wizard.save_sizes')}
+        </Boto>
+      </div>
+    </div>
+  )
+}
+
+// ── DRETA · PAS 3 · TALLES ────────────────────────────────────────────────────────────────
+function PasTalles({ model, estat, onObrir, desa, onCancel }) {
+  const { t } = useTranslation()
+  const obert = estat === 'ara'
 
   if (!obert) {
     return (
@@ -733,52 +1100,11 @@ function PasTalles({ model, estat, onObrir, desa, onCancel }) {
 
   return (
     <Subespai num={3} titol={t('resum_wizard.step_sizes')} estat="ara">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div>
-          <span style={retolCamp}>
-            {model.target
-              ? t('resum_wizard.systems_for', { target: t(`model_wizard.target_${model.target}`, model.target) })
-              : t('model_wizard.size_systems_label')}
-          </span>
-          {/* ORDENA, MAI AMAGA (D-31.3): hi són TOTS, i el que fa el `maxHeight` és no menjar-se
-              la pàgina amb vint runs — desplaçar-se no és ocultar. */}
-          <div style={{ marginTop: 4, maxHeight: 320, overflowY: 'auto' }}>
-            {systems.length === 0 && <span style={buitText}>{t('model_wizard.no_sizes')}</span>}
-            {systems.map(s => (
-              <FilaRun key={s.id} sistema={s} triat={sel?.id === s.id} onTria={() => triaSistema(s)} t={t} />
-            ))}
-          </div>
-        </div>
-        {sel && (
-          <div>
-            <span style={retolCamp}>{t('resum_wizard.run_and_base')}</span>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-              {labelsOf(sel).map(l => (
-                <Xip key={l} marcat={run.includes(l)} onClick={() => toggleTalla(l)}>{l}</Xip>
-              ))}
-            </div>
-            {run.length > 0 && (
-              <div style={{ marginTop: 10 }}>
-                <span style={retolCamp}>{t('model_wizard.base_size')}</span>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-                  {run.map(l => (
-                    <Xip key={l} marcat={base === l} onClick={() => setBase(l)}>
-                      {l}{base === l ? ` · ${t('resum_wizard.base')}` : ''}
-                    </Xip>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', paddingTop: 4 }}>
-          {!valid && <span style={{ ...buitText, fontSize: 'var(--fs-caption)' }}>{t('resum_wizard.need_base')}</span>}
-          <Boto variant="ter" onClick={onCancel}>{t('model_wizard.cancel')}</Boto>
-          <Boto variant="pri" onClick={desar} disabled={desant || !valid}>
-            {desant ? t('model_wizard.saving') : t('resum_wizard.save_sizes')}
-          </Boto>
-        </div>
-      </div>
+      <EditorTalles model={model}
+        inicial={{ size_system_id: model.size_system, size_run_model: model.size_run_model,
+          base_size_label: model.base_size_label }}
+        onDesar={p => desa(p, 'resum_wizard.sizes_saved')}
+        onCancel={onCancel} />
     </Subespai>
   )
 }
@@ -830,32 +1156,21 @@ function FilaRun({ sistema, triat, onTria, t }) {
 //
 // Els dos casos que el backend sí que bloqueja de debò (joc buit · sistema de talles divergent)
 // segueixen sent seus i tornen 400: aquí no es reimplementen, es mostren.
-function PasGraduacio({ model, estat, onObrir, desa, onCancel }) {
+// ── L'EDITOR DE GRADUACIÓ, COMPARTIT PER LA MARE I PER QUALSEVOL PRENDA (SET-2/T7-B3) ─────
+//
+// Mateix argument que `EditorTalles`: la tria és la mateixa a les dues alçades i el que canvia
+// és on es desa. Es munta en obrir, i per això la tria parteix SEMPRE del que hi ha desat.
+function EditorGraduacio({ model, inicialId, onDesar, onCancel, extra }) {
   const { t } = useTranslation()
-  const obert = estat === 'ara'
-  const grsId = model?.grading_rule_set ?? null
-  const [joc, setJoc] = useState(null)
   const [jocs, setJocs] = useState([])
   const [ggCodiById, setGgCodiById] = useState({})
-  const [sel, setSel] = useState(grsId)
+  const [sel, setSel] = useState(inicialId)
   const [desant, setDesant] = useState(false)
-  const { executa, dialeg } = useConfirmacioRuleset()
 
-  // El joc VIGENT, per poder-lo pintar amb el pas tancat (les eleccions fixades i visibles de §8f).
+  // El CATÀLEG només es carrega amb l'editor obert: amb el pas tancat no hi ha res a triar i
+  // dues crides per cada fitxa de model serien dues crides per res.
   useEffect(() => {
-    if (!grsId) { setJoc(null); return undefined }
     let viu = true
-    gradingRuleSets.get(grsId).then(r => { if (viu) setJoc(r.data || null) }).catch(() => {})
-    return () => { viu = false }
-  }, [grsId])
-
-  // El CATÀLEG només es carrega quan el subespai s'obre: amb el pas tancat no hi ha res a triar i
-  // dues crides per cada fitxa de model serien dues crides per res. En obrir, la tria parteix
-  // SEMPRE del que el model té desat — la mateixa llei que el pas 2 (§419).
-  useEffect(() => {
-    if (!obert) return undefined
-    let viu = true
-    setSel(grsId)
     Promise.all([
       // `amb_regles: 1` com al wizard: un joc sense regles no és una opció llunyana, és un
       // bloqueig dur al backend (400 `ruleset_buit`). Oferir-lo seria oferir un carreró sense
@@ -872,11 +1187,14 @@ function PasGraduacio({ model, estat, onObrir, desa, onCancel }) {
       })
       .catch(() => { if (viu) setJocs([]) })
     return () => { viu = false }
-  }, [obert, grsId])
+  }, [])
 
   // Els eixos del MODEL, tal com els porta el seu detall. El `fit` va en MAJÚSCULES perquè
   // `Model.fit_type` és un choice ('Regular') i els jocs el declaren pel codi del vocabulari
   // ('REGULAR'): sense normalitzar, un joc que declara el fit no casaria mai amb cap model.
+  //
+  // I són els del MODEL també quan s'edita una peça, pel mateix motiu que a `EditorTalles`: el
+  // contracte nega que els eixos baixin a la prenda, o sigui que no n'hi ha de propis.
   const eixos = {
     target: model.target || null,
     construction: model.construction || null,
@@ -888,12 +1206,56 @@ function PasGraduacio({ model, estat, onObrir, desa, onCancel }) {
 
   const desar = async () => {
     setDesant(true)
-    // Les confirmacions (joc d'un altre client · esborrat de residents) les porta el hook
-    // compartit, que reintenta amb UN flag per cas. Aquí no se'n reimplementa cap.
-    await desa({ grading_rule_set_id: sel }, 'resum_wizard.grading_saved',
-      p => executa(flags => models.updateStep2(model.id, { ...p, ...flags })))
+    await onDesar(sel)
     setDesant(false)
   }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div>
+        <span style={retolCamp}>{t('dependency.ruleset')}</span>
+        {/* EL SELECTOR ÉS EL MATEIX COMPONENT que el pas 4 del wizard (`RuleSetPicker`), pel
+            mateix motiu que el pas 2 comparteix `CascadeFinder`: duplicar-lo seria estrenar
+            una segona manera de triar una graduació. */}
+        <RuleSetPicker
+          ruleSets={jocs}
+          garmentGroupCodiById={ggCodiById}
+          axes={eixos}
+          eliminatiu
+          selectedId={sel}
+          actionLabel={t('model_sheet.use_ruleset')}
+          onPick={(rs) => setSel(rs.id)}
+        />
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', paddingTop: 4 }}>
+        {!sel && <span style={{ ...buitText, fontSize: 'var(--fs-caption)' }}>{t('resum_wizard.need_ruleset')}</span>}
+        {extra}
+        <Boto variant="ter" onClick={onCancel}>{t('model_wizard.cancel')}</Boto>
+        {/* EL SEU DESAR ÉS L'ÚNIC BLAU d'aquesta columna (§8f). Re-desar el joc que ja hi és no
+            és una acció: el backend no en faria res (`canvia_joc` mira que el joc sigui UN
+            ALTRE) i el botó no ha de prometre una feina que no passarà. */}
+        <Boto variant="pri" onClick={desar} disabled={desant || !sel || sel === inicialId}>
+          {desant ? t('model_wizard.saving') : t('resum_wizard.save_grading')}
+        </Boto>
+      </div>
+    </div>
+  )
+}
+
+function PasGraduacio({ model, estat, onObrir, desa, onCancel }) {
+  const { t } = useTranslation()
+  const obert = estat === 'ara'
+  const grsId = model?.grading_rule_set ?? null
+  const [joc, setJoc] = useState(null)
+  const { executa, dialeg } = useConfirmacioRuleset()
+
+  // El joc VIGENT, per poder-lo pintar amb el pas tancat (les eleccions fixades i visibles de §8f).
+  useEffect(() => {
+    if (!grsId) { setJoc(null); return undefined }
+    let viu = true
+    gradingRuleSets.get(grsId).then(r => { if (viu) setJoc(r.data || null) }).catch(() => {})
+    return () => { viu = false }
+  }, [grsId])
 
   if (!obert) {
     return (
@@ -933,33 +1295,14 @@ function PasGraduacio({ model, estat, onObrir, desa, onCancel }) {
 
   return (
     <Subespai num={4} titol={t('resum_wizard.step_grading')} estat="ara">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div>
-          <span style={retolCamp}>{t('dependency.ruleset')}</span>
-          {/* EL SELECTOR ÉS EL MATEIX COMPONENT que el pas 4 del wizard (`RuleSetPicker`), pel
-              mateix motiu que el pas 2 comparteix `CascadeFinder`: duplicar-lo seria estrenar
-              una segona manera de triar una graduació. */}
-          <RuleSetPicker
-            ruleSets={jocs}
-            garmentGroupCodiById={ggCodiById}
-            axes={eixos}
-            eliminatiu
-            selectedId={sel}
-            actionLabel={t('model_sheet.use_ruleset')}
-            onPick={(rs) => setSel(rs.id)}
-          />
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', paddingTop: 4 }}>
-          {!sel && <span style={{ ...buitText, fontSize: 'var(--fs-caption)' }}>{t('resum_wizard.need_ruleset')}</span>}
-          <Boto variant="ter" onClick={onCancel}>{t('model_wizard.cancel')}</Boto>
-          {/* EL SEU DESAR ÉS L'ÚNIC BLAU d'aquesta columna (§8f). Re-desar el joc que ja hi és no
-              és una acció: el backend no en faria res (`canvia_joc` mira que el joc sigui UN
-              ALTRE) i el botó no ha de prometre una feina que no passarà. */}
-          <Boto variant="pri" onClick={desar} disabled={desant || !sel || sel === grsId}>
-            {desant ? t('model_wizard.saving') : t('resum_wizard.save_grading')}
-          </Boto>
-        </div>
-      </div>
+      <EditorGraduacio model={model} inicialId={grsId}
+        // Les confirmacions (joc d'un altre client · esborrat de residents) les porta el hook
+        // compartit, que reintenta amb UN flag per cas. Aquí no se'n reimplementa cap. El gest
+        // és de la MARE i el 409 és de tot el model: qui desglossa per prenda és el diàleg,
+        // amb el `per_garment` que el payload porta des de R11.
+        onDesar={id => desa({ grading_rule_set_id: id }, 'resum_wizard.grading_saved',
+          p => executa(flags => models.updateStep2(model.id, { ...p, ...flags }), { garment: '' }))}
+        onCancel={onCancel} />
       {dialeg}
     </Subespai>
   )

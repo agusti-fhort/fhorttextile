@@ -4919,7 +4919,20 @@
     "model_base": "Model base",
     "inherits": "Hereta del model",
     "rename_piece": "Reanomenar",
-    "from_model": "Del model"
+    "from_model": "Del model",
+    "add_piece": "Afegir peça",
+    "piece_code": "Codi",
+    "piece_name": "Nom",
+    "piece_name_ph": "Pantaló, Caputxa…",
+    "piece_created": "Peça creada.",
+    "piece_renamed": "Nom desat.",
+    "piece_deleted": "Peça esborrada.",
+    "piece_named": "Peça: {{peca}}",
+    "delete_piece": "Esborrar peça",
+    "delete_piece_warn": "S'esborrarà la peça del model. Només es pot esborrar si no té cap dada penjada.",
+    "delete_piece_blocked": "Aquesta peça no es pot esborrar",
+    "inherit_again": "Torna a heretar",
+    "inherits_again": "La peça torna a heretar del model."
   },
   "disseny": {
     "back_title": "Tornar al tauler"

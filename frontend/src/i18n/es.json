@@ -4919,7 +4919,20 @@
     "model_base": "Modelo base",
     "inherits": "Hereda del modelo",
     "rename_piece": "Renombrar",
-    "from_model": "Del modelo"
+    "from_model": "Del modelo",
+    "add_piece": "Añadir pieza",
+    "piece_code": "Código",
+    "piece_name": "Nombre",
+    "piece_name_ph": "Pantalón, Capucha…",
+    "piece_created": "Pieza creada.",
+    "piece_renamed": "Nombre guardado.",
+    "piece_deleted": "Pieza eliminada.",
+    "piece_named": "Pieza: {{peca}}",
+    "delete_piece": "Eliminar pieza",
+    "delete_piece_warn": "Se eliminará la pieza del modelo. Solo se puede eliminar si no tiene ningún dato colgando.",
+    "delete_piece_blocked": "Esta pieza no se puede eliminar",
+    "inherit_again": "Volver a heredar",
+    "inherits_again": "La pieza vuelve a heredar del modelo."
   },
   "disseny": {
     "back_title": "Volver al panel"

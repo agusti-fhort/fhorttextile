@@ -4919,7 +4919,20 @@
     "model_base": "Base model",
     "inherits": "Inherited from the model",
     "rename_piece": "Rename",
-    "from_model": "From the model"
+    "from_model": "From the model",
+    "add_piece": "Add piece",
+    "piece_code": "Code",
+    "piece_name": "Name",
+    "piece_name_ph": "Trousers, Hood…",
+    "piece_created": "Piece created.",
+    "piece_renamed": "Name saved.",
+    "piece_deleted": "Piece deleted.",
+    "piece_named": "Piece: {{peca}}",
+    "delete_piece": "Delete piece",
+    "delete_piece_warn": "The piece will be removed from the model. It can only be deleted if it has no data attached.",
+    "delete_piece_blocked": "This piece cannot be deleted",
+    "inherit_again": "Inherit again",
+    "inherits_again": "The piece inherits from the model again."
   },
   "disseny": {
     "back_title": "Back to dashboard"
