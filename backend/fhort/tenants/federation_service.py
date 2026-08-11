@@ -564,6 +564,23 @@ ORIGEN_FEDERAT = 'FEDERAT'
 #: Versió del paquet de patrimoni que viatja entre cases. **1** = clau natural de 2 trams
 #: (només el POM); **2** = clau de 4 trams, amb capa i instància. Un paquet sense el camp és
 #: de la versió 1 per definició, i es llegeix com a exterior + instància única.
+#:
+#: 🚩 CENSAT A SET-2/T10 (2026-08-11), NO ARREGLAT — decisió humana pendent.
+#: **Aquesta constant no la valida ningú.** S'ESCRIU una vegada (a l'envelope de
+#: `_llegeix_patrimoni`) i no es LLEGEIX enlloc del codi de producció: l'únic consumidor és un
+#: assert de `models_app/test_escriptors_instancia_cins.py`. La tolerància de versió que hi ha
+#: de fet la fa `_clau_amb_eixos` per LONGITUD DE TUPLA, no per número de versió.
+#:
+#: Conseqüència pràctica: un paquet amb una clau de 5 trams (el dia que el `garment` hi entri)
+#: cauria a la branca `len(clau) == 4` d'aquella funció i petaria amb `ValueError` en
+#: desempaquetar — un error de transport, no un rebuig informat. I un paquet que declarés
+#: `format: 3` s'acceptaria igualment sense que ningú se n'adonés.
+#:
+#: NO es toca aquí perquè és CONTRACTE EXTERN: fer que el lector validi la versió canvia què
+#: accepta la casa receptora, i això és una decisió humana amb les dues cases a la taula, no
+#: un retoc d'higiene. Queda escrit perquè qui creixi la clau natural (l'única manera que el
+#: patrimoni deixi de ser només el de la peça mare) ho trobi abans de trencar-ho.
+#: Re-verificable: `grep -rn "FORMAT_PATRIMONI\|\['format'\]" backend/fhort/`.
 FORMAT_PATRIMONI = 2
 
 
@@ -700,7 +717,20 @@ def _llegeix_patrimoni(model):
         })
 
     regles = []
-    for r in (ModelGradingRule.objects.filter(model=model, actiu=True)
+    # 🚨 SET-2/T10 (2026-08-11) — L'ÀNCORA TAMBÉ AQUÍ, i fins avui no hi era. L'acta de
+    # T5b parla de «l'àncora» en singular i només va créixer al bucle de mesures; aquest es
+    # va quedar amb `filter(model, actiu)` pelat.
+    #
+    # El dany era PITJOR que el de les mesures: la regla d'una peça filla entrava al
+    # paquet, i com que viatja amb una clau que no sap dir de quina peça és
+    # (`_clau_natural_pom`), el destí la re-creava com a regla de la MARE. Una regla no és
+    # un valor sinó una LLEI: la llei d'una calceta aplicada al cos sencer, i cap de les
+    # dues cases se n'assabenta.
+    #
+    # El motiu de l'àncora no canvia: mentre `_clau_natural_pom` no sàpiga dir la peça i
+    # els paquets no es versionin —contracte EXTERN, decisió humana— el patrimoni que
+    # viatja és el de la peça MARE. Es deixa de dir el que no se sap dir.
+    for r in (ModelGradingRule.objects.filter(model=model, actiu=True, garment='')
               .select_related('pom__pom_global').order_by('pom_id')):
         regles.append({
             # La regla NO té eixos (decisió Montse: la sisa dreta i l'esquerra gradúen
@@ -744,6 +774,27 @@ def _llegeix_patrimoni(model):
         'fitxers': fitxers,
         'base_size_label': (model.base_size_label or '').strip(),
     }
+
+
+def _te_regla_resident_de_la_mare(twin, pom):
+    """La marca JA té llei pròpia per a aquest POM a la seva peça principal?
+
+    SET-2/T10 — `garment=''` a la pregunta, i fins avui no hi era. El paquet que arriba
+    és, per construcció, patrimoni de la MARE (v. l'àncora de `_llegeix_patrimoni`), o
+    sigui que la pregunta correcta és si la mare del destí ja en té una — no si en té
+    QUALSEVOL peça. Sense l'àncora, una regla d'una peça filla feia comptar la de la
+    mare com a «saltada» i no s'escrivia mai: el destí es quedava sense la llei de la
+    seva peça principal i el comptador deia que tot havia anat bé.
+
+    Viu en una funció amb nom, i no dins del bucle, perquè és un PREDICAT DE DOMINI («la
+    marca ja ha dit la seva sobre aquest POM») i perquè així es pot provar sense muntar
+    dos tenants: el bucle que el fa servir no és aïllable, aquest predicat sí.
+    """
+    # Import DINS de la funció: idioma d'aquest mòdul sencer (evita cicles a load time). La
+    # primera versió el va donar per fet perquè el bucle d'on ve el tenia importat més amunt,
+    # dins de `_escriu_a_la_marca` — i va petar amb `NameError` a la primera crida.
+    from fhort.models_app.models import ModelGradingRule
+    return ModelGradingRule.objects.filter(model=twin, pom=pom, garment='').exists()
 
 
 def _escriu_a_la_marca(brand_schema, codi_intern, patrimoni):
@@ -841,7 +892,7 @@ def _escriu_a_la_marca(brand_schema, codi_intern, patrimoni):
                 # La regla RESIDENT de la marca és el seu judici sobre les seves dades: si ja
                 # n'hi ha una, no es toca. `GradedSpec` no viatja mai — el motor de la marca
                 # projectarà des d'aquestes regles quan li toqui.
-                if ModelGradingRule.objects.filter(model=twin, pom=pom).exists():
+                if _te_regla_resident_de_la_mare(twin, pom):
                     saltat['regles'] += 1
                     continue
                 ModelGradingRule.objects.create(
