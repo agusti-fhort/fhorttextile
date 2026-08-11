@@ -714,9 +714,14 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
                 # surten de `line`, l'ancoratge que el tècnic ha fet.
                 # Segueix sent `.update()` de queryset —no dispara signal— i `valor_teoric` no
                 # es toca: les dues coses estan documentades a :596-598 i no canvien.
+                # SET-2/T5c — i el SISÈ camp, pel mateix argument que C3/E3 i un eix més
+                # tard: la unicitat declarada porta el `garment` des de `fitting/0026`, o
+                # sigui que aquest filtre tornava a ser més ampli que la identitat i
+                # escampava el `valor_real` derivat a la germana de l'ALTRA PEÇA. Surt de
+                # `line`, l'ancoratge que el tècnic ha fet.
                 (PieceFittingLine.objects
                  .filter(piece_fitting=pf, pom=line.pom, size_label=sl,
-                         capa=line.capa, instancia=line.instancia)
+                         capa=line.capa, instancia=line.instancia, garment=line.garment)
                  .update(valor_real=val))
         return _resp(True, logica or 'CANONIC', warnings)
 

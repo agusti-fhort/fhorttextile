@@ -342,6 +342,11 @@ def create_piece_fitting(session_id: int, model_id: int, *, created_by_id: int |
             size_label=spec.size_label,
             capa=spec.capa,
             instancia=spec.instancia,
+            # SET-2/T5c — i el TERCER eix, pel mateix argument literal: si l'spec és de la
+            # segona peça, la línia és de la segona peça. La sembra i la reconciliació han de
+            # dir el mateix o la reconciliació que ve tot seguit (Q3) retiraria el que la
+            # sembra acaba de crear.
+            garment=spec.garment,
             valor_teoric=spec.graded_value_cm,
             valor_real=spec.graded_value_cm,  # copy, editable before close
         )
@@ -398,19 +403,32 @@ def reconcilia_linies(pf) -> dict:
     model = pf.model
     base_size = (model.base_size_label or '').strip()
 
+    # SET-2/T5c (2026-08-11) — LA CLAU PORTA EL `garment`, A LES TRES BANDES ALHORA.
+    # La identitat d'una línia és de sis camps (`fitting/0026`) i la del seu origen de
+    # quatre; aquí se'n comparaven tres. El dany NO era esborrar de més —deixant caure
+    # l'eix als DOS costats, el predicat de `sobreres` queda més AMPLI que la identitat i
+    # la línia de la 02 troba recer a la germana de la mare—: era per ABSÈNCIA.
+    #   · `actives` col·lapsava les dues peces en una entrada → `a_crear` no podia generar
+    #     mai més d'una línia i la mesura de la segona peça no arribava al full de presa.
+    #   · `ja_hi_son` col·lapsava igual → amb una línia de la 02 ja existent, la de la mare
+    #     es donava per feta i no naixia.
+    # Els tres conjunts creixen ALHORA, com les quatre mapes de `graded-table`: si un
+    # cresqués i un altre no, la reconciliació esborraria el que acaba de crear.
     actives = {
-        (bm.pom_id, bm.capa, bm.instancia): bm
+        (bm.pom_id, bm.capa, bm.instancia, bm.garment): bm
         for bm in BaseMeasurement.objects.filter(
             model=model, is_active=True, base_value_cm__isnull=False)
     }
 
     linies = list(PieceFittingLine.objects.filter(piece_fitting=pf))
-    sobreres = [l.pk for l in linies if (l.pom_id, l.capa, l.instancia) not in actives]
+    sobreres = [l.pk for l in linies
+                if (l.pom_id, l.capa, l.instancia, l.garment) not in actives]
     if sobreres:
         PieceFittingLine.objects.filter(pk__in=sobreres).delete()
 
     fora = set(sobreres)
-    ja_hi_son = {(l.pom_id, l.capa, l.instancia) for l in linies if l.pk not in fora}
+    ja_hi_son = {(l.pom_id, l.capa, l.instancia, l.garment)
+                 for l in linies if l.pk not in fora}
     a_crear = [clau for clau in actives if clau not in ja_hi_son]
 
     creades = 0
@@ -421,8 +439,8 @@ def reconcilia_linies(pf) -> dict:
         specs = {}
         for s in GradedSpec.objects.filter(
                 grading_version=pf.grading_version, is_active=True).values(
-                'pom_id', 'capa', 'instancia', 'size_label', 'graded_value_cm'):
-            clau = (s['pom_id'], s['capa'], s['instancia'])
+                'pom_id', 'capa', 'instancia', 'garment', 'size_label', 'graded_value_cm'):
+            clau = (s['pom_id'], s['capa'], s['instancia'], s['garment'])
             specs.setdefault(clau, {})[s['size_label']] = s['graded_value_cm']
 
         for clau in a_crear:
@@ -442,6 +460,10 @@ def reconcilia_linies(pf) -> dict:
                     size_label=size_label,
                     capa=bm.capa,
                     instancia=bm.instancia,
+                    # SET-2/T5c — la línia neix de la seva MESURA i n'hereta la peça, igual
+                    # que ja n'heretava els dos eixos de germanor. Sense això la línia de la
+                    # 02 naixeria a la mare i la reconciliació següent l'esborraria.
+                    garment=bm.garment,
                     valor_teoric=valor,
                     # Mateix criteri que la sembra (`create_piece_fitting`): el real neix com a
                     # còpia del teòric i és editable. Canviar-lo aquí faria que dues línies de
