@@ -14,10 +14,21 @@ import { useTranslation } from 'react-i18next'
 // no pot passar (13 comportes CHECK congelen `garment` a '' i `ModelGarment` no existeix).
 // Re-verificar amb: `grep -rn "class ModelGarment" backend/`.
 //
+// ⚠️ EL QUE NO HI ÉS, I PER DECISIÓ (Agus, 2026-08-11): `target` i `construction` («Dona»,
+// «Teixit pla»). Els deia la barra crema i NO tornen a cap superfície de treball — són
+// atributs de DEFINICIÓ i viuen al Resum (pas Peça), que és on s'editen. Una pantalla de
+// mesura necessita dependència, joc de regles i run, i res més. Si algun dia es decideix que
+// tornin, el lloc és aquesta fila de dependència, no una barra pròpia.
+//
 // EL RUN NO PORTA RÈTOL. La talla base es diu amb TIPOGRAFIA (negreta + subratllat), no amb
 // un «Base: S» al davant — el mateix criteri que la fitxa tècnica, on la columna de la base
 // es marca sobre ella mateixa i no en un títol. La barra crema sí que el portava escrit.
-export default function PecaContenidor({ model, children }) {
+//
+// `accioJoc` — SLOT per a l'acció sobre el JOC DE REGLES, al costat mateix del nom que mostra
+// (Graduació hi posa «Canviar joc»). És opcional: a Mesures i a Escalat la fila és de lectura,
+// i el rètol italic ja ho diu. En Fase B cada contenidor de peça portarà el SEU, perquè cada
+// peça va a la seva elecció de graduació.
+export default function PecaContenidor({ model, children, accioJoc = null }) {
   const { t } = useTranslation()
   if (!model) return null
 
@@ -36,7 +47,7 @@ export default function PecaContenidor({ model, children }) {
   return (
     <div style={{
       border: '1px solid var(--line)', borderRadius: 'var(--r-card)',
-      background: 'var(--white)', marginBottom: 12,
+      background: 'var(--panel)', marginBottom: 12,
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
@@ -55,9 +66,14 @@ export default function PecaContenidor({ model, children }) {
         <span style={{ color: model.grading_rule_set_nom ? 'var(--gold)' : 'var(--text-soft)' }}>
           {model.grading_rule_set_nom || t('dependency.no_ruleset')}
         </span>
-        <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontStyle: 'italic' }}>
-          {t('dependency.editable_hint')}
-        </span>
+        {accioJoc}
+        {!accioJoc && (
+          // La pista de «lectura» NOMÉS quan la fila no porta l'acció: amb el botó al costat,
+          // dir que no es pot editar aquí seria contradir-se a un pam de distància.
+          <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', fontStyle: 'italic' }}>
+            {t('dependency.editable_hint')}
+          </span>
+        )}
         {talles.length > 0 && (
           // `marginLeft:auto` = el run s'arrambla a la DRETA de la mateixa fila. Les talles NO
           // es tradueixen mai: són dades de domini.

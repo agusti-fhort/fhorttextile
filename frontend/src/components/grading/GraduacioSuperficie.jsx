@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import client from '../../api/client'
 import { models } from '../../api/endpoints'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
+import PecaContenidor from '../model/PecaContenidor'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { useElements } from '../../utils/vocabulariDominiFont'
 import { aDocument, aMotor, opcionsDocument } from '../../utils/breakConvention'
@@ -358,39 +359,31 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
 
   // ── Capçalera de context ───────────────────────────────────────────────────────────────────
   const joc = model?.grading_rule_set_nom || model?.grading_rule_set_detall?.nom || null
-  const dada = (etiqueta, v) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span style={{ fontSize: FS_HEAD, textTransform: 'uppercase', letterSpacing: '0.05em',
-                     color: 'var(--text-muted)' }}>{etiqueta}</span>
-      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)' }}>
-        {v || <span style={{ color: 'var(--text-muted)' }}>—</span>}
-      </span>
-    </div>
+  // SET-2/T7-A3 (Agus, 11/08) — «Canviar joc» va A LA FILA DE DEPENDÈNCIA, al costat del nom
+  // del joc de regles: és l'acció sobre allò que la fila mostra, i és l'única superfície de
+  // les tres on aquesta fila no és de lectura. En Fase B cada contenidor de peça portarà el
+  // seu, perquè cada peça va a la seva elecció de graduació.
+  const canviarJoc = (
+    <button type="button" onClick={onObrirContenidor}
+      style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+      <i className="ti ti-adjustments" style={{ fontSize: 14 }} aria-hidden="true" />
+      {' '}{joc ? t('graduacio.superficie.canviar_joc') : t('graduacio.superficie.triar_joc')}
+    </button>
   )
 
   return (
     <div>
-      <div style={{
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20,
-        flexWrap: 'wrap', border: '0.5px solid var(--border)', borderRadius: 8,
-        background: 'var(--bg-muted)', padding: '12px 16px', marginBottom: 14,
-      }}>
-        <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          {dada(t('graduacio.superficie.model'), model?.codi_intern)}
-          {dada(t('graduacio.superficie.joc'), joc || t('graduacio.superficie.sense_joc'))}
-          {dada(t('graduacio.superficie.talla_base'), data?.base_size)}
-          {dada(t('graduacio.superficie.run'), sizeRun.join(' · '))}
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" onClick={onObrirContenidor} style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
-            <i className="ti ti-adjustments" style={{ fontSize: 14 }} aria-hidden="true" />
-            {' '}{joc ? t('graduacio.superficie.canviar_joc') : t('graduacio.superficie.triar_joc')}
-          </button>
-          <button type="button" onClick={onTancar} style={btnSecondary}>
-            <i className="ti ti-arrow-left" style={{ fontSize: 14 }} aria-hidden="true" />
-            {' '}{t('graduacio.superficie.tornar')}
-          </button>
-        </div>
+      {/* SET-2/T7-A3 · LA BARRA CREMA PRÒPIA D'AQUESTA PANTALLA SE'N VA. No era la compartida
+          (`EditorHeader`): era una còpia amb el mateix crema que deia model · joc · talla base ·
+          run, i tot això ho diu ara el contenidor de peça —el model, la capçalera de la pàgina;
+          el joc, la fila de dependència; la base i el run, el run amb tipografia—.
+          «Tornar» es conserva A PART i fora del contenidor, com el de «Mesurar prenda»: sortir
+          no és una acció sobre la peça. «Canviar joc» sí que ho és, i baixa a la fila. */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+        <button type="button" onClick={onTancar} style={btnSecondary}>
+          <i className="ti ti-arrow-left" style={{ fontSize: 14 }} aria-hidden="true" />
+          {' '}{t('graduacio.superficie.tornar')}
+        </button>
       </div>
 
       {err && <p style={{ color: 'var(--danger, #b3261e)', fontSize: 'var(--fs-body)' }}>{err}</p>}
@@ -398,7 +391,8 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
 
       {!carregant && !err && (
         <>
-          <div style={{ overflowX: 'auto', border: '0.5px solid var(--border)', borderRadius: 8 }}>
+          <PecaContenidor model={model} accioJoc={canviarJoc}>
+          <div style={{ overflowX: 'auto' }}>
             {/* Q2 — LA TAULA NO VA AL 100%. Anava-hi, i com que totes les columnes menys `#`
                 tenien amplada fixada, el sobrant de la pantalla se n'anava sencer a la primera:
                 el forat entre `#` i CAPA de la captura de les 13:04. La consulta no ha fet mai
@@ -457,6 +451,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
               </tbody>
             </table>
           </div>
+          </PecaContenidor>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                         gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
