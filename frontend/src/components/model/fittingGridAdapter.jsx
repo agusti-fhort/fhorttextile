@@ -15,6 +15,7 @@ import { pieceFittingLines } from '../../api/endpoints'
 import { effectiveRegime } from '../../utils/gradingRegime'
 import { formatDelta } from '../../utils/format'
 import { aDocument, etiquetaRegla } from '../../utils/breakConvention'
+import { identitatMesura } from '../../utils/identitatMesura'
 
 // Etiqueta d'una versió: la primera (v1) és Base; les següents són Fit N amb N = version_number - 1.
 const versionLabel = (vn, idx, t) =>
@@ -152,7 +153,13 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) 
       // 'DERIVAT') no és una presa: ho ha de dir, perquè el número s'assembla a un de mesurat.
       // Sense `origen` al payload no es pinta res — cap superfície canvia de forma.
       marca: row.origen === 'DERIVAT' ? 'derivada' : null,
-      rowKey: row.bm_id || `${row.pom_id}|${row.capa || ''}|${row.instancia || ''}`,
+      // SET-2/T6b — la identitat de fila per CRIDA, no per còpia. Aquí hi havia la fórmula
+      // inlined, byte a byte la de `identitatMesura`, i era el punt de més risc del cens: el
+      // `rowKey` de `buildEscalatRows` ve del backend (`row.clau`) i T6a l'ha fet créixer a
+      // quatre trams, de manera que aquesta còpia s'hauria quedat a tres EN SILENCI i dues
+      // germanes de dues prendes haurien compartit clau de fila. Substituïda, no migrada al
+      // costat: una còpia que es pot tornar a desincronitzar no és un arranjament.
+      rowKey: row.bm_id || identitatMesura(row),
       nom_en: row.nom_en, nom_local: row.nom_local,
       nom_fitxa: row.nom_fitxa, bm_id: row.bm_id,   // P4 — autoria de nom a nivell model
       logica: row.logica, increment_base: row.increment_base,
