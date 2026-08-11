@@ -601,6 +601,28 @@ def comptar_regles_residents(model):
     return sum(per_origen.values()), per_origen
 
 
+def comptar_regles_residents_per_garment(model):
+    """SET-2/R11 — les mateixes regles residents, comptades per PEÇA.
+
+    → `{garment: n}`, amb `''` per a la peça mare. Germà de `comptar_regles_residents`,
+    que les compta per ORIGEN: són dos talls del mateix conjunt i cadascun respon una
+    pregunta distinta del diàleg de confirmació —«què perdré» (origen) i «de quina prenda»
+    (peça)—. Es deixen separats a posta: fer que un sol comptador tornés els dos talls
+    hauria canviat l'aritat de retorn de `comptar_regles_residents`, que té QUATRE
+    cridadors i dos en desempaqueten el parell (censat el 2026-08-11:
+    `views.py:679`, `:1110`, `:1142` i `migra_brownie_ruleset.py:142`).
+
+    Per què el diàleg ho necessita: amb dues peces vives, «aquest model té 15 regles
+    pròpies i les perdràs» no diu prou. Perdre-les totes i perdre les d'una sola prenda
+    són dos gestos molt diferents, i qui confirma ha de poder distingir-los ABANS de dir
+    que sí, no després — el mateix argument que va fer néixer `per_origen`.
+    """
+    from django.db.models import Count
+    files = (model.grading_rules.values('garment')
+             .annotate(n=Count('id')).order_by('garment'))
+    return {f['garment']: f['n'] for f in files}
+
+
 def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, confirmat=False,
                                 model=None, confirmat_residents=False, preservades=0):
     """D1 — porta d'entrada de l'assignació d'un GradingRuleSet a un model.
@@ -700,6 +722,10 @@ def _validar_ruleset_assignable(rs, *, size_system_id=None, customer_id=None, co
                 'model_id': model.id,
                 'residents': total,
                 'per_origen': per_origen,
+                # SET-2/R11 — DE QUINA PEÇA parla cadascuna. Clau NOVA i additiva, com
+                # `preservades`: el front que no la conegui segueix llegint `residents`
+                # i `per_origen` com sempre.
+                'per_garment': comptar_regles_residents_per_garment(model),
                 # 6.1 — les que es queden. Clau NOVA i additiva: el front que no la conegui
                 # segueix llegint `residents` i `per_origen` com sempre.
                 'preservades': preservades,
@@ -1118,6 +1144,11 @@ def update_model_step2(request, model_id):
                 'model_id': model.id,
                 'residents': _total,
                 'per_origen': _per_origen,
+                # SET-2/R11 — el MATEIX camp que l'altre 409 d'aquest `tipus`. Les dues
+                # portes alimenten el MATEIX diàleg (`useConfirmacioRuleset`, mateix
+                # `tipus` a posta), o sigui que servir-lo en una i no en l'altra deixaria
+                # el diàleg mut segons per on s'hi hagi arribat.
+                'per_garment': comptar_regles_residents_per_garment(model),
                 'imported': _n_imported,
                 'message': (
                     f"Aquest model té {_total} regles de graduació pròpies ({_detall}). "
@@ -3910,6 +3941,12 @@ def base_stages_view(request, model_id):
             # front no pot dir QUINA germana treu, i `desactivar_pom` no té com saber-ho.
             'capa': bm.capa,
             'instancia': bm.instancia,
+            # SET-2/R11 — I EL TERCER EIX, pel mateix argument literal, un eix més tard:
+            # aquesta vista alimenta Comprovació i la graella de Mesures, i sense ell la
+            # pantalla no pot distingir dues prendes. És l'eix d'una FILA —dada factual,
+            # de quina peça és aquesta mesura— i per tant entra per l'acta de T6a
+            # («servir l'eix d'una fila és sempre legítim»), no per la de la resolució.
+            'garment': bm.garment,
             'takes': takes,
         })
 

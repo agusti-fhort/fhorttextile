@@ -347,6 +347,13 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 # altre nom seria fabricar la divergència que aquest fitxer combat.
                 'capa': line.capa,
                 'instancia': line.instancia,
+                # SET-2 — EL TERCER EIX, pel mateix argument que els dos de germanor i amb
+                # l'acta de `graded_spec_views`: servir l'EIX D'UNA FILA és sempre legítim
+                # (dada factual: de quina prenda és aquesta línia), i és una cosa distinta de
+                # servir una DEFINICIÓ RESOLTA, que només surt del punt únic. Sense ell la
+                # superfície de Fitting no pot distingir dues peces: la modista veuria dues
+                # línies iguals del mateix POM i no sabria quina està prenent.
+                'garment': line.garment,
                 'codi': pom.pom_code if pom else '',
                 'nom': (nom_fitxa_map.get(clau_bm) or (pom.pom_code if pom else '')),  # nom_fitxa (croquis)
                 'nom_en': pom.name_en if pom else '',        # nom canònic EN (línia superior, nomenclatura 2 línies)

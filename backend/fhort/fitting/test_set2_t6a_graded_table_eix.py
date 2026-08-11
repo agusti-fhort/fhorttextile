@@ -199,3 +199,65 @@ class CasDeControlUnaSolaPecaTest(_T6aBase):
 
         self.assertEqual(len(files), 2)
         self.assertEqual([f['capa'] for f in files], ['exterior', 'folre'])
+
+
+class LesSuperficiesDeMesuraEmetenLeixTest(_T6aBase):
+    """SET-2/R11 — les dues vores que encara no el deien, i que S2 va censar.
+
+    Cap de les dues resol res: publiquen l'EIX D'UNA FILA (de quina prenda és aquesta línia
+    o aquesta mesura), que és dada factual. L'acta de `graded_spec_views` cobreix exactament
+    aquest cas i el separa de servir una DEFINICIÓ RESOLTA, que només surt del punt únic.
+    """
+
+    def test_la_linia_de_fitting_diu_de_quina_peca_es(self):
+        """`fitting/serializers.py` — sense l'eix, la modista veu dues línies iguals del
+        mateix POM i no sap quina està prenent."""
+        from fhort.fitting.models import FittingSession, PieceFitting, PieceFittingLine
+        from fhort.fitting.serializers import PieceFittingGridSerializer
+
+        with comportes_garment_alcades('fitting_piecefittingline', *TAULES):
+            sessio = FittingSession.objects.create(
+                model=self.model, fase='Dev', data=datetime.date(2026, 8, 11))
+            pf = PieceFitting.objects.create(
+                session=sessio, model=self.model, grading_version=self.gv)
+            PieceFittingLine.objects.create(
+                piece_fitting=pf, pom=self.pom, size_label=BASE,
+                valor_teoric=50.0, valor_real=50.0, garment=SEGONA)
+
+            linies = PieceFittingGridSerializer(pf).data['lines']
+
+            self.assertEqual([l['garment'] for l in linies], [SEGONA])
+
+    def test_la_taula_detapes_diu_de_quina_peca_es_cada_mesura(self):
+        """`base_stages_view` — alimenta Comprovació i la graella de Mesures."""
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from fhort.models_app.models import BaseMeasurement
+        from fhort.models_app.views import base_stages_view
+
+        with comportes_garment_alcades(*TAULES):
+            BaseMeasurement.objects.create(
+                model=self.model, pom=self.pom, base_value_cm=50.0, ordre=1, garment=SEGONA)
+
+            req = APIRequestFactory().get('/base-stages/')
+            force_authenticate(req, user=self.user)
+            files = base_stages_view(req, self.model.id).data['rows']
+
+            self.assertEqual([f['garment'] for f in files], [SEGONA])
+
+    def test_CAS_DE_CONTROL_la_mare_emet_leix_buit_no_labsencia_del_camp(self):
+        """El camp hi és SEMPRE. Una clau absent obligaria el client a distingir «no ho sé»
+        de «és la mare», que és el defecte que la llei del vocabulari ja va tancar."""
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from fhort.models_app.models import BaseMeasurement
+        from fhort.models_app.views import base_stages_view
+
+        BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom, base_value_cm=100.0, ordre=1)
+
+        req = APIRequestFactory().get('/base-stages/')
+        force_authenticate(req, user=self.user)
+        files = base_stages_view(req, self.model.id).data['rows']
+
+        self.assertEqual([f['garment'] for f in files], [MARE])

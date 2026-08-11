@@ -79,8 +79,14 @@ class BaseStagesNoRegressioTest(TenantTestCase):
             # de QUINA germana és, que és el que permet que dues mesures del mateix POM no es
             # confonguin a la taula. Aquest test va fer la seva feina: va detectar el canvi de
             # contracte, i el canvi era volgut.
+            # `garment`: ampliació de SET-2/R11 (2026-08-11) — el TERCER eix, pel mateix
+            # argument literal que `capa` i `instancia` un eix més tard. La fila diu de
+            # quina PRENDA és, i sense això Comprovació no pot distingir dues peces del
+            # mateix POM. Aquest test ha tornat a fer la seva feina: ha detectat el canvi
+            # de contracte, i el canvi és volgut.
             # Tots són camps AFEGITS: cap dels altres canvia de nom, de valor ni d'ordre.
-            'base_measurement_id', 'base_value_cm', 'capa', 'instancia', 'is_key',
+            'base_measurement_id', 'base_value_cm', 'capa', 'garment', 'instancia',
+            'is_key',
             'nom_ca', 'nom_canonic_model', 'nom_en', 'nom_fitxa', 'nom_traduit_model',
             'pom_code', 'pom_id', 'takes', 'tol_minus', 'tol_plus',
         ])
