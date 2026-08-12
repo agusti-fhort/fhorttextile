@@ -151,7 +151,8 @@
       "err_linear_zero": "A LINEAR rule with delta 0 and no break grades nothing: set a delta or choose FIXED.",
       "err_generic": "could not be saved",
       "load_err": "The grading table could not be loaded.",
-      "regla_heretada": "This piece has no rule of its own: it follows the base model’s."
+      "regla_heretada": "This piece has no rule of its own: it follows the base model’s.",
+      "buit_peca": "This piece has no measurements of its own yet. Define its POMs to be able to grade it."
     }
   },
   "size_map_title": "Size systems",

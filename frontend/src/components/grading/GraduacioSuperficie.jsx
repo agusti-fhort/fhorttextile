@@ -469,7 +469,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
               <tbody>
                 {filesDelContenidor.length === 0
                   ? <tr><td colSpan={10} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
-                      {t('graduacio.superficie.buit')}
+                      {t(peca && !peca.es_mare ? 'graduacio.superficie.buit_peca' : 'graduacio.superficie.buit')}
                     </td></tr>
                   : cos(filesDelContenidor)}
               </tbody>
