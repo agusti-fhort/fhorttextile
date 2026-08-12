@@ -2806,8 +2806,7 @@
     "sortir_amb_canvis_peces": "In: {{peces}}",
     "sortir_amb_canvis_cos": "If you leave now, the changes in these containers will be lost. Close this warning and save them in the container where you made them.",
     "sortir_sense_desar": "Leave without saving",
-    "quedar_me": "Stay here",
-    "import_nomes_mare": "Import does not carry the piece axis yet: it can only import into the main piece."
+    "quedar_me": "Stay here"
   },
   "model_fabric": {
     "err_close_table": "Could not close the table.",
@@ -3972,7 +3971,8 @@
     "file_hint": "PDF, Excel or image · Click to select",
     "analyzing_doc": "⏳ Analyzing document…",
     "analyze_sizes": "⚡ Analyze sizes",
-    "multimodel_warn": "The document contains {{count}} detected models ({{names}}). The import will handle a single model.",
+    "multiprenda_info": "This document seems to carry more than one garment; everything will be imported into {{peca}}.",
+    "desti_peca": "Importing into:",
     "table_columns": "Table columns (confirmed sizes):",
     "no_sizes_selected": "No size selected",
     "doc_sizes": "Document sizes",

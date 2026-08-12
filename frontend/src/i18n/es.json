@@ -2806,8 +2806,7 @@
     "sortir_amb_canvis_peces": "En: {{peces}}",
     "sortir_amb_canvis_cos": "Si sales ahora, los cambios de estos contenedores se perderán. Cierra este aviso y guárdalos en el contenedor donde los has hecho.",
     "sortir_sense_desar": "Salir sin guardar",
-    "quedar_me": "Quedarme",
-    "import_nomes_mare": "La importación aún no sabe de qué pieza es: solo se puede importar en la pieza principal."
+    "quedar_me": "Quedarme"
   },
   "model_fabric": {
     "err_close_table": "No se ha podido cerrar la tabla.",
@@ -3972,7 +3971,8 @@
     "file_hint": "PDF, Excel o imagen · Clica para seleccionar",
     "analyzing_doc": "⏳ Analizando documento…",
     "analyze_sizes": "⚡ Analizar tallas",
-    "multimodel_warn": "El documento contiene {{count}} modelos detectados ({{names}}). La importación tratará un solo modelo.",
+    "multiprenda_info": "Este documento parece llevar más de una prenda; se importará todo a {{peca}}.",
+    "desti_peca": "Importando en:",
     "table_columns": "Columnas de la tabla (tallas confirmadas):",
     "no_sizes_selected": "Ninguna talla seleccionada",
     "doc_sizes": "Tallas del documento",

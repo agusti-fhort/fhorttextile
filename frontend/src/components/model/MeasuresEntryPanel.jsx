@@ -35,6 +35,11 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   const [mode, setMode] = useState('loading')   // 'loading' | 'selector' | 'manual' | 'import'
+  // SET-2/T8 — LA PRENDA DES D'ON S'HA OBERT L'IMPORT. **Un import = una peça**, i la peça la
+  // dedueix el CONTEXT: el botó viu a la capçalera de cada contenidor i el que hi porta és la
+  // seva. `null` = la mare (el camí del selector, que és el del model verge). No és una
+  // pregunta del wizard i no viatja per fila: és context, i el context viu aquí.
+  const [importPeca, setImportPeca] = useState(null)
   // SET-2/T7-fix4 — ¿HEM PASSAT MAI PER LA TRIA? El ← de la graella tornava SEMPRE al selector
   // (les tres targetes Introduir/Importar/Copiar), i en mode ENTRADA no s'hi ha estat mai: amb
   // files ja poblades s'entra DIRECTE a 'manual' (v. el `if (entryMode)` de la càrrega). Tornar
@@ -414,7 +419,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                 </div>
               )}
             </div>
-            <div onClick={() => setMode('import')}
+            <div onClick={() => { setImportPeca(null); setMode('import') }}
               style={{ background: 'var(--bg-main)', border: '0.5px solid var(--border)',
                        borderRadius: 12, padding: '1.5rem', cursor: 'pointer' }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}><i className="ti ti-bolt" style={{ color: 'var(--gold)' }} /></div>
@@ -469,8 +474,8 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
             no cau sobre la mare. Les files es reparteixen per l'eix, com a Mesures i Escalat.
             (Aquí NO cal la vora `garments` del #12b: en aquest camí el desat buit mor amb un
             400 abans d'arribar a la poda.) */}
-        <PecesDelModel model={model} accionsPeca={peca => <BotoImportarPeca peca={peca}
-          onImportar={() => setMode('import')} />}>{peca => {
+        <PecesDelModel model={model} accionsPeca={peca => <BotoImportarPeca
+          onImportar={() => { setImportPeca(peca); setMode('import') }} />}>{peca => {
         const filesDelContenidor = filesDeLaPeca(taulaRows, peca ? (peca.codi || '') : null)
         return (<>
           {/* C2 — els xips de POMs suggerits han mort. La taula ARRENCA amb totes les files de
@@ -559,6 +564,12 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
       {mode === 'import' && (
         <ImportWizard
           model={model}
+          /* L'EIX, com a FET. El wizard no el pregunta mai: el MOSTRA («Important a:
+             Llaçada») i el porta a la iniciació de la sessió, que és l'única porta per on
+             entra al pipeline. */
+          garment={importPeca?.codi ?? ''}
+          garmentNom={importPeca && !importPeca.es_mare
+            ? (importPeca.nom || importPeca.codi) : (model?.nom_prenda || '')}
           onCancel={() => setMode('selector')}
           onComplete={() => reloadTable('manual')}
         />
@@ -573,25 +584,19 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
  * Decisió T8 (Agus): **un import = una peça**, i s'inicia des de la peça. Per això el botó surt
  * de la capçalera de la pàgina i baixa a cada contenidor.
  *
- * 🛑 I A LES PRENDES QUE NO SÓN LA MARE HI ÉS APAGAT, amb el motiu al `title`. El pipeline
- * d'importació (`extraction_views.py`, sis vistes: cribratge · talles · extracció · poms ·
- * grading-preview · mesures) **no coneix l'eix de peça**: censat el 12/08, zero referències a
- * `garment` a tot el fitxer. Un import llançat des del contenidor de la Llaçada escriuria les
- * seves files a la MARE, en silenci — exactament la família que aquest sprint ha anat tancant
- * (#12b, #12c, #12d), fabricada des d'una porta que encara no s'hi ha adaptat.
+ * ✅ SET-2/T8 — I JA NO ESTÀ APAGAT A LES FILLES. B9 el va deixar `disabled` amb el motiu al
+ * `title` perquè el pipeline d'importació no coneixia l'eix de peça (censat el 12/08: zero
+ * referències a `garment` a les sis vistes d'`extraction_views.py`) i un import llançat des del
+ * contenidor de la Llaçada hauria escrit les seves files a la MARE, en silenci. Aquell dia es
+ * va escriure que «el dia que l'import guanyi l'eix, això és treure el `disabled`»: és avui.
+ * La sessió porta la prenda des de la iniciació i el confirm hi escriu totes les files.
  *
- * Un botó apagat que diu per què és la mateixa llei que va regir el «Canviar» de B1 i el cos
- * d'espera: promet menys del que sembla, però no menteix. El dia que l'import guanyi l'eix,
- * això és treure el `disabled`.
+ * L'ordre importa i és el del brief: treure-la ha estat l'ÚLTIM pas, no el primer.
  */
-function BotoImportarPeca({ peca, onImportar }) {
+function BotoImportarPeca({ onImportar }) {
   const { t } = useTranslation()
-  const esMare = !peca || peca.es_mare
   return (
-    <button type="button" onClick={esMare ? onImportar : undefined} disabled={!esMare}
-      title={esMare ? undefined : t('model_measurements.import_nomes_mare')}
-      style={{ ...botoPorta, ...(esMare ? null : { cursor: 'not-allowed', opacity: undefined,
-        background: 'var(--bg-page)', borderColor: 'var(--line)', color: 'var(--text-faint)' }) }}>
+    <button type="button" onClick={onImportar} style={botoPorta}>
       <i className="ti ti-upload" aria-hidden="true"
          style={{ fontSize: 14, color: 'currentColor' }} /> {t('model_measurements.import_table')}
     </button>

@@ -216,7 +216,7 @@ function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea
   )
 }
 
-export default function ImportWizard({ model, onCancel, onComplete }) {
+export default function ImportWizard({ model, garment = '', garmentNom = '', onCancel, onComplete }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const token = localStorage.getItem('access_token')
@@ -314,6 +314,10 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     fd.append('document', file)
     fd.append('model_id', model.id)
     fd.append('garment_type_item_code', model.garment_type_item_code || '')
+    // SET-2/T8 — LA PRENDA DE DESTÍ, i aquesta és l'ÚNICA porta per on entra al pipeline:
+    // a partir d'aquí el backend la llegeix de la sessió i cap altre pas la torna a enviar.
+    // `''` és la mare, que és el camí de sempre.
+    fd.append('garment', garment || '')
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/cribratge/`, {
         method: 'POST', headers: authHeaders, body: fd,
@@ -818,6 +822,22 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
     <div style={{ }}>
       <Stepper step={step} />
 
+      {/* SET-2/T8 · LA PRENDA DE DESTÍ, DITA COM UN FET.
+          **El wizard no pregunta mai de quina peça és l'import**: la peça la fixa el context
+          (el contenidor des d'on s'ha premut «Importar taula») i aquí només es MOSTRA, perquè
+          qui està important sàpiga on aterra la feina sense haver-ho d'anar a comprovar.
+          Només surt quan hi HA prenda: a un model d'una sola peça —el 100% del corpus d'avui—
+          seria soroll dir «important a la peça principal» quan no n'hi ha cap altra. */}
+      {!!garment && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+                      padding: '6px 12px', borderRadius: 8, background: 'var(--bg-main)',
+                      border: `0.5px solid ${BORDER}`, fontSize: 'var(--fs-body)' }}>
+          <i className="ti ti-shirt" aria-hidden="true" style={{ fontSize: 15, color: GOLD }} />
+          <span style={{ color: 'var(--text-muted)' }}>{t('import_wizard.desti_peca')}</span>
+          <strong>{garmentNom || garment}</strong>
+        </div>
+      )}
+
       {error && (
         <div style={{ background: '#fff0f0', border: '1px solid #f0c0c0', color: '#a32d2d',
                       borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
@@ -885,14 +905,6 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
 
       {step === 1 && cribratge && (
         <div>
-          {/* Avís multi-model (gating de cribratge, no bloqueja el pas de talles) */}
-          {cribratge.num_models > 1 && (
-            <div style={{ background: '#fdf6ee', border: '1px solid var(--gold-border)', color: 'var(--gold)',
-                          borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 12 }}>
-              ⚠ {t('import_wizard.multimodel_warn', { count: cribratge.num_models, names: (cribratge.model_detectat || []).map(m => m.nom).join(', ') })}
-            </div>
-          )}
-
           {/* Aparellament document ⟷ model (LA LLEI de la sessió) */}
           <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>
             {t('import_wizard.pairing_intro')}
@@ -1470,6 +1482,25 @@ export default function ImportWizard({ model, onCancel, onComplete }) {
                         borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', marginBottom: 16 }}>
             {t('import_wizard.mana_doc', { count: pomsActius })}
           </div>
+
+          {/* SET-2/T8 · MÉS D'UN PATRÓ AL DOCUMENT — INFORMACIÓ, NO ERROR.
+              Amb «un import = una prenda», que el document en porti dues ha deixat de ser una
+              condició de bloqueig: la peça de destí ja està decidida i tot hi anirà. Per això
+              NO és un modal, NO és vermell i NO demana cap clic per continuar — es pot ignorar
+              amb raó legítima. El que no pot és no dir-se, i ha de dir el NOM de la peça: un
+              avís que no diu on va la feina obliga a anar-ho a comprovar. */}
+          {cribratge?.mes_duna_prenda && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start',
+                          background: 'var(--bg-main)', border: `0.5px solid ${BORDER}`,
+                          borderRadius: 8, padding: '8px 12px', marginBottom: 16,
+                          fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+              <i className="ti ti-info-circle" aria-hidden="true"
+                 style={{ fontSize: 15, color: GOLD, flexShrink: 0, marginTop: 1 }} />
+              <span>{t('import_wizard.multiprenda_info', {
+                peca: garmentNom || model.nom_prenda || model.codi_intern,
+              })}</span>
+            </div>
+          )}
 
           {/* PRINCIPI DEL SOROLL — el model s'alimenta de realitat. Les mesures vives que el
               document NO menciona es PROPOSEN per desactivar; mai s'esborren soles i mai
