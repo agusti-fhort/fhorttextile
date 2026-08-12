@@ -289,7 +289,13 @@ const checkSource = {
         rowKey: clauDeFila(r, r.base_measurement_id),
         // C4/BLOC 2 — els eixos viatgen amb la fila perquè la PODA pugui dir quina germana
         // treu (`onPodar`, més avall). `base_stages` els serveix des de `6e259c8b`.
+        // SET-2/T7-B7 — I EL TERCER EIX. La fila ha de dir DE QUINA PRENDA és, i no per
+        // pintar-ho: perquè el desat l'envia (`utils/payloadMesures`) i la poda del
+        // backend conserva per una clau de QUATRE. Sense l'eix a la fila, el payload cau
+        // al de la peça del CONTENIDOR, i en una taula amb files de dues prendes això
+        // deixaria les de l'altra fora del conjunt a conservar — esborrat silenciós.
         capa: r.capa, instancia: r.instancia,
+        garment: r.garment,
         codi: r.nom_fitxa || r.pom_code,
         pom_code: r.pom_code,
         nom_en: r.nom_en, nom_local: r.nom_ca,

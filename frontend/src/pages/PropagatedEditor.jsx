@@ -57,7 +57,8 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
         // C4/BLOC 3 — hi entra el `pom_id` (i els eixos) perquè l'escriptura no hagi de
         // desmuntar el lineId: la fila ja sap qui és, i el mapa ja la té localitzada.
         if (a) m.set(a.lineId, { vigent: a.value, base: r.base_value_cm, codi: r.codi, talla: s,
-                                 pom_id: r.pom_id, capa: r.capa, instancia: r.instancia })
+                                 pom_id: r.pom_id, capa: r.capa, instancia: r.instancia,
+                                 garment: r.garment })
       }
     }
     return m
