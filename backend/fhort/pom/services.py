@@ -751,6 +751,14 @@ def _te_regles(model) -> bool:
     per les REGLES. Un model apuntant a un GradingRuleSet BUIT passava el gate i graduava a
     FIXED tota la taula. Ara la segona branca compta regles actives del set: mateixa pregunta
     que respon `_load_grading_rules`, que és de qui ha de ser el mirall.
+
+    ── SET-2/PRED-3 (2026-08-12) · PER QUÈ AQUESTA **SÍ** QUE ES QUEDA PER MODEL ────────
+    El tram que va donar subjecte al predicat del fallback (`_load_grading_rules_per_garment`)
+    NO toca aquest, i no per oblit: són dues preguntes distintes. Aquesta és la porta
+    d'entrada del MOTOR i el que decideix és si la generació sencera arrenca; un model on
+    ALGUNA prenda pot graduar no s'ha de refusar en bloc perquè una altra no pugui. Qui
+    reparteix per peça és `_regla_de`, i el que passa amb una peça sense llei ja té llei
+    pròpia i explícita: la cel·la absent de D2 (cap cel·la, mai un FIXED fabricat).
     """
     from fhort.models_app.models import ModelGradingRule
     if ModelGradingRule.objects.filter(model_id=model.id, actiu=True).exists():
@@ -840,20 +848,50 @@ def _load_grading_rules_per_garment(model) -> dict:
     error carregant-les es convertia en graduar-ho tot a FIXED amb un 200 OK. Era la segona
     porta al mateix símptoma del 163, independent del ruleset buit. Ara un error de càrrega
     puja: val més una propagació que peta que una que menteix.
+
+    ── SET-2/PRED-3 (2026-08-12) · EL PREDICAT DEL FALLBACK GUANYA EL SUBJECTE ──────────
+    El predicat era `rules.exists()` sobre **TOT el model**, i decidia una cosa que no és
+    del model sinó d'una peça: **si el contenidor del client es llegeix o no**. Amb dues
+    prendes vives el resultat era asimètric, i la direcció que fa mal NO és la que sembla:
+
+      · mare amb residents + 02 sense → la 02 **hereta** la de la mare (`_regla_de`). Això
+        ja era correcte i no canvia: D5-bis diu exactament això.
+      · **02 amb residents + mare sense** → `rules.exists()` deia que sí, el contenidor no
+        es llegia MAI, i la mare (i tota germana sense residents) queia a `rule is None`
+        → **llei de cel·la absent: cap cel·la emesa**. La graduació de la mare desapareix
+        sencera i només en queda un avís de «cobertura parcial». És l'estat que fabrica
+        l'import per prenda (SET-2/T8) quan la mare gradua pel catàleg del client.
+
+    LA PREGUNTA BONA NO ÉS «té residents el model?» NI «en té aquesta peça?», SINÓ **«en té
+    LA MARE?»**, i el motiu és que el contenidor no pot portar garment: quan entra, entra
+    sempre com a llei de la peça mare. Preguntar per la peça seria confondre els dos estats
+    que D5-bis separa —«no en té» (hereta) i «ningú no en té» (contenidor)—: una peça sense
+    llei pròpia no ha de fer baixar el catàleg per ella, ha d'heretar la de la mare.
+
+    Amb una sola prenda tots els residents són `''` i el predicat val EXACTAMENT el que
+    valia: `te_mare == rules.exists()`. Comportament idèntic, byte a byte, per al 100% del
+    corpus d'avui.
     """
     from fhort.models_app.models import ModelGradingRule
     rules = ModelGradingRule.objects.filter(model_id=model.id, actiu=True)
-    if rules.exists():
-        return {(r.pom_id, r.garment): r for r in rules}
-    if model.grading_rule_set_id:
+    out = {(r.pom_id, r.garment): r for r in rules}
+    # El subjecte del predicat: LA MARE, no el model. Es llegeix del `out` ja materialitzat
+    # per no fer una segona consulta que pogués divergir de la primera.
+    te_residents_la_mare = any(garment == '' for (_pom_id, garment) in out)
+    if not te_residents_la_mare and model.grading_rule_set_id:
         from fhort.pom.models import GradingRule
         # El joc del CATÀLEG no porta garment i no en pot portar (és una llei reutilitzable,
         # mai propietat d'un model: v. el pin de `pom.GradingRule`). Entra, doncs, com a llei
         # de la PEÇA MARE, i `_regla_de` la fa heretar a totes les altres peces.
-        return {(r.pom_id, ''): r for r in GradingRule.objects.filter(
+        #
+        # `update` i no `return`: les residents d'una FILLA conviuen amb el catàleg que
+        # governa la mare. Abans era un `return` perquè les dues branques s'excloïen per
+        # força —o residents o catàleg, mai els dos—, i és justament aquella exclusió la que
+        # deixava la mare muda.
+        out.update({(r.pom_id, ''): r for r in GradingRule.objects.filter(
             rule_set_id=model.grading_rule_set_id, actiu=True
-        )}
-    return {}
+        )})
+    return out
 
 
 def _regla_de(rules, pom_id, garment):
