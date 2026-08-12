@@ -181,8 +181,13 @@ def main():
         carets = pag.locator('[data-fila-peca]')
         mira('B2b dues files superiors (nom + caret + llapis)', carets.count() == 2,
              f'{carets.count()}')
-        mira('B2b el contenidor del Pantaló diu per què és buit',
-             'encara no té mesures' in pag.locator('[data-peca="02"]').inner_text().lower())
+        # SET-2/T7-B8 — el text d'espera se n'ha anat: el contenidor porta la TAULA REAL,
+        # filtrada per l'eix de la peça. Buida avui (la 02 no té files actives) i amb les seves
+        # capçaleres, que és el que diu que la superfície hi és i espera feina, no un rètol.
+        cos02 = pag.locator('[data-peca="02"]').inner_text().lower()
+        mira('B2b el contenidor del Pantaló porta la TAULA real, no un rètol',
+             'pom' in cos02 and 'talla base' in cos02, cos02[:40].replace('\n', ' '))
+        mira('B2b i el text d\'espera ja no hi és', 'encara no té mesures' not in cos02)
         pag.screenshot(path=str(OUT / 't7_b2b_mesures_dos_contenidors.png'), full_page=True)
 
         # EL CONTRAPÈS: amb UNA sola prenda no hi ha CAP fila. Sense ell, un guard que compti

@@ -63,7 +63,7 @@ export function construeixPayload(files, garmentDefecte = '') {
       nom_fitxa: r.nom_fitxa || '',
     }))
   const ambPom = f.filter(r => r.pom_id)
-  return {
+  const cos = {
     measurements,
     keep_pom_ids: ambPom.map(r => r.pom_id),
     keep_mesures: ambPom.map(r => ({
@@ -73,6 +73,18 @@ export function construeixPayload(files, garmentDefecte = '') {
       garment: garmentDeFila(r, garmentDefecte),
     })),
   }
+  // ── L'ABAST EXPLÍCIT, NOMÉS QUAN CAL (SET-2/#12b) ──────────────────────────────────────
+  // `_poda_mesures` dedueix quines prendes s'estan podant de les files que el payload ANOMENA.
+  // Hi ha un sol gest que no pot resoldre: **el contenidor que es desa BUIT** —cap fila, cap
+  // eix, i tanmateix una ordre de buidar-lo—. Per a aquell, i només per a aquell, el client diu
+  // qui és.
+  //
+  // ⚠️ NO S'ENVIA SEMPRE, i la diferència té dany: l'abast explícit SUBSTITUEIX el derivat. En
+  // una taula amb files de dues prendes —l'estat d'avui, perquè `taula-mesures` no filtra—
+  // enviar `garments: ['']` des de la mare deixaria les files de la 02 fora de l'abast, i
+  // esborrar-ne una no faria efecte: un gest que l'usuari fa i que no passa.
+  if (!cos.keep_mesures.length) cos.garments = [garmentDefecte || '']
+  return cos
 }
 
 /**
