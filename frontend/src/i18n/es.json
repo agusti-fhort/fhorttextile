@@ -117,7 +117,11 @@
         "titol": "Tallas de ruptura fuera del run nuevo",
         "regles_one": "{{count}} regla",
         "regles_other": "{{count}} reglas"
-      }
+      },
+      "peca_mare": "Modelo base",
+      "peca_codi": "Pieza {{codi}}",
+      "per_garment_titol": "Por pieza",
+      "avis_de_la_peca": "Este aviso es de {{peca}}."
     },
     "contenidor": {
       "intro": "Elige el juego de reglas con el que se graduará este modelo. Los del cliente van primero; ninguno queda fuera de la lista.",
@@ -4915,7 +4919,24 @@
     "year_season": "Año · Temporada",
     "save_grading": "Guardar graduación",
     "grading_saved": "Graduación guardada.",
-    "need_ruleset": "Elige un conjunto de reglas"
+    "need_ruleset": "Elige un conjunto de reglas",
+    "model_base": "Modelo base",
+    "inherits": "Hereda del modelo",
+    "rename_piece": "Renombrar",
+    "from_model": "Del modelo",
+    "add_piece": "Añadir pieza",
+    "piece_code": "Código",
+    "piece_name": "Nombre",
+    "piece_name_ph": "Pantalón, Capucha…",
+    "piece_created": "Pieza creada.",
+    "piece_renamed": "Nombre guardado.",
+    "piece_deleted": "Pieza eliminada.",
+    "piece_named": "Pieza: {{peca}}",
+    "delete_piece": "Eliminar pieza",
+    "delete_piece_warn": "Se eliminará la pieza del modelo. Solo se puede eliminar si no tiene ningún dato colgando.",
+    "delete_piece_blocked": "Esta pieza no se puede eliminar",
+    "inherit_again": "Volver a heredar",
+    "inherits_again": "La pieza vuelve a heredar del modelo."
   },
   "disseny": {
     "back_title": "Volver al panel"
@@ -4948,5 +4969,9 @@
   "size_map_conf_MEDIUM": "media",
   "size_map_conf_LOW": "baja",
   "size_map_conf_NO_MATCH": "sin correspondencia",
-  "size_map_back_title": "Volver al panel"
+  "size_map_back_title": "Volver al panel",
+  "peca": {
+    "collapse": "Plegar",
+    "expand": "Desplegar"
+  }
 }

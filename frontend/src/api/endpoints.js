@@ -70,6 +70,22 @@ export const models = {
   nextRef: (params) => client.get('/api/v1/models/next-ref/', { params }),       // ?year&season
   createWizard: (data) => client.post('/api/v1/models/create-wizard/', data),    // esquelet COMPLET
   updateStep2: (id, data) => client.patch(`/api/v1/models/${id}/update-step2/`, data),
+  // SET-2/T2-bis — LES PRENDES D'UN MODEL, amb el valor EFECTIU i el flag d'herència per camp.
+  // La mare hi ve sintètica i sempre primera (`id: null`, `codi: ''`). Contracte sencer al
+  // docstring de `garment_views.py`, que és la font de veritat (no cap brief).
+  peces: (id) => client.get(`/api/v1/models/${id}/peces/`),
+  // SET-2/R11 · L'AUTORIA. El POST i el PATCH tornen la peça RESOLTA, amb la MATEIXA forma que
+  // cada element de `peces`: qui pinta no ha de saber dos formats.
+  //
+  // 🔑 AL PATCH, `null` EXPLÍCIT VOL DIR «TORNA A HERETAR» I EL CAMP ABSENT «NO TOQUIS». La
+  // distinció és del contracte i el client l'ha de respectar: **no enviïs mai camps que
+  // l'usuari no ha tocat**, perquè enviar-los tots convertiria cada herència en una declaració.
+  // Per això aquí no hi ha cap objecte per defecte ni cap `?? null`: passa exactament el que et
+  // donin.
+  crearPeca: (id, dades) => client.post(`/api/v1/models/${id}/peces/`, dades),
+  actualitzarPeca: (id, pecaId, dades) =>
+    client.patch(`/api/v1/models/${id}/peces/${pecaId}/`, dades),
+  esborrarPeca: (id, pecaId) => client.delete(`/api/v1/models/${id}/peces/${pecaId}/`),
   destroy: (id) => client.delete(`/api/v1/models/${id}/delete/`),
   taskLog: (id) => client.get(`/api/v1/models/${id}/task-log/`),   // 5B-fix: log de transicions
   // Capa de Projecte: definir tasques d'un model i avançar fase (gate del responsable).

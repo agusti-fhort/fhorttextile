@@ -4,7 +4,7 @@ import { IconAlertTriangle, IconLock } from '@tabler/icons-react'
 import client from '../api/client'
 import { models } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
-import EditorHeader from '../components/model/EditorHeader'
+import PecaContenidor from '../components/model/PecaContenidor'
 import { buildEscalatGroups, buildEscalatRows, escalatRuleLeadCols } from '../components/model/fittingGridAdapter'
 import { mesuraSemblaIncrement } from '../utils/plausibilitatMesura'
 import { formatLen } from '../utils/format'
@@ -35,7 +35,7 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   }, [modelId, t])
 
   useEffect(() => { load() }, [load])
-  // Identitat de model per a la capçalera unificada (EditorHeader).
+  // Identitat de model per al contenidor de peça (dependència, joc de regles i run).
   useEffect(() => { models.get(modelId).then(r => setModelInfo(r.data)).catch(() => {}) }, [modelId])
 
   const base = (data?.base_size || '').trim()
@@ -174,17 +174,18 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
             </button>
           </div>
         )}
-        {/* Capçalera UNIFICADA: identitat de model + franja contextual (Escalat · pista). */}
-        <EditorHeader
-          model={modelInfo}
-          context={
-            <span>
-              <strong>{t('model_sheet.tab_grading')}</strong>
-              {' — '}
-              {readOnly ? t('model_measurements.propagated_hint_ro') : t('model_measurements.propagated_hint')}
-            </span>
-          }
-        />
+        {/* SET-2/T7-A3 · MATEIX PATRÓ QUE MESURES: la barra crema de resum del model se'n va
+            (el que deia ja és a la capçalera de la pàgina, i el run i la base baixen al
+            contenidor de peça, dits amb tipografia). La FRANJA CONTEXTUAL no era part del
+            resum i es queda: és l'únic lloc que diu de què va aquesta pantalla. */}
+        <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap',
+                      padding: '0 2px 10px', fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
+          <span>
+            <strong>{t('model_sheet.tab_grading')}</strong>
+            {' — '}
+            {readOnly ? t('model_measurements.propagated_hint_ro') : t('model_measurements.propagated_hint')}
+          </span>
+        </div>
         {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 8 }}>{err}</div>}
         {/* G6-B/T3 — La versió vigent està segellada i el backend ha refusat l'escriptura. El
             rebuig ha de tenir CARA i SORTIDA: què passa, i què pots fer-hi. */}
@@ -242,6 +243,7 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
             </button>
           </div>
         )}
+        <PecaContenidor model={modelInfo}>
         {loading && !data ? (
           <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('app.loading')}</div>
         ) : gridRows.length === 0 ? (
@@ -257,6 +259,7 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
             onSave={onGridSave}
           />
         )}
+        </PecaContenidor>
       </div>
     </div>
   )

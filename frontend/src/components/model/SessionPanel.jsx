@@ -7,7 +7,7 @@ import { identitatMesura } from '../../utils/identitatMesura'
 
 // Sprint Y — Panell de la SESSIÓ de fitting dins la superfície Mesures (mode sessió). Migra de
 // FittingDetail: la franja de context (estat/data/responsable/lloc/persona) + el panell plegable
-// Canvis · Observacions · Imatges. Cap pantalla pròpia: és un germà de DependencyPanel/WatchpointsPanel.
+// Canvis · Observacions · Imatges. Cap pantalla pròpia: és un germà de PecaContenidor/WatchpointsPanel.
 
 const estatColor = { Oberta: 'var(--warn)', Programada: 'var(--gold)', Tancada: 'var(--ok)', Anullada: 'var(--gray)' }
 

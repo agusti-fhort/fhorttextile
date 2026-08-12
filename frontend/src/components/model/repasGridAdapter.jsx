@@ -141,7 +141,11 @@ export function buildRepasRows(rows, sessions) {
     // vénen: aquest identificador és sintètic i intern del front —la columna és read-only i
     // no es desa enlloc—, i fer-lo passar per la clau del contracte seria un segon lloc que
     // decideix com s'aplana una identitat que decideix `pom/identitat.py`.
-    const ident = `repas:${row.pom_id}:${row.capa || ''}:${row.instancia || ''}`
+    // SET-2/T6b — l'eix de PRENDA hi entra pel mateix motiu que els dos de germanor, i per
+    // aquí i no per `identitatMesura`: aquest identificador és sintètic, intern i amb dialecte
+    // propi (prefix + `:`), i el paràgraf de sobre diu per què no ha de passar per la clau del
+    // contracte. El que ha de créixer és l'eix, no el format.
+    const ident = `repas:${row.pom_id}:${row.capa || ''}:${row.instancia || ''}:${row.garment || ''}`
     return {
       pom_id: row.pom_id, codi: row.codi, pom_code: row.pom_code, is_key: row.is_key,
       capa: row.capa, instancia: row.instancia,

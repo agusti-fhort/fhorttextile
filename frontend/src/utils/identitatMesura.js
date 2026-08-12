@@ -19,7 +19,35 @@
 // Qui hagi d'ENVIAR la identitat al servidor no ha de fer servir això: els tres camps van
 // per separat al cos de la petició, que és el que mana `pom/identitat.py`.
 
+// SET-2/T6b — EL GARMENT ENTRA, I ENTRA L'ÚLTIM. Des que una mesura pot viure a dues PRENDES
+// del mateix model, `{pom}|{capa}|{instancia}` torna a ser insuficient pel mateix motiu que
+// el `pom_id` sol ho va deixar de ser: dues files hi cauen a sobre i el `Map` en descarta una.
+//
+// L'últim, i no el primer, per la mateixa raó que `pom/identitat.py` (T6a): la clau és
+// IDENTITAT, no jerarquia. Que la prenda sigui l'eix de fora mana l'AGRUPACIÓ i l'ORDRE, que
+// viuen als partidors de taules, no l'ordre dels trams d'un token pla. I afegir al final és el
+// canvi que menys demana als seus consumidors.
+//
+// Els quatre trams SEMPRE: `12|exterior||` i `12|exterior|` serien la mateixa mesura escrita de
+// dues maneres. La PEÇA MARE és el tram buit, mai absent — igual que al backend.
+
 /** Clau d'agrupació d'una línia o fila per la mesura a què pertany. */
 export function identitatMesura(fila) {
-  return `${fila.pom_id}|${fila.capa || ''}|${fila.instancia || ''}`
+  return `${fila.pom_id}|${fila.capa || ''}|${fila.instancia || ''}|${fila.garment || ''}`
+}
+
+/**
+ * La clau de FILA per a `MeasureGrid`: la identitat més forta que el payload dona.
+ *
+ * La PK de `BaseMeasurement` mana quan hi és —la taula és única per (model, pom, capa,
+ * instancia, garment), o sigui que la PK ja és tot això resolt i no cal recompondre res—, i
+ * quan el payload no la serveix, el pla B són els quatre eixos. MAI el `pom_id` sol: aquell
+ * era el pla B d'abans que una mesura pogués tenir dues cares, i col·lapsa germanes AVUI.
+ *
+ * La PK s'hi passa a part perquè cada payload li diu d'una manera (`bm_id` al fitting,
+ * `base_measurement_id` al check): la regla viu aquí, el nom del camp al lloc que el llegeix.
+ * I es compara amb `??` i no amb `||` perquè una PK no és mai «falsa»: només absent.
+ */
+export function clauDeFila(fila, pk) {
+  return pk ?? identitatMesura(fila)
 }

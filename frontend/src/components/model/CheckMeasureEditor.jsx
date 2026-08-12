@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { clauDeFila } from '../../utils/identitatMesura'
 import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines } from '../../api/endpoints'
@@ -9,8 +10,8 @@ import { useEnumeracio } from '../../utils/vocabulariDominiFont'
 import { finestraHistoric } from './fittingGridAdapter'
 import MeasureGrid from './MeasureGrid'
 import EditableTable from '../EditableTable/EditableTable'
-import EditorHeader from './EditorHeader'
-import DependencyPanel from './DependencyPanel'
+import BackButton from '../BackButton'
+import PecaContenidor from './PecaContenidor'
 import WatchpointsPanel from './WatchpointsPanel'
 import SessionPanel from './SessionPanel'
 import SessionActions from './SessionActions'
@@ -281,7 +282,11 @@ const checkSource = {
       return {
         pom_id: r.pom_id,
         // Clau de fila per a MeasureGrid: la PK de la mesura, que `base_stages` ja serveix.
-        rowKey: r.base_measurement_id ?? r.pom_id,
+        // SET-2/T6b — el pla B era el `pom_id` sol, i col·lapsava germanes AVUI: dues files
+        // del mateix POM a dues capes compartien clau i React reconciliava una amb l'estat de
+        // l'altra. Ara el pla B és la identitat sencera, per la mateixa porta que els altres
+        // dos adaptadors.
+        rowKey: clauDeFila(r, r.base_measurement_id),
         // C4/BLOC 2 — els eixos viatgen amb la fila perquè la PODA pugui dir quina germana
         // treu (`onPodar`, més avall). `base_stages` els serveix des de `6e259c8b`.
         capa: r.capa, instancia: r.instancia,
@@ -687,8 +692,14 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
 
   return (
     <div>
-      <EditorHeader model={model} onBack={onBack} />
-      <DependencyPanel model={model} />
+      {/* SET-2/T7-A · LA BARRA CREMA DE RESUM DEL MODEL SE'N VA (maqueta d'Agus, 10/08).
+          Deia `codi_intern` i `nom_prenda`, que la capçalera de la pàgina ja diu en gran dues
+          línies més amunt, i `Base: S` + el run, que ara baixen al contenidor de peça dits amb
+          tipografia. El que NO era redundant —el botó de tornar, que hi vivia a dins— es queda:
+          `EditorHeader` només el pintava quan li arribava `onBack`, i aquí es pinta igual.
+          (`EditorHeader` segueix VIU amb UN consumidor: `FittingDetail`, que és una altra
+          pàgina —`/fittings/:id`— i queda fora de l'abast d'aquest tram.) */}
+      {onBack && <div style={{ marginBottom: 8 }}><BackButton onClick={onBack} /></div>}
       {/* Sprint Y — en mode sessió (font fitting), el panell de la sessió: context + Canvis/Observacions/Imatges. */}
       {ctx.fittingSession && <SessionPanel session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} grid={raw?.grid} modelId={model.id} />}
       {/* AQUÍ HI HAVIA «Promoure com a estàndard de l'item» (Agus, 06/08: FORA).
@@ -712,6 +723,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           des de fa temps (↓/Enter i ↑ recorren el carril; A · J · R posen el veredicte sense
           treure la mà del número) i no ho deia res: qui obria la sessió les havia de saber
           d'abans. Només s'hi anuncia el que funciona en aquesta pantalla. */}
+      <PecaContenidor model={model}>
       {!esPresa && !readOnly && rows.length > 0 && (
         <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)',
                     margin: '0 0 10px', lineHeight: 1.8 }}>
@@ -757,6 +769,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           )
         } />
       )}
+      </PecaContenidor>
 
       {/* v3 (`.bar` :193-198) — LA BARRA DE RECOMPTES. La graella diu QUÈ té cada fila; això diu
           on és la sessió sencera, que és la pregunta de qui la tanca. «Sense decidir» és el que
