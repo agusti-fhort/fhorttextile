@@ -266,13 +266,13 @@ class LAbastDeLaPodaAGravarPomTest(TenantTestCase):
     no s'hi perd pel camí—. Aquesta és, a més, la pantalla del dany original: la definició de
     POM és on la tècnica desa la taula per primer cop.
 
-    ⚠️ ELS FIXTURES POSEN CADA PRENDA EN UN POM DIFERENT, i és a posta. Aquesta porta encara
-    resol l'upsert per `(model, pom, capa, instancia)` SENSE el garment (`views.py:2441`, i el
-    `prepared` de `views.py:2399` que se'l menja): amb la mare i la 02 al mateix POM, el
-    `.first()` pot caure sobre la fila de l'altra prenda i sobreescriure-la. És un forat
-    d'ESCRIPTURA, germà d'aquest però més gros, i NO és el que aquest tram tanca; els
-    fixtures l'esquiven perquè el que aquí es mesura és l'abast de la PODA i no un bug que
-    encara no té acta. Qui el tanqui, que esborri aquest paràgraf.
+    ✅ SET-2/#12c (12/08) — LA MITIGACIÓ DELS FIXTURES ESTÀ RETIRADA. Aquests guards es van
+    escriure amb cada prenda en un POM diferent per esquivar un segon forat que llavors era
+    viu: l'upsert d'aquesta mateixa porta resolia sense el `garment`, i amb la mare i la 02
+    al mateix POM el `.first()` podia caure sobre la fila de l'altra prenda. Aquell forat ja
+    no hi és —l'eix entra a `prepared` i a la resolució— i el cas del POM compartit el cobreix
+    ara `LEscripturaDeGravarPomPortaLEixTest`. Els POMs separats d'aquí es queden perquè
+    mesuren una altra cosa: que la poda no travessi la frontera de prenda.
     """
 
     @classmethod
@@ -428,6 +428,128 @@ class LAbastDeLaPodaAGravarPomTest(TenantTestCase):
             self.assertEqual(resp.status_code, 400, getattr(resp, 'data', None))
             segona.refresh_from_db()
             self.assertTrue(segona.is_active, 'una petició rebutjada no ha de podar res')
+
+
+class LEscripturaDeGravarPomPortaLEixTest(TenantTestCase):
+    """SET-2/#12c — el contracte d'ESCRIPTURA de `gravar-pom` guanya la prenda.
+
+    El germà gros del forat de la poda, i a la mateixa porta. `gravar_pom_view` LLEGIA el
+    `garment` per rebutjar dues mesures del mateix request sobre la mateixa fila
+    (`views.py:2364`) i tot seguit el LLENÇAVA: no entrava a `prepared` (`:2399`) i l'upsert
+    resolia per `(model, pom, capa, instancia)` sense l'eix (`:2441`). Amb la mare i la 02 al
+    MATEIX POM —el cas normal: el pit del top i el pit de la calceta són el mateix POM— el
+    `.first()` podia caure sobre la fila de l'altra prenda i sobreescriure-la, i les files
+    noves naixien totes a la mare.
+
+    Aquests guards fan servir EL MATEIX POM per a les dues prendes a posta: és exactament el
+    cas que els fixtures de `LAbastDeLaPodaAGravarPomTest` esquivaven mentre el forat era
+    viu.
+    """
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Tenant'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TST'
+        tenant.vat_number = 'X0000000X'
+        tenant.tipus_client = 'STANDARD'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from fhort.accounts.models import UserProfile
+        from fhort.tasks.models import ModelTask, TaskType
+
+        self.pom = POMMaster.objects.create(codi_client='CH', nom_client='Pit')
+        self.model = Model.objects.create(
+            codi_intern='TST-12C', codi_tenant='TST', any=2026, sequencial=4,
+            temporada='SS26', size_run_model='S·M·L', base_size_label='M',
+        )
+        self.user, _ = get_user_model().objects.get_or_create(
+            username='qa_12c', defaults={'email': 'qa@12c.test'})
+        UserProfile.objects.get_or_create(
+            user=self.user, defaults={'nom_complet': 'QA 12c', 'rol_nom': 'QA'})
+        tt, _ = TaskType.objects.get_or_create(
+            code='pom', defaults={'name': 'POM', 'default_order': 1})
+        ModelTask.objects.get_or_create(
+            model=self.model, task_type=tt, defaults={'status': 'Pending'})
+
+    def _req(self, body):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+        r = APIRequestFactory().post('/x/', body, format='json')
+        force_authenticate(r, user=self.user)
+        return r
+
+    def _gravar(self, files):
+        from fhort.models_app.views import gravar_pom_view
+        return gravar_pom_view(self._req({'measurements': files}), self.model.id)
+
+    def _fila(self, garment, valor, nom):
+        return {'pom_id': self.pom.pk, 'capa': 'exterior', 'instancia': '',
+                'garment': garment, 'base_value_cm': valor, 'nom_fitxa': nom}
+
+    def _vives(self):
+        return {bm.garment: float(bm.base_value_cm)
+                for bm in BaseMeasurement.objects.filter(
+                    model=self.model, pom=self.pom, is_active=True)}
+
+    def test_escriure_la_02_NO_sobreescriu_la_fila_de_la_mare(self):
+        """EL VERMELL. Mateix POM, dues prendes: cadascuna a la seva fila."""
+        with comportes_alcades(*TAULES):
+            mare = BaseMeasurement.objects.create(
+                model=self.model, pom=self.pom, base_value_cm=100.0, ordre=1,
+                nom_fitxa='A-MARE', garment=MARE)
+
+            resp = self._gravar([self._fila(SEGONA, 66.0, 'A-02')])
+
+            self.assertIn(resp.status_code, (200, 201), getattr(resp, 'data', None))
+            mare.refresh_from_db()
+            self.assertEqual(float(mare.base_value_cm), 100.0,
+                             'ESCRIURE LA 02 HA SOBREESCRIT LA FILA DE LA MARE')
+            self.assertEqual(mare.garment, MARE, "la fila de la mare ha canviat de prenda")
+            self.assertEqual(self._vives(), {MARE: 100.0, SEGONA: 66.0})
+
+    def test_una_fila_nova_neix_amb_la_seva_prenda(self):
+        """Sense cap fila prèvia: la que neix ha de portar l'eix del payload, no el default."""
+        with comportes_alcades(*TAULES):
+            resp = self._gravar([self._fila(SEGONA, 66.0, 'A-02')])
+
+            self.assertIn(resp.status_code, (200, 201), getattr(resp, 'data', None))
+            nova = BaseMeasurement.objects.get(model=self.model, pom=self.pom, is_active=True)
+            self.assertEqual(nova.garment, SEGONA,
+                             'LA FILA NOVA HA NASCUT A LA MARE amb un payload que deia 02')
+
+    def test_i_la_02_ja_existent_es_torna_a_trobar_no_es_duplica(self):
+        """L'altra cara: amb l'eix a la resolució, desar dos cops la 02 ACTUALITZA la seva
+        fila. Sense l'eix això requeia a la mare; amb l'eix mal posat duplicaria."""
+        with comportes_alcades(*TAULES):
+            BaseMeasurement.objects.create(
+                model=self.model, pom=self.pom, base_value_cm=100.0, ordre=1,
+                nom_fitxa='A-MARE', garment=MARE)
+            BaseMeasurement.objects.create(
+                model=self.model, pom=self.pom, base_value_cm=60.0, ordre=2,
+                nom_fitxa='A-02', garment=SEGONA)
+
+            resp = self._gravar([self._fila(SEGONA, 66.0, 'A-02')])
+
+            self.assertIn(resp.status_code, (200, 201), getattr(resp, 'data', None))
+            self.assertEqual(resp.data['created'], 0, resp.data)
+            self.assertEqual(resp.data['updated'], 1, resp.data)
+            self.assertEqual(self._vives(), {MARE: 100.0, SEGONA: 66.0})
+
+    def test_EL_CAS_DE_CONTROL_un_desat_dUNA_pesa_fa_el_de_sempre(self):
+        """El 100% del corpus d'avui: sense `garment` al payload, tot va a la mare."""
+        mare = BaseMeasurement.objects.create(
+            model=self.model, pom=self.pom, base_value_cm=100.0, ordre=1, nom_fitxa='A')
+
+        resp = self._gravar([{'pom_id': self.pom.pk, 'base_value_cm': 111.0,
+                              'nom_fitxa': 'A'}])
+
+        self.assertIn(resp.status_code, (200, 201), getattr(resp, 'data', None))
+        mare.refresh_from_db()
+        self.assertEqual(float(mare.base_value_cm), 111.0)
+        self.assertEqual(self._vives(), {MARE: 111.0})
 
 
 class ElRegistreCopiaLaPecaTest(TenantTestCase):

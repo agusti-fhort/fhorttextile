@@ -2396,7 +2396,10 @@ def gravar_pom_view(request, model_id):
                     f'd\'aquest client'
                 )
                 continue
-        prepared.append((m, value, capa, instancia))
+        # SET-2/#12c — l'eix viatja fins a l'escriptura. Fins aquí el `garment` es llegia
+        # (v. el guard de duplicats, unes línies més amunt) i es llençava: la tupla el
+        # deixava fora i l'upsert de sota resolia sense ell.
+        prepared.append((m, value, capa, instancia, garment))
 
     # El rang físic té resposta pròpia (422) i mai es barreja amb els errors de forma (400):
     # un número impossible no és una petició mal escrita, és una dada que no pot existir.
@@ -2426,7 +2429,7 @@ def gravar_pom_view(request, model_id):
             # `measurements` ja arriba en l'ordre de la taula (és el que el client pinta), o sigui
             # que la posició a la llista ÉS l'ordre: no cal cap camp nou al payload ni cap gest
             # més. `enumerate` sobre `prepared`, que conserva l'ordre d'entrada.
-            for pos, (m, value, capa, instancia) in enumerate(prepared):
+            for pos, (m, value, capa, instancia, garment) in enumerate(prepared):
                 try:
                     pom = POMMaster.objects.get(id=m.get('pom_id'))
                 except POMMaster.DoesNotExist:
@@ -2438,14 +2441,23 @@ def gravar_pom_view(request, model_id):
                 # mateixa fila i la segona escrivia damunt la primera. Els eixos vénen del
                 # payload (v. `_identitat_de_mesura`); qui no els digui rep el literal de
                 # sempre, i el `.first()` deixa de poder triar perquè la clau ja és única.
+                # SET-2/#12c — LA PRENDA ENTRA A LA RESOLUCIÓ, com a l'upsert germà de
+                # `set_measurements_view`. El `garment` ja arribava per aquesta funció —el
+                # guard de duplicats del mateix request l'usa des de T2— però es perdia abans
+                # d'escriure: el filtre no el deia i el constructor tampoc. Amb la mare i la
+                # 02 al MATEIX POM (el cas normal: el pit del top i el pit de la calceta són
+                # el mateix POM) el `.first()` podia caure sobre la fila de l'altra prenda i
+                # sobreescriure-la, i tota fila nova naixia a la mare pel default del camp.
+                # És la porta de la DEFINICIÓ de POM: la primera vegada que una taula de
+                # mesures es desa passa per aquí.
                 bm = BaseMeasurement.objects.filter(
                     model=model, pom=pom,
-                    capa=capa, instancia=instancia).first()
+                    capa=capa, instancia=instancia, garment=garment).first()
                 es_nova = bm is None
                 if es_nova:
                     bm = BaseMeasurement(
                         model=model, pom=pom,
-                        capa=capa, instancia=instancia,
+                        capa=capa, instancia=instancia, garment=garment,
                         created_by=request.user)
                     created += 1
                 else:
