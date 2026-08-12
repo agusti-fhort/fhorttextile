@@ -501,22 +501,34 @@ export default function MeasureGrid({
   const baseLeft = COL_CAPA_W + COL_POM_W + COL_NOM_W
   const leadLefts = leadCols.map((_, i) => baseLeft + leadCols.slice(0, i).reduce((s, c) => s + c.width, 0))
 
-  // FIX-4 — el bloc de REGLA es distingeix per FONS (crema de la casa) i per un SEPARADOR gruixut
-  // just abans de les mesures. Dos senyals, no un: el color agrupa, el filet talla.
+  // FIX-4 deia el bloc de REGLA amb dos senyals: un FONS crema i un SEPARADOR gruixut just abans
+  // de les mesures. AGUS (10/08, re-confirmat a pantalla el 12) EN TREU EL FONS: la regla és part
+  // de la LÍNIA INFORMATIVA DEL POM, i el crema la convertia en una taula estrangera enganxada al
+  // costat de la fila. La cel·la agafa el fons de la SEVA fila, com totes les altres.
+  //
+  // El que agrupa passa a ser el que ja hi havia i no s'aprofitava: la CAPÇALERA DE GRUP. Ara n'hi
+  // ha tres i no dues —«POMs definits» sobre CAPA·POM·NOM, «Regla de graduació», «Mesures per
+  // talla»— i el filet gruixut segueix tallant on toca. Nomenar és més fort que tenyir: un color
+  // s'ha d'endevinar i un rètol es llegeix.
   const agrupat = !!leadGroupLabel
-  const REGLA_BG = 'var(--model-band)'                   // crema suau (token de casa, cap hex)
   const SEP = '2px solid var(--line)'                  // separador Regla | Mesures
   const esUltimLead = (i) => agrupat && i === leadCols.length - 1
+  // I LES COLUMNES DE LA REGLA, A L'AMPLADA DEL SEU CONTINGUT. El que les eixamplava no eren els
+  // valors —«+2,0», «XS»— sinó el RÈTOL: a 10px amb tracking .08em i `nowrap`, «TALLA BREAK» sol
+  // demana ~103 px de columna per a un número de tres caràcters. Amb el rètol embolicat (ja té el
+  // seu grup a sobre, que és qui diu de què va) i el padding retallat, qui mesura és la xifra.
+  const leadHd = { whiteSpace: 'normal', padding: '0.5rem 0.4rem', lineHeight: 1.15 }
 
   const stickyHd = (left, w, i = null) => ({
     ...thStyle, position: 'sticky', left, zIndex: 3, minWidth: w, width: w,
-    background: (agrupat && i != null) ? REGLA_BG : 'var(--panel)', textAlign: 'left',
+    background: 'var(--panel)', textAlign: 'left',
+    ...((agrupat && i != null) ? leadHd : null),
     ...(esUltimLead(i) && { borderRight: SEP }),
   })
   const stickyTd = (left, w, bg, i = null) => ({
-    position: 'sticky', left, zIndex: 1, minWidth: w, width: w,
-    background: (agrupat && i != null) ? REGLA_BG : bg,
-    padding: '5px 10px', borderBottom: '1px solid var(--line-soft)',
+    position: 'sticky', left, zIndex: 1, minWidth: w, width: w, background: bg,
+    padding: (agrupat && i != null) ? '5px 6px' : '5px 10px',
+    borderBottom: '1px solid var(--line-soft)',
     verticalAlign: 'middle', whiteSpace: 'nowrap',
     ...(esUltimLead(i) && { borderRight: SEP }),
   })
@@ -534,12 +546,17 @@ export default function MeasureGrid({
         <thead>
           {agrupat && (
             <tr>
-              <th rowSpan={3} style={identitatHd(0, COL_CAPA_W)}>{t('capa.col')}</th>
-              <th rowSpan={3} style={identitatHd(COL_CAPA_W, COL_POM_W)}>{t('measuregrid.col_pom')}</th>
-              <th rowSpan={3} style={identitatHd(COL_CAPA_W + COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>
+              {/* SIMETRIA (Agus, 10/08): si la regla i les talles porten rètol de grup, les tres
+                  columnes d'IDENTITAT també. Sense ell la fila de dalt començava en blanc i
+                  «Regla de graduació» es llegia com el títol de TOTA la taula.
+                  Sticky com les columnes que encapçala: un rètol de grup que llisca mentre les
+                  seves columnes es queden clavades deixa de nomenar-les. Mateix motiu per al de
+                  la regla, que fins ara no ho era. */}
+              <th colSpan={3} style={stickyHd(0, baseLeft)}>{t('measuregrid.grup_poms')}</th>
               {leadCols.length > 0 && (
                 <th colSpan={leadCols.length} style={{
-                  ...thStyle, textAlign: 'center', background: REGLA_BG, borderRight: SEP,
+                  ...thStyle, position: 'sticky', left: baseLeft, zIndex: 3,
+                  textAlign: 'center', background: 'var(--panel)', borderRight: SEP,
                 }}>{leadGroupLabel}</th>
               )}
               {totalGroupCols > 0 && (
@@ -556,9 +573,12 @@ export default function MeasureGrid({
             </tr>
           )}
           <tr>
-            {!agrupat && <th rowSpan={2} style={identitatHd(0, COL_CAPA_W)}>{t('capa.col')}</th>}
-            {!agrupat && <th rowSpan={2} style={identitatHd(COL_CAPA_W, COL_POM_W)}>{t('measuregrid.col_pom')}</th>}
-            {!agrupat && <th rowSpan={2} style={identitatHd(COL_CAPA_W + COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>}
+            {/* Les tres d'identitat viuen SEMPRE en aquesta fila: amb grups, sota el seu rètol
+                («POMs definits»); sense grups, com abans. El `rowSpan` cobreix la fila de
+                sub-columnes en tots dos casos. */}
+            <th rowSpan={2} style={identitatHd(0, COL_CAPA_W)}>{t('capa.col')}</th>
+            <th rowSpan={2} style={identitatHd(COL_CAPA_W, COL_POM_W)}>{t('measuregrid.col_pom')}</th>
+            <th rowSpan={2} style={identitatHd(COL_CAPA_W + COL_POM_W, COL_NOM_W)}>{t('measuregrid.col_nom')}</th>
             {leadCols.map((c, i) => (
               <th key={c.key} rowSpan={2} style={stickyHd(leadLefts[i], c.width, i)}>{c.label}</th>
             ))}

@@ -2688,6 +2688,7 @@
     "poda_ok": "Mesura {{codi}} treta del model (queda inactiva, amb registre al log).",
     "poda_err": "No s'ha pogut treure la mesura.",
     "sense_linia": "Aquesta fila encara no té línia per anotar en aquest check.",
+    "grup_poms": "POMs definits",
     "grup_regla": "Regla de graduació",
     "grup_mesures": "Mesures per talla",
     "regla_delta": "Δ",

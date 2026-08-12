@@ -287,7 +287,10 @@ function regleLabel(row, t, sizeRun) {
 // vegades, i és precisament la lletra petita el que ningú llegia.
 export function regimeLeadCol(t, onRegimChange, readOnly = false, { compacte = false, sizeRun = [] } = {}) {
   return {
-    key: 'regim', label: t('fitting.grid.regime'), width: compacte ? 100 : 118,
+    // `compacte` = les quatre columnes de la REGLA a l'Escalat, que Agus vol a l'amplada del seu
+    // contingut (10/08). Aquí el contingut és el desplegable, i el que el mesura és la paraula
+    // més llarga que hi cap («LINEAR») a 10px més la fletxa nativa del `select`.
+    key: 'regim', label: t('fitting.grid.regime'), width: compacte ? 76 : 118,
     render: (row) => {
       // Règim EFECTIU, no el desat: LINEAR+0 sense break es presenta com a FIXED. Quan passa,
       // FIXED s'afegeix com a opció del desplegable perquè el valor visible sigui triable i
@@ -405,19 +408,19 @@ export function escalatRuleLeadCols(t, onRegimChange, readOnly = false, unit = '
   return [
     regimeLeadCol(t, onRegimChange, readOnly, { compacte: true, sizeRun }),
     {
-      key: 'delta', label: t('measuregrid.regla_delta'), width: 72,
+      key: 'delta', label: t('measuregrid.regla_delta'), width: 54,
       render: (row) => (mostraDelta(row) && row.increment_base != null
         ? <span style={cap}>{formatDelta(row.increment_base, unit)}</span>
         : <span style={buit}>—</span>),
     },
     {
-      key: 'delta_break', label: t('measuregrid.regla_delta_break'), width: 82,
+      key: 'delta_break', label: t('measuregrid.regla_delta_break'), width: 54,
       render: (row) => (mostraDelta(row) && row.increment_break != null
         ? <span style={cap}>{formatDelta(row.increment_break, unit)}</span>
         : <span style={buit}>—</span>),
     },
     {
-      key: 'talla_break', label: t('measuregrid.regla_talla_break'), width: 92,
+      key: 'talla_break', label: t('measuregrid.regla_talla_break'), width: 56,
       // Etiqueta de talla: DADA de domini (XS, 3XL) — no es tradueix ni porta signe. El que sí
       // que se li fa és la volta de CONVENCIÓ: es pinta la del document, no la desada.
       render: (row) => {

@@ -2688,6 +2688,7 @@
     "poda_ok": "Measurement {{codi}} removed from the model (kept inactive, recorded in the log).",
     "poda_err": "The measurement could not be removed.",
     "sense_linia": "This row has no line to record in this check yet.",
+    "grup_poms": "Defined POMs",
     "grup_regla": "Grading rule",
     "grup_mesures": "Measurements by size",
     "regla_delta": "Δ",
