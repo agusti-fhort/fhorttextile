@@ -82,6 +82,27 @@ export function origenDeLaFila(camp, { delModel = false } = {}) {
 }
 
 /**
+ * ¿NEIX LA FILA SUPERIOR DE PEÇA? — SET-2/T7-B2b.
+ *
+ * La llei: **la fila neix amb la SEGONA prenda, no abans**. Amb una sola peça —el 100% del
+ * corpus d'avui— les superfícies de treball han de quedar funcionalment IDÈNTIQUES a com eren:
+ * posar-hi un nom i un caret quan no hi ha res a distingir és decorar.
+ *
+ * ⚠️ VIU AQUÍ, EN UNA FUNCIÓ PURA, PER UNA RAÓ CONCRETA: aquesta llei ja es va perdre una
+ * vegada. B2 la va escriure dins de `PecaContenidor` darrere d'un prop (`mesDunaPeca`) que cap
+ * punt de muntatge passava, i el resultat va ser una condició que **no s'avaluava mai** — un
+ * model de dues peces es pintava en mode una-peça i ningú se'n va adonar fins que l'Agus ho va
+ * veure a pantalla. Una llei que només existeix com a `&&` enmig d'un JSX no té banc; aquesta
+ * el té.
+ *
+ * La llista inclou la MARE (sintètica, sempre primera), o sigui que «més d'una prenda» és
+ * `length > 1` i no `length > 0`.
+ */
+export function calFilaDePeca(peces) {
+  return (peces || []).length > 1
+}
+
+/**
  * El codi que es PROPOSA per a la peça següent — SET-2/T7-B3.
  *
  * La mare és conceptualment la '01' i no té fila (D3), o sigui que la primera peça de debò és

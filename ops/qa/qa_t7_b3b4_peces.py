@@ -41,6 +41,9 @@ BASE = 'https://staging.fhorttextile.tech'
 VIU = os.environ.get('FTT_QA_API') or 'http://127.0.0.1:8001'
 TOKEN = os.environ.get('FTT_QA_TOKEN', '')
 MODEL = 1320
+#: EL CONTRAPÈS d'una sola prenda. Ha de ser un model VIU del corpus, no una fixture: el que es
+#: vol demostrar és que la pantalla de sempre no ha canviat per a la resta de la casa.
+CONTROL_UNA_PECA = int(os.environ.get('FTT_QA_MODEL_1P', '1319'))
 
 #: L'ÚNICA vora on aquest arnès deixa escriure. La resta es responen localment i es censen.
 VORA_ESCRIVIBLE = f'/api/v1/models/{MODEL}/peces/'
@@ -162,6 +165,47 @@ def main():
              and all(canviar02.nth(i).is_enabled() for i in range(canviar02.count())),
              f'{canviar02.count() if canviar02 else 0} botons')
         pag.screenshot(path=str(OUT / 't7_b3_01_dues_peces.png'), full_page=True)
+
+        # ── B2b · LA SUPERFÍCIE DE MESURES TAMBÉ TÉ UN CONTENIDOR PER PRENDA ─────────────
+        # El bug que l'Agus va veure: el 1320 amb dues peces es pintava en mode UNA PEÇA. B2 va
+        # construir la fila superior darrere de dos props i cap punt de muntatge els passava —
+        # i la causa d'arrel és que aquestes superfícies no consumien `GET /peces/`.
+        pag.goto(f'{BASE}/models/{MODEL}?tab=Mesures', wait_until='networkidle')
+        pag.wait_for_timeout(2500)
+        conts = pag.locator('[data-peca]')
+        mira('B2b Mesures pinta UN contenidor per prenda', conts.count() == 2,
+             f'{conts.count()} contenidor(s)')
+        codis = [conts.nth(i).get_attribute('data-peca') for i in range(conts.count())]
+        mira('B2b i cada contenidor diu de quina prenda és', codis == ['', '02'], str(codis))
+        # La fila superior = el caret que plega la taula. Amb dues prendes n'hi ha d'haver DUES.
+        carets = pag.locator('[data-peca] button[aria-expanded]')
+        mira('B2b dues files superiors (nom + caret + llapis)', carets.count() == 2,
+             f'{carets.count()}')
+        mira('B2b el contenidor del Pantaló diu per què és buit',
+             'encara no té mesures' in pag.locator('[data-peca="02"]').inner_text().lower())
+        pag.screenshot(path=str(OUT / 't7_b2b_mesures_dos_contenidors.png'), full_page=True)
+
+        # EL CONTRAPÈS: amb UNA sola prenda no hi ha CAP fila. Sense ell, un guard que compti
+        # «2 i 2» passaria igual si la fila es pintés SEMPRE — el defecte contrari i igual de
+        # dolent (decorar el 100% del corpus d'avui amb un nom i un caret que no distingeixen
+        # res).
+        #
+        # 🚩 AQUÍ NOMÉS ES POT AFIRMAR LA MEITAT, i val més dir-ho que fingir el contrari: al
+        # corpus viu de `fhort` **només el 1320 i el 1322 tenen mesures**, i tots dos tenen ja
+        # dues prendes. O sigui que no hi ha cap model d'UNA peça que arribi a muntar el
+        # contenidor: el 1319 ensenya «Mesures encara no disponibles» i la superfície ni s'hi
+        # acosta. El que aquest cas demostra, doncs, és que **no hi ha cap fila on no n'hi ha
+        # d'haver**; que el contenidor únic es pinta sense fila ho garanteix el banc pur de
+        # `calFilaDePeca` (`pecaDefinicio.test.js`), que és on viu la llei.
+        pag.goto(f'{BASE}/models/{CONTROL_UNA_PECA}?tab=Mesures', wait_until='networkidle')
+        pag.wait_for_timeout(2500)
+        carets_control = pag.locator('[data-peca] button[aria-expanded]').count()
+        mira('B2b CONTROL · en un model d\'UNA prenda no neix CAP fila',
+             carets_control == 0, f'{carets_control} fila/es')
+
+        pag.goto(f'{BASE}/models/{MODEL}?tab=Resum', wait_until='networkidle')
+        pag.wait_for_timeout(1800)
+        targetes = pag.locator('section[id^="peca-"]')
 
         # ── B3.2/B3.3 · EL FANTASMA ──────────────────────────────────────────────────────
         fantasma = pag.locator('button:has-text("Afegir peça")')

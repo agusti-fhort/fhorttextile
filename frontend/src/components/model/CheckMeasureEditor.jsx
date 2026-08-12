@@ -11,7 +11,7 @@ import { finestraHistoric } from './fittingGridAdapter'
 import MeasureGrid from './MeasureGrid'
 import EditableTable from '../EditableTable/EditableTable'
 import BackButton from '../BackButton'
-import PecaContenidor from './PecaContenidor'
+import PecesDelModel, { CosPecaSenseMesures } from './PecesDelModel'
 import WatchpointsPanel from './WatchpointsPanel'
 import SessionPanel from './SessionPanel'
 import SessionActions from './SessionActions'
@@ -723,7 +723,10 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           des de fa temps (↓/Enter i ↑ recorren el carril; A · J · R posen el veredicte sense
           treure la mà del número) i no ho deia res: qui obria la sessió les havia de saber
           d'abans. Només s'hi anuncia el que funciona en aquesta pantalla. */}
-      <PecaContenidor model={model}>
+      {/* SET-2/T7-B2b — UN CONTENIDOR PER PRENDA. Abans era un `PecaContenidor` pelat, i per
+          això la fila superior no naixia mai: els seus dos props no els passava ningú. El cos
+          d'una peça que no és la mare no pot tenir res fins al #12 (comportes), i ho DIU. */}
+      <PecesDelModel model={model}>{peca => (peca && !peca.es_mare) ? <CosPecaSenseMesures /> : (<>
       {!esPresa && !readOnly && rows.length > 0 && (
         <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)',
                     margin: '0 0 10px', lineHeight: 1.8 }}>
@@ -769,7 +772,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           )
         } />
       )}
-      </PecaContenidor>
+      </>)}</PecesDelModel>
 
       {/* v3 (`.bar` :193-198) — LA BARRA DE RECOMPTES. La graella diu QUÈ té cada fila; això diu
           on és la sessió sencera, que és la pregunta de qui la tanca. «Sense decidir» és el que

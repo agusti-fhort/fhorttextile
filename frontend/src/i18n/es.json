@@ -4972,6 +4972,7 @@
   "size_map_back_title": "Volver al panel",
   "peca": {
     "collapse": "Plegar",
-    "expand": "Desplegar"
+    "expand": "Desplegar",
+    "sense_mesures": "Esta pieza aún no tiene medidas. El contenedor está aquí porque la pieza existe y espera."
   }
 }

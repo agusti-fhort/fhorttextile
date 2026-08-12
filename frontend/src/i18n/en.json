@@ -4972,6 +4972,7 @@
   "size_map_back_title": "Back to dashboard",
   "peca": {
     "collapse": "Collapse",
-    "expand": "Expand"
+    "expand": "Expand",
+    "sense_mesures": "This piece has no measurements yet. The container is here because the piece exists and is waiting."
   }
 }

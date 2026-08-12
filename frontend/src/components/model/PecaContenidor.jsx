@@ -56,13 +56,29 @@ export default function PecaContenidor({ model, children, accioJoc = null,
   // exactament el que la capçalera de la pàgina ja diu, en gran, dues línies més amunt.
   // La dependència és d'on penja el model, no com es diu.
   const chain = [model.garment_type_nom, gtItem].filter(Boolean)
+
+  // ── EL JOC I EL RUN SÓN DE LA PEÇA, NO DEL MODEL (SET-2/T7-B2b) ─────────────────────────
+  // Quan hi ha `peca`, els valors surten del CONTRACTE, que els serveix ja EFECTIUS: si la
+  // prenda hereta, hi arriba el del model; si els declara, els seus. Aquesta pantalla no en
+  // resol cap —la resolució viu en un sol punt al servidor (`valor_efectiu`)— i per això aquí
+  // no hi ha cap `peca.X || model.X` sobre valors CRUS: es llegeix el que ja ve resolt.
+  //
+  // Sense `peca` (mentre la llista carrega, o si `/peces/` falla) es cau al model, que és
+  // exactament la pantalla d'abans d'aquest canvi.
+  const jocNom = peca ? (peca.grading_rule_set?.etiqueta || '') : (model.grading_rule_set_nom || '')
+  const runCru = peca ? (peca.size_run_model?.valor || '') : (model.size_run_model || '')
+  const baseCru = peca ? (peca.base_size_label?.valor || '') : (model.base_size_label || '')
   // El run viatja com a cadena unida per '·' (`Model.size_run_model`); partir-la per aquest
   // separador és el que ja fan `FittingDetail.jsx:636` i `TechSheetEditor.jsx:1109`.
-  const talles = (model.size_run_model || '').split('·').map(s => s.trim()).filter(Boolean)
-  const base = (model.base_size_label || '').trim()
+  const talles = String(runCru).split('·').map(s => s.trim()).filter(Boolean)
+  const base = String(baseCru).trim()
 
   return (
-    <div style={{
+    // `data-peca` és el marcador ESTABLE amb què l'arnès compta contenidors i sap de quina
+    // prenda és cadascun. Sense ell caldria comptar `div`s per l'estil, que és el que fa que un
+    // guard es trenqui el dia que algú canviï un `border`. `''` = la mare (i cadena buida, no
+    // absent: la llei del vocabulari separa «és la mare» de «no ho sé»).
+    <div data-peca={peca ? peca.codi : ''} style={{
       border: '1px solid var(--line)', borderRadius: 'var(--r-card)',
       background: 'var(--panel)', marginBottom: 12,
     }}>
@@ -81,8 +97,8 @@ export default function PecaContenidor({ model, children, accioJoc = null,
           </span>
         ))}
         <span style={{ marginLeft: 16, color: 'var(--text-soft)' }}>{t('dependency.ruleset')}:</span>
-        <span style={{ color: model.grading_rule_set_nom ? 'var(--gold)' : 'var(--text-soft)' }}>
-          {model.grading_rule_set_nom || t('dependency.no_ruleset')}
+        <span style={{ color: jocNom ? 'var(--gold)' : 'var(--text-soft)' }}>
+          {jocNom || t('dependency.no_ruleset')}
         </span>
         {accioJoc}
         {!accioJoc && (

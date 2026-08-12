@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { ORIGEN, anclaDeLaPeca, nomDeLaPeca, origenDeLaFila, presentacioCamp,
+import { ORIGEN, anclaDeLaPeca, calFilaDePeca, nomDeLaPeca, origenDeLaFila, presentacioCamp,
   seguentCodiDePeca } from './pecaDefinicio.js'
 
 test('el mateix text amb herències distintes NO és el mateix estat', () => {
@@ -71,6 +71,27 @@ test('els tres origens són tres, i el propi és el que no diu res', () => {
   assert.equal(origenDeLaFila({ valor: '3M·6M', etiqueta: '3M·6M', heretat: false }), ORIGEN.PROPI)
   assert.equal(origenDeLaFila(null), ORIGEN.PROPI)              // sense camp, no s'afirma herència
   assert.equal(new Set(Object.values(ORIGEN)).size, 3)
+})
+
+// ── SET-2/T7-B2b · la fila superior neix amb la SEGONA prenda ───────────────────────────
+//
+// Aquesta llei ja es va perdre una vegada: vivia dins d'un `&&` de JSX darrere d'un prop que
+// ningú passava, i per tant no s'avaluava MAI. Aquí té banc.
+
+test('amb UNA sola prenda no neix cap fila: la pantalla queda com sempre', () => {
+  assert.equal(calFilaDePeca([{ es_mare: true, codi: '' }]), false)
+  assert.equal(calFilaDePeca([]), false)
+  assert.equal(calFilaDePeca(null), false)      // encara carregant: mai decoris pel dubte
+})
+
+test('amb DUES prendes la fila neix a TOTES DUES, mare inclosa', () => {
+  const dues = [{ es_mare: true, codi: '' }, { es_mare: false, codi: '02' }]
+
+  assert.equal(calFilaDePeca(dues), true)
+  // El contrapès que trenca la coincidència: la mare COMPTA com a prenda de la llista, o sigui
+  // que el llindar és `> 1` i no `> 0`. Amb `> 0` la fila apareixeria sempre — el defecte
+  // contrari, i igual de dolent.
+  assert.equal(calFilaDePeca([{ es_mare: true, codi: '' }]), false)
 })
 
 // ── SET-2/T7-B3 · el codi que es proposa ─────────────────────────────────────────────────
