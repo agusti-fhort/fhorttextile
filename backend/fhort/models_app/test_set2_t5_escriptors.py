@@ -110,22 +110,324 @@ class PodaINoTocaLesAltresPecesTest(TenantTestCase):
         self.assertFalse(cau.is_active)
 
     def test_la_poda_per_FILA_distingeix_les_peces(self):
-        """L'altra branca: amb `keep_mesures` (que SÍ porta identitat), conservar la fila de
-        la mare no pot salvar la de la 02 ni a l'inrevés."""
+        """L'altra branca: amb `keep_mesures` (que SÍ porta identitat), la poda distingeix les
+        files DINS de la prenda de què parla el desat.
+
+        ⚠️ REVISAT a SET-2/#12b (12/08). Aquest test afirmava el contrari —que desar la mare
+        havia de fer caure la fila de la 02— perquè T5 llegia `keep_mesures` com «tot el que
+        queda al MODEL». Amb la taula partida per peça (S2, pas 3) el client només pot enviar
+        les files del SEU contenidor, o sigui que aquella lectura convertia cada desat de la
+        mare en una baixa silenciosa de les altres prendes: mesurat contra dades vives, 1
+        baixa i la fila de la 02 morta. Ara `keep_mesures` es llegeix com «tot el que queda al
+        CONTENIDOR», i el que la llista no anomena no és ni candidat.
+        """
+        with comportes_alcades(*TAULES):
+            mare_conserva = self._mesura(self.pom, MARE, nom='A-MARE')
+            mare_poda = self._mesura(self.altre, MARE, valor=80.0, nom='B-MARE')
+            segona = self._mesura(self.pom, SEGONA, valor=60.0, nom='A-02')
+
+            n = _poda_mesures(self.model,
+                              [{'pom_id': self.pom.pk, 'capa': 'exterior',
+                                'instancia': '', 'garment': MARE}],
+                              [])
+
+            mare_conserva.refresh_from_db()
+            mare_poda.refresh_from_db()
+            segona.refresh_from_db()
+            self.assertEqual(n, 1, 'la poda havia de caure NOMÉS sobre la fila de la mare')
+            self.assertTrue(mare_conserva.is_active, 'la fila anomenada ha caigut')
+            self.assertFalse(mare_poda.is_active,
+                             'la fila de la MARE que no surt a la llista havia de caure')
+            self.assertTrue(
+                segona.is_active,
+                'LA PODA HA MATAT LA FILA DE LA 02 amb un desat que només parlava de la mare')
+
+
+class LAbastDeLaPodaEsElDelContenidorTest(TenantTestCase):
+    """SET-2/#12b — el guard que S2 va veure vermell, i el seu cas de control.
+
+    El forat el va mesurar S2 contra dades vives (amb rollback): amb la taula filtrada per
+    peça, desar el contenidor de la mare enviava NOMÉS les files de la mare, i la poda —que
+    mirava totes les files vives del model— donava de baixa les del Pantaló. Amb l'eix al
+    payload i tot: no era que la informació hi faltés, és que l'abast era un altre.
+    """
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Tenant'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TST'
+        tenant.vat_number = 'X0000000X'
+        tenant.tipus_client = 'STANDARD'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        self.pom = POMMaster.objects.create(codi_client='CH', nom_client='Pit')
+        self.altre = POMMaster.objects.create(codi_client='WA', nom_client='Cintura')
+        self.model = Model.objects.create(
+            codi_intern='TST-12B', codi_tenant='TST', any=2026, sequencial=2,
+            temporada='SS26', size_run_model='S·M·L', base_size_label='M',
+        )
+
+    def _mesura(self, pom, garment=MARE, valor=100.0, nom='A'):
+        return BaseMeasurement.objects.create(
+            model=self.model, pom=pom, base_value_cm=valor, ordre=1,
+            nom_fitxa=nom, garment=garment)
+
+    def _fila(self, pom, garment):
+        return {'pom_id': pom.pk, 'capa': 'exterior', 'instancia': '', 'garment': garment}
+
+    def test_EL_GUARD_desar_la_mare_no_desactiva_les_files_del_pantalo(self):
+        """El vermell. Desat del contenidor de la mare, amb la 02 viva i FORA del payload."""
+        with comportes_alcades(*TAULES):
+            mare = self._mesura(self.pom, MARE, nom='A-MARE')
+            segona_a = self._mesura(self.pom, SEGONA, valor=60.0, nom='A-02')
+            segona_b = self._mesura(self.altre, SEGONA, valor=61.0, nom='B-02')
+
+            n = _poda_mesures(self.model, [self._fila(self.pom, MARE)], None)
+
+            for fila in (mare, segona_a, segona_b):
+                fila.refresh_from_db()
+            self.assertEqual(n, 0)
+            self.assertTrue(mare.is_active)
+            self.assertTrue(segona_a.is_active, 'la 02 ha caigut amb un desat de la mare')
+            self.assertTrue(segona_b.is_active, 'la 02 ha caigut amb un desat de la mare')
+
+    def test_i_a_linreves_desar_el_pantalo_no_toca_la_mare(self):
+        """La simetria: l'abast acota igual en les dues direccions."""
+        with comportes_alcades(*TAULES):
+            mare = self._mesura(self.pom, MARE, nom='A-MARE')
+            segona_conserva = self._mesura(self.pom, SEGONA, valor=60.0, nom='A-02')
+            segona_cau = self._mesura(self.altre, SEGONA, valor=61.0, nom='B-02')
+
+            n = _poda_mesures(self.model, [self._fila(self.pom, SEGONA)], None)
+
+            for fila in (mare, segona_conserva, segona_cau):
+                fila.refresh_from_db()
+            self.assertEqual(n, 1)
+            self.assertTrue(mare.is_active, 'desar el Pantaló ha tocat la mare')
+            self.assertTrue(segona_conserva.is_active)
+            self.assertFalse(segona_cau.is_active,
+                             'dins de la peça, el que no surt a la llista SÍ que ha de caure')
+
+    def test_EL_CAS_DE_CONTROL_un_model_dUNA_pesa_es_comporta_EXACTAMENT_igual(self):
+        """El 100% del corpus d'avui. Sense cap fila d'una altra prenda, l'abast derivat és
+        {''} i la poda fa exactament el que feia abans d'aquest tram."""
+        mante = self._mesura(self.pom, MARE, nom='A')
+        cau = self._mesura(self.altre, MARE, valor=80.0, nom='B')
+
+        n = _poda_mesures(self.model, [self._fila(self.pom, MARE)], None)
+
+        mante.refresh_from_db()
+        cau.refresh_from_db()
+        self.assertEqual(n, 1)
+        self.assertTrue(mante.is_active)
+        self.assertFalse(cau.is_active)
+
+    def test_un_contenidor_BUIT_no_endevina_de_qui_es_el_silenci(self):
+        """Sense files i sense abast explícit no es pot saber de quina prenda parla el desat.
+        D'un «no ho sé» no en surt cap baixa: el contrari seria decidir per un client que no
+        ha dit res, que és el que tot aquest tram prohibeix."""
         with comportes_alcades(*TAULES):
             mare = self._mesura(self.pom, MARE, nom='A-MARE')
             segona = self._mesura(self.pom, SEGONA, valor=60.0, nom='A-02')
 
-            _poda_mesures(self.model,
-                          [{'pom_id': self.pom.pk, 'capa': 'exterior',
-                            'instancia': '', 'garment': MARE}],
-                          [])
+            n = _poda_mesures(self.model, [], None)
 
             mare.refresh_from_db()
             segona.refresh_from_db()
+            self.assertEqual(n, 0)
             self.assertTrue(mare.is_active)
-            self.assertFalse(segona.is_active,
-                             'la fila de la 02 no estava a la llista i havia de caure')
+            self.assertTrue(segona.is_active)
+
+    def test_el_contenidor_BUIT_que_diu_qui_es_SI_que_es_buida(self):
+        """La vora d'abast explícit (`garments`): el contenidor que es desa buit diu de qui és
+        i pot buidar-se sencer, sense tocar les altres prendes."""
+        with comportes_alcades(*TAULES):
+            mare = self._mesura(self.pom, MARE, nom='A-MARE')
+            segona = self._mesura(self.pom, SEGONA, valor=60.0, nom='A-02')
+
+            n = _poda_mesures(self.model, [], None, garments=[SEGONA])
+
+            mare.refresh_from_db()
+            segona.refresh_from_db()
+            self.assertEqual(n, 1)
+            self.assertTrue(mare.is_active, "buidar el Pantaló ha tocat la mare")
+            self.assertFalse(segona.is_active)
+
+
+class LAbastDeLaPodaAGravarPomTest(TenantTestCase):
+    """SET-2/#12b — el MATEIX guard, per l'altra porta: `gravar-pom`.
+
+    El forat era UN i tenia dues portes. La llei viu a `_poda_mesures` i les dues hi passen,
+    o sigui que el fix no es duplica; el que sí que cal per duplicat és la PROVA que cada
+    porta li dóna el payload sencer —que el `garments` del cos hi arriba i que l'abast derivat
+    no s'hi perd pel camí—. Aquesta és, a més, la pantalla del dany original: la definició de
+    POM és on la tècnica desa la taula per primer cop.
+
+    ⚠️ ELS FIXTURES POSEN CADA PRENDA EN UN POM DIFERENT, i és a posta. Aquesta porta encara
+    resol l'upsert per `(model, pom, capa, instancia)` SENSE el garment (`views.py:2441`, i el
+    `prepared` de `views.py:2399` que se'l menja): amb la mare i la 02 al mateix POM, el
+    `.first()` pot caure sobre la fila de l'altra prenda i sobreescriure-la. És un forat
+    d'ESCRIPTURA, germà d'aquest però més gros, i NO és el que aquest tram tanca; els
+    fixtures l'esquiven perquè el que aquí es mesura és l'abast de la PODA i no un bug que
+    encara no té acta. Qui el tanqui, que esborri aquest paràgraf.
+    """
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.nom = 'Test Tenant'
+        tenant.tipologia = 'MARCA'
+        tenant.codi_tenant = 'TST'
+        tenant.vat_number = 'X0000000X'
+        tenant.tipus_client = 'STANDARD'
+        tenant.gratis_fins = datetime.date(2030, 1, 1)
+        return tenant
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from fhort.accounts.models import UserProfile
+        from fhort.tasks.models import ModelTask, TaskType
+
+        self.mare_pom = POMMaster.objects.create(codi_client='CH', nom_client='Pit')
+        self.altre_mare = POMMaster.objects.create(codi_client='WA', nom_client='Cintura')
+        self.pom_02 = POMMaster.objects.create(codi_client='HP', nom_client='Maluc')
+        self.altre_02 = POMMaster.objects.create(codi_client='TH', nom_client='Cuixa')
+        self.model = Model.objects.create(
+            codi_intern='TST-12BG', codi_tenant='TST', any=2026, sequencial=3,
+            temporada='SS26', size_run_model='S·M·L', base_size_label='M',
+        )
+        self.user, _ = get_user_model().objects.get_or_create(
+            username='qa_12b', defaults={'email': 'qa@12b.test'})
+        UserProfile.objects.get_or_create(
+            user=self.user, defaults={'nom_complet': 'QA 12b', 'rol_nom': 'QA'})
+        # `gravar_pom_view` tanca la tasca POM del model i falla si no n'hi ha cap.
+        tt, _ = TaskType.objects.get_or_create(
+            code='pom', defaults={'name': 'POM', 'default_order': 1})
+        ModelTask.objects.get_or_create(
+            model=self.model, task_type=tt, defaults={'status': 'Pending'})
+
+    def _req(self, body):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+        r = APIRequestFactory().post('/x/', body, format='json')
+        force_authenticate(r, user=self.user)
+        return r
+
+    def _mesura(self, pom, garment=MARE, valor=100.0, nom='A'):
+        return BaseMeasurement.objects.create(
+            model=self.model, pom=pom, base_value_cm=valor, ordre=1,
+            nom_fitxa=nom, garment=garment)
+
+    def _fila(self, pom, garment, valor=None):
+        d = {'pom_id': pom.pk, 'capa': 'exterior', 'instancia': '', 'garment': garment}
+        if valor is not None:
+            d['base_value_cm'] = valor
+        return d
+
+    def _gravar(self, body):
+        from fhort.models_app.views import gravar_pom_view
+        return gravar_pom_view(self._req(body), self.model.id)
+
+    def test_EL_GUARD_gravar_pom_de_la_mare_no_desactiva_les_files_del_pantalo(self):
+        """El vermell de S2, per la porta de la definició de POM."""
+        with comportes_alcades(*TAULES):
+            mare = self._mesura(self.mare_pom, MARE, nom='A-MARE')
+            segona = self._mesura(self.pom_02, SEGONA, valor=60.0, nom='C-02')
+
+            resp = self._gravar({
+                'measurements': [self._fila(self.mare_pom, MARE, valor=111.0)],
+                'keep_mesures': [self._fila(self.mare_pom, MARE)],
+            })
+
+            self.assertIn(resp.status_code, (200, 201), getattr(resp, 'data', None))
+            self.assertEqual(resp.data['deactivated'], 0, resp.data)
+            mare.refresh_from_db()
+            segona.refresh_from_db()
+            self.assertTrue(mare.is_active)
+            self.assertTrue(
+                segona.is_active,
+                'GRAVAR-POM DE LA MARE HA MATAT LA FILA DE LA 02')
+
+    def test_gravar_pom_del_pantalo_no_toca_la_mare(self):
+        """La simetria, i que dins de la prenda la poda segueix podant."""
+        with comportes_alcades(*TAULES):
+            mare = self._mesura(self.mare_pom, MARE, nom='A-MARE')
+            segona_conserva = self._mesura(self.pom_02, SEGONA, valor=60.0, nom='C-02')
+            segona_cau = self._mesura(self.altre_02, SEGONA, valor=61.0, nom='D-02')
+
+            resp = self._gravar({
+                'measurements': [self._fila(self.pom_02, SEGONA, valor=66.0)],
+                'keep_mesures': [self._fila(self.pom_02, SEGONA)],
+            })
+
+            self.assertIn(resp.status_code, (200, 201), getattr(resp, 'data', None))
+            self.assertEqual(resp.data['deactivated'], 1, resp.data)
+            for fila in (mare, segona_conserva, segona_cau):
+                fila.refresh_from_db()
+            self.assertTrue(mare.is_active, 'desar el Pantaló ha tocat la mare')
+            self.assertTrue(segona_conserva.is_active)
+            self.assertFalse(segona_cau.is_active,
+                             'dins de la peça, el que no surt a la llista SÍ que ha de caure')
+
+    def test_EL_CAS_DE_CONTROL_un_model_dUNA_pesa_es_comporta_EXACTAMENT_igual(self):
+        """El 100% del corpus d'avui passa per aquí i no ha de notar res."""
+        mante = self._mesura(self.mare_pom, MARE, nom='A')
+        cau = self._mesura(self.altre_mare, MARE, valor=80.0, nom='B')
+
+        resp = self._gravar({
+            'measurements': [self._fila(self.mare_pom, MARE, valor=111.0)],
+            'keep_mesures': [self._fila(self.mare_pom, MARE)],
+        })
+
+        self.assertIn(resp.status_code, (200, 201), getattr(resp, 'data', None))
+        self.assertEqual(resp.data['deactivated'], 1, resp.data)
+        mante.refresh_from_db()
+        cau.refresh_from_db()
+        self.assertTrue(mante.is_active)
+        self.assertFalse(cau.is_active)
+
+    def test_labast_EXPLICIT_del_cos_arriba_tambe_per_aquesta_porta(self):
+        """`garments` no és decoració d'una vista sola: la porta l'ha de passar avall.
+
+        El desat parla de la mare, però declara que està podant la 02 —el gest del contenidor
+        que es buida—: la 02 cau sencera i la mare no és ni candidata.
+        """
+        with comportes_alcades(*TAULES):
+            mare = self._mesura(self.mare_pom, MARE, nom='A-MARE')
+            altra_mare = self._mesura(self.altre_mare, MARE, valor=80.0, nom='B-MARE')
+            segona = self._mesura(self.pom_02, SEGONA, valor=60.0, nom='C-02')
+
+            resp = self._gravar({
+                'measurements': [self._fila(self.mare_pom, MARE, valor=111.0)],
+                'keep_mesures': [self._fila(self.mare_pom, MARE)],
+                'garments': [SEGONA],
+            })
+
+            self.assertIn(resp.status_code, (200, 201), getattr(resp, 'data', None))
+            self.assertEqual(resp.data['deactivated'], 1, resp.data)
+            for fila in (mare, altra_mare, segona):
+                fila.refresh_from_db()
+            self.assertTrue(mare.is_active)
+            self.assertTrue(altra_mare.is_active,
+                            "l'abast explícit deia '02': cap fila de la mare era candidata")
+            self.assertFalse(segona.is_active)
+
+    def test_per_aquesta_porta_el_desat_BUIT_no_arriba_ni_a_la_poda(self):
+        """L'asimetria entre les dues portes, escrita perquè no sorprengui ningú.
+
+        `set-measurements` accepta un desat sense mesures (i per això li calia la vora del
+        contenidor buit); `gravar-pom` el rebutja abans amb un 400 —«cal introduir almenys una
+        mida base»—, o sigui que per aquí el cas del contenidor buit no existeix.
+        """
+        with comportes_alcades(*TAULES):
+            segona = self._mesura(self.pom_02, SEGONA, valor=60.0, nom='C-02')
+
+            resp = self._gravar({'measurements': [], 'keep_mesures': [], 'garments': [MARE]})
+
+            self.assertEqual(resp.status_code, 400, getattr(resp, 'data', None))
+            segona.refresh_from_db()
+            self.assertTrue(segona.is_active, 'una petició rebutjada no ha de podar res')
 
 
 class ElRegistreCopiaLaPecaTest(TenantTestCase):

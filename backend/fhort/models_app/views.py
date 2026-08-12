@@ -2272,7 +2272,10 @@ def set_measurements_view(request, model_id):
             # C4/BLOC 1-TER — la poda resol per FILA quan el client diu els eixos, i conserva
             # el comportament d'abans quan no els diu. L'argument sencer viu a `_poda_mesures`,
             # que és també el que fa servir `gravar_pom_view`: dues portes, una sola llei.
-            deactivated = _poda_mesures(model, keep_mesures, keep_pom_ids)
+            # SET-2/#12b — `garments` (opcional): l'abast EXPLÍCIT de la poda, per al
+            # contenidor que es desa buit i no pot anomenar cap fila. V. `_poda_mesures`.
+            deactivated = _poda_mesures(model, keep_mesures, keep_pom_ids,
+                                        _abast_de_poda(request.data))
 
     # NOTE: set-measurements només fa upsert de BaseMeasurement (+ el log via signal). La generació
     # de GradedSpec viu EXCLUSIVAMENT a generar-grading → generate_graded_specs (l'únic camí que
@@ -2467,7 +2470,9 @@ def gravar_pom_view(request, model_id):
                 # C4/BLOC 1-TER — mateixa llei que l'altra porta (v. `_poda_mesures`). El
                 # contracte ja porta els eixos i la baixa és per FILA; el client que només
                 # sap dir `pom_id` conserva el comportament d'abans, que és no matar-ne cap.
-                deactivated = _poda_mesures(model, keep_mesures, keep_pom_ids)
+                # SET-2/#12b — mateixa vora d'abast explícit que a `set_measurements_view`.
+                deactivated = _poda_mesures(model, keep_mesures, keep_pom_ids,
+                                            _abast_de_poda(request.data))
 
             valid_logiques = {code for code, _ in GradingRule.LOGICA_CHOICES}
             for r in rules:
@@ -3482,7 +3487,26 @@ def escalat_ajustar_talla_view(request, model_id):
                      'grading_version_id': gv.id if gv else None, 'linies': linies}, status=200)
 
 
-def _poda_mesures(model, keep_mesures, keep_pom_ids):
+def _abast_de_poda(data):
+    """Les prendes que un desat declara que està podant, o `None` si no ho declara. Punt únic.
+
+    SET-2/#12b — la vora d'ABAST EXPLÍCIT. Normalment l'abast es dedueix de les files que el
+    payload anomena (v. `_poda_mesures`), i no cal dir res: un contenidor que envia files ja
+    diu de quina prenda parla. L'únic gest que la derivació no pot resoldre és el contenidor
+    que es desa BUIT —cap fila, cap eix, i tanmateix una ordre de buidar-lo—, i per a aquell
+    el client ha de poder dir qui és.
+
+    És deliberadament un camp del COS i no un paràmetre d'URL: viatja amb el desat, dins de la
+    mateixa transacció que el provoca. I és opcional per la mateixa raó que `keep_mesures` ho
+    va ser al seu dia: un client que no el digui ha de seguir fent exactament el que feia.
+    """
+    g = (data or {}).get('garments')
+    if not isinstance(g, (list, tuple)):
+        return None
+    return [str(x or '') for x in g]
+
+
+def _poda_mesures(model, keep_mesures, keep_pom_ids, garments=None):
     """Desactiva les mesures actives del model que el client NO ha dit que conserva.
 
     ── C4/BLOC 1-TER · LA PODA RESOL PER FILA, I EL CLIENT VELL NO EN MATA CAP ─────────
@@ -3510,6 +3534,29 @@ def _poda_mesures(model, keep_mesures, keep_pom_ids):
     prohibit a l'upsert—, i el preu de l'error no és una cel·la mal pintada: és una mesura
     donada de baixa que ningú no ha demanat.
 
+    ── SET-2/#12b · I L'ABAST DE LA PODA ÉS EL DE LES PECES QUE EL PAYLOAD NOMENA ──────
+    La branca de `keep_mesures` resolia per fila però mirava TOTES les files vives del model,
+    i això només era correcte mentre la taula fos una de sola. Amb la taula partida per peça
+    (S2, pas 3) un desat porta les files del SEU contenidor i prou: desar el de la mare
+    hauria donat de baixa les files del Pantaló —amb l'eix al payload i tot—, perquè no
+    sortien a la llista. Mesurat contra dades vives per S2, amb rollback: 1 baixa, la fila
+    de la 02 morta.
+
+    És la MATEIXA llei que T5 va aplicar a la branca de la clau curta, un contracte més
+    amunt: **una llista de files no és una ordre d'esborrar la feina d'una altra prenda**. Qui
+    no surt a la llista cau NOMÉS si la seva peça és una de les que la llista anomena; les
+    files de les altres prendes no són ni candidates.
+
+    ⚠️ Això REVISA una decisió de T5 (`test_set2_t5_escriptors`, 10/08), que llegia
+    `keep_mesures` com «tot el que queda al MODEL». Ara es llegeix com «tot el que queda al
+    CONTENIDOR», que és el que el client realment sap dir. El test d'aquell dia s'ha adaptat
+    amb el motiu datat.
+
+    `garments` — l'abast EXPLÍCIT, per al cas que la derivació no pot resoldre: un contenidor
+    que es desa BUIT no anomena cap peça i el payload no diu de qui és. Sense ell no es poda
+    res (no s'endevina mai de qui és el silenci); amb ell, el contenidor diu qui és i pot
+    buidar-se sencer. Cap client l'envia encara: és la vora que S2 necessitarà al pas 3.
+
     Torna el nombre de files desactivades.
     """
     from fhort.models_app.models import BaseMeasurement
@@ -3520,10 +3567,18 @@ def _poda_mesures(model, keep_mesures, keep_pom_ids):
     if keep_mesures is not None:
         conserva = {(int(k['pom_id']),) + _identitat_de_mesura(k)
                     for k in keep_mesures if k.get('pom_id')}
+        # L'ABAST: el que diu el client si el diu, i si no el que les files NOMENEN. Un
+        # conjunt buit —cap fila i cap abast explícit— no és «totes»: és «no ho sé», i
+        # d'un «no ho sé» no en surt cap baixa.
+        if garments is not None:
+            abast = {str(g or '') for g in garments}
+        else:
+            abast = {ident[3] for ident in conserva}
         # `.exclude()` no pot expressar una clau composta: es resol en Python sobre les files
         # vives del model, que són poques i ja s'han de llegir igualment.
         baixes = [bm.id for bm in vives
-                  if (bm.pom_id, bm.capa, bm.instancia, bm.garment) not in conserva]
+                  if bm.garment in abast
+                  and (bm.pom_id, bm.capa, bm.instancia, bm.garment) not in conserva]
         return BaseMeasurement.objects.filter(id__in=baixes).update(is_active=False) if baixes else 0
 
     # ── SET-2/T5 · LA BRANCA DE LA CLAU CURTA, I PER QUÈ HI ENTRA `garment=''` ─────────
