@@ -150,7 +150,8 @@
       "delta_na": "Els deltes no s'apliquen en règim {{regim}}.",
       "err_linear_zero": "Una regla LINEAR amb delta 0 i sense trencament no gradua res: posa-hi un delta o tria FIXED.",
       "err_generic": "no s'ha pogut desar",
-      "load_err": "No s'ha pogut carregar la taula de graduació."
+      "load_err": "No s'ha pogut carregar la taula de graduació.",
+      "regla_heretada": "Aquesta peça no té regla pròpia: segueix la del model base."
     }
   },
   "size_map_title": "Sistemes de talles",
@@ -2804,7 +2805,8 @@
     "sortir_amb_canvis_peces": "A: {{peces}}",
     "sortir_amb_canvis_cos": "Si surts ara, els canvis d’aquests contenidors es perdran. Tanca aquest avís i grava’ls al contenidor on els has fet.",
     "sortir_sense_desar": "Sortir sense desar",
-    "quedar_me": "Quedar-m’hi"
+    "quedar_me": "Quedar-m’hi",
+    "import_nomes_mare": "L'importació encara no sap de quina peça és: només es pot importar a la peça principal."
   },
   "model_fabric": {
     "err_close_table": "No s'ha pogut tancar la taula.",

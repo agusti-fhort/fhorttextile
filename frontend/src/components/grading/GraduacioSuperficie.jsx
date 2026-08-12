@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import client from '../../api/client'
 import { models } from '../../api/endpoints'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
-import PecesDelModel, { CosPecaSenseMesures } from '../model/PecesDelModel'
+import PecesDelModel from '../model/PecesDelModel'
+import { clauRegla, filesDeLaPeca } from '../../utils/identitatMesura'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { useElements } from '../../utils/vocabulariDominiFont'
 import { aDocument, aMotor, opcionsDocument } from '../../utils/breakConvention'
@@ -153,7 +154,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   // El valor VIGENT d'un camp: l'edició si n'hi ha (encara que sigui null: esborrar és una
   // decisió), i si no, el que va arribar del servidor.
   const valor = useCallback((row, camp) => {
-    const ed = edicions.get(row.pom_id)
+    const ed = edicions.get(clauRegla(row))
     if (ed && camp in ed) return ed[camp]
     return row[camp]
   }, [edicions])
@@ -170,25 +171,27 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     setFeedback(null)
     setEdicions(prev => {
       const next = new Map(prev)
-      const cur = { ...(next.get(row.pom_id) || {}) }
+      const cur = { ...(next.get(clauRegla(row)) || {}) }
       cur[camp] = v
       // Escriure un delta sobre una fila que no té CAP regla vol dir LINEAR, i val més que la
       // pantalla ho digui que no pas que el backend ho decideixi en silenci: el desplegable
       // passa a LINEAR a la vista i entra a l'edició com un canvi explícit i visible, que la
       // persona pot canviar tot seguit. (Això NO és sembrar: la fila l'acaba de tocar algú.)
       if (camp !== 'logica' && !row.logica && !('logica' in cur) && !buit(v)) cur.logica = 'LINEAR'
-      next.set(row.pom_id, cur)
+      cur.__pom_id = row.pom_id
+      cur.__garment = row.garment || ''
+      next.set(clauRegla(row), cur)
       return next
     })
   }, [])
 
   // Les files que l'usuari ha tocat, i les que a més queden en LINEAR degenerada (que el backend
   // rebutjaria). Es compten per POM, que és la unitat de la regla.
-  const pomsTocats = useMemo(() => [...edicions.keys()], [edicions])
+  const reglesTocades = useMemo(() => [...edicions.entries()], [edicions])
   const degenerades = useMemo(() => {
     const out = new Set()
     files.forEach(r => {
-      if (!edicions.has(r.pom_id)) return
+      if (!edicions.has(clauRegla(r))) return
       if (esLinearDegenerada(reglaDe(r))) out.add(r.pom_id)
     })
     return out
@@ -198,7 +201,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   // crida NOMÉS els camps que s'han canviat: `set_pom_regim_view` actualitza per presència de
   // clau, o sigui que el que no s'envia no es toca.
   const grava = useCallback(async () => {
-    if (!pomsTocats.length || gravant) return
+    if (!reglesTocades.length || gravant) return
     if (degenerades.size) {
       setFeedback({ type: 'err', text: t('graduacio.superficie.err_linear_zero') })
       return
@@ -206,8 +209,11 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     setGravant(true)
     setFeedback(null)
     const fallits = []
-    for (const pomId of pomsTocats) {
-      const camps = edicions.get(pomId) || {}
+    for (const [clau] of reglesTocades) {
+      const camps = { ...(edicions.get(clau) || {}) }
+      const pomId = camps.__pom_id
+      const garment = camps.__garment || ''
+      delete camps.__pom_id; delete camps.__garment
       const payload = {}
       if ('logica' in camps) payload.logica = camps.logica || null
       if ('increment_base' in camps) payload.increment_base = num(camps.increment_base)
@@ -215,9 +221,12 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
       if ('talla_break_label' in camps) payload.talla_break_label = camps.talla_break_label || null
       if (!Object.keys(payload).length) continue
       try {
-        await models.setPomRule(modelId, pomId, payload)
+        // SET-2/#12d — L'EIX HI VA. `set_pom_regim_view` resol per `(model, pom, garment)`
+        // i qui no el diu rep la mare: sense això, editar la regla des del contenidor de la 02
+        // escrivia sobre la de la mare (el vermell del #12d era exactament 9.0 != 4.0).
+        await models.setPomRule(modelId, pomId, { ...payload, garment })
       } catch (e) {
-        const fila = files.find(r => r.pom_id === pomId)
+        const fila = files.find(r => clauRegla(r) === clau)
         fallits.push(`${fila?.pom_code || pomId}: ${e?.response?.data?.detail || t('graduacio.superficie.err_generic')}`)
       }
     }
@@ -227,10 +236,10 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
       return
     }
     setEdicions(new Map())
-    setFeedback({ type: 'ok', text: t('graduacio.superficie.gravat', { count: pomsTocats.length }) })
+    setFeedback({ type: 'ok', text: t('graduacio.superficie.gravat', { count: reglesTocades.length }) })
     carrega()
     onGravat?.()
-  }, [pomsTocats, gravant, degenerades, edicions, modelId, files, t, carrega, onGravat])
+  }, [reglesTocades, gravant, degenerades, edicions, modelId, files, t, carrega, onGravat])
 
   // ── Cel·les ────────────────────────────────────────────────────────────────────────────────
   const inputStyle = (ko) => ({
@@ -243,10 +252,17 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   const nomDe = (row) => row.nom_canonic_model
     || row.client_name_en || row.nom_en || row.nom_ca || row.pom_code || ''
 
-  const cos = () => files.map((row, i) => {
+  const cos = (deLaPeca) => (deLaPeca || files).map((row, i) => {
     const n = i + 1
     const regla = reglaDe(row)
-    const tocat = edicions.has(row.pom_id)
+    const tocat = edicions.has(clauRegla(row))
+    // SET-2/T7-B10 — LA REGLA HERETADA. El #12d serveix `regla_model.heretat` per fila: la
+    // prenda que no en té de pròpia SEGUEIX la de la mare, i «no en té» i «té la mateixa» no
+    // són el mateix estat (D5-bis). Es diu en el llenguatge del Resum —tinta apagada, mai
+    // vermell—: heretar no és cap avaria, i el valor que es veu és el que governa de debò.
+    // En tocar-la neix la seva (el #12d ho fa amb l'upsert per `(model, pom, garment)`), i
+    // llavors ja no és heretada: per això el marcador cau amb `tocat`.
+    const heretada = !tocat && row.regla_model?.heretat === true
     const ko = degenerades.has(row.pom_id)
     const inst = etiquetaInstancia(row.instancia)
     // Mateixa regla que la consulta: la traducció només surt si NO repeteix el nom visible.
@@ -268,7 +284,9 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     const regims = regimsAutorables.includes(row.logica) || !row.logica
       ? regimsAutorables : [...regimsAutorables, row.logica]
     return (
-      <tr key={row.id} style={{ background: tocat ? 'var(--fila-activa)' : 'transparent' }}>
+      <tr key={row.id} title={heretada ? t('graduacio.superficie.regla_heretada') : undefined}
+        style={{ background: tocat ? 'var(--fila-activa)' : 'transparent',
+          color: heretada ? 'var(--text-soft)' : undefined }}>
         {/* # — el número de fila, com a la consulta (mateix to i cos). */}
         <td style={{ ...tdS, color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>{n}</td>
         <td style={{ ...tdS, color: 'var(--text-muted)' }}>{etiquetaCapa(row.capa || 'exterior', dicc, lang)}</td>
@@ -392,7 +410,12 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
       {!carregant && !err && (
         <>
           {/* SET-2/T7-B2b — un contenidor per prenda; v. `PecesDelModel`. */}
-          <PecesDelModel model={model} accioJoc={canviarJoc}>{peca => (peca && !peca.es_mare) ? <CosPecaSenseMesures /> : (<>
+          {/* SET-2/T7-B10 — LECTURA PARTIDA PER CONTENIDOR. `base-measurements` serveix
+              l'eix a cada fila i, des del #12d, la SEVA regla amb `heretat`. El repartiment és
+              el mateix de Mesures i Escalat. */}
+          <PecesDelModel model={model} accioJoc={canviarJoc}>{peca => {
+          const filesDelContenidor = filesDeLaPeca(files, peca ? (peca.codi || '') : null)
+          return (<>
           <div style={{ overflowX: 'auto' }}>
             {/* Q2 — LA TAULA NO VA AL 100%. Anava-hi, i com que totes les columnes menys `#`
                 tenien amplada fixada, el sobrant de la pantalla se n'anava sencer a la primera:
@@ -444,25 +467,26 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
                 </tr>
               </thead>
               <tbody>
-                {files.length === 0
+                {filesDelContenidor.length === 0
                   ? <tr><td colSpan={10} style={{ ...tdS, color: 'var(--text-muted)', padding: '16px 10px' }}>
                       {t('graduacio.superficie.buit')}
                     </td></tr>
-                  : cos()}
+                  : cos(filesDelContenidor)}
               </tbody>
             </table>
           </div>
-          </>)}</PecesDelModel>
+          </>)
+          }}</PecesDelModel>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                         gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 'var(--fs-body)', color: feedback?.type === 'err' ? 'var(--danger, #b3261e)' : 'var(--text-muted)' }}>
-              {feedback?.text || (pomsTocats.length
-                ? t('graduacio.superficie.tocades', { count: pomsTocats.length })
+              {feedback?.text || (reglesTocades.length
+                ? t('graduacio.superficie.tocades', { count: reglesTocades.length })
                 : t('graduacio.superficie.res_tocat'))}
             </span>
-            <button type="button" onClick={grava} disabled={!pomsTocats.length || gravant}
-              style={btnPrimary(!pomsTocats.length || gravant)}>
+            <button type="button" onClick={grava} disabled={!reglesTocades.length || gravant}
+              style={btnPrimary(!reglesTocades.length || gravant)}>
               {gravant ? t('common.saving') : t('graduacio.superficie.gravar')}
             </button>
           </div>

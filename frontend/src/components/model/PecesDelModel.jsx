@@ -33,7 +33,7 @@ import PecaContenidor from './PecaContenidor'
 // sense fila, que és EXACTAMENT la pantalla d'abans d'aquest canvi. Una superfície de treball no
 // pot dependre d'una segona crida per ensenyar la taula que ja té: el pitjor que pot passar si
 // `/peces/` no contesta és que no es vegi la fila de peça, no que no es vegi la feina.
-export default function PecesDelModel({ model, accioJoc = null, children }) {
+export default function PecesDelModel({ model, accioJoc = null, accionsPeca = null, children }) {
   const [peces, setPeces] = useState(null)
   const id = model?.id
 
@@ -50,7 +50,11 @@ export default function PecesDelModel({ model, accioJoc = null, children }) {
 
   // Encara no ho sabem (o ha fallat): la pantalla de sempre, sense fila.
   if (!peces || peces.length === 0) {
-    return <PecaContenidor model={model} accioJoc={accioJoc}>{children(null)}</PecaContenidor>
+    return (
+      <PecaContenidor model={model} accioJoc={accioJoc} accionsPeca={accionsPeca?.(null)}>
+        {children(null)}
+      </PecaContenidor>
+    )
   }
 
   // La llei («la fila neix amb la SEGONA prenda») viu a `utils/pecaDefinicio` amb banc
@@ -64,7 +68,8 @@ export default function PecesDelModel({ model, accioJoc = null, children }) {
           // L'acció sobre el joc de regles és de la MARE mentre la porta d'escriptura d'una
           // peça no arribi a aquestes superfícies: el Resum ja la té, i tenir-ne dues seria
           // tenir dues autories del mateix camp (el mateix argument que el llapis que NAVEGA).
-          accioJoc={peca.es_mare ? accioJoc : null}>
+          accioJoc={peca.es_mare ? accioJoc : null}
+          accionsPeca={accionsPeca?.(peca)}>
           {children(peca)}
         </PecaContenidor>
       ))}

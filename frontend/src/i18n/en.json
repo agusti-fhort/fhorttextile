@@ -150,7 +150,8 @@
       "delta_na": "Deltas do not apply under {{regim}}.",
       "err_linear_zero": "A LINEAR rule with delta 0 and no break grades nothing: set a delta or choose FIXED.",
       "err_generic": "could not be saved",
-      "load_err": "The grading table could not be loaded."
+      "load_err": "The grading table could not be loaded.",
+      "regla_heretada": "This piece has no rule of its own: it follows the base model’s."
     }
   },
   "size_map_title": "Size systems",
@@ -2804,7 +2805,8 @@
     "sortir_amb_canvis_peces": "In: {{peces}}",
     "sortir_amb_canvis_cos": "If you leave now, the changes in these containers will be lost. Close this warning and save them in the container where you made them.",
     "sortir_sense_desar": "Leave without saving",
-    "quedar_me": "Stay here"
+    "quedar_me": "Stay here",
+    "import_nomes_mare": "Import does not carry the piece axis yet: it can only import into the main piece."
   },
   "model_fabric": {
     "err_close_table": "Could not close the table.",

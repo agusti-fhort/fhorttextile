@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import EditableTable from '../EditableTable/EditableTable'
-import PecesDelModel, { CosPecaSenseMesures } from './PecesDelModel'
+import PecesDelModel from './PecesDelModel'
+import { filesDeLaPeca } from '../../utils/identitatMesura'
 import Modal from '../ui/Modal'
 import ImportWizard from '../ImportWizard/ImportWizard'
 import ModelPicker from './ModelPicker'
@@ -435,24 +436,20 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
 
       {mode === 'manual' && (
         <div>
-        {/* SET-2/T7-fix3 — UN CONTENIDOR PER PRENDA, el mateix patró que Mesures, Escalat i
-            Graduació. Només embolcalla el mode 'manual': el selector de les tres targetes i
-            l'importador són PASSOS DE WIZARD, no feina d'una peça, i posar-los dins d'un
-            contenidor de prenda diria una cosa falsa (que s'està definint la 02 quan encara
-            s'està triant per on començar).
-            ⚠️ El cos de la 02 NO pot ser la graella d'edició: les comportes de mesura són vives
-            i gravar POMs de la 02 escriuria mesures. Mateix text d'espera que a Mesures. */}
-        <PecesDelModel model={model}>{peca => (peca && !peca.es_mare) ? <CosPecaSenseMesures /> : (<>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
-            <div>
-              <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '0 0 0.25rem' }}>
-                {t('model_measurements.pom_title')}
-              </h2>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
-                {t('model_measurements.pom_subtitle')}
-              </div>
+        {/* SET-2/T7-B9 — LA CAPÇALERA I LA GRADUACIÓ, A DALT I FORA DELS CONTENIDORS. La
+            graduació travessa totes les prendes (és el joc del model), i el patró de Mesures i
+            Escalat ja diu que el que travessa peces viu a dalt. Dins d'un contenidor es
+            repetiria una vegada per prenda i cada còpia prometria ser «la d'aquesta peça». */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
+          <div>
+            <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '0 0 0.25rem' }}>
+              {t('model_measurements.pom_title')}
+            </h2>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>
+              {t('model_measurements.pom_subtitle')}
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
               {/* GRADUACIÓ des d'AQUÍ (31/07): és la vista on es treballa la taula, i on les
                   columnes de Regla es veuen buides esperant. Obre el mateix wizard al pas 4
                   que el botó de la barra de consulta. */}
@@ -463,19 +460,29 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                      style={{ fontSize: 14, color: 'currentColor' }} /> {t('graduacio.button')}
                 </button>
               )}
-              <button type="button" onClick={() => setMode('import')}
-                style={botoPorta}>
-                <i className="ti ti-upload" aria-hidden="true"
-                   style={{ fontSize: 14, color: 'currentColor' }} /> {t('model_measurements.import_table')}
-              </button>
-            </div>
           </div>
+        </div>
+
+        {/* SET-2/T7-B9 — UN CONTENIDOR PER PRENDA amb la GRAELLA REAL. El text d'espera se'n
+            va: des del #12c l'upsert de `gravar-pom` resol per la identitat sencera i les files
+            noves neixen amb el seu `garment`, o sigui que gravar des del contenidor de la 02 ja
+            no cau sobre la mare. Les files es reparteixen per l'eix, com a Mesures i Escalat.
+            (Aquí NO cal la vora `garments` del #12b: en aquest camí el desat buit mor amb un
+            400 abans d'arribar a la poda.) */}
+        <PecesDelModel model={model} accionsPeca={peca => <BotoImportarPeca peca={peca}
+          onImportar={() => setMode('import')} />}>{peca => {
+        const filesDelContenidor = filesDeLaPeca(taulaRows, peca ? (peca.codi || '') : null)
+        return (<>
           {/* C2 — els xips de POMs suggerits han mort. La taula ARRENCA amb totes les files de
               l'item i el tècnic hi treu el que no vol amb la ✕ de cada fila (i n'afegeix amb el
               cercador del peu de taula). Triar sobre una llista de 48 xips per després tornar a
               mirar-la a la taula era fer dues vegades la mateixa lectura. */}
           <EditableTable
-            rows={taulaRows.length > 0 ? taulaRows : [...pomsSuggerits]
+            rows={filesDelContenidor.length > 0 ? filesDelContenidor
+              // ELS SUGGERITS SÓN DE L'ITEM, i l'item és del MODEL: sembren la prenda que
+              // encara no té res, no totes alhora. Amb dues prendes buides, oferir-los a les
+              // dues seria proposar la mateixa taula dues vegades.
+              : (peca && !peca.es_mare ? [] : [...pomsSuggerits]
               // Ordre de l'ITEM (GarmentPOMMap.ordre); `poms-suggerits` els serveix amb els KEY
               // al davant, i aquí el que mana és l'ordre en què l'item declara les mesures.
               .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0))
@@ -484,7 +491,7 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                 nom_ca: p.nom_ca, nom_en: p.nom_en, nom_fitxa: '', is_key: p.is_key,
                 client_code: p.client_code, client_name_en: p.client_name_en, client_name_local: p.client_name_local,
                 base_value_cm: null, graded: {}, ordre: i,
-              }))}
+              })))}
             sizeRun={sizeRun}
             baseSize={model?.base_size_label}
             modelId={id}
@@ -498,7 +505,8 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
                fora del conjunt a conservar i les desactiva en silenci. */
             garment={peca?.codi ?? ''}
           />
-        </>)}</PecesDelModel>
+        </>)
+        }}</PecesDelModel>
 
           {/* LA SORTIDA ÉS DE PÀGINA i per això viu FORA dels contenidors, com el desat viu a
               DINS de cadascun. Són dues alçades i no s'han de barrejar: desar és per prenda,
@@ -556,6 +564,37 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
         />
       )}
     </div>
+  )
+}
+
+/**
+ * «IMPORTAR TAULA», a la fila superior del contenidor de la peça — SET-2/T7-B9.
+ *
+ * Decisió T8 (Agus): **un import = una peça**, i s'inicia des de la peça. Per això el botó surt
+ * de la capçalera de la pàgina i baixa a cada contenidor.
+ *
+ * 🛑 I A LES PRENDES QUE NO SÓN LA MARE HI ÉS APAGAT, amb el motiu al `title`. El pipeline
+ * d'importació (`extraction_views.py`, sis vistes: cribratge · talles · extracció · poms ·
+ * grading-preview · mesures) **no coneix l'eix de peça**: censat el 12/08, zero referències a
+ * `garment` a tot el fitxer. Un import llançat des del contenidor de la Llaçada escriuria les
+ * seves files a la MARE, en silenci — exactament la família que aquest sprint ha anat tancant
+ * (#12b, #12c, #12d), fabricada des d'una porta que encara no s'hi ha adaptat.
+ *
+ * Un botó apagat que diu per què és la mateixa llei que va regir el «Canviar» de B1 i el cos
+ * d'espera: promet menys del que sembla, però no menteix. El dia que l'import guanyi l'eix,
+ * això és treure el `disabled`.
+ */
+function BotoImportarPeca({ peca, onImportar }) {
+  const { t } = useTranslation()
+  const esMare = !peca || peca.es_mare
+  return (
+    <button type="button" onClick={esMare ? onImportar : undefined} disabled={!esMare}
+      title={esMare ? undefined : t('model_measurements.import_nomes_mare')}
+      style={{ ...botoPorta, ...(esMare ? null : { cursor: 'not-allowed', opacity: undefined,
+        background: 'var(--bg-page)', borderColor: 'var(--line)', color: 'var(--text-faint)' }) }}>
+      <i className="ti ti-upload" aria-hidden="true"
+         style={{ fontSize: 14, color: 'currentColor' }} /> {t('model_measurements.import_table')}
+    </button>
   )
 }
 

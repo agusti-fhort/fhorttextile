@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { clauDeFila, filesDeLaPeca, identitatMesura } from './identitatMesura.js'
+import { clauDeFila, clauRegla, filesDeLaPeca, identitatMesura } from './identitatMesura.js'
 
 test('dues files idèntiques en tot MENYS el garment no col·lapsen', () => {
   // EL CAS QUE OBRE SET-2: la mateixa mesura, la mateixa capa i la mateixa instància, a dues
@@ -110,4 +110,14 @@ test('sense saber la peça hi són TOTES: mai es buida una taula pel dubte', () 
   assert.equal(filesDeLaPeca(files, null).length, 2)
   assert.equal(filesDeLaPeca(files, undefined).length, 2)
   assert.deepEqual(filesDeLaPeca(null, ''), [])
+})
+
+test('la regla és del POM i de la PRENDA: dues capes la comparteixen, dues prendes no', () => {
+  const mareExterior = { pom_id: 7, garment: '', capa: 'exterior' }
+  const mareFolre = { pom_id: 7, garment: '', capa: 'folre' }
+  const laDeLa02 = { pom_id: 7, garment: '02', capa: 'exterior' }
+
+  assert.equal(clauRegla(mareExterior), clauRegla(mareFolre))   // mateixa llei d'increments
+  assert.notEqual(clauRegla(mareExterior), clauRegla(laDeLa02)) // prendes distintes, regles distintes
+  assert.equal(clauRegla({ pom_id: 7 }), '7|')                  // sense eix = la mare
 })
