@@ -51,3 +51,22 @@ export function identitatMesura(fila) {
 export function clauDeFila(fila, pk) {
   return pk ?? identitatMesura(fila)
 }
+
+/**
+ * LES FILES D'UNA PRENDA — SET-2/T7-B8 (el repartiment client-side).
+ *
+ * `taula-mesures` i `base-stages` NO filtren per peça (no tenen cap paràmetre per fer-ho):
+ * serveixen totes les files del model amb el seu eix, i qui les reparteix per contenidor és la
+ * pantalla. Aquesta funció és aquell repartiment, en un sol lloc.
+ *
+ * ⚠️ `eix` = `null` vol dir **encara no ho sabem** —`/peces/` no ha contestat, o ha fallat— i
+ * llavors hi són TOTES. És la mateixa llei que `PecesDelModel` ja aplica al contenidor: el
+ * pitjor que pot passar si la segona crida no arriba és no veure la fila de peça, mai no veure
+ * la feina. Filtrar per un eix que no coneixem buidaria la taula d'un model sencer.
+ *
+ * La MARE és `''`, i és un valor: una fila sense `garment` és de la mare, no «de cap».
+ */
+export function filesDeLaPeca(files, eix) {
+  if (eix === null || eix === undefined) return files || []
+  return (files || []).filter(f => (f.garment || '') === eix)
+}

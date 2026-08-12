@@ -99,3 +99,28 @@ test('el comparable segueix normalitzant text i buits', () => {
   assert.deepEqual(payloadComparable([fila({ base_value_cm: '' })]),
     payloadComparable([fila({ base_value_cm: null })]))
 })
+
+// ── L'ABAST EXPLÍCIT · SET-2/#12b ────────────────────────────────────────────────────────
+
+test('un contenidor amb files NO envia `garments`: l\'abast el deriva el servidor', () => {
+  // I no és indiferent: l'abast explícit SUBSTITUEIX el derivat. En una taula amb files de
+  // dues prendes (l'estat d'avui, `taula-mesures` no filtra), enviar `garments:['']` deixaria
+  // les files de la 02 fora de l'abast i un esborrat seu no faria efecte — un gest que no passa.
+  const p = construeixPayload([fila()], '')
+
+  assert.ok(!('garments' in p))
+})
+
+test('un contenidor BUIT sí que l\'envia: d\'un silenci no en surt cap baixa', () => {
+  // És l'únic gest que la derivació no pot resoldre: cap fila, cap eix, i tanmateix una ordre
+  // de buidar. Sense `garments`, `_poda_mesures` rep un abast buit i no dona de baixa res.
+  assert.deepEqual(construeixPayload([], '02').garments, ['02'])
+  assert.deepEqual(construeixPayload([], '').garments, [''])      // la mare també es pot buidar
+})
+
+test('files sense `pom_id` no compten com a anomenades: el contenidor segueix buit', () => {
+  // Una fila suggerida no desada no entra a `keep_mesures`, o sigui que no anomena res.
+  const suggerida = { pom_id: null, capa: 'exterior', instancia: '', base_value_cm: null }
+
+  assert.deepEqual(construeixPayload([suggerida], '02').garments, ['02'])
+})

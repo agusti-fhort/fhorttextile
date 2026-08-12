@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { clauDeFila } from '../../utils/identitatMesura'
+import { clauDeFila, filesDeLaPeca } from '../../utils/identitatMesura'
 import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines } from '../../api/endpoints'
@@ -11,7 +11,7 @@ import { finestraHistoric } from './fittingGridAdapter'
 import MeasureGrid from './MeasureGrid'
 import EditableTable from '../EditableTable/EditableTable'
 import BackButton from '../BackButton'
-import PecesDelModel, { CosPecaSenseMesures } from './PecesDelModel'
+import PecesDelModel from './PecesDelModel'
 import WatchpointsPanel from './WatchpointsPanel'
 import SessionPanel from './SessionPanel'
 import SessionActions from './SessionActions'
@@ -732,7 +732,17 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       {/* SET-2/T7-B2b — UN CONTENIDOR PER PRENDA. Abans era un `PecaContenidor` pelat, i per
           això la fila superior no naixia mai: els seus dos props no els passava ningú. El cos
           d'una peça que no és la mare no pot tenir res fins al #12 (comportes), i ho DIU. */}
-      <PecesDelModel model={model}>{peca => (peca && !peca.es_mare) ? <CosPecaSenseMesures /> : (<>
+      {/* SET-2/T7-B8 — CADA CONTENIDOR, LES SEVES FILES. `base-stages` i `taula-mesures` no
+          filtren per peça (no tenen com): serveixen totes les files amb el seu eix i el
+          repartiment és de la pantalla. Amb `peca == null` (la llista encara no ha contestat)
+          hi són totes: buidar una taula pel dubte és el pitjor error d'una superfície de feina.
+          El desat d'aquí va per LÍNIA amb la PK (`sizeCheckLines.update(lineId, …)`), o sigui
+          que no travessa `_poda_mesures` i filtrar no obre cap finestra. */}
+      <PecesDelModel model={model}>{peca => {
+      const eixPeca = peca ? (peca.codi || '') : null
+      const filesDelContenidor = filesDeLaPeca(rows, eixPeca)
+      const presaDelContenidor = filesDeLaPeca(rowsPresa, eixPeca)
+      return (<>
       {!esPresa && !readOnly && rows.length > 0 && (
         <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-soft)',
                     margin: '0 0 10px', lineHeight: 1.8 }}>
@@ -746,7 +756,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
       )}
       {esPresa ? (
         <EditableTable
-          rows={rowsPresa}
+          rows={presaDelContenidor}
           sizeRun={sizeRun}
           baseSize={raw?.baseData?.base_size || model?.base_size_label}
           modelId={model.id}
@@ -755,7 +765,7 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           mostraGrading={readOnly && graduaAlgunaCosa}
         />
       ) : (
-      <MeasureGrid rows={rows} groups={groups} leadCols={leadCols} editable={!readOnly}
+      <MeasureGrid rows={filesDelContenidor} groups={groups} leadCols={leadCols} editable={!readOnly}
         onSave={readOnly ? undefined : onSave} onNomSave={canEditNom ? onNomSave : undefined}
         onNomsSave={canEditNom && src.onNomsSave ? onNomsSave : undefined}
         editCodi reorderable={canReorder} onReorder={canReorder ? onReorder : undefined}
@@ -778,7 +788,8 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           )
         } />
       )}
-      </>)}</PecesDelModel>
+      </>)
+      }}</PecesDelModel>
 
       {/* v3 (`.bar` :193-198) — LA BARRA DE RECOMPTES. La graella diu QUÈ té cada fila; això diu
           on és la sessió sencera, que és la pregunta de qui la tanca. «Sense decidir» és el que

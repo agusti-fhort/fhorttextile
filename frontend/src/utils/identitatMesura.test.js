@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { clauDeFila, identitatMesura } from './identitatMesura.js'
+import { clauDeFila, filesDeLaPeca, identitatMesura } from './identitatMesura.js'
 
 test('dues files idèntiques en tot MENYS el garment no col·lapsen', () => {
   // EL CAS QUE OBRE SET-2: la mateixa mesura, la mateixa capa i la mateixa instància, a dues
@@ -88,4 +88,26 @@ test('un camp absent i un camp buit són la MATEIXA fila', () => {
   assert.equal(identitatMesura({ pom_id: 7 }), identitatMesura({
     pom_id: 7, capa: '', instancia: '', garment: '',
   }))
+})
+
+// ── SET-2/T7-B8 · el repartiment de files per contenidor ────────────────────────────────
+
+test('cada contenidor es queda les seves files, i la mare és `\'\'`', () => {
+  const files = [
+    { pom_id: 1, garment: '' }, { pom_id: 2, garment: '02' }, { pom_id: 3 },
+  ]
+
+  assert.deepEqual(filesDeLaPeca(files, '').map(f => f.pom_id), [1, 3])   // sense eix = de la mare
+  assert.deepEqual(filesDeLaPeca(files, '02').map(f => f.pom_id), [2])
+  assert.deepEqual(filesDeLaPeca(files, '03').map(f => f.pom_id), [])     // buit, i és correcte
+})
+
+test('sense saber la peça hi són TOTES: mai es buida una taula pel dubte', () => {
+  // `/peces/` no ha contestat o ha fallat. Filtrar per un eix desconegut deixaria el model
+  // sencer sense taula — el pitjor error possible en una superfície de treball.
+  const files = [{ pom_id: 1, garment: '' }, { pom_id: 2, garment: '02' }]
+
+  assert.equal(filesDeLaPeca(files, null).length, 2)
+  assert.equal(filesDeLaPeca(files, undefined).length, 2)
+  assert.deepEqual(filesDeLaPeca(null, ''), [])
 })

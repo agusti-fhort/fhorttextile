@@ -4,7 +4,8 @@ import { IconAlertTriangle, IconLock } from '@tabler/icons-react'
 import client from '../api/client'
 import { models } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
-import PecesDelModel, { CosPecaSenseMesures } from '../components/model/PecesDelModel'
+import PecesDelModel from '../components/model/PecesDelModel'
+import { filesDeLaPeca } from '../utils/identitatMesura'
 import { buildEscalatGroups, buildEscalatRows, escalatRuleLeadCols } from '../components/model/fittingGridAdapter'
 import { mesuraSemblaIncrement } from '../utils/plausibilitatMesura'
 import { formatLen } from '../utils/format'
@@ -245,23 +246,28 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
           </div>
         )}
         {/* SET-2/T7-B2b — un contenidor per prenda; v. `PecesDelModel`. */}
-        <PecesDelModel model={modelInfo}>{peca => (peca && !peca.es_mare) ? <CosPecaSenseMesures /> : (<>
+        {/* SET-2/T7-B8 — cada contenidor, les seves files (v. `CheckMeasureEditor`). El desat
+            d'Escalat també va per LÍNIA amb la PK. */}
+        <PecesDelModel model={modelInfo}>{peca => {
+        const filesDelContenidor = filesDeLaPeca(gridRows, peca ? (peca.codi || '') : null)
+        return (<>
         {loading && !data ? (
           <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('app.loading')}</div>
-        ) : gridRows.length === 0 ? (
+        ) : filesDelContenidor.length === 0 ? (
           <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('model_measurements.propagated_empty')}</div>
         ) : (
           <MeasureGrid
             key={`${modelId}:${reloadKey}`}
             editable={!readOnly}
-            rows={gridRows} groups={gridGroups}
+            rows={filesDelContenidor} groups={gridGroups}
             leadCols={leadCols}
             leadGroupLabel={t('measuregrid.grup_regla')}
             groupsLabel={t('measuregrid.grup_mesures')}
             onSave={onGridSave}
           />
         )}
-        </>)}</PecesDelModel>
+        </>)
+        }}</PecesDelModel>
       </div>
     </div>
   )
