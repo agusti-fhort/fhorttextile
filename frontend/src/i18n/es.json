@@ -2501,7 +2501,8 @@
     },
     "repas": {
       "title": "Repaso de fittings",
-      "count": "{{n}} sesiones realizadas",
+      "count_one": "{{count}} sesión hecha",
+      "count_other": "{{count}} sesiones hechas",
       "size": "talla {{talla}}",
       "col_comments": "Comentarios",
       "session_notes": "Notas de la sesión",
@@ -2509,6 +2510,7 @@
       "no_sessions": "Este modelo aún no tiene ningún fitting realizado.",
       "empty": "Ningún POM tomado en estas sesiones.",
       "des_de_mesures": "Toma escrita en la tabla de medidas",
+      "talla_divergent": "Esta prenda se mide en talla {{propia}}: lo que se ve es la talla de la vista.",
       "col_entrada": "Entrada de POMs",
       "empty_all": "Este modelo todavía no tiene ninguna medida."
     },

@@ -2501,7 +2501,8 @@
     },
     "repas": {
       "title": "Repàs de fittings",
-      "count": "{{n}} sessions fetes",
+      "count_one": "{{count}} sessió feta",
+      "count_other": "{{count}} sessions fetes",
       "size": "talla {{talla}}",
       "col_comments": "Comentaris",
       "session_notes": "Notes de la sessió",
@@ -2509,6 +2510,7 @@
       "no_sessions": "Aquest model encara no té cap fitting fet.",
       "empty": "Cap POM pres en aquestes sessions.",
       "des_de_mesures": "Presa escrita a la taula de mesures",
+      "talla_divergent": "Aquesta prenda es mesura en talla {{propia}}: el que es veu és la talla de la vista.",
       "col_entrada": "Entrada de POMs",
       "empty_all": "Aquest model encara no té cap mesura."
     },

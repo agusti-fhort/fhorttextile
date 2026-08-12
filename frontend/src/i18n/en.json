@@ -2501,7 +2501,8 @@
     },
     "repas": {
       "title": "Fitting review",
-      "count": "{{n}} sessions held",
+      "count_one": "{{count}} session done",
+      "count_other": "{{count}} sessions done",
       "size": "size {{talla}}",
       "col_comments": "Comments",
       "session_notes": "Session notes",
@@ -2509,6 +2510,7 @@
       "no_sessions": "This model has no fittings yet.",
       "empty": "No POM measured in these sessions.",
       "des_de_mesures": "Reading entered in the measurements table",
+      "talla_divergent": "This garment is measured in size {{propia}}: what you see is the view's size.",
       "col_entrada": "POM entry",
       "empty_all": "This model has no measurements yet."
     },
