@@ -564,6 +564,24 @@ class ImportSession(models.Model):
     # Model destí (es crea en confirmar)
     model           = models.ForeignKey('models_app.Model', null=True, blank=True,
                         on_delete=models.SET_NULL, related_name='import_sessions')
+    # ── SET-2/T8 · L'EIX DE LA PEÇA, A LA SESSIÓ ─────────────────────────────────────
+    # Decisió Agus (Patró C): **un import = una prenda**, i s'inicia DES DE LA PEÇA. El
+    # garment de destí, doncs, no és una pregunta del wizard ni una decisió que viatgi per
+    # fila: és CONTEXT, i el context d'una sessió viu a la sessió. Es fixa a la iniciació
+    # (`import_session_cribratge_view`) i el confirm hi escriu TOTES les files.
+    #
+    # `''` és la peça mare —el 100% del corpus del 12/08— i per això el default no canvia
+    # el comportament de cap sessió existent: una sessió d'abans d'aquesta columna té ''
+    # i escriu on ha escrit sempre.
+    #
+    # I ÉS TAMBÉ EL REGISTRE import→peça que el brief demana: cada `ImportSession` queda
+    # amb el seu document, el seu model i la seva prenda. Els exemples etiquetats que una
+    # detecció futura haurà de VALIDAR surten d'aquí (no és entrenament ni s'hi anota com
+    # a tal: és el que aquest import va fer, dit en clar).
+    garment         = models.CharField(
+                        max_length=20, blank=True, default='',
+                        help_text="Peça de destí de l'import: codi de ModelGarment ('02', "
+                                  "'03'…). '' és la peça mare, que és el Model mateix.")
     # Resultats per fase
     model_detectat          = models.JSONField(default=dict, blank=True)
     tipologia_confirmada    = models.ForeignKey('tasks.GarmentTypeItem', null=True, blank=True,

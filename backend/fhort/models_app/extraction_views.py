@@ -17,6 +17,54 @@ from fhort.pom.grading_utils import normalitza_cm
 from fhort.models_app.extraction_utils import registra_us_ia
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# SET-2/T8 · LA PEÇA DE DESTÍ D'UN IMPORT — EL PUNT ÚNIC DEL PIPELINE
+#
+# Decisió Agus (Patró C): **un import = una prenda**, i s'inicia DES DE LA PEÇA. El garment
+# es dedueix del context i no es pregunta mai; viu a `ImportSession.garment` des de la
+# iniciació i totes les vistes del pipeline el llegeixen d'AQUÍ, mai del cos de la petició.
+#
+# ⚠️ I EL SEU VALOR EFECTIU NO ES RE-DERIVA ENLLOC. Run, talla base, sistema i joc de regles
+# d'una peça són `garment.X or model.X` amb `is None` per predicat, i això viu en UN sol
+# mòdul (`services_garment.valor_efectiu`) des de T2-bis. Aquestes dues funcions són la
+# porta d'aquest fitxer cap allà: qui necessiti l'eix o el valor efectiu d'un import passa
+# per aquí i no escriu cap `or` propi.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+def _peca_de(session):
+    """La prenda de destí d'una sessió d'import: `ModelGarment` o `None` (= la MARE).
+
+    `None` no és un error tolerat: la mare ÉS el model i no té fila (D3). Una sessió amb un
+    codi que ja no existeix (peça esborrada enmig d'un import) també torna `None` i escriu a
+    la mare —que és el comportament d'abans d'aquest tram— en comptes de petar a mig camí.
+    """
+    from fhort.models_app.models import ModelGarment
+    codi = (getattr(session, 'garment', '') or '').strip()
+    if not codi or not session.model_id:
+        return None
+    return ModelGarment.objects.filter(model_id=session.model_id, codi=codi).first()
+
+
+def _efectiu(session, camp):
+    """El valor EFECTIU d'un camp heretable per a la peça de destí de la sessió."""
+    from fhort.models_app.services_garment import valor_efectiu
+    return valor_efectiu(session.model, _peca_de(session), camp)
+
+
+def _nom_de_la_peca(session):
+    """Com s'anomena la prenda de destí, per DIR-LA a l'usuari.
+
+    L'avís del multi-prenda ha de dir el NOM («s'importarà tot a Llaçada»), no una
+    genèrica: un avís que no diu on va la feina obliga a anar-ho a comprovar. Si ningú ha
+    batejat la peça encara, el codi és el millor nom que en tenim i és millor que el silenci.
+    """
+    peca = _peca_de(session)
+    if peca is not None:
+        return peca.nom or peca.codi
+    model = session.model
+    return (getattr(model, 'nom_prenda', '') or getattr(model, 'codi_intern', '') or '') if model else ''
+
+
 def normalize_size_run(raw):
     """Convert any size_run format to 'XXS·XS·S·M·L·XL'."""
     if not raw:
@@ -564,7 +612,7 @@ def _cribratge_content_block(file_bytes: bytes, filename: str, content_type: str
     }
 
 
-def _cribratge_determinista(file_name, file_bytes, model):
+def _cribratge_determinista(file_name, file_bytes, base_hint, run_model):
     """Cribratge SENSE IA per a un .xlsx que el parser determinista entén — o `None`.
 
     Decisió Agus 2026-07-22: «IA només quan el determinista no pot; un xlsx parsejable no ha
@@ -587,11 +635,14 @@ def _cribratge_determinista(file_name, file_bytes, model):
     """
     if not (file_name or '').lower().endswith(('.xlsx', '.xls')):
         return None
-    run_hint = [s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·')
+    # SET-2/T8 — les pistes són les de la PEÇA DE DESTÍ (valors efectius), no les de la mare:
+    # una peça amb run propi ha de fer llegir el document amb el SEU run, o el parser ancora
+    # les columnes contra una escala que aquella prenda no fa servir.
+    run_hint = [s.strip() for s in (run_model or '').replace(';', '·').split('·')
                 if s.strip()]
     try:
         poms, talles, meta = _parse_excel_poms(
-            file_bytes, base_hint=model.base_size_label, run_hint=run_hint)
+            file_bytes, base_hint=base_hint, run_hint=run_hint)
     except Exception:
         _logging.getLogger(__name__).exception(
             'Cribratge: el parser determinista ha petat; es cau a la IA')
@@ -618,18 +669,21 @@ def _cribratge_determinista(file_name, file_bytes, model):
 def import_session_cribratge_view(request):
     """
     POST /api/v1/import-sessions/cribratge/
-    multipart: document (fitxer), model_id, garment_type_item_code
+    multipart: document (fitxer), model_id, garment_type_item_code, garment
 
     Crida 1 — cribratge barat (visió, Opus, tokens baixos, sense thinking): detecta nº de
     models al document, tipologia, gènere i el run de talles. SEMPRE retorna resultats; el
     gating (bloqueig de talles, confirmació multi-model) és el pas F2.3.
+
+    SET-2/T8 — `garment` és el CONTEXT de la peça des d'on s'ha obert l'import ('' = mare).
+    És l'ÚNICA porta on entra: a partir d'aquí el pipeline el llegeix de la sessió.
     """
     import anthropic
     from django.conf import settings
     from django.core.files.base import ContentFile
 
     from fhort.accounts.models import UserProfile
-    from fhort.models_app.models import ImportSession, Model
+    from fhort.models_app.models import ImportSession, Model, ModelGarment
     from fhort.models_app.extraction_utils import safe_json_parse
     from fhort.tasks.models import GarmentTypeItem
 
@@ -654,6 +708,15 @@ def import_session_cribratge_view(request):
         else:
             item = GarmentTypeItem.objects.filter(code=item_code).first()
 
+    # ── SET-2/T8 · L'EIX DE LA PEÇA. Ve del CONTEXT (el contenidor des d'on s'ha premut
+    # «Importar taula»), mai d'una pregunta del wizard. Un codi que no és cap peça d'aquest
+    # model és un 400 i no un silenci: escriure a la mare quan el client ha dit '02' seria
+    # exactament el dany que aquest tram tanca.
+    garment = (request.data.get('garment') or '').strip()
+    if garment and not ModelGarment.objects.filter(model=model, codi=garment).exists():
+        return Response({'error': f"El model {model.id} no té cap prenda «{garment}»."},
+                        status=400)
+
     profile = UserProfile.objects.filter(user=request.user).first()
 
     api_key = getattr(settings, 'ANTHROPIC_API_KEY', '')
@@ -663,6 +726,7 @@ def import_session_cribratge_view(request):
     # Crea la sessió i desa el document origen.
     session = ImportSession.objects.create(
         estat='CRIBRATGE', creat_per=profile, model=model, tipologia_confirmada=item,
+        garment=garment,
     )
     file_bytes = file_obj.read()
     session.document.save(file_obj.name, ContentFile(file_bytes), save=True)
@@ -685,7 +749,9 @@ def import_session_cribratge_view(request):
     # ningú al wizard: només consumeix `run_talles_document` i `num_models`. Per això
     # saltar la crida no li treu res. PDF, imatge i xlsx on el parser abdica segueixen
     # passant per Opus exactament com abans.
-    resultat = _cribratge_determinista(file_obj.name, file_bytes, model)
+    resultat = _cribratge_determinista(
+        file_obj.name, file_bytes,
+        _efectiu(session, 'base_size_label'), _efectiu(session, 'size_run_model'))
     cribratge_ia = resultat is None
     if not cribratge_ia:
         _logging.getLogger(__name__).info(
@@ -734,9 +800,20 @@ def import_session_cribratge_view(request):
     run_document = resultat.get('run_talles_document') or []
     sistema = resultat.get('sistema_talles') or 'unknown'
 
+    # El run CONFIGURAT és el de la PEÇA DE DESTÍ (efectiu), no el de la mare: és el que la
+    # pantalla de talles compara contra el document i el que el confirm acabarà escrivint.
     run_configurat = [
-        s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()
+        s.strip() for s in (_efectiu(session, 'size_run_model') or '').replace(';', '·').split('·')
+        if s.strip()
     ]
+
+    # ── SET-2/T8 · MÉS D'UN PATRÓ AL DOCUMENT = AVÍS, MAI BARRERA ────────────────────
+    # Amb «un import = una prenda», que el document en porti dues deixa de ser una condició
+    # d'error: la peça de destí ja està decidida pel context i tot el que s'importi hi anirà.
+    # El cribratge, doncs, EMET LA SENYAL i no barra; el gest de barrar-lo era el
+    # `num_models == 1` de `pot_continuar`, que se'n va d'aquell predicat i es queda com a
+    # dada. La senyal es PERSISTEIX (el confirm la torna al front, que és on es pinta).
+    mes_duna_prenda = num_models > 1
 
     # Desa a la sessió (no fa gating; només cribratge).
     session.model_detectat = models_detectats
@@ -747,7 +824,8 @@ def import_session_cribratge_view(request):
         'estat': 'PENDENT',
     }
     # Persisteix el cribratge cru per a F2.3 (gènere/tipologia) sense tocar `resultat` definitiu.
-    session.resultat = {**(session.resultat or {}), 'cribratge': resultat}
+    session.resultat = {**(session.resultat or {}), 'cribratge': resultat,
+                        'mes_duna_prenda': mes_duna_prenda}
     session.estat = 'CRIBRATGE'
     session.save()
 
@@ -755,7 +833,7 @@ def import_session_cribratge_view(request):
     # Pel camí determinista no hi ha tipologia ni gènere per validar (ningú no els demanava
     # al parser): el que fa continuable el document és que s'hagi entès UNA taula de mesures.
     pot_continuar = (not cribratge_ia) or bool(
-        num_models == 1 and tipologia and tipologia != 'unknown' and plausible_genere)
+        tipologia and tipologia != 'unknown' and plausible_genere)
 
     return Response({
         'token': str(session.token),
@@ -768,6 +846,11 @@ def import_session_cribratge_view(request):
         'sistema_talles': sistema,
         'run_configurat': run_configurat,
         'pot_continuar': pot_continuar,
+        # SET-2/T8 — la peça de destí, com a FET (el wizard la MOSTRA, no la pregunta) i la
+        # senyal del document multi-prenda, que és avís i no barrera.
+        'garment': session.garment,
+        'garment_nom': _nom_de_la_peca(session),
+        'mes_duna_prenda': mes_duna_prenda,
         # Traça del routing: qui ha resolt aquest cribratge. Visible a la resposta perquè
         # «quantes crides d'IA ha fet aquest import?» tingui resposta sense mirar logs.
         'cribratge_origen': ('ia' if cribratge_ia else 'parser_determinista'),
@@ -794,6 +877,11 @@ def import_session_talles_view(request, token):
     sessió: es desa a run_conciliat.talla_mapping i el confirm el consumeix en exclusiva (la clau
     `mapeig` antiga es retira). Validació: aparellament UNÍVOC (1↔1), model del system, sense dups.
     `alinear` RETIRAT: el run del model parla SEMPRE en etiquetes tenant.
+
+    SET-2/T8 — TOT el que aquesta vista llegeix i escriu és de la PEÇA DE DESTÍ: el sistema
+    de talles i la base són els EFECTIUS, i el canvi de talla base (B5) aterra a l'override
+    de la prenda, no al model. Sense això, obrir el pas 1 d'un import a la 02 i triar-hi una
+    base canviava la base de la MARE — el dany d'aquest tram, fet des del pas 1.
     """
     from fhort.models_app.models import ImportSession
 
@@ -806,6 +894,12 @@ def import_session_talles_view(request, token):
     if not model:
         return Response({'error': 'La sessió no té model associat'}, status=400)
 
+    # La peça de destí i qui ESCRIU els seus camps heretables: la prenda si n'hi ha, el
+    # model si som a la mare (que és el model mateix, D3).
+    peca = _peca_de(session)
+    destinatari = peca if peca is not None else model
+    size_system = _efectiu(session, 'size_system')
+
     talles_sel = [str(t).strip() for t in (request.data.get('talles_seleccionades') or []) if str(t).strip()]
     mapping_in = request.data.get('talla_mapping')   # [{document, model}] editat per l'humà (opcional)
     base_in = request.data.get('base_size_label')    # B5: canvi de talla base (etiqueta model)
@@ -815,15 +909,17 @@ def import_session_talles_view(request, token):
     # /extraccio/ — aquesta vista només desa la tria.
     full_in = request.data.get('full_seleccionat')
 
-    # Run configurat actual del model (etiquetes tenant; només informatiu).
+    # Run configurat actual de la PEÇA (etiquetes tenant; només informatiu).
     configurat = [
-        s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·') if s.strip()
+        s.strip() for s in (_efectiu(session, 'size_run_model') or '').replace(';', '·').split('·')
+        if s.strip()
     ]
 
-    # Etiquetes REALS del model (SizeDefinition del system, ordenades) — LA veritat del panell dret.
+    # Etiquetes REALS de la peça (SizeDefinition del seu system, ordenades) — LA veritat del
+    # panell dret.
     system_labels = []
-    if model.size_system_id:
-        system_labels = list(model.size_system.talles.order_by('ordre').values_list('etiqueta', flat=True))
+    if size_system is not None:
+        system_labels = list(size_system.talles.order_by('ordre').values_list('etiqueta', flat=True))
     canon_to_tenant = {}
     for _e in system_labels:
         canon_to_tenant.setdefault(canonical_size_label(_e), _e)
@@ -865,15 +961,16 @@ def import_session_talles_view(request, token):
     else:
         talla_mapping, no_aparellades = _propose(talles_sel)
 
-    # ── B5 · TALLA BASE. Canvi opcional (limitat a les SizeDefinition del system) → escriu al model.
+    # ── B5 · TALLA BASE. Canvi opcional (limitat a les SizeDefinition del system) → escriu a
+    # la PEÇA DE DESTÍ: a la seva fila d'override si és una prenda, al model si és la mare.
     if base_in is not None:
         base_in = str(base_in).strip()
-        if base_in and base_in in set(system_labels) and base_in != (model.base_size_label or ''):
-            model.base_size_label = base_in
-            model.save(update_fields=['base_size_label'])
+        if base_in and base_in in set(system_labels) and base_in != (_efectiu(session, 'base_size_label') or ''):
+            destinatari.base_size_label = base_in
+            destinatari.save(update_fields=['base_size_label'])
         elif base_in and base_in not in set(system_labels):
             errors.append(f"La talla base «{base_in}» no és del sistema de talles del model.")
-    base_label = (model.base_size_label or '').strip()
+    base_label = (_efectiu(session, 'base_size_label') or '').strip()
 
     # Guard BLOQUEJANT: la talla base ha de tenir una columna del document aparellada (si no, l'import
     # no pot escriure el valor base → seria el 422 del confirm). Es bloqueja ja al pas 1.
@@ -898,8 +995,9 @@ def import_session_talles_view(request, token):
     conv = _conventional_base()
     if base_label and conv and base_label != conv:
         base_avisos.append(f"La talla base «{base_label}» divergeix de la convenció del segment (esperada «{conv}»).")
-    if base_label and model.grading_rule_set_id:
-        anchor = (model.grading_rule_set.regles.values_list('talla_base__etiqueta', flat=True).first())
+    _joc = _efectiu(session, 'grading_rule_set')
+    if base_label and _joc is not None:
+        anchor = (_joc.regles.values_list('talla_base__etiqueta', flat=True).first())
         if anchor and anchor != base_label:
             base_avisos.append(f"La talla base «{base_label}» divergeix de l'àncora del ruleset «{anchor}».")
 
@@ -927,14 +1025,14 @@ def import_session_talles_view(request, token):
     size_map_prefill = None
     if not ready and no_aparellades:
         target_codi = model.target or ''
-        if not target_codi and model.size_system_id:
-            _ss_target = model.size_system.targets.first()
+        if not target_codi and size_system is not None:
+            _ss_target = size_system.targets.first()
             if _ss_target:
                 target_codi = _ss_target.codi
         size_map_prefill = {
             'target_codi': target_codi or None,
             'labels': no_aparellades,
-            'base_size': model.base_size_label or None,
+            'base_size': base_label or None,
             'import_session_token': str(session.token),
             'model_id': model.id,
         }
@@ -950,7 +1048,7 @@ def import_session_talles_view(request, token):
         'base_paired': base_paired,
         'base_avisos': base_avisos,           # B5: divergències no bloquejants de la talla base.
         'conventional_base': conv,
-        'size_run_model': model.size_run_model,
+        'size_run_model': _efectiu(session, 'size_run_model'),
         'errors': errors,
         'size_map_prefill': size_map_prefill,
     }, status=200)
@@ -1378,11 +1476,13 @@ def _extraccio_via_excel(session, api_key):
     # 2. Parse determinista. Les pistes del model (talla base i run) ajuden a reconèixer les
     # columnes de talla quan el document no declara `SAMPLE SIZE`; si el document sí que ho
     # diu, mana el document.
+    # SET-2/T8 — les pistes són les EFECTIVES de la peça de destí, com al cribratge: llegir el
+    # document amb l'escala de la mare quan la prenda en té una de pròpia és ancorar-lo malament.
     model = session.model
     raw_poms, talles_detectades, meta = _parse_excel_poms(
         file_bytes,
-        base_hint=(model.base_size_label if model else None),
-        run_hint=[s.strip() for s in ((model.size_run_model if model else '') or '')
+        base_hint=(_efectiu(session, 'base_size_label') if model else None),
+        run_hint=[s.strip() for s in ((_efectiu(session, 'size_run_model') if model else '') or '')
                   .replace(';', '·').split('·') if s.strip()],
         # F5 · el full que el tècnic ha triat al pas 1. Viu a `run_conciliat` (JSONField que ja
         # és la casa de l'estat de W1) i NO en un camp nou: no cal migració per a un punter.
@@ -1963,16 +2063,20 @@ def import_session_grading_preview_view(request, token):
     model = session.model
     if not model:
         return Response({'error': 'La sessió no té model associat'}, status=400)
-    if not model.grading_rule_set_id:
+    if _efectiu(session, 'grading_rule_set') is None:
         return Response({'error': 'El model no té GradingRuleSet configurat', 'grading': {}}, status=400)
 
+    # SET-2/T8 — l'eix entra a la CLAU, que és per on el motor el llegeix. `_regla_de` resol
+    # la regla de la peça amb herència de la mare; una clau escalar (la d'abans) hauria
+    # ensenyat sempre la regla de la mare, i el preview ha de dir el mateix que el generador.
+    garment = session.garment or ''
     raw = request.data.get('base_values') or {}
     base_values = {}
     for k, v in raw.items():
         if not str(k).isdigit() or v in (None, ''):
             continue
         try:
-            base_values[int(k)] = float(v)
+            base_values[(int(k), MeasurementLayer.SLUG_DEFECTE, '', garment)] = float(v)
         except (TypeError, ValueError):
             continue
 
@@ -1989,14 +2093,15 @@ def import_session_grading_preview_view(request, token):
     # una sola germana per POM— i per això el col·lapse no perd res.
     # Fer créixer aquest payload és INTERFÍCIE i va a C4 amb maqueta (llei 3c.5).
     # SET-2/T6a — la clau que arriba té QUATRE trams (el `garment` darrere de la instància).
-    # El col·lapse a `pom_id` es queda tal com era i pel mateix argument: avui el wizard
-    # d'import treballa sempre sobre la peça MARE —cap fila '02' pot existir mentre visquin
-    # les comportes— i el payload del front no pot expressar una clau composta. El dia que
-    # l'import s'iniciï des d'una peça (T8), aquest col·lapse és INTERFÍCIE i va amb maqueta.
+    # SET-2/T8 — i el col·lapse a `pom_id` SEGUEIX SENT EXACTE, ara per una altra raó: **un
+    # import = una prenda**, o sigui que totes les claus d'aquesta resposta porten el MATEIX
+    # garment (el de la sessió) i cap parella no pot xocar. El que abans el garantia era la
+    # comporta; ara ho garanteix el disseny. Fer créixer el payload seguiria sent INTERFÍCIE
+    # (llei 3c.5), i aquest camí ja no la necessita.
     grading = {str(pom_id): row
                for (pom_id, _capa, _instancia, _garment), row in grading.items()}
-    return Response({'grading': grading, 'base_size': model.base_size_label,
-                     'size_run': (model.size_run_model or '').split('·'),
+    return Response({'grading': grading, 'base_size': _efectiu(session, 'base_size_label'),
+                     'size_run': (_efectiu(session, 'size_run_model') or '').split('·'),
                      'avisos': grading_avisos}, status=200)
 
 
@@ -2070,8 +2175,10 @@ def import_session_library_prefill_view(request, token):
             continue
         valors.setdefault(pid, {})[m['talla_label']] = m.get('valor')
 
-    base_size = ((model.base_size_label if model else '') or '').strip()
-    run = [s.strip() for s in ((model.size_run_model if model else '') or '')
+    # SET-2/T8 — run i base de la PEÇA de destí (efectius): és la seva taula la que viatja
+    # cap a la Size Library, i amb els de la mare el run proposat seria d'una altra prenda.
+    base_size = ((_efectiu(session, 'base_size_label') if model else '') or '').strip()
+    run = [s.strip() for s in ((_efectiu(session, 'size_run_model') if model else '') or '')
            .replace(';', '·').split('·') if s.strip()]
 
     # Mode deltes → absoluts ABANS d'enviar (reusa 1C-2a; una sola font de conversió).
@@ -2095,8 +2202,9 @@ def import_session_library_prefill_view(request, token):
             poms.append({'pom_codi': codi_by_pid.get(pid) or '', 'valors': net})
 
     target_codi = (model.target if model else '') or ''
-    if not target_codi and model and model.size_system_id:
-        _t = model.size_system.targets.first()
+    _ss = _efectiu(session, 'size_system') if model else None
+    if not target_codi and _ss is not None:
+        _t = _ss.targets.first()
         if _t:
             target_codi = _t.codi
 
@@ -2164,6 +2272,26 @@ def import_session_confirmar_view(request, token):
       4. PDF → ModelFitxer(tipus='DOCUMENT', versio NNN, naming {codi}_DOCUMENT_{NNN});
          re-import → versio_anterior apunta a l'anterior.
       5. session.estat='CONFIRMAT'.
+
+    ── SET-2/T8 · L'EIX DE LA PRENDA TRAVESSA TOTA L'ESCRIPTURA ────────────────────────
+    **Un import = una prenda.** El `garment` de la sessió (fixat a la iniciació, mai
+    preguntat) entra per PARÀMETRE a cada escriptura i a cada consulta prèvia:
+
+      · `BaseMeasurement` neix amb `garment=<el de la sessió>` (i el signal el COPIA al
+        `MeasurementChangeLog`, o sigui que el log ja diu la veritat sense tocar-lo).
+      · `ModelGradingOverride` i `ModelGradingRule`, igual.
+      · I LES TRES CONSULTES QUE MIREN «QUÈ HI HA JA AL MODEL» s'hi acoten: la poda de
+        POMs no mencionats, la neteja de files buides i el pre-flight de les MANUAL. És
+        la MATEIXA llei que #12b va aplicar a `_poda_mesures` —una llista de files no és
+        una ordre d'esborrar la feina d'una altra prenda— per una TERCERA porta que la
+        té pròpia: aquesta funció no passa per `_poda_mesures`, poda ella mateixa.
+      · Run, talla base, sistema i joc de regles són els EFECTIUS de la peça
+        (`services_garment.valor_efectiu`), i el guard dur de la talla base valida
+        contra ells. Amb els de la mare, una peça amb run propi seria rebutjada —o pitjor,
+        acceptada— per una escala que no és la seva.
+      · La metadata reconciliada (sistema · base · run) aterra a la FILA DE LA PEÇA quan
+        no som a la mare: el camí de fallback escrivia `model.save(...)` i hauria canviat
+        el run de la MARE des d'un import a la 02.
     """
     import os
     from django.db import transaction
@@ -2181,6 +2309,25 @@ def import_session_confirmar_view(request, token):
     model = session.model
     if not model:
         return Response({'error': 'La sessió no té model associat'}, status=400)
+
+    # ── L'EIX DE LA SESSIÓ. Es llegeix UNA vegada i viatja per paràmetre; cap escriptura
+    # d'aquesta funció torna a preguntar-lo ni el declara com a literal.
+    from fhort.models_app.services_garment import valor_efectiu
+    garment = session.garment or ''
+    peca = _peca_de(session)
+    destinatari = peca if peca is not None else model
+
+    def _ef(camp):
+        """El valor efectiu d'un camp heretable, llegit dels objectes EN MEMÒRIA.
+
+        No pot ser `_efectiu(session, …)`: aquesta funció RECONCILIA metadata (sistema,
+        base, run) i la desa diferida al final del pre-flight, o sigui que una relectura
+        de la BD entremig tornaria el valor RANCI i el guard de la talla base validaria
+        contra una escala que aquest mateix import ja ha canviat.
+        """
+        return valor_efectiu(model, peca, camp)
+
+    size_system = _ef('size_system')
 
     user_profile = UserProfile.objects.filter(user=request.user).first()
 
@@ -2222,22 +2369,25 @@ def import_session_confirmar_view(request, token):
                 "Sessió sense taula d'aparellament de talles (anterior al canvi): s'aplica el remap "
                 "canònic automàtic. Reobre el pas 1 per fixar l'aparellament si cal."]
             target_codi = model.target or ''
-            if not target_codi and model.size_system_id:
-                _ss_target = model.size_system.targets.first()
+            if not target_codi and size_system is not None:
+                _ss_target = size_system.targets.first()
                 if _ss_target:
                     target_codi = _ss_target.codi
             if run_detectat and base_detectada and target_codi:
                 mr = match_size_system(target_codi, run_detectat, base_detectada)
                 if mr.ok and mr.score == 1.0 and mr.base_ok:
-                    model.size_system = mr.size_system
+                    # SET-2/T8 — la metadata reconciliada és de la PEÇA de destí. A la mare,
+                    # `destinatari` ÉS el model i això és el camí de sempre, byte a byte.
+                    destinatari.size_system = mr.size_system
+                    size_system = mr.size_system
                     meta_update_fields = ['size_system', 'base_size_label', 'size_run_model']
                 else:
                     session.avisos = (session.avisos or []) + [
                         f"Size system no reconciliat automàticament (match {mr.score:.0%} per target "
                         f"'{target_codi}'): es manté la classificació manual."]
-            if model.size_system_id:
+            if size_system is not None:
                 from fhort.pom.models import SizeDefinition
-                _tenant_labels = list(SizeDefinition.objects.filter(size_system=model.size_system)
+                _tenant_labels = list(SizeDefinition.objects.filter(size_system=size_system)
                                       .values_list('etiqueta', flat=True))
                 _canon_to_tenant, _canon_ambig = {}, set()
                 for _e in _tenant_labels:
@@ -2262,30 +2412,32 @@ def import_session_confirmar_view(request, token):
                 if base_detectada:
                     base_detectada = _to_tenant(base_detectada)
                 if meta_update_fields:
-                    model.base_size_label = base_detectada or model.base_size_label
+                    destinatari.base_size_label = (base_detectada
+                                                   or _ef('base_size_label'))
                     # PORTA ÚNICA DEL RUN (llei S24b): l'ordre del DOCUMENT no mana sobre el run
-                    # del MODEL. Les etiquetes ja vénen traduïdes a llengua-tenant per
+                    # de la PEÇA. Les etiquetes ja vénen traduïdes a llengua-tenant per
                     # `_to_tenant`; aquí només se n'imposa l'ordre del SizeSystem.
                     from fhort.pom.grading_utils import run_del_model
                     _run_ordenat, _run_fora = run_del_model(
-                        [_to_tenant(l) for l in run_detectat], model.size_system,
+                        [_to_tenant(l) for l in run_detectat], size_system,
                     )
-                    model.size_run_model = '·'.join(_run_ordenat)
+                    destinatari.size_run_model = '·'.join(_run_ordenat)
                     if _run_fora:
                         # Abans, una etiqueta sense equivalència al sistema es desava CRUA dins el
                         # run (només avisava `_no_resol`), i el model acabava amb una talla que el
                         # seu propi sistema no coneix. Ara no hi entra i es diu en clar — mateixa
                         # direcció que el check (d) de la S24.
                         session.avisos = (session.avisos or []) + [
-                            f"Talles del document fora del sistema '{model.size_system.codi}' "
+                            f"Talles del document fora del sistema '{size_system.codi}' "
                             f"i excloses del run del model: {', '.join(_run_fora)}."]
                 if _no_resol:
                     session.avisos = (session.avisos or []) + [
                         "Etiquetes del document sense equivalència única al sistema "
-                        f"'{model.size_system.codi}': {', '.join(sorted(_no_resol))} (no traduïdes)."]
+                        f"'{size_system.codi}': {', '.join(sorted(_no_resol))} (no traduïdes)."]
 
-        # base_size = etiqueta tenant del model (mai document).
-        base_size = (model.base_size_label or '').strip()
+        # base_size = etiqueta tenant de la PEÇA DE DESTÍ (mai del document, mai de la mare
+        # si la peça en té de pròpia).
+        base_size = (_ef('base_size_label') or '').strip()
         if _to_tenant is not None and base_size:
             base_size = _to_tenant(base_size)
 
@@ -2298,15 +2450,19 @@ def import_session_confirmar_view(request, token):
         if valors_mode == 'deltes':
             from fhort.pom.grading_utils import deltes_a_absoluts
             run_ordenat_conv = [
-                s.strip() for s in (model.size_run_model or '').replace(';', '·').split('·')
+                s.strip() for s in (_ef('size_run_model') or '').replace(';', '·').split('·')
                 if s.strip()
             ]
             valors = deltes_a_absoluts(valors, base_size, run_ordenat_conv)
 
-        # ── C1c (D2, guard DUR). La talla base del model ha de tenir valor a la fitxa (després del
-        # remap). Si no hi és entre les etiquetes dels valors → 422 ABANS de cap escriptura: mai més
-        # base_value_cm=None silenciós. set_rollback per desfer el save de metadata diferit (si n'hi
-        # hagués). Els valors ja parlen la llengua-tenant per C1b.
+        # ── C1c (D2, guard DUR). La talla base de la PEÇA DE DESTÍ ha de tenir valor a la fitxa
+        # (després del remap). Si no hi és entre les etiquetes dels valors → 422 ABANS de cap
+        # escriptura: mai més base_value_cm=None silenciós. set_rollback per desfer el save de
+        # metadata diferit (si n'hi hagués). Els valors ja parlen la llengua-tenant per C1b.
+        #
+        # SET-2/T8 — «la talla base» d'aquest guard és la EFECTIVA de la peça (`_ef`), no la del
+        # model: importar a una prenda amb base pròpia i validar contra la de la mare rebutjaria
+        # fitxes bones i n'acceptaria de dolentes, que és el mateix error amb els dos signes.
         _val_labels = set()
         for _d in valors.values():
             _val_labels |= {k for k, v in _d.items() if v is not None}
@@ -2342,10 +2498,17 @@ def import_session_confirmar_view(request, token):
         # Ara es PROPOSEN, mai s'esborren sols: 409 amb la llista → el tècnic tria
         # `poda_choice`. Mateix mecanisme que `container_choice` (no cal pantalla nova).
         # Sempre soft (is_active=False), mai DELETE dur.
+        #
+        # ⚠️ SET-2/T8 · I L'ABAST ÉS EL DE LA PRENDA QUE S'IMPORTA. Aquesta és la TERCERA
+        # porta de poda de la casa —les dues de `_poda_mesures` les va acotar el #12b— i té
+        # la poda pròpia, o sigui que la llei s'hi ha de tornar a escriure: un document que
+        # parla de la Llaçada no diu RES de les mesures del Pantaló, i sense el filtre les
+        # hauria desactivades totes per no sortir a la seva llista. Un import a la 02 amb
+        # `garment=''` al filtre proposava podar la mare sencera.
         poda_choice = (request.data.get('poda_choice') or '').strip().lower()  # 'desactivar'|'conservar'
         orfes = list(
             BaseMeasurement.objects
-            .filter(model=model, is_active=True, base_value_cm__isnull=False)
+            .filter(model=model, garment=garment, is_active=True, base_value_cm__isnull=False)
             .exclude(pom_id__in=confirmed_pom_ids)
             .select_related('pom')
         )
@@ -2361,7 +2524,9 @@ def import_session_confirmar_view(request, token):
                     'origen': bm.origen,
                 } for bm in orfes],
                 'n': len(orfes),
-                'message': ("Aquest model té mesures vives que el document no menciona. "
+                'garment': garment,
+                'garment_nom': _nom_de_la_peca(session),
+                'message': ("Aquesta prenda té mesures vives que el document no menciona. "
                             "Vols desactivar-les (el model s'alimenta de la realitat del "
                             "document) o conservar-les?"),
             }, status=409)
@@ -2379,9 +2544,12 @@ def import_session_confirmar_view(request, token):
         manual_choice = (request.data.get('manual_choice') or '').strip().lower()  # 'sobreescriure'|'respectar'
         _doc_pom_ids = {int(p['pom_master_id']) for _i, p, _pm in resolved
                         if valors.get(int(p['pom_master_id']), {}).get(base_size) is not None}
+        # SET-2/T8 — acotat a la prenda, com el soroll: el que un tècnic va teclejar al
+        # Pantaló no el trepitja un document de la Llaçada, i per tant tampoc n'ha de sortir
+        # una pregunta que faria decidir sobre files que aquest import no tocarà mai.
         manuals = list(
             BaseMeasurement.objects
-            .filter(model=model, is_active=True, origen='MANUAL',
+            .filter(model=model, garment=garment, is_active=True, origen='MANUAL',
                     base_value_cm__isnull=False, pom_id__in=_doc_pom_ids)
             .select_related('pom')
         ) if _doc_pom_ids else []
@@ -2435,7 +2603,7 @@ def import_session_confirmar_view(request, token):
         # (a) DETECCIÓ de les regles de la fitxa (pur, sense persistència; reusa detect_grading).
         fitxa_specs = derive_rules_from_fitxa(
             run_document=run_document, base_size=base_size, valors=valors,
-            confirmed_pom_ids=confirmed_pom_ids, size_system=model.size_system,
+            confirmed_pom_ids=confirmed_pom_ids, size_system=size_system,
             avisos=grading_avisos, bloqueigs=grading_bloqueigs,
             descartades=grading_descartades)
         # LLEI BEACH (2026-07-26): les columnes fora del sistema (no-base) es descarten també de
@@ -2478,8 +2646,11 @@ def import_session_confirmar_view(request, token):
         rs_fit = FitType.objects.filter(codi__iexact=model.fit_type).first() if model.fit_type else None
         gti = model.garment_type_item
         grp_codi = model.garment_group.codi if model.garment_group_id else None
+        # El contenidor és del CLIENT (customer + sistema + item + fit) i per tant no porta eix
+        # de peça: el que sí que hi entra per la peça és el SISTEMA DE TALLES efectiu, perquè
+        # una prenda amb sistema propi ha de buscar el contenidor del SEU sistema.
         res_cont = resolve_grading_container(
-            model.customer, model.size_system, model.target, model.construction,
+            model.customer, size_system, model.target, model.construction,
             rs_fit, grp_codi, garment_type_item=gti)
         container = res_cont['container']
         container_choice = (request.data.get('container_choice') or '').strip().lower()  # 'create'|'no_container'
@@ -2502,7 +2673,7 @@ def import_session_confirmar_view(request, token):
                     'tipus': 'container_absent',
                     'customer_nom': str(getattr(model.customer, 'nom', '') or model.customer or ''),
                     'garment_type_item': (getattr(gti, 'name', '') if gti else ''),
-                    'size_system': str(getattr(model.size_system, 'nom', '') or model.size_system or ''),
+                    'size_system': str(getattr(size_system, 'nom', '') or size_system or ''),
                     'fit': (rs_fit.codi if rs_fit else (model.fit_type or '')),
                     'n_regles': len(fitxa_specs),
                     'message': ("Aquest client no té graduació per a aquesta combinació "
@@ -2514,9 +2685,11 @@ def import_session_confirmar_view(request, token):
 
         # ════════════════════════════════ ESCRIPTURA ════════════════════════════════
         # Totes les decisions que podien retornar 409/422 ja s'han pres. Persistim la metadata
-        # reconciliada del model (diferida del pre-flight) i escrivim les mesures (sobirania).
+        # reconciliada de la PEÇA DE DESTÍ (diferida del pre-flight) i escrivim les mesures
+        # (sobirania). A la mare, `destinatari` ÉS el model: `model.save(update_fields=…)` de
+        # sempre. A una prenda, els tres camps són overrides seus i la mare no es toca.
         if meta_update_fields:
-            model.save(update_fields=meta_update_fields)
+            destinatari.save(update_fields=meta_update_fields)
 
         # ── 1. Mana el document: neteja files buides i crea NOMÉS els confirmats.
         #
@@ -2527,8 +2700,13 @@ def import_session_confirmar_view(request, token):
         #   · qualsevol altre origen (MANUAL, IMPORTED, FITTED…) → **SOFT** (is_active=False)
         #     + entrada al MeasurementChangeLog. Algú les va crear conscientment encara que
         #     ara no portin valor; la seva desaparició ha de deixar rastre.
+        #
+        # SET-2/T8 — acotat a la prenda (la mateixa llei de la poda de dalt: aquesta neteja
+        # ÉS una poda, i esborrar files de plantilla d'una altra peça és esborrar la seva
+        # bastida sense que ningú l'hagi anomenada).
         _TEMPLATE_ORIGENS = ('TEMPLATE', 'ITEM_STANDARD')
-        _buides = BaseMeasurement.objects.filter(model=model, base_value_cm__isnull=True)
+        _buides = BaseMeasurement.objects.filter(
+            model=model, garment=garment, base_value_cm__isnull=True)
         _buides.filter(origen__in=_TEMPLATE_ORIGENS).delete()
         n_buides_soft = 0
         for bm in _buides.exclude(origen__in=_TEMPLATE_ORIGENS).exclude(is_active=False):
@@ -2580,10 +2758,12 @@ def import_session_confirmar_view(request, token):
             # instància única, i ho declara aquí en comptes de deixar-ho al default implícit.
             BaseMeasurement.objects.update_or_create(
                 model=model, pom=pm,
-                # SET-2/T5 — el garment es declara igual que els altres dos eixos: aquest
-                # camí escriu SEMPRE a la peça mare. Sense el tram al lookup, l'update_or_create
-                # petaria amb MultipleObjectsReturned el dia que hi hagi una segona peça.
-                capa=MeasurementLayer.SLUG_DEFECTE, instancia='', garment='',
+                # SET-2/T5 — el garment es declara igual que els altres dos eixos i entra a la
+                # CLAU, no als defaults: és identitat de fila, i sense ell l'update_or_create
+                # petaria amb MultipleObjectsReturned amb dues peces vives.
+                # SET-2/T8 — i el valor ja no és el literal `''`: és el de la SESSIÓ. Aquesta
+                # és la línia on l'import deixa d'escriure sempre a la mare.
+                capa=MeasurementLayer.SLUG_DEFECTE, instancia='', garment=garment,
                 defaults=_defaults)
             n_bm += 1
             if base_val is not None:
@@ -2637,21 +2817,25 @@ def import_session_confirmar_view(request, token):
             sf_codi = f"IMP-{model.id}-{next_num}"
 
         # (d) APLICAR (escriptures) — savepoint intern amb degradació amb gràcia.
-        new_rule_set = model.grading_rule_set
+        #
+        # SET-2/T8 — el JOC és un camp heretable: el que aquest import decideixi és de la PEÇA
+        # DE DESTÍ i s'escriu a `destinatari`. A la mare, `destinatari` ÉS el model i el camí
+        # és el de sempre; a una prenda, l'override seu, i el joc de la mare no es mou.
+        new_rule_set = _ef('grading_rule_set')
         resident_specs = None
-        prev_grs_id = model.grading_rule_set_id
-        # 6.1 — el joc que el model tenia ABANS d'aquest import, com a OBJECTE: cal llegir-ne
+        prev_grs_id = getattr(destinatari, 'grading_rule_set_id', None)
+        # 6.1 — el joc que la PEÇA tenia ABANS d'aquest import, com a OBJECTE: cal llegir-ne
         # l'`origen` per decidir si les seves `MANUAL` són autoria. Capturat aquí, abans de
         # qualsevol `save()` d'aquesta funció.
-        prev_grs_obj = model.grading_rule_set
+        prev_grs_obj = new_rule_set
         if fitxa_specs:
             try:
                 with transaction.atomic():
                     if container is None:
                         if container_choice == 'no_container':
-                            # SOBIRANIA: el model queda amb regles residents pròpies, sense contenidor.
-                            model.grading_rule_set = None
-                            model.save(update_fields=['grading_rule_set'])
+                            # SOBIRANIA: la peça queda amb regles residents pròpies, sense contenidor.
+                            destinatari.grading_rule_set = None
+                            destinatari.save(update_fields=['grading_rule_set'])
                             new_rule_set = None
                             resident_specs = fitxa_specs
                             grading_avisos.append(
@@ -2665,12 +2849,12 @@ def import_session_confirmar_view(request, token):
                             nom_cont = " · ".join(p for p in [
                                 str(getattr(model.customer, 'nom', '') or model.customer or ''),
                                 str(getattr(model.garment_group, 'nom', '') or model.garment_group or ''),
-                                str(getattr(model.size_system, 'nom', '') or model.size_system or ''),
+                                str(getattr(size_system, 'nom', '') or size_system or ''),
                             ] if p)[:120] or f"Contenidor client · {model.codi_intern}"
                             # AMPLI: garment_type_item=NULL (abast per garment_group FK → el troba M1
                             # nivell 2 la propera vegada). NO és la identitat fina (item), és de món.
                             container = GradingRuleSet.objects.create(
-                                nom=nom_cont, size_system=model.size_system,
+                                nom=nom_cont, size_system=size_system,
                                 garment_group=model.garment_group, garment_type_item=None,
                                 construction=rs_constr, fit_type=rs_fit,
                                 is_system_default=False, actiu=True,
@@ -2678,8 +2862,8 @@ def import_session_confirmar_view(request, token):
                             if rs_target:
                                 container.targets.add(rs_target)
                             afegeix_regles_al_contenidor(container, fitxa_specs, base_def_id)
-                            model.grading_rule_set = container
-                            model.save(update_fields=['grading_rule_set'])
+                            destinatari.grading_rule_set = container
+                            destinatari.save(update_fields=['grading_rule_set'])
                             new_rule_set = container
                             resident_specs = fitxa_specs
                             grading_avisos.append(
@@ -2690,8 +2874,8 @@ def import_session_confirmar_view(request, token):
                         # Amb 0 regles, cls['amplia'] == totes les specs (res per coincidir/divergir).
                         if cls['amplia']:
                             afegeix_regles_al_contenidor(container, cls['amplia'], base_def_id)
-                        model.grading_rule_set = container
-                        model.save(update_fields=['grading_rule_set'])
+                        destinatari.grading_rule_set = container
+                        destinatari.save(update_fields=['grading_rule_set'])
                         new_rule_set = container
                         resident_specs = fitxa_specs
                         grading_avisos.append(
@@ -2706,8 +2890,8 @@ def import_session_confirmar_view(request, token):
                         #     (services._load_model_overrides); base i talla-base van a BaseMeasurement.
                         from fhort.pom.grading_utils import _norm as _norm_label
                         from fhort.models_app.models import ModelGradingOverride
-                        model.grading_rule_set = container
-                        model.save(update_fields=['grading_rule_set'])
+                        destinatari.grading_rule_set = container
+                        destinatari.save(update_fields=['grading_rule_set'])
                         new_rule_set = container
                         # SENSE residents: el contenidor mana (all-or-nothing de _load_grading_rules).
                         # Neteja residents ranços perquè l'herència del contenidor no quedi tapada.
@@ -2718,7 +2902,14 @@ def import_session_confirmar_view(request, token):
                         # els altres 24 POMs. Preservar aquí no salvaria una regla, desactivaria
                         # el contenidor sencer en silenci. És l'únic camí de wipe que la decisió
                         # 6.1 NO tanca, i el tancarà la política fina (decisió de l'Agus).
-                        model.grading_rules.all().delete()
+                        #
+                        # ⚠️ SET-2/T8 — I EL WIPE S'ACOTA A LA PRENDA. `model.grading_rules.all()`
+                        # era el mateix dany del #12d amb una altra taula: un import a la Llaçada
+                        # esborrava les regles residents del Pantaló, que no surten enlloc del
+                        # document i que ningú no ha anomenat. La germana d'aquesta línia
+                        # (`materialize_model_grading_rules_from_specs`) ja fa el wipe per
+                        # `(model, garment)` des de T3; aquesta se li iguala.
+                        model.grading_rules.filter(garment=garment).delete()
                         resident_specs = None
                         base_norm = _norm_label(base_size)
                         pom_divergents = ([c['pom_id'] for c in cls['conflicte']]
@@ -2728,9 +2919,13 @@ def import_session_confirmar_view(request, token):
                             for label, val in (valors.get(pom_id) or {}).items():
                                 if val is None or _norm_label(label) == base_norm:
                                     continue
+                                # SET-2/T8 — `garment` a la CLAU (és identitat de fila, com a
+                                # BaseMeasurement): l'override d'una prenda no trepitja el de
+                                # la germana ni el de la mare.
                                 ModelGradingOverride.objects.update_or_create(
                                     model=model, pom_id=pom_id, size_label=label,
                                     capa=MeasurementLayer.SLUG_DEFECTE, instancia='',
+                                    garment=garment,
                                     defaults={'value_cm': float(val), 'created_by': user_profile,
                                               'motiu': ("Import W5 — divergència vs catàleg del "
                                                         "contenidor (INTOCABLE)")})
@@ -2756,13 +2951,40 @@ def import_session_confirmar_view(request, token):
                     if resident_specs is not None:
                         materialize_model_grading_rules_from_specs(
                             model, resident_specs, origen='IMPORTED',
-                            joc_anterior=prev_grs_obj)
+                            joc_anterior=prev_grs_obj, garment=garment)
             except Exception as e:
-                model.grading_rule_set_id = prev_grs_id
-                new_rule_set = model.grading_rule_set
+                # La reversió és del MATEIX objecte que hauria escrit: a la mare el model, a una
+                # prenda la seva fila. Restaurar `model.grading_rule_set_id` des d'un import a la
+                # 02 hauria mogut el joc de la mare a l'hora d'anar malament.
+                destinatari.grading_rule_set_id = prev_grs_id
+                new_rule_set = _ef('grading_rule_set')
                 grading_avisos.append(
-                    f"Grading no aplicat (error en desar: {e}); es manté el ruleset previ del model.")
-        n_rules = model.grading_rules.count()
+                    f"Grading no aplicat (error en desar: {e}); es manté el ruleset previ de la peça.")
+        n_rules = model.grading_rules.filter(garment=garment).count()
+
+        # ⚠️ SET-2/T8 · EL FORAT QUE AQUEST TRAM **NO** TANCA, DIT EN CLAR I DEIXAT VISIBLE.
+        # `_load_grading_rules_per_garment` (pom/services.py:844-856) pregunta si el MODEL té
+        # cap resident —no si en té AQUESTA peça— i, si en troba, deixa de llegir el
+        # contenidor per a TOTES. Sembrar residents d'una prenda, doncs, pot deixar les altres
+        # sense la regla que heretaven del catàleg. El motor és zona intocable (CLAUDE.md) i
+        # això és decisió de l'Agus, o sigui que aquí NO es toca: es MESURA i es diu. Un avís
+        # que ningú no llegeix no serveix: per això va també a Watchpoint, que sobreviu al
+        # tancament del wizard.
+        if garment and resident_specs is not None:
+            _altres_sense_resident = (
+                model.grading_rules.exclude(garment=garment).exists() is False
+                and _ef('grading_rule_set') is not None)
+            if _altres_sense_resident:
+                _txt = (f"Import a la prenda «{_nom_de_la_peca(session)}»: s'han sembrat "
+                        f"{len(resident_specs)} regla(es) residents d'aquesta peça. Mentre el "
+                        f"motor decideixi «hi ha residents?» per MODEL i no per peça, les altres "
+                        f"prendes poden deixar de graduar pel contenidor del client. Revisa la "
+                        f"graduació de la resta de prendes d'aquest model.")
+                grading_avisos.append('⚠️ ' + _txt)
+                Watchpoint.objects.create(
+                    model=model, task=None, created_by=user_profile, text=_txt,
+                    dades={'tipus': 'residents_de_peca', 'garment': garment,
+                           'n_regles': len(resident_specs)})
 
         # ── 3. SizeFitting CONTENIDOR per a la projecció CONSCIENT (D-10) — només quan no hi ha
         # conflicte pendent. L'import reté base + deltes + breaks (ModelGradingRule); el grading
@@ -2789,7 +3011,7 @@ def import_session_confirmar_view(request, token):
         # visible al WatchpointsPanel del model) + avís al resum del pas 5.
         columnes_descartades = list(dict.fromkeys(grading_descartades))
         if columnes_descartades:
-            _ss_codi = model.size_system.codi if model.size_system_id else ''
+            _ss_codi = size_system.codi if size_system is not None else ''
             _etq = ', '.join(columnes_descartades)
             grading_avisos.append(
                 f"{len(columnes_descartades)} columna/es descartada/es: {_etq} "
@@ -2841,7 +3063,9 @@ def import_session_confirmar_view(request, token):
         if teixit_aplicat:
             model.save()
 
-        # ── 6. Tanca la sessió.
+        # ── 6. Tanca la sessió. L'EIX NO S'HI TOCA: la fila d'`ImportSession` que queda amb
+        # `estat='CONFIRMAT'` porta el document, el model i la PRENDA on ha aterrat, i és el
+        # registre import→peça que el brief demana (v. l'acta al camp `garment` del model).
         session.estat = 'CONFIRMAT'
         session.save(update_fields=['estat', 'avisos', 'actualitzat_at'])
 
@@ -2850,6 +3074,16 @@ def import_session_confirmar_view(request, token):
         'estat': session.estat,
         'model_id': model.id,
         'model_codi': model.codi_intern,
+        # SET-2/T8 — de quina prenda parla tot aquest resum.
+        'garment': garment,
+        'garment_nom': _nom_de_la_peca(session),
+        # L'AVÍS INFORMATIU, MAI BLOQUEJANT: el cribratge va veure més d'un patró al
+        # document i l'import ha anat sencer a UNA prenda. No demana cap clic —el desat ja
+        # s'ha fet— i es pot ignorar amb raó legítima; el que no pot és no dir-se.
+        'avis_multiprenda': ({
+            'garment': garment,
+            'garment_nom': _nom_de_la_peca(session),
+        } if (session.resultat or {}).get('mes_duna_prenda') else None),
         'base_measurements': n_bm,
         'base_measurements_amb_valor': n_bm_valors,
         # B1 — el resultat de la poda mai és silenciós.
@@ -2866,7 +3100,7 @@ def import_session_confirmar_view(request, token):
         'grading_avisos': grading_avisos,
         # BEACH — columnes del document fora del sistema, descartades (no bloqueja; watchpoint creat).
         'columnes_descartades': columnes_descartades,
-        'size_system_codi': (model.size_system.codi if model.size_system_id else None),
+        'size_system_codi': (size_system.codi if size_system is not None else None),
         # D1 — la proposta viatja també a la resposta perquè el wizard la pugui ensenyar
         # a l'acte; la font persistent, però, és el Watchpoint (sobreviu al tancament del
         # wizard, que és justament on abans es perdia tot).
