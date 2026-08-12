@@ -6,7 +6,6 @@ import Login from './pages/Login'
 import Entrar from './pages/Entrar'
 import Shell from './components/layout/Shell'
 import GuardTascaOblidada from './components/GuardTascaOblidada'
-import SessioActiva from './components/SessioActiva'
 import AvisSessio from './components/AvisSessio'
 import { modelFitxers } from './api/endpoints'
 import { botoSec } from './components/ui/buttons'
@@ -103,12 +102,21 @@ function ProtectedRoute({ children }) {
   // Va com a GERMÀ de children: repintar-se cada segon no arrossega l'app sencera.
   // AvisSessio (K5) va al costat del guard de tasca oblidada i pel mateix motiu: tots dos
   // són globals i han de viure allà on la persona treballa, no en una pantalla concreta.
-  // F2.3 — `SessioActiva` va aquí pel MATEIX motiu que els altres dos: des de F1 el Stop és
-  // l'únic gest que tanca una tasca, i el tècnic ha de veure què té obert tant si és a Mesures
-  // com al Taller de patró com a l'editor de fitxa. Un Stop per pantalla serien cinc llocs on
-  // el gest que factura pot divergir.
+  // (F2.3 hi tenia també `SessioActiva`, amb aquest mateix argument. Ja no: v. la nota de sota.)
   if (estatAuth === AUTH_VALID) {
-    return <>{children}<GuardTascaOblidada /><AvisSessio /><SessioActiva /></>
+    // ⚠️ `SessioActiva` DESMUNTADA (Agus, revisió a pantalla 12/08). És la píndola flotant de
+    // baix a la dreta («Definició POM · BRW-26-FW-0002 · 1m»). La decisió no la vaig trobar
+    // escrita enlloc del vault, però l'acta de T4 hi va en la mateixa direcció —«la píndola
+    // d'acabar de F2.3 marxa»— i el que quedava des d'aleshores era el residu INFORMATIU: ja no
+    // tanca res, ja no porta cap gest, i el que deia (què corre i des de quan) el diu el panell
+    // de Tasques, que és on la decisió es pren.
+    //
+    // 🚩 ES RETIRA DE TOTA L'APP I NO NOMÉS D'AQUESTA SUPERFÍCIE, i és deliberat: el component
+    // era GLOBAL a posta (la seva capçalera argumenta que el tècnic salta de Mesures a Fitxa a
+    // Escalat i la sessió és la mateixa cosa a totes), o sigui que amagar-la en una pantalla i
+    // deixar-la en una altra hauria trencat justament l'argument que la sostenia. El fitxer es
+    // queda al repo sense muntar: tornar-la és afegir-la aquí i prou.
+    return <>{children}<GuardTascaOblidada /><AvisSessio /></>
   }
   return <Navigate to="/login" replace state={{ from: location }} />
 }

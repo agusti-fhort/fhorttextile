@@ -143,9 +143,13 @@ function FilaPeca({ model, peca, obert, onCommutar }) {
       display: 'flex', alignItems: 'center', gap: 10,
       padding: '9px 14px', borderBottom: '1px solid var(--line)',
     }}>
+      {/* `data-fila-peca` — marcador estable de LA FILA DE PEÇA. `aria-expanded` sol no serveix
+          per comptar-les: a Editar POM la graella en porta desenes de propis DINS del contenidor,
+          i un guard que els sumés donava 17 on n'hi ha 2. */}
       <button type="button" onClick={onCommutar} {...gestos}
         title={t(obert ? 'peca.collapse' : 'peca.expand')}
         aria-expanded={obert}
+        data-fila-peca={peca?.codi ?? ''}
         style={{
           width: 24, height: 24, flex: 'none', display: 'inline-flex',
           alignItems: 'center', justifyContent: 'center', padding: 0,
@@ -157,8 +161,14 @@ function FilaPeca({ model, peca, obert, onCommutar }) {
         <i className={obert ? 'ti ti-chevron-down' : 'ti ti-chevron-right'} style={{ fontSize: 14 }} />
       </button>
       <span style={{ fontSize: 13, fontWeight: 600 }}>{nom}</span>
-      {/* NAVEGA, no edita: el nom d'una prenda s'autoritza al Resum. */}
-      <Link to={`/models/${model.id}#${anclaDeLaPeca(peca)}`} title={t('resum_wizard.rename_piece')}
+      {/* NAVEGA, no edita: el nom d'una prenda s'autoritza al Resum.
+          ⚠️ `?tab=Resum` NO ÉS DECORACIÓ. Sense ell aquest enllaç aterrava al DASHBOARD i no al
+          Resum: `ModelSheet` només llegeix la pestanya de la URL (`?tab=`) i, si no n'hi ha, cau
+          al seu `defaultTab = 'Dashboard'`. L'ancla hi era i era correcta —el que faltava era
+          dir a quina pestanya—, i per això el símptoma semblava «el llapis no funciona» quan el
+          que passava és que portava a un altre lloc. Passava als DOS models, no només als que
+          estan en fase de wizard. */}
+      <Link to={`/models/${model.id}?tab=Resum#${anclaDeLaPeca(peca)}`} title={t('resum_wizard.rename_piece')}
         style={{
           marginLeft: 'auto', width: 24, height: 24, display: 'inline-flex',
           alignItems: 'center', justifyContent: 'center',

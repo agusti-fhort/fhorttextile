@@ -205,6 +205,18 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   const graduacioMode = sp.get('mode') === 'graduacio'
   const [model, setModel] = useState(null)
   const [activeTab, setActiveTab] = useState(TABS.includes(tabParam) ? tabParam : defaultTab)
+  // ⚠️ I EL `?tab=` ES CONTINUA OBEINT DESPRÉS DEL MUNTATGE (SET-2/T7-fix1). El `useState` de
+  // sobre només el llegeix UN cop: una navegació client-side cap a la MATEIXA ruta amb un
+  // `?tab=` distint no remunta res, i per tant no canviava de pestanya. És el que feia que el
+  // llapis del contenidor de peça (Mesures → `/models/<id>?tab=Resum#peca-02`) es quedés a la
+  // pestanya on ja eres: l'enllaç era correcte i ningú l'escoltava.
+  //
+  // Només actua quan el paràmetre diu una pestanya VÀLIDA i DIFERENT de l'activa: així no trepitja
+  // els canvis de pestanya per gest (que no toquen la URL) ni els `setSp` d'aquesta pàgina.
+  useEffect(() => {
+    if (TABS.includes(tabParam) && tabParam !== activeTab) setActiveTab(tabParam)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabParam])
   const [taulaRows, setTaulaRows] = useState([])
   const [modelTaskRows, setModelTaskRows] = useState([])
   // `sizesAmbDades` l'omplia la graella del Resum vell (`_TabSummary`, no muntat des d'A7). El
@@ -1121,6 +1133,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             <MeasuresEntryPanel model={model} entryMode={mesuresEntry} intent={mesuresIntent}
               onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }}
               onGraduacio={obreGraduacio}
+              /* fix4 — el ← de la graella surt cap a MESURES (d'on s'ha vingut) i no cap a la
+                 pantalla de les tres targetes, que en mode entrada no s'ha vist mai. */
+              onBack={exitEdit}
               onPomSaved={finishPomEntry} />
           ) : (!taskParam && editing !== 'Mesures' && !pomReady) ? (
             /* §8c · L'ESTAT BUIT DE LA PANTALLA: filet discontinu de la casa sobre --panel i la
