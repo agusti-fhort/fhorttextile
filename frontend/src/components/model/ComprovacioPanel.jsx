@@ -262,7 +262,14 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
   }
 
   return (
-    <div style={{ maxWidth: 1060 }}>
+    // LA PANTALLA DECLARA LA SEVA MIDA DE COS (Agus, 10/08: «textos interiors massa grans»).
+    // Aquí no hi havia cap mida lliure de més: hi havia una ABSÈNCIA. Les cel·les de les taules
+    // —i el rètol de cada secció, que va amb `font: inherit`— no en declaraven cap i queien als
+    // 16px del document, o sigui un valor que ningú havia decidit. La vista de Famílies era on
+    // més es notava perquè és tot taula. És la mateixa nota que ja porten `KPICard` i el tauler
+    // del Dashboard, i el que `MeasureGrid` fa a la seva `<table>`: el contenidor diu el cos i
+    // els fills en són excepcions declarades.
+    <div style={{ maxWidth: 1060, fontSize: 'var(--fs-body)' }}>
       {diccError && (
         <AvisDiccionari hint={t('dicc.error_hint_noms')} onReintenta={reintentaDicc} />
       )}
@@ -300,7 +307,10 @@ export default function ComprovacioPanel({ model, onVeureFila = null }) {
             ['correctes', veredicte.correctes, 'var(--text-main)']].map(([clau, n, col]) => (
             <div key={clau} style={{ fontSize: 'var(--fs-label)', textTransform: 'uppercase',
                                      letterSpacing: '0.05em', color: 'var(--text-soft)' }}>
-              <b style={{ display: 'block', fontSize: 17, fontWeight: 600, color: col,
+              {/* L'ÚNICA mida lliure que hi havia: 17px no és cap graó de l'escala
+                  (10 · 12 · 14 · 18 · 22 · 32). El recompte del veredicte és la xifra que
+                  s'ha de llegir d'un cop d'ull → `--fs-h2`. */}
+              <b style={{ display: 'block', fontSize: 'var(--fs-h2)', fontWeight: 600, color: col,
                           marginBottom: 2 }}>{n}</b>
               {t(`comprovacio.compte_${clau}`)}
             </div>
