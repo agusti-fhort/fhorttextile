@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import client from '../../api/client'
 import { models } from '../../api/endpoints'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
-import PecaContenidor from '../model/PecaContenidor'
+import PecesDelModel, { CosPecaSenseMesures } from '../model/PecesDelModel'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
 import { useElements } from '../../utils/vocabulariDominiFont'
 import { aDocument, aMotor, opcionsDocument } from '../../utils/breakConvention'
@@ -391,7 +391,8 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
 
       {!carregant && !err && (
         <>
-          <PecaContenidor model={model} accioJoc={canviarJoc}>
+          {/* SET-2/T7-B2b — un contenidor per prenda; v. `PecesDelModel`. */}
+          <PecesDelModel model={model} accioJoc={canviarJoc}>{peca => (peca && !peca.es_mare) ? <CosPecaSenseMesures /> : (<>
           <div style={{ overflowX: 'auto' }}>
             {/* Q2 — LA TAULA NO VA AL 100%. Anava-hi, i com que totes les columnes menys `#`
                 tenien amplada fixada, el sobrant de la pantalla se n'anava sencer a la primera:
@@ -451,7 +452,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
               </tbody>
             </table>
           </div>
-          </PecaContenidor>
+          </>)}</PecesDelModel>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                         gap: 12, marginTop: 14, flexWrap: 'wrap' }}>

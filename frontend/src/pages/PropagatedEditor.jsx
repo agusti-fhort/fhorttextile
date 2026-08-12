@@ -4,7 +4,7 @@ import { IconAlertTriangle, IconLock } from '@tabler/icons-react'
 import client from '../api/client'
 import { models } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
-import PecaContenidor from '../components/model/PecaContenidor'
+import PecesDelModel, { CosPecaSenseMesures } from '../components/model/PecesDelModel'
 import { buildEscalatGroups, buildEscalatRows, escalatRuleLeadCols } from '../components/model/fittingGridAdapter'
 import { mesuraSemblaIncrement } from '../utils/plausibilitatMesura'
 import { formatLen } from '../utils/format'
@@ -243,7 +243,8 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
             </button>
           </div>
         )}
-        <PecaContenidor model={modelInfo}>
+        {/* SET-2/T7-B2b — un contenidor per prenda; v. `PecesDelModel`. */}
+        <PecesDelModel model={modelInfo}>{peca => (peca && !peca.es_mare) ? <CosPecaSenseMesures /> : (<>
         {loading && !data ? (
           <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('app.loading')}</div>
         ) : gridRows.length === 0 ? (
@@ -259,7 +260,7 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
             onSave={onGridSave}
           />
         )}
-        </PecaContenidor>
+        </>)}</PecesDelModel>
       </div>
     </div>
   )
