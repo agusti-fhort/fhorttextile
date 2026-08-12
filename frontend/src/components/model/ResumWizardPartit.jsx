@@ -609,19 +609,21 @@ function FilesDeLaPeca({ model, peca, onDesat, onError }) {
 
   return (
     <>
-      {/* Fixa, apagada i sense acció: la peça no pot canviar això mai. */}
+      {/* Fixa, apagada i sense acció: la peça no pot canviar això mai. Tot en UNA línia, com les
+          altres dues: els eixos i el tipus de peça separats per punt volat. */}
       <FilaDefinicio etiqueta={t('resum_wizard.step_piece')} origen={ORIGEN.DEL_MODEL}>
         <span>
           {[model.target && t(`model_wizard.target_${model.target}`, model.target),
             model.construction && t(`model_wizard.construction_${model.construction}`, model.construction),
-            model.fit_type && t(`model_wizard.fit_${model.fit_type}`, model.fit_type)]
+            model.fit_type && t(`model_wizard.fit_${model.fit_type}`, model.fit_type),
+            gt || null]
             .filter(Boolean).join(' · ')}
         </span>
-        {gt ? <div style={{ marginTop: 2 }}>{gt}</div> : null}
       </FilaDefinicio>
 
       <FilaDefinicio etiqueta={t('resum_wizard.step_sizes')}
         origen={origenDeLaFila(peca.size_run_model)}
+        expandit={obert === 'talles'}
         accio={obert === 'talles' ? null : (
           <BotoCanviar onClick={() => setObert('talles')}>{t('resum_wizard.change')}</BotoCanviar>
         )}>
@@ -641,22 +643,23 @@ function FilesDeLaPeca({ model, peca, onDesat, onError }) {
               </Boto>
             ) : null} />
         ) : (
+          // Sistema, run i talla base EN UNA LÍNIA — la mateixa lectura que la fila de la mare,
+          // que és el que fa que les tres files es puguin comparar entre targetes d'un cop d'ull.
           <>
-            <div><ValorCamp camp={peca.size_system} buit={cap} /></div>
-            <div style={{ marginTop: 4 }}>
-              <ValorCamp camp={peca.size_run_model} buit={cap} />
-              {peca.base_size_label?.etiqueta
-                ? <span style={{ marginLeft: 8, color: 'var(--text-soft)' }}>
-                    {peca.base_size_label.etiqueta} · {t('resum_wizard.base')}
-                  </span>
-                : null}
-            </div>
+            <ValorCamp camp={peca.size_system} buit={cap} />
+            <ValorCamp camp={peca.size_run_model} buit={cap} />
+            {peca.base_size_label?.etiqueta
+              ? <span style={{ color: 'var(--text-soft)' }}>
+                  {peca.base_size_label.etiqueta} · {t('resum_wizard.base')}
+                </span>
+              : null}
           </>
         )}
       </FilaDefinicio>
 
       <FilaDefinicio etiqueta={t('resum_wizard.step_grading')}
         origen={origenDeLaFila(peca.grading_rule_set)}
+        expandit={obert === 'graduacio'}
         accio={obert === 'graduacio' ? null : (
           <BotoCanviar onClick={() => setObert('graduacio')}>{t('resum_wizard.change')}</BotoCanviar>
         )}>
@@ -853,20 +856,18 @@ function PasPeca({ model, estat, onObrir, catTargets, catConstructions, catFits,
           : null}>
         {estat === 'fet' && (
           // ELECCIONS FIXADES I VISIBLES (§8f): els tres eixos en chips verds d'inclusió i el
-          // tipus de peça escrit. Res s'amaga en tancar-se.
-          <div>
-            <span style={retolCamp}>{t('resum_wizard.axes')}</span>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-              {model.target && <Xip marcat disabled>{t(`model_wizard.target_${model.target}`, model.target)}</Xip>}
-              {model.construction && <Xip marcat disabled>{t(`model_wizard.construction_${model.construction}`, model.construction)}</Xip>}
-              {model.fit_type && <Xip marcat disabled>{t(`model_wizard.fit_${model.fit_type}`, model.fit_type)}</Xip>}
-            </div>
-            <div style={{ marginTop: 8 }}>
-              <span style={retolCamp}>{t('resum_wizard.piece_type')}</span><br />
+          // tipus de peça escrit. Res s'amaga en tancar-se — però tot va EN UNA FILA, i els
+          // sub-rètols («Target · Construcció · Fit», «Tipus de peça») se'n van: un chip verd ja
+          // diu què és, i el rètol PEÇA de l'esquerra ja diu de quin apartat parlem.
+          <>
+            {model.target && <Xip marcat disabled>{t(`model_wizard.target_${model.target}`, model.target)}</Xip>}
+            {model.construction && <Xip marcat disabled>{t(`model_wizard.construction_${model.construction}`, model.construction)}</Xip>}
+            {model.fit_type && <Xip marcat disabled>{t(`model_wizard.fit_${model.fit_type}`, model.fit_type)}</Xip>}
+            <span>
               <b>{model.garment_type_nom}</b>
               {model.garment_type_item_nom && ` · ${model.garment_type_item_nom}`}
-            </div>
-          </div>
+            </span>
+          </>
         )}
       </FilaDefinicio>
     )
@@ -1079,20 +1080,17 @@ function PasTalles({ model, estat, onObrir, desa, onCancel }) {
           ? <BotoCanviar onClick={onObrir}>{t('resum_wizard.change')}</BotoCanviar>
           : null}>
         {estat === 'fet' && (
-          <div>
-            <span style={retolCamp}>{t('model_wizard.grading_system')}</span>
-            <div><b>{model.size_system_nom || model.size_system_codi}</b></div>
-            <div style={{ marginTop: 8 }}>
-              <span style={retolCamp}>{t('resum_wizard.run_and_base')}</span>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-                {(model.size_run_model || '').split('·').filter(Boolean).map(l => (
-                  <Xip key={l} marcat={l === model.base_size_label} disabled>
-                    {l}{l === model.base_size_label ? ` · ${t('resum_wizard.base')}` : ''}
-                  </Xip>
-                ))}
-              </div>
-            </div>
-          </div>
+          // El sistema i les pastilles del run, EN UNA FILA. La talla base segueix marcada dins
+          // de la seva pastilla —és l'única de les cinc que porta text— i per això el run no
+          // necessita cap rètol que digui quina és.
+          <>
+            <b>{model.size_system_nom || model.size_system_codi}</b>
+            {(model.size_run_model || '').split('·').filter(Boolean).map(l => (
+              <Xip key={l} marcat={l === model.base_size_label} disabled>
+                {l}{l === model.base_size_label ? ` · ${t('resum_wizard.base')}` : ''}
+              </Xip>
+            ))}
+          </>
         )}
       </FilaDefinicio>
     )
@@ -1274,20 +1272,19 @@ function PasGraduacio({ model, estat, onObrir, desa, onCancel }) {
           <span style={{ ...buitText, fontSize: 'var(--fs-caption)' }}>{t('resum_wizard.needs_sizes')}</span>
         )}
         {estat !== 'blocat' && grsId && (
-          <div>
-            <span style={retolCamp}>{t('dependency.ruleset')}</span>
-            <div><b>{joc?.nom || model.grading_rule_set_nom || model.grading_rule_set}</b></div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-              {(joc?.targets_codis || []).map(c => (
-                <Xip key={c} marcat disabled>{t(`model_wizard.target_${c}`, c)}</Xip>
-              ))}
-              {joc?.construction_codi && <Xip marcat disabled>{t(`model_wizard.construction_${joc.construction_codi}`, joc.construction_codi)}</Xip>}
-              {joc?.fit_type_codi && <Xip marcat disabled>{t(`model_wizard.fit_${joc.fit_type_codi}`, joc.fit_type_codi)}</Xip>}
-            </div>
-            <div style={{ marginTop: 8, color: 'var(--text-soft)' }}>
-              {t('model_sheet.grading_rules_label')}: {joc?.regles_count ?? 0}
-            </div>
-          </div>
+          // «GRADING BROWNIE 2026 · 142 regles» i prou.
+          //
+          // 🚩 ELS CHIPS D'EIXOS DEL JOC (target · construcció · fit) SE'N VAN d'aquí. No és un
+          // descuit: el disseny validat dona una sola línia a aquest apartat, i aquells eixos són
+          // del JOC —no del model— o sigui que repetien en petit el que la fila PEÇA ja diu en
+          // gran, i amb el joc de Brownie (eixos BUITS a posta) no en pintaven cap. Qui necessiti
+          // el detall del joc el té al picker en obrir «Canviar», que és on es tria.
+          <>
+            <b>{joc?.nom || model.grading_rule_set_nom || model.grading_rule_set}</b>
+            <span style={{ color: 'var(--text-soft)' }}>
+              · {t('model_sheet.grading_rules_label')}: {joc?.regles_count ?? 0}
+            </span>
+          </>
         )}
       </FilaDefinicio>
     )
