@@ -167,12 +167,14 @@ def main():
         print('\nC · LA PODA · un document que no menciona els POMs de la mare')
         sid = transaction.savepoint()
         try:
-            # Sense `poda_choice`: si el confirm mirés TOT el model, els 28 POMs vius de la
-            # mare sortirien proposats per podar amb un 409.
-            res = confirma(sessio(SEGONA, vives))
+            # Sense `poda_choice`: si el confirm mirés TOT el model, els POMs vius de la
+            # mare sortirien proposats per podar amb un 409. (El `container_choice` SÍ que
+            # s'hi passa: la tria del contenidor és una altra llei i té el seu propi 409;
+            # sense ella el que sortiria és aquella pregunta i no la que aquí es mesura.)
+            res = confirma(sessio(SEGONA, vives), container_choice='no_container')
             diu('cap 409 de poda (la mare no és candidata)', res.status_code, 201)
             if res.status_code == 409:
-                print(f'     → proposava podar {res.data.get("n")} POM(s) '
+                print(f'     → 409 {res.data.get("tipus")!r}: {res.data.get("n")} POM(s) '
                       f'de {res.data.get("garment_nom")!r}')
         finally:
             transaction.savepoint_rollback(sid)
