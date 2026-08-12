@@ -890,10 +890,13 @@ class BaseMeasurement(models.Model):
             # —el mateix valor, en silenci, i creuant peces—: un bug de creuament
             # indetectable. Mentre aquesta comporta visqui, cap '02' pot existir i el filtre
             # de R3 és un no-op; per això la comporta és el gate i no la data.
-            models.CheckConstraint(
-                condition=models.Q(garment=''),
-                name='models_app_basemeasurement_garment_gate_set2',
-            ),
+            # ✅ SET-2/#12 (12/08) — RETIRADA per la migració `0084`, amb les condicions que
+            # la mateixa comporta exigia verdes i mesurades: T4 ensenya el motor a distingir
+            # peces, T5 els escriptors, i el filtre de R3 ja mira l'eix sencer
+            # (`services_derivacio.EIXOS_DE_GERMANOR`) —o sigui que corregir el pit del top
+            # ja no pot moure el de la calceta. Gate obert amb la suite sencera verda
+            # (1841/1841, 12/08) i autorització de l'Agus. A partir d'aquí un '02' és legal
+            # a tota la família i `garment` deixa de ser una columna congelada.
         ]
 
     def __str__(self):
@@ -987,10 +990,10 @@ class MeasurementChangeLog(models.Model):
             # va al MATEIX grup que la mesura, i pel mateix motiu de sempre: el signal F1 hi
             # escriu dins de la mateixa transacció, o sigui que separar-les deixaria una alta
             # de peça escrivint un apunt que la comporta del log rebutjaria.
-            models.CheckConstraint(
-                condition=models.Q(garment=''),
-                name='models_app_measurementchangelog_garment_gate_set2',
-            ),
+            # ✅ SET-2/#12 (12/08) — RETIRADA per la migració `0084` (v. `BaseMeasurement`).
+            # Va amb la mesura, com sempre: el signal F1 escriu l'apunt dins de la MATEIXA
+            # transacció que la fila, o sigui que retirar-les per separat hauria deixat una
+            # alta de peça legal escrivint un log il·legal.
         ]
 
     def __str__(self):
@@ -1069,10 +1072,9 @@ class ModelGradingOverride(models.Model):
         ordering = ['model', 'pom', 'size_label']
         constraints = [
             # SET-2/T2 — la comporta del garment (v. `BaseMeasurement.Meta`).
-            models.CheckConstraint(
-                condition=models.Q(garment=''),
-                name='models_app_modelgradingoverride_garment_gate_set2',
-            ),
+            # ✅ SET-2/#12 (12/08) — retirada per la migració `0084`. L'override és l'ajust
+            # MANUAL d'una cel·la i la seva clau ja porta `garment`: pinar la M de la sisa
+            # del top no pot moure la de la calceta.
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
             # ✅ C4/G3 (04/08) — retirada per la migració 0078. L'override és l'ajust MANUAL
             # d'una cel·la: pinar la talla M de la sisa dreta no pot moure l'esquerra, i
@@ -1239,10 +1241,12 @@ class ModelGradingRule(models.Model):
             # regla no petaria: **sobreescriuria la primera en memòria** i el motor graduaria
             # tota una peça amb la llei de l'altra, sense un sol log. T4 és qui ensenya al
             # motor a distingir-les; fins llavors, aquí no hi pot haver cap '02'.
-            models.CheckConstraint(
-                condition=models.Q(garment=''),
-                name='models_app_modelgradingrule_garment_gate_set2',
-            ),
+            # ✅ SET-2/#12 (12/08) — RETIRADA per la migració `0084`. La condició que la
+            # comporta posava per escrit ja es compleix: `_load_grading_rules_per_garment`
+            # (`pom/services.py:820`) indexa per `(pom_id, garment)` des de T4 —verificat, no
+            # assumit—, o sigui que dues peces que comparteixin un POM
+            # ja no s'aixafen en memòria. Aquesta és la comporta de T3 —la més estreta i la
+            # més perillosa de les set— i cau amb les altres sis, no abans.
         ]
 
     def __str__(self):
@@ -1467,10 +1471,9 @@ class SizeCheckLine(models.Model):
             # segueix penjant del MODEL i sense eix (D6): mesurar una prenda és mesurar tot
             # el model, i el veredicte es compta per FILA sobre el model sencer. L'eix és de
             # la LÍNIA, que és la presa, no del check.
-            models.CheckConstraint(
-                condition=models.Q(garment=''),
-                name='models_app_sizecheckline_garment_gate_set2',
-            ),
+            # ✅ SET-2/#12 (12/08) — retirada per la migració `0084`. El SizeCheck segueix
+            # penjant del MODEL i sense eix (D6): el que s'obre és la LÍNIA, que és la presa,
+            # i pot dir de quina prenda parla.
             # C1/T4 — la comporta (v. `BaseMeasurement.Meta`). C4 la retira per migració.
             # ✅ C4/G2 (04/08) — retirada per la migració 0077. La línia de check és una
             # PRESA: la modista mesura la sisa dreta i l'esquerra per separat, i el veredicte

@@ -275,10 +275,9 @@ class GradedSpec(models.Model):
             # Aquesta taula torna a anar al MATEIX grup que la mesura, i pel motiu que ja es
             # va MESURAR amb capa i instància: escriure una base de peça encadena cap al
             # motor, que hi escriu els specs dins de la mateixa crida.
-            models.CheckConstraint(
-                condition=models.Q(garment=''),
-                name='fitting_gradedspec_garment_gate_set2',
-            ),
+            # ✅ SET-2/#12 (12/08) — RETIRADA per la migració `fitting/0027`, dins de la
+            # mateixa onada que la de `BaseMeasurement`: pel mateix encadenament, retirar-les
+            # per separat hauria repetit el `CheckViolation` de `959147a5`.
         ]
 
     def __str__(self):
@@ -505,10 +504,9 @@ class PieceFittingLine(models.Model):
         # germanes vives crear una PieceFitting hauria petat aquí.
         constraints = [
             # SET-2/T2 — la comporta del garment (v. `models_app.BaseMeasurement.Meta`).
-            models.CheckConstraint(
-                condition=models.Q(garment=''),
-                name='fitting_piecefittingline_garment_gate_set2',
-            ),
+            # ✅ SET-2/#12 (12/08) — retirada per la migració `0027`. La línia de fitting
+            # clona els eixos de l'spec (`fitting/services.py:339`): amb l'spec obert i
+            # aquesta tancada, crear una PieceFitting d'una segona peça hauria petat aquí.
         ]
 
     def __str__(self):
