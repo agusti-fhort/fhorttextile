@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import EditableTable from '../EditableTable/EditableTable'
+import PecesDelModel, { CosPecaSenseMesures } from './PecesDelModel'
 import ImportWizard from '../ImportWizard/ImportWizard'
 import Modal from '../ui/Modal'
 import ModelPicker from './ModelPicker'
@@ -425,6 +426,14 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
 
       {mode === 'manual' && (
         <div>
+        {/* SET-2/T7-fix3 — UN CONTENIDOR PER PRENDA, el mateix patró que Mesures, Escalat i
+            Graduació. Només embolcalla el mode 'manual': el selector de les tres targetes i
+            l'importador són PASSOS DE WIZARD, no feina d'una peça, i posar-los dins d'un
+            contenidor de prenda diria una cosa falsa (que s'està definint la 02 quan encara
+            s'està triant per on començar).
+            ⚠️ El cos de la 02 NO pot ser la graella d'edició: les comportes de mesura són vives
+            i gravar POMs de la 02 escriuria mesures. Mateix text d'espera que a Mesures. */}
+        <PecesDelModel model={model}>{peca => (peca && !peca.es_mare) ? <CosPecaSenseMesures /> : (<>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
             <div>
               <h2 style={{ fontSize: 'var(--fs-h2)', fontWeight: 500, margin: '0 0 0.25rem' }}>
@@ -475,7 +484,10 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
             onPomSave={savePom}
             onSaved={(newRows) => setTaulaRows(newRows)}
           />
+        </>)}</PecesDelModel>
 
+          {/* El ← queda FORA dels contenidors: és una acció de PÀGINA (sortir d'Editar POM), no
+              d'una prenda. A dins semblaria que es tanca la peça de la mare. */}
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 24 }}>
             {/* EL PUNT D'ENTRADA MANA EL DESTÍ DE TORNADA, no un destí fix: si has vingut per
                 la tria, hi tornes; si has vingut de Mesures (que és el cas d'Editar POM), en

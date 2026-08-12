@@ -178,7 +178,7 @@ def main():
         codis = [conts.nth(i).get_attribute('data-peca') for i in range(conts.count())]
         mira('B2b i cada contenidor diu de quina prenda és', codis == ['', '02'], str(codis))
         # La fila superior = el caret que plega la taula. Amb dues prendes n'hi ha d'haver DUES.
-        carets = pag.locator('[data-peca] button[aria-expanded]')
+        carets = pag.locator('[data-fila-peca]')
         mira('B2b dues files superiors (nom + caret + llapis)', carets.count() == 2,
              f'{carets.count()}')
         mira('B2b el contenidor del Pantaló diu per què és buit',
@@ -199,7 +199,7 @@ def main():
         # `calFilaDePeca` (`pecaDefinicio.test.js`), que és on viu la llei.
         pag.goto(f'{BASE}/models/{CONTROL_UNA_PECA}?tab=Mesures', wait_until='networkidle')
         pag.wait_for_timeout(2500)
-        carets_control = pag.locator('[data-peca] button[aria-expanded]').count()
+        carets_control = pag.locator('[data-fila-peca]').count()
         mira('B2b CONTROL · en un model d\'UNA prenda no neix CAP fila',
              carets_control == 0, f'{carets_control} fila/es')
 

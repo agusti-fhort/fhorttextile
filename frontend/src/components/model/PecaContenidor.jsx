@@ -143,9 +143,13 @@ function FilaPeca({ model, peca, obert, onCommutar }) {
       display: 'flex', alignItems: 'center', gap: 10,
       padding: '9px 14px', borderBottom: '1px solid var(--line)',
     }}>
+      {/* `data-fila-peca` — marcador estable de LA FILA DE PEÇA. `aria-expanded` sol no serveix
+          per comptar-les: a Editar POM la graella en porta desenes de propis DINS del contenidor,
+          i un guard que els sumés donava 17 on n'hi ha 2. */}
       <button type="button" onClick={onCommutar} {...gestos}
         title={t(obert ? 'peca.collapse' : 'peca.expand')}
         aria-expanded={obert}
+        data-fila-peca={peca?.codi ?? ''}
         style={{
           width: 24, height: 24, flex: 'none', display: 'inline-flex',
           alignItems: 'center', justifyContent: 'center', padding: 0,
