@@ -2804,7 +2804,8 @@
     "sortir_amb_canvis_peces": "En: {{peces}}",
     "sortir_amb_canvis_cos": "Si sales ahora, los cambios de estos contenedores se perderán. Cierra este aviso y guárdalos en el contenedor donde los has hecho.",
     "sortir_sense_desar": "Salir sin guardar",
-    "quedar_me": "Quedarme"
+    "quedar_me": "Quedarme",
+    "import_nomes_mare": "La importación aún no sabe de qué pieza es: solo se puede importar en la pieza principal."
   },
   "model_fabric": {
     "err_close_table": "No se ha podido cerrar la tabla.",

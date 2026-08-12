@@ -38,7 +38,15 @@ import useToc, { anellFocus } from '../ui/toc'
 // i el rètol italic ja ho diu. En Fase B cada contenidor de peça portarà el SEU, perquè cada
 // peça va a la seva elecció de graduació.
 export default function PecaContenidor({ model, children, accioJoc = null,
-                                        peca = null, mesDunaPeca = false }) {
+                                        peca = null, mesDunaPeca = false,
+                                        // SET-2/T7-B9 — accions DE PEÇA (l'import, per decisió
+                                        // T8: un import = una peça i s'inicia des d'ella). Van a
+                                        // la FILA SUPERIOR quan n'hi ha; amb una sola prenda no
+                                        // hi ha fila i cauen a la fila de dependència, que és
+                                        // l'altra capçalera del contenidor i sempre existeix.
+                                        // Deixar-les fora en aquell cas les faria desaparèixer
+                                        // del 100% del corpus d'avui.
+                                        accionsPeca = null }) {
   const { t } = useTranslation()
   const [obert, setObert] = useState(true)
   if (!model) return null
@@ -46,7 +54,8 @@ export default function PecaContenidor({ model, children, accioJoc = null,
   // La fila només existeix quan hi ha més d'una prenda: `peca` sense `mesDunaPeca` és el cas
   // d'avui —la mare sola— i llavors no hi ha res a encapçalar.
   const fila = mesDunaPeca && peca ? (
-    <FilaPeca model={model} peca={peca} obert={obert} onCommutar={() => setObert(v => !v)} />
+    <FilaPeca model={model} peca={peca} obert={obert} onCommutar={() => setObert(v => !v)}
+      accions={accionsPeca} />
   ) : null
 
   const gtItem = model.garment_type_item_nom
@@ -101,6 +110,7 @@ export default function PecaContenidor({ model, children, accioJoc = null,
           {jocNom || t('dependency.no_ruleset')}
         </span>
         {accioJoc}
+        {!fila && accionsPeca}
         {!accioJoc && (
           // La pista de «lectura» NOMÉS quan la fila no porta l'acció: amb el botó al costat,
           // dir que no es pot editar aquí seria contradir-se a un pam de distància.
@@ -134,7 +144,7 @@ export default function PecaContenidor({ model, children, accioJoc = null,
  * (dependència, joc, run) es queden a la vista, que és el que fa que plegar sigui útil quan hi
  * ha tres prendes obertes alhora.
  */
-function FilaPeca({ model, peca, obert, onCommutar }) {
+function FilaPeca({ model, peca, obert, onCommutar, accions = null }) {
   const { t } = useTranslation()
   const [toc, gestos] = useToc()
   const nom = nomDeLaPeca(peca, t('resum_wizard.model_base'))
@@ -168,9 +178,10 @@ function FilaPeca({ model, peca, obert, onCommutar }) {
           dir a quina pestanya—, i per això el símptoma semblava «el llapis no funciona» quan el
           que passava és que portava a un altre lloc. Passava als DOS models, no només als que
           estan en fase de wizard. */}
+      <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, alignItems: 'center' }}>{accions}</span>
       <Link to={`/models/${model.id}?tab=Resum#${anclaDeLaPeca(peca)}`} title={t('resum_wizard.rename_piece')}
         style={{
-          marginLeft: 'auto', width: 24, height: 24, display: 'inline-flex',
+          width: 24, height: 24, display: 'inline-flex',
           alignItems: 'center', justifyContent: 'center',
           borderRadius: 'var(--r-ctrl)', border: '1px solid var(--line)',
           color: 'var(--text-soft)', textDecoration: 'none',

@@ -2804,7 +2804,8 @@
     "sortir_amb_canvis_peces": "A: {{peces}}",
     "sortir_amb_canvis_cos": "Si surts ara, els canvis d’aquests contenidors es perdran. Tanca aquest avís i grava’ls al contenidor on els has fet.",
     "sortir_sense_desar": "Sortir sense desar",
-    "quedar_me": "Quedar-m’hi"
+    "quedar_me": "Quedar-m’hi",
+    "import_nomes_mare": "L'importació encara no sap de quina peça és: només es pot importar a la peça principal."
   },
   "model_fabric": {
     "err_close_table": "No s'ha pogut tancar la taula.",
