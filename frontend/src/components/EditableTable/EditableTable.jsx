@@ -22,6 +22,7 @@ import { boto, botoTer } from '../ui/buttons'
 import BateigInput from '../model/BateigInput'
 import { baseMeasurements, poms } from '../../api/endpoints'
 import { aDocument } from '../../utils/breakConvention'
+import { esBruta } from '../../utils/taulaBruta'
 
 // LA REGLA DE GRADUACIÓ NO ÉS AQUÍ (ordre d'Agus, 05/08 · la maqueta que mana és la v8.1).
 //
@@ -135,6 +136,10 @@ export default function EditableTable({
   saveLabel,
   onPomSave,
   onSaved,
+  // Avisa amunt de si hi ha res per desar. El guarda de sortida de la PÀGINA (que és fora
+  // dels contenidors) no pot endevinar-ho: el desat és per contenidor i qui sap si li'n
+  // queda és cada taula.
+  onDirtyChange = null,
   // `null` = mode autoria_base. Amb objecte = mode presa, i porta les portes per fila:
   //   {baseLabel, onValor(row,val), onIdentitat(row,camps), onParteix(row,filles),
   //    onNova(pom,eixos), onTreu(row), onReordena(ids)}
@@ -156,6 +161,18 @@ export default function EditableTable({
   const [pomPropi, setPomPropi] = useState(null)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  // ── «BRUT» ES MESURA CONTRA EL DESAT, NO CONTRA EL TACTE (SET-2/T7-B5c) ───────────────
+  // `dirty` és un flag de tacte: nou handlers el posen a `true` i no baixa fins que es desa
+  // o es descarta, o sigui que editar una cel·la i tornar-la al seu valor original deixava
+  // el botó viu per fer un POST que no canvia res. `esBruta` compara el que S'ENVIARIA amb
+  // el que ja hi ha desat (banc a `utils/taulaBruta`).
+  //
+  // ⚠️ NOMÉS AL CAMÍ D'`onPomSave` (Definició POM), que és el que aquest bloc demana. Els
+  // altres vuit consumidors d'aquesta taula segueixen amb el flag de sempre: generalitzar-ho
+  // canviaria el comportament de superfícies que ningú ha revisat, i un fals NEGATIU aquí
+  // perdria feina en silenci. Quan es vulgui, és treure el condicional.
+  const brut = onPomSave ? esBruta(rows, localRows) : dirty
+  useEffect(() => { onDirtyChange?.(brut) }, [brut, onDirtyChange])
   // El vocabulari d'identitat (capes + instàncies + regla de composició). Amb `null` —mentre
   // no ha arribat, o si la petició falla— les píndoles surten inertes i la taula es veu igual:
   // la superfície de mesures no pot dependre d'un GET per pintar-se.
@@ -1076,16 +1093,18 @@ export default function EditableTable({
       {/* CAP BOTÓ DE DESAR EN BLOC A LA PRESA: tot s'ha desat ja, camp a camp. Un botó aquí
           prometria un acte que no existeix, i el que SÍ que existeix —tancar el check— viu a la
           barra de resolució, que és de la sessió i no de la taula. */}
-      {!readOnly && !esPresa && (dirty || onPomSave) && (
+      {!readOnly && !esPresa && (brut || onPomSave) && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-          {dirty && (
+          {brut && (
             <button type="button" onClick={() => { setLocalRows(rows); setDirty(false) }}
               style={btnSecondary}>
               <i className="ti ti-arrow-back-up" /> {t('editable_table.discard')}
             </button>
           )}
-          <button type="button" onClick={handleSave} disabled={saving}
-            style={btnPrimary(saving)}>
+          {/* NET = APAGAT. Un botó de desar sempre viu convida a un POST buit i, pitjor, deixa
+              de voler dir res: si està sempre igual, no informa de si hi ha feina pendent. */}
+          <button type="button" onClick={handleSave} disabled={saving || !brut}
+            style={btnPrimary(saving || !brut)}>
             {saving ? t('common.saving') : saveLabel || t('editable_table.confirm_table')}
           </button>
         </div>

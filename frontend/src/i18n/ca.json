@@ -2799,7 +2799,12 @@
     "seed_body_empty": "Es crearan les files dels POMs que l'item declara, buides (per omplir a mà o per import). Les mides que ja hagis tocat al model no es trepitgen.",
     "seed_confirm_empty": "Crear la llista",
     "seed_count": "POMs de l'item: {{total}} · seleccionats per sembrar: {{tria}}. Treu els que no vulguis.",
-    "seed_count_zero": "Cal triar almenys un POM per sembrar."
+    "seed_count_zero": "Cal triar almenys un POM per sembrar.",
+    "sortir_amb_canvis_titol": "Tens canvis sense desar",
+    "sortir_amb_canvis_peces": "A: {{peces}}",
+    "sortir_amb_canvis_cos": "Si surts ara, els canvis d’aquests contenidors es perdran. Tanca aquest avís i grava’ls al contenidor on els has fet.",
+    "sortir_sense_desar": "Sortir sense desar",
+    "quedar_me": "Quedar-m’hi"
   },
   "model_fabric": {
     "err_close_table": "No s'ha pogut tancar la taula.",

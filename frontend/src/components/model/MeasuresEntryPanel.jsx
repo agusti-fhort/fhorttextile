@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import EditableTable from '../EditableTable/EditableTable'
 import PecesDelModel, { CosPecaSenseMesures } from './PecesDelModel'
-import ImportWizard from '../ImportWizard/ImportWizard'
 import Modal from '../ui/Modal'
+import ImportWizard from '../ImportWizard/ImportWizard'
 import ModelPicker from './ModelPicker'
 import { IconBulb, IconX } from '@tabler/icons-react'
 import { botoPorta } from '../ui/buttons'
@@ -52,6 +52,15 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
   const [baseSetAbsent, setBaseSetAbsent] = useState(null)
   const [seedBusy, setSeedBusy] = useState(false)
   const [savingPom, setSavingPom] = useState(false)
+  // ── QUINS CONTENIDORS TENEN FEINA SENSE DESAR (SET-2/T7-B5c) ────────────────────────
+  // Clau = codi de prenda (`''` = la mare). Es guarda per contenidor i no com un booleà
+  // sol perquè el desat ÉS per contenidor: el guarda de sortida ha de poder dir DE QUINA
+  // peça són els canvis, no només que n'hi ha.
+  const [brutsPerPeca, setBrutsPerPeca] = useState({})
+  const marcaBrut = useCallback((codi, brut) => setBrutsPerPeca(
+    prev => (prev[codi] === brut ? prev : { ...prev, [codi]: brut })), [])
+  const pecesBrutes = Object.entries(brutsPerPeca).filter(([, b]) => b).map(([c]) => c)
+  const [avisSortida, setAvisSortida] = useState(false)
   // Confirmació de Gravar POM (paral·lel a "Propagar"): missatge SIMPLE la 1a vegada; ADVERTÈNCIA si
   // resembra (el model JA tenia base → llenç net que substitueix). `hadBaseRef` captura l'estat ABANS
   // de cap sembra (primer cop que veiem files de taula-mesures). `confirmRef` desa la promesa que
@@ -483,23 +492,55 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
             saveLabel={savingPom ? t('common.saving') : t('model_measurements.save_pom')}
             onPomSave={savePom}
             onSaved={(newRows) => setTaulaRows(newRows)}
+            onDirtyChange={(b) => marcaBrut(peca?.codi ?? '', b)}
           />
         </>)}</PecesDelModel>
 
-          {/* El ← queda FORA dels contenidors: és una acció de PÀGINA (sortir d'Editar POM), no
-              d'una prenda. A dins semblaria que es tanca la peça de la mare. */}
+          {/* LA SORTIDA ÉS DE PÀGINA i per això viu FORA dels contenidors, com el desat viu a
+              DINS de cadascun. Són dues alçades i no s'han de barrejar: desar és per prenda,
+              sortir és de la vista. */}
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 24 }}>
             {/* EL PUNT D'ENTRADA MANA EL DESTÍ DE TORNADA, no un destí fix: si has vingut per
                 la tria, hi tornes; si has vingut de Mesures (que és el cas d'Editar POM), en
-                surts cap a Mesures. Sense `onBack` es conserva el comportament de sempre. */}
+                surts cap a Mesures. Sense `onBack` es conserva el comportament de sempre.
+                I ABANS DE SORTIR, EL GUARDA: amb feina sense desar es pregunta, mai es descarta
+                en silenci. El predicat és el de `utils/taulaBruta` —el que s'enviaria contra el
+                que ja hi ha desat— justament perquè no salti amb un edita-i-desfés. */}
             <button type="button"
-              onClick={() => ((vistSelector.current || !onBack) ? setMode('selector') : onBack())}
+              onClick={() => {
+                if (pecesBrutes.length) { setAvisSortida(true); return }
+                return (vistSelector.current || !onBack) ? setMode('selector') : onBack()
+              }}
               style={{ padding: '8px 16px', border: '0.5px solid var(--border)', borderRadius: 6,
                        background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
               ← {t('app.back')}
             </button>
             {hasValues && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('model_measurements.unsaved_pom_hint')}</span>}
           </div>
+
+          {/* EL GUARDA. Diu DE QUINA prenda són els canvis —el desat és per contenidor, i amb
+              tres targetes obertes «tens canvis» no diria on mirar— i no ofereix desar des
+              d'aquí: el desat viu al seu contenidor i tenir-ne una segona porta seria tenir dos
+              camins cap al mateix POST. Qui vulgui desar, tanca l'avís i grava on estava. */}
+          {avisSortida && (
+            <Modal
+              title={t('model_measurements.sortir_amb_canvis_titol')}
+              subtitle={t('model_measurements.sortir_amb_canvis_peces', {
+                peces: pecesBrutes.map(c => (c ? t('graduacio.confirma.peca_codi', { codi: c })
+                  : t('graduacio.confirma.peca_mare'))).join(' · '),
+              })}
+              confirmLabel={t('model_measurements.sortir_sense_desar')}
+              cancelLabel={t('model_measurements.quedar_me')}
+              onCancel={() => setAvisSortida(false)}
+              onConfirm={() => {
+                setAvisSortida(false)
+                if (vistSelector.current || !onBack) setMode('selector'); else onBack()
+              }}>
+              <p style={{ fontSize: 'var(--fs-body)', margin: 0 }}>
+                {t('model_measurements.sortir_amb_canvis_cos')}
+              </p>
+            </Modal>
+          )}
         </div>
       )}
 
