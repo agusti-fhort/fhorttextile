@@ -22,6 +22,9 @@ function deriveFitting(grid) {
     const ident = identitatMesura(l)
     if (!pomMap.has(ident)) pomMap.set(ident, {
       pom_id: l.pom_id, capa: l.capa, instancia: l.instancia,
+      // SET-2/T7-B7 — l'eix de prenda viatja amb la fila: `fitting/serializers` l'emet des
+      // de f6d99e30 i el desat el necessita (v. `utils/payloadMesures`).
+      garment: l.garment,
       codi: l.codi, nom: l.nom, is_key: l.is_key,
       nom_en: l.nom_en, nom_local: l.nom_local, nom_fitxa: l.nom_fitxa, bm_id: l.bm_id,
       // F2 · l'ORIGEN de la mesura base d'aquesta germana. 'DERIVAT' = el sistema l'ha moguda

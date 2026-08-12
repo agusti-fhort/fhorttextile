@@ -149,6 +149,9 @@ export function buildFittingRows(pomRows, baseLabel, versionNumbers, opts = {}) 
       // que la fila ho DIGUÉS: sense aquests dos camps, la graella pintava dues «Chest width»
       // seguides i el nom no deia quina era el folre.
       capa: row.capa, instancia: row.instancia,
+      // SET-2/T7-B7 — el tercer eix, pel mateix motiu literal que els dos de germanor: el
+      // desat l'envia i la poda hi resol. `deriveFitting` ja el porta.
+      garment: row.garment,
       // v3 — LA MARCA D'UNA GERMANA DERIVADA. Una fila que el sistema ha mogut sola (origen
       // 'DERIVAT') no és una presa: ho ha de dir, perquè el número s'assembla a un de mesurat.
       // Sense `origen` al payload no es pinta res — cap superfície canvia de forma.
@@ -368,6 +371,9 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel) {
       // el lineId per saber de quina germana parla. L'escriptura (`escalat/ajustar-talla`)
       // encara és per `pom_id` sol: desancorar-la és feina del bloc 2.
       clau: row.clau, capa: row.capa, instancia: row.instancia,
+      // SET-2/T7-B7 — l'eix de prenda, pel mateix motiu que a les altres dues taules: el
+      // desat l'envia i la poda del backend hi resol. `base-stages` l'emet des de R11.
+      garment: row.garment,
       // Clau de fila per a MeasureGrid: la identitat sencera de la mesura.
       rowKey: row.clau || row.pom_id,
       nom_en: row.nom_en, nom_local: row.nom_ca,
