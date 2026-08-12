@@ -110,6 +110,39 @@ def main():
         ancles = [targetes.nth(i).get_attribute('id') for i in range(n)]
         mira('B3.1 la mare primera i la 02 darrere', ancles == ['peca-base', 'peca-02'], str(ancles))
 
+        # ── B1c · LA TARGETA ÉS COMPACTA (correcció d'Agus a pantalla, 12/08) ────────────
+        # El que es va desplegar feia ~450 px per targeta: cada apartat ocupava un BLOC amb
+        # sub-rètols en línies pròpies. Amb dues prendes ja no en cabia una a pantalla, i la
+        # pila de targetes existeix justament per poder-les comparar d'un cop d'ull.
+        #
+        # ⚠️ ES MESURA, NO ES MIRA. Una captura demostra que "es veu bé" el dia que es pren; un
+        # llindar en píxels torna a fallar el dia que algú hi torni a posar un bloc.
+        #
+        # 🚩 EL LLINDAR ÉS 250 I NO 190, I EL MOTIU S'HA DE SABER. Mesurat a quatre amplades:
+        #   1280 → 181 · 175    (una columna: la graella d'auto-fit encara no es parteix)
+        #   1440 → 239 · 218    ← L'ÚNICA BANDA DOLENTA
+        #   1680 → 181 · 175
+        #   1920 → 181 · 175
+        # A 1440 la graella JA fa dues columnes però cadascuna es queda a ~540 px, i les dues
+        # files més llargues (els chips + «Buttoned Tops · Blusa», i el run de cinc talles)
+        # passen a dues línies. No és que la compactació falli —és el `minmax(min(100%,520px))`
+        # de §8f, que parteix massa aviat—. Pujar-lo a ~620 px mataria la banda, però mou un
+        # BREAKPOINT RATIFICAT i això és decisió d'Agus, no d'aquest arnès.
+        altures = [targetes.nth(i).bounding_box()['height'] for i in range(n)]
+        mira('B1c cada targeta és PRIMA (≤ 250 px, i ≤ 190 fora de la banda de 1440)',
+             all(h <= 250 for h in altures), ' · '.join(f'{h:.0f}px' for h in altures))
+        files_per_targeta = [targetes.nth(i).locator('> div').count() for i in range(n)]
+        mira('B1c tres files per targeta + capçalera', all(f == 4 for f in files_per_targeta),
+             str(files_per_targeta))
+        # I la prova que importa de debò: les DUES targetes i el fantasma, en una pantalla.
+        # El llindar és 900 px —l'alçada d'un portàtil corrent— i NO l'alçada del viewport
+        # d'aquest arnès, que és alta a posta perquè les captures `full_page` surtin senceres.
+        fant = pag.locator('button:has-text("Afegir peça")').first
+        caixa = fant.bounding_box()
+        baix = caixa['y'] + caixa['height']
+        mira('B1c les dues targetes i el fantasma caben en una pantalla de portàtil (900 px)',
+             baix <= 900, f'el fantasma acaba a {baix:.0f}px')
+
         # ── B3.6 · LA PEÇA QUE HERETA HO DIU, i el valor efectiu hi és ────────────────────
         text02 = targetes.nth(1).inner_text().lower() if n == 2 else ''
         mira('B3.6 la 02 diu que hereta', 'hereta del model' in text02)

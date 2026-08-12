@@ -116,13 +116,27 @@ function BateigNom({ valorInicial, onDesar, onCancel }) {
 }
 
 /**
- * Una fila compacta de la definició: rètol, contingut i la seva pròpia acció.
+ * UNA FILA PRIMA de la definició: rètol · valor en horitzontal · acció. Tres per targeta.
+ *
+ * ⚠️ CORRECCIÓ DE B1 (Agus, a pantalla 12/08). El que es va desplegar no era això: cada apartat
+ * ocupava un BLOC —rètol en línia pròpia, sub-rètols interns en línies pròpies, chips en línia
+ * pròpia— i una targeta feia ~450 px d'alt. Amb dues prendes ja no en cabia una a pantalla, i el
+ * sentit de la pila de targetes és justament poder-les comparar d'un cop d'ull. Ara una targeta
+ * de TRES peces ocupa aproximadament el que abans ocupava una.
+ *
+ * El que ho aconsegueix no és afinar padding: és que **les sub-etiquetes internes desapareixen**
+ * (TARGET·CONSTRUCCIÓ·FIT, SISTEMA DE TALLES, TALLA BASE I RUN, JOC DE REGLES). El valor es
+ * llegeix sol i el rètol de l'apartat ja diu de què parla; repetir-ho era dir dues vegades el
+ * mateix i pagar-ho amb dues línies.
  *
  * `heretat` no és un estil: és el que separa «hereta S·M·L» de «declara S·M·L», que pinten el
  * mateix text. Quan és cert, la fila ho escriu i abaixa la tinta del valor — el valor segueix
- * sent el que governa, però la seva autoria és d'un altre lloc.
+ * sent el que governa, però la seva autoria és d'un altre lloc. Compactar NO se'l pot menjar.
+ *
+ * `expandit` = hi ha un editor a dins: la fila torna a ser un bloc. La compacitat és de l'estat
+ * TANCAT, i el formulari obert no s'havia de tocar.
  */
-export function FilaDefinicio({ etiqueta, origen = ORIGEN.PROPI, accio, children }) {
+export function FilaDefinicio({ etiqueta, origen = ORIGEN.PROPI, accio, expandit = false, children }) {
   const { t } = useTranslation()
   // Tres origens, tres lectures, i «del model» NO és una variant d'«hereta»: la primera parla
   // d'un override que existeix i ara és NULL, la segona d'un camp que la peça no té i no tindrà.
@@ -130,30 +144,61 @@ export function FilaDefinicio({ etiqueta, origen = ORIGEN.PROPI, accio, children
   const heretat = origen === ORIGEN.HERETAT
   const delModel = origen === ORIGEN.DEL_MODEL
   const apagat = heretat || delModel
+
+  // ── LA FILA OBERTA NO ÉS COMPACTA (correcció de B1, Agus a pantalla 12/08) ──────────────
+  // La compacitat és de l'estat TANCAT. Amb un editor a dins, un rètol de 86px al costat
+  // escanyaria el formulari contra la vora dreta, i el formulari és el que NO s'havia de
+  // tocar. Obert, doncs, el rètol torna a dalt i el cos ocupa l'ample sencer.
+  if (expandit) {
+    return (
+      <div style={{
+        padding: '9px 16px',
+        borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--line-soft)',
+      }}>
+        <span style={{
+          fontSize: 10, lineHeight: '12px', letterSpacing: '.05em',
+          textTransform: 'uppercase', color: 'var(--text-faint)',
+        }}>{etiqueta}</span>
+        <div style={{ marginTop: 6 }}>{children}</div>
+      </div>
+    )
+  }
+
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start',
-      padding: '9px 16px',
+      // TRES COLUMNES, UNA FILA (disseny validat): rètol a l'esquerra amb amplada FIXA —perquè
+      // els tres rètols de la targeta s'alineïn i el valor comenci sempre a la mateixa x—,
+      // valor al mig en horitzontal, i l'acció a la dreta. `center` i no `start`: en una fila
+      // prima el rètol ha de quedar a l'altura del que qualifica, no penjant de dalt.
+      display: 'grid', gridTemplateColumns: '86px minmax(0, 1fr) auto', gap: 12,
+      alignItems: 'center', padding: '9px 16px',
       borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: 'var(--line-soft)',
     }}>
-      <div style={{ minWidth: 0 }}>
-        <span style={{
-          fontSize: 'var(--fs-label)', lineHeight: '12px', letterSpacing: '.05em',
-          textTransform: 'uppercase', color: 'var(--text-soft)',
-        }}>{etiqueta}</span>
+      <span style={{
+        fontSize: 10, lineHeight: '12px', letterSpacing: '.05em',
+        textTransform: 'uppercase', color: 'var(--text-faint)',
+      }}>{etiqueta}</span>
+      {/* El valor, EN HORITZONTAL. Les sub-etiquetes internes (TARGET·CONSTRUCCIÓ·FIT, SISTEMA
+          DE TALLES, TALLA BASE I RUN, JOC DE REGLES) han desaparegut: el valor es llegeix sol i
+          el rètol de l'apartat ja diu de què parla. `wrap` perquè un run llarg baixi de línia en
+          comptes de trencar la graella. */}
+      <div style={{
+        minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+        color: apagat ? 'var(--text-soft)' : 'var(--text-main)',
+      }}>
+        {/* El prefix qualifica el que es llegeix a continuació, no el nom de l'apartat. */}
+        {delModel && (
+          <span style={{ color: 'var(--text-soft)' }}>{t('resum_wizard.from_model')} ·</span>
+        )}
+        {children}
+        {/* «Hereta» ha de seguir visible: «hereta S·M·L» i «declara S·M·L» pinten el mateix
+            text i NO són el mateix estat (llei de B1). Compactada, la frase va al FINAL del
+            valor —no enganxada al rètol— perquè és una frase sobre el valor. */}
         {heretat && (
-          <span style={{ marginLeft: 8, fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
+          <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-faint)' }}>
             {t('resum_wizard.inherits')}
           </span>
         )}
-        <div style={{ marginTop: 4, color: apagat ? 'var(--text-soft)' : 'var(--text-main)' }}>
-          {/* El prefix va DINS de la línia del valor, no al rètol: qualifica el que es llegeix
-              a continuació, no el nom de l'apartat. */}
-          {delModel && (
-            <span style={{ color: 'var(--text-soft)' }}>{t('resum_wizard.from_model')} · </span>
-          )}
-          {children}
-        </div>
       </div>
       {accio}
     </div>
