@@ -25,13 +25,20 @@ const COPY_FLAGS = ['copy_values', 'copy_run', 'copy_grading', 'copy_files']
 // NO inclou el camí 'size_check' (CheckMeasureEditor): això és el flux de TREBALL del tab, no la
 // genesi (es reapuntarà a J1b). Quan la base queda materialitzada, crida onMaterialized() perquè el
 // tab rellegeixi taula-mesures i passi a la superfície de consulta/treball (CheckMeasureEditor).
-export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, entryMode = false, intent = null, onGraduacio = null }) {
+export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, entryMode = false,
+                                            intent = null, onGraduacio = null, onBack = null }) {
   const { t } = useTranslation()
   const id = model?.id
   const token = localStorage.getItem('access_token')
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   const [mode, setMode] = useState('loading')   // 'loading' | 'selector' | 'manual' | 'import'
+  // SET-2/T7-fix4 — ¿HEM PASSAT MAI PER LA TRIA? El ← de la graella tornava SEMPRE al selector
+  // (les tres targetes Introduir/Importar/Copiar), i en mode ENTRADA no s'hi ha estat mai: amb
+  // files ja poblades s'entra DIRECTE a 'manual' (v. el `if (entryMode)` de la càrrega). Tornar
+  // a un lloc on no has estat no és tornar. És un ref i no un estat perquè no ha de repintar res.
+  const vistSelector = useRef(false)
+  if (mode === 'selector') vistSelector.current = true
   const [pomsSuggerits, setPomsSuggerits] = useState([])
   const [taulaRows, setTaulaRows] = useState([])
   const [sizesAmbDades, setSizesAmbDades] = useState(null)
@@ -470,7 +477,11 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
           />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 24 }}>
-            <button type="button" onClick={() => setMode('selector')}
+            {/* EL PUNT D'ENTRADA MANA EL DESTÍ DE TORNADA, no un destí fix: si has vingut per
+                la tria, hi tornes; si has vingut de Mesures (que és el cas d'Editar POM), en
+                surts cap a Mesures. Sense `onBack` es conserva el comportament de sempre. */}
+            <button type="button"
+              onClick={() => ((vistSelector.current || !onBack) ? setMode('selector') : onBack())}
               style={{ padding: '8px 16px', border: '0.5px solid var(--border)', borderRadius: 6,
                        background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)' }}>
               ← {t('app.back')}

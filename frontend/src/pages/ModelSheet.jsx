@@ -1133,6 +1133,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
             <MeasuresEntryPanel model={model} entryMode={mesuresEntry} intent={mesuresIntent}
               onMaterialized={() => { exitEdit(); reloadTaula(); reloadModel() }}
               onGraduacio={obreGraduacio}
+              /* fix4 — el ← de la graella surt cap a MESURES (d'on s'ha vingut) i no cap a la
+                 pantalla de les tres targetes, que en mode entrada no s'ha vist mai. */
+              onBack={exitEdit}
               onPomSaved={finishPomEntry} />
           ) : (!taskParam && editing !== 'Mesures' && !pomReady) ? (
             /* §8c · L'ESTAT BUIT DE LA PANTALLA: filet discontinu de la casa sobre --panel i la
