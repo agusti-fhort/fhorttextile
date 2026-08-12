@@ -114,15 +114,23 @@ function ModelCard({ model, onClick, t, highlight = false, innerRef = null }) {
   // fantasma que el bloc A va haver de caçar a les pastilles de capa.
   const [toc, gestos] = useToc()
   return (
-    // C4b — ressaltat de la feina ACTIVA (in_progress). Era un anell daurat de 1.5px per fora;
-    // ara és la forma de «on soc» de la casa (§1 · §4): fons `--sel` + FILET D'OR de 3px a
-    // l'esquerra. El filet va sempre declarat (transparent quan no toca) perquè la targeta no
-    // canviï d'amplada en encendre's — una targeta que salta 3px quan algú comença una tasca
-    // és el mateix defecte que la §7 evita amb el `box-shadow` del subratllat del veredicte.
+    // C4b — ressaltat de la feina ACTIVA (in_progress): fons `--sel` + FILET D'OR de 3px a
+    // l'esquerra, que és la forma de «on soc» de la casa (§1 · §4).
+    //
+    // AGUS (10/08): «el contenidor de Pausats no té vora esquerra». La columna sí que en té —les
+    // quatre porten `1px var(--line)` idèntic, mesurat—; qui no en tenia era LA TARGETA de dins,
+    // i Pausats és l'única columna amb targetes, o sigui que el forat es llegia com si fos del
+    // contenidor. La causa: el filet d'or de 3px es declarava SEMPRE i es pintava TRANSPARENT
+    // quan no tocava (per no fer saltar l'amplada en encendre's) — el remei d'un problema en
+    // creava un altre, perquè una targeta amb tres vores i mitja és una targeta trencada.
+    //
+    // Ara la vora és la mateixa als quatre costats i el filet d'or és un `box-shadow` INSET, que
+    // no ocupa caixa i per tant tampoc no fa saltar res: exactament el mateix patró amb què
+    // `MeasureGrid` marca la fila candidata a poda. Un sol senyal, sense forat de reserva.
     <button ref={innerRef} onClick={onClick} {...gestos} style={{
       textAlign: 'left', width: '100%',
-      borderWidth: '1px 1px 1px 3px', borderStyle: 'solid',
-      borderColor: `var(--line) var(--line) var(--line) ${highlight ? 'var(--gold)' : 'transparent'}`,
+      border: '1px solid var(--line)',
+      ...(highlight ? { boxShadow: 'inset 3px 0 0 var(--gold)' } : null),
       background: highlight || toc.hover ? 'var(--sel)' : 'var(--panel)', borderRadius: 'var(--r-card)',
       padding: '8px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4,
       outline: 'none', ...(toc.focus ? anellFocus : null),
