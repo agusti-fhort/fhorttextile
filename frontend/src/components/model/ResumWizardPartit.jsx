@@ -307,6 +307,18 @@ export default function ResumWizardPartit({ model, onUpdated }) {
     return () => { viu = false }
   }, [id, model, versio])
 
+  // L'ANCLA HA DE FER SCROLL, i no ho fa sola. El llapis del contenidor de peça (Mesures,
+  // Escalat, Graduació) porta aquí amb `#peca-<codi>`, però React Router NO desplaça a cap ancla:
+  // canvia la ruta i prou. I encara que ho fes, arribaria massa aviat — la targeta no existeix
+  // fins que `/peces/` ha contestat. Per això el desplaçament penja de `peces` i no del muntatge.
+  useEffect(() => {
+    if (!peces.length) return
+    const ancla = (window.location.hash || '').replace('#', '')
+    if (!ancla.startsWith('peca-')) return
+    // El `scrollMarginTop` de la targeta ja separa del caire; aquí només cal portar-hi la vista.
+    document.getElementById(ancla)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [peces])
+
   // EL BATEIG DE TOTES LES TARGETES, INCLOSA LA MARE — i són dues portes, no una. La mare no té
   // fila (D3): el seu nom és el `nom_prenda` del MODEL i s'escriu allà on sempre s'ha escrit.
   // Una peça té la seva. Qui pinta la targeta no ha de saber quina de les dues és, i per això la
