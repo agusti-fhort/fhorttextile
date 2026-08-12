@@ -150,7 +150,8 @@
       "delta_na": "Los deltas no se aplican en régimen {{regim}}.",
       "err_linear_zero": "Una regla LINEAR con delta 0 y sin ruptura no gradúa nada: pon un delta o elige FIXED.",
       "err_generic": "no se ha podido guardar",
-      "load_err": "No se ha podido cargar la tabla de graduación."
+      "load_err": "No se ha podido cargar la tabla de graduación.",
+      "regla_heretada": "Esta pieza no tiene regla propia: sigue la del modelo base."
     }
   },
   "size_map_title": "Sistemas de tallas",

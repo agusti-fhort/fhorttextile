@@ -180,6 +180,13 @@ function RegleEditCell({ modelId, row, sizeRun, onFeedback }) {
     // Només es declara el règim quan la fila NO en té cap i algú hi acaba d'escriure un delta o un
     // trencament — el mateix criteri que `GraduacioSuperficie` (:158-162). Si ja en té, no es toca.
     if (!row.logica && (normRegle(d) !== '' || normRegle(bs) !== '')) payload.logica = 'LINEAR'
+    // 🚩 ACTA (SET-2/T7-B10, 12/08) — AQUEST CRIDADOR NO DIU LA PRENDA, I A POSTA. `setPomRule`
+    // accepta `garment` des del #12d i qui no el diu rep la MARE, que és exactament el que ha de
+    // passar aquí: aquest editor de regla viu a la graella de Definició POM/Check, i el seu flux
+    // encara NO passa per contenidor de peça —la fila que edita és la que la pantalla té a mà, no
+    // la d'una prenda triada—. Enviar-hi un eix ara seria inventar-se de quina peça parla.
+    // Dirà la prenda el dia que el Check editi mesures d'UNA PEÇA; llavors és afegir `garment` a
+    // aquest payload, i el backend ja hi és a punt.
     models.setPomRule(modelId, row.pom_id, payload)
       .then(() => { desat.current = { d, b: brkVal, bs } })
       .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.regle_save_err') }))

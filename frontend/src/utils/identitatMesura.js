@@ -70,3 +70,19 @@ export function filesDeLaPeca(files, eix) {
   if (eix === null || eix === undefined) return files || []
   return (files || []).filter(f => (f.garment || '') === eix)
 }
+
+/**
+ * LA IDENTITAT D'UNA REGLA DE GRADUACIÓ — SET-2/T7-B10.
+ *
+ * `ModelGradingRule` és única per **(model, pom, garment)**: sense capa ni instància, perquè la
+ * llei d'increments és del POM i de la prenda, no de cada germana. Dues capes del mateix POM
+ * comparteixen regla a posta.
+ *
+ * ⚠️ NO ÉS `identitatMesura` retallada: són dues identitats diferents i confondre-les tornaria a
+ * partir una regla en dues o a fondre'n dues en una. I NO és el `pom_id` sol, que és el que la
+ * pantalla feia servir per indexar les edicions: amb dues prendes, tocar el mateix POM a la mare
+ * i a la 02 escrivia al mateix calaix i la segona edició es menjava la primera ABANS de desar.
+ */
+export function clauRegla(fila) {
+  return `${fila.pom_id}|${fila.garment || ''}`
+}
