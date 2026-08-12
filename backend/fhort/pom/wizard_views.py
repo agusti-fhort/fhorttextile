@@ -614,8 +614,14 @@ def base_measurements_view(request, model_id):
         # Precedència a la fitxa: si el model TÉ ruleset, el consumidor segueix el camí del
         # ruleset; aquest camp és el que el substitueix quan no n'hi ha.
         from fhort.models_app.models import ModelGradingRule
+        # SET-2/#12d — LA CLAU DE LA REGLA PORTA LA PRENDA, i aquí el dany era pitjor que a
+        # l'escriptor. `{r.pom_id: ...}` és un col·lapse: amb la mare i la 02 amb regla pròpia
+        # sobre el mateix POM, el diccionari en perdia una —guanyava l'última que retornés el
+        # planner— i les DUES files ensenyaven la mateixa llei, sense cap avís. És el mode de
+        # fallada que `_load_grading_rules` tenia abans de T4 i que la comporta de T3 existia
+        # per fer impossible; amb la comporta fora, tornava a ser assolible.
         regla_by_pom = {
-            r.pom_id: {
+            (r.pom_id, r.garment): {
                 'logica': r.logica,
                 'increment_base': r.increment_base,
                 'increment_break': r.increment_break,
@@ -624,6 +630,23 @@ def base_measurements_view(request, model_id):
             }
             for r in ModelGradingRule.objects.filter(model_id=model_id, actiu=True)
         }
+
+        def _regla_de(pom_id, garment):
+            """La llei d'una fila: la SEVA si en té, i si no la de la mare (D5-bis).
+
+            «No en té» i «té la mateixa» no són el mateix estat —l'un es pot estrenar, l'altre
+            ja s'ha decidit— i la pantalla ha de poder distingir-los per dir si el que ensenya
+            és propi o heretat. Per això el `heretat` viatja DINS de l'objecte i no s'endevina
+            comparant valors, que és el que obligaria a fer si només s'hi servís la llei.
+            """
+            propia = regla_by_pom.get((pom_id, garment))
+            if propia is not None:
+                return {**propia, 'heretat': False}
+            if garment:
+                mare = regla_by_pom.get((pom_id, ''))
+                if mare is not None:
+                    return {**mare, 'heretat': True}
+            return None
 
         data = [{
             'id': bm.id,
@@ -643,9 +666,16 @@ def base_measurements_view(request, model_id):
             # No s'hi afegeix cap identificador de fila: `id` (aquí sobre) JA és la PK del
             # BaseMeasurement.
             'capa': bm.capa,
+            # SET-2/#12d — EL TERCER EIX AL CONTRACTE, i pel mateix argument que els dos de
+            # sobre: aquesta vista mai no ha filtrat per prenda —ja servia les files de totes—
+            # i el que no feia era dir de quina és cadascuna. Amb `TechSheetEditor.pomRows`
+            # muntant `new Map(...)` per `pom_id`, dues files de prendes diferents es
+            # trepitgen exactament igual que s'hi trepitjaven les germanes de capa abans de C4.
+            'garment': bm.garment,
             'instancia': bm.instancia,
-            # F1: la regla resident d'aquest POM (None si el model no en té cap).
-            'regla_model': regla_by_pom.get(bm.pom_id),
+            # F1: la regla resident d'aquesta fila (None si no en té ni n'hereta cap).
+            # SET-2/#12d: la SEVA si en té, la de la mare si no (D5-bis), i ho diu (`heretat`).
+            'regla_model': _regla_de(bm.pom_id, bm.garment),
             'codi_client': bm.pom.codi_client,
             'nom_client': bm.pom.nom_client,
             'nom_ca': bm.pom.pom_global.nom_ca if bm.pom.pom_global_id else '',

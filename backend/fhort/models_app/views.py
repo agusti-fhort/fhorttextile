@@ -5080,15 +5080,28 @@ def set_pom_regim_view(request, model_id, pom_id):
     if model is None:
         return Response({'detail': 'Model no trobat.'}, status=404)
 
+    # SET-2/#12d — DE QUINA PRENDA ÉS LA REGLA. La clau de `ModelGradingRule` és
+    # `(model, pom, garment)` des de T3 i la comporta que la congelava va caure al #12, però
+    # aquest contracte encara identificava la regla amb el `pom_id` pelat: editar-la des del
+    # contenidor de la 02 escrivia sobre la de la mare. L'eix surt del punt únic de la casa
+    # (`_identitat_de_mesura`), i qui no el diu —el 100% dels clients d'avui— rep la mare,
+    # exactament com abans.
+    garment = _identitat_de_mesura(data)[2]
+
     with transaction.atomic():
-        rule = ModelGradingRule.objects.filter(model=model, pom_id=pom_id).first()
+        rule = ModelGradingRule.objects.filter(
+            model=model, pom_id=pom_id, garment=garment).first()
         if rule is None:
             # Sembra des del fallback del catàleg si n'hi ha; si no, regla nova (autoria de zero).
+            # ⚠️ El joc del CATÀLEG no porta `garment` i no en pot portar: és una llei
+            # reutilitzable, mai propietat d'un model ni d'una prenda (v. `pom.GradingRule`).
+            # La sembra, doncs, es busca igual per a totes dues prendes; el que neix amb l'eix
+            # és la resident.
             src = (GradingRule.objects.filter(
                        rule_set_id=model.grading_rule_set_id, pom_id=pom_id).first()
                    if model.grading_rule_set_id else None)
             rule = ModelGradingRule(
-                model=model, pom_id=pom_id, actiu=True,
+                model=model, pom_id=pom_id, garment=garment, actiu=True,
                 logica=(src.logica if src else 'LINEAR'),
                 increment=(src.increment if src else 0),
                 valors_step=(src.valors_step if src else None),
@@ -5148,6 +5161,11 @@ def set_pom_regim_view(request, model_id, pom_id):
     return Response({
         'model': model.id,
         'pom': rule.pom_id,
+        # SET-2/#12d — la resposta diu QUINA regla ha canviat. Amb dues prendes, «s'ha desat
+        # la regla del POM 12» no és una resposta: n'hi pot haver dues i el client ha de poder
+        # confirmar que la que ha canviat és la que ell mirava. Mateixa llei que la resposta
+        # de `desactivar_pom` a C4/BLOC 2.
+        'garment': rule.garment,
         'logica': rule.logica,
         'origen': rule.origen,
         'increment_base': float(rule.increment_base) if rule.increment_base is not None else None,
