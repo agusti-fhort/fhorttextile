@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fittingRepas } from '../../api/endpoints'
 import { buildRepasGroups, buildRepasRows } from './repasGridAdapter'
+import PecesDelModel from './PecesDelModel'
+import { filesDeLaPeca } from '../../utils/identitatMesura'
 import MeasureGrid from './MeasureGrid'
 
 // REPÀS de fittings del model — la superfície de tornar-hi.
@@ -62,8 +64,17 @@ export default function FittingRepasPanel({ model }) {
           {data.talla && ` · ${t('fitting.repas.size', { talla: data.talla })}`}
         </span>
       </div>
-      <MeasureGrid rows={rows} groups={groups} editable={false}
-        empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('fitting.repas.empty')}</p>} />
+      {/* SET-2/T7-B11 — EL REPÀS AL PATRÓ. `fitting/serializers` emet l'eix des de f6d99e30,
+          o sigui que no hi ha cap frontera de dades: cada contenidor es queda les seves línies.
+          Aquí no hi ha risc d'escriptura de cap mena —la graella és `editable={false}`— i per
+          això entra sense esperar cap porta. */}
+      <PecesDelModel model={model}>{peca => {
+      const filesDelContenidor = filesDeLaPeca(rows, peca ? (peca.codi || '') : null)
+      return (
+        <MeasureGrid rows={filesDelContenidor} groups={groups} editable={false}
+          empty={<p style={{ fontFamily: MONO, fontSize: 'var(--fs-body)', color: 'var(--text-soft)' }}>{t('fitting.repas.empty')}</p>} />
+      )
+      }}</PecesDelModel>
     </div>
   )
 }
