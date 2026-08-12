@@ -23,6 +23,7 @@ import BateigInput from '../model/BateigInput'
 import { baseMeasurements, poms } from '../../api/endpoints'
 import { aDocument } from '../../utils/breakConvention'
 import { esBruta } from '../../utils/taulaBruta'
+import { construeixPayload } from '../../utils/payloadMesures'
 
 // LA REGLA DE GRADUACIÓ NO ÉS AQUÍ (ordre d'Agus, 05/08 · la maqueta que mana és la v8.1).
 //
@@ -140,6 +141,10 @@ export default function EditableTable({
   // dels contenidors) no pot endevinar-ho: el desat és per contenidor i qui sap si li'n
   // queda és cada taula.
   onDirtyChange = null,
+  // De quina PRENDA són les files d'aquesta taula (`''` = la mare). Entra al payload:
+  // sense ell, la poda del backend deixa les files de la peça fora del conjunt a
+  // conservar i les desactiva en silenci (v. `utils/payloadMesures`).
+  garment = '',
   // `null` = mode autoria_base. Amb objecte = mode presa, i porta les portes per fila:
   //   {baseLabel, onValor(row,val), onIdentitat(row,camps), onParteix(row,filles),
   //    onNova(pom,eixos), onTreu(row), onReordena(ids)}
@@ -171,7 +176,7 @@ export default function EditableTable({
   // altres vuit consumidors d'aquesta taula segueixen amb el flag de sempre: generalitzar-ho
   // canviaria el comportament de superfícies que ningú ha revisat, i un fals NEGATIU aquí
   // perdria feina en silenci. Quan es vulgui, és treure el condicional.
-  const brut = onPomSave ? esBruta(rows, localRows) : dirty
+  const brut = onPomSave ? esBruta(rows, localRows, garment) : dirty
   useEffect(() => { onDirtyChange?.(brut) }, [brut, onDirtyChange])
   // El vocabulari d'identitat (capes + instàncies + regla de composició). Amb `null` —mentre
   // no ha arribat, o si la petició falla— les píndoles surten inertes i la taula es veu igual:
@@ -673,59 +678,12 @@ export default function EditableTable({
     aplicaDesfer(row, eix, germanes)
   }
 
-  const buildPayload = () => {
-    const measurements = localRows
-      .filter(r => r.base_value_cm != null && r.base_value_cm !== '')
-      .map(r => ({
-        pom_id: r.pom_id,
-        // C4/BLOC 1-BIS — ELS EIXOS ENTREN AL PAYLOAD D'ESCRIPTURA. Amb `pom_id` pelat,
-        // l'upsert del backend resolia la fila amb el literal `(exterior, '')` i dues
-        // germanes hi queien a sobre: la segona escrivia el seu valor a la fila de la
-        // primera i la primera es quedava sense tocar. Pèrdua de dades en DESAR, no una
-        // columna buida. Avui no fa mal perquè no hi ha cap germana viva; el dia que en
-        // neixi una, ja seria tard.
-        //
-        // Viatgen com a DOS CAMPS i no com la cadena aplanada `{pom}|{capa}|{inst}`: ho mana
-        // `pom/identitat.py` —«qui hagi de consultar, filtrar o escriure, que faci servir els
-        // tres camps per separat»—. La cadena existeix només per a la vora del payload on la
-        // mesura és clau d'un objecte JSON (`deltes`, `cells`), que no és aquest cas.
-        //
-        // Les files encara no desades (les de `poms-suggerits`) no en porten: el backend hi
-        // aplica el literal de sempre, i ho fa dient-ho.
-        capa: r.capa,
-        instancia: r.instancia,
-        base_value_cm: r.base_value_cm,
-        notes: r.notes || '',
-        nom_fitxa: r.nom_fitxa || '',
-      }))
-    const keep_pom_ids = localRows.map(r => r.pom_id).filter(Boolean)
-    // C4/BLOC 1-TER — LA LLISTA DE «QUÈ ES CONSERVA» PORTA LA IDENTITAT DE CADA FILA.
-    //
-    // `keep_pom_ids` és una llista d'enters, i un `pom_id` pelat no pot dir «conserva el
-    // folre i treu l'exterior». Amb dues germanes a la taula, treure'n una i desar no feia
-    // res: el backend només mirava la fila d'exterior. L'usuari clicava la paperera, la fila
-    // desapareixia de la pantalla, i en tornar a carregar hi era una altra vegada.
-    //
-    // Es construeix sobre `localRows` i NO sobre `measurements`, igual que el camp antic:
-    // `measurements` només porta les files amb valor, i una fila buida que en quedés fora
-    // deixaria de ser «conservada» — el backend l'esborraria. Seria fabricar un esborrat
-    // silenciós dins del canvi que els ha de tancar.
-    //
-    // Els dos camps viatgen junts: el backend fa servir el nou i ignora el vell, i un desplegament
-    // a mitges (bundle nou amb backend antic) segueix podant com abans en comptes de deixar
-    // de podar.
-    const keep_mesures = localRows
-      .filter(r => r.pom_id)
-      .map(r => ({ pom_id: r.pom_id, capa: r.capa, instancia: r.instancia }))
-    // CAP `rules` (31/07). Aquesta taula ja no ensenya la regla, o sigui que tampoc no la pot
-    // desar: enviava una entrada per CADA fila amb `logica: r.logica || 'LINEAR'`, i
-    // `set_measurements_view` en fa upsert de ModelGradingRule. Efecte: desar mesures d'un
-    // model sense graduació li creava regles residents —i per tant «ja té graduació»— sense
-    // que ningú n'hagués informat cap. Amb la proposta del catàleg pintada a sobre, a més, el
-    // que es materialitzava era la regla d'un altre. El backend segueix acceptant `rules`
-    // (l'usen altres camins); el que desapareix és que aquesta pantalla n'enviï.
-    return { measurements, keep_pom_ids, keep_mesures }
-  }
+  // EL PAYLOAD EL FABRICA UN SOL LLOC (`utils/payloadMesures`), que és el mateix que el
+  // detector de brut fa servir per comparar: desar i «hi ha res per desar?» ja no poden dir
+  // coses diferents. L'eix de peça hi entra — sense ell la poda del backend desactiva en
+  // silenci les files de les prendes que no són la mare.
+  const buildPayload = () => construeixPayload(localRows, garment)
+
 
   // La GUARDA DE PLAUSIBILITAT del Δ (FIX-4) se'n va amb el bloc de regla: sense camp Δ en
   // aquesta taula no hi pot haver cap delta sospitós que confondre amb una mesura. La guarda

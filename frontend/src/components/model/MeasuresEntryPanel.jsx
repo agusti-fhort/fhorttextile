@@ -493,6 +493,10 @@ export default function MeasuresEntryPanel({ model, onMaterialized, onPomSaved, 
             onPomSave={savePom}
             onSaved={(newRows) => setTaulaRows(newRows)}
             onDirtyChange={(b) => marcaBrut(peca?.codi ?? '', b)}
+            /* DE QUINA PRENDA SÓN AQUESTES FILES. Entra al payload i, sobretot, a
+               `keep_mesures`: sense l'eix, la poda del backend deixa les files de la peça
+               fora del conjunt a conservar i les desactiva en silenci. */
+            garment={peca?.codi ?? ''}
           />
         </>)}</PecesDelModel>
 

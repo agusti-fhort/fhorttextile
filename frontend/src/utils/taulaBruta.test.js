@@ -81,14 +81,23 @@ test('afegir una fila amb valor embruta', () => {
 
 // ── EL PIN DE L'ACOBLAMENT ───────────────────────────────────────────────────────────────
 
-test('PIN · els camps que es desen són SIS, i si en creix un aquí ha de petar', () => {
-  // Aquest mòdul reprodueix `EditableTable.buildPayload`. Si el payload guanya un camp i aquí
-  // no, el detector dirà «net» amb canvis pendents — el fals NEGATIU, que perd feina en
-  // silenci. Aquest test és el que fa sorollós aquell oblit.
-  assert.deepEqual(CAMPS_DE_MESURA,
-    ['pom_id', 'capa', 'instancia', 'base_value_cm', 'notes', 'nom_fitxa'])
-  const p = projeccioDesable([fila()])
-  assert.deepEqual(Object.keys(p.mesures[0]).sort(), [...CAMPS_DE_MESURA].sort())
+test('PIN · el detector compara EL PAYLOAD, i el payload ja porta l\'eix de peça', () => {
+  // Aquest pin va SALTAR EN VERMELL el 12/08 quan el payload va guanyar `garment`, que és
+  // exactament per al que existia. Ara la llista de camps ja no viu aquí —l\'amo és
+  // `payloadMesures`, que és qui construeix el que s\'envia— i aquest mòdul només la
+  // reexporta: comparar i desar no poden divergir perquè surten de la mateixa funció.
+  assert.ok(CAMPS_DE_MESURA.includes('garment'))
+  const p = projeccioDesable([fila()], '02')
+  assert.equal(p.measurements[0].garment, '02')
+  assert.equal(p.keep_mesures[0].garment, '02')
+})
+
+test('la PRENDA del contenidor entra a la comparació', () => {
+  // Les mateixes files a dos contenidors distints NO són el mateix desat.
+  assert.equal(esBruta([fila()], [fila()], '02'), false)
+  assert.notEqual(
+    JSON.stringify(projeccioDesable([fila()], '')),
+    JSON.stringify(projeccioDesable([fila()], '02')))
 })
 
 test('sense files, res a desar', () => {
