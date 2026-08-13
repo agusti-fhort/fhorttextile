@@ -145,6 +145,9 @@ IMPORT_REVISIO_SONNET = os.environ.get('IMPORT_REVISIO_SONNET', '').lower() in (
 # fallback. Per fer parlar la ⓘ en català cal `TRANSLATE_PROVIDER=google` + la seva clau.
 TRANSLATE_PROVIDER = os.environ.get('TRANSLATE_PROVIDER', 'deepl')
 DEEPL_API_KEY = os.environ.get('DEEPL_API_KEY', '')
+# Buit = el host oficial que toqui segons la clau. Es posa per apuntar a una passarel·la o a un
+# doble de proves, que és com es verifica el tram sencer sense la clau real.
+DEEPL_API_URL = os.environ.get('DEEPL_API_URL', '')
 GOOGLE_TRANSLATE_API_KEY = os.environ.get('GOOGLE_TRANSLATE_API_KEY', '')
 
 

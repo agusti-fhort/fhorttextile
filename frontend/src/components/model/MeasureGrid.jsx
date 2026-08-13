@@ -297,7 +297,9 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
     // `traduccio` (tram ⓘ) va l'ÚLTIMA: el bateig del model i el nom del catàleg manen per
     // damunt del que digui un servei extern. Fins avui aquí no hi arribava mai res —el catàleg
     // v4 no porta noms locals— i la ⓘ d'aquestes tres pantalles no sortia mai.
-    const candidat = modelName || traduccio
+    // Un nom local que repeteix el canònic no tapa la traducció demanada: v. la nota de la
+    // mateixa regla a `EditableTable`.
+    const candidat = (modelName && modelName !== top ? modelName : '') || traduccio
     const local = candidat && candidat !== top ? candidat : ''
     return (
       <td style={style}>

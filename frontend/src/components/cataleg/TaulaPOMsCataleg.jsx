@@ -315,6 +315,9 @@ function Fila({ r, i, t, lang, dicc, dims, capes, refValor, onTecla, onCapa, onI
   // Les píndoles de cada eix surten de la BD (D-31.26): un grup per eix i, dins, les seves files
   // pel `display_order`. Amb el diccionari en vol la llista és buida i la taula es pinta igual.
   // El slug compost es parteix amb el SEPARADOR del diccionari, no amb un guió escrit aquí.
+  // El nom local de la casa mana, PERÒ només si diu una cosa diferent de la que ja es
+  // llegeix: quan repeteix el canònic és un forat, i el forat l'omple la traducció.
+  const nomLocal = (r.nom_ca && r.nom_ca !== r.nom ? r.nom_ca : '') || traduccio
   const trams = tramsInstancia(dicc, r.instancia)
   const commuta = (slug) => {
     // Dins d'un eix les opcions són excloents: triar «right» treu «left», no les suma.
@@ -347,7 +350,7 @@ function Fila({ r, i, t, lang, dicc, dims, capes, refValor, onTecla, onCapa, onI
             SEMPRE, també quan no tenia res a dir: una ⓘ que s'obre buida és una promesa que no es
             compleix. Ara surt quan hi ha text —el nom local de la casa o, si no n'hi ha (el cas
             dels 142 del catàleg v4), el que torna el servei de traducció— i calla si no n'hi ha. */}
-        {(r.nom_ca || traduccio) && <InfoTraduccio text={r.nom_ca || traduccio} />}
+        {nomLocal && <InfoTraduccio text={nomLocal} />}
         <span style={{ ...iconaCel, marginLeft: 5, fontSize: 'var(--fs-body)' }} title={t('cataleg_peces.title_edit_name')}>✎</span>
       </td>
       {/* Els dos primers eixos del diccionari són les dues columnes que la v4 dibuixa (Posició ·

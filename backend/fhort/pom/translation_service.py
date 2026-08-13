@@ -80,7 +80,10 @@ def _deepl(texts, lang):
         return None
     # Les claus gratuïtes acaben en `:fx` i NO van al mateix host que les de pagament; endevinar-ho
     # aquí estalvia una variable d'entorn més i el 403 que ningú relaciona amb el host.
-    base = 'https://api-free.deepl.com' if clau.endswith(':fx') else 'https://api.deepl.com'
+    # `DEEPL_API_URL` el sobreescriu: és el que permet posar un DOBLE al davant —una passarel·la,
+    # o un servidor de proves— i comprovar el tram sencer, cache i tot, sense la clau real.
+    base = (getattr(settings, 'DEEPL_API_URL', '') or '').rstrip('/') or (
+        'https://api-free.deepl.com' if clau.endswith(':fx') else 'https://api.deepl.com')
     try:
         r = httpx.post(
             f'{base}/v2/translate',

@@ -459,8 +459,10 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
 
 function POMCard({ pom, mode, isActive, isSelected, onSelect, traduccio = '' }) {
   const { t } = useTranslation()
-  // El nom de la casa mana; la traducció demanada només omple el forat.
-  const local = pom.name_cat || traduccio
+  // El nom de la casa mana; la traducció demanada omple el forat —i «repeteix el canònic»
+  // TAMBÉ és un forat: encadenar-lo amb un `||` el deixaria guanyar i la segona línia no
+  // sortiria igualment.
+  const local = (pom.name_cat && pom.name_cat !== pom.name_en ? pom.name_cat : '') || traduccio
   const borderColor = mode === 'assign' && isActive
     ? '#3b6d11'
     : isSelected ? 'var(--gold)' : 'var(--border)'

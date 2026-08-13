@@ -153,7 +153,9 @@ export default function POMCatalogue() {
                         {pom.pom_code}
                       </span>
                       <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        <PomNamePair en={pom.name_en} local={pom.name_cat || traduccioDe(pom.pom_id)} />
+                        <PomNamePair en={pom.name_en}
+                          local={(pom.name_cat && pom.name_cat !== pom.name_en ? pom.name_cat : '')
+                            || traduccioDe(pom.pom_id)} />
                       </span>
                       {pom.abbreviation && (
                         <span style={{

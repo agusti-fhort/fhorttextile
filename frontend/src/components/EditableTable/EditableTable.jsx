@@ -1211,7 +1211,14 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           // …i quan NINGÚ ha escrit res —el cas dels 142 POMs del catàleg v4, que només tenen el
           // nom anglès— la traducció es DEMANA (tram ⓘ). Va l'última de la cadena a posta: el que
           // ha batejat el model i el que ha dit el client manen sempre per damunt d'un servei.
-          const candidat = row.nom_traduit_model || sota || traduccioDe?.(row.pom_id) || ''
+          // ⚠️ UN NOM LOCAL QUE REPETEIX EL CANÒNIC NO ÉS UNA TRADUCCIÓ: ÉS EL FORAT. El
+          // payload d'aquesta taula serveix `nom_ca` amb l'anglès de recanvi quan no hi ha
+          // català, i encadenar-lo amb un `||` el deixava guanyar: `sota` sortia ple, la ⓘ el
+          // descartava per repetir el nom visible i la traducció demanada no hi arribava mai.
+          // Vist a pantalla el 13/08 amb els 26 POMs del 1320 traduïts i CAP ⓘ pintada.
+          const propi = row.nom_traduit_model || sota || ''
+          const candidat = (propi && propi !== nomVisible ? propi : '')
+            || traduccioDe?.(row.pom_id) || ''
           const traduit = candidat && candidat !== nomVisible ? candidat : ''
           // LA INSTÀNCIA VIU DINS DEL NOM, no en una columna a part i no com a sufix del codi.
           // Paraula sencera («Left», mai «L») i EN EL COLOR DEL NOM: és el nom d'aquesta mesura
