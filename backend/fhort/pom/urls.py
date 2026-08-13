@@ -118,5 +118,13 @@ try:
 except Exception:
     _identity_paths = []
 
+# LA ⓘ — el nom d'un POM en la llengua de qui llegeix. Proxy de lectura: la clau del proveïdor
+# és del servidor i el front només coneix aquesta porta. Per REFERÈNCIA (ids), mai per text.
+from .translation_views import translate_poms_view
+
+_translate_paths = [
+    path('translate/pom/', translate_poms_view),
+]
+
 urlpatterns = (_sprint7_pom_paths + _size_map_paths + _dictionary_paths
-               + _cataleg_paths + _identity_paths + router.urls)
+               + _cataleg_paths + _identity_paths + _translate_paths + router.urls)

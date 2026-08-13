@@ -1862,3 +1862,62 @@ class GradingRuleHistory(models.Model):
     def __str__(self):
         return (f"{self.pom_codi}: {self.valor_anterior} → {self.valor_nou} "
                 f"({self.modificat_at.strftime('%Y-%m-%d %H:%M')})")
+
+
+# ─────────────────────────────────────────────────────────────
+# TRAM ⓘ — la CACHE de traducció del vocabulari de domini
+# ─────────────────────────────────────────────────────────────
+
+class TranslationCache(models.Model):
+    """La traducció del vocabulari de domini, MEMORITZADA. No és domini: és una còpia.
+
+    **PER QUÈ AQUESTA TAULA I NO COLUMNES A `POMMaster`.** La decisió d'Agus del 09/08 diu que
+    la traducció del vocabulari tècnic NO viu a la BD com a dada de la casa: duplicar-la a
+    `nom_ca`/`nom_es` crearia una segona font de veritat que caldria mantenir a mà per a cada
+    tenant i cada catàleg nou. El que hi ha aquí és el contrari d'una font de veritat: és el
+    resultat d'una pregunta a un tercer, desat perquè no calgui tornar-la a fer. **Es pot buidar
+    sencera sense perdre res** — l'endemà es torna a omplir sola. Aquesta és la prova que no és
+    domini, i és la línia que la separa de `i18n_content.Translation`, que SÍ que és domini (text
+    escrit per una persona, que un refresc de cache no pot trepitjar mai).
+
+    **PER QUÈ VIU AL TENANT i no a `public`.** `POMMaster` és una taula de TENANT: l'id d'un POM
+    només vol dir alguna cosa dins del seu esquema. Una cache compartida a `public` amb
+    `source_ref='pom:142'` faria xocar el POM 142 de `fhort` amb el 142 de `los`, que no són el
+    mateix POM ni tenen per què dir el mateix. La compartició hauria exigit una clau per TEXT
+    —que és exactament el que el disseny prohibeix (per referència, mai per text lliure)— o un
+    prefix d'esquema, que és una taula de tenant disfressada. A més, el dia que hi entrin els
+    àlies de client (`CustomerPOMAlias`), aquells són dada de tenant i no poden sortir-ne.
+    El preu de no compartir és una crida per tenant i idioma: l'univers són ~17k caràcters, i
+    DeepL en regala 500k al mes. Es paga.
+
+    **`source_text` NO és la clau, però hi és.** La clau és `(source_ref, lang)` —el mateix POM
+    dona la mateixa entrada encara que li reformulin el nom, tal com demana el disseny—; el que
+    fa `source_text` és permetre adonar-se que el nom canònic ha canviat i refrescar la FILA
+    sense canviar la CLAU. Sense això, rebatejar un POM deixaria la ⓘ dient el nom vell per sempre.
+    """
+
+    source_ref = models.CharField(
+        max_length=120,
+        help_text="Referència estable de l'objecte traduït (p.ex. 'pom:142').",
+    )
+    lang = models.CharField(max_length=5, help_text='Codi ISO 639-1 en minúscules (ca, es, fr…).')
+    text = models.TextField(blank=True, help_text='La traducció.')
+    source_text = models.TextField(
+        blank=True,
+        help_text="Text original (EN) del qual surt la traducció; si canvia, la fila es refresca.",
+    )
+    provider = models.CharField(max_length=20, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Traducció memoritzada'
+        verbose_name_plural = 'Traduccions memoritzades'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['source_ref', 'lang'],
+                name='uniq_translationcache_ref_lang',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.source_ref} [{self.lang}]'

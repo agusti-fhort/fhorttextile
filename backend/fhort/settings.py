@@ -137,6 +137,16 @@ ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 # crida per polir text cosmètic. S'encén per avaluar-la, no per a tothom.
 IMPORT_REVISIO_SONNET = os.environ.get('IMPORT_REVISIO_SONNET', '').lower() in ('1', 'true', 'yes')
 
+# TRAM ⓘ — traducció del vocabulari de domini (`pom/translation_service.py`).
+# La clau viu AQUÍ i no al bundle: el front només coneix `/api/v1/translate/pom/`.
+# Sense clau, tot segueix funcionant en anglès (fallback silenciós), i és per això que el tram
+# es pot construir i provar abans que la clau hi sigui.
+# ⚠️ DeepL NO té el CATALÀ entre els idiomes destí: amb `deepl`, un usuari en `ca` cau al
+# fallback. Per fer parlar la ⓘ en català cal `TRANSLATE_PROVIDER=google` + la seva clau.
+TRANSLATE_PROVIDER = os.environ.get('TRANSLATE_PROVIDER', 'deepl')
+DEEPL_API_KEY = os.environ.get('DEEPL_API_KEY', '')
+GOOGLE_TRANSLATE_API_KEY = os.environ.get('GOOGLE_TRANSLATE_API_KEY', '')
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
