@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { garmentTypeItems, garmentPomMaps, poms } from '../../api/endpoints'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
+import { useTraduccioPoms } from '../../utils/traduccioPomFont'
+import { InfoTraduccio } from '../EditableTable/EditableTable'
 import { dimensionsDe, composaInstancia, tramsInstancia } from '../../utils/diccionariMesures'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 
@@ -70,6 +72,8 @@ export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, 
   const { dicc } = useEstatDiccionari()
   const [files, setFiles] = useState([])
   const [tretes, setTretes] = useState([])      // mapIds a esborrar en desar
+  // LA ⓘ TÉ FONT (tram ⓘ): un lot per taula, la mateixa porta que la resta del sistema.
+  const traduccioDe = useTraduccioPoms(files.map(r => r.pom_id))
   const [carregant, setCarregant] = useState(true)
   const [desant, setDesant] = useState(false)
   const refsValor = useRef({})
@@ -257,6 +261,7 @@ export default function TaulaPOMsCataleg({ itemId, tallaBase, onDirty, onSaved, 
           <tbody>
             {files.map((r, i) => (
               <Fila key={r.id} r={r} i={i} t={t} lang={lang} dicc={dicc} dims={dims}
+                traduccio={traduccioDe(r.pom_id)}
                 capes={capesDelDiccionari} eixos={capçalera}
                 refValor={(el) => { refsValor.current[r.id] = el }}
                 onTecla={(e) => tecles(e, r, i)}
@@ -306,7 +311,7 @@ function Kbd({ children }) {
   )
 }
 
-function Fila({ r, i, t, lang, dicc, dims, capes, refValor, onTecla, onCapa, onInstancia, onDuplica, onTreu }) {
+function Fila({ r, i, t, lang, dicc, dims, capes, refValor, onTecla, onCapa, onInstancia, onDuplica, onTreu, traduccio = '' }) {
   // Les píndoles de cada eix surten de la BD (D-31.26): un grup per eix i, dins, les seves files
   // pel `display_order`. Amb el diccionari en vol la llista és buida i la taula es pinta igual.
   // El slug compost es parteix amb el SEPARADOR del diccionari, no amb un guió escrit aquí.
@@ -338,8 +343,11 @@ function Fila({ r, i, t, lang, dicc, dims, capes, refValor, onTecla, onCapa, onI
       <td style={{ ...td, color: 'var(--gold)', fontWeight: 600 }}>{r.pom_code}</td>
       <td style={{ ...td, lineHeight: 1.4 }}>
         {r.nom}
-        <span style={{ ...iconaCel, marginLeft: 5, fontSize: 'var(--fs-body)' }}
-          title={r.nom_ca ? `${t('cataleg_peces.title_name_ca')}: ${r.nom_ca}` : t('cataleg_peces.title_name_ca')}>ⓘ</span>
+        {/* LA ⓘ DEL SISTEMA (tram ⓘ), no el caràcter «ⓘ» amb un `title`. La maqueta la dibuixava
+            SEMPRE, també quan no tenia res a dir: una ⓘ que s'obre buida és una promesa que no es
+            compleix. Ara surt quan hi ha text —el nom local de la casa o, si no n'hi ha (el cas
+            dels 142 del catàleg v4), el que torna el servei de traducció— i calla si no n'hi ha. */}
+        {(r.nom_ca || traduccio) && <InfoTraduccio text={r.nom_ca || traduccio} />}
         <span style={{ ...iconaCel, marginLeft: 5, fontSize: 'var(--fs-body)' }} title={t('cataleg_peces.title_edit_name')}>✎</span>
       </td>
       {/* Els dos primers eixos del diccionari són les dues columnes que la v4 dibuixa (Posició ·

@@ -264,6 +264,16 @@ export const diccionariMesures = {
   get: () => client.get('/api/v1/mesures/diccionari/'),
 }
 
+// LA ⓘ — el nom d'un POM en la llengua de qui llegeix. Es demana per REFERÈNCIA (ids) i EN LOT:
+// la clau del proveïdor de traducció viu al servidor i el que es pinta són els POMs visibles
+// d'una pantalla, no un nom cada cop. Qui l'usa és `utils/traduccioPomFont.js`, mai una pantalla
+// directament: el sistema hi ha d'entrar per un sol punt.
+export const traduccions = {
+  poms: (pomIds, lang) => client.get('/api/v1/translate/pom/', {
+    params: { pom_ids: [...pomIds].join(','), lang },
+  }),
+}
+
 // LES ENUMERACIONS DE DOMINI (F2.2): règims de graduació · fases del model · estats del model ·
 // fases de tasca. Germà del diccionari de dalt i pel mateix motiu: eren als `choices` dels models
 // i el front se les escrivia a mà, fins que van derivar (la còpia dels règims en tenia quatre

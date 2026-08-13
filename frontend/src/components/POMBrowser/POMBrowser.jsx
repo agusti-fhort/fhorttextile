@@ -10,6 +10,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '../../store/auth'
 import i18n from '../../i18n'
+import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import CascadeSelector from '../CascadeSelector/CascadeSelector'
 import { groupLabel } from '../grading/gradingAxes'
 
@@ -126,6 +127,10 @@ export default function POMBrowser({
     )
   }
   const filtered = poms.filter(matchSearch)            // explore (graella)
+  // LA SEGONA LÍNIA TÉ FONT (tram ⓘ). Aquest és el patró que la casa cita com a norma —anglès a
+  // dalt, llengua de qui llegeix a sota en cursiva grisa—, però el catàleg v4 no porta `nom_ca`
+  // i la segona línia no sortia mai. Ara, quan la casa no en té, es demana.
+  const traduccioDe = useTraduccioPoms(poms.map(p => p.pom_id))
   const assignFiltered = orderedPoms.filter(matchSearch)  // assign (llista, ordre local)
 
   // ── Mode ASSIGN: persistència real (POST/DELETE garment-pom-maps) ──────────
@@ -389,6 +394,7 @@ export default function POMBrowser({
                 <POMCard
                   key={pom.map_id ?? pom.pom_code}
                   pom={pom}
+                  traduccio={traduccioDe(pom.pom_id)}
                   mode={mode}
                   isActive={activePoms.includes(pom.pom_code)}
                   isSelected={selectedPom?.pom_code === pom.pom_code}
@@ -451,8 +457,10 @@ function POMListRow({ pom, isSelected, onRowClick, onRemove, onToggleKey }) {
   )
 }
 
-function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
+function POMCard({ pom, mode, isActive, isSelected, onSelect, traduccio = '' }) {
   const { t } = useTranslation()
+  // El nom de la casa mana; la traducció demanada només omple el forat.
+  const local = pom.name_cat || traduccio
   const borderColor = mode === 'assign' && isActive
     ? '#3b6d11'
     : isSelected ? 'var(--gold)' : 'var(--border)'
@@ -503,11 +511,11 @@ function POMCard({ pom, mode, isActive, isSelected, onSelect }) {
       </div>
       {/* Convenció sector: anglès primari (negre) + nom localitzat (cursiva gris). */}
       <p style={{ fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-main)', margin: 0, lineHeight: 1.3 }}>
-        {pom.name_en || pom.name_cat}
+        {pom.name_en || local}
       </p>
-      {pom.name_en && pom.name_cat && pom.name_cat !== pom.name_en && (
+      {pom.name_en && local && local !== pom.name_en && (
         <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontStyle: 'italic', margin: '2px 0 0', lineHeight: 1.3 }}>
-          {pom.name_cat}
+          {local}
         </p>
       )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>

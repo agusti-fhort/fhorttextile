@@ -5,6 +5,8 @@ import BateigInput from './BateigInput'
 import { thStyle, SaveStatus, useDebouncedSave, fmtMeasure, useUnit } from '../../pages/fittingShared'
 import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 import { useDiccionariMesures, useEstatDiccionari } from '../../utils/diccionariMesuresFont'
+import { useTraduccioPoms } from '../../utils/traduccioPomFont'
+import { InfoTraduccio } from '../EditableTable/EditableTable'
 import AvisDiccionari from '../ui/AvisDiccionari'
 
 // MeasureGrid — editor únic de mesures (un component, dos modes treball/consulta) que serveix els
@@ -223,7 +225,7 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
 // `onNomSave(bmId, value)` (P4: NO toca el POM tenant compartit).
 function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitModel = '',
                    instancia = '', marca = null, bmId, editable, onNomSave, onNomsSave = null,
-                   editCodi = false, style }) {
+                   editCodi = false, style, traduccio = '' }) {
   const { t } = useTranslation()
   const dicc = useDiccionariMesures()
   // La INSTÀNCIA s'enganxa al nom en TOTES les branques: és el nom d'aquesta mesura el que
@@ -292,15 +294,20 @@ function NomCell({ nomEn, nomLocal, nomFitxa, nomCanonicModel = '', nomTraduitMo
   // la ⓘ, com a P1. Aquí no s'hi edita res, o sigui que la línia només ocupava alçada; el que ha
   // de saltar a la vista en una taula amb germanes és QUINA mesura és cada fila.
   if (!canEdit) {
-    const local = modelName && modelName !== top ? modelName : ''
+    // `traduccio` (tram ⓘ) va l'ÚLTIMA: el bateig del model i el nom del catàleg manen per
+    // damunt del que digui un servei extern. Fins avui aquí no hi arribava mai res —el catàleg
+    // v4 no porta noms locals— i la ⓘ d'aquestes tres pantalles no sortia mai.
+    const candidat = modelName || traduccio
+    const local = candidat && candidat !== top ? candidat : ''
     return (
       <td style={style}>
         <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-main)', whiteSpace: 'normal' }}>
           {top || '—'}<Inst /><Marca />
-          {local && (
-            <i className="ti ti-info-circle" title={local} aria-label={local}
-              style={{ fontSize: 12, marginLeft: 6, color: 'var(--text-soft)', cursor: 'help' }} />
-          )}
+          {/* LA MATEIXA ⓘ QUE LES ALTRES TAULES, no una que se li assembli. Aquí n'hi havia una
+              de pròpia amb `title` natiu: el mecanisme que el 06/08 ja es va diagnosticar com a
+              inservible —només surt amb el ratolí a sobre i esperant-se, no respon al clic ni al
+              teclat, i sobre 12px la meitat de les vegades no arriba a sortir—. */}
+          {local && <InfoTraduccio text={local} />}
         </div>
       </td>
     )
@@ -461,6 +468,9 @@ export default function MeasureGrid({
     if (el) inputRefs.current[lineId] = el
     else delete inputRefs.current[lineId]
   }, [])
+  // LA ⓘ TÉ FONT (tram ⓘ): un sol lot per graella, compartit per Escalat, Comprovació, Repàs i
+  // Fitting, que són les quatre pantalles que munten aquesta graella.
+  const traduccioDe = useTraduccioPoms(rows.map(r => r.pom_id))
   const gridRef = useRef({ rows, groups })
   useEffect(() => { gridRef.current = { rows, groups } }, [rows, groups])
   const onNav = useCallback((lineId, dir) => {
@@ -645,6 +655,7 @@ export default function MeasureGrid({
                     : stickyTd(COL_CAPA_W, COL_POM_W, rowBg)}
                   title={soroll ? t('measuregrid.poda_candidata') : undefined} />
                 <NomCell nomEn={r.nom_en} nomLocal={r.nom_local} nomFitxa={r.nom_fitxa} bmId={r.bm_id}
+                  traduccio={traduccioDe(r.pom_id)}
                   nomCanonicModel={r.nom_canonic_model} nomTraduitModel={r.nom_traduit_model}
                   instancia={r.instancia} marca={r.marca}
                   editable={editable} onNomSave={onNomSave} onNomsSave={onNomsSave}

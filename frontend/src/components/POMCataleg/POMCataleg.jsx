@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { poms, pomCategories, customerAliases } from '../../api/endpoints'
+import { useTraduccioPoms } from '../../utils/traduccioPomFont'
+import { InfoTraduccio } from '../EditableTable/EditableTable'
 
 // Segueix la paginació de DRF fins al final. `page_size: 1000` era un SOSTRE: amb un catàleg més
 // gran, la pantalla n'hauria pintat 1000 i el comptador n'hauria dit 1000, sense que res
@@ -191,14 +193,18 @@ function ValorGlobal({ sel, valor, t }) {
 // EL CATÀLEG VA EN ANGLÈS I LA TRADUCCIÓ VIU DARRERE LA ⓘ (maqueta v3, decisió vigent). El nom
 // local deixa de competir amb el canònic a la mateixa línia; qui el necessiti l'hi troba. Va a
 // `title` I a `aria-label`: una icona que només parla amb el ratolí no diu res a qui no en té.
-function InfoLocal({ nom, t }) {
-  if (!nom) return null
-  const text = t('poms.cat.name_local_info', { nom })
-  return (
-    <span role="img" aria-label={text} title={text}
-          style={{ marginLeft: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-label)',
-                   cursor: 'help', flex: 'none' }}>ⓘ</span>
-  )
+// LA ⓘ DEL CATÀLEG — la MATEIXA del sistema (tram ⓘ), no una de pròpia.
+//
+// Aquí n'hi havia una feta a mà amb el caràcter «ⓘ» i un `title` natiu: el mecanisme que ja es
+// va diagnosticar inservible el 06/08 (només amb el ratolí a sobre, sense clic ni teclat). Ara
+// és `InfoTraduccio`, per portal i amb hover + clic + focus, com a la taula de mesures.
+//
+// I el que hi ha a dins ja no és només `name_cat`: el catàleg v4 no en porta cap, i per això
+// aquesta ⓘ no sortia MAI. Quan la casa no té nom local, es demana (`traduccio`).
+function InfoLocal({ nom, traduccio }) {
+  const text = nom || traduccio || ''
+  if (!text) return null
+  return <InfoTraduccio text={text} />
 }
 
 function Tags({ valors, buit }) {
@@ -225,6 +231,9 @@ export default function POMCataleg() {
   const [carregant, setCarregant] = useState(true)
   const [error, setError] = useState(null)
   const [ocupat, setOcupat] = useState(false)
+  // LA ⓘ TÉ FONT (tram ⓘ). El catàleg sencer d'un cop: són 142 POMs i la petició va en lot, o
+  // sigui tres crides al proveïdor el primer cop de cada idioma i cap més mai.
+  const traduccioDe = useTraduccioPoms(llista.map(p => p.id))
 
   const carrega = useCallback(() => {
     setCarregant(true); setError(null)
@@ -384,7 +393,8 @@ export default function POMCataleg() {
                     <span style={cx.code}>{p.pom_code || p.codi_client}</span>
                     <span style={cx.nm}>
                       {p.name_en || p.nom_client}
-                      <InfoLocal nom={p.name_cat !== p.name_en ? p.name_cat : null} t={t} />
+                      <InfoLocal nom={p.name_cat !== p.name_en ? p.name_cat : null}
+                        traduccio={traduccioDe(p.id)} />
                     </span>
                     {(p.abbreviation || p.codi_client) && (
                       <span style={cx.ab}>{p.abbreviation || p.codi_client}</span>)}
@@ -410,7 +420,8 @@ export default function POMCataleg() {
                 </div>
                 <div style={{ fontSize: 'var(--fs-h3)', lineHeight: '20px', fontWeight: 600, marginTop: 4 }}>
                   {sel.name_en || sel.nom_client}
-                  <InfoLocal nom={sel.name_cat !== sel.name_en ? sel.name_cat : null} t={t} /></div>
+                  <InfoLocal nom={sel.name_cat !== sel.name_en ? sel.name_cat : null}
+                    traduccio={traduccioDe(sel.id)} /></div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                   <span style={{
                     ...cx.badge,
@@ -441,7 +452,8 @@ export default function POMCataleg() {
                       viu darrere la ⓘ del nom canònic (maqueta v3, mateix patró a llista i fitxa). */}
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_name_en')}</span>
                     <span>{sel.name_en || sel.nom_client}
-                      <InfoLocal nom={sel.name_cat !== sel.name_en ? sel.name_cat : null} t={t} /></span></div>
+                      <InfoLocal nom={sel.name_cat !== sel.name_en ? sel.name_cat : null}
+                        traduccio={traduccioDe(sel.id)} /></span></div>
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_nomenclature')}</span>
                     <span>{sel.abbreviation || sel.codi_client}</span></div>
                   <div style={cx.kv}><span style={cx.k}>{t('poms.cat.f_family')}</span>

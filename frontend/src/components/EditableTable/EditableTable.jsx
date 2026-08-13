@@ -17,6 +17,7 @@ import {
   codiProposat, codiBase,
 } from '../../utils/diccionariMesures'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
+import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import AvisDiccionari from '../ui/AvisDiccionari'
 import { boto, botoTer } from '../ui/buttons'
 import BateigInput from '../model/BateigInput'
@@ -269,6 +270,10 @@ export default function EditableTable({
   }, [])
   const rowsRef = useRef(localRows)
   useEffect(() => { rowsRef.current = localRows }, [localRows])
+  // LA ⓘ TÉ FONT (tram ⓘ). El catàleg v4 no porta cap nom traduït —per decisió, la traducció del
+  // vocabulari de domini no viu a la BD— i la ⓘ callava a totes les files. Es demana AQUÍ, un cop
+  // per taula i en LOT: la cel·la no ha de saber que hi ha una petició pel mig.
+  const traduccioDe = useTraduccioPoms(localRows.map(r => r.pom_id))
   // v8.1 — DES DE L'ÚLTIMA FILA, ↓ ENTRA AL CERCADOR. El carril no s'acaba en una paret: el
   // gest natural després de la darrera mesura és afegir-ne una altra, i és allà on és el camp.
   const finderRef = useRef(null)
@@ -909,6 +914,7 @@ export default function EditableTable({
                     activa={row.id === filaActiva}
                     neix={row.id === filaNeix}
                     onActiva={setFilaActiva}
+                    traduccioDe={traduccioDe}
                     dicc={dicc}
                     dims={dims}
                     esPresa={esPresa}
@@ -1072,7 +1078,7 @@ export default function EditableTable({
 }
 
 function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, onDelete,
-                       onBateig, widths, registerVal, onNav, esPresa,
+                       onBateig, widths, registerVal, onNav, esPresa, traduccioDe,
                        dicc, dims, dimState, onParteix, onDesfa, onMesInstancia, onGermanaCapa,
                        capesLliures, onCapa, mostraGrading = false, sizeRun = [] }) {
   const { t, i18n } = useTranslation()
@@ -1202,7 +1208,10 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           // la fila («Cord width» → «Cord width») és una promesa d'informació que no compleix; és
           // la mateixa regla que ja aplica `nomsDePom` a la segona línia de les altres taules.
           const nomVisible = row.nom_canonic_model || dalt
-          const candidat = row.nom_traduit_model || sota || ''
+          // …i quan NINGÚ ha escrit res —el cas dels 142 POMs del catàleg v4, que només tenen el
+          // nom anglès— la traducció es DEMANA (tram ⓘ). Va l'última de la cadena a posta: el que
+          // ha batejat el model i el que ha dit el client manen sempre per damunt d'un servei.
+          const candidat = row.nom_traduit_model || sota || traduccioDe?.(row.pom_id) || ''
           const traduit = candidat && candidat !== nomVisible ? candidat : ''
           // LA INSTÀNCIA VIU DINS DEL NOM, no en una columna a part i no com a sufix del codi.
           // Paraula sencera («Left», mai «L») i EN EL COLOR DEL NOM: és el nom d'aquesta mesura

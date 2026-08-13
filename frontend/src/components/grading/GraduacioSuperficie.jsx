@@ -6,6 +6,7 @@ import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 import PecesDelModel from '../model/PecesDelModel'
 import { clauRegla, filesDeLaPeca } from '../../utils/identitatMesura'
 import { useEstatDiccionari } from '../../utils/diccionariMesuresFont'
+import { useTraduccioPoms } from '../../utils/traduccioPomFont'
 import { useElements } from '../../utils/vocabulariDominiFont'
 import { aDocument, aMotor, opcionsDocument } from '../../utils/breakConvention'
 import { InfoTraduccio, AMPLADES } from '../EditableTable/EditableTable'
@@ -149,6 +150,9 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
   useEffect(() => { carrega() }, [carrega])
 
   const files = useMemo(() => data?.rows ?? [], [data])
+  // LA MATEIXA ⓘ I LA MATEIXA FONT que la consulta (tram ⓘ): es demana un cop per pantalla i en
+  // lot. Copiar aquí una segona manera de demanar-ho seria el que la casa no vol.
+  const traduccioDe = useTraduccioPoms(files.map(r => r.pom_id))
   const sizeRun = useMemo(() => data?.size_run ?? [], [data])
 
   // El valor VIGENT d'un camp: l'edició si n'hi ha (encara que sigui null: esborrar és una
@@ -267,7 +271,7 @@ export default function GraduacioSuperficie({ model, onTancar, onObrirContenidor
     const inst = etiquetaInstancia(row.instancia)
     // Mateixa regla que la consulta: la traducció només surt si NO repeteix el nom visible.
     const nomVisible = nomDe(row)
-    const candidat = row.nom_traduit_model || row.nom_ca || ''
+    const candidat = row.nom_traduit_model || row.nom_ca || traduccioDe(row.pom_id) || ''
     const traduit = candidat && candidat !== nomVisible ? candidat : ''
     const deltes = acceptaDeltes(regla.logica)
     // D'ON VE EL QUE ES VEU. Això ho decidia `regla_origen` tot sol, i mentia: la regla del
