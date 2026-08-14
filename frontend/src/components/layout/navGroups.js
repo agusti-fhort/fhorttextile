@@ -42,18 +42,24 @@ export const navGroups = [
   { sectionKey: 'nav.section_technical_studio', items: [
   ]},
   // Comercial Studio — mestres comercials (Clients, Proveïdors, Productes) + documents (Ofertes).
-  // El gate de tier del mòdul arriba a B5; de moment sense `cap` (visible; l'escriptura la
-  // gateja CONFIGURE dins la pàgina).
+  // GATE `comercial` (2026-08-14): la secció sencera és de qui pot veure el diner. Amagar-la
+  // és CORTESIA — el tall de veritat és el del servidor (`commerce/views.py`, `_ComercialMixin`),
+  // que és qui respon 403 a qui hi arribi per URL. Si algun dia les dues llistes discrepen,
+  // mana el backend. El gate de tier del mòdul (feature_flags) segueix pendent per a B5.
+  //
+  // Clients i Proveïdors hi entren perquè viuen en aquesta secció des de B3-M i porten dades
+  // fiscals i de compra; el seu `descompte_pct` ja es poda al serializer per als altres camins
+  // (el CustomerSelector del wizard de models, el Dashboard) que segueixen oberts.
   { sectionKey: 'nav.section_comercial', items: [
-    { to: '/clients', labelKey: 'nav.clients', icon: 'ti-users-group' },
-    { to: '/suppliers', labelKey: 'nav.suppliers', icon: 'ti-building-factory' },
-    { to: '/comercial/productes', labelKey: 'nav.products', icon: 'ti-package' },
-    { to: '/comercial/ofertes', labelKey: 'nav.quotes', icon: 'ti-file-invoice' },
-    { to: '/comercial/comandes', labelKey: 'nav.orders', icon: 'ti-clipboard-check' },
-    { to: '/comercial/encarrecs', labelKey: 'nav.workorders', icon: 'ti-briefcase' },
-    { to: '/comercial/orfes', labelKey: 'nav.orphans', icon: 'ti-unlink' },
-    { to: '/comercial/albarans', labelKey: 'nav.deliverynotes', icon: 'ti-truck-delivery' },
-    { to: '/comercial/condicions-pagament', labelKey: 'nav.payment_terms', icon: 'ti-calendar-dollar' },
+    { to: '/clients', labelKey: 'nav.clients', icon: 'ti-users-group', cap: 'comercial' },
+    { to: '/suppliers', labelKey: 'nav.suppliers', icon: 'ti-building-factory', cap: 'comercial' },
+    { to: '/comercial/productes', labelKey: 'nav.products', icon: 'ti-package', cap: 'comercial' },
+    { to: '/comercial/ofertes', labelKey: 'nav.quotes', icon: 'ti-file-invoice', cap: 'comercial' },
+    { to: '/comercial/comandes', labelKey: 'nav.orders', icon: 'ti-clipboard-check', cap: 'comercial' },
+    { to: '/comercial/encarrecs', labelKey: 'nav.workorders', icon: 'ti-briefcase', cap: 'comercial' },
+    { to: '/comercial/orfes', labelKey: 'nav.orphans', icon: 'ti-unlink', cap: 'comercial' },
+    { to: '/comercial/albarans', labelKey: 'nav.deliverynotes', icon: 'ti-truck-delivery', cap: 'comercial' },
+    { to: '/comercial/condicions-pagament', labelKey: 'nav.payment_terms', icon: 'ti-calendar-dollar', cap: 'comercial' },
   ]},
   { sectionKey: 'nav.section_sistema', items: [
     { to: '/onboarding', labelKey: 'nav.onboarding', icon: 'ti-rocket', cap: 'onboarding' },

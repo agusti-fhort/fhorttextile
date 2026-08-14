@@ -151,6 +151,7 @@ export default function Sidebar() {
   const isStudio = useAuthStore(s => s.tenant?.tipologia === 'estudi')
   const canPlan = !!user?.capabilities?.some(c => c === 'define_tasks' || c === 'configure')
   const canExecute = !!user?.capabilities?.includes('execute_tasks')
+  const canComercial = !!user?.capabilities?.includes('comercial')
   const [expanded, setExpanded] = useState({['nav.models']: true})
   const [logoutHover, setLogoutHover] = useState(false)
   const [onboardingPct, setOnboardingPct] = useState(100)
@@ -190,6 +191,7 @@ export default function Sidebar() {
         case 'studio': return isStudio
         case 'studio_configure': return isStudio && canConfigure
         case 'manage_users': return canManageUsers
+        case 'comercial': return canComercial
         case 'onboarding': return onboardingPct < 100
         default: return true
       }
@@ -197,7 +199,7 @@ export default function Sidebar() {
     return navGroups
       .map(g => ({ sectionKey: g.sectionKey, items: g.items.filter(allowed) }))
       .filter(g => g.items.length > 0)
-  }, [canPlan, canExecute, canConfigure, canManageUsers, isBrand, isStudio, onboardingPct])
+  }, [canPlan, canExecute, canConfigure, canManageUsers, canComercial, isBrand, isStudio, onboardingPct])
 
   const allItems = useMemo(() => groups.flatMap(g => g.items), [groups])
 

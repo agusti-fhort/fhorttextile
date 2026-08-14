@@ -1,8 +1,14 @@
 """ViewSets del mestre d'articles (B1).
 
-Gating: lectura = qualsevol autenticat; escriptura = capability CONFIGURE (semàntica de
-configuració de catàleg, com CustomerViewSet). La capability pròpia del mòdul i el gate de
-tier (feature_flags) arriben a B5.
+Gating (2026-08-14): lectura I escriptura exigeixen COMERCIAL — la capability de VEURE EL
+DINER; l'escriptura, a més, CONFIGURE. Fins aquí la lectura era oberta a qualsevol autenticat
+i era la porta per on un tècnic es baixava preus, marges i el PDF sencer d'una oferta.
+
+Quatre vistes en queden FORA a posta —SalesOrder, SalesOrderLine, WorkOrder i
+DeliveryNoteLine— perquè sostenen dues superfícies TÈCNIQUES que no pinten cap import: el
+selector d'assignació model↔comanda i la cadena de traçabilitat de la fitxa del model. Allà
+la lectura segueix oberta i el que hi viatja es PODA (`PodaEconomicaMixin`). Cadascuna ho
+raona al seu docstring. El gate de tier del mòdul (feature_flags) segueix pendent per a B5.
 """
 from django.db.models import ProtectedError
 from django.http import HttpResponse
@@ -12,7 +18,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from fhort.accounts.capabilities import HasCapability, CONFIGURE, DEFINE_TASKS
+from fhort.accounts.capabilities import HasCapability, COMERCIAL, CONFIGURE, DEFINE_TASKS
 
 from .models import (
     Unit, Product, ProductRecipe, ProductSupplier, ProductComponent, ProductPriceGTI,
@@ -28,32 +34,61 @@ from .serializers import (
 )
 
 
-class _ConfigureWriteMixin:
-    """Lectura oberta a autenticats; escriptura gated CONFIGURE (patró CustomerViewSet)."""
+class _Comercial(HasCapability):
+    """Veure el DINER. Subclasse amb l'atribut de classe (patró `_DefineTasks`,
+    `tasks/views_b.py:319`) i NO `self.required_capability = …` sobre la view: `HasCapability`
+    mira primer la view i després la pròpia classe, o sigui que amb l'idioma vell dos permisos
+    a la mateixa view acabarien exigint tots dos la MATEIXA capacitat."""
+    required_capability = COMERCIAL
+
+
+class _Configure(HasCapability):
+    required_capability = CONFIGURE
+
+
+class _DefineTasks(HasCapability):
+    required_capability = DEFINE_TASKS
+
+
+class _ComercialMixin:
+    """Lectura I escriptura exigeixen COMERCIAL; l'escriptura, A MÉS, CONFIGURE.
+
+    Abans (fins 2026-08-14) això era `_ConfigureWriteMixin`: lectura oberta a qualsevol
+    autenticat i escriptura gated CONFIGURE. La lectura oberta era la porta per on un tècnic
+    es baixava preus, marges i el PDF sencer d'una oferta (diagnosi §2.3). Ara qui escriu
+    comerç necessita LES DUES: veure el diner i poder configurar.
+
+    ⚠️ Aquest mixin NO el porten les vistes que sostenen l'assignació model↔comanda
+    (SalesOrder, SalesOrderLine, WorkOrder, DeliveryNoteLine): allà la lectura queda oberta i
+    el que hi viatja es poda. Cadascuna diu per què al seu docstring.
+    """
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
-            return [IsAuthenticated()]
-        p = HasCapability(); self.required_capability = CONFIGURE
-        return [p]
+            return [_Comercial()]
+        return [_Comercial(), _Configure()]
 
 
 class UnitViewSet(viewsets.ReadOnlyModelViewSet):
-    """Catàleg d'unitats (sembrat; consulta per al selector d'unitat de l'article)."""
+    """Catàleg d'unitats (sembrat; consulta per al selector d'unitat de l'article).
+
+    Sense cap import a dins, però els seus dos únics cridadors són la fitxa i la llista
+    d'articles (`pages/Products.jsx:115`, `pages/ProductDetail.jsx:62`), que ara demanen
+    COMERCIAL: deixar-lo obert seria l'únic forat d'un menú tancat."""
     queryset = Unit.objects.all()
     serializer_class = UnitSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [_Comercial]
     filterset_fields = ['active']
 
 
-class PaymentTermsViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
-    """Condicions de pagament (M4): CRUD amb fraccions nested writable. Lectura oberta (selector al
-    Customer i als documents); escriptura gated CONFIGURE. El guard Σ%=100 viu al serializer."""
+class PaymentTermsViewSet(_ComercialMixin, viewsets.ModelViewSet):
+    """Condicions de pagament (M4): CRUD amb fraccions nested writable. El guard Σ%=100 viu al
+    serializer. Els cridadors (fitxa d'oferta i fitxa de client) són tots comercials."""
     queryset = PaymentTerms.objects.prefetch_related('lines').all()
     serializer_class = PaymentTermsSerializer
     filterset_fields = ['active']
 
 
-class ProductViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+class ProductViewSet(_ComercialMixin, viewsets.ModelViewSet):
     queryset = Product.objects.select_related('unit').prefetch_related(
         'recipe_lines', 'suppliers__supplier', 'components__component', 'price_exceptions__garment_type_item'
     ).all()
@@ -70,25 +105,25 @@ class ProductViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT)
 
 
-class ProductRecipeViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+class ProductRecipeViewSet(_ComercialMixin, viewsets.ModelViewSet):
     queryset = ProductRecipe.objects.select_related('product').all()
     serializer_class = ProductRecipeSerializer
     filterset_fields = ['product', 'task_code']
 
 
-class ProductSupplierViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+class ProductSupplierViewSet(_ComercialMixin, viewsets.ModelViewSet):
     queryset = ProductSupplier.objects.select_related('product', 'supplier').all()
     serializer_class = ProductSupplierSerializer
     filterset_fields = ['product', 'supplier', 'is_default']
 
 
-class ProductComponentViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+class ProductComponentViewSet(_ComercialMixin, viewsets.ModelViewSet):
     queryset = ProductComponent.objects.select_related('pack', 'component').all()
     serializer_class = ProductComponentSerializer
     filterset_fields = ['pack', 'component']
 
 
-class ProductPriceGTIViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+class ProductPriceGTIViewSet(_ComercialMixin, viewsets.ModelViewSet):
     queryset = ProductPriceGTI.objects.select_related('product', 'garment_type_item').all()
     serializer_class = ProductPriceGTISerializer
     filterset_fields = ['product', 'garment_type_item']
@@ -96,18 +131,20 @@ class ProductPriceGTIViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
 
 # ── Documents comercials — Quote (B2) ──────────────────────────────────────────────────
 
-class QuoteViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
-    """CRUD d'ofertes + accions `send` (DRAFT→SENT) i `pdf` (descàrrega). Escriptura gated
-    CONFIGURE (com el mestre B1); el `pdf` és lectura (autenticat). Rol comercial propi = B5."""
+class QuoteViewSet(_ComercialMixin, viewsets.ModelViewSet):
+    """CRUD d'ofertes + accions `send` (DRAFT→SENT) i `pdf` (descàrrega)."""
     queryset = Quote.objects.select_related('customer', 'created_by').prefetch_related(
         'lines__product', 'lines__model_intents__model').all()
     serializer_class = QuoteSerializer
     filterset_fields = ['status', 'customer']
 
     def get_permissions(self):
-        # El PDF és una lectura: obert a autenticats (no gated CONFIGURE).
+        # El PDF és una LECTURA, i per això no demana CONFIGURE — però és l'oferta sencera
+        # amb tots els imports impresos, o sigui la lectura més sensible del mòdul. Demana
+        # COMERCIAL com qualsevol altra lectura d'aquí (abans n'hi havia prou amb estar
+        # autenticat: un tècnic se'l baixava, verificat a la diagnosi §2.3).
         if self.action == 'pdf':
-            return [IsAuthenticated()]
+            return [_Comercial()]
         return super().get_permissions()
 
     def perform_create(self, serializer):
@@ -164,10 +201,13 @@ class QuoteViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
             return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
         # meta.intent_conflicts: models d'intenció que no han pogut viatjar (ocupats en una altra
         # comanda o sense quantitat) — el frontend els mostra al comercial. Mai bloqueja la conversió.
-        return Response({**SalesOrderSerializer(order).data, **meta}, status=status.HTTP_201_CREATED)
+        # `context=` no és decoratiu: sense request al context la poda econòmica talla per
+        # defecte i fins un admin rebria la comanda acabada de crear sense totals.
+        return Response({**SalesOrderSerializer(order, context=self.get_serializer_context()).data,
+                         **meta}, status=status.HTTP_201_CREATED)
 
 
-class QuoteLineViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+class QuoteLineViewSet(_ComercialMixin, viewsets.ModelViewSet):
     """Línies d'oferta (edició filtrada per ?quote=, patró satèl·lit B1). El guard DRAFT viu al
     model i es replica al serializer per a un 400 net."""
     queryset = QuoteLine.objects.select_related('quote', 'product').all()
@@ -175,7 +215,7 @@ class QuoteLineViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
     filterset_fields = ['quote', 'product']
 
 
-class QuoteLineModelIntentViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+class QuoteLineModelIntentViewSet(_ComercialMixin, viewsets.ModelViewSet):
     """Vincle preparatori model↔línia d'oferta (E2, patró satèl·lit ?quote_line=). Escriptura
     gated CONFIGURE; els guards (estat DRAFT/SENT + coherència de client) viuen al serializer.
     Intenció informativa: no toca WO ni cartera."""
@@ -218,18 +258,27 @@ class QuoteLineModelIntentViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
 
 # ── Documents comercials — SalesOrder (comanda, B3b) ───────────────────────────────────
 
-class SalesOrderViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin,
+class SalesOrderViewSet(_ComercialMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin,
                         mixins.UpdateModelMixin, viewsets.GenericViewSet):
     """Comandes de venda (B3b). NOMÉS lectura + update restringit a `status` (les comandes neixen
-    de la conversió d'una oferta, mai per POST; irreversibilitat de línies via serializer). El
-    `pdf` és lectura (autenticat)."""
+    de la conversió d'una oferta, mai per POST; irreversibilitat de línies via serializer).
+
+    ⚠️ LECTURA OBERTA A POSTA (decisió d'Agus, 2026-08-14): l'assignació model↔comanda és una
+    ACCIÓ OPERATIVA, no un acte comercial, i el seu selector viu a la fitxa del model
+    (`ActionsMenu.jsx:86` demana les comandes OPEN del client). Qui assigna ha de poder triar
+    la comanda encara que no vegi el diner. El selector només fa servir `document_number` i,
+    de les línies, `quantity`/`qty_allocated` — cap import: la poda del serializer el deixa
+    intacte. L'escriptura (status, data d'emissió) sí que és comercial i va gated."""
     queryset = SalesOrder.objects.select_related('customer', 'source_quote', 'created_by').prefetch_related(
         'lines__product', 'due_dates').all()
     serializer_class = SalesOrderSerializer
     filterset_fields = ['status', 'customer']
 
     def get_permissions(self):
+        # El PDF imprimeix tots els imports: és lectura, però lectura COMERCIAL.
         if self.action == 'pdf':
+            return [_Comercial()]
+        if self.action in ('list', 'retrieve'):
             return [IsAuthenticated()]
         return super().get_permissions()
 
@@ -256,18 +305,28 @@ class SalesOrderViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixins.
         return resp
 
 
-class SalesOrderLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin,
+class SalesOrderLineViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin,
                             mixins.UpdateModelMixin, viewsets.GenericViewSet):
     """Línies de comanda (lectura + PATCH restringit a `qty_allocated`, filtrat per ?order=). Sense
-    create/destroy: les línies neixen de la conversió (irreversibilitat, B3b)."""
+    create/destroy: les línies neixen de la conversió (irreversibilitat, B3b).
+
+    ⚠️ AQUESTA VISTA ÉS LA CASA DE L'ACCIÓ OPERATIVA i per això no porta `_ComercialMixin`.
+    `assign-model`/`assign-models` són l'assignació model↔comanda, que Agus va decidir
+    (2026-08-14) que queda FORA de COMERCIAL: qui assigna fa cartera, no comerç. També hi
+    entra el PATCH de `qty_allocated`, que és la imputació d'aquella mateixa cartera. Tot
+    plegat segueix demanant CONFIGURE, que és el que el manager ja té.
+
+    Els imports de les línies els poda el serializer, igual que a la comanda."""
     queryset = SalesOrderLine.objects.select_related('order', 'product').all()
     serializer_class = SalesOrderLineSerializer
     filterset_fields = ['order', 'product']
 
     def get_permissions(self):
-        if self.action == 'allocation':   # expansió read-only: obert a autenticats
+        # `allocation` és una expansió read-only (models assignats + tasques + % imputat) i
+        # no porta cap import: alimenta el desplegable de la fitxa de comanda.
+        if self.action in ('list', 'retrieve', 'allocation'):
             return [IsAuthenticated()]
-        return super().get_permissions()
+        return [_Configure()]
 
     @action(detail=True, methods=['get'])
     def allocation(self, request, pk=None):
@@ -316,7 +375,8 @@ class SalesOrderLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mix
             wo, meta = assign_model_to_order_line(model, line, user=getattr(request.user, 'profile', None))
         except DjangoValidationError as e:
             return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({'work_order': WorkOrderSerializer(wo).data, **meta},
+        return Response({'work_order': WorkOrderSerializer(
+                            wo, context=self.get_serializer_context()).data, **meta},
                         status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='assign-models')
@@ -341,28 +401,45 @@ class SalesOrderLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mix
                 line.id, model_ids, user=getattr(request.user, 'profile', None))
         except DjangoValidationError as e:
             return Response({'detail': '; '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({'work_orders': WorkOrderSerializer(wos, many=True).data, 'warnings': warnings},
+        return Response({'work_orders': WorkOrderSerializer(
+                            wos, many=True, context=self.get_serializer_context()).data,
+                         'warnings': warnings},
                         status=status.HTTP_201_CREATED)
 
 
 class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
-    """Encàrrecs / ordres de treball (B4a). Lectura (autenticat) + acció `close` (gate
-    DEFINE_TASKS). No es crea per POST: els ORDER neixen del wizard (B4b) i els COLLECTOR
-    del hook lazy. Llista filtrable per kind/status/customer/period."""
+    """Encàrrecs / ordres de treball (B4a). No es crea per POST: els ORDER neixen del wizard
+    (B4b) i els COLLECTOR del hook lazy. Llista filtrable per kind/status/customer/period.
+
+    ⚠️ LECTURA OBERTA A POSTA: la pestanya Producció de la fitxa del model demana els WO per
+    `?model=` (`ProductionTab.jsx:75`) per pintar la cadena comanda→encàrrec→albarà, i només
+    en fa servir `number/kind/status/order_number/delivery_note_number`. El `price_snapshot`
+    el poda el serializer. Tancar-ho amb 403 buidaria la traçabilitat a tot el taller."""
     queryset = WorkOrder.objects.select_related('customer', 'model', 'closed_by', 'order_line') \
         .prefetch_related('adjustments', 'tasks__task_type').all()
     serializer_class = WorkOrderSerializer
     filterset_fields = ['kind', 'status', 'customer', 'period', 'model']
 
     def get_permissions(self):
-        if self.action in ('list', 'retrieve', 'orphaned'):
+        if self.action in ('list', 'retrieve'):
             return [IsAuthenticated()]
-        # El tècnic tanca (DEFINE_TASKS); el comercial revisa el preu de venda (CONFIGURE).
-        p = HasCapability()
-        # review, unassign i reattach són actes COMERCIALS (preu/cartera) → CONFIGURE (com assign-model).
-        self.required_capability = (CONFIGURE if self.action in ('review', 'unassign', 'reattach')
-                                    else DEFINE_TASKS)
-        return [p]
+        # `orphaned` NO pot anar amb els altres dos: es construeix el payload A MÀ
+        # (`'total': str(order.total)`, sota) i per tant NO passa pel serializer ni per la
+        # poda. A més és l'informe de la pantalla Comercial › Orfes. Lectura, però COMERCIAL.
+        if self.action == 'orphaned':
+            return [_Comercial()]
+        # `review` és literalment la revisió del PREU DE VENDA d'un encàrrec tancat: qui la
+        # fa ha de veure el diner (COMERCIAL) i poder configurar (CONFIGURE).
+        if self.action == 'review':
+            return [_Comercial(), _Configure()]
+        # `unassign`/`reattach` mouen CARTERA, no preu: mateix estatut operatiu que
+        # assign-model, i per tant fora de COMERCIAL (decisió d'Agus, 2026-08-14).
+        if self.action in ('unassign', 'reattach'):
+            return [_Configure()]
+        # `close` és del TÈCNIC (feina feta). `reattach-candidates` cau aquí i queda com
+        # estava: és una lectura sense imports servida amb DEFINE_TASKS — incoherència
+        # anterior a aquesta peça, ANOTADA al report i no tocada (fora de scope).
+        return [_DefineTasks()]
 
     @action(detail=False, methods=['get'])
     def orphaned(self, request):
@@ -478,10 +555,11 @@ class WorkOrderViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewset
         return Response(self.get_serializer(wo).data)
 
 
-class ExpenseViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
+class ExpenseViewSet(_ComercialMixin, viewsets.ModelViewSet):
     """Despeses d'un encàrrec (B4b): línies externes (servei extern / mercaderia) amb cost
-    real i preu de venda. CRUD gated CONFIGURE; lectura oberta. Satèl·lit del WorkOrder,
-    filtrat per ?work_order= (mateix patró que order-lines/quote-lines). NO és una tasca."""
+    real i preu de venda. Satèl·lit del WorkOrder, filtrat per ?work_order= (mateix patró que
+    order-lines/quote-lines). NO és una tasca. Una despesa és cost i marge de dalt a baix:
+    aquí la lectura també demana COMERCIAL, cap pantalla tècnica no la consulta."""
     queryset = Expense.objects.select_related('product', 'supplier', 'created_by').all()
     serializer_class = ExpenseSerializer
     filterset_fields = ['work_order', 'product', 'supplier']
@@ -492,7 +570,7 @@ class ExpenseViewSet(_ConfigureWriteMixin, viewsets.ModelViewSet):
 
 # ── Documents comercials — DeliveryNote (albarà, B4c) ──────────────────────────────────
 
-class DeliveryNoteViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin,
+class DeliveryNoteViewSet(_ComercialMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin,
                           mixins.UpdateModelMixin, mixins.DestroyModelMixin,
                           viewsets.GenericViewSet):
     """Albarans (B4c). Lectura oberta; `generate`/`issue`/`destroy` gated CONFIGURE; `pdf`
@@ -505,8 +583,9 @@ class DeliveryNoteViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixin
     filterset_fields = ['status', 'customer']
 
     def get_permissions(self):
+        # El PDF de l'albarà és el document amb els imports impresos: lectura COMERCIAL.
         if self.action == 'pdf':
-            return [IsAuthenticated()]
+            return [_Comercial()]
         return super().get_permissions()
 
     @action(detail=False, methods=['get'])
@@ -634,17 +713,27 @@ class DeliveryNoteViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin, mixin
         return super().destroy(request, *args, **kwargs)
 
 
-class DeliveryNoteLineViewSet(_ConfigureWriteMixin, mixins.RetrieveModelMixin,
+class DeliveryNoteLineViewSet(_ComercialMixin, mixins.RetrieveModelMixin,
                               mixins.ListModelMixin, mixins.CreateModelMixin,
                               mixins.UpdateModelMixin, mixins.DestroyModelMixin,
                               viewsets.GenericViewSet):
     """Línies d'albarà (edició filtrada per ?delivery_note=). PATCH de preu/descripció/qty/visible
     en DRAFT (guard replicat al serializer per a un 400 net); FK de traçabilitat read-only. `create`
     crea una línia MANUAL (comentari lliure) en un DRAFT; `destroy` treu una línia del DRAFT. Les
-    línies proposades neixen de `add-lines/` (v2) o `generate/` (v1)."""
+    línies proposades neixen de `add-lines/` (v2) o `generate/` (v1).
+
+    ⚠️ LECTURA OBERTA A POSTA: `ProductionTab.jsx:76` demana aquestes línies per `?model=` des
+    de la fitxa del model i només en pinta `dn_number`/`dn_status`. És el cas que va obrir la
+    peça — hi viatjaven `unit_price`, `line_total` i `internal_cost` (diagnosi §3.2) — i el
+    serializer els poda. L'escriptura (preu de la línia en DRAFT) sí que és comercial."""
     queryset = DeliveryNoteLine.objects.select_related('delivery_note', 'product', 'model').all()
     serializer_class = DeliveryNoteLineSerializer
     filterset_fields = ['delivery_note', 'line_kind', 'model']
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
         """POST commerce/delivery-note-lines/ — crea una línia MANUAL (comentari/lliure) en un DRAFT.

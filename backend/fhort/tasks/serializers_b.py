@@ -1,4 +1,7 @@
 from rest_framework import serializers
+
+from fhort.accounts.capabilities import PodaEconomicaMixin
+
 from .models import (TaskType, ModelTask, Supplier, Production,
                      GarmentTypeItem, GarmentTypeItemPart, TaskTimeEstimate, Customer)
 from .services_c import rectification_count
@@ -136,7 +139,13 @@ class SupplierSerializer(serializers.ModelSerializer):
                   'pais', 'condicions_compra', 'persona_contacte', 'telefon_contacte', 'email_contacte']
 
 
-class CustomerSerializer(serializers.ModelSerializer):
+class CustomerSerializer(PodaEconomicaMixin, serializers.ModelSerializer):
+    #: `descompte_pct` és condició comercial. El Dashboard (la home de TOTHOM) carrega
+    #: `customers.list({page_size:200})` (`frontend/src/pages/Dashboard.jsx:233`) i el
+    #: CustomerSelector el fa servir des del wizard de models: el descompte de tots els
+    #: clients arribava a qualsevol tècnic (diagnosi 2026-08-14 §3.1).
+    CAMPS_ECONOMICS = ('descompte_pct',)
+
     # Comptadors agregats (annotate del CustomerViewSet). SerializerMethodField amb default 0 perquè
     # les respostes fora de list (create/update) — que no venen annotades — no petin.
     quotes_sent = serializers.SerializerMethodField()

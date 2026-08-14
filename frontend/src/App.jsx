@@ -127,6 +127,30 @@ function PantallaEspera() {
   return <div style={{ minHeight: '100vh', background: 'var(--bg-page)' }} />
 }
 
+/** Ruta que a més d'autenticació demana una CAPACITAT (2026-08-14, capability `comercial`).
+ *
+ * Aquest patró no existia: fins ara les rutes només es protegien contra l'anonimat i qualsevol
+ * persona autenticada podia entrar a qualsevol pantalla escrivint la URL. Amagar l'entrada del
+ * menú (`navGroups.js`) no ho impedia — el menú és una llista, no una porta.
+ *
+ * És CORTESIA, no seguretat: qui entri igualment troba una pàgina que no carrega res, perquè
+ * el tall de veritat és el 403 del servidor. El que evita és el pitjor dels dos mons, que és
+ * una pantalla muntada i plena de missatges d'error.
+ *
+ * Rebota a l'arrel i no a /login: qui hi arriba SÍ que té sessió; el que no té és el permís, i
+ * enviar-lo a la pantalla d'entrar li diria una mentida sobre què li passa.
+ */
+function RutaAmbCapacitat({ cap, children }) {
+  const estatAuth = useAuthStore(s => s.estatAuth)
+  const capabilities = useAuthStore(s => s.user?.capabilities)
+  if (estatAuth === AUTH_DESCONEGUT) return <PantallaEspera />
+  // `capabilities` encara no carregat (fetchMe en vol) → esperem. Decidir amb la llista buida
+  // rebotaria la persona legítima a l'arrel a cada F5 sobre una pantalla comercial.
+  if (estatAuth === AUTH_VALID && capabilities === undefined) return <PantallaEspera />
+  if (!capabilities?.includes(cap)) return <Navigate to="/" replace />
+  return children
+}
+
 // v2/J1: el Size Check antic es jubila. /size-check redirigeix al TAB Mesures del ModelSheet,
 // conservant task_id (que el tab consumeix). Ja NO apunta a la pàgina standalone (jubilada).
 function SizeCheckRedirect() {
@@ -456,30 +480,35 @@ export default function App() {
               tenir-hi les dues portes obertes eren dos sistemes per editar el mateix. */}
           <Route path="cataleg-peces" element={<CatalegPeces />} />
           <Route path="cataleg-peces/items/:itemId" element={<CatalegPecesItem />} />
-          <Route path="suppliers" element={<Suppliers />} />
           <Route path="recursos" element={<Recursos />} />
           <Route path="encarrecs" element={<Encarrecs />} />
-          <Route path="clients" element={<Customers />} />
-          <Route path="clients/:id" element={<CustomerDetail />} />
+          {/* ── BLOC COMERCIAL — tot sota `comercial` (2026-08-14) ────────────────────────
+              El guard de ruta és CORTESIA: el tall de veritat és el 403 de
+              `commerce/views.py`. Serveix perquè qui hi arribi per URL trobi el taulell i
+              no una pantalla muntada i plena d'errors. Clients i Proveïdors hi entren
+              perquè viuen en aquesta secció des de B3-M i porten dades fiscals i de compra. */}
+          <Route path="suppliers" element={<RutaAmbCapacitat cap="comercial"><Suppliers /></RutaAmbCapacitat>} />
+          <Route path="clients" element={<RutaAmbCapacitat cap="comercial"><Customers /></RutaAmbCapacitat>} />
+          <Route path="clients/:id" element={<RutaAmbCapacitat cap="comercial"><CustomerDetail /></RutaAmbCapacitat>} />
           {/* Mòdul Comercial Studio (B1) — mestre d'articles. Gate de tier = B5. */}
-          <Route path="comercial/productes" element={<Products />} />
-          <Route path="comercial/productes/:id" element={<ProductDetail />} />
+          <Route path="comercial/productes" element={<RutaAmbCapacitat cap="comercial"><Products /></RutaAmbCapacitat>} />
+          <Route path="comercial/productes/:id" element={<RutaAmbCapacitat cap="comercial"><ProductDetail /></RutaAmbCapacitat>} />
           {/* Comercial Studio (B2) — ofertes (Quote). */}
-          <Route path="comercial/ofertes" element={<Quotes />} />
-          <Route path="comercial/ofertes/:id" element={<QuoteDetail />} />
+          <Route path="comercial/ofertes" element={<RutaAmbCapacitat cap="comercial"><Quotes /></RutaAmbCapacitat>} />
+          <Route path="comercial/ofertes/:id" element={<RutaAmbCapacitat cap="comercial"><QuoteDetail /></RutaAmbCapacitat>} />
           {/* Comercial (M4) — condicions de pagament (PaymentTerms). */}
-          <Route path="comercial/condicions-pagament" element={<PaymentTerms />} />
+          <Route path="comercial/condicions-pagament" element={<RutaAmbCapacitat cap="comercial"><PaymentTerms /></RutaAmbCapacitat>} />
           {/* Comercial (B3b) — comandes de venda (SalesOrder). */}
-          <Route path="comercial/comandes" element={<Orders />} />
-          <Route path="comercial/comandes/:id" element={<OrderDetail />} />
+          <Route path="comercial/comandes" element={<RutaAmbCapacitat cap="comercial"><Orders /></RutaAmbCapacitat>} />
+          <Route path="comercial/comandes/:id" element={<RutaAmbCapacitat cap="comercial"><OrderDetail /></RutaAmbCapacitat>} />
           {/* Comercial (B4a) — encàrrecs / ordres de treball (WorkOrder). */}
-          <Route path="comercial/encarrecs" element={<WorkOrders />} />
-          <Route path="comercial/encarrecs/:id" element={<WorkOrderDetail />} />
+          <Route path="comercial/encarrecs" element={<RutaAmbCapacitat cap="comercial"><WorkOrders /></RutaAmbCapacitat>} />
+          <Route path="comercial/encarrecs/:id" element={<RutaAmbCapacitat cap="comercial"><WorkOrderDetail /></RutaAmbCapacitat>} />
           {/* Comercial (D6) — informe d'encàrrecs orfes (desassignats, pendents de reassignar). */}
-          <Route path="comercial/orfes" element={<OrphanedWorkOrders />} />
+          <Route path="comercial/orfes" element={<RutaAmbCapacitat cap="comercial"><OrphanedWorkOrders /></RutaAmbCapacitat>} />
           {/* Comercial (B4c) — albarans (DeliveryNote). */}
-          <Route path="comercial/albarans" element={<DeliveryNotes />} />
-          <Route path="comercial/albarans/:id" element={<DeliveryNoteDetail />} />
+          <Route path="comercial/albarans" element={<RutaAmbCapacitat cap="comercial"><DeliveryNotes /></RutaAmbCapacitat>} />
+          <Route path="comercial/albarans/:id" element={<RutaAmbCapacitat cap="comercial"><DeliveryNoteDetail /></RutaAmbCapacitat>} />
           {/* TEMPORAL (esborrable) — banc de proves dels components del sistema visual comercial. */}
           <Route path="comercial/_kit" element={<CommercialKitDemo />} />
           <Route path="planificacio" element={<Planning />} />

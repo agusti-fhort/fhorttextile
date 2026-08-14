@@ -2144,7 +2144,8 @@
       "close_gates": "Cerrar gates",
       "configure": "Configurar",
       "view_team_tasks": "Ver tareas de equipo",
-      "manage_users": "Gestionar usuarios"
+      "manage_users": "Gestionar usuarios",
+      "comercial": "Ver precios y costes"
     },
     "search_ph": "Buscar usuario…",
     "all_roles": "Todos los roles",

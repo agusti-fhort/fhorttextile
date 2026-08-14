@@ -3,6 +3,8 @@ fhort/pom/s2_serializers.py — Sprint S2 serializers
 """
 from rest_framework import serializers
 
+from fhort.accounts.capabilities import PodaEconomicaMixin
+
 
 class TargetSerializer(serializers.Serializer):
     id = serializers.IntegerField()
@@ -198,7 +200,12 @@ class SizingProfileSerializer(serializers.Serializer):
             return []
 
 
-class TenantConfigSerializer(serializers.Serializer):
+class TenantConfigSerializer(PodaEconomicaMixin, serializers.Serializer):
+    #: `hourly_rate` és la TARIFA DE COST per hora de la casa, i aquest endpoint el consulta
+    #: tota la SPA per saber `unitat_mesura`: qualsevol pantalla de mesures la portava al
+    #: payload (diagnosi 2026-08-14 §3.1). Es poda; el GET segueix obert per a la resta.
+    CAMPS_ECONOMICS = ('hourly_rate',)
+
     id = serializers.IntegerField(read_only=True)
     unitat_mesura = serializers.ChoiceField(choices=['CM', 'INCH'])
     norma_referencia = serializers.ChoiceField(choices=['ISO_8559', 'ASTM_D13'])

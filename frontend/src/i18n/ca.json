@@ -2144,7 +2144,8 @@
       "close_gates": "Tancar gates",
       "configure": "Configurar",
       "view_team_tasks": "Veure tasques d'equip",
-      "manage_users": "Gestionar usuaris"
+      "manage_users": "Gestionar usuaris",
+      "comercial": "Veure preus i costos"
     },
     "search_ph": "Cerca usuari…",
     "all_roles": "Tots els rols",
