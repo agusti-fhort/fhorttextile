@@ -6507,7 +6507,12 @@ export default function TechSheetEditor() {
     }
     if (ribbonGroup === 'file') {
       return [
-        ribbonTool({ key: 'export', icon: 'ti-file-download', label: t('tech_sheet.export_pdf'), onClick: onExport, disabled: exporting }),
+        // 🚩 «EXPORTAR PDF» JA NO ÉS AQUÍ (14/08). Estava als DOS llocs alhora —botó de la barra
+        // superior i eina d'aquest grup— i la captura d'Agus ho ensenyava com el que era: la
+        // mateixa acció dues vegades a la mateixa pantalla, a 30px de distància. Es queda a
+        // dalt, que és on la §8b la posa (porta a l'extrem dret del menú) i on es veu des de
+        // les vuit tabs i no només des de Fitxer. Aquí hi queden les eines que NO tenen lloc a
+        // dalt: desar com a plantilla, l'idioma del document i el mode plantilla.
         ribbonTool({ key: 'save-template', icon: 'ti-template', label: t('tech_sheet.save_as_template'), onClick: () => setSaveAsTpl({ nom: '', descripcio: '' }), disabled: !locked }),
         // B7 — l'idioma del DOCUMENT, al costat d'exportar: és una propietat del fitxer que
         // s'imprimeix, no una preferència de qui l'edita. L'etiqueta del camp va en l'idioma
@@ -6769,6 +6774,47 @@ export default function TechSheetEditor() {
     { id: 'edit', label: t('tech_sheet.menu_edit'), items: menuEditItems },
   ]
 
+  // EL MENÚ DE L'EDITOR — «Edició» + les vuit tabs de la cinta. Viu aquí, en una variable, i no
+  // dins del JSX de la cinta, perquè des del 14/08 es pinta a la BARRA SUPERIOR (`children` del
+  // `PageMenu`): eren dues franges de crom seguides i totes dues són el mateix nivell —closca—,
+  // mentre que la cinta d'eines de sota canvia amb la tab i per tant és CONTINGUT.
+  //
+  // «EDICIÓ» segueix separat de les vuit i primer. No és una tab (no canvia de què va la
+  // cinta), és un menú, i barrejar-lo amb les altres el faria semblar la novena.
+  // 🚨 I SEGUEIX SENSE PODER-SE ESBORRAR: les seves cinc entrades —desfés, refés, copia,
+  // enganxa, duplica— són l'ÚNICA superfície VISIBLE d'aquestes accions; a tot arreu més només
+  // existeixen com a drecera de teclat, i una drecera que ningú anuncia no existeix per a qui
+  // no la sap. Ha canviat de pis dues vegades; no s'ha perdut cap cop.
+  //
+  // `alignItems:'flex-end'` i el `paddingTop` són el que fa que les tabs recolzin la seva vora
+  // inferior sobre el filet de la barra, com feien sobre el de la cinta: la tab activa es
+  // llegeix com a continuació del que hi ha a sota, que és el que la fa una tab i no un botó.
+  const menuDeLEditor = (
+    <span style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 2, paddingTop: 4, alignSelf: 'stretch' }}>
+      {menuBar.map(m => (
+        <div key={m.id} data-menu style={{ position: 'relative', alignSelf: 'center' }}>
+          <button type="button" onClick={() => setMenuOpen(o => o === m.id ? null : m.id)}
+            style={menuCintaStyle(menuOpen === m.id)}>
+            {m.label}
+            <i className="ti ti-chevron-down" aria-hidden="true" style={{ fontSize: 12, color: 'currentColor' }} />
+          </button>
+          {menuOpen === m.id && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 70, minWidth: 210, background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 'var(--r-ctrl)', boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '4px 0' }}>
+              {m.items}
+            </div>
+          )}
+        </div>
+      ))}
+      <span style={{ ...ribbonSep, height: 20, alignSelf: 'center', margin: '0 6px' }} />
+      {ribbonTabs.map(tab => (
+        <button key={tab.id} type="button" onClick={() => setRibbonGroup(tab.id)}
+          style={ribbonTabStyle(ribbonGroup === tab.id)}>
+          {tab.label}
+        </button>
+      ))}
+    </span>
+  )
+
   // PEÇA P/C: pan actiu (eina 'pan' o espai) i cursor del viewport segons l'eina activa.
   const panActive = locked && (tool === 'pan' || spaceHeld)
   // SORTIR. Sense tasca (consulta, plantilla) la sortida és directa, com sempre. Amb tasca,
@@ -6865,6 +6911,17 @@ export default function TechSheetEditor() {
           backTitle={t('tech_sheet.back_to_model')}
           onBack={() => sortirDeLaFitxa()}
           items={[]}
+          /* 🔑 EL MENÚ DE L'EDITOR PUJA AQUÍ (Agus, a pantalla, 14/08). Eren dues franges de
+             crom seguides —fletxa+document+PDF a dalt, «Edició» i les vuit tabs a sota— i totes
+             dues són el MATEIX nivell: closca. La cinta contextual es queda a sota perquè
+             aquella sí que canvia amb la tab: és CONTINGUT, no crom.
+             El forat és el `children` del PageMenu, que la §8b ja reserva per a «desplegables i
+             botons de menú» a l'esquerra: el `rightChildren` se'n va sol a l'extrem dret amb el
+             seu `marginLeft:auto`, o sigui que la fila queda exactament com la vol Agus —
+             ← | menú | (espai) | Pàgina/versió + Exportar PDF.
+             Cap estil s'ha hagut de tocar: la cinta ja era `--panel`, el mateix fons que la
+             barra (`COL.sidebar`), i les tabs ja portaven els tokens de la casa. */
+          children={menuDeLEditor}
           rightChildren={<>
             {/* En mode plantilla el llenç menteix a posta (mostra {codi} en lloc del codi
                 real): cal dir-ho, o algú pensarà que la fitxa ha perdut les dades. */}
@@ -6897,44 +6954,9 @@ export default function TechSheetEditor() {
           </>}
       />
 
-      {/* ── Ribbon SolidWorks: fila 1 grups, fila 2 comandaments ── */}
+      {/* ── Ribbon: NOMÉS la cinta contextual. La fila de grups ha pujat a la barra superior
+             (v. `menuDeLEditor`, definit abans del `return`). ── */}
       <div style={{ flexShrink: 0, background: CTX_BG, borderBottom: `1px solid ${CTX_BORDER}`, color: CTX_TEXT }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, minHeight: 31, padding: '3px 12px 0' }}>
-          {/* «EDICIÓ» S'ABSORBEIX AQUÍ, i el nivell sencer que ocupava desapareix.
-              Era una franja pròpia de 26px per a UN sol desplegable —dels quatre menús
-              originals en van quedar tres de buits (F7)—, o sigui un pis de crom per a un
-              botó. Baixa a la fila de tabs de la cinta, que és el nivell d'EINA on li toca.
-              🚨 EL QUE NO ES POT FER ÉS ESBORRAR-LO. Les seves cinc entrades —desfés, refés,
-              copia, enganxa, duplica— són l'ÚNICA superfície VISIBLE d'aquestes accions: a
-              tot arreu més només existeixen com a drecera de teclat, i una drecera que ningú
-              anuncia no existeix per a qui no la sap. Es mou de lloc; no es perd.
-              Va abans de les tabs i separat: no és una tab (no canvia de què va la cinta),
-              és un menú, i barrejar-lo amb les vuit el faria semblar la novena. */}
-          {menuBar.map(m => (
-            <div key={m.id} data-menu style={{ position: 'relative', alignSelf: 'center' }}>
-              <button type="button" onClick={() => setMenuOpen(o => o === m.id ? null : m.id)}
-                style={menuCintaStyle(menuOpen === m.id)}>
-                {m.label}
-                <i className="ti ti-chevron-down" aria-hidden="true" style={{ fontSize: 12, color: 'currentColor' }} />
-              </button>
-              {menuOpen === m.id && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 70, minWidth: 210, background: COL.bg, border: `1px solid ${COL.border}`, borderRadius: 'var(--r-ctrl)', boxShadow: '0 4px 12px rgba(0,0,0,0.12)', padding: '4px 0' }}>
-                  {m.items}
-                </div>
-              )}
-            </div>
-          ))}
-          <span style={{ ...ribbonSep, height: 20, alignSelf: 'center', margin: '0 6px' }} />
-          {ribbonTabs.map(tab => (
-            <button key={tab.id} type="button" onClick={() => setRibbonGroup(tab.id)}
-              style={ribbonTabStyle(ribbonGroup === tab.id)}>
-              {tab.label}
-            </button>
-          ))}
-          <span style={{ marginLeft: 'auto', color: COL.textMuted, fontSize: 'var(--fs-label)' }}>
-            {editingFlatId ? t('tech_sheet.node_edit_mode') : multiSelected ? t('tech_sheet.selected_objects', { n: selectedObjects.length }) : selObj ? `${t('tech_sheet.element')} · ${selObj.type}` : tool !== 'select' ? t('tech_sheet.ctx_tool', { tool: activeToolDef.label }) : t('tech_sheet.ctx_idle')}
-          </span>
-        </div>
         {/* C4 · les eines MAI fan scroll: si no caben, la fila creix. Un scroll horitzontal
             amaga eines darrere d'un gest que ningú fa, i el ribbon existeix justament per
             no haver d'anar a buscar res. Amb els tabs partits, el cas normal és una fila. */}
@@ -6949,6 +6971,14 @@ export default function TechSheetEditor() {
             <span style={ribbonSep} />
           </>)}
           {renderRibbonContent()}
+          {/* L'ESTAT DE CONTEXT BAIXA AQUÍ amb la fila de grups que el portava. És el rètol que
+              diu què hi ha seleccionat o quina eina està activa, i pertany al nivell d'EINA:
+              a la barra superior, que ara és closca pura, hi hauria quedat com un quart tipus
+              de contingut al costat de la versió i el botó d'exportar. Amb `marginLeft:auto`
+              conserva l'extrem dret que tenia. */}
+          <span style={{ marginLeft: 'auto', paddingLeft: 12, color: COL.textMuted, fontSize: 'var(--fs-label)' }}>
+            {editingFlatId ? t('tech_sheet.node_edit_mode') : multiSelected ? t('tech_sheet.selected_objects', { n: selectedObjects.length }) : selObj ? `${t('tech_sheet.element')} · ${selObj.type}` : tool !== 'select' ? t('tech_sheet.ctx_tool', { tool: activeToolDef.label }) : t('tech_sheet.ctx_idle')}
+          </span>
         </div>
       </div>
 
