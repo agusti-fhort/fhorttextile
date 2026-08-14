@@ -3,6 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Modal from '../ui/Modal'
 import FileDropCard from '../ui/FileDropCard'
+// P1 · la graella parla per FILA (`ordre`), no per POM. La lògica pura viu al costat, en un
+// mòdul que el runner de Node pot defensar: `node --test src/components/ImportWizard/`.
+import {
+  aplicaGrading, columnesBuides, comptaValors, construeixBaseValues, construeixMesures,
+  construeixTaula, teValorABase,
+} from './taulaMesures'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -262,7 +268,7 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
   const filaRefs = useRef({})
 
   // Pas 3 — taula de mesures
-  const [taula, setTaula] = useState({})              // {pom_master_id: {talla: valor}}
+  const [taula, setTaula] = useState({})              // {ordre: {talla: valor}} — P1: per FILA
   const [valorsMode, setValorsMode] = useState('absoluts')   // 1C-2b: mode dels valors de la fitxa
   const [gradingLoading, setGradingLoading] = useState(false)
   const [savingMesures, setSavingMesures] = useState(false)
@@ -605,34 +611,18 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
     || ((extraccioMeta?.base_size && tallesSel.includes(extraccioMeta.base_size))
       ? extraccioMeta.base_size : tallesSel[0])
 
-  const buildTaula = (src) => {
-    const t = {}
-    for (const p of (src || pomsExtrets || []).filter(x => x.actiu)) {
-      const row = {}
-      for (const talla of tallesSel) {
-        const v = (p.values || {})[talla]
-        row[talla] = (v === undefined || v === null) ? '' : String(v)
-      }
-      t[p.pom_master_id] = row
-    }
-    setTaula(t)
-  }
+  const buildTaula = (src) => setTaula(construeixTaula(src || pomsExtrets, tallesSel))
 
-  const setCell = (pid, talla, val) =>
-    setTaula(prev => ({ ...prev, [pid]: { ...(prev[pid] || {}), [talla]: val } }))
+  const setCell = (clau, talla, val) =>
+    setTaula(prev => ({ ...prev, [clau]: { ...(prev[clau] || {}), [talla]: val } }))
 
   // Columnes (talles) completament buides → ofereix generar grading.
-  const emptyCols = tallesSel.filter(talla =>
-    pomsTaula.every(p => !(taula[p.pom_master_id]?.[talla] ?? '').toString().trim()))
-  const baseTeValors = pomsTaula.some(p => (taula[p.pom_master_id]?.[baseSize] ?? '').toString().trim())
+  const emptyCols = columnesBuides(pomsTaula, tallesSel, taula)
+  const baseTeValors = teValorABase(pomsTaula, taula, baseSize)
 
   const handleGenerarGrading = async () => {
     setGradingLoading(true); setError('')
-    const base_values = {}
-    for (const p of pomsTaula) {
-      const v = taula[p.pom_master_id]?.[baseSize]
-      if (v !== undefined && v !== '') base_values[p.pom_master_id] = v
-    }
+    const base_values = construeixBaseValues(pomsTaula, taula, baseSize)
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/grading-preview/`, {
         method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -640,35 +630,16 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setError(data.error || t('import_wizard.err_status', { status: res.status })); setGradingLoading(false); return }
-      const grading = data.grading || {}
-      // Omple NOMÉS les cel·les buides; preserva els valors extrets del document.
-      setTaula(prev => {
-        const next = { ...prev }
-        for (const p of pomsTaula) {
-          const g = grading[String(p.pom_master_id)] || {}
-          const row = { ...(next[p.pom_master_id] || {}) }
-          for (const talla of tallesSel) {
-            if (!(row[talla] ?? '').toString().trim() && g[talla] !== undefined)
-              row[talla] = String(g[talla])
-          }
-          next[p.pom_master_id] = row
-        }
-        return next
-      })
+      // Omple NOMÉS les cel·les buides; preserva els valors extrets del document. La resposta
+      // arriba amb la mateixa clau amb què s'ha preguntat i el backend ho declara a `clau`.
+      setTaula(prev => aplicaGrading(prev, pomsTaula, tallesSel, data.grading || {}, data.clau))
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
     setGradingLoading(false)
   }
 
   const handleContinueMesures = async () => {
     setSavingMesures(true); setError('')
-    const mesures = []
-    for (const p of pomsTaula) {
-      for (const talla of tallesSel) {
-        const v = taula[p.pom_master_id]?.[talla]
-        if (v !== undefined && v !== '')
-          mesures.push({ pom_master_id: p.pom_master_id, talla_label: talla, valor: parseFloat(v) })
-      }
-    }
+    const mesures = construeixMesures(pomsTaula, tallesSel, taula)
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/mesures/`, {
         method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -687,14 +658,7 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
   // size_map_create_view; aquí només preparem el prefill i naveguem.
   const goCrearLibrary = async () => {
     setSavingMesures(true); setError('')
-    const mesures = []
-    for (const p of pomsTaula) {
-      for (const talla of tallesSel) {
-        const v = taula[p.pom_master_id]?.[talla]
-        if (v !== undefined && v !== '')
-          mesures.push({ pom_master_id: p.pom_master_id, talla_label: talla, valor: parseFloat(v) })
-      }
-    }
+    const mesures = construeixMesures(pomsTaula, tallesSel, taula)
     try {
       await fetch(`${API}/api/v1/import-sessions/${sessionToken}/mesures/`, {
         method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -760,8 +724,7 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
   }
 
   // ── Pas 5 — confirmar
-  const nValors = pomsTaula.reduce((acc, p) =>
-    acc + tallesSel.filter(t => (taula[p.pom_master_id]?.[t] ?? '').toString().trim()).length, 0)
+  const nValors = comptaValors(pomsTaula, tallesSel, taula)
   const teixitInformat = !!(teixit.fabric_main || teixit.fabric_composition ||
     teixit.shrinkage_iso_key || teixit.shrinkage_warp || teixit.shrinkage_pct)
 
@@ -1306,8 +1269,12 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                         </td>
                       </tr>
                     )}
+                    {/* P1 · la `key` de la fila és l'ORDRE. Amb el POM, dues germanes (el
+                        mateix POM en dues instàncies) donaven claus DUPLICADES: React
+                        desmunta i remunta els inputs i el que s'està teclejant es perd.
+                        L'`ordre` el fixa l'extracció i no canvia entre renders. */}
                     {grup.items.map(p => (
-                  <tr key={p.pom_master_id} style={{ borderTop: `1px solid ${BORDER}` }}>
+                  <tr key={p.ordre} style={{ borderTop: `1px solid ${BORDER}` }}>
                     <td style={{ padding: '6px 10px', position: 'sticky', left: 0, background: 'var(--white)' }}>
                       {/* QA-S8 · El codi del DOCUMENT mana: és el que la persona té al paper
                           davant. El del catàleg queda com a secundari i atenuat, i només si
@@ -1324,8 +1291,8 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                       <td key={talla} style={{ padding: '2px', textAlign: 'center',
                             background: talla === baseSize ? '#fbf7ec' : 'var(--white)' }}>
                         <input type="number" step="0.1"
-                          value={taula[p.pom_master_id]?.[talla] ?? ''}
-                          onChange={e => setCell(p.pom_master_id, talla, e.target.value)}
+                          value={taula[p.ordre]?.[talla] ?? ''}
+                          onChange={e => setCell(p.ordre, talla, e.target.value)}
                           style={{ width: 56, padding: '4px', textAlign: 'center', fontSize: 'var(--fs-body)',
                                    border: `1px solid ${BORDER}`, borderRadius: 4,
                                    fontFamily: 'inherit' }} />
