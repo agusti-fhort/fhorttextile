@@ -16,7 +16,9 @@ import AssetNavigator from '../components/assets/AssetNavigator'
 import Contenidor from '../components/ui/Contenidor'
 import PageMenu from '../components/ui/PageMenu'
 import { botoSec, apagat } from '../components/ui/buttons'
-import { pindolesDeModel, ETIQUETA_SECCIO } from '../utils/modelSeccions'
+// `pindolesDeModel` se'n va amb les píndoles de seccions (v. el PageMenu, més avall).
+// `ETIQUETA_SECCIO` es queda: la molla del breadcrumb encara diu com es diu aquesta secció.
+import { ETIQUETA_SECCIO } from '../utils/modelSeccions'
 import useMolla from '../store/molla'
 import { useDocumentHistory, cloneWithNewIds, offsetObjectMm } from './ftt/history'
 import { SNAP_PX, buildCandidates, computeSnap } from './ftt/snapping'
@@ -6850,17 +6852,19 @@ export default function TechSheetEditor() {
           Sense el `<div>` de marge negatiu que porten les altres pantalles: aquí el padding
           del `<main>` ja el cancel·la l'arrel, i la barra se'n va igualment al forat del crom
           pel portal (§8b-quater), o sigui que aquí no ocupa lloc. */}
+      {/* 🚩 SENSE LES PÍNDOLES DE SECCIONS (14/08). Quan la ruta va entrar al bastiment comú
+          es va quedar amb el menú de seccions del model, i Agus el va llistar a pantalla com a
+          part del que sobra: aquí no s'està navegant pel model, s'està editant un document.
+          Les nou seccions són a UN clic —la fletxa torna al model, i allà hi són totes—, i el
+          que hi guanya és el que la peça buscava: la barra queda amb la fletxa de sortir, el
+          crom del DOCUMENT i Exportar PDF, que és la barra pròpia de l'eina.
+          `sortirDeLaFitxa` conserva el paràmetre de destí (i el modal d'acabar que se'l
+          guarda): no es toca, perquè el dia que torni una drecera a una secció, ja funciona. */}
       <PageMenu
           backTo={`/models/${id}`}
           backTitle={t('tech_sheet.back_to_model')}
           onBack={() => sortirDeLaFitxa()}
-          items={pindolesDeModel({
-            activa: 'Fitxa tècnica',
-            // Cap secció no navega pel seu compte: totes surten de l'editor, i sortir de
-            // l'editor amb una tasca oberta ha de passar pel modal d'acabar.
-            onTria: (seccio) => sortirDeLaFitxa(`/models/${id}?tab=${encodeURIComponent(seccio)}`),
-            t,
-          })}
+          items={[]}
           rightChildren={<>
             {/* En mode plantilla el llenç menteix a posta (mostra {codi} en lloc del codi
                 real): cal dir-ho, o algú pensarà que la fitxa ha perdut les dades. */}

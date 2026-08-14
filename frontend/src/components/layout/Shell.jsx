@@ -1,10 +1,27 @@
 import { useEffect, useRef } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import { enganxaForat } from './chromeSlot'
+import { esPantallaCompleta } from './rutesPantallaCompleta'
 
 export default function Shell() {
+  // PANTALLA COMPLETA (14/08) · hi ha rutes que són EINES i no pàgines: el llenç mana i el crom
+  // de navegació hi fa nosa. Fins al 09/08 s'aconseguia declarant-les fora d'aquest component;
+  // des que la fitxa tècnica va entrar al bastiment comú (133496e2) hi va entrar TAMBÉ el
+  // sidebar, la top bar i les píndoles de seccions del model, i l'eina va perdre la pantalla.
+  //
+  // El que s'amaga és el crom de NAVEGACIÓ. El bloc enganxat es queda —hi ha el forat del
+  // portal, que és per on el `PageMenu` de l'eina publica la fletxa de sortir i «Exportar
+  // PDF»— i `--chrome-h` es continua mesurant sobre ell, ara sense la top bar: l'editor, que
+  // ja fa `height: calc(100vh - var(--chrome-h))`, passa a omplir-ho tot sense tocar ni una
+  // línia seva. El `padding` del `<main>` NO es toca: l'editor el cancel·la amb `margin:-1.5rem`
+  // i posar-lo a zero el descentraria 24px cap amunt i cap a l'esquerra.
+  //
+  // El perquè de la llista i les alternatives descartades: `rutesPantallaCompleta.js`.
+  const { pathname } = useLocation()
+  const pantallaCompleta = esPantallaCompleta(pathname)
+
   // §8b-quater(3) · `--chrome-h` — L'ALÇADA DEL BLOC DE CROM, PUBLICADA EN VIU.
   //
   // La demana l'editor de fitxa tècnica, que és una pantalla a PANTALLA COMPLETA i ha de poder
@@ -71,9 +88,9 @@ export default function Shell() {
         '--topbar-top': import.meta.env.VITE_STAGING === 'true' ? '28px' : '0px',
         '--chrome-top': import.meta.env.VITE_STAGING === 'true' ? '84px' : '56px',
       }}>
-        <Sidebar />
+        {!pantallaCompleta && <Sidebar />}
         <div style={{
-          marginLeft: 240,
+          marginLeft: pantallaCompleta ? 0 : 240,
           flex: 1,
           minWidth: 0,            // flex item: permet encongir per sota del min-content del fill (la taula)
           display: 'flex',
@@ -92,7 +109,12 @@ export default function Shell() {
             zIndex: 30,
             background: 'var(--panel)',
           }}>
-            <Topbar />
+            {/* La top bar marxa a pantalla completa (identitat i camí són crom de navegació),
+                però el forat del portal es queda SEMPRE: és per on l'eina publica la seva
+                pròpia barra. Sense ell, la fitxa es quedaria sense fletxa de sortir i sense
+                Exportar PDF — que és exactament el que passaria si es tornés la ruta a fora
+                del Shell. */}
+            {!pantallaCompleta && <Topbar />}
             <div ref={enganxaForat} />
           </div>
           <main style={{

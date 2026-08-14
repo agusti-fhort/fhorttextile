@@ -422,9 +422,14 @@ export default function App() {
             <FittingPrintSheet />
           </ProtectedRoute>
         } />
-        {/* W2 — Taller de patró: FORA del Shell, com l'editor .ftt. És una eina a pantalla
-            completa (el canvas mana), no una pàgina del menú. `?file=` tria el PatternFile;
-            sense param, s'obre el vigent del model. */}
+        {/* W2 — Taller de patró: FORA del Shell. És una eina a pantalla completa (el canvas
+            mana), no una pàgina del menú. `?file=` tria el PatternFile; sense param, s'obre el
+            vigent del model.
+            ⚠️ Deia «com l'editor .ftt» i des del 09/08 ja no és cert: l'editor és DINS del
+            Shell i arriba a la pantalla completa per l'altre camí, `rutesPantallaCompleta`
+            (hi ha de ser, perquè la seva barra —fletxa i Exportar PDF— es teletransporta al
+            forat que obre el Shell). Els dos camins són legítims i el guard accepta tots dos;
+            el que no s'accepta és el tercer, que és el que va passar: dins i sense declarar. */}
         <Route path="/models/:id/patro/taller" element={
           <ProtectedRoute>
             <TallerPatro />
