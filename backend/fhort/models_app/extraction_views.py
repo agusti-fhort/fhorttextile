@@ -2021,6 +2021,9 @@ def import_session_poms_view(request, token):
 
     Rep poms_confirmats (llista de pom_master_id actius). Marca actiu per cada POM extret;
     els pom_master_id confirmats que no hi siguin (afegits manualment del catàleg) s'incorporen.
+    P2 · `files_confirmades` (opcional, llista d'`ordre`) fa la mateixa pregunta PER FILA i, si
+    hi és, mana sobre `poms_confirmats` per a l'estat `actiu`: amb germanes, un POM no pot
+    respondre per totes les seves files.
     Rep també poms_tenant_only (llista d'ordres de files NO_MATCH que el tècnic vol crear com
     a POMMaster tenant-only: pom_global=None, codi_client=codi_fitxa). estat→'MESURES'.
 
@@ -2081,9 +2084,24 @@ def import_session_poms_view(request, token):
                          'candidats': {c: _candidats_de_codi(c) for c in duplicats}}, status=409)
 
     existents = {p.get('pom_master_id') for p in poms if p.get('pom_master_id')}
-    for p in poms:
+    # P2 · QUINES FILES ENTREN A LA TAULA — la pregunta és per FILA quan el client la sap fer.
+    #
+    # `poms_confirmats` és una llista d'IDs de POM, i mentre un POM no podia ocupar més d'una
+    # fila això era la mateixa cosa. Des de l'Onada 3 no ho és: amb tres germanes, desmarcar-ne
+    # una les desmarcava TOTES TRES. `files_confirmades` (llista d'`ordre`) fa la mateixa
+    # pregunta a la fila. Absent = el camí de sempre, byte a byte; `[]` és una decisió («cap»),
+    # que no és el mateix que no dir-ne res.
+    #
+    # No substitueix `poms_confirmats`: aquell té una segona feina —incorporar POMs del catàleg
+    # que el document no menciona— i aquells encara no tenen fila amb què demanar-se.
+    files_confirmades = request.data.get('files_confirmades')
+    ordres_confirmats = ({int(x) for x in files_confirmades if str(x).lstrip('-').isdigit()}
+                         if isinstance(files_confirmades, list) else None)
+    for i, p in enumerate(poms):
         if p.get('pom_master_id'):
-            p['actiu'] = p['pom_master_id'] in confirmats_set
+            p['actiu'] = ((p.get('ordre', i) in ordres_confirmats)
+                          if ordres_confirmats is not None
+                          else p['pom_master_id'] in confirmats_set)
 
     # PORTA de les resolucions, també abans de tocar res: si una sola falla, no n'entra CAP.
     # Els errors van per `ordre` perquè el wizard els pugui pintar a la fila que toca i

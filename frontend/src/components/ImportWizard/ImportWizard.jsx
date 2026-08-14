@@ -9,7 +9,7 @@ import {
   aplicaGrading, columnesBuides, comptaValors, construeixBaseValues, construeixMesures,
   construeixTaula, teValorABase,
 } from './taulaMesures'
-import { sufixIdentitat } from '../../utils/capaInstancia'
+import { etiquetaInstancia, sufixIdentitat } from '../../utils/capaInstancia'
 import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -271,6 +271,11 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
   const [conflictes, setConflictes] = useState({})
   // R3 · decisions preses i encara no enviades: {ordre: {accio:'vincula'|'crea', ...}}.
   const [resolucions, setResolucions] = useState({})
+  // P2 · la INSTÀNCIA triada per fila (`{ordre: slug}`). Viu a part de `resolucions` perquè és
+  // una decisió d'un altre gènere —no diu QUIN POM és, sinó DE QUINA de les seves mesures parla
+  // la fila— i perquè una fila ja aparellada l'ha de poder triar sense re-vincular res. Al
+  // desar es fonen: el backend rep UNA resolució per fila, sencera.
+  const [instancies, setInstancies] = useState({})
   const [panellOrdre, setPanellOrdre] = useState(null)   // fila amb el panell obert (una alhora)
   const [crea, setCrea] = useState({ codi: '', nom: '' })
   const filaRefs = useRef({})
@@ -319,6 +324,18 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
     [tallesSel, mapping, baseLabel],
   )
   const basePaired = !!baseDocLabel
+
+  // P2 · les opcions del columnat d'instància, agrupades pels EIXOS que el backend declara
+  // (`GET /api/v1/mesures/diccionari/`). L'estructura no es duplica aquí: si demà hi ha un eix
+  // nou, aquesta llista el porta sola. Sense diccionari (o si el GET falla) queda buida i el
+  // columnat no es pinta — la pantalla es comporta com abans i no ofereix una llista mig feta.
+  const eixosInstancia = useMemo(() => {
+    const per = dicc?.instancies || {}
+    return (dicc?.eixos || [])
+      .map(e => ({ clau: e.clau, nom: e[`nom_${lang}`] || e.nom_en || e.clau,
+                   files: per[e.clau] || [] }))
+      .filter(g => g.files.length)
+  }, [dicc, lang])
 
   // ── Upload → cribratge
   const handleUpload = async () => {
@@ -544,8 +561,20 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
     const actius = pomsExtrets.filter(p => p.actiu)
     // Les resolucions manen: la fila que en porta una no viatja pels camins a cegues
     // (`poms_confirmats` amb el vincle vell, `poms_tenant_only` amb el codi del document).
-    const llistaRes = actius.filter(p => resolucions[p.ordre])
-      .map(p => ({ ordre: p.ordre, ...resolucions[p.ordre] }))
+    //
+    // P2 · LA INSTÀNCIA VIATJA PER AQUÍ, i no per un camp nou: dir «aquesta fila és el POM B a
+    // baix» és UNA decisió, no dues, i el backend ja la sap llegir sencera (`_pla_de_resolucions`).
+    // Una fila que només tria instància n'estrena una de `vincula` al POM que ja tenia.
+    const llistaRes = actius
+      .filter(p => resolucions[p.ordre]
+        || (instancies[p.ordre] !== undefined && p.pom_master_id))
+      .map(p => {
+        const base = resolucions[p.ordre]
+          || { accio: 'vincula', pom_master_id: p.pom_master_id,
+               pom_codi: p.pom_codi, pom_nom: p.pom_nom }
+        const inst = instancies[p.ordre]
+        return { ordre: p.ordre, ...base, ...(inst === undefined ? {} : { instancia: inst }) }
+      })
     const ambRes = new Set(llistaRes.map(r => r.ordre))
     const ids = actius.filter(p => p.pom_master_id && !ambRes.has(p.ordre)).map(p => p.pom_master_id)
     const tenantOnly = actius
@@ -554,8 +583,12 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
     try {
       const res = await fetch(`${API}/api/v1/import-sessions/${sessionToken}/poms/`, {
         method: 'PATCH', headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        // P2 · `files_confirmades` diu QUINES FILES entren, per `ordre`. `poms_confirmats` es
+        // queda perquè té una altra feina: incorporar POMs del catàleg que el document no
+        // menciona, i aquells encara no tenen fila amb què demanar-se.
         body: JSON.stringify({ poms_confirmats: ids, poms_tenant_only: tenantOnly,
-                               resolucions: llistaRes }),
+                               resolucions: llistaRes,
+                               files_confirmades: actius.map(p => p.ordre) }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.status === 409 && data.error === 'codi_duplicat') {
@@ -593,7 +626,9 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
       // assignats: les decisions pendents ja són dades i l'estat local de resolució mor aquí.
       const updated = data.poms_extrets || pomsExtrets
       setPomsExtrets(updated)
-      setResolucions({}); setConflictes({}); setPanellOrdre(null)
+      // …i la instància també: ha pujat a la fila (`capa`/`instancia` de `poms_extrets`) i
+      // llegir-la de dos llocs alhora és com neixen les discrepàncies que ningú no veu.
+      setResolucions({}); setConflictes({}); setPanellOrdre(null); setInstancies({})
       buildTaula(updated)
       setStep(3)
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
@@ -1144,6 +1179,36 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                               <span style={{ fontWeight: 500 }}>{sufixIdentitat(p, dicc, lang)}</span>
                             </>}
                       </div>
+                      {/* P2 · EL COLUMNAT D'INSTÀNCIA. La fitxa de la Brumà porta tres files
+                          del mateix POM —«at the top», «at the bottom», «stretched out»— i el
+                          que les distingeix no és el POM sinó DE QUINA de les seves mesures
+                          parla cadascuna. No hi ha suggeriment automàtic i és decisió d'Agus:
+                          el lèxic que llegiria «stretched out» → Extended vol corpus d'imports
+                          reals que l'ensenyi. Fins llavors mana la llei de l'import — el que
+                          no se sap segur, ho decideix l'humà. */}
+                      {(p.pom_master_id || res?.accio === 'vincula') && eixosInstancia.length > 0 && (
+                        <select
+                          value={instancies[p.ordre] ?? (p.instancia || '')}
+                          title={t('import_wizard.instancia_label')}
+                          aria-label={t('import_wizard.instancia_label')}
+                          onChange={e => setInstancies(prev => ({ ...prev, [p.ordre]: e.target.value }))}
+                          style={{ flex: '0 0 132px', padding: '3px 6px', borderRadius: 4,
+                                   border: `1px solid ${BORDER}`, background: 'var(--white)',
+                                   fontSize: 'var(--fs-label)', fontFamily: 'inherit',
+                                   color: (instancies[p.ordre] ?? p.instancia)
+                                     ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                          <option value="">{t('import_wizard.instancia_unica')}</option>
+                          {eixosInstancia.map(g => (
+                            <optgroup key={g.clau} label={g.nom}>
+                              {g.files.map(f => (
+                                <option key={f.slug} value={f.slug}>
+                                  {etiquetaInstancia(f.slug, dicc)}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      )}
                       {/* Qualsevol fila es pot re-decidir, tingui match o no. */}
                       <button type="button" onClick={() => obrePanell(p)}
                         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer',

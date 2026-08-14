@@ -43,6 +43,10 @@ MODEL_CODIS = int(os.environ.get('FTT_QA_MODEL_CODIS', '1320'))
 BASE = 'https://staging.fhorttextile.tech'
 VIU = 'http://127.0.0.1:8001'
 HOST_TENANT = os.environ.get('FTT_QA_HOST', 'fhorttextile.tech')
+#: QUIN CAS ES FOTOGRAFIA. `normal` = el camí de sempre (P1: el 100% actual, intacte).
+#: `bruma` = tres files del MATEIX POM en tres instàncies (P2+P3: el cas real que ho motiva
+#: tot). El segon només és assolible des que el pas 2 ofereix el columnat d'instància.
+CAS = os.environ.get('FTT_QA_CAS', 'normal')
 
 
 # ══════════════════ FASE 1 · el document i el token (venv del backend) ══════════════════
@@ -68,6 +72,14 @@ def prepara():
                  .select_related('pom').order_by('ordre')[:6])
         codis = [(bm.pom.codi_client or '', bm.pom.nom_client or '', float(bm.base_value_cm or 0))
                  for bm in vives]
+        if CAS == 'bruma':
+            # LA FITXA DE LA BRUMÀ, amb un codi REAL del catàleg: tres files que parlen del
+            # MATEIX POM —«at the top», «at the bottom», «stretched out»— amb 30, 31 i 40. La
+            # primera s'aparella sola; les altres dues les resol la persona, que és el gest.
+            base_codi = codis[0][0]
+            codis = [(base_codi, 'at the top', 30.0),
+                     (f'{base_codi}{base_codi}', 'at the bottom', 31.0),
+                     (f'{base_codi}1', 'stretched out', 40.0)]
         user = get_user_model().objects.filter(profile__isnull=False).order_by('id').first()
         # ⚠️ EL TOKEN VA SEGELLAT AMB L'SCHEMA (`fhort/auth_jwt.py`): un `AccessToken.for_user`
         # pelat no porta el claim `tenant_schema`, i `TenantJWTAuthentication` el rebutja →
@@ -86,7 +98,7 @@ def prepara():
         ws.append([codi, nom] + [round(valor + (i - i_base) * 1.0, 1) for i in range(len(run))])
     wb.save(XLSX)
 
-    ESTAT.write_text(json.dumps({'token': token, 'xlsx': str(XLSX), 'run': run,
+    ESTAT.write_text(json.dumps({'token': token, 'xlsx': str(XLSX), 'run': run, 'cas': CAS,
                                  'base': model.base_size_label, 'codis': [c[0] for c in codis]}))
     print(f'✓ document {XLSX} · {len(codis)} files · run={run} base={model.base_size_label!r}')
     print(f'✓ estat a {ESTAT} (conté un token; és /tmp i no es commita)')
@@ -135,6 +147,11 @@ def captura():
                     return
                 r = sess.request(request.method, VIU + url.split(BASE, 1)[-1], headers=caps,
                                  data=request.post_data_buffer, timeout=300)
+                if r.status_code >= 400:
+                    # Una passejada muda no serveix de res: si el backend diu que no, es diu.
+                    cos = (request.post_data_buffer or b'')[:500].decode('utf8', 'replace')
+                    print(f'  ⚠️  {request.method} {cami} → {r.status_code} {r.text[:300]}')
+                    print(f'      cos enviat: {cos}')
                 route.fulfill(status=r.status_code, body=r.content,
                               headers={'content-type': r.headers.get('content-type', 'application/json')})
             except Exception as e:
@@ -182,15 +199,33 @@ def captura():
         pag.wait_for_timeout(600)
         pag.get_by_role('button', name='Analitzar talles').click()
         pag.wait_for_timeout(4000)
-        foto(pag, '01_talles', 'pas 1 · les columnes del document aparellades')
+        foto(pag, f'{CAS}_01_talles', 'pas 1 · les columnes del document aparellades')
 
         pag.get_by_role('button', name='Continuar → POMs').click()
-        pag.wait_for_timeout(9000)
-        foto(pag, '02_poms', 'pas 2 · una fila per fila del document (encara sense instàncies)')
+        pag.wait_for_timeout(12000)
+        if CAS == 'bruma':
+            # LES DUES FILES QUE NO S'HAN APARELLAT SOLES: la persona les vincula al MATEIX POM
+            # que la primera. Fins a P2 això era una col·lisió («Un POM no pot ser dues files»).
+            base_codi = estat['codis'][0]
+            for i in (1, 2):
+                pag.get_by_text('canvia el vincle').nth(i).click()
+                pag.wait_for_timeout(900)
+                pag.get_by_placeholder('Tria un POM del catàleg…').first.fill(base_codi)
+                pag.wait_for_timeout(1400)
+                pag.locator(f'button:text-matches("^{base_codi} ·")').first.click()
+                pag.wait_for_timeout(900)
+            # …I EL COLUMNAT: de quina mesura del POM parla cada fila. El selector va per
+            # `aria-label` i no per posició: el <select> de l'idioma de la capçalera també és
+            # un <select>, i comptar-los tots desplaçava la tria una fila.
+            sel = pag.locator('select[aria-label="Instància"]')
+            for i, slug in ((1, 'bottom'), (2, 'extended')):
+                sel.nth(i).select_option(slug)
+                pag.wait_for_timeout(500)
+        foto(pag, f'{CAS}_02_poms', 'pas 2 · una fila per fila, amb el columnat d\'instància')
 
         pag.get_by_role('button', name='Continuar → Mesures').click()
         pag.wait_for_timeout(3000)
-        foto(pag, '03_graella', 'pas 3 · LA GRAELLA amb la clau de fila nova')
+        foto(pag, f'{CAS}_03_graella', 'pas 3 · LA GRAELLA amb la clau de fila nova')
 
         # EL GEST QUE EL CANVI DE `key` POSAVA EN RISC: teclejar.
         cel = pag.locator('input[type="number"]').nth(1)
@@ -198,7 +233,7 @@ def captura():
         cel.fill('99.9')
         pag.wait_for_timeout(700)
         valor = cel.input_value()
-        foto(pag, '04_teclejat', f'la cel·la teclejada reté el valor ({valor})')
+        foto(pag, f'{CAS}_04_teclejat', f'la cel·la teclejada reté el valor ({valor})')
         print(('✅' if valor == '99.9' else '❌') + f' el valor teclejat hi queda: {valor!r}')
         ctx.close(); nav.close()
         return 0 if valor == '99.9' else 1
