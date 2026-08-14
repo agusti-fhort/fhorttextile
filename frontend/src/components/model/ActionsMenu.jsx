@@ -281,7 +281,15 @@ export default function ActionsMenu({ targets, model, selectionSet = null, onCha
     { key: 'assign', label: t('model_sheet.assign_tasks'), icon: 'ti-users-plus', enabled: n > 0 },
     { key: 'production', label: t('model_sheet.send_to_production'), icon: 'ti-send', enabled: !conjunt && list.length > 0, hint: conjuntHint },
     { key: 'fitting', label: t('model_sheet.schedule_fitting'), icon: 'ti-calendar-plus', enabled: !conjunt && list.length > 0, hint: conjuntHint },
-    { key: 'assign_order', label: t('model_sheet.assign_order'), icon: 'ti-clipboard-list', enabled: !conjunt && list.length > 0, hint: conjuntHint },
+    // L'assignació a comanda demana CONFIGURE al servidor des de sempre
+    // (`commerce/views.py`, `assign-model`), però l'entrada de menú no ho deia: un tècnic la
+    // veia, obria el modal, triava línia i només aleshores es menjava un 403. Es gateja com
+    // les dues germanes de sota. NO demana `comercial`: assignar és cartera, no comerç
+    // (decisió d'Agus, 2026-08-14), i el selector li arriba podat d'imports.
+    ...(canConfigure
+      ? [{ key: 'assign_order', label: t('model_sheet.assign_order'), icon: 'ti-clipboard-list',
+           enabled: !conjunt && list.length > 0, hint: conjuntHint }]
+      : []),
     // Només en una Marca amb CONFIGURE. Fora del mode conjunt: l'endpoint pren model_ids
     // explícits (no filtres), com production/fitting/assign_order.
     ...((isBrand && canConfigure)
