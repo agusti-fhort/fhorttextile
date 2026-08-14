@@ -9,6 +9,8 @@ import {
   aplicaGrading, columnesBuides, comptaValors, construeixBaseValues, construeixMesures,
   construeixTaula, teValorABase,
 } from './taulaMesures'
+import { sufixIdentitat } from '../../utils/capaInstancia'
+import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -223,8 +225,14 @@ function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea
 }
 
 export default function ImportWizard({ model, garment = '', garmentNom = '', onCancel, onComplete }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  // P3 · LA IDENTITAT DE LA FILA, VISIBLE. `sufixIdentitat` és la porta única de la casa i
+  // torna '' per a la mesura única d'exterior: avui, doncs, la pantalla no canvia ni un píxel.
+  // Parla el dia que una fila porta germana — que és el dia que dues files diuen el mateix nom
+  // amb xifres diferents, el pitjor que pot ensenyar una taula de mesures.
+  const dicc = useDiccionariMesures()
+  const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
   const token = localStorage.getItem('access_token')
   const authHeaders = { Authorization: `Bearer ${token}` }
 
@@ -1129,7 +1137,12 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                                     {t('import_wizard.add_as_own')}
                                   </span>
                                 </span>)
-                          : <><b>{p.pom_codi}</b> · {p.pom_nom || p.descripcio}</>}
+                          : <><b>{p.pom_codi}</b> · {p.pom_nom || p.descripcio}
+                              {/* P3 · i la identitat també aquí, que és on es decideix: la
+                                  fila que ja porta instància ho ha de dir al pas on la
+                                  persona la mira, no només a la graella del pas següent. */}
+                              <span style={{ fontWeight: 500 }}>{sufixIdentitat(p, dicc, lang)}</span>
+                            </>}
                       </div>
                       {/* Qualsevol fila es pot re-decidir, tingui match o no. */}
                       <button type="button" onClick={() => obrePanell(p)}
@@ -1285,6 +1298,11 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                       {p.pom_codi && p.codi_fitxa && p.pom_codi !== p.codi_fitxa && (
                         <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> → {p.pom_codi}</span>
                       )}
+                      {/* P3 · LA IDENTITAT AL RÈTOL, no en una columna nova: el que eixampla
+                          una taula és el rètol, i aquí la instància és el que fa que dues
+                          files del mateix POM es puguin dir l'una de l'altra. Mateix ordre i
+                          mateixa forma que a la fitxa i a MeasureGrid (` · Bottom · Folre`). */}
+                      <span style={{ fontWeight: 500 }}>{sufixIdentitat(p, dicc, lang)}</span>
                       <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{p.pom_nom || p.descripcio}</div>
                     </td>
                     {tallesSel.map(talla => (
