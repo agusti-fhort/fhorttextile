@@ -4107,7 +4107,8 @@
     "resol_err_pom_ja_usat": "Aquest POM ja el té la fila {{ordre}} d'aquest import. Un POM no pot ser dues files.",
     "resol_err_pom_no_valid": "Aquest POM ja no existeix o està inactiu. Tria'n un altre.",
     "resol_err_codi_repetit": "El codi «{{codi}}» ja el crea la fila {{ordre}} d'aquest mateix import.",
-    "resol_err_generic": "Aquesta fila no s'ha pogut resoldre. Torna a decidir-la."
+    "resol_err_generic": "Aquesta fila no s'ha pogut resoldre. Torna a decidir-la.",
+    "resol_fet_btn": "Fet"
   },
   "dependency": {
     "title": "Dependència",

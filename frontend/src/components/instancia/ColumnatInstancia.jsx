@@ -90,34 +90,50 @@ function ModalCombinacio({ valor, dicc, onTanca, onAplica }) {
  * Sense diccionari (o si el GET ha fallat) no pinta res — la pantalla es comporta com abans en
  * comptes d'oferir una llista mig feta. És la mateixa llei que ja segueix `EditableTable`.
  */
-export default function ColumnatInstancia({ valor = '', dicc, onTria, ambRetols = false }) {
+export default function ColumnatInstancia({ valor = '', dicc, onTria }) {
   const { t, i18n } = useTranslation()
   const [modal, setModal] = useState(false)
   const dims = dimensionsDe(dicc)
   if (!dims.length) return null
   const actuals = tramsPerEix(dicc, valor)
+  const grupS = { padding: '6px 10px', borderLeft: `1px solid var(--border)` }
+  const retolS = { fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
+                   letterSpacing: '0.04em', color: 'var(--text-muted)', marginBottom: 5 }
 
+  // EL FORMAT DE MESURES (v8.1 · el columnat de la Definició manual): una capçalera INSTÀNCIA i,
+  // a sota, un GRUP DE COLUMNES per eix del diccionari amb el seu rètol, més la del `＋`. No és
+  // decoració: amb les píndoles en una tira sola, «Bottom» i «Relaxed» semblen la mateixa llista
+  // i triar-ne una de cada sembla contradir-se. Amb els grups es veu que són dues preguntes.
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-      {dims.map(d => (
-        <div key={d.clau} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
-          {ambRetols && (
-            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginRight: 2 }}>
-              {nomEnIdioma(d, i18n.language)}
-            </span>
-          )}
-          {d.opcions.map(o => (
-            <Pindola key={o.slug} slug={o.slug} dicc={dicc} encesa={actuals[d.clau] === o.slug}
-              tip={actuals[d.clau] === o.slug
-                ? t('instancia.tip_treu', { nom: etiquetaInstancia(o.slug, dicc) })
-                : t('instancia.tip_aquesta', { nom: etiquetaInstancia(o.slug, dicc) })}
-              onTria={s => onTria(triaTram(dicc, valor, s))} />
-          ))}
+    <div style={{ display: 'inline-block', border: `1px solid var(--border)`, borderRadius: 6,
+                  background: 'var(--white)', overflow: 'hidden' }}>
+      <div style={{ padding: '4px 10px', background: 'var(--gold-pale)', color: 'var(--gold)',
+                    fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
+                    letterSpacing: '0.04em' }}>
+        {t('instancia.grup')}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch' }}>
+        {dims.map((d, k) => (
+          <div key={d.clau} style={{ ...grupS, borderLeft: k ? grupS.borderLeft : 'none' }}>
+            <div style={retolS}>{nomEnIdioma(d, i18n.language)}</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {d.opcions.map(o => (
+                <Pindola key={o.slug} slug={o.slug} dicc={dicc} encesa={actuals[d.clau] === o.slug}
+                  tip={actuals[d.clau] === o.slug
+                    ? t('instancia.tip_treu', { nom: etiquetaInstancia(o.slug, dicc) })
+                    : t('instancia.tip_aquesta', { nom: etiquetaInstancia(o.slug, dicc) })}
+                  onTria={s => onTria(triaTram(dicc, valor, s))} />
+              ))}
+            </div>
+          </div>
+        ))}
+        <div style={grupS}>
+          <div style={retolS}>{t('instancia.mes')}</div>
+          <button type="button" onClick={() => setModal(true)} title={t('instancia.mes_tip')}
+            aria-label={t('instancia.mes_tip')}
+            style={{ ...pindolaS(false), color: 'var(--text-muted)' }}>＋</button>
         </div>
-      ))}
-      <button type="button" onClick={() => setModal(true)} title={t('instancia.mes_tip')}
-        aria-label={t('instancia.mes_tip')}
-        style={{ ...pindolaS(false), color: 'var(--text-muted)' }}>＋</button>
+      </div>
       {modal && (
         <ModalCombinacio valor={valor} dicc={dicc} onTanca={() => setModal(false)}
           onAplica={slug => { onTria(slug); setModal(false) }} />

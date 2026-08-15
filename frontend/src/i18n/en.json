@@ -4107,7 +4107,8 @@
     "resol_err_pom_ja_usat": "Row {{ordre}} of this import already takes this POM. One POM cannot be two rows.",
     "resol_err_pom_no_valid": "That POM no longer exists or is inactive. Pick another one.",
     "resol_err_codi_repetit": "Row {{ordre}} of this same import already creates the code «{{codi}}».",
-    "resol_err_generic": "This row could not be resolved. Decide it again."
+    "resol_err_generic": "This row could not be resolved. Decide it again.",
+    "resol_fet_btn": "Done"
   },
   "dependency": {
     "title": "Dependency",

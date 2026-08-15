@@ -11,7 +11,7 @@ import {
 } from './taulaMesures'
 import { sufixIdentitat } from '../../utils/capaInstancia'
 import ColumnatInstancia from '../instancia/ColumnatInstancia'
-import { filaAmbIdentitat } from './filaPas2'
+import { filaAmbIdentitat, instanciaEfectiva } from './filaPas2'
 import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -136,7 +136,7 @@ function PomCatalegPicker({ cataleg, onPick, autoFocus }) {
 // catàleg. Aquí la fila té les TRES sortides a sobre —vincular a un candidat, triar del
 // catàleg, o crear-ne un de nou amb codi i nom editables— i la decisió segueix sent seva:
 // el backend no en tria cap, només diu qui es disputa el codi.
-function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea, onTanca,
+function ResolPanel({ fila, conflicte, res, cataleg, crea, setCrea, onVincula, onCrea, onTanca,
                      dicc, instancia, onInstancia }) {
   const { t } = useTranslation()
   const candidats = conflicte?.candidats || []
@@ -198,14 +198,11 @@ function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea
         onPick={pm => onVincula({ id: pm.id, codi_client: pm.codi_client,
                                   nom_client: pm.nom_client, actiu: true })} />
 
-      {/* P2-bis · LA INSTÀNCIA, AL MATEIX GEST. Vincular «BB» al POM B i dir que parla del
-          BAIXOS és UNA decisió, i fins ara demanava dues passades: vincular aquí i tornar a
-          la fila a triar la instància. Val per als DOS camins —el catàleg de sobre i el
-          «Crea i vincula» de sota—: la fila que neix d'un codi nou també pot ser una germana.
-          Sense tocar res queda la instància única, que és el default de sempre. */}
-      <div style={EYEBROW}>{t('instancia.grup')}</div>
-      <ColumnatInstancia valor={instancia} dicc={dicc} onTria={onInstancia} ambRetols />
-
+      {/* P2-ter/2 · LA INSTÀNCIA, DINS DEL GEST DE VINCULAR: cercador → instància → fet. Triar
+          el POM ja NO tanca el panell; el tanca «Fet», i entremig hi cap l'altra meitat de la
+          decisió. Val per als DOS camins —el catàleg de sobre i el «Crea i vincula» de sota—:
+          la fila que neix d'un codi nou també pot ser una germana. Sense tocar res queda la
+          instància única, que és el default de sempre. */}
       <div style={EYEBROW}>{t('import_wizard.resol_crea_title')}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
         <label style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
@@ -231,6 +228,28 @@ function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea
       <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 6 }}>
         {t('import_wizard.resol_crea_hint')}
       </div>
+
+      {/* La segona meitat de la decisió, en FORMAT DE MESURES (el columnat de la Definició
+          manual). Va al final perquè és el que es tria DESPRÉS d'haver dit quin POM és, i
+          només quan ja n'hi ha un: preguntar de quina mesura del POM parla una fila que
+          encara no té POM és preguntar sobre res. */}
+      {res && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--ok)', marginBottom: 8 }}>
+            {res.accio === 'vincula'
+              ? t('import_wizard.resol_fet_vincula', { codi: res.pom_codi, nom: res.pom_nom })
+              : t('import_wizard.resol_fet_crea', { codi: res.codi, nom: res.nom })}
+            <b>{sufixIdentitat({ instancia }, dicc)}</b>
+          </div>
+          <ColumnatInstancia valor={instancia} dicc={dicc} onTria={onInstancia} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+            <button type="button" onClick={onTanca}
+              style={{ ...BTN, background: GOLD, color: 'var(--white)' }}>
+              {t('import_wizard.resol_fet_btn')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -520,12 +539,15 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
     carregaCataleg()
   }
 
-  const posaResolucio = (ordre, res) => {
+  // P2-ter/2 · `tanca` és de qui la crida. Des del panell, triar el POM ja NO el tanca: la
+  // decisió té dues meitats —quin POM és i de quina de les seves mesures parla la fila— i
+  // tancar a la primera obligava a reobrir per a la segona. El tanca «Fet».
+  const posaResolucio = (ordre, res, { tanca = true } = {}) => {
     setResolucions(prev => ({ ...prev, [ordre]: res }))
     setConflictes(prev => { const n = { ...prev }; delete n[ordre]; return n })
     setPomsExtrets(prev => prev.map(p =>
       p.ordre === ordre ? { ...p, actiu: true, tenant_only: false } : p))
-    setPanellOrdre(null)
+    if (tanca) setPanellOrdre(null)
   }
 
   const treuResolucio = (ordre) => {
@@ -1207,20 +1229,20 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                     </div>
                     {panellOrdre === p.ordre && (
                       <ResolPanel
-                        fila={p} conflicte={conflicte} cataleg={cataleg}
+                        fila={p} conflicte={conflicte} res={res} cataleg={cataleg}
                         crea={crea} setCrea={setCrea}
                         onTanca={() => setPanellOrdre(null)}
                         dicc={dicc}
-                        instancia={instancies[p.ordre] ?? (p.instancia || '')}
+                        instancia={instanciaEfectiva(p, instancies)}
                         onInstancia={slug => setInstancies(prev => ({ ...prev, [p.ordre]: slug }))}
                         onVincula={(c) => posaResolucio(p.ordre, {
                           accio: 'vincula', pom_master_id: c.id,
                           pom_codi: c.codi_client, pom_nom: c.nom_client,
-                        })}
+                        }, { tanca: false })}
                         onCrea={() => posaResolucio(p.ordre, {
                           accio: 'crea', codi: crea.codi.trim(),
                           nom: crea.nom.trim() || crea.codi.trim(),
-                        })}
+                        }, { tanca: false })}
                       />
                     )}
                     </Fragment>

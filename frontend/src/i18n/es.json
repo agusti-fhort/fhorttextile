@@ -4107,7 +4107,8 @@
     "resol_err_pom_ja_usat": "La fila {{ordre}} de esta importación ya tiene este POM. Un POM no puede ser dos filas.",
     "resol_err_pom_no_valid": "Ese POM ya no existe o está inactivo. Elige otro.",
     "resol_err_codi_repetit": "La fila {{ordre}} de esta misma importación ya crea el código «{{codi}}».",
-    "resol_err_generic": "Esta fila no se ha podido resolver. Vuelve a decidirla."
+    "resol_err_generic": "Esta fila no se ha podido resolver. Vuelve a decidirla.",
+    "resol_fet_btn": "Hecho"
   },
   "dependency": {
     "title": "Dependencia",
