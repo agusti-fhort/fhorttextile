@@ -234,6 +234,43 @@ def main():
         finally:
             transaction.savepoint_rollback(sid)
 
+        # ══ F · P2-bis · LA INSTÀNCIA COMPOSTA TRAVESSA ═══════════════════════════════
+        print('\nF · P2-bis — una instància COMPOSTA (`left-relaxed`) de punta a punta')
+        sid = transaction.savepoint()
+        try:
+            # Les píndoles creuen els dos eixos i n'emeten UN slug compost per la porta única
+            # (`composaInstancia`). El que aquí es mesura és que la cadena no el parteixi ni el
+            # reordeni pel camí: el que la persona tria al pas 2 ha de ser el que hi ha al disc.
+            s = sessio([(0, 'B', 'left relaxed'), (1, 'BB', 'right relaxed')])
+            res = crida(import_session_poms_view, s, {
+                'poms_confirmats': [],
+                'resolucions': [
+                    {'ordre': 0, 'accio': 'vincula', 'pom_master_id': pom.id,
+                     'instancia': 'left-relaxed'},
+                    {'ordre': 1, 'accio': 'vincula', 'pom_master_id': pom.id,
+                     'instancia': 'right-relaxed'},
+                ]})
+            diu('el pas 2 accepta les compostes', res.status_code, 200)
+            s.refresh_from_db()
+            files = sorted(s.poms_extrets, key=lambda f: f['ordre'])
+            payload = mesures_com_el_front(files, run, taula_de({0: 60.0, 1: 61.0}))
+            crida(import_session_mesures_view, s, {'mesures': payload,
+                                                   'valors_mode': 'absoluts'}, sufix='mesures')
+            s.refresh_from_db()
+            res = crida(import_session_confirmar_view, s,
+                        {'container_choice': 'no_container', 'poda_choice': 'conservar',
+                         'manual_choice': 'sobreescriure'}, metode='post', sufix='confirmar')
+            diu('el confirm desa', res.status_code, 201)
+            if res.status_code != 201:
+                print('    ', getattr(res, 'data', None))
+            diu('el slug compost arriba SENCER i sense reordenar',
+                {(bm.capa, bm.instancia): bm.base_value_cm
+                 for bm in BaseMeasurement.objects.filter(model=model, garment=MARE, pom=pom,
+                                                          origen='IMPORTED')},
+                {('exterior', 'left-relaxed'): 60.0, ('exterior', 'right-relaxed'): 61.0})
+        finally:
+            transaction.savepoint_rollback(sid)
+
         # ══ EL ROLLBACK, DEMOSTRAT ════════════════════════════════════════════════════
         print('\nROLLBACK')
         diu('la BD ha tornat exactament on era', cens(MODEL_ID), abans)

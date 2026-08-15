@@ -9,7 +9,8 @@ import {
   aplicaGrading, columnesBuides, comptaValors, construeixBaseValues, construeixMesures,
   construeixTaula, teValorABase,
 } from './taulaMesures'
-import { etiquetaInstancia, sufixIdentitat } from '../../utils/capaInstancia'
+import { sufixIdentitat } from '../../utils/capaInstancia'
+import ColumnatInstancia from '../instancia/ColumnatInstancia'
 import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -134,7 +135,8 @@ function PomCatalegPicker({ cataleg, onPick, autoFocus }) {
 // catàleg. Aquí la fila té les TRES sortides a sobre —vincular a un candidat, triar del
 // catàleg, o crear-ne un de nou amb codi i nom editables— i la decisió segueix sent seva:
 // el backend no en tria cap, només diu qui es disputa el codi.
-function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea, onTanca }) {
+function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea, onTanca,
+                     dicc, instancia, onInstancia }) {
   const { t } = useTranslation()
   const candidats = conflicte?.candidats || []
   const EYEBROW = { fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
@@ -194,6 +196,14 @@ function ResolPanel({ fila, conflicte, cataleg, crea, setCrea, onVincula, onCrea
       <PomCatalegPicker cataleg={cataleg} autoFocus={candidats.length === 0}
         onPick={pm => onVincula({ id: pm.id, codi_client: pm.codi_client,
                                   nom_client: pm.nom_client, actiu: true })} />
+
+      {/* P2-bis · LA INSTÀNCIA, AL MATEIX GEST. Vincular «BB» al POM B i dir que parla del
+          BAIXOS és UNA decisió, i fins ara demanava dues passades: vincular aquí i tornar a
+          la fila a triar la instància. Val per als DOS camins —el catàleg de sobre i el
+          «Crea i vincula» de sota—: la fila que neix d'un codi nou també pot ser una germana.
+          Sense tocar res queda la instància única, que és el default de sempre. */}
+      <div style={EYEBROW}>{t('instancia.grup')}</div>
+      <ColumnatInstancia valor={instancia} dicc={dicc} onTria={onInstancia} ambRetols />
 
       <div style={EYEBROW}>{t('import_wizard.resol_crea_title')}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
@@ -324,18 +334,6 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
     [tallesSel, mapping, baseLabel],
   )
   const basePaired = !!baseDocLabel
-
-  // P2 · les opcions del columnat d'instància, agrupades pels EIXOS que el backend declara
-  // (`GET /api/v1/mesures/diccionari/`). L'estructura no es duplica aquí: si demà hi ha un eix
-  // nou, aquesta llista el porta sola. Sense diccionari (o si el GET falla) queda buida i el
-  // columnat no es pinta — la pantalla es comporta com abans i no ofereix una llista mig feta.
-  const eixosInstancia = useMemo(() => {
-    const per = dicc?.instancies || {}
-    return (dicc?.eixos || [])
-      .map(e => ({ clau: e.clau, nom: e[`nom_${lang}`] || e.nom_en || e.clau,
-                   files: per[e.clau] || [] }))
-      .filter(g => g.files.length)
-  }, [dicc, lang])
 
   // ── Upload → cribratge
   const handleUpload = async () => {
@@ -1122,7 +1120,11 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                   const conflicte = conflictes[p.ordre]
                   return (
                     <Fragment key={idx}>
-                    <div ref={el => { filaRefs.current[p.ordre] = el }} style={{
+                    {/* `data-fila` — l'àncora de la fila per a l'arnès de captura, i el mateix
+                        patró que `EditableTable` ja fa servir (`data-fila`, `data-pindola`):
+                        sense ella, una passejada ha de comptar píndoles per posició i qualsevol
+                        canvi de columnat li mou la tria a una altra fila. */}
+                    <div ref={el => { filaRefs.current[p.ordre] = el }} data-fila={p.ordre} style={{
                       display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
                       borderTop: idx ? `1px solid ${BORDER}` : 'none',
                       background: conflicte ? 'var(--err-bg)' : res ? 'var(--ok-bg)'
@@ -1186,28 +1188,11 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                           el lèxic que llegiria «stretched out» → Extended vol corpus d'imports
                           reals que l'ensenyi. Fins llavors mana la llei de l'import — el que
                           no se sap segur, ho decideix l'humà. */}
-                      {(p.pom_master_id || res?.accio === 'vincula') && eixosInstancia.length > 0 && (
-                        <select
-                          value={instancies[p.ordre] ?? (p.instancia || '')}
-                          title={t('import_wizard.instancia_label')}
-                          aria-label={t('import_wizard.instancia_label')}
-                          onChange={e => setInstancies(prev => ({ ...prev, [p.ordre]: e.target.value }))}
-                          style={{ flex: '0 0 132px', padding: '3px 6px', borderRadius: 4,
-                                   border: `1px solid ${BORDER}`, background: 'var(--white)',
-                                   fontSize: 'var(--fs-label)', fontFamily: 'inherit',
-                                   color: (instancies[p.ordre] ?? p.instancia)
-                                     ? 'var(--text-main)' : 'var(--text-muted)' }}>
-                          <option value="">{t('import_wizard.instancia_unica')}</option>
-                          {eixosInstancia.map(g => (
-                            <optgroup key={g.clau} label={g.nom}>
-                              {g.files.map(f => (
-                                <option key={f.slug} value={f.slug}>
-                                  {etiquetaInstancia(f.slug, dicc)}
-                                </option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
+                      {(p.pom_master_id || res?.accio === 'vincula') && (
+                        <ColumnatInstancia
+                          valor={instancies[p.ordre] ?? (p.instancia || '')}
+                          dicc={dicc}
+                          onTria={slug => setInstancies(prev => ({ ...prev, [p.ordre]: slug }))} />
                       )}
                       {/* Qualsevol fila es pot re-decidir, tingui match o no. */}
                       <button type="button" onClick={() => obrePanell(p)}
@@ -1233,6 +1218,9 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                         fila={p} conflicte={conflicte} cataleg={cataleg}
                         crea={crea} setCrea={setCrea}
                         onTanca={() => setPanellOrdre(null)}
+                        dicc={dicc}
+                        instancia={instancies[p.ordre] ?? (p.instancia || '')}
+                        onInstancia={slug => setInstancies(prev => ({ ...prev, [p.ordre]: slug }))}
                         onVincula={(c) => posaResolucio(p.ordre, {
                           accio: 'vincula', pom_master_id: c.id,
                           pom_codi: c.codi_client, pom_nom: c.nom_client,

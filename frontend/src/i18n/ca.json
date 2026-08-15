@@ -472,7 +472,8 @@
     "confirm": "Confirmar",
     "close": "Tancar",
     "next": "Següent",
-    "previous": "Anterior"
+    "previous": "Anterior",
+    "apply": "Aplicar"
   },
   "topbar": {
     "unit_switch": "Canviar a {{unitat}}",
@@ -4106,9 +4107,7 @@
     "resol_err_pom_ja_usat": "Aquest POM ja el té la fila {{ordre}} d'aquest import. Un POM no pot ser dues files.",
     "resol_err_pom_no_valid": "Aquest POM ja no existeix o està inactiu. Tria'n un altre.",
     "resol_err_codi_repetit": "El codi «{{codi}}» ja el crea la fila {{ordre}} d'aquest mateix import.",
-    "resol_err_generic": "Aquesta fila no s'ha pogut resoldre. Torna a decidir-la.",
-    "instancia_label": "Instància",
-    "instancia_unica": "Única"
+    "resol_err_generic": "Aquesta fila no s'ha pogut resoldre. Torna a decidir-la."
   },
   "dependency": {
     "title": "Dependència",
@@ -4677,7 +4676,9 @@
     "desfa_titol": "Desfer la instància",
     "desfa_avis": "Es retirarà {{count}} germana amb valor pres. La fila torna a la identitat base i el POM del model no es toca.",
     "desfa_avis_plural": "Es retiraran {{count}} germanes amb valor pres. La fila torna a la identitat base i el POM del model no es toca.",
-    "desfa_confirma": "Retirar la germana"
+    "desfa_confirma": "Retirar la germana",
+    "unica": "Instància única",
+    "tip_treu": "{{nom}} — treure-la (torna a la instància única)"
   },
   "obrir_tasca": {
     "conflicte_titol": "Aquesta tasca la té oberta {{tecnic}}",

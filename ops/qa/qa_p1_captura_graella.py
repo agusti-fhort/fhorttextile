@@ -210,16 +210,21 @@ def captura():
             for i in (1, 2):
                 pag.get_by_text('canvia el vincle').nth(i).click()
                 pag.wait_for_timeout(900)
+                if i == 1:
+                    # P2-bis · EL FORMULARI DE RESOLUCIÓ amb les píndoles a dins: vincular i dir
+                    # de quina mesura parla la fila és UN sol gest, no dues passades.
+                    foto(pag, f'{CAS}_02a_panell',
+                         'el formulari de resolució: catàleg + píndoles + crea-i-vincula')
                 pag.get_by_placeholder('Tria un POM del catàleg…').first.fill(base_codi)
                 pag.wait_for_timeout(1400)
                 pag.locator(f'button:text-matches("^{base_codi} ·")').first.click()
                 pag.wait_for_timeout(900)
-            # …I EL COLUMNAT: de quina mesura del POM parla cada fila. El selector va per
-            # `aria-label` i no per posició: el <select> de l'idioma de la capçalera també és
-            # un <select>, i comptar-los tots desplaçava la tria una fila.
-            sel = pag.locator('select[aria-label="Instància"]')
-            for i, slug in ((1, 'bottom'), (2, 'extended')):
-                sel.nth(i).select_option(slug)
+            # …I EL COLUMNAT DE LA FILA: les píndoles de la casa, una per eix. L'àncora és
+            # `data-fila`, no la posició: comptar píndoles per índex se'n va a una altra fila al
+            # primer canvi de columnat.
+            for ordre, nom in ((1, 'Bottom'), (2, 'Extended')):
+                pag.locator(f'[data-fila="{ordre}"] button[aria-pressed]',
+                            has_text=nom).first.click()
                 pag.wait_for_timeout(500)
         foto(pag, f'{CAS}_02_poms', 'pas 2 · una fila per fila, amb el columnat d\'instància')
 

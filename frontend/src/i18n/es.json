@@ -472,7 +472,8 @@
     "confirm": "Confirmar",
     "close": "Cerrar",
     "next": "Siguiente",
-    "previous": "Anterior"
+    "previous": "Anterior",
+    "apply": "Aplicar"
   },
   "topbar": {
     "unit_switch": "Cambiar a {{unitat}}",
@@ -4106,9 +4107,7 @@
     "resol_err_pom_ja_usat": "La fila {{ordre}} de esta importación ya tiene este POM. Un POM no puede ser dos filas.",
     "resol_err_pom_no_valid": "Ese POM ya no existe o está inactivo. Elige otro.",
     "resol_err_codi_repetit": "La fila {{ordre}} de esta misma importación ya crea el código «{{codi}}».",
-    "resol_err_generic": "Esta fila no se ha podido resolver. Vuelve a decidirla.",
-    "instancia_label": "Instancia",
-    "instancia_unica": "Única"
+    "resol_err_generic": "Esta fila no se ha podido resolver. Vuelve a decidirla."
   },
   "dependency": {
     "title": "Dependencia",
@@ -4677,7 +4676,9 @@
     "desfa_titol": "Deshacer la instancia",
     "desfa_avis": "Se retirará {{count}} hermana con valor tomado. La fila vuelve a la identidad base y el POM del modelo no se toca.",
     "desfa_avis_plural": "Se retirarán {{count}} hermanas con valor tomado. La fila vuelve a la identidad base y el POM del modelo no se toca.",
-    "desfa_confirma": "Retirar la hermana"
+    "desfa_confirma": "Retirar la hermana",
+    "unica": "Instancia única",
+    "tip_treu": "{{nom}} — quitarla (vuelve a la instancia única)"
   },
   "obrir_tasca": {
     "conflicte_titol": "Esta tarea la tiene abierta {{tecnic}}",

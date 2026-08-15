@@ -472,7 +472,8 @@
     "confirm": "Confirm",
     "close": "Close",
     "next": "Next",
-    "previous": "Previous"
+    "previous": "Previous",
+    "apply": "Apply"
   },
   "topbar": {
     "unit_switch": "Switch to {{unitat}}",
@@ -4106,9 +4107,7 @@
     "resol_err_pom_ja_usat": "Row {{ordre}} of this import already takes this POM. One POM cannot be two rows.",
     "resol_err_pom_no_valid": "That POM no longer exists or is inactive. Pick another one.",
     "resol_err_codi_repetit": "Row {{ordre}} of this same import already creates the code «{{codi}}».",
-    "resol_err_generic": "This row could not be resolved. Decide it again.",
-    "instancia_label": "Instance",
-    "instancia_unica": "Single"
+    "resol_err_generic": "This row could not be resolved. Decide it again."
   },
   "dependency": {
     "title": "Dependency",
@@ -4677,7 +4676,9 @@
     "desfa_titol": "Undo the instance",
     "desfa_avis": "{{count}} sister with a measured value will be withdrawn. The row returns to its base identity and the model's POM is not touched.",
     "desfa_avis_plural": "{{count}} sisters with measured values will be withdrawn. The row returns to its base identity and the model's POM is not touched.",
-    "desfa_confirma": "Withdraw the sister"
+    "desfa_confirma": "Withdraw the sister",
+    "unica": "Single instance",
+    "tip_treu": "{{nom}} — remove it (back to the single instance)"
   },
   "obrir_tasca": {
     "conflicte_titol": "{{tecnic}} has this task open",
