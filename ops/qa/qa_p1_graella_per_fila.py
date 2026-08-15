@@ -271,6 +271,50 @@ def main():
         finally:
             transaction.savepoint_rollback(sid)
 
+        # ══ G · P2-ter/3 · EL CERCADOR SERVEIX EL CATÀLEG SENCER ══════════════════════
+        # No escriu res: és una lectura, i va aquí perquè el que ha de mesurar és el CENS REAL
+        # del tenant. Un test amb fixtures diria que la vista sap comptar les seves pròpies
+        # files; el que va fallar no és això, sinó que el wizard demanava el catàleg per una
+        # porta que en servia UNA PÀGINA.
+        print('\nG · EL CERCADOR — el catàleg sencer, canònic + vocabulari del client')
+        from django.conf import settings
+        if 'testserver' not in settings.ALLOWED_HOSTS:
+            settings.ALLOWED_HOSTS = list(settings.ALLOWED_HOSTS) + ['testserver']
+        from fhort.pom.models import CustomerPOMAlias
+        from fhort.pom.views import POMMasterViewSet
+        from fhort.pom.wizard_views import search_poms_view
+
+        n_casa = POMMaster.objects.filter(actiu=True).count()
+        n_client = (CustomerPOMAlias.objects
+                    .filter(customer_id=model.customer_id, pom__isnull=False)
+                    .values('pom_id').distinct().count())
+        nota('cens del tenant (POMs actius · POMs amb àlies del client)', (n_casa, n_client))
+
+        req = APIRequestFactory().get('/api/v1/poms/cerca/',
+                                      {'q': '', 'page_size': 500, 'model': model.id})
+        force_authenticate(req, user=user)
+        d = search_poms_view(req).data
+        diu('la secció de la CASA les té totes', d['seccions']['casa']['count'], n_casa)
+        diu('la secció del CLIENT també', d['seccions']['client']['count'], n_client)
+        # El SOSTRE és de la vista (100 com a màxim, `page_size` mana per sota) i és a posta: el
+        # que ha d'arribar sencer és el RECOMPTE, no la llista. Amb ell, «no hi és» i «no hi
+        # cabia» deixen de dir-se igual — que és com es fabrica un duplicat.
+        diu('serveix fins al sostre, i diu que ha tallat', (len(d['results']), d['truncat']),
+            (min(100, n_casa + n_client), n_casa + n_client > 100))
+        diu('les dues poblacions hi són totes dues', 
+            (any(r['seccio'] == 'client' for r in d['results']),
+             any(r['seccio'] == 'casa' for r in d['results'])), (True, True))
+
+        # LA PORTA VELLA, MESURADA — el que el wizard feia servir fins a P2-ter/3. Es deixa
+        # escrit al costat: sense el número, «no hi és» i «no hi cabia» es tornen a dir igual.
+        req2 = APIRequestFactory().get('/api/v1/poms/')
+        force_authenticate(req2, user=user)
+        d2 = POMMasterViewSet.as_view({'get': 'list'})(req2).data
+        nota('la porta vella (`/api/v1/poms/`): total vs servits a la pàgina 1',
+             (d2.get('count'), len(d2.get('results') or [])))
+        diu('…i per això no valia: en servia menys que el catàleg',
+            len(d2.get('results') or []) < n_casa, True)
+
         # ══ EL ROLLBACK, DEMOSTRAT ════════════════════════════════════════════════════
         print('\nROLLBACK')
         diu('la BD ha tornat exactament on era', cens(MODEL_ID), abans)

@@ -1,7 +1,8 @@
-import { Fragment, useState, useMemo, useRef } from 'react'
+import { Fragment, useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Modal from '../ui/Modal'
+import { poms } from '../../api/endpoints'
 import FileDropCard from '../ui/FileDropCard'
 // P1 · la graella parla per FILA (`ordre`), no per POM. La lògica pura viu al costat, en un
 // mòdul que el runner de Node pot defensar: `node --test src/components/ImportWizard/`.
@@ -48,7 +49,6 @@ const STEPS = [
   { n: 5, labelKey: 'import_wizard.step.save' },
 ]
 
-const norm = (s) => (s || '').trim().toUpperCase()
 const GOLD = 'var(--gold, #c79a3a)'
 const BORDER = 'var(--border)'
 
@@ -90,41 +90,91 @@ function Stepper({ step }) {
 // R3 · UN sol picker per als DOS llocs on el pas 2 tria un POM del catàleg: el botó
 // «+ Afegir POM del catàleg» del final de la llista i el panell de conflicte de fila. Abans
 // el primer era un <select> nu amb el catàleg sencer; ara tots dos cerquen per codi o nom.
-function PomCatalegPicker({ cataleg, onPick, autoFocus }) {
+function PomCatalegPicker({ modelId, onPick, autoFocus }) {
   const { t } = useTranslation()
   const [q, setQ] = useState('')
-  const tots = cataleg || []
-  const filtrats = useMemo(() => {
-    const n = norm(q)
-    return n ? tots.filter(c => norm(c.codi_client).includes(n) || norm(c.nom_client).includes(n)) : tots
-  }, [tots, q])
-  const visibles = filtrats.slice(0, 50)
+  const [dades, setDades] = useState(null)   // {results, count, truncat, seccions}
+  const [focusat, setFocusat] = useState(!!autoFocus)
+
+  // ⚠️ LA PORTA ERA `/api/v1/poms/` I NOMÉS EN SERVIA LA PRIMERA PÀGINA. Mesurat al tenant
+  // `fhort` (15/08): 142 POMs actius, 25 a la pàgina 1 → **117 invisibles**, i el filtre del
+  // camp corria sobre aquells 25. I el vocabulari del CLIENT no hi era gens: el codi que la
+  // fitxa porta escrit viu a `CustomerPOMAlias.client_code`, no a `POMMaster.codi_client` —que
+  // es diu «client» però és el codi de la CASA.
+  //
+  // El mateix defecte, amb el mateix mecanisme, el va pagar el cercador de la Definició manual
+  // (79 POMs invisibles de 143, i un duplicat fabricat: el POM 1047). La solució és la SEVA, no
+  // una de nova: `poms/cerca/`, que serveix les DUES poblacions en seccions amb el seu
+  // recompte, posa l'exacte al davant i cerca des d'UN sol caràcter (els 22 codis d'una lletra
+  // del catàleg v4). Amb `?model=` hi entra el vocabulari del client d'aquest model.
+  useEffect(() => {
+    const cerca = q.trim()
+    // Camp buit AMB EL FOCUS POSAT = catàleg SENCER. La lliçó de la Definició manual: qui obre
+    // el desplegable per veure QUÈ hi ha —el cas de qui encara no coneix la nomenclatura del
+    // client— es trobava un buit i en deduïa que no hi havia catàleg.
+    if (!cerca && !focusat) { setDades(null); return }
+    const timer = setTimeout(() => {
+      poms.cerca({ q: cerca, page_size: 50, ...(modelId ? { model: modelId } : {}) })
+        .then(r => setDades(r.data || null))
+        .catch(() => setDades(null))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [q, modelId, focusat])
+
+  const files = dades?.results || []
+  const sec = dades?.seccions || {}
+  // Les dues poblacions es pinten AMB EL SEU RÈTOL i el seu recompte: un POM amb àlies hi surt
+  // dues vegades i totes dues porten al MATEIX `pom_id`. No es demana a ningú que sàpiga que
+  // són la mateixa cosa; se li deixa arribar-hi per qualsevol de les dues portes.
+  const grups = [
+    ['client', t('import_wizard.resol_sec_client'), sec.client],
+    ['casa', t('import_wizard.resol_sec_casa'), sec.casa],
+  ].filter(([clau]) => files.some(f => f.seccio === clau))
+
   return (
     <div>
-      <input value={q} autoFocus={autoFocus} onChange={e => setQ(e.target.value)}
+      <input value={q} autoFocus={autoFocus}
+        onFocus={() => setFocusat(true)} onChange={e => setQ(e.target.value)}
         placeholder={t('import_wizard.choose_pom')}
         style={{ width: '100%', maxWidth: 380, padding: '6px 9px', borderRadius: 6,
                  border: `1px solid ${BORDER}`, fontSize: 'var(--fs-body)', fontFamily: 'inherit' }} />
-      <div style={{ maxWidth: 380, maxHeight: 170, overflowY: 'auto', marginTop: 6,
+      <div style={{ maxWidth: 380, maxHeight: 210, overflowY: 'auto', marginTop: 6,
                     border: `1px solid ${BORDER}`, borderRadius: 6, background: 'var(--white)' }}>
-        {visibles.length === 0 && (
+        {files.length === 0 && (
           <div style={{ padding: '8px 10px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             {t('import_wizard.resol_cap_resultat')}
           </div>
         )}
-        {visibles.map((c, i) => (
-          <button key={c.id} type="button" onClick={() => onPick(c)}
-            style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
-                     padding: '6px 10px', fontSize: 'var(--fs-body)', fontFamily: 'inherit',
-                     background: 'transparent', border: 'none',
-                     borderTop: i ? `1px solid ${BORDER}` : 'none' }}>
-            <b>{c.codi_client}</b> · {c.nom_client}
-          </button>
+        {grups.map(([clau, retol, comptes]) => (
+          <Fragment key={clau}>
+            <div style={{ padding: '4px 10px', background: 'var(--bg-muted)',
+                          fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)',
+                          textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {retol}{comptes ? ` · ${comptes.mostrats}/${comptes.count}` : ''}
+            </div>
+            {files.filter(f => f.seccio === clau).map(c => (
+              <button key={`${clau}-${c.id}`} type="button"
+                onClick={() => onPick({ id: c.id, codi_client: c.codi_client,
+                                        nom_client: c.nom_client })}
+                style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+                         padding: '6px 10px', fontSize: 'var(--fs-body)', fontFamily: 'inherit',
+                         background: 'transparent', border: 'none',
+                         borderTop: `1px solid ${BORDER}` }}>
+                {/* A la secció del CLIENT mana el seu codi —és el que la fitxa porta escrit— i
+                    el de la casa queda al costat. A la de la casa, el de la casa. */}
+                <b>{clau === 'client' && c.client_code ? c.client_code : c.codi_client}</b>
+                {' · '}{c.nom_client}
+                {clau === 'client' && c.client_code && c.client_code !== c.codi_client && (
+                  <span style={{ color: 'var(--text-muted)' }}> → {c.codi_client}</span>
+                )}
+              </button>
+            ))}
+          </Fragment>
         ))}
       </div>
-      {filtrats.length > visibles.length && (
+      {dades?.truncat && (
         <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 4 }}>
-          {t('import_wizard.resol_mes_resultats', { n: filtrats.length - visibles.length })}
+          {t('import_wizard.resol_mes_resultats', { n: dades.count - files.length })}
         </div>
       )}
     </div>
@@ -136,7 +186,7 @@ function PomCatalegPicker({ cataleg, onPick, autoFocus }) {
 // catàleg. Aquí la fila té les TRES sortides a sobre —vincular a un candidat, triar del
 // catàleg, o crear-ne un de nou amb codi i nom editables— i la decisió segueix sent seva:
 // el backend no en tria cap, només diu qui es disputa el codi.
-function ResolPanel({ fila, conflicte, res, cataleg, crea, setCrea, onVincula, onCrea, onTanca,
+function ResolPanel({ fila, conflicte, res, modelId, crea, setCrea, onVincula, onCrea, onTanca,
                      dicc, instancia, onInstancia }) {
   const { t } = useTranslation()
   const candidats = conflicte?.candidats || []
@@ -194,7 +244,7 @@ function ResolPanel({ fila, conflicte, res, cataleg, crea, setCrea, onVincula, o
       )}
 
       <div style={EYEBROW}>{t('import_wizard.resol_cataleg_title')}</div>
-      <PomCatalegPicker cataleg={cataleg} autoFocus={candidats.length === 0}
+      <PomCatalegPicker modelId={modelId} autoFocus={candidats.length === 0}
         onPick={pm => onVincula({ id: pm.id, codi_client: pm.codi_client,
                                   nom_client: pm.nom_client, actiu: true })} />
 
@@ -291,7 +341,6 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
   const [pomsExtrets, setPomsExtrets] = useState(null)
   const [extraccioMeta, setExtraccioMeta] = useState(null)
   const [savingPoms, setSavingPoms] = useState(false)
-  const [cataleg, setCataleg] = useState(null)        // POMMaster catàleg (per afegir manual)
   const [showAddPom, setShowAddPom] = useState(false)
   // 409 `codi_duplicat`: el catàleg té 2+ POMs tenant-only amb el mateix codi i el backend no
   // pot triar. NO és un error del wizard (la sessió és intacta i re-desable): és una feina de
@@ -507,26 +556,9 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
   // fila (resolució 'crea' amb codi i nom editables). El contracte `poms_tenant_only` del
   // backend segueix viu i cobert per tests; el que ja no hi ha és la via cega des d'aquí.
 
-  // El catàleg el necessiten dos consumidors (el botó d'afegir i el panell de resolució);
-  // es carrega un sol cop i qui el demana decideix què n'obre.
-  const carregaCataleg = async () => {
-    if (cataleg) return cataleg
-    try {
-      const res = await fetch(`${API}/api/v1/poms/`, { headers: authHeaders })
-      const data = await res.json().catch(() => ({}))
-      const llista = data.results || data || []
-      setCataleg(llista)
-      return llista
-    } catch (e) {
-      setError(t('import_wizard.err_catalog', { detail: String(e) }))
-      return null
-    }
-  }
-
-  const loadCataleg = async () => {
-    await carregaCataleg()
-    setShowAddPom(true)
-  }
+  // El catàleg ja NO es precarrega: cada picker el demana al cercador del servidor
+  // (`poms/cerca/`), que és qui sap servir les dues poblacions. La còpia local que hi havia
+  // aquí era la que només en tenia 25 de 142.
 
   // ── R3 · el conflicte es resol a la fila ──────────────────────────────────────
   const obrePanell = (p) => {
@@ -536,7 +568,6 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
       nom: (res?.accio === 'crea' ? res.nom : '') || p.descripcio || p.pom_nom || '',
     })
     setPanellOrdre(p.ordre)
-    carregaCataleg()
   }
 
   // P2-ter/2 · `tanca` és de qui la crida. Des del panell, triar el POM ja NO el tanca: la
@@ -1229,7 +1260,7 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                     </div>
                     {panellOrdre === p.ordre && (
                       <ResolPanel
-                        fila={p} conflicte={conflicte} res={res} cataleg={cataleg}
+                        fila={p} conflicte={conflicte} res={res} modelId={model.id}
                         crea={crea} setCrea={setCrea}
                         onTanca={() => setPanellOrdre(null)}
                         dicc={dicc}
@@ -1255,13 +1286,13 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
               {/* Afegir POM manual del catàleg */}
               <div style={{ marginBottom: 16 }}>
                 {!showAddPom ? (
-                  <button type="button" onClick={loadCataleg}
+                  <button type="button" onClick={() => setShowAddPom(true)}
                     style={{ padding: '6px 12px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
                              border: `1px dashed ${GOLD}`, background: 'transparent', color: GOLD }}>
                     {t('import_wizard.add_pom_catalog')}
                   </button>
                 ) : (
-                  <PomCatalegPicker cataleg={cataleg} autoFocus onPick={addPomManual} />
+                  <PomCatalegPicker modelId={model.id} autoFocus onPick={addPomManual} />
                 )}
               </div>
 

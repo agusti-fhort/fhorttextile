@@ -4108,7 +4108,9 @@
     "resol_err_pom_no_valid": "Aquest POM ja no existeix o està inactiu. Tria'n un altre.",
     "resol_err_codi_repetit": "El codi «{{codi}}» ja el crea la fila {{ordre}} d'aquest mateix import.",
     "resol_err_generic": "Aquesta fila no s'ha pogut resoldre. Torna a decidir-la.",
-    "resol_fet_btn": "Fet"
+    "resol_fet_btn": "Fet",
+    "resol_sec_client": "Catàleg del client",
+    "resol_sec_casa": "Catàleg de la casa"
   },
   "dependency": {
     "title": "Dependència",
