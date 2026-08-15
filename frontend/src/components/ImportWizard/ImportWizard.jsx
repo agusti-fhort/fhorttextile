@@ -11,6 +11,7 @@ import {
 } from './taulaMesures'
 import { sufixIdentitat } from '../../utils/capaInstancia'
 import ColumnatInstancia from '../instancia/ColumnatInstancia'
+import { filaAmbIdentitat } from './filaPas2'
 import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -1144,6 +1145,7 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                               {res.accio === 'vincula'
                                 ? t('import_wizard.resol_fet_vincula', { codi: res.pom_codi, nom: res.pom_nom })
                                 : t('import_wizard.resol_fet_crea', { codi: res.codi, nom: res.nom })}
+                              <b>{sufixIdentitat(filaAmbIdentitat(p, instancies), dicc, lang)}</b>
                             </span>
                           : noMatch
                           ? (tenantOnly
@@ -1175,25 +1177,15 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                                   </span>
                                 </span>)
                           : <><b>{p.pom_codi}</b> · {p.pom_nom || p.descripcio}
-                              {/* P3 · i la identitat també aquí, que és on es decideix: la
-                                  fila que ja porta instància ho ha de dir al pas on la
-                                  persona la mira, no només a la graella del pas següent. */}
-                              <span style={{ fontWeight: 500 }}>{sufixIdentitat(p, dicc, lang)}</span>
+                              {/* P2-ter · LA FILA INFORMA. La instància entra al NOM, com a la
+                                  graella del pas 3 i com a la fitxa: aquí es LLEGEIX què és
+                                  aquesta fila. Per canviar-la, «canvia el vincle» — l'edició viu
+                                  al panell. I el que es llegeix és la decisió PENDENT, no
+                                  l'últim desat: si no, diria «única» just després que algú hagi
+                                  triat «Bottom». */}
+                              <b>{sufixIdentitat(filaAmbIdentitat(p, instancies), dicc, lang)}</b>
                             </>}
                       </div>
-                      {/* P2 · EL COLUMNAT D'INSTÀNCIA. La fitxa de la Brumà porta tres files
-                          del mateix POM —«at the top», «at the bottom», «stretched out»— i el
-                          que les distingeix no és el POM sinó DE QUINA de les seves mesures
-                          parla cadascuna. No hi ha suggeriment automàtic i és decisió d'Agus:
-                          el lèxic que llegiria «stretched out» → Extended vol corpus d'imports
-                          reals que l'ensenyi. Fins llavors mana la llei de l'import — el que
-                          no se sap segur, ho decideix l'humà. */}
-                      {(p.pom_master_id || res?.accio === 'vincula') && (
-                        <ColumnatInstancia
-                          valor={instancies[p.ordre] ?? (p.instancia || '')}
-                          dicc={dicc}
-                          onTria={slug => setInstancies(prev => ({ ...prev, [p.ordre]: slug }))} />
-                      )}
                       {/* Qualsevol fila es pot re-decidir, tingui match o no. */}
                       <button type="button" onClick={() => obrePanell(p)}
                         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer',
