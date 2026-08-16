@@ -207,6 +207,12 @@ export default function EditableTable({
   //
   // Es compara el CONTINGUT. Un re-sync de debò —desar, canviar de peça, recarregar la taula—
   // segueix entrant igual, i `dirty` només es rebaixa quan realment ve estat nou de fora.
+  // «Hi ha mesures gravades?» — files amb valor que ja venen del servidor. Es mira sobre `rows`
+  // (l'últim desat), no sobre `localRows`: el que la línia afirma és el que hi ha a la BD, i
+  // afirmar-ho des de l'estat local seria dir «gravat» d'una cosa que s'està escrivint.
+  const teFilesAmbValor = (rows || []).some(
+    r => r.base_value_cm !== null && r.base_value_cm !== undefined && r.base_value_cm !== '')
+
   const rowsSerials = JSON.stringify(rows)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setLocalRows(rows); setDirty(false) }, [rowsSerials])
@@ -1079,8 +1085,24 @@ export default function EditableTable({
             </button>
           )}
           {/* NET = APAGAT. Un botó de desar sempre viu convida a un POST buit i, pitjor, deixa
-              de voler dir res: si està sempre igual, no informa de si hi ha feina pendent. */}
+              de voler dir res: si està sempre igual, no informa de si hi ha feina pendent.
+
+              …PERÒ UN BOTÓ APAGAT HA DE DIR PER QUÈ (QA Agus 16/08). El gris és legítim —no hi
+              ha res per desar— i tanmateix es llegia com «no puc acabar»: la persona veia la
+              taula plena de valors i el botó mort, i no sabia si la feina estava gravada. El
+              `title` diu la causa, i la línia del costat diu el FET que la persona ha vingut a
+              comprovar. Cap de les dues és decoració: sense elles, l'única manera de saber si
+              les mesures hi eren era sortir i tornar a entrar. */}
+          {!brut && teFilesAmbValor && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+                           fontSize: 'var(--fs-body)', color: 'var(--ok)' }}>
+              <i className="ti ti-circle-check" aria-hidden="true" style={{ fontSize: 15 }} />
+              {t('editable_table.ja_gravat')}
+            </span>
+          )}
           <button type="button" onClick={handleSave} disabled={saving || !brut}
+            title={brut ? (saveLabel || t('editable_table.confirm_table'))
+                        : t('editable_table.res_per_desar')}
             style={btnPrimary(saving || !brut)}>
             {saving ? t('common.saving') : saveLabel || t('editable_table.confirm_table')}
           </button>

@@ -3422,7 +3422,9 @@
     "finder_nivell_model": "creats des d'un model",
     "cerca_truncada": "Se'n mostren {{mostrats}} de {{total}} — afina la cerca per veure la resta.",
     "finder_seccio_client": "catàleg del client",
-    "finder_seccio_casa": "catàleg de la casa"
+    "finder_seccio_casa": "catàleg de la casa",
+    "ja_gravat": "Les mesures estan gravades",
+    "res_per_desar": "No hi ha canvis per desar"
   },
   "dashboard": {
     "tab_home": "Inici",

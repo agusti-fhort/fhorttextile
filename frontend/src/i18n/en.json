@@ -3422,7 +3422,9 @@
     "finder_nivell_model": "created from a model",
     "cerca_truncada": "Showing {{mostrats}} of {{total}} — refine the search to see the rest.",
     "finder_seccio_client": "client catalogue",
-    "finder_seccio_casa": "house catalogue"
+    "finder_seccio_casa": "house catalogue",
+    "ja_gravat": "Measurements are saved",
+    "res_per_desar": "No changes to save"
   },
   "dashboard": {
     "tab_home": "Home",

@@ -3422,7 +3422,9 @@
     "finder_nivell_model": "creados desde un modelo",
     "cerca_truncada": "Se muestran {{mostrats}} de {{total}} — afina la búsqueda para ver el resto.",
     "finder_seccio_client": "catálogo del cliente",
-    "finder_seccio_casa": "catálogo de la casa"
+    "finder_seccio_casa": "catálogo de la casa",
+    "ja_gravat": "Las medidas están guardadas",
+    "res_per_desar": "No hay cambios que guardar"
   },
   "dashboard": {
     "tab_home": "Inicio",
