@@ -251,21 +251,25 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
         # perquè aquí hi ha de qui copiar-los. Per `(gv, pom, talla)` l'evolució de la sisa
         # dreta ensenyaria les xifres de l'esquerra a cada versió conservada — i és
         # precisament la columna que serveix per veure si una mesura s'ha mogut.
+        # S42/F7 — I EL TERCER EIX, pel mateix argument una peça més amunt: `GradedSpec` és
+        # única per `(grading_version, pom, size_label, capa, instancia, garment)` i la línia
+        # el porta. Sense ell, l'evolució de la mare ensenyava les xifres del Short —el
+        # contrari exacte del que aquesta columna serveix per veure.
         spec_map = {}
         for s in GradedSpec.objects.filter(grading_version__size_fitting=sf).values(
-            'grading_version_id', 'pom_id', 'capa', 'instancia', 'size_label',
+            'grading_version_id', 'pom_id', 'capa', 'instancia', 'garment', 'size_label',
             'graded_value_cm',
         ):
             spec_map[(s['grading_version_id'], s['pom_id'], s['capa'], s['instancia'],
-                      s['size_label'])] = s['graded_value_cm']
+                      s['garment'], s['size_label'])] = s['graded_value_cm']
 
         # PG-4b-3a — règim per POM (resident→fallback) per al desplegable + etiqueta de regla.
         from fhort.pom.services import _load_grading_rules
         rules = _load_grading_rules(obj.model)
 
-        # BaseMeasurement del model (unique per (model, pom, capa, instancia)): aporta
-        # nom_fitxa (nomenclatura client, autoritativa) i l'ordre de fitxa. Una sola query,
-        # reutilitzada per al 'nom' de cada línia i per a l'ordenació final.
+        # BaseMeasurement del model (unique per (model, pom, capa, instancia, garment)):
+        # aporta nom_fitxa (nomenclatura client, autoritativa) i l'ordre de fitxa. Una sola
+        # query, reutilitzada per al 'nom' de cada línia i per a l'ordenació final.
         #
         # C2/Onada 1 — CLAU COMPOSTA (pom, capa): `PieceFittingLine` porta capa des de C1, o
         # sigui que cada línia pot demanar la SEVA. Per POM sol, el folre i l'exterior d'un
@@ -278,6 +282,21 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
         # CHECK «instància ⇒ nom» existeixen per evitar. Els TRES mapes creixen alhora: si un
         # s'ancorés i un altre no, una fila portaria l'ordre d'una instància i el nom d'una
         # altra.
+        #
+        # 🚨 S42/F7 — I LA PRENDA, l'últim eix, amb l'argument IDÈNTIC i el dany ja vist en
+        # dades reals (1379: el POM 962 viu a la mare i a la 02 amb la mateixa capa i la
+        # mateixa instància, i només el `garment` els separa). Amb la clau de tres, les dues
+        # línies hi queien a sobre i guanyava l'última escrita: totes dues sortien amb
+        # `nom_fitxa 'M1'` i `bm_id 3354`, quan la de la mare és `3344`/'G1'.
+        #
+        # Les dues conseqüències són les que aquest comentari ja anunciava per a la capa,
+        # una frontera més enllà:
+        #   · `nom_fitxa` és el que S'IMPRIMEIX al full que va al fabricant
+        #     (`FittingPrintSheet.jsx`): la fila de la mare sortia batejada com la del Short.
+        #   · `bm_id` és el DESTÍ D'ESCRIPTURA del bateig (P4): rebatejar la fila de la mare
+        #     escrivia a la `BaseMeasurement` de l'ALTRA PRENDA.
+        # I per la mateixa llei d'aquí sobre —els mapes creixen ALHORA— hi entren els quatre
+        # de cop, i el `spec_map` de més amunt amb ells.
         from fhort.models_app.models import BaseMeasurement
         # F2 — `origen` entra a la MATEIXA query que ja hi era (cap consulta nova): és el que
         # C3 va construir per dir que un valor no l'ha mesurat ningú (`origen='DERIVAT'`,
@@ -285,12 +304,12 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
         # germana que el sistema ha mogut de la que ningú no ha tocat. No s'hi afegeix cap
         # camp nou: la derivació ja té identificador i és aquest.
         bm_data = list(BaseMeasurement.objects.filter(model_id=obj.model_id)
-                       .values_list('pom_id', 'capa', 'instancia', 'ordre', 'nom_fitxa', 'id',
-                                    'origen'))
-        ordre_map = {(p, c, i): o for p, c, i, o, _, _, _ in bm_data}
-        nom_fitxa_map = {(p, c, i): nf for p, c, i, _, nf, _, _ in bm_data}
-        bm_id_map = {(p, c, i): bid for p, c, i, _, _, bid, _ in bm_data}  # P4 — autoria de nom a nivell MODEL
-        origen_map = {(p, c, i): og for p, c, i, _, _, _, og in bm_data}
+                       .values_list('pom_id', 'capa', 'instancia', 'garment', 'ordre',
+                                    'nom_fitxa', 'id', 'origen'))
+        ordre_map = {(p, c, i, g): o for p, c, i, g, o, _, _, _ in bm_data}
+        nom_fitxa_map = {(p, c, i, g): nf for p, c, i, g, _, nf, _, _ in bm_data}
+        bm_id_map = {(p, c, i, g): bid for p, c, i, g, _, _, bid, _ in bm_data}  # P4 — autoria de nom a nivell MODEL
+        origen_map = {(p, c, i, g): og for p, c, i, g, _, _, _, og in bm_data}
 
         out = []
         # Ordre de fitxa, paral·lel a `out`. C4/BLOC 1-BIS: la fila del payload SÍ que porta
@@ -299,11 +318,11 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
         # forma que no arregla res i que aquest commit no ha de portar.
         ordres = []
         for line in obj.linies.select_related('pom', 'pom__pom_global').all():
-            clau_bm = (line.pom_id, line.capa, line.instancia)
+            clau_bm = (line.pom_id, line.capa, line.instancia, line.garment)
             evolucio = []
             for v in versions:
                 val = spec_map.get((v.id, line.pom_id, line.capa, line.instancia,
-                                    line.size_label))
+                                    line.garment, line.size_label))
                 if val is None:
                     continue
                 evolucio.append({
@@ -367,11 +386,12 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                 'nota': line.nota,
                 # D-31.21 — el veredicte, que la graella ha de poder tornar a pintar en obrir.
                 'decisio': line.decisio,
-                # F2 — l'origen de la mesura base d'AQUESTA germana (`clau_bm` ja porta els dos
-                # eixos). 'DERIVAT' = el sistema l'ha moguda perquè s'ha corregit la seva
-                # germana; qualsevol altre valor amb una germana FITTED al costat vol dir que
-                # aquesta NO s'ha actualitzat. La pantalla ja té tot el que cal per etiquetar-ho
-                # sense demanar res més: origen + capa + instancia + decisio, línia per línia.
+                # F2 — l'origen de la mesura base d'AQUESTA germana (`clau_bm` porta els
+                # QUATRE eixos des de F7). 'DERIVAT' = el sistema l'ha moguda perquè s'ha
+                # corregit la seva germana; qualsevol altre valor amb una germana FITTED al
+                # costat vol dir que aquesta NO s'ha actualitzat. La pantalla ja té tot el
+                # que cal per etiquetar-ho sense demanar res més: origen + capa + instancia +
+                # decisio, línia per línia.
                 'origen': origen_map.get(clau_bm),
                 'evolucio': evolucio,
                 # Règim per POM (mateix valor a cada talla; el front el llegeix per pom_id).
