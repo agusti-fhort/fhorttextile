@@ -1963,8 +1963,21 @@ def _garment_de(fila, garment_sessio=''):
     Una fila que no en declari cap es comporta EXACTAMENT com abans d'aquesta peça: rep el de la
     sessió, que és el que el confirm hi escrivia hardcodejat. Cap de les 16 sessions vives del
     corpus (totes amb `garment=''`) canvia de comportament.
+
+    ── EL PRE-MARCAT HI ENTRA (16/08) · I VIU EN UN SOL LLOC ────────────────────────────────
+    Entre la decisió de la persona i la de la sessió hi ha la PROPOSTA del document
+    (`garment_proposat`, F2). Hi entra perquè el disseny la crida «pre-marcat» i un pre-marcat és
+    un valor POSAT que es pot canviar, no una insinuació: la cel·la el mostra i enviar el pas
+    l'accepta.
+
+    ⚠️ I hi entra AQUÍ, no a cada consumidor. El 16/08 la regla només vivia al front i el
+    detector del backend comparava com a mare una fila que la pantalla mostrava com a «Short»
+    (captura 13:21): dues meitats de la mateixa pantalla parlant de files diferents. Amb la
+    resolució en un sol punt, el detector, el confirm i el pas 3 no poden divergir.
     """
     g = (fila or {}).get('garment')
+    if g is None:
+        g = (fila or {}).get('garment_proposat')
     if g is None:
         return (garment_sessio or '').strip()
     return str(g).strip()
@@ -2153,6 +2166,24 @@ def _valors_per_pom(valors, avisos=None):
     return {pid: files for pid, (_canonica, files) in tria.items()}
 
 
+def _descriu_fila(fila, pm, capa, instancia, garment):
+    """Com s'anomena una fila del pas 2 quan cal DIR-LA en un conflicte.
+
+    El text que llegeix la persona és «M · Short · exterior · única», no un `ordre` pelat: el
+    conflicte s'ha de poder resoldre mirant les dues files, i per mirar-les cal saber quines són.
+    """
+    fila = fila or {}
+    return {
+        'ordre': fila.get('ordre'),
+        'codi': fila.get('codi_fitxa') or (pm.codi_client if pm is not None else '') or '',
+        'nom': (fila.get('pom_nom') or (pm.nom_client if pm is not None else '')
+                or fila.get('descripcio') or ''),
+        'capa': capa if capa is not None else _capa_instancia_de(fila)[0],
+        'instancia': instancia if instancia is not None else _capa_instancia_de(fila)[1],
+        'garment': garment,
+    }
+
+
 def _pla_de_resolucions(poms, brut, garment_sessio=''):
     """R2 · valida les `resolucions` de fila i en retorna el PLA, o els errors per fila.
 
@@ -2187,7 +2218,7 @@ def _pla_de_resolucions(poms, brut, garment_sessio=''):
     #: La col·lisió no desapareix: es fa PRECISA. Dues files amb la mateixa identitat sencera
     #: segueixen sent l'error de sempre, i han de ser-ho — són dues mesures que voldrien
     #: ocupar la mateixa cel·la i el confirm en perdria una en silenci.
-    presos = {_identitat(p, garment_sessio): p.get('ordre') for p in poms
+    presos = {_identitat(p, garment_sessio): p for p in poms
               if p.get('pom_master_id') and p.get('actiu')
               and p.get('ordre') not in ordres_resolts}
 
@@ -2210,17 +2241,28 @@ def _pla_de_resolucions(poms, brut, garment_sessio=''):
             # (exterior, instància única): una resolució que no parli d'instàncies es comporta
             # exactament com abans d'aquesta peça.
             capa, instancia = _capa_instancia_de(r)
-            # SET-2/T8-ter — la peça entra a la identitat que es compara. La resolució encara no
-            # en declara cap de pròpia (això és F4): fins llavors totes les files d'una tramesa
-            # comparteixen la de la sessió i el detector val EXACTAMENT el que valia.
-            garment = _garment_de(r, garment_sessio)
+            # ⚠️ LA PEÇA DE LA FILA MANA SOBRE LA DE LA SESSIÓ (QA Agus 16/08, captura 13:21).
+            # Una resolució diu QUIN POM és aquesta fila; de QUI és ho diu la COLUMNA, que ja ha
+            # desat la decisió a la fila unes línies més amunt (`files_garment`). Fent el fallback
+            # a la sessió, el detector comparava com a mare una fila que la pantalla mostrava com
+            # a «Short», i la Brumà donava un conflicte que no es podia verificar mirant-la.
+            garment = _garment_de(r, _garment_de(fila, garment_sessio))
             ident = (pm.id, capa, instancia, garment)
             if ident in presos:
+                ocupada = presos[ident]
                 errors.append({'ordre': ordre, 'error': 'pom_ja_usat', 'pom_master_id': pm.id,
                                'capa': capa, 'instancia': instancia, 'garment': garment,
-                               'ordre_ocupat': presos[ident]})
+                               'ordre_ocupat': ocupada.get('ordre'),
+                               # EL CONFLICTE ES RESOL VEIENT-LO, NO ENDEVINANT-LO. «Un POM no pot
+                               # ser dues files» és una acusació sense judici: no diu per què
+                               # AQUESTA vegada, i amb la peça i la instància a la identitat les
+                               # dues files poden diferir en tres eixos. Van les DUES, amb nom.
+                               'aquesta': _descriu_fila(fila, pm, capa, instancia, garment),
+                               'ocupada': _descriu_fila(ocupada, None, None, None,
+                                                        _garment_de(ocupada, garment_sessio))})
                 continue
-            presos[ident] = ordre
+            presos[ident] = dict(fila or {}, ordre=ordre, capa=capa, instancia=instancia,
+                                 garment=garment, pom_master_id=pm.id, pom_codi=pm.codi_client)
             pla.append({'fila': fila, 'accio': 'vincula', 'pom': pm,
                         'capa': capa, 'instancia': instancia, 'garment': garment})
         elif accio == 'crea':

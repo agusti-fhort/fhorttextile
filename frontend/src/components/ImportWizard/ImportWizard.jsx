@@ -187,8 +187,19 @@ function PomCatalegPicker({ modelId, onPick, autoFocus }) {
 // catàleg. Aquí la fila té les TRES sortides a sobre —vincular a un candidat, triar del
 // catàleg, o crear-ne un de nou amb codi i nom editables— i la decisió segueix sent seva:
 // el backend no en tria cap, només diu qui es disputa el codi.
+// SET-2/T8-ter · com es DIU una fila en un conflicte: «M · Short · exterior · única».
+// L'ordre és el de la identitat (codi → peça → capa → instància), el mateix que la casa fa servir
+// a la fila i a la fitxa. La peça hi va la segona perquè és la FRONTERA: és la resposta que fa
+// que dues files que semblen iguals no ho siguin.
+function descriuFila(d, peces, t) {
+  const peca = (peces || []).find(p => p.codi === (d.garment || ''))
+  const nomPeca = peca ? (peca.es_mare ? '' : (peca.nom || peca.codi)) : (d.garment || '')
+  return [d.codi, nomPeca, d.capa, d.instancia || '—'].filter(Boolean).join(' · ')
+}
+
+
 function ResolPanel({ fila, conflicte, res, modelId, crea, setCrea, onVincula, onCrea, onTanca,
-                     dicc, capa, instancia, onCapa, onInstancia }) {
+                     dicc, capa, instancia, onCapa, onInstancia, peces }) {
   const { t } = useTranslation()
   const candidats = conflicte?.candidats || []
   // El RÈTOL VIU de la columna dreta: la decisió d'aquesta tramesa si n'hi ha, i si no, el
@@ -219,8 +230,16 @@ function ResolPanel({ fila, conflicte, res, modelId, crea, setCrea, onVincula, o
       {conflicte?.error && (
         <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 'var(--fs-body)',
                       background: 'var(--err-bg)', color: 'var(--err)' }}>
-          {t([`import_wizard.resol_err_${conflicte.error}`, 'import_wizard.resol_err_generic'],
-             { codi: conflicte.codi || fila.codi_fitxa || '', ordre: (conflicte.ordre_ocupat ?? 0) + 1 })}
+          {/* SET-2/T8-ter · EL CONFLICTE ES RESOL VEIENT-LO. «Un POM no pot ser dues files» era
+              una acusació sense judici: no deia per què AQUESTA vegada, i amb la peça i la
+              instància a la identitat les dues files poden diferir en tres eixos. Ara van les
+              DUES amb nom, i el rètol el compon la mateixa funció que la resta de la casa. */}
+          {conflicte.aquesta && conflicte.ocupada
+            ? t('import_wizard.resol_err_pom_ja_usat_dues', {
+                aquesta: descriuFila(conflicte.aquesta, peces), ocupada: descriuFila(conflicte.ocupada, peces) })
+            : t([`import_wizard.resol_err_${conflicte.error}`, 'import_wizard.resol_err_generic'],
+                { codi: conflicte.codi || fila.codi_fitxa || '',
+                  ordre: (conflicte.ordre_ocupat ?? 0) + 1 })}
         </div>
       )}
 
@@ -677,11 +696,13 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
         body: JSON.stringify({ poms_confirmats: ids, poms_tenant_only: tenantOnly,
                                resolucions: llistaRes,
                                files_confirmades: actius.map(p => p.ordre),
-                               // SET-2/T8-ter · DE QUI ÉS CADA FILA. Només les DECIDIDES: una
-                               // proposta que ningú ha confirmat no és una decisió i no pot
-                               // viatjar com si ho fos (`estatDeLaPeca`, provat a part).
+                               // SET-2/T8-ter · DE QUI ÉS CADA FILA — la que la CEL·LA MOSTRA.
+                               // Hi entren també les PROPOSADES: la secció del document és un
+                               // pre-marcat i enviar el pas l'accepta. Enviar-hi només les
+                               // verdes feia que el detector comparés com a mare una fila que
+                               // deia «Short» a la pantalla (QA 16/08).
                                files_garment: pomsExtrets
-                                 .filter(p => estatDeLaPeca(p, identitats) === 'decidit')
+                                 .filter(p => estatDeLaPeca(p, identitats) !== 'defecte')
                                  .map(p => ({ ordre: p.ordre,
                                               garment: pecaEfectiva(p, identitats, garment || '') })) }),
       })
@@ -1377,7 +1398,7 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                     </div>
                     {panellOrdre === p.ordre && (
                       <ResolPanel
-                        fila={p} conflicte={conflicte} res={res} modelId={model.id}
+                        fila={p} conflicte={conflicte} res={res} modelId={model.id} peces={peces}
                         crea={crea} setCrea={setCrea}
                         onTanca={() => setPanellOrdre(null)}
                         dicc={dicc}

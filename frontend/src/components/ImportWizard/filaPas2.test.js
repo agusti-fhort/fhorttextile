@@ -106,7 +106,10 @@ test('T8-ter · la proposta del document es veu, però NO és una decisió', () 
   const fila = { ordre: 1, garment_proposat: '02' }
   assert.equal(estatDeLaPeca(fila, {}), 'proposat')
   assert.equal(pecaVisible(fila, {}, ''), '02', 'la proposta s\'ha de veure col·locada')
-  assert.equal(pecaEfectiva(fila, {}, ''), '', 'la proposta no pot arribar al confirm')
+  // CORREGIT 16/08: la proposta és un PRE-MARCAT i VIATJA. Abans aquí s'assegurava el contrari
+  // («no pot arribar al confirm») i el resultat va ser que el detector comparava com a mare una
+  // fila que la pantalla mostrava com a «Short» — un conflicte que no es podia verificar mirant-la.
+  assert.equal(pecaEfectiva(fila, {}, ''), '02', 'el pre-marcat viatja: la pantalla i el detector diuen el mateix')
 })
 
 test('T8-ter · confirmar el proposat amb un clic el fa DECIDIT', () => {

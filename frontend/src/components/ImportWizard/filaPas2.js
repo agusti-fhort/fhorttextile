@@ -77,13 +77,25 @@ export function filaAmbIdentitat(fila, pendents) {
  * SESSIÓ. `??` per la mateixa raó que als altres dos eixos: `''` és la decisió «la mare» i amb
  * `||` es llegiria com «no s'ha triat res», ressuscitant la desada.
  *
- * ⚠️ `garment_proposat` NO hi entra. La proposta del document (F2) és un SUGGERIMENT i es pinta
- * com a tal (àmbar); si es colés aquí, una fila proposada seria indistingible d'una decidida i
- * el confirm rebria una decisió que ningú no ha pres.
+ * ⚠️ LA PROPOSTA HI ENTRA — CORRECCIÓ DEL 16/08, i val la pena dir per què era al revés.
+ *
+ * Aquesta funció excloïa `garment_proposat` amb l'argument «una proposta que ningú ha confirmat
+ * no pot viatjar com si fos una decisió». Sona bé i era FALS a la pantalla: el detector del pas 2
+ * comparava la fila com si fos de la mare mentre el desplegable deia «Short», i la Brumà donava
+ * «M1 xoca amb G1» amb la peça informada a la cel·la (QA Agus, captura 13:21). **Un conflicte
+ * calculat contra una cosa que la pantalla no mostra és una acusació que no es pot verificar.**
+ *
+ * El disseny d'Agus ja ho deia amb la paraula justa: la secció del document és el **PRE-MARCAT**.
+ * Un pre-marcat és un valor POSAT que l'usuari pot canviar, no una insinuació — i enviar el pas
+ * l'accepta, com qualsevol casella pre-marcada de la casa.
+ *
+ * `estatDeLaPeca` segueix distingint QUI ho ha dit (verd = una persona · àmbar = el document), que
+ * és el que la columna ha de deixar escanejar. El que ja no fa és que les dues meitats de la
+ * pantalla parlin de files diferents.
  */
 export function pecaEfectiva(fila, pendents, garmentSessio = '') {
   const p = (pendents || {})[(fila || {}).ordre] || {}
-  return (p.garment ?? (fila || {}).garment ?? garmentSessio) || ''
+  return (p.garment ?? (fila || {}).garment ?? (fila || {}).garment_proposat ?? garmentSessio) || ''
 }
 
 /**
@@ -109,7 +121,6 @@ export function estatDeLaPeca(fila, pendents) {
  * de proposar-la — que es vegi ja col·locada i només calgui confirmar-la).
  */
 export function pecaVisible(fila, pendents, garmentSessio = '') {
-  if (estatDeLaPeca(fila, pendents) === 'proposat') return (fila || {}).garment_proposat || ''
   return pecaEfectiva(fila, pendents, garmentSessio)
 }
 

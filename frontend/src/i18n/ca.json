@@ -4114,7 +4114,8 @@
     "peca_tip": "De quina peça del model és aquesta mesura.",
     "peca_proposada_tip": "Proposat pel document (secció «{{seccio}}»). Confirma-ho o tria'n una altra.",
     "peces_seccions_sense_peca": "El document porta seccions que aquest model no té com a peça: {{seccions}}. Crea-les si les vols separar; si no, les seves files aniran on digui la columna.",
-    "peca_grup_n": "· {{count}} mesures"
+    "peca_grup_n": "· {{count}} mesures",
+    "resol_err_pom_ja_usat_dues": "Aquestes dues files són la MATEIXA mesura: «{{aquesta}}» i «{{ocupada}}». Distingeix-les per instància, per capa o canvia'n una de peça."
   },
   "dependency": {
     "title": "Dependència",

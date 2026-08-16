@@ -4114,7 +4114,8 @@
     "peca_tip": "De qué pieza del modelo es esta medida.",
     "peca_proposada_tip": "Propuesto por el documento (sección «{{seccio}}»). Confírmalo o elige otra.",
     "peces_seccions_sense_peca": "El documento trae secciones que este modelo no tiene como pieza: {{seccions}}. Créalas si quieres separarlas; si no, sus filas irán donde diga la columna.",
-    "peca_grup_n": "· {{count}} medidas"
+    "peca_grup_n": "· {{count}} medidas",
+    "resol_err_pom_ja_usat_dues": "Estas dos filas son la MISMA medida: «{{aquesta}}» y «{{ocupada}}». Distínguelas por instancia, por capa o cambia una de pieza."
   },
   "dependency": {
     "title": "Dependencia",

@@ -275,17 +275,25 @@ class LaPropostaDeSeccioTest(_BaseImportPerPrendaTest):
         for p in poms:
             self.assertNotIn('garment_proposat', p)
 
-    def test_la_proposta_NO_es_la_decisio(self):
-        """`garment_proposat` és una clau separada de `garment`: mentre ningú la confirmi, la
-        fila segueix sense eix propi i el confirm hi escriu el de la sessió."""
+    def test_la_proposta_es_un_PRE_MARCAT_i_viatja(self):
+        """CORREGIT 16/08 (QA Agus, captura 13:21). Aquí s'assegurava el contrari —«la proposta
+        no arriba al confirm»— i el resultat va ser que el detector comparava com a MARE una fila
+        que la pantalla mostrava com a «Short»: un conflicte que no es podia verificar mirant-la.
+
+        El disseny ja ho deia amb la paraula justa: la secció del document és el **PRE-MARCAT**, i
+        un pre-marcat és un valor POSAT que es pot canviar. `garment` segueix sent una clau a
+        part —qui ho ha dit es distingeix (`estatDeLaPeca`)— però la identitat és la mateixa a la
+        pantalla i al detector."""
         self.peca.nom = 'Short'
         self.peca.save(update_fields=['nom'])
         poms = self._files('SHORT')
         _proposta_de_peca(self.model, poms)
 
         self.assertEqual(poms[0]['garment_proposat'], SEGONA)
-        self.assertNotIn('garment', poms[0])
-        self.assertEqual(_garment_de(poms[0], MARE), MARE)
+        self.assertNotIn('garment', poms[0], 'la proposta no es disfressa de decisió')
+        self.assertEqual(_garment_de(poms[0], MARE), SEGONA)
+        # …i una decisió explícita hi mana per damunt.
+        self.assertEqual(_garment_de(dict(poms[0], garment=MARE), MARE), MARE)
 
 
 class ElGuardManyToOneCompataPerPecaTest(_BaseImportPerPrendaTest):
@@ -397,3 +405,66 @@ class LaMetricaDeCadaPecaTest(_BaseImportPerPrendaTest):
         self.assertEqual(fora[0]['garment'], SEGONA)
         self.assertEqual(fora[0]['garment_nom'], 'Llaçada')
         self.assertEqual(fora[0]['camps'], ['size_run_model'])
+
+
+class ElConflicteMiraLaPecaDeLaFilaTest(_BaseImportPerPrendaTest):
+    """QA Agus 16/08 (captura 13:21) · el detector comparava com a MARE una fila que la pantalla
+    mostrava com a «Short».
+
+    El cas real: «G1 · Bottom height» (faldilla) i «M1 · Bottom hem height» (short) són el mateix
+    POM 962. Amb la peça només PROPOSADA per la secció del document, la fila no la portava i el
+    detector donava «Aquest POM ja el té la fila 6» amb «Short» informat al desplegable — un
+    conflicte que no es podia verificar mirant la pantalla.
+
+    LA CORRECCIÓ ÉS D'UN SOL PUNT: el pre-marcat entra a `_garment_de`, o sigui que el detector,
+    el confirm i el pas 3 no poden divergir.
+    """
+
+    PREFIX = 'T8T9'
+
+    def _fila(self, ordre, codi, **kw):
+        return dict({'ordre': ordre, 'codi_fitxa': codi, 'pom_master_id': self.pit.id,
+                     'actiu': True, 'pom_nom': 'Bottom height'}, **kw)
+
+    def test_el_pre_marcat_del_document_compta_a_la_identitat(self):
+        """La fila proposada a la 02 NO xoca amb la de la mare: són dues cel·les diferents."""
+        poms = [self._fila(0, 'G1'), self._fila(1, 'M1', garment_proposat=SEGONA)]
+        pla, errors = _pla_de_resolucions(
+            poms, [{'ordre': 1, 'accio': 'vincula', 'pom_master_id': self.pit.id}], MARE)
+        self.assertEqual(errors, [], 'conflicte amb la peça informada a la cel·la')
+        self.assertEqual(pla[0]['garment'], SEGONA)
+
+    def test_la_colisio_de_debo_segueix_mossegant_I_DIU_LES_DUES_FILES(self):
+        """EL CONTROL. Mateixa identitat sencera i MATEIXA peça: sí que és un conflicte. I el
+        missatge ha de portar les dues files amb nom — «un POM no pot ser dues files» sense dir
+        per què aquesta vegada és una acusació sense judici."""
+        poms = [self._fila(0, 'M', garment_proposat=SEGONA),
+                self._fila(1, 'M1', garment_proposat=SEGONA)]
+        pla, errors = _pla_de_resolucions(
+            poms, [{'ordre': 1, 'accio': 'vincula', 'pom_master_id': self.pit.id}], MARE)
+
+        self.assertEqual(pla, [])
+        self.assertEqual(len(errors), 1)
+        e = errors[0]
+        self.assertEqual(e['error'], 'pom_ja_usat')
+        self.assertEqual(e['aquesta']['codi'], 'M1')
+        self.assertEqual(e['ocupada']['codi'], 'M')
+        self.assertEqual(e['aquesta']['garment'], SEGONA)
+        self.assertEqual(e['ocupada']['garment'], SEGONA)
+        # I les dues es poden anomenar: sense nom, el conflicte s'ha d'endevinar.
+        self.assertTrue(e['aquesta']['nom'] and e['ocupada']['nom'])
+
+    def test_la_decisio_de_la_persona_mana_sobre_el_pre_marcat(self):
+        poms = [self._fila(0, 'G1'),
+                self._fila(1, 'M1', garment_proposat=SEGONA, garment=MARE)]
+        _pla, errors = _pla_de_resolucions(
+            poms, [{'ordre': 1, 'accio': 'vincula', 'pom_master_id': self.pit.id}], MARE)
+        self.assertEqual(len(errors), 1, 'triar la mare a mà ha de tornar a fer-les xocar')
+
+    def test_amb_una_sola_peca_el_comportament_es_el_d_avui(self):
+        """EL CONTROL DE NO-REGRESSIÓ: sense propostes ni decisions, tot com sempre."""
+        poms = [self._fila(0, 'G1'), self._fila(1, 'M1')]
+        _pla, errors = _pla_de_resolucions(
+            poms, [{'ordre': 1, 'accio': 'vincula', 'pom_master_id': self.pit.id}], MARE)
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]['error'], 'pom_ja_usat')
