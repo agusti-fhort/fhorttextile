@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { clauDeFila, filesDeLaPeca } from '../../utils/identitatMesura'
+import { construeixFilesDePresa } from '../../utils/filesDePresa'
 import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
 import { models, sizeChecks, sizeCheckLines, baseMeasurements, pieceFittingLines } from '../../api/endpoints'
@@ -600,48 +601,14 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     || [...reglaPerPom.values()].some(x => x.logica)
 
   const esPresa = src.kind === 'check'
-  const rowsPresa = !esPresa ? [] : (raw?.baseData?.rows || []).map(r => {
-    const line = (raw?.check?.lines || []).find(
-      l => l.base_measurement_id != null && l.base_measurement_id === r.base_measurement_id)
-    return {
-      // La taula indexa per `row.id`, que és el que fa servir per saber si una fila ja viu a la
-      // BD (el bateig hi penja). Aquí SEMPRE hi viu: la presa no inventa mesures.
-      id: r.base_measurement_id,
-      lineId: line?.id ?? null,
-      pom_id: r.pom_id, pom_code: r.pom_code,
-      capa: r.capa, instancia: r.instancia,
-      nom_fitxa: r.nom_fitxa || '',
-      nom_en: r.nom_en, nom_ca: r.nom_ca,
-      nom_canonic_model: r.nom_canonic_model || '',
-      nom_traduit_model: r.nom_traduit_model || '',
-      is_key: r.is_key,
-      // EL CARRIL PORTA LA PRESA, no la base: és el número que la modista escriu avui.
-      //
-      // …PERÒ EN CONSULTA NO HI HA PRESA. La «Taula de mesures» és una pantalla de LECTURA del
-      // model: la pregunta que ve a respondre és quina base té la fitxa, no què s'està mesurant
-      // avui. Llegint `line.valor_real`/`line.valor_teoric` també aquí, la consulta depenia d'un
-      // SizeCheck obert: un model amb els valors gravats a Definició POM i sense cap check
-      // (MILEY, BRW-SS26-0003 — 12 files MANUAL amb valor i zero SizeCheck) ensenyava les files
-      // correctes i les dues columnes a «—». Les files arribaven perquè vénen de `base_stages`;
-      // els valors no, perquè venien de l'altra banda.
-      //
-      // La font primària és `BaseMeasurement`, i `base_stages_view` ja la serveix a
-      // `base_value_cm` (`models_app/views.py:3517`); el seu propi docstring fixa la semàntica:
-      // «l'últim estadi coincideix amb la base vigent (BaseMeasurement)» (`:3418`). O sigui que
-      // en consulta les dues columnes són la MATEIXA cosa, i és aquesta.
-      //
-      // El mode presa NO canvia: amb `readOnly=false` el carril segueix portant `valor_real` i la
-      // base vigent segueix sent el `valor_teoric` que el check va congelar en obrir-se — que és
-      // el que la presa ha de comparar, i no s'ha de moure mentre es pren.
-      base_value_cm: readOnly ? (r.base_value_cm ?? null) : (line?.valor_real ?? null),
-      // LA REGLA, per a les quatre columnes de lectura de la consulta. Es creua per `pom_id` i
-      // no pels eixos a posta: `ModelGradingRule` no porta capa ni instancia (decisio de domini
-      // amb acta —mateix POM, mateix increment a totes les cares—), o sigui que dues germanes
-      // COMPARTEIXEN regla i han de sortir amb la mateixa. Creuar per la fila donaria buit.
-      ...(reglaPerPom.get(r.pom_id) || {}),
-      // …i al costat, la base VIGENT, que és contra el que es mesura.
-      base_vigent: readOnly ? (r.base_value_cm ?? null) : (line?.valor_teoric ?? null),
-    }
+  // S42/G8 — LA CONSTRUCCIÓ DE LES FILES SE'N VA A `utils/filesDePresa`, i el que hi guanya no
+  // és ordre: és BANC. Vivia aquí com un `.map()` de quaranta línies enmig del cos del
+  // component, i `node --test` no pot importar un `.jsx` — o sigui que era codi de domini
+  // sense cap prova possible. Mateix moviment que `calFilaDePeca` i `motiuPasPresa`, i pel
+  // mateix motiu. La decisió de SI es construeixen (`esPresa`) es queda aquí, que és una
+  // decisió de render; la de COM, se'n va, que és una llei.
+  const rowsPresa = !esPresa ? [] : construeixFilesDePresa({
+    baseRows: raw?.baseData?.rows, linies: raw?.check?.lines, reglaPerPom, readOnly,
   })
 
   // Les PORTES PER FILA. Cadascuna escriu el mínim i rellegeix: la font de veritat torna del
