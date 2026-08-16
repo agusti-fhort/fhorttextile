@@ -40,7 +40,17 @@ from django_tenants.utils import schema_context
 
 # Els 7 models amb graduació viva al corpus post-neteja (02/08). Els dos segellats
 # (163, 182) entren només a la mètrica de preview.
-MODELS = list(globals().get('MODELS', [162, 163, 174, 182, 186, 268, 269]))
+#: ── EL BANC · CENS DINÀMIC PEL PREFIX (2026-08-16) ─────────────────────────────────────────
+#: Abans hi havia una LLISTA ESCRITA A MÀ (162·163·174·182·186·268·269) i el 16/08 es va
+#: descobrir que **cap d'aquells models existia ja**: la sembra v4 del 09/08 se'n va endur el
+#: corpus i ningú se'n va assabentar, perquè un golden que mesura models inexistents no peta —
+#: emet 0 cel·les i un md5 perfectament estable. Una llista a mà no pot dir «ja no sóc el banc».
+#:
+#: El cens ara és el PREFIX, que és la definició real de pertinença: qui és del banc és qui
+#: `sembra_banc_paritat` ha sembrat. Afegir una fitxa al document MOU l'empremta, i això és el
+#: que ha de passar: obliga a un segell nou i datat en comptes de deixar-la entrar en silenci.
+PREFIX_BANC = globals().get('PREFIX_BANC', 'BANC-')
+MODELS = list(globals().get('MODELS', []))
 OUT = globals().get('OUT', '/tmp/golden_c3.json')
 SCHEMA = globals().get('SCHEMA', 'fhort')
 
@@ -49,9 +59,22 @@ class _Rollback(Exception):
     """Senyal de sortida de l'atomic de captura del generador. Mai no és un error."""
 
 
-def _clau(model_id, pom_id, capa, instancia, size_label):
-    """La clau del golden. Ordre = ordre de la identitat: model → POM → eixos → talla."""
-    return f'{model_id}|{pom_id}|{capa}|{instancia}|{size_label}'
+def _clau(model_id, pom_id, capa, instancia, garment, size_label):
+    """La clau del golden. Ordre = ordre de la identitat: model → POM → eixos → talla.
+
+    ── 2026-08-16 · EL `garment` ENTRA A LA CLAU ────────────────────────────────────────────
+    Fins avui en quedava fora amb un argument que era bo: afegir-l'hi hauria canviat l'md5 sense
+    que cap cel·la s'hagués mogut, i s'hauria perdut la comparació amb `165d6701…` justament al
+    tram que l'havia de conservar. Aquell md5 ja no es pot comparar amb res —el seu corpus és
+    mort— i el banc es re-segella de zero, o sigui que el motiu per deixar-lo fora ha caducat.
+
+    I hi ha d'entrar: T8-ter ha baixat el garment a la fila i F6 tocarà la derivació per peça.
+    Un golden cec a la peça no podria distingir «la regla del short ha canviat» de «no ha
+    canviat res». Al banc totes les files són de la mare (les seccions del document NO són
+    peces), o sigui que avui és una columna constant — i és exactament quan s'ha d'afegir, no
+    el dia que ja hi hagi dany a amagar.
+    """
+    return f'{model_id}|{pom_id}|{capa}|{instancia}|{garment}|{size_label}'
 
 
 with schema_context(SCHEMA):
@@ -61,6 +84,12 @@ with schema_context(SCHEMA):
         SealedGradingVersionError, _load_base_measurements,
         generate_graded_specs, preview_graded_specs,
     )
+
+    # El cens del banc, resolt AQUÍ (cal l'ORM). Una llista explícita per `MODELS=[...]` segueix
+    # manant: és la porta per mesurar un model concret sense tocar el fitxer.
+    if not MODELS:
+        MODELS = list(Model.objects.filter(codi_intern__startswith=PREFIX_BANC)
+                      .order_by('codi_intern').values_list('pk', flat=True))
 
     preview_cells = {}
     generator_cells = {}
@@ -102,7 +131,7 @@ with schema_context(SCHEMA):
         # comportes, i demana refer el banc i segellar un md5 nou.
         for (pom_id, capa, instancia, _garment), fila in specs.items():
             for size_label, val in fila.items():
-                preview_cells[_clau(model_id, pom_id, capa, instancia, size_label)] = {
+                preview_cells[_clau(model_id, pom_id, capa, instancia, _garment, size_label)] = {
                     'v': val,
                     # Amb 1 germana això és soroll; amb 2+ és EL senyal.
                     'n_germanes': len(germanes_per_pom.get(pom_id) or [1]),
@@ -128,10 +157,20 @@ with schema_context(SCHEMA):
                     # Tot això viu dins de l'atomic que es desfà: a staging no hi passa res.
                     GradedSpec.objects.filter(grading_version=gv).delete()
                     generate_graded_specs(sf.pk)
+                    # ⚠️ I ES TORNA A RESOLDRE LA VERSIÓ DESPRÉS DE GENERAR. `generate_graded_specs`
+                    # pot obrir-ne una de NOVA (`_get_or_create_grading_version`), i llegint la
+                    # d'abans el golden comptava 0 cel·les mentre el log deia «135 specs»: una
+                    # mètrica de generador que sempre val zero és estable i CEGA, que és el
+                    # pitjor que li pot passar a una referència.
+                    gv = vigent_grading_version(sf.pk)
+                    _camps = ['pom_id', 'capa', 'instancia', 'size_label', 'graded_value_cm']
+                    if any(f.name == 'garment' for f in GradedSpec._meta.fields):
+                        _camps.append('garment')
                     for s in GradedSpec.objects.filter(grading_version=gv, is_active=True).values(
-                            'pom_id', 'capa', 'instancia', 'size_label', 'graded_value_cm'):
-                        generator_cells[_clau(model_id, s['pom_id'], s['capa'],
-                                              s['instancia'], s['size_label'])] = s['graded_value_cm']
+                            *_camps):
+                        generator_cells[_clau(model_id, s['pom_id'], s['capa'], s['instancia'],
+                                              s.get('garment', ''),
+                                              s['size_label'])] = s['graded_value_cm']
                         n_gen += 1
                     raise _Rollback()
             except _Rollback:
@@ -158,8 +197,8 @@ with schema_context(SCHEMA):
         }
 
     payload = {
-        'versio_golden': 'c3-identitat-completa-v1',
-        'clau': 'model_id|pom_id|capa|instancia|size_label',
+        'versio_golden': 'banc-brownie-v1',
+        'clau': 'model_id|pom_id|capa|instancia|garment|size_label',
         'models': MODELS,
         'segellats_sense_generador': sorted(segellats),
         'n_celles_preview': len(preview_cells),
