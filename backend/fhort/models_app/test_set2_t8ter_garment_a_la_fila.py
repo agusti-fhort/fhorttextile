@@ -30,7 +30,8 @@ EL CONTROL de no-regressió és `ImportSensePeçaALaFilaTest`: una tramesa on ca
 s'ha de comportar EXACTAMENT com abans d'aquesta peça —totes les files a la peça de la sessió—,
 que és el 100% del corpus viu (16 sessions al tenant `fhort`, totes amb `garment=''`).
 """
-from fhort.models_app.extraction_views import _garment_de, _identitat, _pla_de_resolucions
+from fhort.models_app.extraction_views import (
+    _garment_de, _identitat, _pla_de_resolucions, _proposta_de_peca)
 from fhort.models_app.models import BaseMeasurement, ModelGarment
 
 from fhort.models_app.test_set2_t8_import_per_prenda import (
@@ -226,3 +227,58 @@ class ImportSensePecaALaFilaTest(_BaseImportPerPrendaTest):
         self.assertEqual(res.status_code, 201, res.data)
         self.assertEqual(self._files(MARE).count(), 1)
         self.assertEqual(self._files(SEGONA).count(), 0)
+
+
+class LaPropostaDeSeccioTest(_BaseImportPerPrendaTest):
+    """F2 · el rètol del document proposa la peça — i PROPOSA, no decideix."""
+
+    PREFIX = 'T8T5'
+
+    def _files(self, *seccions):
+        return [{'ordre': i, 'seccio': s, 'codi_fitxa': f'X{i}'}
+                for i, s in enumerate(seccions)]
+
+    def test_el_retol_del_document_troba_la_peca_pel_nom(self):
+        """El cas Brumà: la secció «SHORT» i la peça batejada «Short»."""
+        self.peca.nom = 'Short'
+        self.peca.save(update_fields=['nom'])
+        poms = self._files(None, 'SHORT', 'SHORT')
+
+        traca = _proposta_de_peca(self.model, poms)
+
+        self.assertNotIn('garment_proposat', poms[0], 'una fila sense secció no es proposa')
+        self.assertEqual(poms[1]['garment_proposat'], SEGONA)
+        self.assertEqual(poms[2]['garment_proposat'], SEGONA)
+        self.assertEqual(traca['n_proposades'], 2)
+        self.assertEqual(traca['seccions_sense_peca'], [])
+
+    def test_tambe_pel_codi_i_amb_el_retol_titulat(self):
+        self.peca.nom = 'Short'
+        self.peca.save(update_fields=['nom'])
+        poms = self._files('02', 'Short measurements')
+        _proposta_de_peca(self.model, poms)
+        self.assertEqual(poms[0]['garment_proposat'], SEGONA)
+        self.assertEqual(poms[1]['garment_proposat'], SEGONA)
+
+    def test_una_seccio_sense_peca_es_DIU_i_no_aterra_enlloc(self):
+        """L'absència que s'ha de dir: un document amb secció SHORT sobre un model que no en
+        té peça vol dir que falta crear-la. El silenci hi deixaria set files a la mare."""
+        poms = self._files('SHORT', 'CAPUTXA')
+        traca = _proposta_de_peca(self.model, poms)
+
+        self.assertEqual(traca['n_proposades'], 0)
+        self.assertEqual(sorted(traca['seccions_sense_peca']), ['CAPUTXA', 'SHORT'])
+        for p in poms:
+            self.assertNotIn('garment_proposat', p)
+
+    def test_la_proposta_NO_es_la_decisio(self):
+        """`garment_proposat` és una clau separada de `garment`: mentre ningú la confirmi, la
+        fila segueix sense eix propi i el confirm hi escriu el de la sessió."""
+        self.peca.nom = 'Short'
+        self.peca.save(update_fields=['nom'])
+        poms = self._files('SHORT')
+        _proposta_de_peca(self.model, poms)
+
+        self.assertEqual(poms[0]['garment_proposat'], SEGONA)
+        self.assertNotIn('garment', poms[0])
+        self.assertEqual(_garment_de(poms[0], MARE), MARE)

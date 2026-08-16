@@ -1587,8 +1587,13 @@ def _extraccio_via_excel(session, api_key):
 
     # 10. Persisteix. NOTA: `session.poms_extrets` és la font de veritat per als passos
     # W2-confirmació (:1216) i W3-mesures (:1415); cal desar-la (paritat amb la via Opus).
+    # SET-2/T8-ter — la proposta secció→peça, sobre les files ja aparellades. Va DESPRÉS del
+    # matching perquè no en depèn (la secció viatja tal qual) però abans de desar, que és quan
+    # la fila ha de quedar amb la seva proposta.
+    _proposta = _proposta_de_peca(session.model, poms_extrets)
     session.resultat = {**(session.resultat or {}),
                         'extraccio': extraccio,
+                        'proposta_peces': _proposta,
                         'grading_status': 'ok'}
     session.poms_extrets = poms_extrets
     session.avisos = list(session.avisos or []) + avisos_extraccio
@@ -1617,6 +1622,9 @@ def _extraccio_via_excel(session, api_key):
         'grading_status': {'status': 'ok', 'detail': ''},
         'avisos': avisos_extraccio,
         'suggested_valors_mode': suggested_valors_mode,
+        # SET-2/T8-ter — la proposta secció→peça i, sobretot, les seccions que NO tenen
+        # peça: una absència que el pas 2 ha de poder DIR (crear la peça és un gest humà).
+        'proposta_peces': _proposta,
         'fulls': fulls,                    # F5 · informe del llibre
         'full': meta.get('full'),          # F5 · quin s'ha llegit
     }, status=200), meta
@@ -1769,7 +1777,11 @@ def import_session_extraccio_view(request, token):
     )
     avisos += _avisos_de_matching(stats)
 
+    # SET-2/T8-ter — la proposta secció→peça (mateixa crida que la via Excel: un sol punt de
+    # decisió per als dos camins d'extracció).
+    _proposta = _proposta_de_peca(session.model, poms_extrets)
     session.resultat = {**(session.resultat or {}), 'extraccio': extracted,
+                        'proposta_peces': _proposta,
                         'grading_status': grading_status}
     session.poms_extrets = poms_extrets
     session.avisos = avisos
@@ -1800,6 +1812,9 @@ def import_session_extraccio_view(request, token):
         'grading_status': grading_status,
         'avisos': avisos,
         'suggested_valors_mode': suggested_valors_mode,
+        # SET-2/T8-ter — la proposta secció→peça i, sobretot, les seccions que NO tenen
+        # peça: una absència que el pas 2 ha de poder DIR (crear la peça és un gest humà).
+        'proposta_peces': _proposta,
         # F5 · l'informe de fulls surt del parser determinista, que sap comptar les pestanyes
         # encara que abdiqui de llegir-les. Buit per a PDF/imatge, que no tenen fulls.
         'fulls': excel_meta.get('fulls') or [],
@@ -1871,6 +1886,77 @@ def _garment_de(fila, garment_sessio=''):
     if g is None:
         return (garment_sessio or '').strip()
     return str(g).strip()
+
+
+def _norm_seccio(text):
+    """Forma comparable d'un rètol de secció o d'un nom de peça.
+
+    Majúscules/minúscules i espais sobrers no distingeixen res: «SHORT», «Short» i « short »
+    són el mateix rètol. Els accents SÍ que es conserven —no és el mateix «Llaçada» que
+    «Llacada» per a un tècnic que escriu bé— i no cal desaccentuar per al cas real.
+    """
+    return ' '.join(str(text or '').strip().split()).casefold()
+
+
+def _proposta_de_peca(model, poms):
+    """Marca `garment_proposat` a cada fila segons la SECCIÓ del document. Torna la traça.
+
+    ── SET-2/T8-ter · EL SUGGERIMENT NEIX D'ON JA ESTAVA ────────────────────────────────
+    `seccio` no és cap camp nou: els DOS camins d'extracció ja la porten a la fila —el parser
+    determinista la treu del rètol de bloc (`:530`) i la via IA del `section` de l'esquema
+    (`:1745`)— i el confirm ja la persisteix a `BaseMeasurement.seccio` des de F3. L'única
+    cosa que faltava era aparellar-la amb les peces del model.
+
+    ⚠️ PROPOSA, NO DECIDEIX. `garment_proposat` és una clau SEPARADA de `garment`: la fila
+    proposada segueix sense declarar eix propi i, si ningú la confirma, el confirm hi escriu
+    el de la sessió com sempre. La decisió és de la persona (la columna del pas 2, F3) i el
+    dia que el rètol del document canviï de nom, el pitjor que pot passar és que no es
+    proposi res — mai que la fila aterri sola a una peça que ningú no ha triat.
+
+    L'aparellament és per NOM o per CODI de la peça, en forma comparable, i té una segona
+    passada per PARAULA SENCERA («SHORT MEASUREMENTS» → la peça «Short») perquè els documents
+    reals titulen les seccions, no les etiqueten. Es demana ≥3 caràcters per no aparellar una
+    peça dita «A» amb qualsevol secció que porti una a.
+
+    Les seccions que NO troben peça es tornen a part: **és una absència que s'ha de DIR**. Un
+    document amb una secció SHORT sobre un model sense peça Short vol dir que falta crear-la, i
+    un silenci aquí deixaria set files aterrant a la mare sense que ningú se n'adonés.
+    """
+    from fhort.models_app.models import ModelGarment
+
+    peces = list(ModelGarment.objects.filter(model=model).order_by('ordre', 'codi')) if model else []
+    per_nom = {}
+    for g in peces:
+        for etiqueta in (g.nom, g.codi):
+            clau = _norm_seccio(etiqueta)
+            if clau:
+                per_nom.setdefault(clau, g.codi)
+
+    mapa, sense_peca = {}, []
+    for p in (poms or []):
+        seccio = _norm_seccio(p.get('seccio'))
+        if not seccio:
+            continue
+        if seccio in mapa:
+            p['garment_proposat'] = mapa[seccio]
+            continue
+        codi = per_nom.get(seccio)
+        if codi is None:
+            # Segona passada: el nom de la peça com a PARAULA SENCERA dins del rètol.
+            mots = set(seccio.split())
+            for clau, c in per_nom.items():
+                if len(clau) >= 3 and clau in mots:
+                    codi = c
+                    break
+        if codi is None:
+            if p.get('seccio') not in sense_peca:
+                sense_peca.append(p.get('seccio'))
+            continue
+        mapa[seccio] = codi
+        p['garment_proposat'] = codi
+
+    return {'mapa': mapa, 'seccions_sense_peca': sense_peca,
+            'n_proposades': sum(1 for p in (poms or []) if p.get('garment_proposat'))}
 
 
 def _identitat(fila, garment_sessio=''):
