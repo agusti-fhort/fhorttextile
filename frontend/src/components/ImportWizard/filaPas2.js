@@ -47,3 +47,68 @@ export function capaEfectiva(fila, pendents) {
 export function filaAmbIdentitat(fila, pendents) {
   return { ...fila, ...identitatEfectiva(fila, pendents) }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// SET-2/T8-ter · LA PEÇA — I PER QUÈ NO SEGUEIX LA LLEI DE LES ALTRES DUES
+//
+// P2-ter diu «LA FILA INFORMA, NO EDITA»: capa i instància se'n van al panell i la fila només
+// les llegeix. La peça fa el contrari —desplegable a la fila, sempre visible, a la dreta de
+// tot— i **no és una excepció, és una NATURA de dada diferent** (Agus, 16/08, §6):
+//
+//   · capa i instància són EIXOS DE GERMANOR: matisos d'UNA mesura («el pit de l'exterior i el
+//     pit del folre»). Es responen mirant la mesura de prop → el panell, i la fila n'informa.
+//   · la peça és una FRONTERA: de QUI és aquesta fila. Es respon mirant la COLUMNA sencera
+//     («quines files són del short?») i s'ha de poder escanejar i corregir en bloc sense obrir
+//     res. Amagar-la al panell obligaria a obrir divuit files per repartir un document.
+//
+// La distinció ja era llei al BACKEND abans que a la UI: `_load_grading_rules_per_garment`
+// (`pom/services.py`) diu, literal, que la capa i la instància no entren a la clau de la regla
+// perquè són eixos de germanor, i que el garment SÍ perquè és una frontera (D4). La UI, doncs,
+// no n'estrena cap: la fa visible.
+//
+// El TRANSPORT, en canvi, és el mateix i a posta: la peça pendent viu al MATEIX mapa que els
+// altres dos eixos. El comentari de dalt ja argumenta per què no n'hi ha un per eix —dos mapes
+// paral·lels sobre la mateixa fila són dues veritats que un dia discrepen— i això no canvia
+// perquè la pregunta sigui d'una altra natura.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * La PEÇA que la fila ha de dir: la pendent si n'hi ha, si no la desada, i si no la de la
+ * SESSIÓ. `??` per la mateixa raó que als altres dos eixos: `''` és la decisió «la mare» i amb
+ * `||` es llegiria com «no s'ha triat res», ressuscitant la desada.
+ *
+ * ⚠️ `garment_proposat` NO hi entra. La proposta del document (F2) és un SUGGERIMENT i es pinta
+ * com a tal (àmbar); si es colés aquí, una fila proposada seria indistingible d'una decidida i
+ * el confirm rebria una decisió que ningú no ha pres.
+ */
+export function pecaEfectiva(fila, pendents, garmentSessio = '') {
+  const p = (pendents || {})[(fila || {}).ordre] || {}
+  return (p.garment ?? (fila || {}).garment ?? garmentSessio) || ''
+}
+
+/**
+ * L'ESTAT de la cel·la de peça: `'decidit'` · `'proposat'` · `'defecte'`.
+ *
+ * Els tres colors de la columna (verd · àmbar · neutre) surten d'aquí i no del component: és
+ * una regla i es prova amb `node --test`, no mirant una pantalla.
+ *
+ * `decidit` és **qualsevol tria humana**, també la que CONFIRMA el proposat amb un clic — i
+ * també quan coincideix amb la mare. «Ningú no ho ha mirat» i «algú ha dit que és de la mare»
+ * no són el mateix estat, i la columna existeix precisament per poder distingir-los d'un cop
+ * d'ull.
+ */
+export function estatDeLaPeca(fila, pendents) {
+  const p = (pendents || {})[(fila || {}).ordre] || {}
+  if (p.garment !== undefined || (fila || {}).garment !== undefined) return 'decidit'
+  if ((fila || {}).garment_proposat) return 'proposat'
+  return 'defecte'
+}
+
+/**
+ * La peça que la cel·la MOSTRA: la decidida si n'hi ha, i si no la PROPOSADA (que és el sentit
+ * de proposar-la — que es vegi ja col·locada i només calgui confirmar-la).
+ */
+export function pecaVisible(fila, pendents, garmentSessio = '') {
+  if (estatDeLaPeca(fila, pendents) === 'proposat') return (fila || {}).garment_proposat || ''
+  return pecaEfectiva(fila, pendents, garmentSessio)
+}

@@ -3976,7 +3976,6 @@
     "file_hint": "PDF, Excel o imagen · Clica para seleccionar",
     "analyzing_doc": "⏳ Analizando documento…",
     "analyze_sizes": "⚡ Analizar tallas",
-    "multiprenda_info": "Este documento parece llevar más de una prenda; se importará todo a {{peca}}.",
     "desti_peca": "Importando en:",
     "table_columns": "Columnas de la tabla (tallas confirmadas):",
     "no_sizes_selected": "Ninguna talla seleccionada",
@@ -4110,7 +4109,11 @@
     "resol_err_generic": "Esta fila no se ha podido resolver. Vuelve a decidirla.",
     "resol_fet_btn": "Hecho",
     "resol_sec_client": "Catálogo del cliente",
-    "resol_sec_casa": "Catálogo de la casa"
+    "resol_sec_casa": "Catálogo de la casa",
+    "peca_col": "Pieza",
+    "peca_tip": "De qué pieza del modelo es esta medida.",
+    "peca_proposada_tip": "Propuesto por el documento (sección «{{seccio}}»). Confírmalo o elige otra.",
+    "peces_seccions_sense_peca": "El documento trae secciones que este modelo no tiene como pieza: {{seccions}}. Créalas si quieres separarlas; si no, sus filas irán donde diga la columna."
   },
   "dependency": {
     "title": "Dependencia",

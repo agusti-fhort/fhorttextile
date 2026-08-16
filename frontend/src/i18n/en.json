@@ -3976,7 +3976,6 @@
     "file_hint": "PDF, Excel or image · Click to select",
     "analyzing_doc": "⏳ Analyzing document…",
     "analyze_sizes": "⚡ Analyze sizes",
-    "multiprenda_info": "This document seems to carry more than one garment; everything will be imported into {{peca}}.",
     "desti_peca": "Importing into:",
     "table_columns": "Table columns (confirmed sizes):",
     "no_sizes_selected": "No size selected",
@@ -4110,7 +4109,11 @@
     "resol_err_generic": "This row could not be resolved. Decide it again.",
     "resol_fet_btn": "Done",
     "resol_sec_client": "Client's catalogue",
-    "resol_sec_casa": "House catalogue"
+    "resol_sec_casa": "House catalogue",
+    "peca_col": "Garment",
+    "peca_tip": "Which garment of the model this measurement belongs to.",
+    "peca_proposada_tip": "Proposed by the document (section “{{seccio}}”). Confirm it or pick another.",
+    "peces_seccions_sense_peca": "The document has sections this model has no garment for: {{seccions}}. Create them if you want them separated; otherwise their rows go wherever the column says."
   },
   "dependency": {
     "title": "Dependency",

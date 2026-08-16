@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Modal from '../ui/Modal'
-import { poms } from '../../api/endpoints'
+import { models, poms } from '../../api/endpoints'
 import FileDropCard from '../ui/FileDropCard'
 // P1 · la graella parla per FILA (`ordre`), no per POM. La lògica pura viu al costat, en un
 // mòdul que el runner de Node pot defensar: `node --test src/components/ImportWizard/`.
@@ -12,7 +12,8 @@ import {
 } from './taulaMesures'
 import { sufixIdentitat } from '../../utils/capaInstancia'
 import ColumnatIdentitat from '../instancia/ColumnatIdentitat'
-import { capaEfectiva, filaAmbIdentitat, identitatEfectiva, instanciaEfectiva } from './filaPas2'
+import { capaEfectiva, estatDeLaPeca, filaAmbIdentitat, identitatEfectiva, instanciaEfectiva,
+         pecaEfectiva, pecaVisible } from './filaPas2'
 import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -372,6 +373,21 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
   // P2-quinquies · UN sol mapa per als DOS eixos: dos mapes paral·lels sobre la mateixa fila
   // són dues veritats que un dia discrepen, que és el defecte que aquest tram persegueix.
   const [identitats, setIdentitats] = useState({})
+  // SET-2/T8-ter — les peces del model, per al desplegable de la columna. Es demanen un cop i
+  // MAI bloquegen: sense elles la columna no es pinta i el pas 2 es comporta com abans (la
+  // mateixa llei que el diccionari d'identitat). La mare hi entra sempre com a primera opció:
+  // `peces_del_model` la publica com a fila sintètica (`es_mare`), que és exactament per a
+  // això —recórrer totes les prendes d'un model amb un sol bucle.
+  const [peces, setPeces] = useState([])
+  useEffect(() => {
+    if (!model?.id) return
+    let viu = true
+    models.peces(model.id)
+      .then(r => { if (viu) setPeces(r.data?.peces || r.data || []) })
+      .catch(() => { if (viu) setPeces([]) })
+    return () => { viu = false }
+  }, [model?.id])
+
   const [panellOrdre, setPanellOrdre] = useState(null)   // fila amb el panell obert (una alhora)
   const [crea, setCrea] = useState({ codi: '', nom: '' })
   const filaRefs = useRef({})
@@ -539,7 +555,10 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
       setExtraccioMeta({ header: data.header, base_size: data.base_size, sizes: data.sizes,
                          grading_status: data.grading_status, avisos: data.avisos || [],
                          // F5 · informe del llibre: quines pestanyes hi ha i quina s'ha llegit.
-                         fulls: data.fulls || [], full: data.full || null })
+                         fulls: data.fulls || [], full: data.full || null,
+                         // SET-2/T8-ter · la proposta secció→peça i, sobretot, les seccions
+                         // que no en tenen: el pas 2 les ha de poder DIR.
+                         proposta_peces: data.proposta_peces || null })
       if (data.suggested_valors_mode === 'absoluts' || data.suggested_valors_mode === 'deltes')
         setValorsMode(data.suggested_valors_mode)
     } catch (e) {
@@ -657,7 +676,14 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
         // menciona, i aquells encara no tenen fila amb què demanar-se.
         body: JSON.stringify({ poms_confirmats: ids, poms_tenant_only: tenantOnly,
                                resolucions: llistaRes,
-                               files_confirmades: actius.map(p => p.ordre) }),
+                               files_confirmades: actius.map(p => p.ordre),
+                               // SET-2/T8-ter · DE QUI ÉS CADA FILA. Només les DECIDIDES: una
+                               // proposta que ningú ha confirmat no és una decisió i no pot
+                               // viatjar com si ho fos (`estatDeLaPeca`, provat a part).
+                               files_garment: pomsExtrets
+                                 .filter(p => estatDeLaPeca(p, identitats) === 'decidit')
+                                 .map(p => ({ ordre: p.ordre,
+                                              garment: pecaEfectiva(p, identitats, garment || '') })) }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.status === 409 && data.error === 'codi_duplicat') {
@@ -1161,6 +1187,23 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                 </div>
               )}
 
+              {/* SET-2/T8-ter · LES SECCIONS QUE NO TENEN PEÇA. És una ABSÈNCIA i s'ha de dir:
+                  un document amb secció SHORT sobre un model sense peça Short vol dir que en
+                  falta una, i el silenci hi deixaria set files aterrant a la mare sense que
+                  ningú se n'adonés. No barra: la columna segueix manant. */}
+              {(extraccioMeta?.proposta_peces?.seccions_sense_peca || []).length > 0 && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start',
+                              background: 'var(--bg-main)', border: `0.5px solid ${BORDER}`,
+                              borderRadius: 8, padding: '8px 12px', marginBottom: 12,
+                              fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                  <i className="ti ti-info-circle" aria-hidden="true"
+                     style={{ fontSize: 15, color: GOLD, flexShrink: 0, marginTop: 1 }} />
+                  <span>{t('import_wizard.peces_seccions_sense_peca', {
+                    seccions: (extraccioMeta.proposta_peces.seccions_sense_peca).join(' · '),
+                  })}</span>
+                </div>
+              )}
+
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>
                 {t('import_wizard.poms_summary', { count: pomsExtrets.length, active: pomsActius })}
                 {extraccioMeta?.base_size && <> · {t('import_wizard.base_size_label')}: <b>{extraccioMeta.base_size}</b></>}
@@ -1274,6 +1317,52 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                           : tenantOnly ? 'tenant-only'
                           : pendent ? t('import_wizard.pending_badge')
                           : noMatch ? t('import_wizard.no_match_badge') : conf.toLowerCase()}</span>
+                      {/* ═══ SET-2/T8-ter · LA COLUMNA DE PEÇA · A LA DRETA DE TOT ═══
+                          La fila es llegeix codi → vincle → accions, i aquesta és l'última
+                          pregunta: DE QUI és. Sempre visible i mai al panell, i no és una
+                          excepció a P2-ter sinó una natura de dada diferent — capa i instància
+                          són eixos de GERMANOR (matisos d'una mesura, es responen mirant-la de
+                          prop) i la peça és una FRONTERA (pertinença, es respon escanejant la
+                          COLUMNA sencera). L'argument sencer viu a `filaPas2.js`, que és on
+                          les dues lleis es toquen.
+
+                          TRES ESTATS, i el que els distingeix no és decoració: verd = algú ho
+                          ha DECIDIT · àmbar = el document ho PROPOSA i espera un clic · neutre
+                          = ningú ho ha mirat i anirà a la peça de la sessió. «Ningú no ho ha
+                          mirat» i «algú ha dit que és de la mare» no són el mateix estat.
+                          La regla és `estatDeLaPeca`, i es prova amb `node --test`. */}
+                      {peces.length > 0 && (() => {
+                        const estat = estatDeLaPeca(p, identitats)
+                        const visible = pecaVisible(p, identitats, garment || '')
+                        const COL = { decidit: { bg: '#f0f9f0', fg: '#3b6d11', br: '#cfe6c0' },
+                                      proposat: { bg: '#fdf6ee', fg: 'var(--gold)', br: 'var(--gold-border)' },
+                                      defecte: { bg: 'var(--white)', fg: 'var(--text-muted)', br: BORDER } }[estat]
+                        return (
+                          <select
+                            data-peca={p.ordre} data-estat={estat}
+                            value={visible}
+                            title={estat === 'proposat'
+                              ? t('import_wizard.peca_proposada_tip', { seccio: p.seccio || '' })
+                              : t('import_wizard.peca_tip')}
+                            aria-label={t('import_wizard.peca_col')}
+                            onChange={e => setIdentitats(prev => ({
+                              ...prev,
+                              [p.ordre]: { ...(prev[p.ordre] || {}), garment: e.target.value },
+                            }))}
+                            style={{
+                              flex: '0 0 auto', minWidth: 116, maxWidth: 160, padding: '2px 6px',
+                              borderRadius: 6, fontFamily: 'inherit', fontSize: 'var(--fs-label)',
+                              background: COL.bg, color: COL.fg, border: `1px solid ${COL.br}`,
+                              fontWeight: estat === 'defecte' ? 400 : 600,
+                            }}>
+                            {peces.map(pc => (
+                              <option key={pc.codi} value={pc.codi}>
+                                {pc.es_mare ? t('resum_wizard.model_base') : (pc.nom || pc.codi)}
+                              </option>
+                            ))}
+                          </select>
+                        )
+                      })()}
                     </div>
                     {panellOrdre === p.ordre && (
                       <ResolPanel
@@ -1587,24 +1676,20 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
             {t('import_wizard.mana_doc', { count: pomsActius })}
           </div>
 
-          {/* SET-2/T8 · MÉS D'UN PATRÓ AL DOCUMENT — INFORMACIÓ, NO ERROR.
-              Amb «un import = una prenda», que el document en porti dues ha deixat de ser una
-              condició de bloqueig: la peça de destí ja està decidida i tot hi anirà. Per això
-              NO és un modal, NO és vermell i NO demana cap clic per continuar — es pot ignorar
-              amb raó legítima. El que no pot és no dir-se, i ha de dir el NOM de la peça: un
-              avís que no diu on va la feina obliga a anar-ho a comprovar. */}
-          {cribratge?.mes_duna_prenda && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start',
-                          background: 'var(--bg-main)', border: `0.5px solid ${BORDER}`,
-                          borderRadius: 8, padding: '8px 12px', marginBottom: 16,
-                          fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-              <i className="ti ti-info-circle" aria-hidden="true"
-                 style={{ fontSize: 15, color: GOLD, flexShrink: 0, marginTop: 1 }} />
-              <span>{t('import_wizard.multiprenda_info', {
-                peca: garmentNom || model.nom_prenda || model.codi_intern,
-              })}</span>
-            </div>
-          )}
+          {/* ── SET-2/T8-ter (16/08) · AQUÍ HI HAVIA L'AVÍS DE MULTI-PRENDA I S'HA RETIRAT.
+              Deia «aquest document sembla portar més d'una peça; tot anirà a X» — i era el que
+              es podia dir mentre l'import fos d'UNA peça i el destí ja estigués decidit: un avís
+              perquè ningú es trobés la feina en un lloc que no esperava.
+
+              Amb la columna del pas 2 la frase ha deixat de ser certa (ja no va tot a X) i,
+              sobretot, ha deixat de ser NECESSÀRIA: el suggeriment ja no interromp al final del
+              camí, es pinta AL LLOC DE LA DECISIÓ —les files de la secció SHORT surten en àmbar
+              a la seva columna— i confirmar-lo és un clic allà mateix. Un avís que repetís al
+              pas 5 el que la columna ja diu al pas 2 només afegiria una lectura.
+
+              La DADA es conserva (`cribratge.mes_duna_prenda`, i el backend segueix desant-la a
+              `resultat['mes_duna_prenda']`): és traça del que el document deia, i el dia que la
+              proposta falli servirà per saber que el senyal hi era. */}
 
           {/* PRINCIPI DEL SOROLL — el model s'alimenta de realitat. Les mesures vives que el
               document NO menciona es PROPOSEN per desactivar; mai s'esborren soles i mai

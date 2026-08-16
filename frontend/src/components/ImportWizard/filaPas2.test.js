@@ -19,7 +19,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { capaEfectiva, filaAmbIdentitat, instanciaEfectiva } from './filaPas2.js'
+import { capaEfectiva, estatDeLaPeca, filaAmbIdentitat, identitatEfectiva, instanciaEfectiva, pecaEfectiva, pecaVisible } from './filaPas2.js'
 
 const FILA = { ordre: 1, codi_fitxa: 'BB', pom_master_id: 7, capa: '', instancia: '' }
 
@@ -87,4 +87,54 @@ test("tornar a l'exterior és una decisió, no un «res»", () => {
 test('sense res pendent, la capa desada (i el control: cap = exterior)', () => {
   assert.equal(capaEfectiva({ ...FILA, capa: 'entretela' }, {}), 'entretela')
   assert.equal(capaEfectiva(FILA, {}), '')
+})
+
+// ── SET-2/T8-ter · LA PEÇA A LA FILA ───────────────────────────────────────────────────
+// Tres estats i una regla per cadascun. El que aquests guards defensen:
+//   1 · «ningú no ho ha mirat» i «algú ha dit que és de la mare» NO són el mateix estat.
+//   2 · la PROPOSTA del document no és una decisió, i no pot arribar al confirm com si ho fos.
+//   3 · el control: sense res pendent ni proposat, la fila diu la peça de la SESSIÓ — que és
+//       el comportament d'abans d'aquesta peça, byte a byte.
+
+test('T8-ter · sense res dit, la fila és de la peça de la sessió (el control)', () => {
+  assert.equal(pecaEfectiva({ ordre: 1 }, {}, '02'), '02')
+  assert.equal(pecaEfectiva({ ordre: 1 }, {}, ''), '')
+  assert.equal(estatDeLaPeca({ ordre: 1 }, {}), 'defecte')
+})
+
+test('T8-ter · la proposta del document es veu, però NO és una decisió', () => {
+  const fila = { ordre: 1, garment_proposat: '02' }
+  assert.equal(estatDeLaPeca(fila, {}), 'proposat')
+  assert.equal(pecaVisible(fila, {}, ''), '02', 'la proposta s\'ha de veure col·locada')
+  assert.equal(pecaEfectiva(fila, {}, ''), '', 'la proposta no pot arribar al confirm')
+})
+
+test('T8-ter · confirmar el proposat amb un clic el fa DECIDIT', () => {
+  const fila = { ordre: 1, garment_proposat: '02' }
+  const pendents = { 1: { garment: '02' } }
+  assert.equal(estatDeLaPeca(fila, pendents), 'decidit')
+  assert.equal(pecaEfectiva(fila, pendents, ''), '02')
+})
+
+test('T8-ter · triar LA MARE és una decisió, no una absència', () => {
+  // El vermell d'`||`: amb `||` una tria de mare es llegiria com «no s'ha triat res» i la
+  // columna tornaria a àmbar just després que algú l'hagi decidida.
+  const fila = { ordre: 1, garment_proposat: '02' }
+  const pendents = { 1: { garment: '' } }
+  assert.equal(estatDeLaPeca(fila, pendents), 'decidit')
+  assert.equal(pecaEfectiva(fila, pendents, '02'), '')
+  assert.equal(pecaVisible(fila, pendents, '02'), '')
+})
+
+test('T8-ter · la pendent mana sobre la desada', () => {
+  const fila = { ordre: 1, garment: '02' }
+  assert.equal(pecaEfectiva(fila, { 1: { garment: '03' } }, ''), '03')
+  assert.equal(estatDeLaPeca(fila, {}), 'decidit', 'una fila ja desada amb peça és decidida')
+})
+
+test('T8-ter · la peça viu al MATEIX mapa que capa i instància, sense trepitjar-les', () => {
+  const fila = { ordre: 1, capa: 'exterior', instancia: 'bottom' }
+  const pendents = { 1: { garment: '02' } }
+  assert.deepEqual(identitatEfectiva(fila, pendents), { capa: 'exterior', instancia: 'bottom' })
+  assert.equal(pecaEfectiva(fila, pendents, ''), '02')
 })
