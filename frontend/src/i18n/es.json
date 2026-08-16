@@ -4113,7 +4113,8 @@
     "peca_col": "Pieza",
     "peca_tip": "De qué pieza del modelo es esta medida.",
     "peca_proposada_tip": "Propuesto por el documento (sección «{{seccio}}»). Confírmalo o elige otra.",
-    "peces_seccions_sense_peca": "El documento trae secciones que este modelo no tiene como pieza: {{seccions}}. Créalas si quieres separarlas; si no, sus filas irán donde diga la columna."
+    "peces_seccions_sense_peca": "El documento trae secciones que este modelo no tiene como pieza: {{seccions}}. Créalas si quieres separarlas; si no, sus filas irán donde diga la columna.",
+    "peca_grup_n": "· {{count}} medidas"
   },
   "dependency": {
     "title": "Dependencia",

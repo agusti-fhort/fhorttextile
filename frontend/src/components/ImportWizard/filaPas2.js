@@ -112,3 +112,32 @@ export function pecaVisible(fila, pendents, garmentSessio = '') {
   if (estatDeLaPeca(fila, pendents) === 'proposat') return (fila || {}).garment_proposat || ''
   return pecaEfectiva(fila, pendents, garmentSessio)
 }
+
+// SET-2/T8-ter · I PER PEÇA ÉS UNA PARTICIÓ, NO UNA TIRA DE GRUPS CONSECUTIUS.
+//
+// La diferència amb `agrupaPerSeccio` no és d'estil. La SECCIÓ és una capçalera del DOCUMENT i
+// per això s'insereix quan canvia i pot repetir-se: així ho diu el paper. La PEÇA és una
+// FRONTERA del model, i el pas 3 és el patró de contenidors de la casa (`PecesDelModel`) —
+// primer la mare, després cada peça, cadascuna amb TOTES les seves files. Un document que
+// alterni faldilla · short · faldilla ha de donar DOS contenidors, no tres: si no, el tècnic
+// veuria la mateixa peça dues vegades i no sabria quina de les dues taules és «la del short».
+//
+// L'ORDRE és el de `peces` (la mare primer, que és com `peces_del_model` les serveix), no el
+// d'aparició al document: el contenidor és del model i el seu ordre és el del model.
+export const agrupaPerPeca = (items, pecaDe, ordreCodis) => {
+  const perCodi = new Map()
+  for (const item of items) {
+    const codi = pecaDe(item) || ''
+    if (!perCodi.has(codi)) perCodi.set(codi, [])
+    perCodi.get(codi).push(item)
+  }
+  const ordre = (ordreCodis || []).length ? ordreCodis : [...perCodi.keys()]
+  const grups = []
+  for (const codi of ordre) {
+    if (perCodi.has(codi)) { grups.push({ codi, items: perCodi.get(codi) }); perCodi.delete(codi) }
+  }
+  // Les peces que ja no són del model (esborrades enmig d'un import) no desapareixen de la
+  // taula: es pinten al final amb el seu codi. Amagar-les seria perdre files en silenci.
+  for (const [codi, items2] of perCodi) grups.push({ codi, items: items2 })
+  return grups
+}

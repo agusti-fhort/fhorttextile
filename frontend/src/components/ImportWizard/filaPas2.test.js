@@ -19,7 +19,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { capaEfectiva, estatDeLaPeca, filaAmbIdentitat, identitatEfectiva, instanciaEfectiva, pecaEfectiva, pecaVisible } from './filaPas2.js'
+import { agrupaPerPeca, capaEfectiva, estatDeLaPeca, filaAmbIdentitat, identitatEfectiva, instanciaEfectiva, pecaEfectiva, pecaVisible } from './filaPas2.js'
 
 const FILA = { ordre: 1, codi_fitxa: 'BB', pom_master_id: 7, capa: '', instancia: '' }
 
@@ -137,4 +137,27 @@ test('T8-ter · la peça viu al MATEIX mapa que capa i instància, sense trepitj
   const pendents = { 1: { garment: '02' } }
   assert.deepEqual(identitatEfectiva(fila, pendents), { capa: 'exterior', instancia: 'bottom' })
   assert.equal(pecaEfectiva(fila, pendents, ''), '02')
+})
+
+test('T8-ter · el pas 3 parteix per PEÇA: files alternades donen DOS contenidors', () => {
+  // Un document que alterni faldilla · short · faldilla ha de donar dos contenidors, no tres:
+  // amb tres, el tècnic veuria la mateixa peça dues vegades i no sabria quina taula és quina.
+  const items = [{ g: '' }, { g: '02' }, { g: '' }]
+  const grups = agrupaPerPeca(items, x => x.g, ['', '02'])
+  assert.equal(grups.length, 2)
+  assert.deepEqual(grups.map(g => g.codi), ['', '02'])
+  assert.equal(grups[0].items.length, 2)
+  assert.equal(grups[1].items.length, 1)
+})
+
+test('T8-ter · l\'ordre és el del MODEL, no el d\'aparició al document', () => {
+  const items = [{ g: '02' }, { g: '' }]
+  assert.deepEqual(agrupaPerPeca(items, x => x.g, ['', '02']).map(g => g.codi), ['', '02'])
+})
+
+test('T8-ter · una peça que ja no és del model es pinta igual, al final', () => {
+  // Amagar-la seria perdre files en silenci.
+  const items = [{ g: '' }, { g: '99' }]
+  const grups = agrupaPerPeca(items, x => x.g, ['', '02'])
+  assert.deepEqual(grups.map(g => g.codi), ['', '99'])
 })

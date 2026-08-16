@@ -4113,7 +4113,8 @@
     "peca_col": "Garment",
     "peca_tip": "Which garment of the model this measurement belongs to.",
     "peca_proposada_tip": "Proposed by the document (section “{{seccio}}”). Confirm it or pick another.",
-    "peces_seccions_sense_peca": "The document has sections this model has no garment for: {{seccions}}. Create them if you want them separated; otherwise their rows go wherever the column says."
+    "peces_seccions_sense_peca": "The document has sections this model has no garment for: {{seccions}}. Create them if you want them separated; otherwise their rows go wherever the column says.",
+    "peca_grup_n": "· {{count}} measurements"
   },
   "dependency": {
     "title": "Dependency",

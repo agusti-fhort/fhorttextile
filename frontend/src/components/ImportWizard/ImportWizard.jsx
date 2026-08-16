@@ -12,8 +12,8 @@ import {
 } from './taulaMesures'
 import { sufixIdentitat } from '../../utils/capaInstancia'
 import ColumnatIdentitat from '../instancia/ColumnatIdentitat'
-import { capaEfectiva, estatDeLaPeca, filaAmbIdentitat, identitatEfectiva, instanciaEfectiva,
-         pecaEfectiva, pecaVisible } from './filaPas2'
+import { agrupaPerPeca, capaEfectiva, estatDeLaPeca, filaAmbIdentitat, identitatEfectiva,
+         instanciaEfectiva, pecaEfectiva, pecaVisible } from './filaPas2'
 import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -741,8 +741,19 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
 
   // ── Pas 3 — taula de mesures
   const pomsTaula = (pomsExtrets || []).filter(p => p.actiu)  // files = POMs actius
-  const grupsTaula = agrupaPerSeccio(pomsTaula, p => p.seccio)     // F6
-  const taulaAmbSeccions = grupsTaula.some(g => g.seccio)
+  // SET-2/T8-ter · EL PAS 3 S'AGRUPA PER PEÇA, no per secció. La secció era el millor
+  // criteri mentre l'import fos d'una peça sola —era l'únic repartiment que el document
+  // insinuava—, però ara la peça és una decisió PRESA al pas 2 i el pas 3 l'ha de reflectir:
+  // el que el tècnic omple és la taula d'una prenda, i és el patró de contenidors de la casa.
+  // La secció segueix viva a la fila (i al `title` de la columna) com a rastre d'on venia.
+  const grupsTaula = agrupaPerPeca(
+    pomsTaula, p => pecaEfectiva(p, identitats, garment || ''), peces.map(pc => pc.codi))
+  const taulaAmbPeces = grupsTaula.length > 1
+  const nomDePeca = (codi) => {
+    const pc = peces.find(x => x.codi === codi)
+    if (pc) return pc.es_mare ? t('resum_wizard.model_base') : (pc.nom || pc.codi)
+    return codi || t('resum_wizard.model_base')
+  }
   // La columna base de la taula de mesures és la label DOCUMENT aparellada amb la talla base
   // del model (B5); si no, fallback a l'heurística anterior.
   const baseSize = baseDocLabel
@@ -1482,11 +1493,19 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
               </thead>
               <tbody>
                 {grupsTaula.map((grup, gi) => (
-                  <Fragment key={`g${gi}`}>
-                    {(grup.seccio || taulaAmbSeccions) && (
+                  <Fragment key={`p${grup.codi}`}>
+                    {/* SET-2/T8-ter · LA CAPÇALERA DE CONTENIDOR: la PEÇA. Es pinta només quan
+                        n'hi ha més d'una — amb una sola prenda la taula queda idèntica a la
+                        d'abans d'aquesta peça, que és el 100% dels imports d'avui. */}
+                    {taulaAmbPeces && (
                       <tr>
-                        <td colSpan={1 + tallesSel.length} style={{ ...SUBHEAD, borderTop: `1px solid ${BORDER}` }}>
-                          {grup.seccio || t('import_wizard.seccio_cap')}
+                        <td data-peca-grup={grup.codi} colSpan={1 + tallesSel.length}
+                            style={{ ...SUBHEAD, borderTop: `1px solid ${BORDER}` }}>
+                          {nomDePeca(grup.codi)}
+                          <span style={{ marginLeft: 8, fontWeight: 400, textTransform: 'none',
+                                         letterSpacing: 0 }}>
+                            {t('import_wizard.peca_grup_n', { count: grup.items.length })}
+                          </span>
                         </td>
                       </tr>
                     )}

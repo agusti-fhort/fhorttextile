@@ -2579,7 +2579,13 @@ def import_session_mesures_view(request, token):
                    'valor': normalitza_cm(valor)}
         if fila is not None:
             capa, instancia = _capa_instancia_de(fila)
-            entrada.update({'ordre': ordre, 'capa': capa, 'instancia': instancia})
+            # SET-2/T8-ter — i la PEÇA de la fila, pel mateix argument que els altres dos eixos:
+            # els EIXOS NO ELS DIU AQUEST PAYLOAD, s'hereten de la fila (que és on el pas 2 va
+            # desar la decisió). Sense això una mesura d'una fila decidida a la 02 es desava amb
+            # el garment de la SESSIÓ i el confirm no la trobava: la cel·la quedava buida sense
+            # que ningú petés — el mode de fallada que aquest tram persegueix, fabricat al pas 3.
+            entrada.update({'ordre': ordre, 'capa': capa, 'instancia': instancia,
+                            'garment': _garment_de(fila, session.garment or '')})
         net.append(entrada)
 
     session.resultat = {**(session.resultat or {}), 'mesures': net}
