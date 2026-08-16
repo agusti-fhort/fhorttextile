@@ -13,15 +13,30 @@
 // hagi triat «Bottom» — i el següent gest seria tornar-hi a entrar per comprovar-ho.
 //
 /**
- * La instància que la fila ha de DIR: la PENDENT si n'hi ha, i si no, la desada.
+ * La IDENTITAT que la fila ha de DIR —capa i instància—: la PENDENT si n'hi ha, i si no, la
+ * desada. `pendents` és `{ordre: {capa?, instancia?}}`: UN sol mapa per als dos eixos, i no un
+ * per eix, perquè dos mapes paral·lels sobre la mateixa fila són dues veritats que un dia
+ * discrepen — que és el defecte que aquest tram sencer persegueix.
  *
- * `??` i no `||` a posta: `''` és una decisió («treu-la, torna a la instància única») i amb `||`
- * es llegiria com «no s'ha triat res», ressuscitant la desada. La diferència es veu en un sol
- * gest: treure la instància d'una fila que ja en tenia una.
+ * `??` i no `||` a posta: `''` és una decisió («treu-la, torna a la instància única» · «torna a
+ * l'exterior») i amb `||` es llegiria com «no s'ha triat res», ressuscitant la desada.
  */
+export function identitatEfectiva(fila, pendents) {
+  const p = (pendents || {})[(fila || {}).ordre] || {}
+  return {
+    capa: (p.capa ?? (fila || {}).capa) || '',
+    instancia: (p.instancia ?? (fila || {}).instancia) || '',
+  }
+}
+
+/** Només la instància — el que demana el columnat quan pregunta pel seu eix. */
 export function instanciaEfectiva(fila, pendents) {
-  const pendent = (pendents || {})[(fila || {}).ordre]
-  return (pendent ?? (fila || {}).instancia) || ''
+  return identitatEfectiva(fila, pendents).instancia
+}
+
+/** Només la capa. `''` = l'exterior de sempre; qui la pinta ja ho resol (`etiquetaCapa`). */
+export function capaEfectiva(fila, pendents) {
+  return identitatEfectiva(fila, pendents).capa
 }
 
 /**
@@ -30,5 +45,5 @@ export function instanciaEfectiva(fila, pendents) {
  * «· Bottom» a la casa és aquella funció, i n'hi ha d'haver una sola.
  */
 export function filaAmbIdentitat(fila, pendents) {
-  return { ...fila, instancia: instanciaEfectiva(fila, pendents) }
+  return { ...fila, ...identitatEfectiva(fila, pendents) }
 }

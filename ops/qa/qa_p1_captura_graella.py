@@ -223,8 +223,15 @@ def captura():
                 pag.locator('button[aria-pressed]', has_text=pindola).first.click()
                 pag.wait_for_timeout(500)
                 if i == 1:
+                    # P2-quinquies · LA CAPA, el primer eix. Es tria FOLRE per a la foto —el cas
+                    # real és una fila «lining»— i es torna a l'exterior tot seguit: el que la
+                    # passejada ha de deixar desat és la Brumà (tres instàncies), no un folre.
+                    pag.locator('select[aria-label="Capa"]').first.select_option('folre')
+                    pag.wait_for_timeout(400)
                     foto(pag, f'{CAS}_02b_panell',
-                         'el panell complet: vincle fet + INSTÀNCIA en format de mesures + Fet')
+                         'el panell: CAPA · POSICIÓ · ESTAT · MÉS, vincle fet i Fet')
+                    pag.locator('select[aria-label="Capa"]').first.select_option('exterior')
+                    pag.wait_for_timeout(400)
                 pag.get_by_role('button', name='Fet').first.click()
                 pag.wait_for_timeout(700)
         foto(pag, f'{CAS}_02_poms', 'pas 2 · files NETES: la instància al nom, cap píndola')

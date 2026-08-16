@@ -271,6 +271,43 @@ def main():
         finally:
             transaction.savepoint_rollback(sid)
 
+        # ══ H · P2-quinquies · LA CAPA, EL PRIMER EIX ═════════════════════════════════
+        print('\nH · P2-quinquies — una fila FOLRE i la seva germana EXTERIOR, separades')
+        sid = transaction.savepoint()
+        try:
+            # El cas real: la fitxa porta una fila «lining». Si la capa no viatgés, les dues
+            # files cauirien a `(pom, exterior, '')` i la segona es menjaria la primera.
+            s = sessio([(0, 'B', 'chest width'), (1, 'BL', 'chest width lining')])
+            res = crida(import_session_poms_view, s, {
+                'poms_confirmats': [],
+                'resolucions': [
+                    {'ordre': 0, 'accio': 'vincula', 'pom_master_id': pom.id},
+                    {'ordre': 1, 'accio': 'vincula', 'pom_master_id': pom.id, 'capa': 'folre'},
+                ]})
+            diu('el detector no les confon', res.status_code, 200)
+            if res.status_code != 200:
+                print('    ', getattr(res, 'data', None))
+            s.refresh_from_db()
+            files = sorted(s.poms_extrets, key=lambda f: f['ordre'])
+            diu('la capa queda a la fila', [f.get('capa') for f in files], ['exterior', 'folre'])
+            payload = mesures_com_el_front(files, run, taula_de({0: 70.0, 1: 68.0}))
+            crida(import_session_mesures_view, s, {'mesures': payload,
+                                                   'valors_mode': 'absoluts'}, sufix='mesures')
+            s.refresh_from_db()
+            res = crida(import_session_confirmar_view, s,
+                        {'container_choice': 'no_container', 'poda_choice': 'conservar',
+                         'manual_choice': 'sobreescriure'}, metode='post', sufix='confirmar')
+            diu('el confirm desa', res.status_code, 201)
+            if res.status_code != 201:
+                print('    ', getattr(res, 'data', None))
+            diu('al disc hi ha les DUES, cadascuna a la seva matèria',
+                {(bm.capa, bm.instancia): bm.base_value_cm
+                 for bm in BaseMeasurement.objects.filter(model=model, garment=MARE, pom=pom,
+                                                          origen='IMPORTED')},
+                {('exterior', ''): 70.0, ('folre', ''): 68.0})
+        finally:
+            transaction.savepoint_rollback(sid)
+
         # ══ G · P2-ter/3 · EL CERCADOR SERVEIX EL CATÀLEG SENCER ══════════════════════
         # No escriu res: és una lectura, i va aquí perquè el que ha de mesurar és el CENS REAL
         # del tenant. Un test amb fixtures diria que la vista sap comptar les seves pròpies

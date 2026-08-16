@@ -4992,5 +4992,8 @@
     "collapse": "Plegar",
     "expand": "Desplegar",
     "sense_mesures": "Esta pieza aún no tiene medidas. El contenedor está aquí porque la pieza existe y espera."
+  },
+  "identitat": {
+    "grup": "Identidad"
   }
 }

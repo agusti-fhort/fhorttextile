@@ -1,4 +1,10 @@
-// EL COLUMNAT D'INSTÀNCIA — les píndoles de la casa, com a component compartit.
+// EL COLUMNAT D'IDENTITAT — la capa i les instàncies d'una mesura, amb les píndoles de la casa.
+//
+// L'ORDRE DE LES COLUMNES ÉS L'ORDRE DE LA IDENTITAT: CAPA · POSICIÓ · ESTAT · MÉS. La capa va
+// primera perquè és el primer eix —diu de quina MATÈRIA parla la mesura (exterior, folre)— i les
+// instàncies la qualifiquen a dins. Sense la columna de capa, una fila «lining» de la fitxa
+// s'aparellava a l'exterior i queia damunt de la germana que ja hi era: el cas real que la va
+// portar (Agus, 16/08).
 //
 // El patró és el de la Definició manual (`EditableTable`, columnat INSTÀNCIA): un GRUP DE
 // PÍNDOLES PER EIX del diccionari —avui posició i estat— i un `＋` per a les combinacions. Aquí
@@ -16,7 +22,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import Modal from '../ui/Modal'
-import { etiquetaInstancia } from '../../utils/capaInstancia'
+import { etiquetaCapa, etiquetaInstancia } from '../../utils/capaInstancia'
 import { dimensionsDe, nomEnIdioma } from '../../utils/diccionariMesures'
 import { aplicaCombinacio, tramsPerEix, triaTram } from './instanciaTria.js'
 
@@ -90,11 +96,13 @@ function ModalCombinacio({ valor, dicc, onTanca, onAplica }) {
  * Sense diccionari (o si el GET ha fallat) no pinta res — la pantalla es comporta com abans en
  * comptes d'oferir una llista mig feta. És la mateixa llei que ja segueix `EditableTable`.
  */
-export default function ColumnatInstancia({ valor = '', dicc, onTria }) {
+export default function ColumnatIdentitat({ valor = '', capa = '', dicc, onTria, onCapa }) {
   const { t, i18n } = useTranslation()
+  const lang = (i18n.resolvedLanguage || i18n.language || 'ca').slice(0, 2)
   const [modal, setModal] = useState(false)
   const dims = dimensionsDe(dicc)
-  if (!dims.length) return null
+  const capes = dicc?.capes || []
+  if (!dims.length && !capes.length) return null
   const actuals = tramsPerEix(dicc, valor)
   const grupS = { padding: '6px 10px', borderLeft: `1px solid var(--border)` }
   const retolS = { fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
@@ -110,11 +118,30 @@ export default function ColumnatInstancia({ valor = '', dicc, onTria }) {
       <div style={{ padding: '4px 10px', background: 'var(--gold-pale)', color: 'var(--gold)',
                     fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
                     letterSpacing: '0.04em' }}>
-        {t('instancia.grup')}
+        {t('identitat.grup')}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch' }}>
+        {/* LA CAPA · el mateix control que la Definició manual (un <select> amb el vocabulari
+            de `MeasurementLayer` que el diccionari publica): és una tria EXCLOENT d'una llista
+            tancada i curta, no una graella d'opcions. Default `exterior` — qui no la toca es
+            comporta com sempre. */}
+        {capes.length > 0 && onCapa && (
+          <div style={{ ...grupS, borderLeft: 'none' }}>
+            <div style={retolS}>{t('capa.col')}</div>
+            <select value={capa || 'exterior'} aria-label={t('capa.col')}
+              onChange={e => onCapa(e.target.value)}
+              style={{ font: 'inherit', fontSize: 'var(--fs-label)', color: 'var(--text-main)',
+                       background: 'var(--white)', border: '1px solid var(--border)',
+                       borderRadius: 5, padding: '2px 6px', minWidth: 96 }}>
+              {capes.map(c => (
+                <option key={c.slug} value={c.slug}>{etiquetaCapa(c.slug, dicc, lang)}</option>
+              ))}
+            </select>
+          </div>
+        )}
         {dims.map((d, k) => (
-          <div key={d.clau} style={{ ...grupS, borderLeft: k ? grupS.borderLeft : 'none' }}>
+          <div key={d.clau} style={{ ...grupS,
+                                     borderLeft: (k || (capes.length && onCapa)) ? grupS.borderLeft : 'none' }}>
             <div style={retolS}>{nomEnIdioma(d, i18n.language)}</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {d.opcions.map(o => (

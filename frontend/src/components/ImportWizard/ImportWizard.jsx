@@ -11,8 +11,8 @@ import {
   construeixTaula, teValorABase,
 } from './taulaMesures'
 import { sufixIdentitat } from '../../utils/capaInstancia'
-import ColumnatInstancia from '../instancia/ColumnatInstancia'
-import { filaAmbIdentitat, instanciaEfectiva } from './filaPas2'
+import ColumnatIdentitat from '../instancia/ColumnatIdentitat'
+import { capaEfectiva, filaAmbIdentitat, identitatEfectiva, instanciaEfectiva } from './filaPas2'
 import { useDiccionariMesures } from '../../utils/diccionariMesuresFont'
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -187,7 +187,7 @@ function PomCatalegPicker({ modelId, onPick, autoFocus }) {
 // catàleg, o crear-ne un de nou amb codi i nom editables— i la decisió segueix sent seva:
 // el backend no en tria cap, només diu qui es disputa el codi.
 function ResolPanel({ fila, conflicte, res, modelId, crea, setCrea, onVincula, onCrea, onTanca,
-                     dicc, instancia, onInstancia }) {
+                     dicc, capa, instancia, onCapa, onInstancia }) {
   const { t } = useTranslation()
   const candidats = conflicte?.candidats || []
   // El RÈTOL VIU de la columna dreta: la decisió d'aquesta tramesa si n'hi ha, i si no, el
@@ -300,11 +300,12 @@ function ResolPanel({ fila, conflicte, res, modelId, crea, setCrea, onVincula, o
         {/* Sense rètol de secció: el bloc ja porta la seva capçalera INSTÀNCIA, i escriure-la
             dues vegades seguides fa dubtar de si són dues coses. */}
         <div style={{ height: 10 }} />
-        <ColumnatInstancia valor={instancia} dicc={dicc} onTria={onInstancia} />
+        <ColumnatIdentitat valor={instancia} capa={capa} dicc={dicc}
+          onTria={onInstancia} onCapa={onCapa} />
         {vincle && (
           <div style={{ marginTop: 10 }}>
             <div style={{ fontSize: 'var(--fs-body)', color: 'var(--ok)', marginBottom: 8 }}>
-              {vincle}<b>{sufixIdentitat({ instancia }, dicc)}</b>
+              {vincle}<b>{sufixIdentitat({ capa, instancia }, dicc)}</b>
             </div>
             <button type="button" onClick={onTanca}
               style={{ ...BTN, background: GOLD, color: 'var(--white)' }}>
@@ -364,11 +365,13 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
   const [conflictes, setConflictes] = useState({})
   // R3 · decisions preses i encara no enviades: {ordre: {accio:'vincula'|'crea', ...}}.
   const [resolucions, setResolucions] = useState({})
-  // P2 · la INSTÀNCIA triada per fila (`{ordre: slug}`). Viu a part de `resolucions` perquè és
-  // una decisió d'un altre gènere —no diu QUIN POM és, sinó DE QUINA de les seves mesures parla
-  // la fila— i perquè una fila ja aparellada l'ha de poder triar sense re-vincular res. Al
-  // desar es fonen: el backend rep UNA resolució per fila, sencera.
-  const [instancies, setInstancies] = useState({})
+  // P2 · la IDENTITAT triada per fila (`{ordre: {capa, instancia}}`). Viu a part de
+  // `resolucions` perquè és una decisió d'un altre gènere —no diu QUIN POM és, sinó DE QUINA de
+  // les seves mesures parla la fila— i perquè una fila ja aparellada l'ha de poder triar sense
+  // re-vincular res. Al desar es fonen: el backend rep UNA resolució per fila, sencera.
+  // P2-quinquies · UN sol mapa per als DOS eixos: dos mapes paral·lels sobre la mateixa fila
+  // són dues veritats que un dia discrepen, que és el defecte que aquest tram persegueix.
+  const [identitats, setIdentitats] = useState({})
   const [panellOrdre, setPanellOrdre] = useState(null)   // fila amb el panell obert (una alhora)
   const [crea, setCrea] = useState({ codi: '', nom: '' })
   const filaRefs = useRef({})
@@ -632,14 +635,14 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
     // baix» és UNA decisió, no dues, i el backend ja la sap llegir sencera (`_pla_de_resolucions`).
     // Una fila que només tria instància n'estrena una de `vincula` al POM que ja tenia.
     const llistaRes = actius
-      .filter(p => resolucions[p.ordre]
-        || (instancies[p.ordre] !== undefined && p.pom_master_id))
+      .filter(p => resolucions[p.ordre] || (identitats[p.ordre] && p.pom_master_id))
       .map(p => {
         const base = resolucions[p.ordre]
           || { accio: 'vincula', pom_master_id: p.pom_master_id,
                pom_codi: p.pom_codi, pom_nom: p.pom_nom }
-        const inst = instancies[p.ordre]
-        return { ordre: p.ordre, ...base, ...(inst === undefined ? {} : { instancia: inst }) }
+        // Els DOS eixos hi entren només si s'han triat: una tramesa que no en parli deixa la
+        // fila com estava, i el backend hi posa els literals de sempre (exterior · única).
+        return { ordre: p.ordre, ...base, ...(identitats[p.ordre] || {}) }
       })
     const ambRes = new Set(llistaRes.map(r => r.ordre))
     const ids = actius.filter(p => p.pom_master_id && !ambRes.has(p.ordre)).map(p => p.pom_master_id)
@@ -694,7 +697,7 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
       setPomsExtrets(updated)
       // …i la instància també: ha pujat a la fila (`capa`/`instancia` de `poms_extrets`) i
       // llegir-la de dos llocs alhora és com neixen les discrepàncies que ningú no veu.
-      setResolucions({}); setConflictes({}); setPanellOrdre(null); setInstancies({})
+      setResolucions({}); setConflictes({}); setPanellOrdre(null); setIdentitats({})
       buildTaula(updated)
       setStep(3)
     } catch (e) { setError(t('import_wizard.err_connection', { detail: String(e) })) }
@@ -1212,7 +1215,7 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                               {res.accio === 'vincula'
                                 ? t('import_wizard.resol_fet_vincula', { codi: res.pom_codi, nom: res.pom_nom })
                                 : t('import_wizard.resol_fet_crea', { codi: res.codi, nom: res.nom })}
-                              <b>{sufixIdentitat(filaAmbIdentitat(p, instancies), dicc, lang)}</b>
+                              <b>{sufixIdentitat(filaAmbIdentitat(p, identitats), dicc, lang)}</b>
                             </span>
                           : noMatch
                           ? (tenantOnly
@@ -1250,7 +1253,7 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                                   al panell. I el que es llegeix és la decisió PENDENT, no
                                   l'últim desat: si no, diria «única» just després que algú hagi
                                   triat «Bottom». */}
-                              <b>{sufixIdentitat(filaAmbIdentitat(p, instancies), dicc, lang)}</b>
+                              <b>{sufixIdentitat(filaAmbIdentitat(p, identitats), dicc, lang)}</b>
                             </>}
                       </div>
                       {/* Qualsevol fila es pot re-decidir, tingui match o no. */}
@@ -1278,8 +1281,12 @@ export default function ImportWizard({ model, garment = '', garmentNom = '', onC
                         crea={crea} setCrea={setCrea}
                         onTanca={() => setPanellOrdre(null)}
                         dicc={dicc}
-                        instancia={instanciaEfectiva(p, instancies)}
-                        onInstancia={slug => setInstancies(prev => ({ ...prev, [p.ordre]: slug }))}
+                        capa={capaEfectiva(p, identitats)}
+                        instancia={instanciaEfectiva(p, identitats)}
+                        onCapa={slug => setIdentitats(prev => ({
+                          ...prev, [p.ordre]: { ...identitatEfectiva(p, prev), capa: slug } }))}
+                        onInstancia={slug => setIdentitats(prev => ({
+                          ...prev, [p.ordre]: { ...identitatEfectiva(p, prev), instancia: slug } }))}
                         onVincula={(c) => posaResolucio(p.ordre, {
                           accio: 'vincula', pom_master_id: c.id,
                           pom_codi: c.codi_client, pom_nom: c.nom_client,
