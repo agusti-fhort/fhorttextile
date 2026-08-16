@@ -190,6 +190,14 @@ function ResolPanel({ fila, conflicte, res, modelId, crea, setCrea, onVincula, o
                      dicc, instancia, onInstancia }) {
   const { t } = useTranslation()
   const candidats = conflicte?.candidats || []
+  // El RÈTOL VIU de la columna dreta: la decisió d'aquesta tramesa si n'hi ha, i si no, el
+  // vincle que la fila ja portava (una fila aparellada sola que s'obre només per dir de quina
+  // mesura del POM parla). Sense POM no hi ha rètol ni «Fet»: no hi ha res a confirmar.
+  const vincle = res
+    ? (res.accio === 'vincula'
+        ? t('import_wizard.resol_fet_vincula', { codi: res.pom_codi, nom: res.pom_nom })
+        : t('import_wizard.resol_fet_crea', { codi: res.codi, nom: res.nom }))
+    : (fila.pom_master_id ? `${fila.pom_codi} · ${fila.pom_nom || fila.descripcio || ''}` : null)
   const EYEBROW = { fontSize: 'var(--fs-label)', fontWeight: 600, textTransform: 'uppercase',
                     letterSpacing: '0.04em', color: 'var(--text-muted)', margin: '10px 0 6px' }
   const BTN = { padding: '5px 12px', borderRadius: 6, border: `1px solid ${GOLD}`, cursor: 'pointer',
@@ -243,16 +251,19 @@ function ResolPanel({ fila, conflicte, res, modelId, crea, setCrea, onVincula, o
         </>
       )}
 
+      {/* P2-quater · DUES COLUMNES: les dues meitats de la decisió es veuen ALHORA. Amb el
+          bloc d'instància a sota, el desplegable del cercador obert el deixava fora de vista, i
+          triar la instància demanava tancar abans el que s'estava mirant. A l'esquerra QUI és
+          (catàleg o codi nou), a la dreta DE QUINA de les seves mesures parla la fila.
+          `flexWrap` amb una base de 450px: en una finestra estreta cauen l'una sota l'altra
+          soles, que és el comportament que ja tenia. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
+      <div style={{ flex: '1 1 450px', minWidth: 0, maxWidth: 520 }}>
       <div style={EYEBROW}>{t('import_wizard.resol_cataleg_title')}</div>
       <PomCatalegPicker modelId={modelId} autoFocus={candidats.length === 0}
         onPick={pm => onVincula({ id: pm.id, codi_client: pm.codi_client,
                                   nom_client: pm.nom_client, actiu: true })} />
 
-      {/* P2-ter/2 · LA INSTÀNCIA, DINS DEL GEST DE VINCULAR: cercador → instància → fet. Triar
-          el POM ja NO tanca el panell; el tanca «Fet», i entremig hi cap l'altra meitat de la
-          decisió. Val per als DOS camins —el catàleg de sobre i el «Crea i vincula» de sota—:
-          la fila que neix d'un codi nou també pot ser una germana. Sense tocar res queda la
-          instància única, que és el default de sempre. */}
       <div style={EYEBROW}>{t('import_wizard.resol_crea_title')}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
         <label style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
@@ -278,28 +289,31 @@ function ResolPanel({ fila, conflicte, res, modelId, crea, setCrea, onVincula, o
       <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 6 }}>
         {t('import_wizard.resol_crea_hint')}
       </div>
+      </div>
 
-      {/* La segona meitat de la decisió, en FORMAT DE MESURES (el columnat de la Definició
-          manual). Va al final perquè és el que es tria DESPRÉS d'haver dit quin POM és, i
-          només quan ja n'hi ha un: preguntar de quina mesura del POM parla una fila que
-          encara no té POM és preguntar sobre res. */}
-      {res && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
-          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--ok)', marginBottom: 8 }}>
-            {res.accio === 'vincula'
-              ? t('import_wizard.resol_fet_vincula', { codi: res.pom_codi, nom: res.pom_nom })
-              : t('import_wizard.resol_fet_crea', { codi: res.codi, nom: res.nom })}
-            <b>{sufixIdentitat({ instancia }, dicc)}</b>
-          </div>
-          <ColumnatInstancia valor={instancia} dicc={dicc} onTria={onInstancia} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+      {/* LA SEGONA MEITAT, SEMPRE A LA VISTA. Abans només es pintava amb la resolució ja presa,
+          i per això apareixia i desapareixia sota el desplegable; ara viu a la seva columna i
+          es pot triar abans o després de dir quin POM és — l'ordre el posa qui treballa, no la
+          pantalla. El rètol viu i el «Fet» sí que demanen que ja hi HAGI POM: una fila que
+          encara no en té no té res a confirmar. */}
+      <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+        {/* Sense rètol de secció: el bloc ja porta la seva capçalera INSTÀNCIA, i escriure-la
+            dues vegades seguides fa dubtar de si són dues coses. */}
+        <div style={{ height: 10 }} />
+        <ColumnatInstancia valor={instancia} dicc={dicc} onTria={onInstancia} />
+        {vincle && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--ok)', marginBottom: 8 }}>
+              {vincle}<b>{sufixIdentitat({ instancia }, dicc)}</b>
+            </div>
             <button type="button" onClick={onTanca}
               style={{ ...BTN, background: GOLD, color: 'var(--white)' }}>
               {t('import_wizard.resol_fet_btn')}
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+      </div>
     </div>
   )
 }

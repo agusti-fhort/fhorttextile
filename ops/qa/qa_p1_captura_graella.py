@@ -217,7 +217,7 @@ def captura():
                 pag.wait_for_timeout(1600)
                 if i == 1:
                     foto(pag, f'{CAS}_02a_cercador',
-                         'el cercador amb les DUES poblacions: catàleg del client i de la casa')
+                         'desplegable OBERT (client + casa) i INSTÀNCIA visible al costat')
                 pag.locator(f'button:text-matches("^{base_codi} ·")').first.click()
                 pag.wait_for_timeout(900)
                 pag.locator('button[aria-pressed]', has_text=pindola).first.click()
