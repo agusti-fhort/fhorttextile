@@ -47,6 +47,18 @@ export function construeixFilesDePresa({ baseRows, linies, reglaPerPom, readOnly
       lineId: line?.id ?? null,
       pom_id: r.pom_id, pom_code: r.pom_code,
       capa: r.capa, instancia: r.instancia,
+      // SET-2/T7-B8 · S42/F5 — L'EIX DE PRENDA, que és el que reparteix la fila entre
+      // contenidors (`filesDeLaPeca`, cridat des de `CheckMeasureEditor`). Els altres tres
+      // adaptadors de files el copien des de T7-B7 i aquest s'hi va quedar fora; `base-stages`
+      // el serveix des de R11, o sigui que el camp hi era i el que faltava era recollir-lo.
+      //
+      // ⚠️ SENSE AQUESTA LÍNIA EL FORAT ÉS MUT, i per això va viure quatre dies. `filesDeLaPeca`
+      // fa `(f.garment || '') === eix`, i `undefined || ''` és `''`: una fila sense eix no es
+      // perd ni peta — se'n va al contenidor de la MARE com si fos seva, i el de la peça queda
+      // amb el capçal i res més. Cap error, cap avís, cap rastre. El filtre no pot distingir
+      // «és de la mare» de «algú l'ha deixat caure pel camí», i per això qui ho ha de garantir
+      // és qui construeix la fila: aquí.
+      garment: r.garment,
       nom_fitxa: r.nom_fitxa || '',
       nom_en: r.nom_en, nom_ca: r.nom_ca,
       nom_canonic_model: r.nom_canonic_model || '',
