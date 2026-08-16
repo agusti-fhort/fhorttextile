@@ -1285,18 +1285,40 @@ def _apply_many_to_one_guard(rows):
     Un àlies dolent és un problema del catàleg i es resol al catàleg; el que aquesta porta
     ha de garantir és que **no acabi sent una pèrdua de dades silenciosa**.
 
+    ── SET-2/T8-ter (16/08) · LA PREMISSA D'AQUEST GUARD HA CADUCAT DUES VEGADES ──────────
+    La frase de dalt —«`BaseMeasurement` és únic per `(model, pom)`»— era certa el dia que es va
+    escriure i ja no ho és: la clau porta `capa` i `instancia` des de C1/T3 i `garment` des de
+    T2. El guard, però, seguia comptant per `pom_master_id` PELAT, i per això desvinculava files
+    que **no col·lideixen**.
+
+    És exactament el que va passar amb la Brumà el 16/08: «G1 · Bottom height» (faldilla) i
+    «M1 · Bottom hem height» (short) resolen al mateix POM 962 i el guard va desvincular-les
+    totes dues. La persona va haver de resoldre-les a mà —dos 409 al rastre de la sessió 113— i
+    la sortida que va trobar va ser inventar-li una instància al short. El guard fabricava la
+    feina que després obligava a fabricar la dada.
+
+    Ara compta per **`(pom, peça proposada)`**, que és el gra que la clau realment té a
+    l'abast en aquest moment del pipeline. Els altres dos eixos NO hi entren i és a posta:
+    capa i instància encara no les ha dit ningú quan aquest guard corre (les decideix la persona
+    al pas 2), o sigui que comptar-hi seria donar per bo un buit que ningú ha confirmat. La peça
+    sí que hi és, perquè la porta el DOCUMENT (`seccio` → `_proposta_de_peca`, F2).
+
+    Dues files del mateix POM dins de la MATEIXA peça segueixen desvinculant-se, que és el
+    vermell original i ha de seguir sent-ho.
+
     Muta `rows` in situ.
     """
     counts = {}
     for r in rows:
         if r.get('pom_master_id'):
-            counts[r['pom_master_id']] = counts.get(r['pom_master_id'], 0) + 1
-    dup_ids = {pid for pid, n in counts.items() if n >= 2}
+            clau = (r['pom_master_id'], r.get('garment_proposat') or '')
+            counts[clau] = counts.get(clau, 0) + 1
+    dup_ids = {clau for clau, n in counts.items() if n >= 2}
     if not dup_ids:
         return rows
 
     for r in rows:
-        if r.get('pom_master_id') in dup_ids:
+        if (r.get('pom_master_id'), r.get('garment_proposat') or '') in dup_ids:
             # El suggeriment queda VISIBLE: la persona ha de poder veure a què s'assemblava.
             r['weak_suggestion'] = r.get('pom_nom')
             r['weak_suggestion_codi'] = r.get('pom_codi')
@@ -1308,7 +1330,7 @@ def _apply_many_to_one_guard(rows):
     return rows
 
 
-def _match_rows(files, customer):
+def _match_rows(files, customer, model=None):
     """Files llegides del document → `poms_extrets`, amb les portes aplicades.
 
     **Font ÚNICA de matching per als DOS camins d'extracció** (parser ràpid d'Excel i visió
@@ -1324,6 +1346,12 @@ def _match_rows(files, customer):
     `seccio` (F4) travessa TAL QUAL: aquesta funció aparella POMs, no interpreta el document.
     Els dos camins d'extracció l'omplen (el parser llegint la fila de secció, la IA amb el camp
     `section` de l'esquema) i el que arriba aquí ja és el text final.
+
+    SET-2/T8-ter — `model` hi entra perquè la PROPOSTA de peça (F2) s'ha de resoldre AQUÍ DINS,
+    entre l'aparellament i el guard de many-to-one: el guard compta per `(pom, peça proposada)` i
+    sense la proposta ja feta comptaria per POM pelat i desvincularia files que no col·lideixen.
+    L'ordre dels tres passos és, doncs, part del contracte i no una casualitat. `model=None`
+    (cap cridador de producte) degrada a la proposta buida: totes les files a la mare.
     """
     rows = []
     n_nomatch = n_low = 0
@@ -1361,10 +1389,13 @@ def _match_rows(files, customer):
             'many_to_one': False,
         })
 
+    # L'ORDRE MANA: proposta (F2) → guard (F4). Vegeu el docstring.
+    proposta = _proposta_de_peca(model, rows)
     _apply_many_to_one_guard(rows)
     n_many = sum(1 for r in rows if r.get('many_to_one'))
 
-    return rows, {'n_nomatch': n_nomatch, 'n_low': n_low, 'n_many_to_one': n_many}
+    return rows, {'n_nomatch': n_nomatch, 'n_low': n_low, 'n_many_to_one': n_many,
+                  'proposta': proposta}
 
 
 def _avisos_de_matching(stats):
@@ -1555,7 +1586,7 @@ def _extraccio_via_excel(session, api_key):
     # matching és literalment el mateix codi.
     # N3: customer del model per resoldre els àlies de nomenclatura del client.
     import_customer = session.model.customer if session.model_id else None
-    poms_extrets, stats = _match_rows(raw_poms, import_customer)
+    poms_extrets, stats = _match_rows(raw_poms, import_customer, session.model)
 
     avisos_extraccio = list(revision.get('warnings', []))
     avisos_extraccio += _avisos_de_matching(stats)
@@ -1587,10 +1618,9 @@ def _extraccio_via_excel(session, api_key):
 
     # 10. Persisteix. NOTA: `session.poms_extrets` és la font de veritat per als passos
     # W2-confirmació (:1216) i W3-mesures (:1415); cal desar-la (paritat amb la via Opus).
-    # SET-2/T8-ter — la proposta secció→peça, sobre les files ja aparellades. Va DESPRÉS del
-    # matching perquè no en depèn (la secció viatja tal qual) però abans de desar, que és quan
-    # la fila ha de quedar amb la seva proposta.
-    _proposta = _proposta_de_peca(session.model, poms_extrets)
+    # SET-2/T8-ter — la proposta ja l'ha resolta `_match_rows` (ha de córrer ABANS del guard
+    # de many-to-one, que hi compta); aquí només se'n desa la traça.
+    _proposta = stats.get('proposta') or {}
     session.resultat = {**(session.resultat or {}),
                         'extraccio': extraccio,
                         'proposta_peces': _proposta,
@@ -1774,12 +1804,12 @@ def import_session_extraccio_view(request, token):
             for msr in measurements
         ],
         import_customer,
+        session.model,
     )
     avisos += _avisos_de_matching(stats)
 
-    # SET-2/T8-ter — la proposta secció→peça (mateixa crida que la via Excel: un sol punt de
-    # decisió per als dos camins d'extracció).
-    _proposta = _proposta_de_peca(session.model, poms_extrets)
+    # SET-2/T8-ter — la proposta ja l'ha resolta `_match_rows` (un sol punt per als dos camins).
+    _proposta = stats.get('proposta') or {}
     session.resultat = {**(session.resultat or {}), 'extraccio': extracted,
                         'proposta_peces': _proposta,
                         'grading_status': grading_status}
@@ -2250,6 +2280,43 @@ def import_session_poms_view(request, token):
     #
     # No substitueix `poms_confirmats`: aquell té una segona feina —incorporar POMs del catàleg
     # que el document no menciona— i aquells encara no tenen fila amb què demanar-se.
+    # ── SET-2/T8-ter · LA PEÇA DE CADA FILA, DECIDIDA PER LA PERSONA ────────────────────────
+    # `files_garment` és `[{ordre, garment}]` i és la porta de la COLUMNA del pas 2. Va a part
+    # de `resolucions` a posta: aquelles resolen QUIN POM és una fila que no en tenia, i la
+    # immensa majoria de files ja el tenen —el que la persona hi canvia és de qui SÓN—. Fer-ho
+    # passar per `resolucions` obligaria a re-declarar el vincle per moure una fila de peça.
+    #
+    # ⚠️ Es valida contra les peces REALS del model, com la porta del cribratge: un codi que no
+    # és cap peça d'aquest model és un 400 i no un silenci. Escriure a la mare quan la persona
+    # ha dit «02» és exactament el dany que aquest tram tanca, fabricat des de l'altra banda.
+    # `''` és sempre vàlid: és la mare.
+    files_garment = request.data.get('files_garment')
+    if isinstance(files_garment, list) and files_garment:
+        from fhort.models_app.models import ModelGarment
+        _codis_valids = set(
+            ModelGarment.objects.filter(model=session.model).values_list('codi', flat=True))
+        _per_ordre = _files_per_ordre(poms)
+        _desconeguts, _ordres_no_trobats = set(), []
+        for entrada in files_garment:
+            if not isinstance(entrada, dict):
+                continue
+            g = str(entrada.get('garment') or '').strip()
+            if g and g not in _codis_valids:
+                _desconeguts.add(g)
+                continue
+            fila = _per_ordre.get(entrada.get('ordre'))
+            if fila is None:
+                _ordres_no_trobats.append(entrada.get('ordre'))
+                continue
+            fila['garment'] = g
+        if _desconeguts:
+            return Response({'error': 'garment_desconegut', 'codis': sorted(_desconeguts),
+                             'message': (f"El model {session.model_id} no té cap prenda "
+                                         f"«{', '.join(sorted(_desconeguts))}».")}, status=400)
+        if _ordres_no_trobats:
+            return Response({'error': 'files_inexistents', 'ordres': _ordres_no_trobats},
+                            status=400)
+
     files_confirmades = request.data.get('files_confirmades')
     ordres_confirmats = ({int(x) for x in files_confirmades if str(x).lstrip('-').isdigit()}
                          if isinstance(files_confirmades, list) else None)

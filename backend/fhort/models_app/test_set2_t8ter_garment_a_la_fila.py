@@ -30,8 +30,11 @@ EL CONTROL de no-regressió és `ImportSensePeçaALaFilaTest`: una tramesa on ca
 s'ha de comportar EXACTAMENT com abans d'aquesta peça —totes les files a la peça de la sessió—,
 que és el 100% del corpus viu (16 sessions al tenant `fhort`, totes amb `garment=''`).
 """
+from rest_framework.test import APIRequestFactory, force_authenticate
+
 from fhort.models_app.extraction_views import (
-    _garment_de, _identitat, _pla_de_resolucions, _proposta_de_peca)
+    _apply_many_to_one_guard, _garment_de, _identitat, _pla_de_resolucions,
+    _proposta_de_peca, import_session_poms_view)
 from fhort.models_app.models import BaseMeasurement, ModelGarment
 
 from fhort.models_app.test_set2_t8_import_per_prenda import (
@@ -282,3 +285,81 @@ class LaPropostaDeSeccioTest(_BaseImportPerPrendaTest):
         self.assertEqual(poms[0]['garment_proposat'], SEGONA)
         self.assertNotIn('garment', poms[0])
         self.assertEqual(_garment_de(poms[0], MARE), MARE)
+
+
+class ElGuardManyToOneCompataPerPecaTest(_BaseImportPerPrendaTest):
+    """F4 · el guard de many-to-one comptava per POM PELAT, i la seva premissa era rància.
+
+    Deia «`BaseMeasurement` és únic per `(model, pom)`» — cert el dia que es va escriure, fals
+    des de C1/T3 (capa, instància) i T2 (garment). Per això desvinculava files que NO
+    col·lideixen: és el que va passar amb la Brumà el 16/08 (G1 faldilla + M1 short, POM 962).
+    """
+
+    PREFIX = 'T8T6'
+
+    def test_el_mateix_pom_en_peces_proposades_diferents_conserva_el_vincle(self):
+        rows = [
+            {'pom_master_id': self.pit.id, 'garment_proposat': None, 'actiu': True},
+            {'pom_master_id': self.pit.id, 'garment_proposat': SEGONA, 'actiu': True},
+        ]
+        _apply_many_to_one_guard(rows)
+        self.assertEqual([r['pom_master_id'] for r in rows], [self.pit.id, self.pit.id])
+        self.assertTrue(all(r['actiu'] for r in rows))
+        self.assertFalse(any(r.get('many_to_one') for r in rows))
+
+    def test_dins_de_LA_MATEIXA_peca_segueix_desvinculant(self):
+        """EL CONTROL. El vermell original és real i ha de seguir mossegant: dues files del
+        mateix POM a la mateixa peça sí que col·lapsarien al confirm."""
+        rows = [
+            {'pom_master_id': self.pit.id, 'garment_proposat': SEGONA, 'actiu': True},
+            {'pom_master_id': self.pit.id, 'garment_proposat': SEGONA, 'actiu': True},
+        ]
+        _apply_many_to_one_guard(rows)
+        self.assertEqual([r['pom_master_id'] for r in rows], [None, None])
+        self.assertTrue(all(r['many_to_one'] for r in rows))
+        self.assertFalse(any(r['actiu'] for r in rows))
+
+
+class LaColumnaDecideixLaPecaTest(_BaseImportPerPrendaTest):
+    """F4 · `files_garment` — la porta de la columna del pas 2."""
+
+    PREFIX = 'T8T7'
+
+    def _patch(self, session, body):
+        req = APIRequestFactory().patch(
+            f'/api/v1/import-sessions/{session.token}/poms/', body, format='json')
+        force_authenticate(req, user=self.user)
+        return import_session_poms_view(req, session.token)
+
+    def _sessio_pas2(self):
+        s = self._sessio(garment=MARE, poms=[self.pit])
+        s.estat = 'POMS'
+        s.poms_extrets = [{'codi_fitxa': 'M1', 'descripcio': 'x', 'pom_master_id': self.pit.id,
+                           'actiu': True, 'ordre': 0}]
+        s.save()
+        return s
+
+    def test_la_decisio_de_la_persona_es_desa_a_la_fila(self):
+        s = self._sessio_pas2()
+        res = self._patch(s, {'poms_confirmats': [self.pit.id],
+                              'files_garment': [{'ordre': 0, 'garment': SEGONA}]})
+        self.assertEqual(res.status_code, 200, res.data)
+        s.refresh_from_db()
+        self.assertEqual(s.poms_extrets[0]['garment'], SEGONA)
+
+    def test_una_peca_que_no_es_del_model_es_un_400_i_no_un_silenci(self):
+        s = self._sessio_pas2()
+        res = self._patch(s, {'poms_confirmats': [self.pit.id],
+                              'files_garment': [{'ordre': 0, 'garment': '99'}]})
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.data['error'], 'garment_desconegut')
+        s.refresh_from_db()
+        self.assertNotIn('garment', s.poms_extrets[0])
+
+    def test_la_mare_explicita_es_valida(self):
+        s = self._sessio_pas2()
+        res = self._patch(s, {'poms_confirmats': [self.pit.id],
+                              'files_garment': [{'ordre': 0, 'garment': ''}]})
+        self.assertEqual(res.status_code, 200, res.data)
+        s.refresh_from_db()
+        self.assertEqual(s.poms_extrets[0]['garment'], MARE)
