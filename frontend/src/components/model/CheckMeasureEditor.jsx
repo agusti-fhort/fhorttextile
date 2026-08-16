@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { clauDeFila, filesDeLaPeca } from '../../utils/identitatMesura'
+import { clauDeFila, eixosDeLaFila, filesDeLaPeca } from '../../utils/identitatMesura'
 import { construeixFilesDePresa } from '../../utils/filesDePresa'
 import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
@@ -572,8 +572,12 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     // C4/BLOC 2 — es poda LA FILA, no el POM. Sense els eixos, treure la sisa dreta
     // desactivava l'esquerra o l'exterior, i quina ho decidia l'ordenació de la consulta.
     // `base_stages` els serveix des de `6e259c8b`.
-    models.desactivarPom(model.id, row.pom_id, undefined,
-                         { capa: row.capa, instancia: row.instancia })
+    //
+    // S42/F5+ — I EL TERCER EIX, que era el que faltava. La fila ja el porta (`filesDePresa` i
+    // `buildRows`), el backend ja el resol, i el que hi havia n'enviava DOS DE TRES: podar el
+    // POM 962 des del contenidor Short del 1379 desactivava la fila de la MARE. Els tres van
+    // junts i per això surten d'un sol lloc (`eixosDeLaFila`), no d'un literal escrit aquí.
+    models.desactivarPom(model.id, row.pom_id, undefined, eixosDeLaFila(row))
       .then(() => load())
       .then(() => onFeedback?.({ type: 'ok', text: t('measuregrid.poda_ok', { codi: row.codi || row.pom_code || '' }) }))
       .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.poda_err') })),

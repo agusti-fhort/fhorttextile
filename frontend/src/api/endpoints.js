@@ -127,9 +127,13 @@ export const models = {
   // log de mesures. Mai DELETE dur: la mesura va existir i el model n'ha de guardar memòria.
   // C4/BLOC 2 — la poda diu QUINA germana treu. Els eixos van al COS i no al camí: una
   // `instancia` buida (el cas normal) no té representació honesta dins d'una URL.
+  // S42/F5+ — L'EIX DE PRENDA HI ENTRA. El backend ja resol la fila per `(pom, capa,
+  // instancia, garment)` (`desactivar_pom_view`, des de `e0809954`) i a qui no el diu li dona
+  // el literal de la MARE: enviant-ne dos de tres, podar una fila de la 02 apuntava a la fila
+  // de la mare. Qui no el passi segueix rebent `''`, que és el que feia tothom fins ara.
   desactivarPom: (modelId, pomId, motiu, eixos = {}) =>
     client.post(`/api/v1/models/${modelId}/pom/${pomId}/desactivar/`,
-                { motiu, capa: eixos.capa, instancia: eixos.instancia }),
+                { motiu, capa: eixos.capa, instancia: eixos.instancia, garment: eixos.garment }),
   // P0+P2+P3 — PROMOCIÓ model→item. Dues fases: confirm=false retorna el diff sense escriure
   // res; confirm=true aplica dins d'una transacció. Gate CONFIGURE al backend.
   promoureAItem: (modelId, confirm = false) => client.post(`/api/v1/models/${modelId}/promoure-a-item/`, { confirm }),

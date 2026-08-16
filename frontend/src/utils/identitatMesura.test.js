@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { clauDeFila, clauRegla, filesDeLaPeca, identitatMesura } from './identitatMesura.js'
+import { clauDeFila, clauRegla, eixosDeLaFila, filesDeLaPeca, identitatMesura } from './identitatMesura.js'
 
 test('dues files idèntiques en tot MENYS el garment no col·lapsen', () => {
   // EL CAS QUE OBRE SET-2: la mateixa mesura, la mateixa capa i la mateixa instància, a dues
@@ -151,6 +151,69 @@ test('🚨 una fila que ha PERDUT l\'eix cau a la MARE, i el forat és MUT', () 
 
   assert.equal(filesDeLaPeca(ambFuita, '').length, 18)   // ← les 18 al contenidor de la mare
   assert.equal(filesDeLaPeca(ambFuita, '02').length, 0)  // ← i el del Short, buit
+})
+
+// ── S42/F5+ · LA PODA, I ON VA A PARAR ────────────────────────────────────────────────
+//
+// Aquest banc no es queda al payload: el RESOL, perquè el dany no era d'un costat ni de
+// l'altre sinó de la JUNTA. Enviar dos eixos de tres no peta enlloc — simplement apunta a una
+// altra fila, i aquella fila cau.
+
+/** Les files de `BaseMeasurement` del 1379 que tenen germana a l'altra prenda, tal com són a
+ *  BD: el POM 962 (G1) hi és dos cops amb la MATEIXA `(capa, instancia)`. Només l'eix de
+ *  prenda els separa, i per això és el cas que aquest guard no pot passar per casualitat. */
+const BD_1379 = [
+  { id: 3344, pom_id: 962, capa: 'exterior', instancia: '', garment: '' },    // la MARE
+  { id: 3354, pom_id: 962, capa: 'exterior', instancia: '', garment: '02' },  // el SHORT
+  { id: 3350, pom_id: 954, capa: 'exterior', instancia: '', garment: '02' },  // només al Short
+  { id: 3342, pom_id: 908, capa: 'exterior', instancia: '', garment: '' },    // només a la mare
+]
+
+/** MIRALL de `desactivar_pom_view` (`models_app/views.py:4964`): filtra per
+ *  `(model, pom, capa, instancia, garment)`, i qui no diu un eix rep el literal de la MARE
+ *  (`_identitat_de_mesura`, `:3636`). Retorna la PK que cauria, o `null` (el 404). */
+const filaQueCau = (payload) => {
+  const capa = payload.capa || 'exterior'
+  const instancia = payload.instancia || ''
+  const garment = payload.garment || ''
+  const bm = BD_1379.find(r => r.pom_id === payload.pom_id && r.capa === capa
+    && r.instancia === instancia && r.garment === garment)
+  return bm ? bm.id : null
+}
+
+const podaDe = (fila) => filaQueCau({ pom_id: fila.pom_id, ...eixosDeLaFila(fila) })
+
+test('🚨 1379 · podar la fila del SHORT no toca la de la mare', () => {
+  // EL DANY QUE AIXÒ TANCA: amb el contenidor Short buit, aquest clic no existia. F5 el va
+  // omplir i el mateix clic va passar a desactivar la fila de la MARE, amb entrada al
+  // `MeasurementChangeLog`, que és append-only.
+  const delShort = { pom_id: 962, capa: 'exterior', instancia: '', garment: '02' }
+  const deLaMare = { pom_id: 962, capa: 'exterior', instancia: '', garment: '' }
+
+  assert.equal(podaDe(delShort), 3354)   // la del Short, no la 3344
+  assert.equal(podaDe(deLaMare), 3344)   // i la de la mare segueix sent la seva
+})
+
+test('els tres eixos viatgen, i la mare és `\'\'` i no absent', () => {
+  assert.deepEqual(eixosDeLaFila({ capa: 'folre', instancia: 'esq', garment: '02' }),
+    { capa: 'folre', instancia: 'esq', garment: '02' })
+  // Una fila de la mare i una fila a qui ningú ha posat l'eix han de dir el MATEIX al
+  // servidor: `''`. Enviar `undefined` seria deixar que el default decidís per nosaltres.
+  assert.equal(eixosDeLaFila({ capa: 'exterior', instancia: '', garment: '' }).garment, '')
+  assert.equal(eixosDeLaFila({ capa: 'exterior', instancia: '' }).garment, '')
+})
+
+test('CONTROL · una fila que viu a UNA sola prenda cau on toca', () => {
+  assert.equal(podaDe({ pom_id: 954, capa: 'exterior', instancia: '', garment: '02' }), 3350)
+  assert.equal(podaDe({ pom_id: 908, capa: 'exterior', instancia: '', garment: '' }), 3342)
+})
+
+test('CONTROL una-peça · sense `02` la poda va contra la mare, com sempre', () => {
+  // El 100% del corpus d'una sola prenda: totes les files són `garment:''` i el
+  // comportament ha de ser idèntic al d'abans d'aquest canvi.
+  for (const fila of BD_1379.filter(r => r.garment === '')) {
+    assert.equal(podaDe(fila), fila.id)
+  }
 })
 
 test('la regla és del POM i de la PRENDA: dues capes la comparteixen, dues prendes no', () => {

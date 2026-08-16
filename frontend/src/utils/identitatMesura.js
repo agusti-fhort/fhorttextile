@@ -72,6 +72,35 @@ export function filesDeLaPeca(files, eix) {
 }
 
 /**
+ * ELS TRES EIXOS D'UNA FILA, per ENVIAR-LOS al servidor — S42/F5+.
+ *
+ * ⚠️ NO ÉS `identitatMesura` amb una altra forma, i la diferència importa: aquella fabrica una
+ * clau PLANA per a un `Map` intern del client i no viatja mai. Aquesta són els tres camps PER
+ * SEPARAT, que és exactament el que demana `pom/identitat.py` a qui escriu. Qui hagi d'enviar
+ * una identitat al servidor fa servir això; qui hagi d'indexar una fila, l'altra.
+ *
+ * EXISTEIX PERQUÈ LA PODA ES VA DEIXAR UN EIX. `desactivar_pom_view` resol la fila a
+ * desactivar per `(model, pom, capa, instancia, garment)` des de `e0809954` i qui no diu
+ * l'eix rep el literal de la MARE (`_identitat_de_mesura`, `models_app/views.py:3636`). El
+ * client n'enviava dos de tres, o sigui que treure una fila d'una prenda apuntava a la fila
+ * de la mare —i quan aquella existia, la desactivava, amb entrada al `MeasurementChangeLog`,
+ * que és append-only i no es pot corregir mai.
+ *
+ * Amb el contenidor de la 02 buit allò era inofensiu i no ho va veure ningú. F5 el va omplir,
+ * i el mateix clic va passar a fer mal. **Una porta d'escriptura inofensiva perquè ningú hi
+ * arriba no és una porta segura: és una porta que espera.**
+ *
+ * La MARE és `''` a tots tres, mai absent — igual que al backend.
+ */
+export function eixosDeLaFila(fila) {
+  return {
+    capa: fila?.capa,
+    instancia: fila?.instancia,
+    garment: fila?.garment || '',
+  }
+}
+
+/**
  * LA IDENTITAT D'UNA REGLA DE GRADUACIÓ — SET-2/T7-B10.
  *
  * `ModelGradingRule` és única per **(model, pom, garment)**: sense capa ni instància, perquè la
