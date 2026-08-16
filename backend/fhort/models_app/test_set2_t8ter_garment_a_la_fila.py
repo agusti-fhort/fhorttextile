@@ -34,7 +34,8 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from fhort.models_app.extraction_views import (
     _apply_many_to_one_guard, _garment_de, _identitat, _pla_de_resolucions,
-    _proposta_de_peca, import_session_poms_view)
+    _efectiu, _efectiu_de_peca, _peces_amb_metrica_propia, _proposta_de_peca,
+    import_session_poms_view)
 from fhort.models_app.models import BaseMeasurement, ModelGarment
 
 from fhort.models_app.test_set2_t8_import_per_prenda import (
@@ -363,3 +364,36 @@ class LaColumnaDecideixLaPecaTest(_BaseImportPerPrendaTest):
         self.assertEqual(res.status_code, 200, res.data)
         s.refresh_from_db()
         self.assertEqual(s.poms_extrets[0]['garment'], MARE)
+
+
+class LaMetricaDeCadaPecaTest(_BaseImportPerPrendaTest):
+    """F8 · `_efectiu_de_peca` i l'avís del pas 1 (§3)."""
+
+    PREFIX = 'T8T8'
+
+    def test_efectiu_de_peca_resol_qualsevol_peca_no_nomes_la_de_la_sessio(self):
+        self.peca.base_size_label = 'L'
+        self.peca.save(update_fields=['base_size_label'])
+        s = self._sessio(garment=MARE)
+
+        # La sessió és de la MARE i tanmateix es pot preguntar per la 02.
+        self.assertEqual(_efectiu(s, 'base_size_label'), 'M')
+        self.assertEqual(_efectiu_de_peca(s, MARE, 'base_size_label'), 'M')
+        self.assertEqual(_efectiu_de_peca(s, SEGONA, 'base_size_label'), 'L')
+
+    def test_una_peca_que_hereta_no_es_una_divergencia(self):
+        """NULL vol dir «hereta»: el cas normal, i el 100% del corpus d'avui."""
+        s = self._sessio(garment=MARE)
+        self.assertEqual(_peces_amb_metrica_propia(s, [SEGONA]), [])
+        self.assertEqual(_efectiu_de_peca(s, SEGONA, 'base_size_label'), 'M')
+
+    def test_una_peca_amb_metrica_propia_es_DIU(self):
+        self.peca.size_run_model = 'XS·S·M'
+        self.peca.save(update_fields=['size_run_model'])
+        s = self._sessio(garment=MARE)
+
+        fora = _peces_amb_metrica_propia(s, [MARE, SEGONA])
+        self.assertEqual(len(fora), 1)
+        self.assertEqual(fora[0]['garment'], SEGONA)
+        self.assertEqual(fora[0]['garment_nom'], 'Llaçada')
+        self.assertEqual(fora[0]['camps'], ['size_run_model'])

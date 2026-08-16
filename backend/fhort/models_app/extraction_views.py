@@ -51,6 +51,58 @@ def _efectiu(session, camp):
     return valor_efectiu(session.model, _peca_de(session), camp)
 
 
+def _efectiu_de_peca(session, codi, camp):
+    """El valor EFECTIU d'un camp heretable per a UNA peça qualsevol d'aquest import.
+
+    SET-2/T8-ter — `_efectiu` pregunta per la peça de LA SESSIÓ, i amb el garment a la fila la
+    sessió ja no té una sola peça de destí. Aquest germà pren el codi com a argument.
+
+    No duplica cap regla d'herència: totes dues passen per `valor_efectiu`, que segueix sent el
+    punt únic (la llei de T2-bis és que `garment.X or model.X` viu en UN sol lloc).
+    """
+    from fhort.models_app.models import ModelGarment
+    from fhort.models_app.services_garment import valor_efectiu
+    codi = (codi or '').strip()
+    peca = (ModelGarment.objects.filter(model_id=session.model_id, codi=codi).first()
+            if (codi and session.model_id) else None)
+    return valor_efectiu(session.model, peca, camp)
+
+
+def _peces_amb_metrica_propia(session, codis):
+    """Les peces de `codis` que declaren run o talla base PRÒPIS (override no NULL).
+
+    ── SET-2/T8-ter · PER QUÈ EL PAS 1 ES RESOL CONTRA LA MARE (decisió Agus, §3) ──────────
+    El pas 1 aparella les columnes del DOCUMENT amb les talles del model, i el document és UN:
+    porta un sol joc de columnes per a totes les peces que hi surten. Un aparellament per peça
+    voldria dir un pas 1 per peça, que és un wizard diferent i no el que aquest tram construeix.
+
+    La referència neutra, doncs, és LA MARE — el model mateix (D3), que és de qui les peces
+    hereten mentre no diguin el contrari. I com que NULL vol dir «hereta», el cas normal és que
+    totes les peces hi coincideixin: el 100% del corpus d'avui (la `02 Short` del 1323 té
+    `base_size_label=None`).
+
+    El cas rar és que una peça declari metrica pròpia. Llavors el pas 1 NO pot parlar per ella i
+    **s'ha de DIR** en comptes de decidir en silenci: aparellar contra la mare i escriure a una
+    peça amb un altre run seria fabricar un aparellament que ningú ha validat. Es torna la
+    llista perquè el wizard l'avisi; no barra, perquè qui sap si el document parla d'aquella
+    peça és la persona que reparteix les files.
+    """
+    from fhort.models_app.models import ModelGarment
+    if not session.model_id:
+        return []
+    codis_reals = [c for c in {(c or '').strip() for c in (codis or [])} if c]
+    if not codis_reals:
+        return []
+    fora = []
+    for peca in ModelGarment.objects.filter(model_id=session.model_id, codi__in=codis_reals):
+        propis = [camp for camp in ('size_run_model', 'base_size_label', 'size_system')
+                  if getattr(peca, camp if camp != 'size_system' else 'size_system_id') is not None]
+        if propis:
+            fora.append({'garment': peca.codi, 'garment_nom': peca.nom or peca.codi,
+                         'camps': propis})
+    return fora
+
+
 def _nom_de_peca(model, codi):
     """Com s'anomena la peça `codi` d'aquest model, per DIR-LA a l'usuari.
 
@@ -899,7 +951,7 @@ def import_session_talles_view(request, token):
     de la prenda, no al model. Sense això, obrir el pas 1 d'un import a la 02 i triar-hi una
     base canviava la base de la MARE — el dany d'aquest tram, fet des del pas 1.
     """
-    from fhort.models_app.models import ImportSession
+    from fhort.models_app.models import ImportSession, ModelGarment
 
     session = ImportSession.objects.filter(token=token).select_related(
         'model', 'model__size_system',
