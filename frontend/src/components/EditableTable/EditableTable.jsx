@@ -196,7 +196,20 @@ export default function EditableTable({
   // sabem, en comptes d'oferir sis opcions que potser ja no són les bones.
   const capesDelDiccionari = dicc?.capes?.map(c => c.slug) || []
 
-  useEffect(() => { setLocalRows(rows); setDirty(false) }, [rows])
+  // ⚠️ UNA `rows` NOVA NO ÉS UNA `rows` DIFERENT. El contenidor la fabrica DINS del render
+  // (`filesDeLaPeca(taulaRows, …)` a `MeasuresEntryPanel`, dins d'una render-prop), o sigui que
+  // cada re-render del pare en dona un array NOU amb el MATEIX contingut. Amb la dependència per
+  // identitat, aquest efecte reconstruïa `localRows` des del servidor a cada re-render i es
+  // menjava el que s'estigués editant. Es veia al <select> de capa —l'únic control CONTROLAT de
+  // la fila—: es triava «Folre» i tornava a «Exterior» tot sol, com si no es deixés canviar (QA
+  // Agus 16/08). Els altres camps ho dissimulaven perquè són no-controlats i només parlen al
+  // `commit`. I el pare re-renderitza sol: el poll del cronòmetre pica cada minut.
+  //
+  // Es compara el CONTINGUT. Un re-sync de debò —desar, canviar de peça, recarregar la taula—
+  // segueix entrant igual, i `dirty` només es rebaixa quan realment ve estat nou de fora.
+  const rowsSerials = JSON.stringify(rows)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setLocalRows(rows); setDirty(false) }, [rowsSerials])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -1192,8 +1205,26 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
       <td style={stickyTd(widths.capa + widths.codi, widths.nom)}>
         {(() => {
           // Llei de presentació de la casa (nom internacional dalt · llengua de qui llegeix
-          // sota), APLICADA AL CLIENT: si el POM té àlies, manen les seves descripcions.
-          const dalt = row.client_name_en || row.nom_en || row.nom_ca || row.pom_code
+          // sota).
+          //
+          // ⚠️ LA FILA DIU EL NOM CANÒNIC DEL CATÀLEG (Agus, 16/08). Aquí manava
+          // `row.client_name_en` —la `description_en` de l'àlies del client— i el que sortia a la
+          // columna del nom era el text extens de la fitxa: «Total length at the CF / Skirt CF
+          // length / Total CF length of the skirt» on el catàleg diu «Skirt length».
+          //
+          // I no era només llarg: era EL MATEIX a quatre files. `alies_per_pom` resol UN àlies
+          // PER POM (ordenat per `pendent_revisio, client_code`), i les quatre germanes del POM
+          // 958 —FS · FS2 · FS3 · FS4, que és el que les distingeix— cobraven totes la descripció
+          // de la FS. El nom col·lapsava per POM just a la columna que ha de dir quina fila és.
+          //
+          // El text del client no es perd ni deixa de manar on és seu: el CODI de la fila segueix
+          // sent el seu (`client_code` fa de placeholder de `nom_fitxa`, just aquí sota) i la
+          // descripció extensa passa a CONTEXT —al `title` de la cel·la—, que és el seu lloc:
+          // és com anomena el client aquesta mesura als seus documents, no com es diu la mesura.
+          const dalt = row.nom_en || row.nom_ca || row.pom_code
+          // El text del client, per al `title`, i només si diu una cosa que no es llegeixi ja.
+          const contextClient = (row.client_name_en && row.client_name_en !== dalt)
+            ? row.client_name_en : ''
           // ⚠️ LA TRADUCCIÓ NO S'HA DE PERDRE PER TENIR ÀLIES (QA Agus 09/08). Anava
           // `client_name_en ? client_name_local : nom_ca`: un POM amb àlies del client PERÒ
           // sense descripció local es quedava sense cap segona llengua, tot i que la casa en
@@ -1241,7 +1272,10 @@ function SortableRow({ row, n, readOnly, activa, neix, onActiva, onCellChange, o
           const nomEditable = !readOnly && bmId != null && onBateig
           return (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-              <div style={{ minWidth: 0, flex: 1 }}>
+              {/* El `title` porta com anomena el CLIENT aquesta mesura als seus documents. És
+                  context —d'on ha sortit la fila—, mai el nom de la fila: es demana passant-hi
+                  per sobre i no compta pel nom de ningú. */}
+              <div style={{ minWidth: 0, flex: 1 }} title={contextClient || undefined}>
                 <NomCanonic
                   value={row.nom_canonic_model || ''} placeholder={dalt || ''} instancia={inst}
                   traduccio={traduit} editant={nomEditable && editantIdentitat} estil={estilDalt}
