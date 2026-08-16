@@ -30,6 +30,7 @@ import BadgeLliurable from '../components/model/BadgeLliurable'
 import { CARA_CAP, caraDeError, caraObrirTasca } from '../utils/caraObrirTasca'
 import { CODE_PER_TAB, saltDeSuperficie, minutsDeSessio } from '../utils/sessioActiva'
 import { SECCIONS_MODEL, ETIQUETA_SECCIO, pindolesDeModel } from '../utils/modelSeccions'
+import { motiuPasPresa } from '../utils/motiuPasPresa'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
@@ -813,6 +814,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     // `editing` hi entra a posta: en sortir d'una superfície de treball l'estat pot haver
     // canviat (gravar POM genera la taula) i el stepper ha de dir la veritat NOVA, no la vella.
   }, [activeTab, id, editing])
+  // S42/F2 — PER QUÈ el pas ③ està apagat, deduït de l'estat i no codificat al JSX. `null` =
+  // res l'atura (inclòs «encara no ha contestat»), i és el mateix predicat que bloquejava el
+  // botó abans: un sol lloc per a la condició i per al motiu, que no poden divergir.
+  const motiuPresa = motiuPasPresa(estatPas)
   const [propStatus, setPropStatus] = useState(null)   // {te_dades_propagades, segellada, version_number}
   const [propStep, setPropStep] = useState(0)           // 0 cap modal · 1 avís adaptat · 2 confirmació final
   const [propagarEnCua, setPropagarEnCua] = useState(false)
@@ -1263,21 +1268,27 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                     que el stepper no tenia cap fet per a aquest pas. Ara `te_presa` el porta —hi
                     ha algun fitting amb contingut—, i l'ordre de precedència és: BLOQUEJAT (no
                     hi ha taula) → FET (s'hi ha mesurat) → disponible. */}
+                {/* S42/F2 — EL RÈTOL DIU EL PAS QUE FALTA, i el diu perquè el DEDUEIX.
+                    Era una constant («Cal gravar el POM») i al 1379 acusava un pas que ja
+                    lluïa el ✓ del costat: els POM hi eren i el que faltava era propagar. El
+                    predicat de `disabled` NO canvia —segueix sent `te_taula`, el mateix que
+                    exigeix `create-piece`—; el que canvia és que ara n'hi ha UN de sol, i és
+                    el motiu mateix: `motiuPasPresa(...) != null` ÉS `!te_taula` amb l'estat
+                    resolt. La llei viu a `utils/motiuPasPresa` amb banc, no aquí dins. */}
                 <button type="button"
-                  disabled={openingTask || (estatPas != null && !estatPas.te_taula)}
-                  title={estatPas != null && !estatPas.te_taula
-                    ? t('model_sheet.pas_sense_taula') : undefined}
+                  disabled={openingTask || motiuPresa != null}
+                  title={motiuPresa ? t(motiuPresa) : undefined}
                   onClick={() => enterEdit('Mesures', 'size_check')}
-                  style={btnPas(estatPas != null && !estatPas.te_taula ? 'blocat'
+                  style={btnPas(motiuPresa ? 'blocat'
                     : (estatPas?.te_presa ? 'fet' : 'ara'), openingTask)}>
-                  <i className={`ti ti-${estatPas != null && estatPas.te_taula && estatPas.te_presa
+                  <i className={`ti ti-${motiuPresa == null && estatPas?.te_presa
                     ? 'check' : 'ruler-measure'}`} style={{ fontSize: 14 }} />
                   {t('presa.titol')}
                 </button>
-                {estatPas != null && !estatPas.te_taula && (
+                {motiuPresa && (
                   <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
                                  alignSelf: 'center' }}>
-                    {t('model_sheet.pas_sense_taula')}
+                    {t(motiuPresa)}
                   </span>
                 )}
                 {/* ④ PROPAGAR a grading (origen): inicia fase nova sobre llenç net i porta a

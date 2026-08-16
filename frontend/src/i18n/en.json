@@ -989,7 +989,9 @@
     "measures_view_table": "Measurement table",
     "measures_view_repas": "Fitting review",
     "back_title": "Back to Models",
-    "pas_sense_taula": "Save the POM to generate the size table"
+    "pas_sense_mesures": "Save the POM to generate the size table",
+    "pas_sense_regles": "Define the grading to generate the size table",
+    "pas_sense_propagacio": "Propagate to generate the size table"
   },
   "model_wizard": {
     "customer": "Customer",

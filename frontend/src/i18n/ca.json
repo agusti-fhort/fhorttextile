@@ -989,7 +989,9 @@
     "measures_view_table": "Taula de mesures",
     "measures_view_repas": "Repàs de fittings",
     "back_title": "Tornar a Models",
-    "pas_sense_taula": "Cal gravar el POM per generar la taula de talles"
+    "pas_sense_mesures": "Cal gravar el POM per generar la taula de talles",
+    "pas_sense_regles": "Cal definir la graduació per generar la taula de talles",
+    "pas_sense_propagacio": "Cal propagar per generar la taula de talles"
   },
   "model_wizard": {
     "customer": "Client",
