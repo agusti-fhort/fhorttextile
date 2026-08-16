@@ -112,6 +112,47 @@ test('sense saber la peça hi són TOTES: mai es buida una taula pel dubte', () 
   assert.deepEqual(filesDeLaPeca(null, ''), [])
 })
 
+// ── S42 · EL 1379 REAL, I EL FORAT QUE NO CANTA ────────────────────────────────────────
+//
+// Les 18 files de `BRW-FW26-0002` (RUFFLES) tal com les serveixen `taula-mesures` i
+// `base-stages` el 16/08/2026: 11 de la mare i 7 de la 02 (Short). No és un cas inventat —
+// és el model amb què es va reportar que «les 7 del Short surten al contenidor de la mare».
+const FILES_1379 = [
+  { codi: 'B', garment: '' }, { codi: 'BB', garment: '' }, { codi: 'B1', garment: '' },
+  { codi: 'BF', garment: '' }, { codi: 'D', garment: '' }, { codi: 'G1', garment: '' },
+  { codi: 'FS', garment: '' }, { codi: 'FS2', garment: '' }, { codi: 'FS3', garment: '' },
+  { codi: 'FS4', garment: '' }, { codi: 'FS5', garment: '' },
+  { codi: 'FR', garment: '02' }, { codi: 'FE', garment: '02' }, { codi: 'CT', garment: '02' },
+  { codi: 'M', garment: '02' }, { codi: 'M1', garment: '02' }, { codi: 'F1', garment: '02' },
+  { codi: 'FT', garment: '02' },
+]
+
+test('1379 · els dos contenidors es reparteixen 11 / 7, i cap fila es queda pel camí', () => {
+  const mare = filesDeLaPeca(FILES_1379, '')
+  const short = filesDeLaPeca(FILES_1379, '02')
+
+  assert.equal(mare.length, 11)
+  assert.deepEqual(short.map(f => f.codi), ['FR', 'FE', 'CT', 'M', 'M1', 'F1', 'FT'])
+  // Cap fila duplicada i cap perduda: els dos contenidors sumen el payload sencer.
+  assert.equal(mare.length + short.length, FILES_1379.length)
+})
+
+test('🚨 una fila que ha PERDUT l\'eix cau a la MARE, i el forat és MUT', () => {
+  // AIXÒ ÉS EL QUE S'HA DE VIGILAR, i per què cap pantalla en pot avisar: `f.garment || ''`
+  // no distingeix «és de la mare» de «algú ha deixat caure el camp pel camí». Un adaptador
+  // que no copiï `garment` (v. `buildEscalatRows`, `buildRepasRows`, `CheckMeasureEditor.
+  // buildRows`, que el copien TOTS TRES a posta) no peta, no avisa i no deixa rastre: les
+  // seves files se'n van senceres al primer contenidor i el de la peça surt buit.
+  //
+  // El símptoma és EXACTAMENT el que es va reportar el 16/08, i per això el cas viu aquí amb
+  // nom i cognoms: si algun dia torna, que el banc digui de què es tracta abans que ningú
+  // hagi de tornar a llegir sis fitxers.
+  const ambFuita = FILES_1379.map(f => (f.garment === '02' ? { codi: f.codi } : f))
+
+  assert.equal(filesDeLaPeca(ambFuita, '').length, 18)   // ← les 18 al contenidor de la mare
+  assert.equal(filesDeLaPeca(ambFuita, '02').length, 0)  // ← i el del Short, buit
+})
+
 test('la regla és del POM i de la PRENDA: dues capes la comparteixen, dues prendes no', () => {
   const mareExterior = { pom_id: 7, garment: '', capa: 'exterior' }
   const mareFolre = { pom_id: 7, garment: '', capa: 'folre' }
