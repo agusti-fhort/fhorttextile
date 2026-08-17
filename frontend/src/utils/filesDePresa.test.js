@@ -21,7 +21,9 @@ const BASE = [
   },
 ]
 const LINIES = [{ id: 771, base_measurement_id: 3344, valor_real: 0.7, valor_teoric: 0.5 }]
-const REGLES = new Map([[962, { logica: 'FIXED', increment_base: 0 }]])
+// S42/F1 · Q1-bis — LA CLAU DE LA REGLA ÉS `{pom}|{garment}` (v. `identitatMesura.clauRegla`),
+// no el `pom_id` pelat: `ModelGradingRule` és única per `(model, pom, garment)`.
+const REGLES = new Map([['962|', { logica: 'FIXED', increment_base: 0 }]])
 
 const fes = (extra = {}) => construeixFilesDePresa({
   baseRows: BASE, linies: LINIES, reglaPerPom: REGLES, readOnly: true, ...extra,
@@ -65,12 +67,46 @@ test('PRESA · el carril porta el que la modista escriu avui', () => {
   assert.equal(fr.base_value_cm, null)  // sense línia no hi ha presa
 })
 
-test('la regla s\'hi fusiona per pom_id, i qui no en té no inventa camps', () => {
+test('la regla s\'hi fusiona per (pom, garment), i qui no en té no inventa camps', () => {
   const [g1, fr] = fes()
 
   assert.equal(g1.logica, 'FIXED')
   assert.equal(g1.increment_base, 0)
   assert.equal('logica' in fr, false)
+})
+
+test('S42/F1 · Q1-bis — la regla de la PEÇA no és la de la mare', () => {
+  // El MATEIX POM viu a la mare i a la 02 amb lleis DIVERGENTS. Amb la clau curta
+  // (`pom_id` pelat) les dues files queien al mateix calaix i la 02 rebia la llei de la
+  // mare —o la mare la de la 02, segons quina entrés l'última al Map—. Sense divergència
+  // sembrada aquest test no provaria res: els dos deltes són diferents a posta.
+  const baseRows = [
+    { base_measurement_id: 1, pom_id: 962, capa: 'exterior', instancia: '', garment: '' },
+    { base_measurement_id: 2, pom_id: 962, capa: 'exterior', instancia: '', garment: '02' },
+  ]
+  const reglaPerPom = new Map([
+    ['962|', { logica: 'LINEAR', increment_base: 2 }],
+    ['962|02', { logica: 'LINEAR', increment_base: 10 }],
+  ])
+  const [mare, segona] = construeixFilesDePresa({
+    baseRows, linies: [], reglaPerPom, readOnly: true })
+
+  assert.equal(mare.increment_base, 2)
+  assert.equal(segona.increment_base, 10, 'la 02 ha de rebre LA SEVA llei, no la de la mare')
+})
+
+test('S42/F1 · Q1-bis — una peça SENSE llei pròpia no inventa camps', () => {
+  // L'herència (peça → mare) la fa el BACKEND (`_regla_de`), no aquest adaptador: aquí una
+  // clau que no hi és ha de deixar la fila sense els quatre camps, que és el que fa que la
+  // columna digui `—` en comptes d'ensenyar la llei d'una altra peça.
+  const baseRows = [
+    { base_measurement_id: 2, pom_id: 962, capa: 'exterior', instancia: '', garment: '03' },
+  ]
+  const [sola] = construeixFilesDePresa({
+    baseRows, linies: [], reglaPerPom: new Map([['962|', { logica: 'LINEAR' }]]),
+    readOnly: true })
+
+  assert.equal('logica' in sola, false, "la 03 no pot heretar la llei de la mare AQUÍ")
 })
 
 test('entrades buides no peten: cap fila, i prou', () => {

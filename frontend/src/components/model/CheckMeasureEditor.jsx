@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { clauDeFila, eixosDeLaFila, filesDeLaPeca } from '../../utils/identitatMesura'
+import { clauDeFila, clauRegla, eixosDeLaFila, filesDeLaPeca } from '../../utils/identitatMesura'
 import { construeixFilesDePresa } from '../../utils/filesDePresa'
 import { useNavigate } from 'react-router-dom'
 import client from '../../api/client'
@@ -181,14 +181,16 @@ function RegleEditCell({ modelId, row, sizeRun, onFeedback }) {
     // Només es declara el règim quan la fila NO en té cap i algú hi acaba d'escriure un delta o un
     // trencament — el mateix criteri que `GraduacioSuperficie` (:158-162). Si ja en té, no es toca.
     if (!row.logica && (normRegle(d) !== '' || normRegle(bs) !== '')) payload.logica = 'LINEAR'
-    // 🚩 ACTA (SET-2/T7-B10, 12/08) — AQUEST CRIDADOR NO DIU LA PRENDA, I A POSTA. `setPomRule`
-    // accepta `garment` des del #12d i qui no el diu rep la MARE, que és exactament el que ha de
-    // passar aquí: aquest editor de regla viu a la graella de Definició POM/Check, i el seu flux
-    // encara NO passa per contenidor de peça —la fila que edita és la que la pantalla té a mà, no
-    // la d'una prenda triada—. Enviar-hi un eix ara seria inventar-se de quina peça parla.
-    // Dirà la prenda el dia que el Check editi mesures d'UNA PEÇA; llavors és afegir `garment` a
-    // aquest payload, i el backend ja hi és a punt.
-    models.setPomRule(modelId, row.pom_id, payload)
+    // ✅ ACTA TANCADA (S42/F1 · Q1-bis, 17/08) — I AQUEST DIA HA ARRIBAT. L'acta de T7-B10
+    // deia: «aquest cridador no diu la prenda, i a posta … dirà la prenda el dia que el Check
+    // editi mesures d'UNA PEÇA; llavors és afegir `garment` a aquest payload, i el backend ja
+    // hi és a punt». Avui la graella viu DINS del contenidor per prenda (`PecesDelModel`) i la
+    // fila que aquesta cel·la edita ja ve repartida per `filesDeLaPeca`, amb el seu eix a
+    // sobre: no s'inventa de quina peça parla, l'hi diu la fila. Sense això, editar la Δ des
+    // del contenidor de la 02 reescrivia la regla de la MARE —`ModelGradingRule` és única per
+    // `(model, pom, garment)`— i el `set_pom_regim_view` la materialitzava amb `origen='MANUAL'`
+    // a la peça equivocada.
+    models.setPomRule(modelId, row.pom_id, { ...payload, garment: row.garment || '' })
       .then(() => { desat.current = { d, b: brkVal, bs } })
       .catch(() => onFeedback?.({ type: 'err', text: t('measuregrid.regle_save_err') }))
   }
@@ -594,8 +596,13 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
   // mesura no és editar la regla de graduació), la TOLERÀNCIA, i el vocabulari de fitting —«REAL
   // (PROTO)» i «DECISIÓ · NOTA»—, que és d'una altra eina. Ordre d'Agus, 05/08.
   // La regla per POM, de `taula-mesures` (nomes en consulta: v. `checkSource.load`).
+  // S42/F1 · Q1-bis — LA CLAU DE LA REGLA ÉS `(pom, garment)`, NO EL POM PELAT.
+  // `ModelGradingRule` és única per `(model, pom, garment)` i `clauRegla` és el punt únic que
+  // ho sap dir. Amb la clau curta, la fila de la mare i la de la 02 queien al MATEIX calaix i
+  // la segona sobreescrivia la primera en construir el Map: el contenidor de la 02 ensenyava
+  // el règim i la Δ de la mare. El deute el declarava `filesDePresa` amb un 🚩 apuntant aquí.
   const reglaPerPom = new Map(
-    ((raw?.regles?.rows) || []).map(x => [x.pom_id, {
+    ((raw?.regles?.rows) || []).map(x => [clauRegla(x), {
       logica: x.logica, increment_base: x.increment_base,
       increment_break: x.increment_break, talla_break_label: x.talla_break_label,
     }]))
@@ -635,6 +642,12 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
         .then(() => (b ? baseMeasurements.create({
           model: model.id, pom: row.pom_id, capa: row.capa || 'exterior',
           instancia: b.instancia, nom_fitxa: b.nom_fitxa,
+          // S42/F1 — LA GERMANA NEIX A LA PEÇA DE LA MARE. L'eix surt de la FILA que es
+          // parteix (`filesDePresa` el serveix): partir un POM del contenidor de la 02
+          // creava la germana a la MARE, i la partició quedava a mitges —la mare de la 02
+          // rebatejada i la seva parella en una altra peça—. La mare NO es reescriu d'eix:
+          // el `update` de sobre només toca instància i nom.
+          garment: row.garment || '',
           base_value_cm: row.base_vigent ?? null, origen: row.origen || 'TEMPLATE',
         }) : null))
         .then(() => load())
@@ -646,14 +659,29 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
     //
     // La mare NO s'esborra mai: és la mesura del model, i desfer una partició no és treure una
     // mesura de la fitxa. Per això aquí hi ha un `update` i no un `desactivarPom`.
+    //
+    // 🚨 S42/F1 — I ELS EIXOS SURTEN D'`eixosDeLaFila`, NO D'UN LITERAL ESCRIT AQUÍ.
+    // Això deia `{ capa: g.capa, instancia: g.instancia }`: dos eixos de tres. `onPodar`
+    // (70 línies més amunt) ja porta els tres des de F5+ i el seu comentari diu, literalment,
+    // que van junts «i per això surten d'un sol lloc, no d'un literal escrit aquí» — i aquí
+    // hi havia exactament aquest literal. Efecte mesurat: desfer una partició des del
+    // contenidor de la 02 enviava els eixos de la germana SENSE la peça, i
+    // `desactivar_pom_view` —que resol per `(pom, capa, instancia, garment)` i dona la MARE
+    // a qui no en diu res— PODAVA LA FILA DE LA MARE. Destructiu i mut: la germana de la 02
+    // es quedava viva i la mesura del model desapareixia de la fitxa.
     onDesfaInstancia: (row, ident, germanes) =>
       Promise.all((germanes || []).map(g => models.desactivarPom(
-        model.id, g.pom_id, undefined, { capa: g.capa, instancia: g.instancia })))
+        model.id, g.pom_id, undefined, eixosDeLaFila(g))))
         .then(() => baseMeasurements.update(row.id, ident))
         .then(() => load()),
     onNova: (pom, eixos) => baseMeasurements.create({
       model: model.id, pom: pom.id, capa: eixos.capa || 'exterior',
       instancia: eixos.instancia || '', nom_fitxa: eixos.nom_fitxa || '',
+      // S42/F1 — LA FILA NOVA NEIX A LA PEÇA DEL CONTENIDOR. L'eix arriba d'`EditableTable`
+      // (prop `garment`), que és qui sap quina taula l'ha demanada; aquesta porta la serveix
+      // per a tots els contenidors i per tant no el pot deduir. Sense ell, afegir un POM des
+      // de la 02 el materialitzava a la mare i la 02 seguia sense la mesura.
+      garment: eixos.garment || '',
       // Neix SENSE valor: una mesura que ningú ha pres no en té cap, i 'TEMPLATE' és
       // exactament el que el domini diu d'una fila materialitzada i encara buida.
       base_value_cm: null, origen: 'TEMPLATE',
@@ -739,6 +767,13 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           baseSize={raw?.baseData?.base_size || model?.base_size_label}
           modelId={model.id}
           readOnly={readOnly}
+          /* S42/F1 — DE QUINA PRENDA ÉS AQUESTA TAULA. El prop existia i aquest consumidor
+             no el passava (`MeasuresEntryPanel:511` sí), o sigui que les files que NEIXEN
+             des d'aquí no podien dir la peça: el contenidor la sabia (`eixPeca`) i la porta
+             de creació rebia el default de la mare. Mateixa expressió que l'altre
+             consumidor perquè `eixPeca` és `null` mentre la llista de peces no ha contestat
+             i el payload no pot portar un `null`. */
+          garment={peca?.codi ?? ''}
           presa={presaPortes}
           mostraGrading={readOnly && graduaAlgunaCosa}
         />

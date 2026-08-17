@@ -359,7 +359,10 @@ export default function EditableTable({
     const instancia = eixos.instancia || ''
     if (esPresa) {
       // A la presa la fila neix a la BD: no hi ha botó que la pugui desar més tard.
-      marcaDesat(presa.onNova(pom, { capa, instancia })).catch(() => {})
+      // S42/F1 — i neix A LA PEÇA D'AQUESTA TAULA. El `garment` del prop és l'eix del
+      // contenidor que ens ha muntat; sense ell, tota fila nova naixia a la MARE (el
+      // serializer aplicava el default) i la mesura de la 02 no arribava a existir.
+      marcaDesat(presa.onNova(pom, { capa, instancia, garment })).catch(() => {})
       return
     }
     // La invariant `instancia_exigeix_nom` demana nom quan hi ha instància: el cercador el
@@ -479,9 +482,13 @@ export default function EditableTable({
     const seguent = capesDelDiccionari.find(c => !preses.has(c))
     if (!seguent) return
     if (esPresa) {
+      // S42/F1 — la germana de capa neix A LA PEÇA DE LA MARE. Aquí l'eix surt de la FILA i
+      // no del prop: és una germana d'aquesta mesura, i el seu lloc és el de la mare, no el
+      // del contenidor (que avui són el mateix, però la fila és qui ho sap del cert).
       marcaDesat(presa.onNova(
         { id: mare.pom_id, codi_client: mare.pom_code },
-        { capa: seguent, instancia: inst, nom_fitxa: mare.nom_fitxa || '' })).catch(() => {})
+        { capa: seguent, instancia: inst, nom_fitxa: mare.nom_fitxa || '',
+          garment: mare.garment ?? garment })).catch(() => {})
       return
     }
     insereixGermana(mare, { capa: seguent, instancia: inst, nom_fitxa: mare.nom_fitxa || '' })

@@ -22,6 +22,10 @@
 //
 //     node --test frontend/src/utils/filesDePresa.test.js
 
+// ⚠️ Amb extensió: aquest mòdul l'ha de poder importar `node --test`, que no resol
+// l'extensió implícita com fa Vite (mateixa convenció que `taulaBruta.js` i `grupsDelFull.js`).
+import { clauRegla } from './identitatMesura.js'
+
 /**
  * Construeix les files de la taula de mesures en mode presa/consulta.
  *
@@ -88,12 +92,15 @@ export function construeixFilesDePresa({ baseRows, linies, reglaPerPom, readOnly
       // amb acta —mateix POM, mateix increment a totes les cares—), o sigui que dues germanes
       // COMPARTEIXEN regla i han de sortir amb la mateixa. Creuar per la fila donaria buit.
       //
-      // 🚩 I AIXÒ NO VAL PER AL GARMENT, que sí que travessa la regla (`ModelGradingRule` és
-      // única per `(model, pom, garment)`; v. `identitatMesura.clauRegla`). Amb dues prendes,
-      // aquesta clau curta col·lapsa i el contenidor de la 02 ensenya la llei de la mare. NO
-      // entra a F5 —és el mateix tram que Q1-bis, i vol la seva QA—, però queda dit aquí, que
-      // és on es paga.
-      ...(regles.get(r.pom_id) || {}),
+      // ✅ I EL GARMENT SÍ QUE HI ENTRA (S42/F1 · Q1-bis, 17/08). Aquí hi havia un 🚩 que
+      // deia que la clau curta col·lapsa i que el contenidor de la 02 ensenya la llei de la
+      // mare. Ja no: la clau és `(pom, garment)` via `clauRegla`, que és el punt únic que sap
+      // com s'aplana la identitat d'una REGLA (i que NO és `identitatMesura` retallada —capa i
+      // instància no hi entren, perquè són eixos de germanor i comparteixen llei).
+      // El backend hi arriba per la mateixa passada: `taula-mesures` serveix la regla amb
+      // `_regla_de(_load_grading_rules_per_garment(...))`, que hereta de la mare quan la peça
+      // no en té de pròpia.
+      ...(regles.get(clauRegla(r)) || {}),
       // …i al costat, la base VIGENT, que és contra el que es mesura.
       base_vigent: readOnly ? (r.base_value_cm ?? null) : (line?.valor_teoric ?? null),
     }
