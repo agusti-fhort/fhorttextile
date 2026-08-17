@@ -2768,9 +2768,6 @@ export default function TechSheetEditor() {
   // F3 — partició opcional de les taules de mesures per secció d'origen. Default false: la
   // fitxa d'una peça (la immensa majoria) no ha de notar que això existeix.
   const [partirPerSeccio, setPartirPerSeccio] = useState(false)
-  // SET-2/T9 — i per PRENDA, l'eix de sobre. Mateix default i mateixa raó: qui compon una
-  // fitxa d'un model d'una peça no ha de saber ni que això existeix.
-  const [partirPerPeca, setPartirPerPeca] = useState(false)
   const [notice, setNotice] = useState(null)        // toast efímer (p.ex. "ja hi ha capçalera")
   const [thumbnails, setThumbnails] = useState([])
   const [exporting, setExporting] = useState(false)
@@ -5087,7 +5084,16 @@ export default function TechSheetEditor() {
   // La LLEI de partir viu a `utils/garmentFitxa` (`partirTaules`), amb les seves proves: aquí
   // només s'hi lliguen les dues caselles i el criteri de secció que ja tenia la casa.
   const partirEnTaules = (files) => partirTaules(files, {
-    perPeca: partirPerPeca, perSeccio: partirPerSeccio, seccionsDe: seccionsDeFiles,
+    // Q8 — LA PARTICIÓ PER PRENDA JA NO ÉS UNA CASELLA: és el comportament únic. Va néixer
+    // opcional (T9) quan cap dada real tenia peces i el que calia era que la fitxa d'un model
+    // d'una peça no notés que això existia. Amb el model multi-peça viu, una casella per decidir
+    // si les peces es distingeixen és una manera d'equivocar-se —una taula amb les mesures de dues
+    // prendes barrejades i sense rètol no es pot llegir— i una passa més abans de compondre.
+    //
+    // NO ÉS UN CANVI DE COMPORTAMENT PER A LES FITXES D'AVUI: amb una sola prenda `partirTaules`
+    // torna UN grup, exactament com amb la casella apagada. La partició per SECCIÓ es queda
+    // opcional: aquell eix sí que és una decisió de maquetació (F3).
+    perPeca: true, perSeccio: partirPerSeccio, seccionsDe: seccionsDeFiles,
   })
 
   // Col·locació ESGLAONADA: N taules a la mateixa x/y naixerien exactament l'una damunt de
@@ -7783,20 +7789,15 @@ export default function TechSheetEditor() {
                   <span style={libName}>{v.label}</span>
                 </button>
               ))}
-              {/* SET-2/T9 — la partició per PRENDA, sobre la de secció perquè és l'eix de
-                  dalt. Mateixa llei: només surt si el model té més d'una peça, i avui no en
-                  té cap (la comporta CHECK de T2 congela `garment` a ''), de manera que
-                  aquesta casella no es pinta enlloc. Mai forçada. */}
+              {/* Q8 — AQUÍ HI HAVIA LA CASELLA «Una taula per peça (N)», i se n'ha anat perquè
+                  ara és el comportament únic. El que en queda és el RÈTOL: qui compon la fitxa ha
+                  de saber quantes taules li sortiran de cada entrada, i això no és una opció sinó
+                  un fet del model. Amb una sola prenda no es pinta res, com abans. */}
               {pecesDelModel.length > 0 && (
-                <label style={{ ...libRow, cursor: 'pointer', gap: 6 }}
+                <p style={{ ...libEmpty, marginTop: 2 }}
                   title={t('tech_sheet.split_by_garment_hint', { peces: pecesDelModel.join(' · ') })}>
-                  <input type="checkbox" checked={partirPerPeca}
-                    onChange={e => setPartirPerPeca(e.target.checked)}
-                    style={{ flexShrink: 0, cursor: 'pointer' }} />
-                  <span style={libName}>
-                    {t('tech_sheet.split_by_garment', { count: pecesDelModel.length + 1 })}
-                  </span>
-                </label>
+                  {t('tech_sheet.split_by_garment_always', { count: pecesDelModel.length + 1 })}
+                </p>
               )}
               {/* F3 — la partició per secció NOMÉS surt si el model en té més d'una: en una
                   fitxa d'una sola peça seria una casella que no vol dir res. Mai forçada. */}

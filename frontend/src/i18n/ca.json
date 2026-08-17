@@ -3255,6 +3255,7 @@
     "table_variant_sizeset_peca": "Size set (per peça)",
     "table_variant_notes_peca": "Notes del fitting (per peça)",
     "q8_flash_no_notes": "Cap mesura de la sessió porta nota: no hi ha res a inserir.",
+    "split_by_garment_always": "Aquest model té {{count}} peces: cada taula s’insereix en grup, una per peça.",
     "q8_col_layer": "Layer",
     "q8_col_pom": "POM",
     "q8_col_base": "Base",

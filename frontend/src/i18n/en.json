@@ -3255,6 +3255,7 @@
     "table_variant_sizeset_peca": "Size set (per piece)",
     "table_variant_notes_peca": "Fitting notes (per piece)",
     "q8_flash_no_notes": "No measurement in this session carries a note: there is nothing to insert.",
+    "split_by_garment_always": "This model has {{count}} pieces: every table is inserted as a group, one per piece.",
     "q8_col_layer": "Layer",
     "q8_col_pom": "POM",
     "q8_col_base": "Base",
