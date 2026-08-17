@@ -934,7 +934,6 @@
     "back_to_consult": "Back to consultation",
     "edit_measures": "Edit measurements",
     "edit_pom": "Edit POM",
-    "edit_grading": "Edit grading",
     "open_task_err": "Could not open the task.",
     "open_task_err_albaranada": "Cannot open: this task is already on an issued delivery note. To correct it, add a new extra.",
     "use_ruleset": "Use this set",
@@ -991,7 +990,8 @@
     "back_title": "Back to Models",
     "pas_sense_mesures": "Save the POM to generate the size table",
     "pas_sense_regles": "Define the grading to generate the size table",
-    "pas_sense_propagacio": "Propagate to generate the size table"
+    "pas_sense_propagacio": "Propagate to generate the size table",
+    "measure_set": "Size set"
   },
   "model_wizard": {
     "customer": "Customer",

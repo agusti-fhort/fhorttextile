@@ -934,7 +934,6 @@
     "back_to_consult": "Tornar a consulta",
     "edit_measures": "Editar mides",
     "edit_pom": "Editar POM",
-    "edit_grading": "Editar escalat",
     "open_task_err": "No s'ha pogut obrir la tasca.",
     "open_task_err_albaranada": "No es pot obrir: la tasca ja està albaranada (albarà emès). Per rectificar-la, cal un extra nou.",
     "use_ruleset": "Usar aquest joc",
@@ -991,7 +990,8 @@
     "back_title": "Tornar a Models",
     "pas_sense_mesures": "Cal gravar el POM per generar la taula de talles",
     "pas_sense_regles": "Cal definir la graduació per generar la taula de talles",
-    "pas_sense_propagacio": "Cal propagar per generar la taula de talles"
+    "pas_sense_propagacio": "Cal propagar per generar la taula de talles",
+    "measure_set": "Mesurar set"
   },
   "model_wizard": {
     "customer": "Client",

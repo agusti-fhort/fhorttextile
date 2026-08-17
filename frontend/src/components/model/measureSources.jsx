@@ -44,7 +44,12 @@ function deriveFitting(grid) {
 
 // Resol la PieceFitting d'aquesta sessió per al model. Materialització EN OBRIR (decisió 6): si la
 // sessió encara no té peça, la crea (create-piece és idempotent des de XD: 409 si ja existeix).
-async function resolvePieceFitting(model, fittingSession) {
+//
+// E3b — EXPORTADA. «Mesurar set» (`ModelSheet`) obre la presa de l'Escalat, i una presa és
+// sessió + PEÇA: `peca_de_presa_del_model` no troba res mentre la peça no existeixi, per molta
+// sessió que hi hagi. Escriure'n una segona versió allà seria la mateixa creació resolta per dues
+// lleis —i el 409 `piece_exists` només el sap esquivar aquesta.
+export async function resolvePieceFitting(model, fittingSession) {
   const existing = (fittingSession?.piece_fittings || []).find(p => p.model === model.id || p.model_id === model.id)
     || (fittingSession?.piece_fittings || [])[0]
   if (existing) return existing.id

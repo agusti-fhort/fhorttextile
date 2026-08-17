@@ -6,7 +6,7 @@ import SubTabs from '../components/ui/SubTabs'
 import ActionsMenu from '../components/model/ActionsMenu'
 import WatchpointDrawer from '../components/model/WatchpointDrawer'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
-import { fittingSource } from '../components/model/measureSources'
+import { fittingSource, resolvePieceFitting } from '../components/model/measureSources'
 import MeasuresEntryPanel from '../components/model/MeasuresEntryPanel'
 import ComprovacioPanel from '../components/model/ComprovacioPanel'
 import FittingRepasPanel from '../components/model/FittingRepasPanel'
@@ -20,7 +20,7 @@ import PageMenu from '../components/ui/PageMenu'
 // decideixi on van la viabilitat i el teixit, torna a ser una línia.
 import ResumWizardPartit from '../components/model/ResumWizardPartit'
 import { MaduresaBadge, EncarrecDelClient } from '../components/model/FederacioBadge'
-import { models, watchpoints, modelTasks, fittingSessions, modelFitxers } from '../api/endpoints'
+import { models, watchpoints, modelTasks, fittingSessions, modelFitxers, presaEscalat } from '../api/endpoints'
 import { authFetch } from '../api/authFetch'
 import { missatgeError } from '../api/errorsAuth'
 import useAuthStore from '../store/auth'
@@ -32,6 +32,7 @@ import { CARA_CAP, caraDeError, caraObrirTasca } from '../utils/caraObrirTasca'
 import { CODE_PER_TAB, saltDeSuperficie, minutsDeSessio } from '../utils/sessioActiva'
 import { SECCIONS_MODEL, ETIQUETA_SECCIO, pindolesDeModel } from '../utils/modelSeccions'
 import { motiuPasPresa } from '../utils/motiuPasPresa'
+import { estatDeLaPresa } from '../utils/estatPresa'
 import { UPLOAD_ACCEPT } from '../utils/uploads'
 import RegistreActivitatTab from '../components/model/RegistreActivitatTab'
 import DashboardTab from '../components/model/DashboardTab'
@@ -436,7 +437,13 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     else setEditing(tab)
   }, [setSp])
 
-  const obreDeDebo = useCallback((tab, code) => {
+  // `opts.obrePresa` — E3b · «MESURAR SET». La decisió D5 de la diagnosi E1 («l'Escalat no crea
+  // sessions») queda TANCADA per decisió d'Agus: el gest de crear/entrar a la presa és aquest
+  // botó, patró bessó del ③ «Mesurar prenda». Va per OPCIÓ i no pel parell `(tab, code)` a posta:
+  // `('Escalat','grading')` també l'usa `autoEdit` en muntar la ruta `/models/:id/escalat`, i
+  // fer-hi néixer una sessió + peça + N línies convertiria un ENLLAÇ en una escriptura de domini.
+  // Crear és del gest; entrar-hi, de la ruta.
+  const obreDeDebo = useCallback((tab, code, opts = {}) => {
     setOpeningTask(true)
     // D'ON VENIM, abans d'obrir res: el tab on l'usuari és ARA. Les quatre portes del tab Mesures
     // hi passen totes, i també les entrades per URL (`?mode=entry`, `?task_id=`), que arriben
@@ -445,9 +452,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     // ③ vol la SESSIÓ ABANS que la tasca: `open-task` la rep per `fitting_session_id` i, si era
     // Programada, la passa a Oberta (la baula Y1 que ja feia servir l'entrada per URL). Per a la
     // resta de codis no hi ha sessió i el flux és el de sempre, intacte.
-    const volSessio = tab === 'Mesures' && code === 'size_check'
+    const volPresa = !!opts.obrePresa
+    const volSessio = (tab === 'Mesures' && code === 'size_check') || volPresa
     ;(volSessio ? sessioDeFitting() : Promise.resolve(null))
-      .then(sessio => {
+      .then(async sessio => {
         if (volSessio && !sessio) {
           // Sense sessió no hi ha pantalla de fitting. Val més no entrar que entrar a una ALTRA
           // taula que se li assembla —que és exactament el defecte que això tanca.
@@ -455,6 +463,12 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
           return null
         }
         if (sessio) setFittingSession(sessio)
+        // E3b — UNA PRESA ÉS SESSIÓ **I PEÇA**. `sessioDeFitting` només resol la sessió, i
+        // `peca_de_presa_del_model` (el punt únic del servidor) no troba res mentre la peça no
+        // existeixi: sense això «Mesurar set» deixaria la graella exactament igual de morta que
+        // abans, amb una sessió oberta que ningú no veuria. `resolvePieceFitting` és la funció
+        // que la font de fitting ja fa servir —amb el seu 409 `piece_exists`—, no una segona.
+        if (volPresa) await resolvePieceFitting({ id: parseInt(id) }, sessio)
         return models.openTask(parseInt(id), code, sessio?.id ?? null)
       })
       .then(res => {
@@ -508,13 +522,13 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // F2.1 · REGLA D'OR — el modal NO surt en el cas normal. `caraObrirTasca` decideix, i si diu
   // CARA_CAP s'obre directament: zero fricció, zero clics. Només quan hi ha conflicte, feina
   // lliurada o albarà emès es demana res a ningú.
-  const enterEdit = (tab, code, intent = null) => {
+  const enterEdit = (tab, code, intent = null, opts = {}) => {
     if (openingTask) return
     setMesuresIntent(intent)
     const vigent = tascaVigentDe(code)
     const cara = caraObrirTasca(vigent, jo)
-    if (cara !== CARA_CAP) { setDialeg({ cara, tab, code, tasca: vigent }); return }
-    obreDeDebo(tab, code)
+    if (cara !== CARA_CAP) { setDialeg({ cara, tab, code, tasca: vigent, opts }); return }
+    obreDeDebo(tab, code, opts)
   }
   // T4 — SORTIR ÉS DECIDIR. Fins ara sortir pausava en silenci, i acabar una tasca depenia de
   // trobar la píndola flotant de F2.3. Ara, en desar i sortir d'una superfície de treball, el
@@ -806,7 +820,10 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // dos endpoints per a la mateixa pregunta acabarien donant dues respostes.
   const [estatPas, setEstatPas] = useState(null)
   useEffect(() => {
-    if (activeTab !== 'Mesures' || !id) return undefined
+    // E3b — I TAMBÉ A ESCALAT. «Mesurar set» té la MATEIXA dependència que el ③ («create-piece»
+    // exigeix versió activa amb specs) i per tant li toca el MATEIX motiu escrit, no un 400 cru
+    // a la cara després de prémer. Un endpoint més no: el mateix, en un tab més.
+    if ((activeTab !== 'Mesures' && activeTab !== 'Escalat') || !id) return undefined
     let viu = true
     models.gradingStatus(parseInt(id))
       .then(r => { if (viu) setEstatPas(r.data || null) })
@@ -819,6 +836,22 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
   // res l'atura (inclòs «encara no ha contestat»), i és el mateix predicat que bloquejava el
   // botó abans: un sol lloc per a la condició i per al motiu, que no poden divergir.
   const motiuPresa = motiuPasPresa(estatPas)
+  // E3b — L'ESTAT DE LA PRESA, per pintar «Mesurar set» honestament: amb una presa VIVA el botó
+  // hi torna a entrar (FET, §6: «la feina hi és»), i sense —cap o tancada— és la feina d'ara.
+  // Mateixa font que l'Escalat (`fitting/model/<id>/presa/`): no se n'estrena cap.
+  const [presaSet, setPresaSet] = useState(null)
+  useEffect(() => {
+    if (activeTab !== 'Escalat' || !id) return undefined
+    let viu = true
+    presaEscalat.get(parseInt(id))
+      .then(r => { if (viu) setPresaSet(r.data || null) })
+      .catch(() => { if (viu) setPresaSet(null) })
+    return () => { viu = false }
+    // `editing` és LOAD-BEARING: «Mesurar set» acaba posant `editing='Escalat'`, i és per aquí
+    // que aquest efecte s'assabenta que la presa que acaba de crear ja existeix. Sense ell el
+    // botó es quedaria dient «obre'n una» just després d'haver-ne obert una.
+  }, [activeTab, id, editing])
+  const presaVivaSet = estatDeLaPresa(presaSet).escrivible
   const [propStatus, setPropStatus] = useState(null)   // {te_dades_propagades, segellada, version_number}
   const [propStep, setPropStep] = useState(0)           // 0 cap modal · 1 avís adaptat · 2 confirmació final
   const [propagarEnCua, setPropagarEnCua] = useState(false)
@@ -994,7 +1027,9 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
     if (accio === 'consultar') { netejaEdicio(); setActiveTab(d.tab); return }
     if (accio === 'treballar') {
       if (d.fitxerId) { obreFitxa(d.fitxerId); return }   // la fitxa té la seva pròpia navegació
-      obreDeDebo(d.tab, d.code); return
+      // E3b — les OPCIONS del gest viatgen amb el diàleg: qui prem «Mesurar set» i es troba un
+      // conflicte ha d'acabar obrint la presa quan digui que sí, no una edició sense presa.
+      obreDeDebo(d.tab, d.code, d.opts || {}); return
     }
     // `ronda` i `correccio` van per la MATEIXA porta: una correcció és una volta d'una sola
     // tasca. El backend hi posa el motiu i la genealogia (mare) sense que la UI ho hagi de saber.
@@ -1004,7 +1039,7 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
       .then(() => {
         reloadTasks(); reloadModel()
         if (d.fitxerId) obreFitxa(d.fitxerId)
-        else obreDeDebo(d.tab, d.code)
+        else obreDeDebo(d.tab, d.code, d.opts || {})
       })
       .catch(e => setFeedback({
         type: 'err',
@@ -1336,21 +1371,49 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
         {/* Escalat: consulta ↔ edició DINS la tab (inline, sense overlay; manté el context). */}
         {activeTab === 'Escalat' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-              {editing === 'Escalat' ? (
+            {/* ── E3b · «MESURAR SET» ÉS EL GEST PRINCIPAL D'AQUESTA PANTALLA ─────────────────
+                Aquí hi havia «Editar escalat», i el nom deia el que la pantalla feia ABANS d'E1:
+                editar la corba teòrica. Des d'E1 la columna «Fit actual» ANOTA LA PRESA de les
+                peces físiques arribades, i el gest que hi correspon és mesurar un SET de talles
+                —bessó del ③ «Mesurar prenda», que mesura UNA a la base. Mateix llenguatge visual
+                (`btnPas`, regla), mateix motiu escrit quan està blocat, mateix `open-task`.
+
+                I ÉS EL GEST QUE CREA: `obrePresa` resol la sessió i la peça abans d'entrar
+                (decisió D5 TANCADA per Agus). Els tres estats hi caben sense cap branca pròpia,
+                perquè `sessioDeFitting` ja els resol: presa viva → s'hi enganxa · cap → la crea ·
+                TANCADA → no la troba (una acta no és viva) i en crea una de NOVA, que és
+                exactament el que ha de passar. L'acta es queda a l'històric.
+
+                EL BOTÓ SOBREVIU A `editing`: entrar per la ruta `/models/:id/escalat` (Kanban)
+                posa `editing='Escalat'` SENSE crear cap presa —un enllaç no pot escriure al
+                domini—, i llavors la graella és de lectura fins que algú prem això. Amagar-lo
+                perquè «ja s'està editant» deixaria el tècnic dins d'un mode d'edició que no
+                accepta cap tecla i sense cap porta per obrir-ne una. */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+              {editing === 'Escalat' && (
                 <button type="button" onClick={exitEdit}
                   style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)' }}>
                   <i className="ti ti-eye" style={{ fontSize: 14 }} />
                   {t('model_sheet.back_to_consult')}
                 </button>
-              ) : (
-                <button type="button" disabled={openingTask}
-                  onClick={() => enterEdit('Escalat', 'grading')}
-                  style={{ ...btnSecondary, borderColor: 'var(--gold)', color: 'var(--gold)',
-                           opacity: openingTask ? 0.6 : 1, cursor: openingTask ? 'default' : 'pointer' }}>
-                  <i className="ti ti-resize" style={{ fontSize: 14 }} />
-                  {t('model_sheet.edit_grading')}
+              )}
+              {(editing !== 'Escalat' || !presaVivaSet) && (
+                <button type="button"
+                  disabled={openingTask || motiuPresa != null}
+                  title={motiuPresa ? t(motiuPresa) : undefined}
+                  onClick={() => enterEdit('Escalat', 'grading', null, { obrePresa: true })}
+                  style={btnPas(motiuPresa ? 'blocat' : (presaVivaSet ? 'fet' : 'ara'),
+                                openingTask)}>
+                  <i className={`ti ti-${motiuPresa == null && presaVivaSet
+                    ? 'check' : 'ruler-measure'}`} style={{ fontSize: 14 }} />
+                  {t('model_sheet.measure_set')}
                 </button>
+              )}
+              {motiuPresa && (
+                <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-muted)',
+                               alignSelf: 'center' }}>
+                  {t(motiuPresa)}
+                </span>
               )}
             </div>
             <PropagatedEditor modelId={parseInt(id)} inline readOnly={editing !== 'Escalat'} />

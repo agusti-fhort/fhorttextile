@@ -73,7 +73,12 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
         .catch(() => { setErr(t('model_measurements.propagated_load_err')); return false }),
       presaEscalat.get(modelId).then(r => setPresa(r.data)).catch(() => setPresa(null)),
     ]).finally(() => setLoading(false))
-  }, [modelId, t])
+    // E3b — `readOnly` HI ENTRA I ÉS LOAD-BEARING. «Mesurar set» crea la sessió i la peça DES DE
+    // FORA (`ModelSheet`) i tot seguit posa `editing='Escalat'`, que és el que arriba aquí com a
+    // `readOnly:false`. Sense això aquest component es quedaria amb l'estat de presa que va
+    // llegir en muntar-se —«no n'hi ha cap»— i la graella seguiria de lectura just després del
+    // gest que l'havia d'obrir: el botó funcionaria i no ho semblaria.
+  }, [modelId, readOnly, t])
 
   useEffect(() => { load() }, [load])
   // Identitat de model per al contenidor de peça (dependència, joc de regles i run).
