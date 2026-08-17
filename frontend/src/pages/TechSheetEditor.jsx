@@ -43,7 +43,7 @@ import { grupsDelFull } from '../utils/grupsDelFull'
 import { aDocument } from '../utils/breakConvention'
 import { nomDeLaPeca } from '../utils/pecaDefinicio'
 import { etiquetaCapa, etiquetaInstancia } from '../utils/capaInstancia'
-import { filesFitting, filesGrading } from '../utils/taulesQ8'
+import { filesFitting, filesGrading, filesNotes, filesSizeSet } from '../utils/taulesQ8'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -5236,23 +5236,32 @@ export default function TechSheetEditor() {
     return { text: Number(v) > 0 ? `+${n}` : `−${n}` }
   }
 
+  // LA GRAELLA DE L'ÚLTIMA SESSIÓ TANCADA, en un sol lloc: la demanen les TRES taules que en
+  // beuen (fitting, size set i notes) i han de veure exactament el mateix payload. Dues còpies
+  // d'aquesta cadena de dues peticions serien dues maneres de triar el `PieceFitting`, i el dia
+  // que una sessió en tingués dos la taula de fitting i la de notes parlarien de peces diferents.
+  // `null` = ja s'ha avisat l'usuari i qui crida ha de plegar.
+  const gridDeLaSessioTancada = async () => {
+    try {
+      const rS = await fetch(`${API}/api/v1/fitting-sessions/${sessioTancada.id}/`, { headers: authHeaders })
+      if (!rS.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return null }
+      const sessio = await rS.json()
+      const peces = sessio.piece_fittings || []
+      const pf = peces.find(p => String(p.model ?? p.model_id) === String(model.id)) || peces[0]
+      if (!pf) { flash(t('tech_sheet.flash_empty_table')); return null }
+      const rG = await fetch(`${API}/api/v1/piece-fittings/${pf.id}/`, { headers: authHeaders })
+      if (!rG.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return null }
+      return await rG.json()
+    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return null }
+  }
+
   // ── Q8a · TAULA DE FITTING, PER PEÇA ────────────────────────────────────────
   // La font és l'ÚLTIMA SESSIÓ TANCADA i el seu `PieceFitting`: el grid porta una línia per
   // (mesura × talla) i aquesta taula n'agafa la de la talla base, que és on es prova la peça.
   const insertTaulaFitting = async () => {
     if (!locked || !sessioTancada) return
-    let grid
-    try {
-      const rS = await fetch(`${API}/api/v1/fitting-sessions/${sessioTancada.id}/`, { headers: authHeaders })
-      if (!rS.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
-      const sessio = await rS.json()
-      const peces = sessio.piece_fittings || []
-      const pf = peces.find(p => String(p.model ?? p.model_id) === String(model.id)) || peces[0]
-      if (!pf) { flash(t('tech_sheet.flash_empty_table')); return }
-      const rG = await fetch(`${API}/api/v1/piece-fittings/${pf.id}/`, { headers: authHeaders })
-      if (!rG.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
-      grid = await rG.json()
-    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
+    const grid = await gridDeLaSessioTancada()
+    if (!grid) return
 
     const { base, files } = filesFitting(grid)
     if (!files.length) { flash(t('tech_sheet.flash_empty_table')); return }
@@ -5356,6 +5365,100 @@ export default function TechSheetEditor() {
         snapshot: {
           model_id: model.id, talla_base: base || null, garment: g.garment,
           snapshot_at: new Date().toISOString(),
+        },
+      },
+    }))
+    const n = inserirGrupPaginat(entrades)
+    if (n) flash(t('tech_sheet.q8_flash_inserted', { count: n }))
+    setTablePicker(null)
+  }
+
+  // ── Q8c · TAULA DE SIZE SET, PER PEÇA ───────────────────────────────────────
+  // El mateix patró que Q8a però PER CADA TALLA: tres columnes per talla (la teòrica, la que ha
+  // arribat i la desviació). La font és la MATEIXA graella de l'última sessió tancada: aquesta
+  // taula i la de fitting no poden sortir de dos llocs, o la fila de la base diria dues coses.
+  //
+  // 🔑 LES NOTES NO HI SÓN, i tenen taula pròpia: amb tres columnes per talla no hi cap ni una
+  // frase, i encabir-les-hi hauria estat estrènyer les xifres fins a fer-les il·legibles.
+  const insertTaulaSizeSet = async () => {
+    if (!locked || !sessioTancada) return
+    const grid = await gridDeLaSessioTancada()
+    if (!grid) return
+    const { base, talles, files } = filesSizeSet(grid)
+    if (!files.length || !talles.length) { flash(t('tech_sheet.flash_empty_table')); return }
+
+    const grups = grupsQ8(files)
+    const wPom = ampladaPomQ8(files)
+    const entrades = grups.map(g => ({
+      taula: {
+        id: uid(), type: 'table', layer: 'free', kind: 'q8_size_set',
+        garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
+        columns: [
+          { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
+          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
+          ...talles.flatMap(sl => [
+            // La talla base porta la marca al MODEL: el builder hi pinta la franja de realçat, la
+            // mateixa que la pantalla. El `*` es manté perquè sobreviu a l'imprès en blanc i negre.
+            { key: sl, label: sl === base ? `${sl}*` : sl, width: 13, ...(sl === base ? { base: true } : {}) },
+            { key: `${sl}_act`, label: tEn('tech_sheet.q8_col_actual'), width: 13 },
+            { key: `${sl}_dif`, label: tEn('tech_sheet.q8_col_diff'), width: 12 },
+          ]),
+          { key: 'verdict', label: tEn('tech_sheet.q8_col_verdict'), width: 22 },
+        ],
+        rows: g.files.map(f => [
+          capaQ8(f), cellaPom(f),
+          ...talles.flatMap(sl => {
+            const c = f.celles?.[sl] || {}
+            return [xifra(c.teorica) || '–', cellaActual(c.actual, c.teorica), cellaDif(c.dif)]
+          }),
+          // R2 — UNA SOLA COLUMNA DE VEREDICTE, i és la de la BASE. Una per talla seria oferir
+          // dotze caselles de les quals onze no es poden omplir mai: una talla no-base no arriba
+          // a `BaseMeasurement` perquè el `close` la descarta.
+          f.celles?.[base]?.veredicte || '',
+        ]),
+        style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+        snapshot: {
+          model_id: model.id, fitting_session_id: sessioTancada.id,
+          talla_base: base || null, garment: g.garment, snapshot_at: new Date().toISOString(),
+        },
+      },
+    }))
+    const n = inserirGrupPaginat(entrades)
+    if (n) flash(t('tech_sheet.q8_flash_inserted', { count: n }))
+    setTablePicker(null)
+  }
+
+  // ── Q8c-bis · LES NOTES, EN TAULA PRÒPIA I INSERIBLE A PART ─────────────────
+  // Layout de Q8a i amb la talla base al costat, perquè una nota sense la xifra a què es refereix
+  // obliga a anar a buscar-la a l'altra taula. Només hi entren les files que TENEN nota: una
+  // columna de guions no és informació.
+  const insertTaulaNotes = async () => {
+    if (!locked || !sessioTancada) return
+    const grid = await gridDeLaSessioTancada()
+    if (!grid) return
+    const { base, files } = filesNotes(grid)
+    if (!files.length) { flash(t('tech_sheet.q8_flash_no_notes')); return }
+
+    const grups = grupsQ8(files)
+    const wPom = ampladaPomQ8(files)
+    const entrades = grups.map(g => ({
+      taula: {
+        id: uid(), type: 'table', layer: 'free', kind: 'q8_notes',
+        garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
+        columns: [
+          { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
+          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
+          { key: 'base', label: base || tEn('tech_sheet.q8_col_base'), width: 18 },
+          { key: 'notes', label: tEn('tech_sheet.q8_col_notes'), width: 100 },
+        ],
+        rows: g.files.map(f => [
+          capaQ8(f), cellaPom(f), xifra(f.valors?.[base]?.teorica),
+          { text: f.nota, wrap: true },
+        ]),
+        style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+        snapshot: {
+          model_id: model.id, fitting_session_id: sessioTancada.id,
+          talla_base: base || null, garment: g.garment, snapshot_at: new Date().toISOString(),
         },
       },
     }))
@@ -5696,6 +5799,8 @@ export default function TechSheetEditor() {
     // selector convidaria a compondre la fitxa amb un fitting que ja s'ha superat.
     if (variant === 'q8_fitting') { insertTaulaFitting(); return }
     if (variant === 'q8_grading') { insertTaulaGrading(); return }
+    if (variant === 'q8_size_set') { insertTaulaSizeSet(); return }
+    if (variant === 'q8_notes') { insertTaulaNotes(); return }
     // R3 — la personalitzada s'insereix ja, 3×3. Preguntar files i columnes abans de veure res
     // no aporta: el panell dret ja té els controls d'afegir i treure files i columnes, i allà
     // es decideix VEIENT la taula, que és quan se sap quantes en calen.
@@ -5981,6 +6086,17 @@ export default function TechSheetEditor() {
     {
       k: 'q8_grading', icon: 'ti-chart-grid-dots', label: t('tech_sheet.table_variant_grading_peca'),
       ok: baseMeasuresOk, motiu: t('tech_sheet.lib_table_no_base_values'),
+    },
+    // Q8c i les seves notes: mateixa porta que Q8a —la sessió TANCADA—, i entrades separades
+    // perquè l'espec les vol inseribles independentment: la taula de notes va sovint a una altra
+    // pàgina que la graella de talles.
+    {
+      k: 'q8_size_set', icon: 'ti-table-row', label: t('tech_sheet.table_variant_sizeset_peca'),
+      ok: !!sessioTancada, motiu: t('tech_sheet.lib_table_no_closed_session'),
+    },
+    {
+      k: 'q8_notes', icon: 'ti-notes', label: t('tech_sheet.table_variant_notes_peca'),
+      ok: !!sessioTancada, motiu: t('tech_sheet.lib_table_no_closed_session'),
     },
     { k: 't2', icon: 'ti-list-details', label: t('tech_sheet.table_variant_t2'), ok: true, motiu: '' },
     { k: 'custom', icon: 'ti-table-plus', label: t('tech_sheet.table_variant_custom'), ok: true, motiu: '' },
