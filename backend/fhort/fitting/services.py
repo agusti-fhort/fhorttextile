@@ -158,6 +158,29 @@ def peca_de_presa_del_model(model):
             .first())
 
 
+def darrera_peca_de_presa_segellada(model):
+    """La `PieceFitting` de la DARRERA presa SEGELLADA del model, o `None`. NO crea res.
+
+    🚨 EL FORAT QUE TANCA (E3a, `DIAGNOSI_QA_2054_REGRESSIO_O_FORAT.md`): sense això, el GET de
+    presa serveix `session: null` per a una sessió `Tancada` EXACTAMENT IGUAL que per a un model
+    que no n'ha tingut mai cap. Una presa segellada quedava **indistingible del no-res**, i d'aquí
+    penjaven tres símptomes que semblaven tres bugs: la graella seguia editable i contestava 409
+    per cel·la, el sub-tab «Decisió» no obria, i el racó oferia «obrir una presa» sobre un model
+    que n'acabava de tancar una. Una acta que no es pot llegir no és una acta.
+
+    Mateix ordre cronològic que `peca_de_presa_del_model` —`-session__data`, desempat per id— i
+    pel mateix motiu: la que mana és LA MÉS RECENT, no la que es va obrir primer. Amb l'històric
+    complet no s'hi arriba per aquí: això serveix l'ÚLTIMA, que és l'estat de la pantalla; el
+    passat sencer és del Repàs.
+    """
+    from fhort.fitting.models import PieceFitting
+    return (PieceFitting.objects
+            .filter(model=model, session__estat__in=SEALED_SESSION_ESTATS)
+            .select_related('session', 'model', 'grading_version__size_fitting')
+            .order_by('-session__data', '-session__id', '-id')
+            .first())
+
+
 def desa_presa_escalat(model, *, pom_id, capa, instancia, garment, talla, valor, nota=None):
     """Anota la presa d'UNA mesura a UNA talla sobre la presa viva del model.
 

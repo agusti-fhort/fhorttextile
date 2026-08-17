@@ -27,6 +27,13 @@ que sap com s'aplana una identitat de mesura: aquí no se'n fabrica cap.
 sessió + peça + N línies, i fer-ho néixer d'una tecla en una cel·la seria el mateix error de
 naturalesa que aquesta peça arregla. El gest explícit ja existeix i és el que obre «Mesurar
 prenda».
+
+── ELS TRES ESTATS DE LA LECTURA (E3a) ─────────────────────────────────────────────────────
+`presa_oberta` i `presa_tancada` són DOS booleans i no un, perquè els casos són tres i no dos:
+viva (s'hi escriu) · segellada (es llegeix, és acta) · cap (no hi ha res). Servir el mateix
+payload per a «segellada» i per a «cap» —que és el que es feia— deixava la pantalla oferint
+obrir una presa sobre una que s'acabava de tancar, i teclejant en una graella que contestava
+409 a cada cel·la. V. `docs/diagnosis/DIAGNOSI_QA_2054_REGRESSIO_O_FORAT.md`.
 """
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -76,17 +83,43 @@ class EscalatPresaView(APIView):
 
     # ── LECTURA ─────────────────────────────────────────────────────────────────────────
     def get(self, request, model_id):
+        """Estat de la presa del model, en TRES casos i no dos (E3a).
+
+        🚨 EL CINQUÈ ESTAT. Fins ara això responia `presa_oberta: false` + `session: null` tant
+        per a un model que no ha tingut mai cap presa com per a un que n'acaba de segellar una:
+        **el mateix payload per a dues coses oposades**. La pantalla no podia distingir-les i per
+        això oferia obrir una presa sobre una acta acabada de tancar, i deixava teclejar en una
+        graella que el servidor rebutjava cel·la a cel·la amb 409.
+
+        Ara els tres casos tenen nom:
+          · presa VIVA      → `presa_oberta: true`  · `presa_tancada: false`
+          · presa SEGELLADA → `presa_oberta: false` · `presa_tancada: true` + LES DADES SENCERES
+                              (sessió, preses, resum): una acta es llegeix, i el sub-tab de
+                              Decisió necessita `session.id` per muntar-hi la consulta.
+          · cap presa       → tots dos `false` i el payload buit de sempre.
+
+        `presa_oberta` NO canvia de significat —segueix volent dir «s'hi pot escriure»— i per
+        això el guard del POST no s'hi ha de tocar: qui només el llegia, segueix bé.
+        """
         try:
             model = Model.objects.get(id=model_id)
         except Model.DoesNotExist:
             return Response({'error': 'Model no trobat'}, status=404)
 
-        pf = services.peca_de_presa_del_model(model)
         base = (model.base_size_label or '').strip()
+        pf = services.peca_de_presa_del_model(model)
+        # L'ORDRE MANA I ÉS AQUEST: primer la viva. Una presa oberta és on es treballa ARA; la
+        # segellada només parla quan no hi ha ningú treballant, que és quan la pantalla necessita
+        # saber d'on ve. Al revés, obrir-ne una de nova no es notaria fins a recarregar.
+        oberta = pf is not None
         if pf is None:
-            # Estat BUIT però COMPLET: la pantalla ha de poder dir «no hi ha presa oberta» i
-            # oferir el gest, no quedar-se sense saber què passa.
-            return Response({'presa_oberta': False, 'piece_fitting_id': None, 'session': None,
+            pf = services.darrera_peca_de_presa_segellada(model)
+        if pf is None:
+            # Estat BUIT però COMPLET: la pantalla ha de poder dir «no hi ha cap presa» sense
+            # quedar-se sense saber què passa. El gest d'obrir-ne una és «Mesurar set», i viu al
+            # full del model (E3b) — aquesta porta no crea res (decisió D5, tancada a E3b).
+            return Response({'presa_oberta': False, 'presa_tancada': False,
+                             'piece_fitting_id': None, 'session': None,
                              'base_size': base, 'preses': {},
                              'resum': {'n_preses': 0, 'n_linies': 0, 'talles_amb_presa': [],
                                        'decidides_base': 0, 'pendents_base': 0}}, status=200)
@@ -112,11 +145,13 @@ class EscalatPresaView(APIView):
 
         s = pf.session
         return Response({
-            'presa_oberta': True,
+            'presa_oberta': oberta,
+            'presa_tancada': not oberta,
             'piece_fitting_id': pf.id,
             # QUI, QUAN I EN QUIN ESTAT: el flux és pausable i asíncron entre el taller i el
             # despatx, i qui reprèn ha de saber de quina presa parla sense obrir cap altra
             # pantalla. `session.data` és el DIA de la presa, no el de l'última tecla.
+            # `estat` hi era ja i ara és la peça que sosté el rètol «Presa del 16/08 · tancada».
             'session': {'id': s.id, 'data': s.data.isoformat() if s.data else None,
                         'fase': s.fase, 'estat': s.estat,
                         'responsable': (s.responsable.nom_complet if s.responsable_id else '')},
