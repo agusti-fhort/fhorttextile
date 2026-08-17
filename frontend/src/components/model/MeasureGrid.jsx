@@ -146,8 +146,7 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
       <td style={{ ...cellTd(true, false, false),
                    // E2b — el fantasma també en LECTURA: una consulta no pot fer passar per
                    // presa una xifra que ningú no ha mesurat (és la llei d'E1 a la pantalla).
-                   fontStyle: fantasma ? 'italic' : undefined,
-                   color: fantasma ? 'var(--text-faint)'
+                   color: fantasma ? 'var(--text-soft)'
                      : (colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)')),
                    // `active.canvi` (B2) posa la negreta a la columna activa amb el mateix
                    // criteri que a les d'història: un canvi es marca encara que ningú no li
@@ -205,13 +204,18 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
           style={{
             font: 'inherit', width: 70, padding: '2px 4px', textAlign: 'right',
             border: `1px solid ${colVerdicte || 'var(--line)'}`, borderRadius: 4, background: 'var(--white)',
-            // E2b — EL FANTASMA ES VEU I NO AFIRMA RES. `--text-faint` és el token que la casa
-            // reserva a «deshabilitat i estats buits» (`index.css:72`), que és exactament el
-            // que és una teòrica pre-omplerta: hi ha xifra, però ningú no l'ha mesurada. En
-            // tocar-la (`edited`) recupera la tinta normal, perquè ja és una presa.
-            color: fantasma ? 'var(--text-faint)'
+            // ── E2c-bis (decisió d'Agus, 17/08) · GRIS NORMAL I RECTE ────────────────────
+            // Això anava en `--text-faint` + CURSIVA, llegint el pre-omplert com un «estat
+            // buit». No ho és: **és la mesura vigent de la presa actual**, vàlida mentre ningú
+            // no la toqui. La cursiva la feia semblar provisional i el `--text-faint` (3.05:1,
+            // reservat per norma a «deshabilitat i estats buits», `index.css:72`) la feia
+            // semblar inactiva.
+            //
+            // Ara `--text-soft` (5.37:1, «secundari»): **gris perquè no està confirmada, recta
+            // perquè és un valor de debò**. La distinció fantasma/presa NO es toca — segueix
+            // sencera per sota, i qui mana és `presa_at`. Això és crom, no semàntica.
+            color: fantasma ? 'var(--text-soft)'
               : (colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)')),
-            fontStyle: fantasma ? 'italic' : undefined,
             fontWeight: verdicte || (modified && edited) ? 700 : 400,
             textDecoration: verdicte === 'REJECTED' ? 'line-through' : undefined,
             fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',
