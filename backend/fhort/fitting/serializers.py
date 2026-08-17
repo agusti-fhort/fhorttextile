@@ -264,8 +264,15 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                       s['garment'], s['size_label'])] = s['graded_value_cm']
 
         # PG-4b-3a — règim per POM (resident→fallback) per al desplegable + etiqueta de regla.
-        from fhort.pom.services import _load_grading_rules
-        rules = _load_grading_rules(obj.model)
+        # ✅ S42/F1 · Q1-bis — PER PEÇA. `_load_grading_rules` serveix la llei de la MARE per
+        # contracte declarat (`pom/services.py:774`), i aquesta era una de les cinc boques que
+        # la llegien. L'argument és EL MATEIX que el dels tres mapes d'aquí sota i el dany
+        # també: amb dues línies del mateix POM a dues prendes, el desplegable de règim i
+        # l'etiqueta de regla de la 02 ensenyaven la llei de la mare. `_regla_de` hereta de la
+        # mare quan la peça no en té de pròpia, o sigui que una peça sense regles sembrades no
+        # es queda muda.
+        from fhort.pom.services import _load_grading_rules_per_garment, _regla_de
+        rules = _load_grading_rules_per_garment(obj.model)
 
         # BaseMeasurement del model (unique per (model, pom, capa, instancia, garment)):
         # aporta nom_fitxa (nomenclatura client, autoritativa) i l'ordre de fitxa. Una sola
@@ -333,7 +340,8 @@ class PieceFittingGridSerializer(serializers.ModelSerializer):
                     'valor_cm': val,
                 })
             pom = line.pom
-            r = rules.get(line.pom_id)
+            # S42/F1 · Q1-bis — la línia diu la seva prenda i la regla es busca amb ella.
+            r = _regla_de(rules, line.pom_id, line.garment)
             # Q3 (06/08) — L'ORDRE DE LA PRESA (i del full imprès) ÉS L'ORDRE DEL MODEL, amb el
             # MATEIX desempat que la consulta. `BaseMeasurement.ordre` sol no és una ordenació:
             # les mesures entrades de cop comparteixen `ordre=0` (12 de 12 al MILEY), i llavors
