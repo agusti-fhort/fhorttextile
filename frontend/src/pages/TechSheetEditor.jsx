@@ -38,6 +38,12 @@ import { useDiccionariMesures } from '../utils/diccionariMesuresFont'
 // F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
 import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
 import { GARMENT_MARE, agrupaPerGarment, calArbrePerGarment, garmentDeFila, partirTaules } from '../utils/garmentFitxa'
+import { ampladaPerTextos, paginesDelRepartiment, repartimentEnPagines } from '../utils/repartimentTaules'
+import { grupsDelFull } from '../utils/grupsDelFull'
+import { aDocument } from '../utils/breakConvention'
+import { nomDeLaPeca } from '../utils/pecaDefinicio'
+import { etiquetaCapa, etiquetaInstancia } from '../utils/capaInstancia'
+import { filesFitting, filesGrading } from '../utils/taulesQ8'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -2808,6 +2814,13 @@ export default function TechSheetEditor() {
   // DECIDIR què s'escriu; el que arriba al document és només el string. Cap id hi viatja.
   const [pomRows, setPomRows] = useState([])
   const [nRepas, setNRepas] = useState(0)      // esdeveniments de fitting del model (porta T3)
+  // Q8 — LA SESSIÓ DE LA QUAL PARLEN LES TAULES DE FITTING I DE SIZE SET: l'ÚLTIMA TANCADA.
+  // No la que hi ha oberta: una fitxa és un document i el que s'imprimeix ha de ser el que ja
+  // està decidit. Una sessió oberta encara es pot moure sota els peus del paper.
+  const [sessioTancada, setSessioTancada] = useState(null)
+  // Les PRENDES del model, amb el seu NOM: és l'únic contracte que el diu (`grupsDelFull` en
+  // depèn per titular cada taula del grup). Null = «encara no ho sabem», que no és «no en té».
+  const [pecesModel, setPecesModel] = useState(null)
   // Cota pre-carregada: {text} mentre l'usuari té un POM triat i encara no ha fet els dos clics.
   const [cotaPreset, setCotaPreset] = useState(null)
   // F2 (precedent de col·locació): enllaç OBJECT-LEVEL — la procedència viu a cada objecte
@@ -3579,6 +3592,36 @@ export default function TechSheetEditor() {
     fetch(`${API}/api/v1/fitting/model/${id}/repas/`, { headers: authHeaders })
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (!cancelled && d) setNRepas((d.sessions || []).length) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  // ── Q8 · l'última sessió TANCADA i les prendes del model, per a les portes de les variants ──
+  // Mateix criteri que el Repàs (aquí sobre): la porta ha de poder dir el motiu ABANS d'obrir el
+  // panell, i la inserció tornarà a demanar les dades quan toqui, que és quan el snapshot ha de
+  // ser fresc. Les dues crides van juntes i cap d'elles bloqueja l'altra: si les prendes no
+  // contesten, el grup surt sense rètols de peça, mai sense taules (llei de `grupsDelFull`).
+  useEffect(() => {
+    if (!id) return undefined
+    let cancelled = false
+    fetch(`${API}/api/v1/fitting-sessions/?model=${id}&estat=Tancada`, { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (cancelled || !d) return
+        const totes = d.results || d || []
+        // L'ÚLTIMA per DATA, i l'id com a desempat: dues sessions del mateix dia són possibles
+        // (el «fitting aquí i ara» en pot obrir una amb una altra ja tancada) i l'ordre en què
+        // arribin no pot decidir quina mana.
+        const ultima = [...totes].sort(
+          (a, b) => String(a.data || '').localeCompare(String(b.data || '')) || (a.id - b.id),
+        ).pop()
+        setSessioTancada(ultima || null)
+      })
+      .catch(() => {})
+    fetch(`${API}/api/v1/models/${id}/peces/`, { headers: authHeaders })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d) setPecesModel(d.peces || null) })
       .catch(() => {})
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -5052,6 +5095,275 @@ export default function TechSheetEditor() {
   // (prou per veure-les totes, prou poc per no sortir de la pàgina amb 3-4 peces).
   const escalonat = (i) => ({ x: 10 + i * 6, y: 14 + i * 8 })
 
+  // ── Q8 · INSERIR UN GRUP DE TAULES, APILADES I PAGINADES ────────────────────
+  //
+  // Les taules de Q8 no s'insereixen d'una en una i esglaonades com les de S3/T9: van en GRUP
+  // (una per peça, la mare primer) i han de partir-se per pàgines sense tallar cap fila. Per
+  // això aquesta via no passa per `fitTableObj` ni per `inserirTaules`.
+  //
+  // 🚨 L'ESCALA LA MANA NOMÉS L'AMPLADA, i és tot el canvi de criteri. `fitTableObj` escalava per
+  // les DUES dimensions (`min(1, ample, alt)`), i era l'alçada la que feia encongir una taula
+  // llarga fins per sota del sòl de 8pt. Ara l'alçada la resol el TALL (`repartimentTaules`) i
+  // l'escala només ha de fer cabre l'ample. La resta de variants segueixen amb `fitTableObj`
+  // intacte: aquesta llei és de les taules que saben partir-se, no de totes.
+  //
+  // 🔑 UN SOL `setPages`, I NO N CRIDES A `addObject`. La pila d'història coalesciona per ràfega
+  // de 500 ms i N insercions síncrones ja hi cabrien, però llavors l'atomicitat de l'undo
+  // dependria del rellotge. Amb una sola mutació —pàgines noves incloses— el grup sencer és UN
+  // pas de desfer per construcció (llei S42/Q8).
+  // Una entrada del grup és una TAULA (`{ taula }`) o una LÍNIA DE TEXT (`{ nota }`). La segona
+  // existeix perquè l'espec de Q8a demana que una peça sense sessió no porti taula sinó una
+  // frase: emetre-hi una taula amb zero files seria una capçalera sola, que diu que hi ha
+  // columnes per omplir quan el que passa és que no hi ha hagut fitting.
+  const ENTRADA_NOTA_H = 7                        // mm — alçada d'una línia solta al flux
+  const inserirGrupPaginat = (entrades) => {
+    if (!locked || !entrades.length) return 0
+    const MARGE = 10                              // el mateix marge que `fitTableObj` ja feia servir
+    const Y_INICI = 14                            // on arrenca el cos útil, com totes les taules d'aquí
+
+    // La geometria la diu el BUILDER, que és qui la sap. Aquí només es passa a mm i s'hi aplica
+    // l'escala d'amplada, perquè el repartiment ha de comptar en la mida en què es dibuixarà.
+    // Una nota entra al repartiment com una taula de ZERO files i alçada fixa: el mòdul del tall
+    // ja té aquesta branca i així la frase no se separa mai de la peça a què pertany.
+    const mesurades = entrades.map(e => {
+      if (e.nota != null) {
+        return { nota: e.nota, wMm: fmt.w - 2 * MARGE, scale: 1, hTitol: ENTRADA_NOTA_H, hCapcalera: 0, hFila: 0, nFiles: 0 }
+      }
+      const g = buildTableCellPrimitives(e.taula)
+      const wMm = g.totalW / MM_TO_PX
+      const scale = Math.min(1, (fmt.w - 2 * MARGE) / wMm)
+      return {
+        obj: e.taula, scale, wMm: wMm * scale,
+        hTitol: (g.titolH / MM_TO_PX) * scale,
+        hCapcalera: (g.hdrH / MM_TO_PX) * scale,
+        hFila: (g.rowH / MM_TO_PX) * scale,
+        nFiles: (e.taula.rows || []).length,
+      }
+    })
+    const trossos = repartimentEnPagines(mesurades, { yInici: Y_INICI, yFinal: fmt.h - MARGE })
+    const nPagines = paginesDelRepartiment(trossos)
+
+    // La capçalera mestra de les pàgines noves es resol ABANS d'entrar a l'updater: `setPages`
+    // ha de ser una funció pura del seu argument, i `masterHeaderInstance` llegeix l'estat.
+    const fmtPag = pages[currentPage]?.format
+    const hdrProto = masterHeaderInstance()
+    const novaPagina = () => ({
+      id: uid(),
+      objects: hdrProto ? [{ ...hdrProto, id: uid(), ...masterHeaderGeomFor(fmtPag || pageFormat) }] : [],
+      ...(fmtPag && fmtPag !== pageFormat ? { format: fmtPag } : {}),
+    })
+
+    setPages(ps => {
+      const out = ps.map(p => ({ ...p, objects: [...(p.objects || [])] }))
+      while (out.length < currentPage + nPagines) out.push(novaPagina())
+      for (const tr of trossos) {
+        const m = mesurades[tr.taula]
+        if (m.nota != null) {
+          out[currentPage + tr.pagina].objects.push({
+            id: uid(), type: 'text', layer: 'free', x: MARGE, y: tr.y,
+            width: m.wMm, height: ENTRADA_NOTA_H, text: m.nota,
+            fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain,
+          })
+          continue
+        }
+        const files = (m.obj.rows || []).slice(tr.ini, tr.fi)
+        out[currentPage + tr.pagina].objects.push({
+          ...m.obj, id: uid(), rows: files,
+          x: MARGE, y: tr.y, scale: m.scale, width: m.wMm,
+          height: m.hTitol + m.hCapcalera + files.length * m.hFila,
+        })
+      }
+      return out
+    })
+    setSelectedIds([])
+    return trossos.length
+  }
+
+  // ── Q8 · EL VOCABULARI COMPARTIT DE LES TRES TAULES ─────────────────────────
+  //
+  // ⚠️ EXCEPCIÓ i18n DECLARADA: les CAPÇALERES DE COLUMNA d'aquestes tres taules van SEMPRE en
+  // anglès, sigui quin sigui l'idioma del document. És el mateix criteri —i el mateix mecanisme,
+  // una `t` fixada a `en`— que el full de fitting descarregable ja aplica a les capes (D-31.22):
+  // el paper viatja cap al fabricant i el fabricant llegeix anglès. Les claus existeixen igualment
+  // als tres idiomes (paritat de l'i18n-gate); el que està fixat és a quin se li demanen.
+  // El CONTINGUT segueix la seva pròpia llei: les talles, els règims i els veredictes són dades de
+  // domini i no es tradueixen mai; el nom local del POM segueix l'idioma del document.
+  const tEn = useMemo(() => i18n.getFixedT('en'), [])
+  // LA UNITAT LA DECLARA LA TAULA. `useUnit` és la llei d'unitat del TENANT (no hi ha cap toggle
+  // per document), i és la mateixa que `fmtMeasure` ja aplica a totes les xifres d'aquí.
+  const unitatDeclarada = tEn(unit === 'INCH' ? 'tech_sheet.q8_unit_in' : 'tech_sheet.q8_unit_cm')
+  // LA CAPA JA TÉ COLUMNA, o sigui que el nom del POM deixa de portar-la com a apèndix. Queda el
+  // nom canònic més la INSTÀNCIA, que és el que distingeix dues germanes de la mateixa capa —la
+  // mateixa composició que el full descarregable (`nom · inst`).
+  const nomPomQ8 = (fila) => {
+    const { canonic } = nomsDePom(fila)
+    const inst = etiquetaInstancia(fila.instancia, dicc)
+    return `${canonic}${inst ? ` · ${inst}` : ''}`
+  }
+  const capaQ8 = (fila) => etiquetaCapa(fila.capa, dicc, 'en')
+  // El repartiment per peça i el TÍTOL de cada taula: `grupsDelFull` ja resol l'ordre (la mare
+  // primer, del contracte de `/peces/`) i el nom. No se'n reescriu la llei.
+  const grupsQ8 = (files) => grupsDelFull(files, pecesModel, tEn('resum_wizard.model_base'))
+  // L'amplada de la columna del POM surt del corpus REAL, no d'un número escrit a mà: el nom més
+  // llarg hi ha de cabre en dues línies. `charMm` és exacte perquè la fitxa va en monoespaiada
+  // (mateixa aritmètica que el builder: 0.6 del cos, i el cos de Q8 és 9pt = 3.175 mm).
+  const CHAR_MM_Q8 = 3.175 * 0.6
+  const ampladaPomQ8 = (files) => ampladaPerTextos(files.map(nomPomQ8), {
+    charMm: CHAR_MM_Q8, padMm: 4, minMm: 34, maxMm: 62,
+  })
+  const cellaPom = (fila) => ({ text: nomPomQ8(fila), wrap: true })
+  const xifra = (v) => (v == null ? '' : (fmtMeasure(v, unit) ?? ''))
+  // La Dif amb signe explícit i el menys TIPOGRÀFIC, com `rowDelta`: un guionet de teclat i un
+  // menys no es distingeixen al paper i el signe d'una desviació sí que s'ha de poder llegir.
+  const cellaDif = (d) => {
+    if (d == null) return { text: '' }
+    if (Number(d) === 0) return { text: xifra(0) }
+    const n = xifra(Math.abs(d))
+    return { text: Number(d) > 0 ? `+${n}` : `−${n}`, alerta: true }
+  }
+  // L'Actual: negre quan coincideix amb l'aprovada, VERMELL NEGRETA quan se n'aparta. Buida quan
+  // ningú no ha mesurat — i llavors no és cap alerta, és una casella per omplir.
+  const cellaActual = (actual, referencia) => (
+    actual == null ? { text: '' }
+      : { text: xifra(actual), alerta: Number(actual) !== Number(referencia) }
+  )
+  // Un increment de graduació: signe explícit i menys tipogràfic, la convenció de `rowDelta` i de
+  // `GradingRuleSets`. Sense increment o amb zero, «—»: FIXED i STEP no en tenen, i un 0 pintat
+  // diria que la mesura no creix quan el que passa és que la regla no és d'increment.
+  const cellaIncrement = (v) => {
+    if (v == null || Number(v) === 0) return { text: '—' }
+    const n = xifra(Math.abs(v))
+    return { text: Number(v) > 0 ? `+${n}` : `−${n}` }
+  }
+
+  // ── Q8a · TAULA DE FITTING, PER PEÇA ────────────────────────────────────────
+  // La font és l'ÚLTIMA SESSIÓ TANCADA i el seu `PieceFitting`: el grid porta una línia per
+  // (mesura × talla) i aquesta taula n'agafa la de la talla base, que és on es prova la peça.
+  const insertTaulaFitting = async () => {
+    if (!locked || !sessioTancada) return
+    let grid
+    try {
+      const rS = await fetch(`${API}/api/v1/fitting-sessions/${sessioTancada.id}/`, { headers: authHeaders })
+      if (!rS.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
+      const sessio = await rS.json()
+      const peces = sessio.piece_fittings || []
+      const pf = peces.find(p => String(p.model ?? p.model_id) === String(model.id)) || peces[0]
+      if (!pf) { flash(t('tech_sheet.flash_empty_table')); return }
+      const rG = await fetch(`${API}/api/v1/piece-fittings/${pf.id}/`, { headers: authHeaders })
+      if (!rG.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
+      grid = await rG.json()
+    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
+
+    const { base, files } = filesFitting(grid)
+    if (!files.length) { flash(t('tech_sheet.flash_empty_table')); return }
+    const grups = grupsQ8(files)
+    const wPom = ampladaPomQ8(files)
+    const snapshotComu = {
+      model_id: model.id, fitting_session_id: sessioTancada.id,
+      talla_base: base || null, snapshot_at: new Date().toISOString(),
+    }
+    const entrades = grups.map(g => ({
+      taula: {
+        id: uid(), type: 'table', layer: 'free', kind: 'q8_fitting',
+        garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
+        columns: [
+          { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
+          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
+          // LA CAPÇALERA DE LA COLUMNA DE LA BASE ÉS L'ETIQUETA REAL DE LA TALLA (S, L…), no la
+          // paraula «base»: és la mateixa llei que la T0 va fixar el 31/07 —la columna que porta
+          // la xifra és qui declara de quina talla parla— i aquí encara mana més, perquè al
+          // costat hi ha l'Actual i s'han de poder comparar sense llegir cap peu.
+          { key: 'base', label: base || tEn('tech_sheet.q8_col_base'), width: 18 },
+          { key: 'actual', label: tEn('tech_sheet.q8_col_actual'), width: 18 },
+          { key: 'dif', label: tEn('tech_sheet.q8_col_diff'), width: 16 },
+          { key: 'verdict', label: tEn('tech_sheet.q8_col_verdict'), width: 22 },
+          { key: 'notes', label: tEn('tech_sheet.q8_col_notes'), width: 52 },
+        ],
+        rows: g.files.map(f => [
+          capaQ8(f), cellaPom(f), xifra(f.aprovada),
+          cellaActual(f.actual, f.aprovada), cellaDif(f.dif),
+          // Els veredictes són DADA DE DOMINI (el que va imprès cap al fabricant): no es
+          // tradueixen ni s'abrevien aquí — la casa els escriu sencers a la fitxa.
+          f.veredicte || '', f.nota || '',
+        ]),
+        style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+        snapshot: { ...snapshotComu, garment: g.garment },
+      },
+    }))
+    // UNA PEÇA SENSE SESSIÓ NO PORTA TAULA, PORTA UNA FRASE. Una capçalera de columnes sola diria
+    // que hi ha caselles per omplir, quan el que passa és que aquella peça no s'ha provat.
+    const ambFiles = new Set(grups.map(g => g.garment))
+    for (const p of pecesModel || []) {
+      const codi = p?.es_mare ? GARMENT_MARE : (p?.codi || '')
+      if (ambFiles.has(codi)) continue
+      const nom = nomDeLaPeca(p, tEn('resum_wizard.model_base'))
+      entrades.push({ nota: `${nom} — ${tEn('tech_sheet.q8_no_session')}` })
+    }
+    const n = inserirGrupPaginat(entrades)
+    if (n) flash(t('tech_sheet.q8_flash_inserted', { count: n }))
+    setTablePicker(null)
+  }
+
+  // ── Q8b · TAULA DE GRADING, PER PEÇA ────────────────────────────────────────
+  // Font ÚNICA: `taula-mesures`, que porta en un sol payload el règim (el mateix que la pantalla
+  // d'Escalat edita), la corba per talla i l'eix de la prenda. `graded-table/` no serveix
+  // `garment` i faria caure totes les files a la mare — que és per què la T1b no es parteix mai.
+  const insertTaulaGrading = async () => {
+    if (!locked) return
+    let data
+    try {
+      const r = await fetch(`${API}/api/v1/models/${model.id}/taula-mesures/`, { headers: authHeaders })
+      if (!r.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
+      data = await r.json()
+    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
+    const talles = data?.size_run || []
+    const base = (model?.base_size_label || '').trim()
+    const files = filesGrading(data?.rows || [], talles, base)
+    if (!files.length) { flash(t('tech_sheet.flash_empty_table')); return }
+
+    const grups = grupsQ8(files)
+    const wPom = ampladaPomQ8(files)
+    const entrades = grups.map(g => ({
+      taula: {
+        id: uid(), type: 'table', layer: 'free', kind: 'q8_grading',
+        garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
+        columns: [
+          { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
+          { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
+          { key: 'rule', label: tEn('tech_sheet.q8_col_rule'), width: 18 },
+          { key: 'delta', label: tEn('tech_sheet.q8_col_delta'), width: 14 },
+          { key: 'break', label: tEn('tech_sheet.q8_col_break'), width: 14 },
+          { key: 'breaksize', label: tEn('tech_sheet.q8_col_break_size'), width: 18 },
+          // La talla base va MARCADA al model (`base: true`): el builder hi pinta la franja de
+          // realçat, igual que a la T1b. Les talles NO es tradueixen: són dades de domini.
+          ...talles.map(sl => (sl === base
+            ? { key: sl, label: `${sl}*`, width: 14, base: true }
+            : { key: sl, label: sl, width: 14 })),
+        ],
+        rows: g.files.map(f => [
+          capaQ8(f), cellaPom(f),
+          // El RÈGIM és dada de domini (LINEAR/STEP/FIXED): no es tradueix ni s'abreuja.
+          f.regla || '—',
+          cellaIncrement(f.delta), cellaIncrement(f.delta_break),
+          // 🔒 EL BREAK ES PRESENTA EN CONVENCIÓ DE DOCUMENT, i la dada NO es toca: la BD desa la
+          // PRIMERA talla del tram gran i el full del client escriu l'ÚLTIMA del tram petit, que
+          // és una posició de diferència dins del run. Sense run o sense traducció possible, «—»:
+          // una etiqueta desplaçada per error és indistingible d'una de correcta.
+          aDocument(f.talla_break, talles) || '—',
+          ...talles.map(sl => xifra(f.valors?.[sl]) || '–'),
+        ]),
+        style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+        snapshot: {
+          model_id: model.id, talla_base: base || null, garment: g.garment,
+          snapshot_at: new Date().toISOString(),
+        },
+      },
+    }))
+    const n = inserirGrupPaginat(entrades)
+    if (n) flash(t('tech_sheet.q8_flash_inserted', { count: n }))
+    setTablePicker(null)
+  }
+
   // Insereix N objectes (un per secció) o UN de sol. Retorna quantes taules ha posat.
   const inserirTaules = (grups, fesObjecte) => {
     grups.forEach((g, i) => {
@@ -5380,6 +5692,10 @@ export default function TechSheetEditor() {
     if (variant === 'base_measures') { insertTableBaseMeasures(); return }
     // T3 — res a triar: el Repàs és del MODEL, no d'un size fitting. S'insereix i prou.
     if (variant === 'repas') { insertTableRepas(); return }
+    // Q8 — res a triar: la sessió és L'ÚLTIMA TANCADA, no una de la llista. Oferir-ne un
+    // selector convidaria a compondre la fitxa amb un fitting que ja s'ha superat.
+    if (variant === 'q8_fitting') { insertTaulaFitting(); return }
+    if (variant === 'q8_grading') { insertTaulaGrading(); return }
     // R3 — la personalitzada s'insereix ja, 3×3. Preguntar files i columnes abans de veure res
     // no aporta: el panell dret ja té els controls d'afegir i treure files i columnes, i allà
     // es decideix VEIENT la taula, que és quan se sap quantes en calen.
@@ -5651,6 +5967,20 @@ export default function TechSheetEditor() {
     {
       k: 'repas', icon: 'ti-history', label: t('tech_sheet.table_variant_repas'),
       ok: nRepas > 0, motiu: t('tech_sheet.lib_table_no_repas'),
+    },
+    // Q8a — la taula de FITTING per peça. Porta d'una sola condició: que hi hagi una sessió
+    // TANCADA. Amb una d'oberta la variant es veu igualment i diu per què no es pot inserir
+    // (R3: una opció que desapareix no s'aprèn).
+    {
+      k: 'q8_fitting', icon: 'ti-ruler-2', label: t('tech_sheet.table_variant_fitting_peca'),
+      ok: !!sessioTancada, motiu: t('tech_sheet.lib_table_no_closed_session'),
+    },
+    // Q8b — l'ESCALAT per peça. La porta és la mateixa que la T0: que el model tingui mesures.
+    // El règim pot ser buit a totes les files (un model sense graduar) i la taula segueix sent
+    // correcta: dirà «—» a Rule i a Δ, que és exactament el que hi ha.
+    {
+      k: 'q8_grading', icon: 'ti-chart-grid-dots', label: t('tech_sheet.table_variant_grading_peca'),
+      ok: baseMeasuresOk, motiu: t('tech_sheet.lib_table_no_base_values'),
     },
     { k: 't2', icon: 'ti-list-details', label: t('tech_sheet.table_variant_t2'), ok: true, motiu: '' },
     { k: 'custom', icon: 'ti-table-plus', label: t('tech_sheet.table_variant_custom'), ok: true, motiu: '' },
