@@ -5026,18 +5026,10 @@
     "col_mesura": "Medida",
     "sense_presa_oberta": "No hay ninguna toma abierta de este modelo: ábrela para anotar las medidas de las prendas recibidas.",
     "sessio_segellada": "La toma está cerrada: no se pueden anotar medidas.",
-    "presa_sense": "Ninguna toma abierta",
     "presa_del": "Toma del {{data}}",
-    "presa_comptador": "{{n}} de {{total}} medidas",
-    "presa_talles": "Tallas: {{talles}}",
-    "presa_pendents": "{{n}} por decidir en la base",
-    "presa_decidida": "Bases decididas",
     "porta_obrir": "Abrir la toma",
-    "porta_decidir": "Decidir en la talla base",
-    "porta_revisar": "Revisar la decisión",
-    "porta_decidir_buida": "Todavía no se ha anotado ninguna medida.",
-    "porta_decidir_tanca": "Cerrar la decisión",
-    "decisio_titol": "Decisión en la talla base",
-    "decisio_sense_rellotge": "La decisión se ha abierto, pero no se ha podido iniciar el contador de tiempo de la tarea."
+    "decisio_sense_rellotge": "La decisión se ha abierto, pero no se ha podido iniciar el contador de tiempo de la tarea.",
+    "subtab_presa": "Toma",
+    "subtab_decisio": "Decisión talla base"
   }
 }

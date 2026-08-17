@@ -5026,18 +5026,10 @@
     "col_mesura": "Size",
     "sense_presa_oberta": "There is no open measuring session for this model: open one to record the measurements of the garments received.",
     "sessio_segellada": "The measuring session is closed: no measurements can be recorded.",
-    "presa_sense": "No open measuring session",
     "presa_del": "Session of {{data}}",
-    "presa_comptador": "{{n}} of {{total}} measured",
-    "presa_talles": "Sizes: {{talles}}",
-    "presa_pendents": "{{n}} to decide at base",
-    "presa_decidida": "Base sizes decided",
     "porta_obrir": "Open measuring session",
-    "porta_decidir": "Decide at base size",
-    "porta_revisar": "Review the decision",
-    "porta_decidir_buida": "No measurement recorded yet.",
-    "porta_decidir_tanca": "Close decision",
-    "decisio_titol": "Decision at base size",
-    "decisio_sense_rellotge": "The decision panel is open, but the task timer could not be started."
+    "decisio_sense_rellotge": "The decision panel is open, but the task timer could not be started.",
+    "subtab_presa": "Measurement",
+    "subtab_decisio": "Base size decision"
   }
 }

@@ -6,7 +6,8 @@ import client from '../api/client'
 import { models, presaEscalat } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
 import PecesDelModel from '../components/model/PecesDelModel'
-import BarraPresaEscalat from '../components/model/BarraPresaEscalat'
+import SubTabs from '../components/ui/SubTabs'
+import { SENSE_PRESA, estatDeLaPresa } from '../utils/estatPresa'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import { fittingSource } from '../components/model/measureSources'
 import { filesDeLaPeca } from '../utils/identitatMesura'
@@ -54,7 +55,10 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   // MATEIX `CheckMeasureEditor` amb la MATEIXA font `fittingSource` i les mateixes portes de
   // servidor. L'única cosa que aquesta pantalla ha d'aportar de nou és el RELLOTGE: la tasca
   // `size_check`, que fins ara obria `ModelSheet` en aterrar-hi.
-  const [decisioOberta, setDecisioOberta] = useState(false)
+  // E2c-bis/C1 — SUB-TAB, no panell plegable. La decisió és una SECCIÓ GERMANA de la presa
+  // dins de la mateixa pantalla (NORMA §8b-bis), i el commutador és el mateix component que
+  // fa servir el tab Mesures (`ui/SubTabs`), no un de nou.
+  const [vista, setVista] = useState('presa')          // 'presa' | 'decisio'
   const [decisioTaskId, setDecisioTaskId] = useState(null)
 
   // E1/B3 — DUES fonts, i cadascuna diu una cosa que l'altra no sap:
@@ -76,6 +80,14 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   useEffect(() => { load() }, [load])
   // Identitat de model per al contenidor de peça (dependència, joc de regles i run).
   useEffect(() => { models.get(modelId).then(r => setModelInfo(r.data)).catch(() => {}) }, [modelId])
+
+  // E2c-bis — l'estat de la presa, pel MATEIX punt únic que feia servir la barra retirada.
+  // El badge del sub-tab és `pendents_base` (les bases que queden per decidir); amb dues
+  // prendes n'hi ha dues, i `estatDeLaPresa` ja ho resol.
+  const estatPresa = estatDeLaPresa(presa)
+  const diaDeLaPresa = estatPresa.session?.data
+    ? new Date(estatPresa.session.data).toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit' })
+    : null
 
   const base = (data?.base_size || '').trim()
   // Identitat estable: `data?.size_run || []` fabricava un array nou a cada render i feia recalcular
@@ -115,18 +127,18 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   // Sense sessió no s'obre res, i és la mateixa llei que el botó ③ de `ModelSheet`: val més no
   // entrar que entrar a una superfície que se li assembla. La barra ja deixa el botó inert amb
   // la presa BUIDA; això és el cinturó.
-  const obreDecisio = useCallback(() => {
-    if (decisioOberta) { setDecisioOberta(false); return }
+  const triaVista = useCallback((k) => {
+    if (k !== 'decisio') { setVista(k); return }
     const sid = presa?.session?.id
     if (!sid) { setErr(t('escalat.sense_presa_oberta')); return }
-    setDecisioOberta(true)
+    setVista('decisio')
     if (decisioTaskId != null) return
     models.openTask(modelId, 'size_check', sid)
       .then(r => setDecisioTaskId(r.data.task_id))
       // El panell ja és obert i la decisió es pot prendre igualment: el que es perd si això
       // falla és el compta-temps, no la feina. Dir-ho i no tancar-li la porta a sobre.
       .catch(() => setErr(t('escalat.decisio_sense_rellotge')))
-  }, [decisioOberta, decisioTaskId, presa, modelId, t])
+  }, [decisioTaskId, presa, modelId, t])
 
   // La pregunta de plausibilitat viva: {lineId, valor, base, codi, talla, resolt}. Mai un bloqueig.
   const [confirmPlaus, setConfirmPlaus] = useState(null)
@@ -279,15 +291,48 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
           </span>
         </div>
         {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 8 }}>{err}</div>}
-        {/* E1/B3 · R5 — L'ESTAT DE LA PRESA I EL PAS SEGÜENT.
-            ✅ E2c — LA PORTA DE DECIDIR JA NO NAVEGA: obre i tanca el panell de sota. El tècnic
-            no surt del tab per decidir a la base i tornar per veure'n l'efecte.
-            ⚠️ «Obrir una presa» SÍ que segueix navegant, i és a posta: crea sessió + peça + N
-            línies, i aquesta pantalla no ho fa sola (decisió D5 de la diagnosi, OBERTA). */}
-        <BarraPresaEscalat
-          presa={presa} readOnly={readOnly} decisioOberta={decisioOberta}
-          onDecidir={obreDecisio}
-          onObrir={() => navigate(`/models/${modelId}?tab=Mesures`)} />
+        {/* ── E2c-bis/C1+C4 · SUB-TABS, I LA BARRA D'ESTAT FORA ─────────────────────────────
+            La barra deia «4 de 90» · «Talles: M·S» · «18 per decidir». Tot això o bé el diu la
+            taula (quines talles tenen presa es veu mirant-la) o bé el diu ara el BADGE del
+            sub-tab, que és l'únic número que fa prendre una decisió: quantes bases queden per
+            decidir. Un rètol que repeteix el que hi ha a sota no informa: ocupa.
+
+            🚩 PROPOSTA DE POSICIÓ (decisió visual final d'Agus, C4): l'ancoratge de la presa
+            —«Presa del 16/08»— va a la DRETA de la fila de sub-tabs i no dins del sub-tab de
+            Decisió. El motiu és el flux asíncron que E1 persegueix: al taller es mesura i al
+            despatx es decideix, potser un altre dia, i qui obre la pantalla ha de saber DE QUINA
+            presa parla **mentre mesura**, no només quan decideix. Dins del sub-tab de Decisió
+            quedaria amagat justament a la meitat del flux que més el necessita.
+
+            ⚠️ EL GEST D'OBRIR UNA PRESA SOBREVIU a la barra, i no és una etiqueta: sense presa
+            no hi ha res a mesurar ni a decidir. Ocupa el mateix racó de la dreta —quan no hi ha
+            data, hi ha la porta per crear-ne una— perquè aquell racó és «de quina presa parlem».
+            Segueix NAVEGANT a posta: obrir crea sessió + peça + N línies i aquesta pantalla no
+            ho fa sola (decisió D5, OBERTA). */}
+        <SubTabs
+          items={[
+            { key: 'presa', label: 'escalat.subtab_presa', icon: 'ti-ruler-measure' },
+            { key: 'decisio', label: 'escalat.subtab_decisio', icon: 'ti-checkbox',
+              badge: estatPresa.pendents_base },
+          ]}
+          actiu={vista} onTria={triaVista}
+          dreta={
+            estatPresa.estat === SENSE_PRESA ? (
+              !readOnly && (
+                <button type="button" onClick={() => navigate(`/models/${modelId}?tab=Mesures`)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px',
+                           fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-caption)',
+                           color: 'var(--gold)' }}>
+                  {t('escalat.porta_obrir')}
+                </button>
+              )
+            ) : (
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace',
+                             fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
+                {t('escalat.presa_del', { data: diaDeLaPresa || '—' })}
+              </span>
+            )
+          } />
         {/* FIX-4 — la pregunta de plausibilitat. MAI un bloqueig dur: hi ha peces petites
             legítimes, i una validació que impedeix desar només ensenya a esquivar-la. Es
             pregunta, i el «sí» desa amb normalitat. */}
@@ -318,6 +363,10 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
         {/* SET-2/T7-B2b — un contenidor per prenda; v. `PecesDelModel`. */}
         {/* SET-2/T7-B8 — cada contenidor, les seves files (v. `CheckMeasureEditor`). El desat
             d'Escalat també va per LÍNIA amb la PK. */}
+        {/* E2c-bis/C1 — LA TAULA DE PRESA ÉS EL SUB-TAB «Presa». Les dues seccions són
+            germanes i se'n veu UNA: tenir-les totes dues alhora era el panell desplegable que
+            aquesta peça substitueix, i deixava la decisió a mitja pàgina de distància. */}
+        {vista === 'presa' && (
         <PecesDelModel model={modelInfo}>{peca => {
         const filesDelContenidor = filesDeLaPeca(gridRows, peca ? (peca.codi || '') : null)
         return (<>
@@ -338,6 +387,7 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
         )}
         </>)
         }}</PecesDelModel>
+        )}
 
         {/* ── E2c · EL PANELL DE DECISIÓ, DINS D'ESCALAT ──────────────────────────────────
             La talla base es decideix aquí mateix: el tècnic acaba d'anotar les peces arribades
@@ -354,13 +404,10 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
 
             En tancar el panell (o en gravar la sessió) es rellegeix la presa: decidir a la base
             i propagar mou la corba, i la taula de sobre ha de dir la veritat sense recarregar. */}
-        {decisioOberta && presa?.session?.id && (
-          <section style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 'var(--fs-h3)', fontWeight: 600,
-                         color: 'var(--text-main)' }}>
-              {t('escalat.decisio_titol')}
-            </h3>
+        {vista === 'decisio' && presa?.session?.id && (
+          <section style={{ marginTop: 16 }}>
             <CheckMeasureEditor
+              embedded
               model={modelInfo || { id: modelId }}
               readOnly={readOnly}
               taskId={decisioTaskId}
@@ -368,8 +415,8 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
               sourceCtx={{ fittingSession: presa.session }}
               lockRules
               onFeedback={fb => { if (fb?.type === 'err') setErr(fb.text) }}
-              onResolved={() => { setDecisioOberta(false); load() }}
-              onSessionSaved={() => { setDecisioOberta(false); load() }} />
+              onResolved={() => { setVista('presa'); load() }}
+              onSessionSaved={() => { setVista('presa'); load() }} />
           </section>
         )}
       </div>
