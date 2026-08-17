@@ -3256,6 +3256,8 @@
     "table_variant_notes_peca": "Notas del fitting (por pieza)",
     "q8_flash_no_notes": "Ninguna medida de la sesión lleva nota: no hay nada que insertar.",
     "split_by_garment_always": "Este modelo tiene {{count}} piezas: cada tabla se inserta en grupo, una por pieza.",
+    "q8_flash_apaisat": "Esta tabla requiere formato {{format}}: se ha añadido una página apaisada.",
+    "q8_flash_apaisat_ajustat": "Esta tabla requiere formato {{format}} y aun así se ha tenido que ajustar al mínimo legible: revísala.",
     "q8_col_layer": "Layer",
     "q8_col_pom": "POM",
     "q8_col_base": "Base",

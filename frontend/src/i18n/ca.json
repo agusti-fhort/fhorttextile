@@ -3256,6 +3256,8 @@
     "table_variant_notes_peca": "Notes del fitting (per peça)",
     "q8_flash_no_notes": "Cap mesura de la sessió porta nota: no hi ha res a inserir.",
     "split_by_garment_always": "Aquest model té {{count}} peces: cada taula s’insereix en grup, una per peça.",
+    "q8_flash_apaisat": "Aquesta taula demana format {{format}}: s’hi ha afegit una pàgina apaïsada.",
+    "q8_flash_apaisat_ajustat": "Aquesta taula demana format {{format}} i encara s’ha hagut d’ajustar al mínim llegible: revisa-la.",
     "q8_col_layer": "Layer",
     "q8_col_pom": "POM",
     "q8_col_base": "Base",

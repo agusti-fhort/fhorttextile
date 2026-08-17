@@ -5165,10 +5165,36 @@ export default function TechSheetEditor() {
   // frase: emetre-hi una taula amb zero files seria una capçalera sola, que diu que hi ha
   // columnes per omplir quan el que passa és que no hi ha hagut fitting.
   const ENTRADA_NOTA_H = 7                        // mm — alçada d'una línia solta al flux
+  const MARGE_GRUP = 10                           // el mateix marge que `fitTableObj` ja feia servir
+  // C4 · L'ESCALA NO POT BAIXAR DEL SÒL. El cos de Q8 és 9pt i la llei de la fitxa és 8pt: per
+  // sota de 8/9 el que surt de l'escala ja no es pot llegir, i llavors la resposta no és encongir
+  // més sinó CANVIAR DE FULL. Aquest número és el que fa que l'apaïsat existeixi.
+  const ESCALA_MINIMA = 8 / 9
+
+  // El format més ESTRET que fa cabre `wMm` sense escalar; `null` si cap no hi arriba. L'ordre
+  // importa: primer el que menys canvia el document (l'apaïsat del mateix paper) i només després
+  // el paper gran, perquè passar d'A4 a A3 és una decisió d'impressió, no de maquetació.
+  const formatQueHiCap = (wMm) => (
+    ['A4L', 'A3L', 'A3P'].find(k => PAGE_FORMATS[k] && PAGE_FORMATS[k].w - 2 * MARGE_GRUP >= wMm) || null
+  )
+
   const inserirGrupPaginat = (entrades) => {
     if (!locked || !entrades.length) return 0
-    const MARGE = 10                              // el mateix marge que `fitTableObj` ja feia servir
+    const MARGE = MARGE_GRUP
     const Y_INICI = 14                            // on arrenca el cos útil, com totes les taules d'aquí
+
+    // ── C4 · QUIN FULL DEMANA AQUEST GRUP ─────────────────────────────────────────────────
+    // Es mesura tot a escala 1 i es mira si la taula MÉS AMPLA cap al format on som. Si no hi cap,
+    // el grup SENCER se'n va a un full que hi càpiga — mai mig grup aquí i mig allà: una sola
+    // orientació per grup, que és una unitat de document.
+    const wMax = Math.max(0, ...entrades.map(e => (
+      e.nota != null ? 0 : buildTableCellPrimitives(e.taula).totalW / MM_TO_PX
+    )))
+    const fmtKeyGrup = wMax <= fmt.w - 2 * MARGE ? null : formatQueHiCap(wMax)
+    const fmtGrup = fmtKeyGrup ? PAGE_FORMATS[fmtKeyGrup] : fmt
+    // Ni el full més gran no hi arriba: s'escala, però MAI per sota del sòl. El que passa llavors
+    // és que la taula sobresurt, i una taula que sobresurt es veu; una de 6pt, no.
+    const escalaGrup = Math.min(1, Math.max(ESCALA_MINIMA, (fmtGrup.w - 2 * MARGE) / (wMax || 1)))
 
     // La geometria la diu el BUILDER, que és qui la sap. Aquí només es passa a mm i s'hi aplica
     // l'escala d'amplada, perquè el repartiment ha de comptar en la mida en què es dibuixarà.
@@ -5176,11 +5202,11 @@ export default function TechSheetEditor() {
     // ja té aquesta branca i així la frase no se separa mai de la peça a què pertany.
     const mesurades = entrades.map(e => {
       if (e.nota != null) {
-        return { nota: e.nota, wMm: fmt.w - 2 * MARGE, scale: 1, hTitol: ENTRADA_NOTA_H, hCapcalera: 0, hFila: 0, nFiles: 0 }
+        return { nota: e.nota, wMm: fmtGrup.w - 2 * MARGE, scale: 1, hTitol: ENTRADA_NOTA_H, hCapcalera: 0, hFila: 0, nFiles: 0 }
       }
       const g = buildTableCellPrimitives(e.taula)
       const wMm = g.totalW / MM_TO_PX
-      const scale = Math.min(1, (fmt.w - 2 * MARGE) / wMm)
+      const scale = escalaGrup
       // La banda del tros de CONTINUACIÓ només porta la unitat: es mesura amb el mateix builder
       // sobre l'objecte sense títol, en lloc d'endevinar-ne l'alçada.
       const gCont = buildTableCellPrimitives({ ...e.taula, titol: '' })
@@ -5195,26 +5221,33 @@ export default function TechSheetEditor() {
         nFiles: (e.taula.rows || []).length,
       }
     })
-    const trossos = repartimentEnPagines(mesurades, { yInici: Y_INICI, yFinal: fmt.h - MARGE })
+    const trossos = repartimentEnPagines(mesurades, { yInici: Y_INICI, yFinal: fmtGrup.h - MARGE })
     const nPagines = paginesDelRepartiment(trossos)
 
     // La capçalera mestra de les pàgines noves es resol ABANS d'entrar a l'updater: `setPages`
     // ha de ser una funció pura del seu argument, i `masterHeaderInstance` llegeix l'estat.
-    const fmtPag = pages[currentPage]?.format
+    // C4 — quan el grup demana un altre full, les pàgines noves neixen amb el SEU format (la clau
+    // `format` per pàgina ja existeix des de F4 i sobreviu al round-trip) i la capçalera mestra
+    // se'ls hi torna a derivar, que en apaïsat té una altra caixa.
+    const fmtKeyPag = fmtKeyGrup || pages[currentPage]?.format
     const hdrProto = masterHeaderInstance()
     const novaPagina = () => ({
       id: uid(),
-      objects: hdrProto ? [{ ...hdrProto, id: uid(), ...masterHeaderGeomFor(fmtPag || pageFormat) }] : [],
-      ...(fmtPag && fmtPag !== pageFormat ? { format: fmtPag } : {}),
+      objects: hdrProto ? [{ ...hdrProto, id: uid(), ...masterHeaderGeomFor(fmtKeyPag || pageFormat) }] : [],
+      ...(fmtKeyPag && fmtKeyPag !== pageFormat ? { format: fmtKeyPag } : {}),
     })
+
+    // 🚨 UN GRUP QUE DEMANA UN ALTRE FULL NO POT ARRENCAR A LA PÀGINA ACTUAL: aquella és del
+    // format d'ara i la taula no hi cap. Comença a la següent, que neix amb el format bo.
+    const pagBase = fmtKeyGrup ? pages.length : currentPage
 
     setPages(ps => {
       const out = ps.map(p => ({ ...p, objects: [...(p.objects || [])] }))
-      while (out.length < currentPage + nPagines) out.push(novaPagina())
+      while (out.length < pagBase + nPagines) out.push(novaPagina())
       for (const tr of trossos) {
         const m = mesurades[tr.taula]
         if (m.nota != null) {
-          out[currentPage + tr.pagina].objects.push({
+          out[pagBase + tr.pagina].objects.push({
             id: uid(), type: 'text', layer: 'free', x: MARGE, y: tr.y,
             width: m.wMm, height: ENTRADA_NOTA_H, text: m.nota,
             fontSize: 9, fontFamily: FONT, fill: KONVA_COL.textMain,
@@ -5228,7 +5261,7 @@ export default function TechSheetEditor() {
         // sola perquè cada tros és una taula completa. Repetir també el nom de la peça diria que
         // hi comença un grup nou allà on el que hi ha és el mateix continuant.
         const primerTros = tr.ini === 0
-        out[currentPage + tr.pagina].objects.push({
+        out[pagBase + tr.pagina].objects.push({
           ...m.obj, id: uid(), rows: files,
           ...(primerTros ? {} : { titol: '' }),
           x: MARGE, y: tr.y, scale: m.scale, width: m.wMm,
@@ -5238,6 +5271,14 @@ export default function TechSheetEditor() {
       return out
     })
     setSelectedIds([])
+    // L'AVÍS ÉS PART DE LA FEINA, no un detall: qui compon la fitxa ha de saber que se li ha
+    // afegit una pàgina d'un altre format i per què. I si a més s'ha hagut d'escalar fins al sòl
+    // es diu també, perquè és l'únic cas en què la taula pot sobresortir del full.
+    if (fmtKeyGrup) {
+      flash(escalaGrup > ESCALA_MINIMA
+        ? t('tech_sheet.q8_flash_apaisat', { format: PAGE_FORMATS[fmtKeyGrup].label })
+        : t('tech_sheet.q8_flash_apaisat_ajustat', { format: PAGE_FORMATS[fmtKeyGrup].label }))
+    }
     return trossos.length
   }
 
