@@ -49,6 +49,11 @@ export function repartimentEnPagines(mesures, { yInici, yFinal, separacio = 6 })
 
   ;(mesures || []).forEach((m, taula) => {
     const hTitol = Math.max(0, m?.hTitol || 0)
+    // C3 — EL TÍTOL DE GRUP OBRE EL GRUP UN COP. Del segon tros endavant la banda és més baixa
+    // (només hi queda la unitat), i el tall ho ha de saber: si continués reservant la banda
+    // sencera, cada pàgina de continuació perdria uns mil·límetres que ningú no fa servir.
+    // Per omissió val el mateix que `hTitol`, que és el comportament d'abans de C3.
+    const hTitolCont = Math.max(0, m?.hTitolCont ?? m?.hTitol ?? 0)
     const hCapcalera = Math.max(0, m?.hCapcalera || 0)
     // Alçades REALS per fila. Amb `hFila` (número únic) es replica per a totes: les taules que no
     // embolcallen res tenen files iguals i no han de construir cap llista.
@@ -57,7 +62,8 @@ export function repartimentEnPagines(mesures, { yInici, yFinal, separacio = 6 })
       ? m.hFiles.slice(0, nDeclarat).map(h => Math.max(0, h || 0))
       : Array.from({ length: nDeclarat }, () => Math.max(0, m?.hFila || 0))
     const nFiles = hFiles.length
-    const fixa = hTitol + hCapcalera
+    const fixaDe = (primer) => (primer ? hTitol : hTitolCont) + hCapcalera
+    const fixa = fixaDe(true)
 
     // Una taula sense files és una capçalera sola: s'emet igualment. La decisió de si val la
     // pena inserir-la és de qui crida (l'espec de Q8a diu que una peça sense sessió no porta
@@ -72,7 +78,7 @@ export function repartimentEnPagines(mesures, { yInici, yFinal, separacio = 6 })
     // Quantes files caben, sumant-ne l'alçada REAL una a una fins que la següent se'n surt.
     const capenDes = (des, espai) => {
       let n = 0
-      let acc = fixa
+      let acc = fixaDe(des === 0)
       while (des + n < nFiles && acc + hFiles[des + n] <= espai) { acc += hFiles[des + n]; n += 1 }
       return n
     }
@@ -89,7 +95,7 @@ export function repartimentEnPagines(mesures, { yInici, yFinal, separacio = 6 })
       if (n < 1) n = 1                        // v. l'acta del bloc mínim, aquí sobre
       const alt = hFiles.slice(ini, ini + n).reduce((a, b) => a + b, 0)
       trossos.push({ taula, ini, fi: ini + n, pagina, y })
-      y += fixa + alt + separacio
+      y += fixaDe(ini === 0) + alt + separacio
       ini += n
     }
   })

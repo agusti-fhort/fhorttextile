@@ -155,3 +155,17 @@ test('C2 · una fila més alta que la pàgina segueix sortint sola, sense penjar
   assert.equal(r.length, 2)
   r.forEach(t => assert.equal(t.fi - t.ini, 1))
 })
+
+test('C3 · del segon tros endavant la banda és més baixa: el títol obre el grup UN COP', () => {
+  const base = { hCapcalera: 4, hFiles: Array(100).fill(5), nFiles: 100 }
+  const amb = repartimentEnPagines([{ ...base, hTitol: 20, hTitolCont: 4 }], PAGINA)
+  const sense = repartimentEnPagines([{ ...base, hTitol: 20 }], PAGINA)
+  // El primer tros és igual als dos casos: la banda sencera la paguen tots dos.
+  assert.equal(amb[0].fi, sense[0].fi)
+  // El segon, no: qui sap que la banda encongeix hi encabeix més files.
+  assert.ok(amb[1].fi - amb[1].ini > sense[1].fi - sense[1].ini,
+    `cont=${amb[1].fi - amb[1].ini} vs ${sense[1].fi - sense[1].ini}`)
+  // I cap fila es perd ni es duplica, que és la invariant que mai no pot caure.
+  assert.equal(amb[amb.length - 1].fi, 100)
+  amb.slice(1).forEach((t, i) => assert.equal(t.ini, amb[i].fi))
+})

@@ -1017,7 +1017,9 @@ function buildTableCellPrimitives(obj) {
     prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: titolH, fill: TBL.ROW_EVEN })
     if (titol) prims.push({ t: 't', x: T_PAD, y: 0, w: totalW - 2 * T_PAD, h: titolH, text: titol, fill: TBL.VAL, size: fontPx, bold: true, mid: true, align: 'left' })
     if (unitatDecl) prims.push({ t: 't', x: T_PAD, y: 0, w: totalW - 2 * T_PAD, h: titolH, text: unitatDecl, fill: TBL.NOM, size: subPx, mid: true, align: 'right' })
-    prims.push({ t: 'l', points: [0, titolH, totalW, titolH], stroke: TBL.FRAME, sw: TBL.FRAME_SW })
+    // C3 — FILET FORT sota el títol de grup, com la fila-títol del full de fitting: és el que
+    // el fa llegir com un encapçalament i no com una fila més de la taula.
+    prims.push({ t: 'l', points: [0, titolH, totalW, titolH], stroke: TBL.FRAME, sw: titol ? 1 : TBL.FRAME_SW })
   }
 
   // Capçalera
@@ -5179,8 +5181,12 @@ export default function TechSheetEditor() {
       const g = buildTableCellPrimitives(e.taula)
       const wMm = g.totalW / MM_TO_PX
       const scale = Math.min(1, (fmt.w - 2 * MARGE) / wMm)
+      // La banda del tros de CONTINUACIÓ només porta la unitat: es mesura amb el mateix builder
+      // sobre l'objecte sense títol, en lloc d'endevinar-ne l'alçada.
+      const gCont = buildTableCellPrimitives({ ...e.taula, titol: '' })
       return {
         obj: e.taula, scale, wMm: wMm * scale,
+        hTitolCont: (gCont.titolH / MM_TO_PX) * scale,
         hTitol: (g.titolH / MM_TO_PX) * scale,
         hCapcalera: (g.hdrH / MM_TO_PX) * scale,
         // C2 — l'alçada REAL de cada fila, no el màxim de la taula: amb un sol nom de dues línies
@@ -5217,10 +5223,16 @@ export default function TechSheetEditor() {
         }
         const files = (m.obj.rows || []).slice(tr.ini, tr.fi)
         const altCos = (m.hFiles || []).slice(tr.ini, tr.fi).reduce((a, b) => a + b, 0)
+        // C3 — EL TÍTOL DE GRUP OBRE EL GRUP UN COP, al primer tros. És un encapçalament, no una
+        // capçalera: la que s'ha de repetir a cada pàgina és la de COLUMNES, i aquesta ja hi va
+        // sola perquè cada tros és una taula completa. Repetir també el nom de la peça diria que
+        // hi comença un grup nou allà on el que hi ha és el mateix continuant.
+        const primerTros = tr.ini === 0
         out[currentPage + tr.pagina].objects.push({
           ...m.obj, id: uid(), rows: files,
+          ...(primerTros ? {} : { titol: '' }),
           x: MARGE, y: tr.y, scale: m.scale, width: m.wMm,
-          height: m.hTitol + m.hCapcalera + altCos,
+          height: (primerTros ? m.hTitol : m.hTitolCont) + m.hCapcalera + altCos,
         })
       }
       return out
@@ -5251,9 +5263,16 @@ export default function TechSheetEditor() {
     return `${canonic}${inst ? ` · ${inst}` : ''}`
   }
   const capaQ8 = (fila) => etiquetaCapa(fila.capa, dicc, 'en')
-  // El repartiment per peça i el TÍTOL de cada taula: `grupsDelFull` ja resol l'ordre (la mare
+  // El repartiment per peça i el TÍTOL de cada grup: `grupsDelFull` ja resol l'ordre (la mare
   // primer, del contracte de `/peces/`) i el nom. No se'n reescriu la llei.
-  const grupsQ8 = (files) => grupsDelFull(files, pecesModel, tEn('resum_wizard.model_base'))
+  //
+  // C3 — LA MARE ES DIU AMB EL NOM DEL MODEL, no «Base model». Al full de fitting aquell rètol
+  // genèric té sentit perquè el full ja porta la capçalera de fitxa amb el model a sobre; a la
+  // fitxa tècnica el grup pot caure a qualsevol pàgina i «Base model» no diu de QUIN model és.
+  // El contracte de `/peces/` ja serveix el nom bo a la fila de la mare i `nomDeLaPeca` només
+  // necessita que li diguem com se'n diu: se li passa el nom del model i el rètol genèric cau.
+  const nomDelModel = () => (model?.nom_prenda || model?.codi_intern || '').trim()
+  const grupsQ8 = (files) => grupsDelFull(files, pecesModel, nomDelModel())
   // L'amplada de la columna del POM surt del corpus REAL, no d'un número escrit a mà: el nom més
   // llarg hi ha de cabre en dues línies. `charMm` és exacte perquè la fitxa va en monoespaiada
   // (mateixa aritmètica que el builder: 0.6 del cos, i el cos de Q8 és 9pt = 3.175 mm).
