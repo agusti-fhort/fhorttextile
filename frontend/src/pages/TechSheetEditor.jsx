@@ -43,7 +43,7 @@ import { grupsDelFull } from '../utils/grupsDelFull'
 import { aDocument } from '../utils/breakConvention'
 import { nomDeLaPeca } from '../utils/pecaDefinicio'
 import { etiquetaCapa, etiquetaInstancia } from '../utils/capaInstancia'
-import { filesFitting, filesGrading, filesNotes, filesSizeSet } from '../utils/taulesQ8'
+import { filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat } from '../utils/taulesQ8'
 
 const PaperFlatEditor = lazy(() => import('./PaperFlatEditor'))
 
@@ -5319,21 +5319,28 @@ export default function TechSheetEditor() {
     setTablePicker(null)
   }
 
+  // LA CORBA CONSOLIDADA DEL MODEL, en un sol lloc: la demanen l'escalat (Q8b) i el size set
+  // sense preses (Q8c). `null` = ja s'ha avisat i qui crida ha de plegar.
+  const taulaMesuresDelModel = async () => {
+    try {
+      const r = await fetch(`${API}/api/v1/models/${model.id}/taula-mesures/`, { headers: authHeaders })
+      if (!r.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return null }
+      const d = await r.json()
+      return { rows: d?.rows || [], talles: d?.size_run || [],
+               base: (model?.base_size_label || '').trim() }
+    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return null }
+  }
+
   // ── Q8b · TAULA DE GRADING, PER PEÇA ────────────────────────────────────────
   // Font ÚNICA: `taula-mesures`, que porta en un sol payload el règim (el mateix que la pantalla
   // d'Escalat edita), la corba per talla i l'eix de la prenda. `graded-table/` no serveix
   // `garment` i faria caure totes les files a la mare — que és per què la T1b no es parteix mai.
   const insertTaulaGrading = async () => {
     if (!locked) return
-    let data
-    try {
-      const r = await fetch(`${API}/api/v1/models/${model.id}/taula-mesures/`, { headers: authHeaders })
-      if (!r.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
-      data = await r.json()
-    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
-    const talles = data?.size_run || []
-    const base = (model?.base_size_label || '').trim()
-    const files = filesGrading(data?.rows || [], talles, base)
+    const consolidat = await taulaMesuresDelModel()
+    if (!consolidat) return
+    const { talles, base } = consolidat
+    const files = filesGrading(consolidat.rows, talles, base)
     if (!files.length) { flash(t('tech_sheet.flash_empty_table')); return }
 
     const grups = grupsQ8(files)
@@ -5387,10 +5394,24 @@ export default function TechSheetEditor() {
   // 🔑 LES NOTES NO HI SÓN, i tenen taula pròpia: amb tres columnes per talla no hi cap ni una
   // frase, i encabir-les-hi hauria estat estrènyer les xifres fins a fer-les il·legibles.
   const insertTaulaSizeSet = async () => {
-    if (!locked || !sessioTancada) return
-    const grid = await gridDeLaSessioTancada()
-    if (!grid) return
-    const { base, talles, files } = filesSizeSet(grid)
+    if (!locked) return
+    // 🚨 B0 — LA FONT ÉS L'ESTAT CONSOLIDAT, i la sessió tancada l'ENRIQUEIX. Aquesta taula
+    // demanava una sessió TANCADA i per això un model amb l'escalat tancat i cap fitting segellat
+    // no podia documentar el seu propi size set. El size set no és una propietat del fitting: és
+    // la corba del model, que viu a `GradedSpec` i que `taula-mesures` serveix sense sessió. El
+    // que hi aporta un fitting són les PRESES, i que no n'hi hagi no vol dir que no hi hagi size
+    // set — vol dir que encara ningú no l'ha mesurat, i llavors Actual/Dif/Verdict surten BUITS.
+    let dades
+    if (sessioTancada) {
+      const grid = await gridDeLaSessioTancada()
+      if (!grid) return
+      dades = filesSizeSet(grid)
+    } else {
+      const consolidat = await taulaMesuresDelModel()
+      if (!consolidat) return
+      dades = filesSizeSetConsolidat(consolidat.rows, consolidat.talles, consolidat.base)
+    }
+    const { base, talles, files } = dades
     if (!files.length || !talles.length) { flash(t('tech_sheet.flash_empty_table')); return }
 
     const grups = grupsQ8(files)
@@ -5424,7 +5445,7 @@ export default function TechSheetEditor() {
         ]),
         style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
         snapshot: {
-          model_id: model.id, fitting_session_id: sessioTancada.id,
+          model_id: model.id, fitting_session_id: sessioTancada?.id ?? null,
           talla_base: base || null, garment: g.garment, snapshot_at: new Date().toISOString(),
         },
       },
@@ -6096,9 +6117,11 @@ export default function TechSheetEditor() {
     // Q8c i les seves notes: mateixa porta que Q8a —la sessió TANCADA—, i entrades separades
     // perquè l'espec les vol inseribles independentment: la taula de notes va sovint a una altra
     // pàgina que la graella de talles.
+    // 🚨 B0 — EL SIZE SET NO MIRA CAP SESSIÓ. La seva font és la corba consolidada del model
+    // (la mateixa porta que Q8b i la T0); una sessió tancada només hi afegeix les preses.
     {
       k: 'q8_size_set', icon: 'ti-table-row', label: t('tech_sheet.table_variant_sizeset_peca'),
-      ok: !!sessioTancada, motiu: t('tech_sheet.lib_table_no_closed_session'),
+      ok: baseMeasuresOk, motiu: t('tech_sheet.lib_table_no_base_values'),
     },
     {
       k: 'q8_notes', icon: 'ti-notes', label: t('tech_sheet.table_variant_notes_peca'),

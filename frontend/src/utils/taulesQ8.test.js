@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { diferencia, filesFitting, filesGrading, filesNotes, filesSizeSet } from './taulesQ8.js'
+import { diferencia, filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat } from './taulesQ8.js'
 
 const MODEL = { base_size_label: 'S', size_run_model: 'XS·S·M' }
 
@@ -161,4 +161,30 @@ test('un grid buit no peta ni inventa talles', () => {
   assert.deepEqual(filesFitting(null), { base: '', files: [] })
   assert.deepEqual(filesGrading(null, ['S'], 'S'), [])
   assert.deepEqual(filesNotes(grid([])).files, [])
+})
+
+// ── B0 · el size set sense cap presa: la corba del model ja és size set ──────────────────────
+
+test('B0 · SIZE SET CONSOLIDAT: la corba hi és i les preses surten BUIDES, no absents', () => {
+  const { base, talles, files } = filesSizeSetConsolidat([filaTM()], ['XS', 'S', 'M'], 'S')
+  assert.equal(base, 'S')
+  assert.deepEqual(talles, ['XS', 'S', 'M'])
+  // Les tres cel·les existeixen: un forat s'ha de poder veure, i el que hi falta és la PRESA.
+  assert.deepEqual(Object.keys(files[0].celles), ['XS', 'S', 'M'])
+  assert.deepEqual(files[0].celles.S, { teorica: 50, actual: null, dif: null, veredicte: '' })
+  assert.equal(files[0].celles.XS.teorica, 48, 'la corba surt de `graded`')
+})
+
+test('B0 · la forma de sortida és la MATEIXA que amb sessió: qui pinta no ha de saber d\'on ve', () => {
+  const amb = filesSizeSet(grid([linia(1, 'S')]))
+  const sense = filesSizeSetConsolidat([filaTM()], ['XS', 'S', 'M'], 'S')
+  assert.deepEqual(Object.keys(amb).sort(), Object.keys(sense).sort())
+  assert.deepEqual(Object.keys(amb.files[0].celles.S).sort(),
+                   Object.keys(sense.files[0].celles.S).sort())
+})
+
+test('B0 · el consolidat també porta l\'eix de la prenda, o no es podria repartir', () => {
+  const { files } = filesSizeSetConsolidat(
+    [filaTM(), filaTM({ garment: '02' })], ['S'], 'S')
+  assert.deepEqual(files.map(f => f.garment), ['', '02'])
 })

@@ -106,6 +106,34 @@ export function filesSizeSet(grid) {
   }
 }
 
+/**
+ * Q8c-consolidat · EL SIZE SET QUAN ENCARA NINGÚ NO L'HA MESURAT.
+ *
+ * 🚨 LA CORRECCIÓ DE B0. El size set **no és una propietat del fitting: és LA CORBA DEL MODEL**.
+ * Viu consolidada a `GradedSpec` i la serveix `taula-mesures` sense demanar cap sessió. Lligar
+ * aquesta taula a l'existència d'una sessió TANCADA feia que un model amb l'escalat tancat i cap
+ * fitting segellat no pogués documentar el seu propi size set — i una fitxa documenta cicles
+ * ACABATS, que és exactament el cas.
+ *
+ * El que aporta una sessió tancada són les PRESES (`Actual`, `Dif`, `Verdict`). Que no n'hi hagi
+ * cap no vol dir que no hi hagi size set: vol dir que **encara ningú no l'ha mesurat**, i la
+ * columna ha de sortir BUIDA, no absent. Per això la forma de sortida és la MATEIXA que
+ * `filesSizeSet` i qui pinta no ha de saber de quina de les dues ve.
+ */
+export function filesSizeSetConsolidat(rows, talles, base) {
+  return {
+    base,
+    talles: talles || [],
+    files: filesGrading(rows, talles, base).map(f => ({
+      ...f,
+      celles: Object.fromEntries((talles || []).map(s => [s, {
+        teorica: f.valors?.[s] ?? null,
+        actual: null, dif: null, veredicte: '',
+      }])),
+    })),
+  }
+}
+
 /** Les notes de la talla base, en taula PRÒPIA (l'espec de Q8c les treu de la graella: amb una
  *  columna per talla no hi cap ni una frase). Només les files que en tenen: una taula de notes
  *  buides seria una columna de guions. */
