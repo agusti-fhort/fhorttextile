@@ -120,3 +120,38 @@ test('a UNA línia demana el doble d\'amplada que a dues', () => {
   assert.equal(ampladaPerTextos(['x'.repeat(30)], { ...opts, linies: 1 }), 30)
   assert.equal(ampladaPerTextos(['x'.repeat(30)], { ...opts, linies: 2 }), 15)
 })
+
+// ── C2 · alçades reals per fila ──────────────────────────────────────────────────────────────
+
+test('C2 · amb `hFiles` cada fila val el que val, i no totes el màxim', () => {
+  // 10 files compactes (4) i una de doble (8): amb el màxim antic serien 11×8 = 88;
+  // amb l'alçada real són 10×4 + 8 = 48, i el que hi cap a la pàgina canvia de debò.
+  const hFiles = [...Array(10).fill(4), 8]
+  const r = repartimentEnPagines([{ hTitol: 6, hCapcalera: 8, hFiles, nFiles: 11 }],
+    { yInici: 14, yFinal: 14 + 14 + 48, separacio: 6 })
+  assert.equal(r.length, 1, 'hi caben totes just')
+  assert.equal(r[0].fi, 11)
+})
+
+test('C2 · el tall cau on la SUMA se surt, no on ho diria una alçada mitjana', () => {
+  const hFiles = [10, 10, 10, 2, 2, 2]
+  // Espai per a 30 de cos: les tres primeres hi caben i la quarta ja no… sí que hi cap (32>30 no).
+  const r = repartimentEnPagines([{ hTitol: 0, hCapcalera: 0, hFiles, nFiles: 6 }],
+    { yInici: 0, yFinal: 30, separacio: 0 })
+  assert.equal(r[0].fi, 3, 'tres files de 10 omplen els 30 exactes')
+  assert.equal(r[1].ini, 3)
+  assert.equal(r[1].fi, 6, 'les tres petites caben totes a la següent')
+})
+
+test('C2 · `hFila` (número únic) segueix valent: les taules sense wrap no fan cap llista', () => {
+  const ambLlista = repartimentEnPagines([{ hTitol: 6, hCapcalera: 8, hFiles: Array(20).fill(5), nFiles: 20 }], PAGINA)
+  const ambNumero = repartimentEnPagines([{ hTitol: 6, hCapcalera: 8, hFila: 5, nFiles: 20 }], PAGINA)
+  assert.deepEqual(ambNumero, ambLlista)
+})
+
+test('C2 · una fila més alta que la pàgina segueix sortint sola, sense penjar-se', () => {
+  const r = repartimentEnPagines([{ hTitol: 0, hCapcalera: 0, hFiles: [500, 500], nFiles: 2 }],
+    { yInici: 14, yFinal: 287, separacio: 6 })
+  assert.equal(r.length, 2)
+  r.forEach(t => assert.equal(t.fi - t.ini, 1))
+})

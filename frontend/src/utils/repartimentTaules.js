@@ -26,7 +26,15 @@
  * és 0 i un bucle honest no acabaria mai. S'emet igualment UNA fila i es deixa que vessi: una
  * taula que sobresurt es veu i es corregeix; un editor penjat, no.
  *
- * @param {Array<{hTitol: number, hCapcalera: number, hFila: number, nFiles: number}>} mesures
+ * ⚠️ **LES FILES NO SÓN TOTES IGUALS D'ALTES** (C2). Una fila amb el nom a dues línies és més
+ * alta que una de compacta, i comptar-les amb una alçada única —el màxim, que és el que feia la
+ * primera versió— inflava CADA fila fins a la més alta de la taula i deixava mig full en blanc.
+ * Per això l'entrada és `hFiles`, l'alçada REAL de cada fila, i el tall les va sumant fins que
+ * la següent ja no hi cap. `hFila` (número únic) segueix acceptat i vol dir «totes iguals»: és
+ * el que fan servir les taules que no embolcallen res.
+ *
+ * @param {Array<{hTitol: number, hCapcalera: number, hFiles?: number[], hFila?: number,
+ *                nFiles?: number}>} mesures
  *        geometria ja resolta de cada taula (el builder és qui la sap; aquí no es calcula).
  * @param {{yInici: number, yFinal: number, separacio?: number}} pagina
  *        `yInici` = on comença el cos útil · `yFinal` = on s'acaba · `separacio` = aire entre
@@ -42,8 +50,13 @@ export function repartimentEnPagines(mesures, { yInici, yFinal, separacio = 6 })
   ;(mesures || []).forEach((m, taula) => {
     const hTitol = Math.max(0, m?.hTitol || 0)
     const hCapcalera = Math.max(0, m?.hCapcalera || 0)
-    const hFila = Math.max(0, m?.hFila || 0)
-    const nFiles = Math.max(0, m?.nFiles || 0)
+    // Alçades REALS per fila. Amb `hFila` (número únic) es replica per a totes: les taules que no
+    // embolcallen res tenen files iguals i no han de construir cap llista.
+    const nDeclarat = Math.max(0, m?.nFiles ?? (m?.hFiles ? m.hFiles.length : 0))
+    const hFiles = Array.isArray(m?.hFiles)
+      ? m.hFiles.slice(0, nDeclarat).map(h => Math.max(0, h || 0))
+      : Array.from({ length: nDeclarat }, () => Math.max(0, m?.hFila || 0))
+    const nFiles = hFiles.length
     const fixa = hTitol + hCapcalera
 
     // Una taula sense files és una capçalera sola: s'emet igualment. La decisió de si val la
@@ -56,21 +69,27 @@ export function repartimentEnPagines(mesures, { yInici, yFinal, separacio = 6 })
       return
     }
 
+    // Quantes files caben, sumant-ne l'alçada REAL una a una fins que la següent se'n surt.
+    const capenDes = (des, espai) => {
+      let n = 0
+      let acc = fixa
+      while (des + n < nFiles && acc + hFiles[des + n] <= espai) { acc += hFiles[des + n]; n += 1 }
+      return n
+    }
     let ini = 0
     while (ini < nFiles) {
-      // Quantes files caben al que queda de pàgina, un cop pagats el títol i la capçalera.
-      let capacitat = hFila > 0 ? Math.floor((yFinal - y - fixa) / hFila) : nFiles - ini
+      let n = capenDes(ini, yFinal - y)
       // No hi cap ni una fila: pàgina nova. Només val la pena si NO estem ja al principi d'una
       // pàgina buida —si hi som, saltar-ne una altra no guanyaria ni un mil·límetre.
-      if (capacitat < 1 && y > yInici) {
+      if (n < 1 && y > yInici) {
         pagina += 1
         y = yInici
-        capacitat = hFila > 0 ? Math.floor((yFinal - y - fixa) / hFila) : nFiles - ini
+        n = capenDes(ini, yFinal - y)
       }
-      if (capacitat < 1) capacitat = 1        // v. l'acta del bloc mínim, aquí sobre
-      const n = Math.min(capacitat, nFiles - ini)
+      if (n < 1) n = 1                        // v. l'acta del bloc mínim, aquí sobre
+      const alt = hFiles.slice(ini, ini + n).reduce((a, b) => a + b, 0)
       trossos.push({ taula, ini, fi: ini + n, pagina, y })
-      y += fixa + n * hFila + separacio
+      y += fixa + alt + separacio
       ini += n
     }
   })

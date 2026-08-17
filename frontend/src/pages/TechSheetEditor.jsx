@@ -976,24 +976,33 @@ function buildTableCellPrimitives(obj) {
   // nom de mesura truncat al paper que va al fabricant és el mateix mode de fallada que la R4
   // va tancar a la capçalera. Amb `wrap`, la cel·la parteix per PARAULA i la fila creix.
   //
-  // ⚠️ L'ALÇADA DE FILA ES QUEDA UNIFORME, i és una condició, no una simplificació: la zebra, la
-  // franja de la talla base i sobretot el tall per pàgines (`repartimentTaules`, que rep UN
-  // `hFila`) estan escrits sobre files iguals. Per això mana el MÀXIM de línies de tota la
-  // taula: totes les files creixen alhora o no en creix cap.
-  const wrapLines = rows.reduce((mx, row) => Math.max(mx, ...cols.map((c, i) => {
+  // C2 — CADA FILA, LA SEVA ALÇADA. Abans manava el MÀXIM de línies de tota la taula i totes les
+  // files creixien alhora: n'hi havia prou amb UN nom de dues línies perquè les altres cinquanta
+  // en paguessin dues, i mig full quedava en blanc. Ara la fila val el que val el seu contingut.
+  //
+  // Això es podia fer perquè les tres coses que depenien de la uniformitat ja s'hi han adaptat:
+  // la zebra i la franja de la talla base es pinten fila a fila amb els seus offsets, i el tall
+  // per pàgines rep `hFiles` (l'alçada REAL de cadascuna) en lloc d'un únic `hFila`.
+  const liniesDeFila = (row) => Math.max(1, ...cols.map((c, i) => {
     const cell = norm(row[i])
     return cell.wrap ? liniesQueOcupa(cell.text, i) : 1
-  })), 1)
-  const rowH = hasSub
+  }))
+  const rowHs = rows.map(row => (hasSub
     ? fontPx * 2 + T_CELL_PAD_Y * 3
-    : wrapLines * fontPx + T_CELL_PAD_Y * 2
+    : liniesDeFila(row) * fontPx + T_CELL_PAD_Y * 2))
+  // Offsets acumulats: `rowY[i]` és on comença la fila i, relatiu al principi del cos.
+  const rowY = []
+  const cosH = rowHs.reduce((acc, h) => { rowY.push(acc); return acc + h }, 0)
+  // L'alçada d'UNA fila quan totes són iguals (taules sense `wrap`): la demanen els consumidors
+  // que encara raonen amb un sol número.
+  const rowH = rowHs.length ? Math.max(...rowHs) : fontPx + T_CELL_PAD_Y * 2
   // Q8 — la banda de títol: 0 quan no hi ha títol, i llavors tot el que hi ha sota queda
   // exactament on era. Una mica més alta que una fila de capçalera perquè respiri per sobre
   // del filet, com la fila-títol del full descarregable (padding 7px a dalt, 2px a baix).
   const titol = String(obj.titol ?? '').trim()
   const unitatDecl = String(obj.unitat ?? '').trim()
   const titolH = (titol || unitatDecl) ? fontPx + T_CELL_PAD_Y * 4 : 0
-  const totalH = titolH + hdrH + rows.length * rowH
+  const totalH = titolH + hdrH + cosH
   // Offsets x acumulats per columna: els necessiten la capçalera, el contingut i el realçat
   // de la talla base (que és una franja vertical, no una cel·la).
   const cx0 = []
@@ -1029,15 +1038,16 @@ function buildTableCellPrimitives(obj) {
   // Fons de files (zebra opcional) en passada pròpia: la franja de la talla base ha de quedar
   // PER SOBRE dels fons i PER SOTA del text (mateix ordre que buildTablePrimitives).
   if (st.zebra) rows.forEach((row, ri) => {
-    prims.push({ t: 'r', x: 0, y: titolH + hdrH + ri * rowH, w: totalW, h: rowH, fill: ri % 2 === 0 ? TBL.ROW_EVEN : TBL.ROW_ODD })
+    prims.push({ t: 'r', x: 0, y: titolH + hdrH + rowY[ri], w: totalW, h: rowHs[ri], fill: ri % 2 === 0 ? TBL.ROW_EVEN : TBL.ROW_ODD })
   })
   if (baseIdx >= 0 && rows.length) {
-    prims.push({ t: 'r', x: cx0[baseIdx], y: titolH + hdrH, w: cw[baseIdx], h: rows.length * rowH, fill: TBL.BASE_BG })
+    prims.push({ t: 'r', x: cx0[baseIdx], y: titolH + hdrH, w: cw[baseIdx], h: cosH, fill: TBL.BASE_BG })
   }
 
   // Contingut
   rows.forEach((row, ri) => {
-    const y = titolH + hdrH + ri * rowH
+    const y = titolH + hdrH + rowY[ri]
+    const hFila = rowHs[ri]
     let cxR = 0
     cols.forEach((c, i) => {
       const cell = norm(row[i])
@@ -1065,11 +1075,11 @@ function buildTableCellPrimitives(obj) {
         prims.push({ t: 't', x: cxR + T_PAD, y: y + T_CELL_PAD_Y, w: wCell, h: fontPx + 2, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: false, align })
         prims.push({ t: 't', x: cxR + T_PAD, y: y + T_CELL_PAD_Y * 2 + fontPx, w: wCell, h: subPx + 2, text: cell.sub, fill: TBL.NOM, size: subPx, italic: true, mid: false })
       } else {
-        prims.push({ t: 't', x: cxR + T_PAD, y, w: wCell, h: rowH, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: true, align, wrap: !!cell.wrap })
+        prims.push({ t: 't', x: cxR + T_PAD, y, w: wCell, h: hFila, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: true, align, wrap: !!cell.wrap })
       }
       cxR += cw[i]
     })
-    prims.push({ t: 'l', points: [0, y + rowH, totalW, y + rowH], stroke: TBL.ROW_BORDER, sw: 0.5 })
+    prims.push({ t: 'l', points: [0, y + hFila, totalW, y + hFila], stroke: TBL.ROW_BORDER, sw: 0.5 })
   })
 
   // Separadors verticals (interns) + vora exterior. Els filets arrenquen SOTA la banda de
@@ -1084,7 +1094,9 @@ function buildTableCellPrimitives(obj) {
   // seria una segona aritmètica de la mateixa cosa, i el dia que el builder canviés el padding
   // el tall de pàgina cauria mig mil·límetre sense que res avisés.
   // Camps ADDITIUS: els tres consumidors d'avui desestructuren `{prims, totalW, totalH}`.
-  return { prims, totalW, totalH, titolH, hdrH, rowH }
+  // `rowHs` surt al costat de `rowH`: qui reparteix per pàgines necessita l'alçada de CADA fila
+  // (C2), i qui només vol un número segueix tenint-lo. Camps additius, com sempre.
+  return { prims, totalW, totalH, titolH, hdrH, rowH, rowHs }
 }
 
 // Camp (S5-1): xip de placeholder d'un camp del catàleg → {prims, totalW, totalH}. Es RESOL
@@ -5171,7 +5183,9 @@ export default function TechSheetEditor() {
         obj: e.taula, scale, wMm: wMm * scale,
         hTitol: (g.titolH / MM_TO_PX) * scale,
         hCapcalera: (g.hdrH / MM_TO_PX) * scale,
-        hFila: (g.rowH / MM_TO_PX) * scale,
+        // C2 — l'alçada REAL de cada fila, no el màxim de la taula: amb un sol nom de dues línies
+        // el màxim inflava les altres cinquanta i deixava mig full en blanc.
+        hFiles: (g.rowHs || []).map(h => (h / MM_TO_PX) * scale),
         nFiles: (e.taula.rows || []).length,
       }
     })
@@ -5202,10 +5216,11 @@ export default function TechSheetEditor() {
           continue
         }
         const files = (m.obj.rows || []).slice(tr.ini, tr.fi)
+        const altCos = (m.hFiles || []).slice(tr.ini, tr.fi).reduce((a, b) => a + b, 0)
         out[currentPage + tr.pagina].objects.push({
           ...m.obj, id: uid(), rows: files,
           x: MARGE, y: tr.y, scale: m.scale, width: m.wMm,
-          height: m.hTitol + m.hCapcalera + files.length * m.hFila,
+          height: m.hTitol + m.hCapcalera + altCos,
         })
       }
       return out
