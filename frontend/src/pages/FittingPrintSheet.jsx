@@ -6,6 +6,7 @@ import { fittingSessions, pieceFittings, models } from '../api/endpoints'
 import FttHeaderBand from '../components/model/FttHeaderBand'
 import { etiquetaCapa, etiquetaInstancia } from '../utils/capaInstancia'
 import { useEstatDiccionari } from '../utils/diccionariMesuresFont'
+import { grupsDelFull } from '../utils/grupsDelFull'
 import { identitatMesura } from '../utils/identitatMesura'
 
 // EL FULL DE FITTING QUE ES PORTA A LA PROVA — A4 APAÏSAT, per omplir A MÀ.
@@ -72,10 +73,19 @@ export default function FittingPrintSheet() {
         // col·lecció, referència de client, target|fit|construction, logo—. Amb només el que
         // porta la peça, la banda sortia amb les etiquetes i els valors buits: una capçalera
         // aprovada mig plena és pitjor que no tenir-la, perquè sembla que la dada no existeixi.
+        // I LES PRENDES DEL MODEL, que és l'únic lloc on viu el NOM de cada peça: el payload
+        // de la graella serveix l'eix a cada línia (`garment`) però no diu que la '02' es
+        // digui «Short». Va al mateix `Promise.all` —cap petició en sèrie— i amb el mateix
+        // `catch` que el model: si no contesta, el full surt sense rètols de prenda, mai
+        // sense files (v. `grupsDelFull`).
         return Promise.all([
           pieceFittings.get(peca.id),
           models.get(modelId).catch(() => null),
-        ]).then(([g, m]) => ({ sessio: r.data, grid: g.data, model: m?.data || null }))
+          models.peces(modelId).catch(() => null),
+        ]).then(([g, m, pc]) => ({
+          sessio: r.data, grid: g.data, model: m?.data || null,
+          peces: pc?.data?.peces || null,
+        }))
       })
       .then(d => { if (viu) setDades(d) })
       .catch(() => { if (viu) setError(t('fitting.print.load_err')) })
@@ -103,6 +113,14 @@ export default function FittingPrintSheet() {
     if (!vistes.has(clau)) vistes.set(clau, l)
   }
   const files = [...vistes.values()]
+
+  // I LES FILES ES REPARTEIXEN PER PRENDA. Una fila-títol obre cada grup dins de la MATEIXA
+  // taula —no són dues taules—, perquè el que ha de córrer i partir-se sol entre pàgines és
+  // una taula, i perquè la capçalera de columnes és la mateixa per a totes dues prendes.
+  //
+  // La mare es diu «Base model» I EN ANGLÈS, com les capes (D-31.22): el full viatja cap al
+  // fabricant. El nom de la prenda ('Short') és dada de domini i no es tradueix mai.
+  const grups = grupsDelFull(files, dades.peces, tEn('resum_wizard.model_base'))
 
   const dataSessio = (dades.sessio?.data || '').split('-').reverse().join('/')
   const capcalera = {
@@ -175,7 +193,7 @@ export default function FittingPrintSheet() {
         </button>
       </div>
 
-      <Full files={files} capcalera={capcalera} dataSessio={dataSessio}
+      <Full grups={grups} capcalera={capcalera} dataSessio={dataSessio}
         logoUrl={ple.customer_logo || null} t={t} tEn={tEn} dicc={dicc} />
     </div>
   )
@@ -192,7 +210,7 @@ export default function FittingPrintSheet() {
 // el pipeline d'impressió real: la banda surt idèntica a cada pàgina, al mateix punt, i el
 // tbody hi arrenca sempre just a sota (44,64 mm del cantell)—. El preu, decidit i acceptat, és
 // que ningú pot numerar les pàgines: v. el camp `pagina` a la capçalera.
-function Full({ files, capcalera, dataSessio, logoUrl, t, tEn, dicc }) {
+function Full({ grups, capcalera, dataSessio, logoUrl, t, tEn, dicc }) {
   const ampladaUtil = A4_W - MARGE * 2
   return (
     <div className="ftt-full" style={{
@@ -247,13 +265,33 @@ function Full({ files, capcalera, dataSessio, logoUrl, t, tEn, dicc }) {
               <ThPr>{t('fitting.print.col_comments')}</ThPr>
             </tr>
           </thead>
-          <tbody>
-            {files.map((l, j) => {
-              // La instància ja ÉS anglès canònic (no es tradueix): no li cal cap traductor.
-              const inst = etiquetaInstancia(l.instancia)
-              return (
+          {/* UN `tbody` PER PRENDA, dins de la MATEIXA taula: la capçalera de columnes i
+              l'amplada de cada columna són les mateixes per a totes, i el que ha de córrer i
+              partir-se sol entre pàgines és una taula, no una pila. La fila-títol obre el grup
+              UN COP, allà on cau al flux — a diferència de la capçalera, que es repeteix a cada
+              pàgina perquè viu al `thead`.
+              El «#» segueix comptant de dalt a baix del full i no es reinicia a cada prenda:
+              serveix per assenyalar una línia del paper a la sala, i a la sala el paper és un. */}
+          {grups.map((g, gi) => {
+            const desDe = grups.slice(0, gi).reduce((n, x) => n + x.files.length, 0)
+            return (
+              <tbody key={g.garment}>
+                {/* `titol` és null quan el model té una sola prenda o quan no en sabem els
+                    noms: llavors no hi ha fila-títol i la taula és la d'abans del tram. */}
+                {g.titol && (
+                  <tr>
+                    <td colSpan={8} style={{
+                      fontWeight: 700, fontSize: '8.5pt', padding: '7px 5px 2px',
+                      borderBottom: '1px solid var(--text-main)', color: 'var(--text-main)',
+                    }}>{g.titol}</td>
+                  </tr>
+                )}
+                {g.files.map((l, j) => {
+                  // La instància ja ÉS anglès canònic (no es tradueix): no li cal cap traductor.
+                  const inst = etiquetaInstancia(l.instancia)
+                  return (
                 <tr key={l.id}>
-                  <TdPr>{j + 1}</TdPr>
+                  <TdPr>{desDe + j + 1}</TdPr>
                   <TdPr>{capaEn(l.capa, dicc)}</TdPr>
                   <TdPr><b>{l.nom_fitxa || l.codi || ''}</b></TdPr>
                   {/* L'ÚNICA cel·la que embolcalla: la llei és que una fila creix només si el
@@ -275,9 +313,11 @@ function Full({ files, capcalera, dataSessio, logoUrl, t, tEn, dicc }) {
                   </TdPr>
                   <TdPr />
                 </tr>
-              )
-            })}
-          </tbody>
+                  )
+                })}
+              </tbody>
+            )
+          })}
 
           {/* LA LLEGENDA VA A CADA PÀGINA: qui té el full 2 a la mà no té el full 1, i sense la
               llegenda les tres caselles són tres sigles sense significat. La promesa és la
