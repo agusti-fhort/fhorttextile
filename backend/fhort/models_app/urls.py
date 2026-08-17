@@ -13,7 +13,9 @@ from .views import (
     create_model_wizard,
     generate_grading_view,
     set_size_override_view,
-    escalat_ajustar_talla_view,
+    # E1/B4 — sense ruta (jubilada); l'import es queda perquè `urls.py` és el cens
+    # viu de vistes i els bancs la criden per funció. V. la nota de sota.
+    escalat_ajustar_talla_view,  # noqa: F401
     grading_status_view,
     base_measurement_noms_view,
     base_measurements_reorder_view,
@@ -231,9 +233,24 @@ urlpatterns = (
         path('models/<int:model_id>/analisi-ia/', ai_analysis_view),
         path('models/<int:model_id>/xat-mesures/', measurements_chat_view),
         path('models/<int:model_id>/generar-grading/', generate_grading_view),
-        # D5 — `set-size-override/` JUBILADA: el wrapper JS existia i cap component el cridava;
-        # l'editor real fa servir escalat/ajustar-talla. Vista conservada per a test_g6_segell.
-        path('models/<int:model_id>/escalat/ajustar-talla/', escalat_ajustar_talla_view),
+        # D5 — `set-size-override/` JUBILADA: el wrapper JS existia i cap component el cridava.
+        # ✅ E1/B4 (17/08) — `escalat/ajustar-talla/` JUBILADA TAMBÉ, i per la mateixa porta que
+        # aquella: es retira LA RUTA i la vista es conserva per als bancs que la fan servir de
+        # VEHICLE per a lleis que segueixen vives (el segell G6, la guarda de rang, l'escriptura
+        # per germanes de C4, la conservació de valors en STEP, i el banc F1 del `garment`).
+        #
+        # 🔑 PER QUÈ SURT: era la porta que feia que la columna «Fit actual» de l'Escalat
+        # EDITÉS LA CORBA TEÒRICA —`BaseMeasurement`/`ModelGradingOverride` + re-derivació dels
+        # specs a cada tecla—, i per això «Mesurar prenda» clonava com a teòric el número que el
+        # tècnic acabava d'anotar: desviació zero i acceptació buida. Ara aquella columna anota
+        # una PRESA (`fitting/model/<id>/presa/`, E1/B3) i el seu únic cridador ha canviat de
+        # porta. Sense ruta, **R2 és estructural**: no queda cap camí viu per decidir ni propagar
+        # des d'una talla no-base (el guard partit d'E1/B1 tanca l'altre).
+        #
+        # 🚩 EL QUE DESAPAREIX AMB ELLA, i consta perquè és una CAPACITAT, no codi mort: no queda
+        # cap superfície per pinçar el valor d'UNA talla no-base (`ModelGradingOverride` per
+        # cel·la). N'hi entren igualment per l'import W5, i ningú no els pot editar. Si algun dia
+        # cal, ha de tornar per un gest que digui què fa, no per la cel·la d'una presa.
         path('models/<int:model_id>/grading-status/', grading_status_view),
         path('models/<int:model_id>/base-measurements/reorder/', base_measurements_reorder_view),
         # Sprint NOMS-POM — el BATEIG de la línia (nom canònic + traducció del client). Porta

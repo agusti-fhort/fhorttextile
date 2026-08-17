@@ -142,8 +142,11 @@ export const models = {
   // res; confirm=true aplica dins d'una transacció. Gate CONFIGURE al backend.
   promoureAItem: (modelId, confirm = false) => client.post(`/api/v1/models/${modelId}/promoure-a-item/`, { confirm }),
   // D5 (2026-07-21) — `setSizeOverride` JUBILAT: estava declarat aquí però cap component el
-  // cridava mai; l'editor real fa servir `escalatAjustarTalla`. La ruta del backend també s'ha
-  // retirat. Si algun dia cal editar una talla no-base per API, es reobre conscientment.
+  // cridava mai. La ruta del backend també s'ha retirat.
+  // ⚠️ Aquesta nota deia «l'editor real fa servir `escalatAjustarTalla`» i ha caducat el 17/08:
+  // aquell també és jubilat (E1/B4, més avall). **Cap dels dos camins existeix ja**, i per tant
+  // avui no hi ha cap API per editar el valor d'UNA talla no-base: si algun dia cal, es reobre
+  // conscientment i per un gest que digui què fa.
   // Taula base amb estadis (històric per presa + tolerància + base vigent). Read-only.
   baseStages: (modelId) => client.get(`/api/v1/models/${modelId}/base-stages/`),
   // D-31.17 — LA COMPROVACIÓ del model: què falta i què s'ha de mirar abans que la fitxa
@@ -153,19 +156,12 @@ export const models = {
   // una versió segellada retorna 409 {error:'sealed', version_number} → cal doble confirmació
   // ({allow_reopen_sealed:true}).
   generarGrading: (modelId, body) => client.post(`/api/v1/models/${modelId}/generar-grading/`, body || {}),
-  // Fase 2 — ajust de talla a Escalat: ancora la talla i PROPAGA per regla a les germanes (com el
-  // fitting). Retorna {linies:[{id,valor_real}]} per refrescar la fila. Base inclosa.
-  // C4/BLOC 2 — `eixos` diu QUINA germana s'ajusta. Aquesta crida escriu a quatre taules i
-  // totes quatre anaven amb el literal de la mesura única.
-  // S42/F1 — I LA PEÇA. La signatura n'acceptava dos de tres, i el `perLinia` de
-  // `PropagatedEditor` ja carregava el tercer: la dada hi era i es perdia a la crida. Sense
-  // l'eix, `_write_base` feia `get_or_create` sobre una clau de dues columnes i, amb una peça
-  // i la mare compartint POM, casava amb DUES files → `MultipleObjectsReturned` (500 mesurat
-  // al POM 962 del model 1379). Qui no el passi segueix rebent la mare.
-  escalatAjustarTalla: (modelId, pomId, talla, valor, eixos = {}) =>
-    client.post(`/api/v1/models/${modelId}/escalat/ajustar-talla/`,
-                { pom_id: pomId, talla, valor, capa: eixos.capa,
-                  instancia: eixos.instancia, garment: eixos.garment }),
+  // ✅ E1/B4 (17/08) — `escalatAjustarTalla` JUBILAT, i amb ell la ruta del backend.
+  // Aquella crida EDITAVA LA CORBA TEÒRICA (escrivia `BaseMeasurement`/`ModelGradingOverride`
+  // i re-derivava els specs a cada tecla), i per això «Mesurar prenda» clonava com a teòric el
+  // número que el tècnic acabava d'anotar: desviació zero i acceptació buida. El seu únic
+  // cridador —`PropagatedEditor`— ha canviat de porta i ara anota una PRESA: v. `presaEscalat`,
+  // més avall. Mateix camí que `setSizeOverride` va fer el 21/07.
   // Fase B — estat de propagació perquè el botó Propagar MIRI ABANS (read-only):
   // {te_dades_propagades, segellada, version_number, te_regles}.
   // G2 — `te_regles` és la condició dura: sense regla NO es propaga mai; el gest porta a
