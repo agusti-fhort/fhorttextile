@@ -944,12 +944,33 @@ function buildTableCellPrimitives(obj) {
   // passar). Si no hi cap, parteix en línies i la fila creix. La font és monoespaiada, així
   // que comptar caràcters n'és una mesura exacta, no una estimació.
   const charW = fontPx * 0.6
-  const liniesQueOcupa = (text, i) => {
-    const cabenPerLinia = Math.max(1, Math.floor((cw[i] - 2 * T_PAD) / charW))
+  const liniesQueOcupa = (text, i, ampleChar = charW) => {
+    const cabenPerLinia = Math.max(1, Math.floor((cw[i] - 2 * T_PAD) / ampleChar))
     return Math.max(1, Math.ceil(String(text ?? '').length / cabenPerLinia))
   }
-  const hdrLines = cols.map((c, i) => liniesQueOcupa(c.label, i))
-  const hdrH = Math.max(...hdrLines, 1) * fontPx + T_CELL_PAD_Y * 2
+  // ── Q8-bis/C1 · LA CAPÇALERA FINA DEL FULL DE FITTING ─────────────────────────────────────
+  // La fila negra invertida se'n va. L'espec de coherència de la família documental és el full
+  // descarregable (D3 del tram) i allà la capçalera **no té fons**: és cos petit en majúscula amb
+  // tracking, sobre blanc, i qui la separa de les dades és un FILET de tinta forta. Una banda
+  // negra al capdamunt d'una taula de mesures pesa més que les xifres, que són el que s'ha de
+  // llegir.
+  //
+  // ⚠️ EL COS PETIT ES CLAVA AL SÒL DE 8pt, no a la proporció del full. El full va a 7,5pt sobre
+  // 8,5pt de cos; aquí el cos és 9pt i el 0,85 donaria 7,65 — per sota del sòl de la fitxa. Es
+  // clampa a 8: la proporció és una intenció de disseny, el sòl és una llei.
+  //
+  // Opt-in per `style.capcaleraFina`: les taules ja inserides (T0/T1a/T1b/T2/T3/custom) no la
+  // porten i segueixen sortint amb la seva capçalera de sempre, al píxel.
+  const fina = !!st.capcaleraFina
+  const hdrPt = fina ? Math.max(8, pt * 0.85) : pt
+  const hdrFontPx = fina ? Math.round(hdrPt * 0.3528 * MM_TO_PX) : fontPx
+  // El tracking eixampla cada caràcter: si no entrés al compte, un títol de columna a mida
+  // s'escaparia de la seva cel·la — que és el mode de fallada que la R4 va tancar.
+  const hdrLS = fina ? Math.max(0.4, hdrFontPx * 0.06) : 0
+  const hdrCharW = hdrFontPx * 0.6 + hdrLS
+  const etiquetaCol = (c) => (fina ? String(c.label ?? '').toUpperCase() : String(c.label ?? ''))
+  const hdrLines = cols.map((c, i) => liniesQueOcupa(etiquetaCol(c), i, hdrCharW))
+  const hdrH = Math.max(...hdrLines, 1) * hdrFontPx + T_CELL_PAD_Y * 2
   // Q8 · `cell.wrap` — LA CEL·LA QUE NO ES TALLA. Les cel·les de dades es pinten amb
   // `ellipsis: true` i `wrap: 'none'`: un nom de POM llarg hi perdia el final en silenci, i un
   // nom de mesura truncat al paper que va al fabricant és el mateix mode de fallada que la R4
@@ -991,11 +1012,19 @@ function buildTableCellPrimitives(obj) {
   }
 
   // Capçalera
-  prims.push({ t: 'r', x: 0, y: titolH, w: totalW, h: hdrH, fill: st.headerFill || TBL.HDR_BG })
-  if (baseIdx >= 0) prims.push({ t: 'r', x: cx0[baseIdx], y: titolH, w: cw[baseIdx], h: hdrH, fill: TBL.BASE_HDR })
+  // C1 — SENSE FONS quan és fina: només el filet de sota la separa de les dades. L'ÚNIC ombrejat
+  // que sobreviu a tota la taula és el gris suau de la columna de la talla base, i li travessa
+  // també la capçalera perquè es llegeixi com UNA franja i no com dos trossos.
+  if (fina) {
+    if (baseIdx >= 0) prims.push({ t: 'r', x: cx0[baseIdx], y: titolH, w: cw[baseIdx], h: hdrH, fill: TBL.BASE_BG })
+  } else {
+    prims.push({ t: 'r', x: 0, y: titolH, w: totalW, h: hdrH, fill: st.headerFill || TBL.HDR_BG })
+    if (baseIdx >= 0) prims.push({ t: 'r', x: cx0[baseIdx], y: titolH, w: cw[baseIdx], h: hdrH, fill: TBL.BASE_HDR })
+  }
   cols.forEach((c, i) => {
-    prims.push({ t: 't', x: cx0[i] + T_PAD, y: titolH, w: cw[i] - 2 * T_PAD, h: hdrH, text: String(c.label ?? ''), fill: TBL.HDR_TEXT, size: fontPx, bold: true, mid: true, align: 'center', wrap: true })
+    prims.push({ t: 't', x: cx0[i] + T_PAD, y: titolH, w: cw[i] - 2 * T_PAD, h: hdrH, text: etiquetaCol(c), fill: fina ? TBL.VAL : TBL.HDR_TEXT, size: hdrFontPx, bold: true, ls: hdrLS, mid: true, align: 'center', wrap: true })
   })
+  if (fina) prims.push({ t: 'l', points: [0, titolH + hdrH, totalW, titolH + hdrH], stroke: TBL.FRAME, sw: 1 })
 
   // Fons de files (zebra opcional) en passada pròpia: la franja de la talla base ha de quedar
   // PER SOBRE dels fons i PER SOTA del text (mateix ordre que buildTablePrimitives).
@@ -5301,7 +5330,7 @@ export default function TechSheetEditor() {
           // tradueixen ni s'abrevien aquí — la casa els escriu sencers a la fitxa.
           f.veredicte || '', f.nota || '',
         ]),
-        style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+        style: { fontSize: 9, capcaleraFina: true, zebra: true },
         snapshot: { ...snapshotComu, garment: g.garment },
       },
     }))
@@ -5374,7 +5403,7 @@ export default function TechSheetEditor() {
           aDocument(f.talla_break, talles) || '—',
           ...talles.map(sl => xifra(f.valors?.[sl]) || '–'),
         ]),
-        style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+        style: { fontSize: 9, capcaleraFina: true, zebra: true },
         snapshot: {
           model_id: model.id, talla_base: base || null, garment: g.garment,
           snapshot_at: new Date().toISOString(),
@@ -5443,7 +5472,7 @@ export default function TechSheetEditor() {
           // a `BaseMeasurement` perquè el `close` la descarta.
           f.celles?.[base]?.veredicte || '',
         ]),
-        style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+        style: { fontSize: 9, capcaleraFina: true, zebra: true },
         snapshot: {
           model_id: model.id, fitting_session_id: sessioTancada?.id ?? null,
           talla_base: base || null, garment: g.garment, snapshot_at: new Date().toISOString(),
@@ -5482,7 +5511,7 @@ export default function TechSheetEditor() {
           capaQ8(f), cellaPom(f), xifra(f.valors?.[base]?.teorica),
           { text: f.nota, wrap: true },
         ]),
-        style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
+        style: { fontSize: 9, capcaleraFina: true, zebra: true },
         snapshot: {
           model_id: model.id, fitting_session_id: sessioTancada.id,
           talla_base: base || null, garment: g.garment, snapshot_at: new Date().toISOString(),
