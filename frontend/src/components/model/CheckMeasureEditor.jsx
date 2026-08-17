@@ -417,7 +417,7 @@ function RecomptesFitting({ lines, baseLabel, buffer }) {
   )
 }
 
-export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false, taskId = null, source = null, sourceCtx = null, lockRules = false, onSessionSaved = null }) {
+export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBack = null, readOnly = false, taskId = null, source = null, sourceCtx = null, lockRules = false, onSessionSaved = null, embedded = false }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const src = source || checkSource
@@ -713,7 +713,16 @@ export default function CheckMeasureEditor({ model, onFeedback, onResolved, onBa
           pàgina —`/fittings/:id`— i queda fora de l'abast d'aquest tram.) */}
       {onBack && <div style={{ marginBottom: 8 }}><BackButton onClick={onBack} /></div>}
       {/* Sprint Y — en mode sessió (font fitting), el panell de la sessió: context + Canvis/Observacions/Imatges. */}
-      {ctx.fittingSession && <SessionPanel session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} grid={raw?.grid} modelId={model.id} />}
+      {/* ── E2c-bis/C2 · EN MODE EMBEGUT, LA CAPÇALERA DE SESSIÓ SE'N VA ────────────────────
+          `SessionPanel` porta la franja de context (estat · data · responsable · model-persona ·
+          lloc), la porta al «Full de fitting» i el plegador «Desplegar». Dins d'Escalat les tres
+          coses sobren i una d'elles menteix: el full i el context són de la SESSIÓ sencera, i
+          aquí només s'hi decideix la talla base d'aquest model. Repetir-los dins d'un sub-tab
+          els duplica amb la pantalla que ja els diu.
+          ⚠️ `embedded` NOMÉS amaga; no canvia cap contracte ni cap porta. El mode STANDALONE
+          (tab Mesures) queda idèntic —el prop és `false` per defecte i qui no el passa no nota
+          res—, que és la condició que el brief posa i el que fa que això sigui presentació. */}
+      {!embedded && ctx.fittingSession && <SessionPanel session={ctx.fittingSession} pieceFittingId={raw?.pieceFittingId} grid={raw?.grid} modelId={model.id} />}
       {/* AQUÍ HI HAVIA «Promoure com a estàndard de l'item» (Agus, 06/08: FORA).
           Promoure és un acte de CATÀLEG —escriu a `GarmentTypeItem`, que és patrimoni de la casa
           i no d'aquest model— i estava penjat de les superfícies de PRESA i de CONSULTA del
