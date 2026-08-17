@@ -81,3 +81,27 @@ export function repartimentEnPagines(mesures, { yInici, yFinal, separacio = 6 })
 /** Quantes pàgines fan falta per a un repartiment (0 si no hi ha res). */
 export const paginesDelRepartiment = (trossos) =>
   (trossos || []).reduce((n, t) => Math.max(n, t.pagina + 1), 0)
+
+/**
+ * L'AMPLADA QUE FA QUE EL NOM MÉS LLARG HI CÀPIGA EN `linies` LÍNIES.
+ *
+ * L'espec de Q8 diu «nom de POM mai tallat: amplada mínima = nom més llarg a màx 2 línies», i
+ * això no es pot decidir amb un número escrit a mà: depèn del corpus del model. Un altre lloc
+ * d'aquesta casa ja va pagar aquesta lliçó amb `FILES_PER_PAGINA = 18`, un límit «conservador a
+ * posta» que era fals mesurat.
+ *
+ * Es pot comptar per CARÀCTERS i no estimar perquè la fitxa va en monoespaiada: `charMm` és
+ * l'amplada exacta d'un caràcter. La mateixa aritmètica que el builder fa servir per no tallar
+ * mai un títol de columna.
+ *
+ * @param {string[]} textos  els noms que hi han de cabre
+ * @param {{charMm: number, padMm?: number, minMm?: number, maxMm?: number, linies?: number}} opts
+ */
+export function ampladaPerTextos(textos, { charMm, padMm = 0, minMm = 0, maxMm = Infinity, linies = 2 }) {
+  const llarg = (textos || []).reduce((mx, s) => Math.max(mx, String(s ?? '').length), 0)
+  if (!llarg || !(charMm > 0)) return Math.max(minMm, Math.min(maxMm, minMm))
+  // Els caràcters que han de cabre en UNA línia perquè el text sencer ocupi `linies` com a molt.
+  const perLinia = Math.ceil(llarg / Math.max(1, linies))
+  const necessaria = perLinia * charMm + padMm
+  return Math.max(minMm, Math.min(maxMm, necessaria))
+}

@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { paginesDelRepartiment, repartimentEnPagines } from './repartimentTaules.js'
+import { ampladaPerTextos, paginesDelRepartiment, repartimentEnPagines } from './repartimentTaules.js'
 
 const PAGINA = { yInici: 14, yFinal: 283, separacio: 6 }
 // Geometria d'una taula Q8 típica: banda de títol 6, capçalera 8, fila 5.
@@ -91,4 +91,32 @@ test('sense taules no hi ha ni trossos ni pàgines', () => {
 test('sense banda de títol el repartiment és el mateix menys la seva alçada', () => {
   const r = repartimentEnPagines([geo(200, { hTitol: 0 })], PAGINA)
   assert.equal(r[0].fi, Math.floor((283 - 14 - 8) / 5))
+})
+
+// ── L'amplada que fa que el nom més llarg no es talli ───────────────────────────────────────
+
+test('AMPLADA PER TEXTOS: el nom més llarg hi cap en dues línies, i el límit no es negocia', () => {
+  // 40 caràcters a 2 línies = 20 per línia · 1.5 mm/caràcter = 30 mm, més 2 de padding.
+  const w = ampladaPerTextos(['x'.repeat(40), 'curt'], { charMm: 1.5, padMm: 2 })
+  assert.equal(w, 32)
+})
+
+test('el mínim mana quan els noms són curts (una columna raquítica no es llegeix)', () => {
+  assert.equal(ampladaPerTextos(['AB'], { charMm: 1.5, minMm: 30 }), 30)
+})
+
+test('el màxim mana quan els noms són desmesurats: la pàgina no és negociable', () => {
+  assert.equal(ampladaPerTextos(['x'.repeat(400)], { charMm: 1.5, maxMm: 60 }), 60)
+})
+
+test('sense textos, sense amplada de caràcter o amb la llista buida, cau al mínim', () => {
+  assert.equal(ampladaPerTextos([], { charMm: 1.5, minMm: 44 }), 44)
+  assert.equal(ampladaPerTextos(null, { charMm: 1.5, minMm: 44 }), 44)
+  assert.equal(ampladaPerTextos(['Chest'], { charMm: 0, minMm: 44 }), 44)
+})
+
+test('a UNA línia demana el doble d\'amplada que a dues', () => {
+  const opts = { charMm: 1, padMm: 0 }
+  assert.equal(ampladaPerTextos(['x'.repeat(30)], { ...opts, linies: 1 }), 30)
+  assert.equal(ampladaPerTextos(['x'.repeat(30)], { ...opts, linies: 2 }), 15)
 })

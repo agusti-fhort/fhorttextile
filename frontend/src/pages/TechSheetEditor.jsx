@@ -933,17 +933,33 @@ function buildTableCellPrimitives(obj) {
   // que buildTablePrimitives amb nom_en/nom_ca).
   const norm = (c) => (c && typeof c === 'object') ? c : { text: String(c ?? '') }
   const hasSub = rows.some(row => row.some(c => norm(c).sub))
-  const rowH = hasSub ? fontPx * 2 + T_CELL_PAD_Y * 3 : fontPx + T_CELL_PAD_Y * 2
   // R4 · LA CAPÇALERA NO ES TALLA MAI. Un títol de columna amb ellipsi no es pot endevinar
   // (i en una taula de mesures, endevinar què mesura una columna és exactament el que no pot
   // passar). Si no hi cap, parteix en línies i la fila creix. La font és monoespaiada, així
   // que comptar caràcters n'és una mesura exacta, no una estimació.
   const charW = fontPx * 0.6
-  const hdrLines = cols.map((c, i) => {
+  const liniesQueOcupa = (text, i) => {
     const cabenPerLinia = Math.max(1, Math.floor((cw[i] - 2 * T_PAD) / charW))
-    return Math.max(1, Math.ceil(String(c.label ?? '').length / cabenPerLinia))
-  })
+    return Math.max(1, Math.ceil(String(text ?? '').length / cabenPerLinia))
+  }
+  const hdrLines = cols.map((c, i) => liniesQueOcupa(c.label, i))
   const hdrH = Math.max(...hdrLines, 1) * fontPx + T_CELL_PAD_Y * 2
+  // Q8 · `cell.wrap` — LA CEL·LA QUE NO ES TALLA. Les cel·les de dades es pinten amb
+  // `ellipsis: true` i `wrap: 'none'`: un nom de POM llarg hi perdia el final en silenci, i un
+  // nom de mesura truncat al paper que va al fabricant és el mateix mode de fallada que la R4
+  // va tancar a la capçalera. Amb `wrap`, la cel·la parteix per PARAULA i la fila creix.
+  //
+  // ⚠️ L'ALÇADA DE FILA ES QUEDA UNIFORME, i és una condició, no una simplificació: la zebra, la
+  // franja de la talla base i sobretot el tall per pàgines (`repartimentTaules`, que rep UN
+  // `hFila`) estan escrits sobre files iguals. Per això mana el MÀXIM de línies de tota la
+  // taula: totes les files creixen alhora o no en creix cap.
+  const wrapLines = rows.reduce((mx, row) => Math.max(mx, ...cols.map((c, i) => {
+    const cell = norm(row[i])
+    return cell.wrap ? liniesQueOcupa(cell.text, i) : 1
+  })), 1)
+  const rowH = hasSub
+    ? fontPx * 2 + T_CELL_PAD_Y * 3
+    : wrapLines * fontPx + T_CELL_PAD_Y * 2
   // Q8 — la banda de títol: 0 quan no hi ha títol, i llavors tot el que hi ha sota queda
   // exactament on era. Una mica més alta que una fila de capçalera perquè respiri per sobre
   // del filet, com la fila-títol del full descarregable (padding 7px a dalt, 2px a baix).
@@ -1014,7 +1030,7 @@ function buildTableCellPrimitives(obj) {
         prims.push({ t: 't', x: cxR + T_PAD, y: y + T_CELL_PAD_Y, w: wCell, h: fontPx + 2, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: false, align })
         prims.push({ t: 't', x: cxR + T_PAD, y: y + T_CELL_PAD_Y * 2 + fontPx, w: wCell, h: subPx + 2, text: cell.sub, fill: TBL.NOM, size: subPx, italic: true, mid: false })
       } else {
-        prims.push({ t: 't', x: cxR + T_PAD, y, w: wCell, h: rowH, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: true, align })
+        prims.push({ t: 't', x: cxR + T_PAD, y, w: wCell, h: rowH, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: true, align, wrap: !!cell.wrap })
       }
       cxR += cw[i]
     })
