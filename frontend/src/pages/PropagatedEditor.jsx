@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { IconAlertTriangle } from '@tabler/icons-react'
 import client from '../api/client'
@@ -7,7 +6,7 @@ import { models, presaEscalat } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
 import PecesDelModel from '../components/model/PecesDelModel'
 import SubTabs from '../components/ui/SubTabs'
-import { SENSE_PRESA, estatDeLaPresa } from '../utils/estatPresa'
+import { SENSE_PRESA, TANCADA, estatDeLaPresa } from '../utils/estatPresa'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
 import { fittingSource } from '../components/model/measureSources'
 import { filesDeLaPeca } from '../utils/identitatMesura'
@@ -39,7 +38,6 @@ import { useUnit } from './fittingShared'
 // El règim per POM es canvia amb setPomRegim; la corba vigent surt de taula-mesures.
 export default function PropagatedEditor({ modelId, onClose, inline = false, readOnly = false }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [modelInfo, setModelInfo] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -88,6 +86,13 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   const diaDeLaPresa = estatPresa.session?.data
     ? new Date(estatPresa.session.data).toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit' })
     : null
+  // E3a — LA GRAELLA NOMÉS ACCEPTA UNA TECLA SI LA PRESA ÉS VIVA, i el predicat és el de
+  // `estatDeLaPresa`, que deriva del MATEIX `presa_oberta` que el guard del servidor. Amb això
+  // els 409 per cel·la deixen d'existir PER CONSTRUCCIÓ i no per un missatge més amable: a la QA
+  // de les 20:54 se'n van teclejar tres seguits sobre una presa que s'acabava de segellar.
+  // Els DOS estats sense presa hi entren —tancada i cap—; enumerar-los aquí seria la segona llei.
+  const potEscriure = !readOnly && estatPresa.escrivible
+  const esActa = estatPresa.estat === TANCADA
 
   const base = (data?.base_size || '').trim()
   // Identitat estable: `data?.size_run || []` fabricava un array nou a cada render i feia recalcular
@@ -132,13 +137,18 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
     const sid = presa?.session?.id
     if (!sid) { setErr(t('escalat.sense_presa_oberta')); return }
     setVista('decisio')
+    // E3a — SOBRE UNA ACTA NO S'OBRE CAP RELLOTGE. La decisió d'una presa tancada ja està
+    // presa: consultar-la no és feina i encunyar-hi una tasca `size_check` faria comptar temps
+    // de treball a qui només mira enrere —i deixaria una tasca oberta que després algú hauria
+    // de tancar. El panell es munta igual, en lectura.
+    if (esActa) return
     if (decisioTaskId != null) return
     models.openTask(modelId, 'size_check', sid)
       .then(r => setDecisioTaskId(r.data.task_id))
       // El panell ja és obert i la decisió es pot prendre igualment: el que es perd si això
       // falla és el compta-temps, no la feina. Dir-ho i no tancar-li la porta a sobre.
       .catch(() => setErr(t('escalat.decisio_sense_rellotge')))
-  }, [decisioTaskId, presa, modelId, t])
+  }, [decisioTaskId, presa, modelId, esActa, t])
 
   // La pregunta de plausibilitat viva: {lineId, valor, base, codi, talla, resolt}. Mai un bloqueig.
   const [confirmPlaus, setConfirmPlaus] = useState(null)
@@ -304,34 +314,35 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
             presa parla **mentre mesura**, no només quan decideix. Dins del sub-tab de Decisió
             quedaria amagat justament a la meitat del flux que més el necessita.
 
-            ⚠️ EL GEST D'OBRIR UNA PRESA SOBREVIU a la barra, i no és una etiqueta: sense presa
-            no hi ha res a mesurar ni a decidir. Ocupa el mateix racó de la dreta —quan no hi ha
-            data, hi ha la porta per crear-ne una— perquè aquell racó és «de quina presa parlem».
-            Segueix NAVEGANT a posta: obrir crea sessió + peça + N línies i aquesta pantalla no
-            ho fa sola (decisió D5, OBERTA). */}
+            🚨 E3a — EL RACÓ JA NO ÉS UN GEST EN CAP ESTAT, i això és el que arregla el camí que
+            la QA de les 20:54 va destapar (§D2 de la diagnosi). Aquí hi havia un botó que
+            NAVEGAVA a `?tab=Mesures`, i com que `models/:id/escalat` i `models/:id` munten el
+            MATEIX `ModelSheet`, React Router reconcilia en comptes de remuntar: `editing` sobrevivia
+            valent `'Escalat'` i el SALT DE SUPERFÍCIE (`ModelSheet:664-675`) llegia el canvi de tab
+            com un canvi d'EINA → obria la tasca `pom` i aterrava a Definició POM. Un botó que diu
+            «obrir la presa» i acaba definint POMs.
+            El gest de crear/entrar viu ara al botó PRINCIPAL «Mesurar set» (E3b), que no navega:
+            resol la sessió i la peça allà mateix. Aquest racó torna a ser el que sempre havia
+            hagut de ser —«DE QUINA PRESA PARLEM»— i per tant una ETIQUETA, en els tres estats. */}
         <SubTabs
           items={[
             { key: 'presa', label: 'escalat.subtab_presa', icon: 'ti-ruler-measure' },
+            // El badge és feina PENDENT, i sobre una acta no en queda cap: pintar-hi «1 per
+            // decidir» sobre una presa tancada seria demanar una decisió que ja no es pot prendre.
             { key: 'decisio', label: 'escalat.subtab_decisio', icon: 'ti-checkbox',
-              badge: estatPresa.pendents_base },
+              badge: esActa ? null : estatPresa.pendents_base },
           ]}
           actiu={vista} onTria={triaVista}
           dreta={
-            estatPresa.estat === SENSE_PRESA ? (
-              !readOnly && (
-                <button type="button" onClick={() => navigate(`/models/${modelId}?tab=Mesures`)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px',
-                           fontFamily: 'IBM Plex Mono, monospace', fontSize: 'var(--fs-caption)',
-                           color: 'var(--gold)' }}>
-                  {t('escalat.porta_obrir')}
-                </button>
-              )
-            ) : (
-              <span style={{ fontFamily: 'IBM Plex Mono, monospace',
-                             fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>
-                {t('escalat.presa_del', { data: diaDeLaPresa || '—' })}
-              </span>
-            )
+            <span style={{ fontFamily: 'IBM Plex Mono, monospace',
+                           fontSize: 'var(--fs-caption)',
+                           color: esActa ? 'var(--text-muted)' : 'var(--text-soft)' }}
+                  title={esActa ? t('escalat.presa_tancada_nota') : undefined}>
+              {estatPresa.estat === SENSE_PRESA
+                ? t('escalat.presa_cap')
+                : t(esActa ? 'escalat.presa_tancada_del' : 'escalat.presa_del',
+                    { data: diaDeLaPresa || '—' })}
+            </span>
           } />
         {/* FIX-4 — la pregunta de plausibilitat. MAI un bloqueig dur: hi ha peces petites
             legítimes, i una validació que impedeix desar només ensenya a esquivar-la. Es
@@ -377,7 +388,7 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
         ) : (
           <MeasureGrid
             key={`${modelId}:${reloadKey}`}
-            editable={!readOnly}
+            editable={potEscriure}
             rows={filesDelContenidor} groups={gridGroups}
             leadCols={leadCols}
             leadGroupLabel={t('measuregrid.grup_regla')}
@@ -404,12 +415,22 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
 
             En tancar el panell (o en gravar la sessió) es rellegeix la presa: decidir a la base
             i propagar mou la corba, i la taula de sobre ha de dir la veritat sense recarregar. */}
+        {/* E3a — SOBRE UNA ACTA, CONSULTA. La sessió tancada ja té `session.id` (E3a/B1), o sigui
+            que el panell es munta igual i ensenya el que es va decidir; el que canvia és que hi
+            entra en lectura i sense rellotge. Abans això ni s'arribava a muntar —el payload no
+            portava sessió— i el sub-tab semblava avariat. */}
         {vista === 'decisio' && presa?.session?.id && (
           <section style={{ marginTop: 16 }}>
+            {esActa && (
+              <div style={{ marginBottom: 10, fontSize: 'var(--fs-caption)',
+                            color: 'var(--text-muted)' }}>
+                {t('escalat.decisio_tancada_nota')}
+              </div>
+            )}
             <CheckMeasureEditor
               embedded
               model={modelInfo || { id: modelId }}
-              readOnly={readOnly}
+              readOnly={readOnly || esActa}
               taskId={decisioTaskId}
               source={fittingSource}
               sourceCtx={{ fittingSession: presa.session }}

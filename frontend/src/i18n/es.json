@@ -5033,9 +5033,12 @@
     "sense_presa_oberta": "No hay ninguna toma abierta de este modelo: ábrela para anotar las medidas de las prendas recibidas.",
     "sessio_segellada": "La toma está cerrada: no se pueden anotar medidas.",
     "presa_del": "Toma del {{data}}",
-    "porta_obrir": "Abrir la toma",
     "decisio_sense_rellotge": "La decisión se ha abierto, pero no se ha podido iniciar el contador de tiempo de la tarea.",
     "subtab_presa": "Toma",
-    "subtab_decisio": "Decisión talla base"
+    "subtab_decisio": "Decisión talla base",
+    "presa_tancada_del": "Toma del {{data}} · cerrada",
+    "presa_cap": "Ninguna toma abierta",
+    "presa_tancada_nota": "Esta toma está cerrada: se consulta, no se escribe. Pulsa «Medir set» para abrir una nueva.",
+    "decisio_tancada_nota": "Consulta de lo que se decidió en esta toma."
   }
 }

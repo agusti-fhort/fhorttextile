@@ -5033,9 +5033,12 @@
     "sense_presa_oberta": "No hi ha cap presa oberta d'aquest model: obre-la per anotar-hi les mesures de les peces arribades.",
     "sessio_segellada": "La presa està tancada: no s’hi poden anotar mesures.",
     "presa_del": "Presa del {{data}}",
-    "porta_obrir": "Obrir la presa",
     "decisio_sense_rellotge": "La decisió s’ha obert, però no s’ha pogut engegar el comptador de temps de la tasca.",
     "subtab_presa": "Presa",
-    "subtab_decisio": "Decisió talla base"
+    "subtab_decisio": "Decisió talla base",
+    "presa_tancada_del": "Presa del {{data}} · tancada",
+    "presa_cap": "Cap presa oberta",
+    "presa_tancada_nota": "Aquesta presa està tancada: es consulta, no s'hi escriu. Prem «Mesurar set» per obrir-ne una de nova.",
+    "decisio_tancada_nota": "Consulta del que es va decidir en aquesta presa."
   }
 }
