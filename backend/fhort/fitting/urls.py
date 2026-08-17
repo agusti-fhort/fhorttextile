@@ -3,6 +3,7 @@ import uuid as _uuid
 from django.urls import path, register_converter
 from rest_framework.routers import DefaultRouter
 
+from .escalat_presa_views import EscalatPresaView
 from .graded_spec_views import GradedSpecTableView
 from .repas_views import FittingRepasView
 
@@ -67,4 +68,7 @@ urlpatterns = group_urls + router.urls + [
     path('fitting/<int:sf_id>/graded-table/', GradedSpecTableView.as_view(), name='graded-spec-table'),
     # Repàs de fittings del model: taula POM × sessions (lectura pura).
     path('fitting/model/<int:model_id>/repas/', FittingRepasView.as_view(), name='fitting-repas'),
+    # E1/B3 — la PRESA de l'Escalat: llegir l'estat de la presa viva i anotar-hi una cel·la.
+    # Mateix patró de ruta que el repàs (vista de MODEL dins de l'app que té el magatzem).
+    path('fitting/model/<int:model_id>/presa/', EscalatPresaView.as_view(), name='escalat-presa'),
 ]

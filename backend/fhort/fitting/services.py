@@ -109,6 +109,106 @@ def fitting_line_decisio_fora_de_base(line, camps) -> bool:
     return escriptura_es_decisio(camps) and fitting_line_is_non_base(line)
 
 
+# ── E1/B3 — LA PRESA DE L'ESCALAT ────────────────────────────────────────────
+#
+# Pas 1 del flux E1: quan arriben les peces FÍSIQUES del model, es mesura cada talla i s'anota
+# a la columna «Fit actual» de l'Escalat. Fins avui aquella columna EDITAVA LA CORBA TEÒRICA
+# (`escalat_ajustar_talla_view` → `BaseMeasurement`/`ModelGradingOverride` + re-derivació dels
+# specs), i per això el pas 2 hidratava del que el pas 1 acabava d'escriure: desviació zero i
+# acceptació buida. V. `docs/diagnosis/DIAGNOSI_E1_MESURA_ESCALAT.md` §3.2.
+#
+# 🔑 EL CANVI ÉS DE NATURALESA, NO DE DESTÍ: la presa és una DADA D'OBSERVACIÓ i va a
+# `PieceFittingLine.valor_real`, que és el magatzem que ja té els cinc eixos
+# (pom · capa · instancia · garment · size_label), el teòric al costat i el veredicte a sobre.
+# **Aquesta porta NO toca `BaseMeasurement` i NO crida `generate_graded_specs`.** El dia que
+# algú hi afegeixi qualsevol de les dues coses, el pas 2 tornarà a mirar-se al mirall.
+#
+# ⚠️ NO CREA SESSIÓ. Obrir una presa és un acte —crea `FittingSession` + `PieceFitting` + N
+# línies— i fer-lo néixer d'una tecla en una cel·la seria el mateix error que aquesta peça
+# arregla. Sense presa viva es retorna `PresaNoObertaError` i la pantalla ofereix el gest
+# explícit, que és el mateix que obre «Mesurar prenda». (Decisió D5 de la diagnosi: OBERTA.)
+
+
+class PresaNoObertaError(Exception):
+    """No hi ha cap `PieceFitting` viva del model: no hi ha on anotar la presa."""
+
+
+class PresaSenseLiniaError(Exception):
+    """La presa viva no té línia per a aquesta mesura i talla (mesura morta o talla fora del
+    run de la versió). No se n'inventa cap: una línia nova ha de néixer de la reconciliació,
+    que sap què és una mesura viva del model."""
+
+
+def peca_de_presa_del_model(model):
+    """La `PieceFitting` VIVA del model, o `None`. Punt únic, i NO crea res.
+
+    «Viva» = la seva sessió és `Programada` o `Oberta` (`SESSIONS_VIVES`), el mateix predicat
+    que fa servir `reconcilia_linies` per decidir si una peça encara es pot posar al dia. Una
+    sessió segellada és ACTA i no admet preses noves.
+
+    Amb més d'una de viva mana LA MÉS RECENT per data de sessió (desempat per id), que és el
+    mateix ordre cronològic que `esdeveniments.peces_amb_contingut` — mai per id de peça sol,
+    que és l'ordre en què es van OBRIR les graelles.
+    """
+    from fhort.fitting.models import PieceFitting
+    return (PieceFitting.objects
+            .filter(model=model, session__estat__in=SESSIONS_VIVES)
+            .select_related('session', 'model', 'grading_version__size_fitting')
+            .order_by('-session__data', '-session__id', '-id')
+            .first())
+
+
+def desa_presa_escalat(model, *, pom_id, capa, instancia, garment, talla, valor, nota=None):
+    """Anota la presa d'UNA mesura a UNA talla sobre la presa viva del model.
+
+    Retorna la `PieceFittingLine` desada. Alça `PresaNoObertaError`, `PresaSenseLiniaError` o
+    `ValueError` (sessió segellada) — la traducció a codis HTTP la fa la vista.
+
+    ⚠️ ELS EIXOS ARRIBEN JA RESOLTS. Qui els llegeix del cos d'una petició els passa per
+    `models_app.views._identitat_de_mesura`, que és el punt únic que decideix què rep qui no
+    els diu (l'exterior de la instància única de la mare). Aquí NO s'hi torna a aplicar cap
+    default: dos llocs decidint el mateix literal són dues lleis, i el dia que una canviés,
+    aquesta porta escriuria a una fila que la resta del sistema no busca mai.
+
+    `valor=None` esborra la presa: la línia torna al seu teòric, que és el mateix gest que
+    «treure l'ancoratge» a `propagar` (`views.py:664`). No s'esborra la línia: la línia és de
+    la peça, no de qui l'ha mesurada.
+
+    🚨 LES DUES COSES QUE AQUESTA FUNCIÓ NO FA, i que la vista que substitueix SÍ feia:
+      · no escriu `BaseMeasurement` (això és consolidar, i consolidar és del `close`);
+      · no crida `generate_graded_specs` (això és propagar, i propagar té la seva porta).
+    Si un dia calen, no van aquí: van al gest que les mereix.
+    """
+    from fhort.fitting.models import PieceFittingLine
+
+    pf = peca_de_presa_del_model(model)
+    if pf is None:
+        raise PresaNoObertaError(
+            "El model no té cap presa oberta: obre-la abans d'anotar mesures.")
+    if pf.session.estat in SEALED_SESSION_ESTATS:      # cinturó: `peca_de_presa_del_model` ja
+        raise ValueError('Sessió de fitting tancada; no es pot modificar.')   # les exclou
+
+    linia = (PieceFittingLine.objects
+             .filter(piece_fitting=pf, pom_id=pom_id, capa=capa,
+                     instancia=instancia, garment=garment,
+                     size_label=(talla or '').strip())
+             .first())
+    if linia is None:
+        raise PresaSenseLiniaError(
+            f"La presa oberta no té línia per a aquesta mesura a la talla {talla}.")
+
+    # `valor_real = valor_teoric` és el que la línia ja porta de la sembra: escriure-hi el
+    # teòric és treure la presa, no anotar-ne una. Ho decideix `linia_te_contingut` a la
+    # lectura; aquí només es desa el número que ha dit qui mesura.
+    linia.valor_real = linia.valor_teoric if valor is None else float(valor)
+    camps = ['valor_real']
+    if nota is not None:
+        linia.nota = nota
+        camps.append('nota')
+    linia.save(update_fields=camps)
+    return linia
+
+
 # ── Peça 1 — guard de solapament ─────────────────────────────────────────────
 class SessionOverlapError(Exception):
     """Conflicte DUR: ja hi ha una sessió viva del mateix model que solapa la franja
