@@ -997,8 +997,15 @@ function buildTableCellPrimitives(obj) {
       // manté aquí perquè els SNAPSHOTS ja inserits abans de S4 segueixin pintant-se igual (no es
       // migren). Cap taula nova entra per aquesta branca.
       const isBreak = !!cell.bold
-      const bold = isBreak || i === 0
-      const fill = isBreak ? TBL.BREAK : TBL.VAL
+      // Q8 · `cell.alerta` = LA XIFRA QUE NO COINCIDEIX (l'Actual que s'aparta de la mesura
+      // aprovada, la Dif que no és zero). Vermell + NEGRETA, i **sense subratllat**: és una clau
+      // NOVA i no `bold`, precisament perquè `bold` ja vol dir break i arrossega el subratllat.
+      // Reutilitzar-la hauria fet que una desviació de fitting es pintés com un trencament de
+      // graduació —dos senyals de domini distints amb la mateixa tinta i el mateix traç— i que
+      // cap snapshot antic es pogués distingir d'un de nou.
+      const alerta = !!cell.alerta
+      const bold = isBreak || alerta || i === 0
+      const fill = isBreak || alerta ? TBL.BREAK : TBL.VAL
       // R4 · les XIFRES van centrades a la cel·la. Alineades a l'esquerra, una columna de
       // talles es llegeix com un serrell; centrades, la columna es llegeix d'un cop d'ull.
       // El text (nomenclatura, nom de POM, material) es queda a l'esquerra, que és on es llegeix.
