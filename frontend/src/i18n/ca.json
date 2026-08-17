@@ -2522,7 +2522,6 @@
       "load_err": "No s'ha pogut carregar el full de fitting.",
       "print": "Imprimir",
       "sheet": "Full de fitting",
-      "session_line": "FULL DE FITTING · {{data}} · Talla base {{base}}",
       "col_n": "#",
       "col_layer": "Layer",
       "col_code": "Code",
@@ -2530,11 +2529,7 @@
       "col_spec": "Spec",
       "col_meas": "Meas.",
       "col_decision": "Decision",
-      "col_comments": "Comments",
-      "legend_ac": "ACCEPTED — la mesura és correcta, cap acció.",
-      "legend_ad": "ADJUSTED — la mesura nova substitueix l'especificació.",
-      "legend_rj": "REJECTED — refer segons especificació; digueu el motiu a Comments.",
-      "signature": "Mesurat per ____________________ · Data ____ / ____ / ______ · Signatura ____________________"
+      "col_comments": "Comments"
     }
   },
   "wizard_base_size_required": "El sistema de talles ha canviat. Selecciona la talla base.",

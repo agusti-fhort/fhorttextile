@@ -2522,7 +2522,6 @@
       "load_err": "Could not load the fitting sheet.",
       "print": "Print",
       "sheet": "Fitting sheet",
-      "session_line": "FITTING SHEET · {{data}} · Base size {{base}}",
       "col_n": "#",
       "col_layer": "Layer",
       "col_code": "Code",
@@ -2530,11 +2529,7 @@
       "col_spec": "Spec",
       "col_meas": "Meas.",
       "col_decision": "Decision",
-      "col_comments": "Comments",
-      "legend_ac": "ACCEPTED — measurement is correct, no action.",
-      "legend_ad": "ADJUSTED — the new measurement replaces the spec.",
-      "legend_rj": "REJECTED, follow specs — remake to specification; state the reason in Comments.",
-      "signature": "Measured by ____________________ · Date ____ / ____ / ______ · Signature ____________________"
+      "col_comments": "Comments"
     }
   },
   "wizard_base_size_required": "The size system has changed. Select the base size.",

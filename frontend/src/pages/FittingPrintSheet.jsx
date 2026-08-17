@@ -173,13 +173,12 @@ export default function FittingPrintSheet() {
             padding: 0 !important; overflow: visible !important;
           }
         }
-        /* LA CAPÇALERA ES REPETEIX SOLA perquè viu al THEAD, i la llegenda al TFOOT: és el
-           navegador qui les torna a pintar a cada pàgina, sense que ningú compti res. Els dos
-           display hi són explícits encara que siguin el valor per defecte — qualsevol regla que
-           els toqués mataria la repetició sense dir-ho. I cap fila es parteix per la meitat
-           entre dues pàgines: una mesura tallada horitzontalment no es llegeix. */
+        /* LA CAPÇALERA ES REPETEIX SOLA perquè viu al THEAD: és el navegador qui la torna a
+           pintar a cada pàgina, sense que ningú compti res. El display hi és explícit encara
+           que sigui el valor per defecte — qualsevol regla que el toqués mataria la repetició
+           sense dir-ho. I cap fila es parteix per la meitat entre dues pàgines: una mesura
+           tallada horitzontalment no es llegeix. */
         .ftt-full thead { display: table-header-group; }
-        .ftt-full tfoot { display: table-footer-group; }
         .ftt-full tr { page-break-inside: avoid; break-inside: avoid; }
         .ftt-full, .ftt-full * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       `}</style>
@@ -319,31 +318,15 @@ function Full({ grups, capcalera, dataSessio, logoUrl, t, tEn, dicc }) {
             )
           })}
 
-          {/* LA LLEGENDA VA A CADA PÀGINA: qui té el full 2 a la mà no té el full 1, i sense la
-              llegenda les tres caselles són tres sigles sense significat. La promesa és la
-              mateixa d'abans, però ara la manté el `tfoot` en comptes del bucle de pàgines —el
-              navegador el repeteix igual que el `thead`—, i és l'única manera que li quedava:
-              fora de la taula sortiria UN sol cop, al final de tot. */}
-          <tfoot>
-            <tr>
-              <td colSpan={8} style={{ paddingTop: 9, borderTop: '1px solid var(--border)',
-                                       fontSize: '7.5pt', color: 'var(--text-muted)',
-                                       lineHeight: 1.9 }}>
-                <b>AC</b> = {t('fitting.print.legend_ac')} &nbsp;·&nbsp;
-                <b>AD</b> = {t('fitting.print.legend_ad')} &nbsp;·&nbsp;
-                <b>RJ</b> = {t('fitting.print.legend_rj')}
-              </td>
-            </tr>
-          </tfoot>
+          {/* AQUÍ HI HAVIA EL PEU —la llegenda AC/AD/RJ al `tfoot` i, sota la taula, el bloc de
+              signatura—, i se n'han anat tots dos. Els tècnics no els demanen: qui té el full a
+              la sala ja sap què vol dir marcar una casella, i qui el signa no ho fa en aquesta
+              línia. El `tfoot` marxa SENCER i no només el seu contingut: un `tfoot` buit
+              seguiria reservant la seva alçada a cada pàgina, que és justament el que aquí
+              costava més (8,07 mm de cada full, els reservés o no).
+              ⚠️ LES CASELLES DE CADA FILA ES QUEDEN: el que se'n va és el text que les
+              explicava, no la columna DECISION on el fabricant marca. */}
         </table>
-      </div>
-
-      {/* LA SIGNATURA ES FIRMA UNA VEGADA i per això es queda FORA de la taula: aquí baix del
-          flux, o sigui a l'última pàgina i enlloc més. Abans ho decidia un `ultima` que sortia
-          de la paginació a mà; ara ho decideix el lloc on està escrita, que no es pot
-          equivocar. */}
-      <div style={{ marginTop: 10, fontSize: '7.5pt', color: 'var(--text-muted)' }}>
-        {t('fitting.print.signature')}
       </div>
     </div>
   )
