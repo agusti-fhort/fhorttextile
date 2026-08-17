@@ -5013,6 +5013,9 @@
     "porta_obrir": "Open measuring session",
     "porta_decidir": "Decide at base size",
     "porta_revisar": "Review the decision",
-    "porta_decidir_buida": "No measurement recorded yet."
+    "porta_decidir_buida": "No measurement recorded yet.",
+    "porta_decidir_tanca": "Close decision",
+    "decisio_titol": "Decision at base size",
+    "decisio_sense_rellotge": "The decision panel is open, but the task timer could not be started."
   }
 }

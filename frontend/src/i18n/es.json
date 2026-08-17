@@ -5013,6 +5013,9 @@
     "porta_obrir": "Abrir la toma",
     "porta_decidir": "Decidir en la talla base",
     "porta_revisar": "Revisar la decisión",
-    "porta_decidir_buida": "Todavía no se ha anotado ninguna medida."
+    "porta_decidir_buida": "Todavía no se ha anotado ninguna medida.",
+    "porta_decidir_tanca": "Cerrar la decisión",
+    "decisio_titol": "Decisión en la talla base",
+    "decisio_sense_rellotge": "La decisión se ha abierto, pero no se ha podido iniciar el contador de tiempo de la tarea."
   }
 }

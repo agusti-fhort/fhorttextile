@@ -5013,6 +5013,9 @@
     "porta_obrir": "Obrir la presa",
     "porta_decidir": "Decidir a la talla base",
     "porta_revisar": "Revisar la decisió",
-    "porta_decidir_buida": "Encara no s’hi ha anotat cap mesura."
+    "porta_decidir_buida": "Encara no s’hi ha anotat cap mesura.",
+    "porta_decidir_tanca": "Tancar la decisió",
+    "decisio_titol": "Decisió a la talla base",
+    "decisio_sense_rellotge": "La decisió s’ha obert, però no s’ha pogut engegar el comptador de temps de la tasca."
   }
 }

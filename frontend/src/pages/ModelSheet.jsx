@@ -1308,7 +1308,24 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 </button>
               </div>
             </div>
-            {editing === 'Mesures' ? (
+            {editing === 'Mesures' && fittingSessionParam && !fittingSession ? (
+              // 🚨 E2c — LA URL DIU «SESSIÓ» I LA SESSIÓ ENCARA NO HI ÉS: S'ESPERA.
+              //
+              // El defecte que això tanca (QA d'Agus, 17/08): entrar per
+              // `?tab=Mesures&fitting_session=<id>` SENSE `task_id` dispara DOS efectes
+              // independents —resoldre la sessió (:737) i obrir la tasca + `setEditing`
+              // (:752)—, i el render de sota cau a `source={fittingSession ? … : null}`.
+              // Si guanyava la cursa el segon, es pintava la font `check` en mode treball: la
+              // taula de DEFINICIÓ POM amb els deltes, amb el rellotge de `size_check` corrent
+              // al damunt. Sense error i sense res que ho digués.
+              //
+              // La llei ja era escrita 370 línies més amunt («val més no entrar que entrar a
+              // una ALTRA taula que se li assembla») i s'aplicava NOMÉS al botó ③. Aquí
+              // s'aplica al camí per URL, que és el que fan servir la fulla de convocatòria i
+              // el redirect de `/fittings/<id>` — o sigui que el forat era més ample que la
+              // porta que el va destapar.
+              <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>{t('app.loading')}</div>
+            ) : editing === 'Mesures' ? (
               // Sprint Y — amb sessió de fitting resolta: font FITTING + lockRules (règim/deltes/nom
               // read-only, preses editables). Sense sessió: font check per defecte, comportament idèntic.
               <CheckMeasureEditor model={model} readOnly={false} taskId={editTaskId}

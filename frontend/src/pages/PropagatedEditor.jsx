@@ -7,6 +7,8 @@ import { models, presaEscalat } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
 import PecesDelModel from '../components/model/PecesDelModel'
 import BarraPresaEscalat from '../components/model/BarraPresaEscalat'
+import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
+import { fittingSource } from '../components/model/measureSources'
 import { filesDeLaPeca } from '../utils/identitatMesura'
 import { buildEscalatGroups, buildEscalatRows, escalatRuleLeadCols } from '../components/model/fittingGridAdapter'
 import { mesuraSemblaIncrement } from '../utils/plausibilitatMesura'
@@ -43,6 +45,17 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   const [err, setErr] = useState('')
   const [reloadKey, setReloadKey] = useState(0)   // remunta MeasureGrid en canvi de règim (re-sembra)
   const [presa, setPresa] = useState(null)        // E1/B3 — estat de la presa viva + valors
+  // ── E2c (QA d'Agus, 17/08) · LA DECISIÓ ENTRA AQUÍ DINS ──────────────────────────────────
+  // La barra R5 NAVEGAVA a `?tab=Mesures&fitting_session=<id>`, i el tècnic havia de sortir del
+  // tab per decidir a la talla base i tornar-hi per veure'n l'efecte. Ara el mateix component
+  // de decisió es MUNTA aquí com a secció pròpia: la barra obre i tanca en comptes de portar.
+  //
+  // 🔑 NO ÉS UN COMPONENT NOU NI UN CONTRACTE PARAL·LEL (v. la diagnosi E2, Bloc 1): és el
+  // MATEIX `CheckMeasureEditor` amb la MATEIXA font `fittingSource` i les mateixes portes de
+  // servidor. L'única cosa que aquesta pantalla ha d'aportar de nou és el RELLOTGE: la tasca
+  // `size_check`, que fins ara obria `ModelSheet` en aterrar-hi.
+  const [decisioOberta, setDecisioOberta] = useState(false)
+  const [decisioTaskId, setDecisioTaskId] = useState(null)
 
   // E1/B3 — DUES fonts, i cadascuna diu una cosa que l'altra no sap:
   //   · `taula-mesures` → la CORBA VIGENT del model (teòrica propagada);
@@ -93,6 +106,27 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
     }
     return m
   }, [gridRows, sizes])
+
+  // E2c — OBRIR EL PANELL ÉS OBRIR LA FEINA, i per tant el rellotge. `open-task` és el mateix
+  // servei que fa servir `ModelSheet` per aterrar a «Mesurar prenda» (crea-si-falta + assigna +
+  // En curs), amb la sessió al davant perquè lligui la tasca a AQUESTA presa. Es fa un sol cop:
+  // tancar i reobrir el panell no encunya cap tasca nova.
+  //
+  // Sense sessió no s'obre res, i és la mateixa llei que el botó ③ de `ModelSheet`: val més no
+  // entrar que entrar a una superfície que se li assembla. La barra ja deixa el botó inert amb
+  // la presa BUIDA; això és el cinturó.
+  const obreDecisio = useCallback(() => {
+    if (decisioOberta) { setDecisioOberta(false); return }
+    const sid = presa?.session?.id
+    if (!sid) { setErr(t('escalat.sense_presa_oberta')); return }
+    setDecisioOberta(true)
+    if (decisioTaskId != null) return
+    models.openTask(modelId, 'size_check', sid)
+      .then(r => setDecisioTaskId(r.data.task_id))
+      // El panell ja és obert i la decisió es pot prendre igualment: el que es perd si això
+      // falla és el compta-temps, no la feina. Dir-ho i no tancar-li la porta a sobre.
+      .catch(() => setErr(t('escalat.decisio_sense_rellotge')))
+  }, [decisioOberta, decisioTaskId, presa, modelId, t])
 
   // La pregunta de plausibilitat viva: {lineId, valor, base, codi, talla, resolt}. Mai un bloqueig.
   const [confirmPlaus, setConfirmPlaus] = useState(null)
@@ -245,16 +279,14 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
           </span>
         </div>
         {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 8 }}>{err}</div>}
-        {/* E1/B3 · R5 — L'ESTAT DE LA PRESA I EL PAS SEGÜENT. La navegació va a una porta que
-            JA EXISTEIX i no n'inventa cap: amb sessió resolta, `?tab=Mesures&fitting_session=<id>`
-            és el camí que `ModelSheet` ja sap obrir (obre la tasca `size_check` d'aquella
-            sessió i aterra a la presa); sense presa oberta, al tab Mesures, on el stepper té
-            el gest de «Mesurar prenda». ⚠️ Obrir una presa CREA sessió + peça + N línies, i per
-            això aquesta pantalla no ho fa sola: hi porta (decisió D5 de la diagnosi, OBERTA). */}
+        {/* E1/B3 · R5 — L'ESTAT DE LA PRESA I EL PAS SEGÜENT.
+            ✅ E2c — LA PORTA DE DECIDIR JA NO NAVEGA: obre i tanca el panell de sota. El tècnic
+            no surt del tab per decidir a la base i tornar per veure'n l'efecte.
+            ⚠️ «Obrir una presa» SÍ que segueix navegant, i és a posta: crea sessió + peça + N
+            línies, i aquesta pantalla no ho fa sola (decisió D5 de la diagnosi, OBERTA). */}
         <BarraPresaEscalat
-          presa={presa} readOnly={readOnly}
-          onDecidir={() => navigate(
-            `/models/${modelId}?tab=Mesures&fitting_session=${presa?.session?.id ?? ''}`)}
+          presa={presa} readOnly={readOnly} decisioOberta={decisioOberta}
+          onDecidir={obreDecisio}
           onObrir={() => navigate(`/models/${modelId}?tab=Mesures`)} />
         {/* FIX-4 — la pregunta de plausibilitat. MAI un bloqueig dur: hi ha peces petites
             legítimes, i una validació que impedeix desar només ensenya a esquivar-la. Es
@@ -306,6 +338,40 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
         )}
         </>)
         }}</PecesDelModel>
+
+        {/* ── E2c · EL PANELL DE DECISIÓ, DINS D'ESCALAT ──────────────────────────────────
+            La talla base es decideix aquí mateix: el tècnic acaba d'anotar les peces arribades
+            i decideix sense canviar de tab ni perdre de vista la taula que acaba d'omplir.
+
+            És el MATEIX component que el tab Mesures (`CheckMeasureEditor` + `fittingSource`),
+            amb els MATEIXOS props que li passa `ModelSheet`. `lockRules` hi va per la mateixa
+            raó que allà: en una sessió, el règim i els deltes són lectura —s'hi decideixen
+            preses, no s'hi edita el patrimoni del model.
+
+            LA SESSIÓ VA PRIMA (`{id}` i prou) i n'hi ha prou: `resolvePieceFitting` només llegeix
+            `fittingSession.id`, i si no té la peça a mà la crea o la recupera amb el 409
+            `piece_exists`. No cal rellegir la sessió sencera per muntar-lo.
+
+            En tancar el panell (o en gravar la sessió) es rellegeix la presa: decidir a la base
+            i propagar mou la corba, i la taula de sobre ha de dir la veritat sense recarregar. */}
+        {decisioOberta && presa?.session?.id && (
+          <section style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 'var(--fs-h3)', fontWeight: 600,
+                         color: 'var(--text-main)' }}>
+              {t('escalat.decisio_titol')}
+            </h3>
+            <CheckMeasureEditor
+              model={modelInfo || { id: modelId }}
+              readOnly={readOnly}
+              taskId={decisioTaskId}
+              source={fittingSource}
+              sourceCtx={{ fittingSession: presa.session }}
+              lockRules
+              onFeedback={fb => { if (fb?.type === 'err') setErr(fb.text) }}
+              onResolved={() => { setDecisioOberta(false); load() }}
+              onSessionSaved={() => { setDecisioOberta(false); load() }} />
+          </section>
+        )}
       </div>
     </div>
   )

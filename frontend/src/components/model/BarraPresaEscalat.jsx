@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { IconChevronRight } from '@tabler/icons-react'
+import { IconChevronDown, IconChevronRight, IconChevronUp } from '@tabler/icons-react'
 import { BUIDA, DECIDIDA, MESURANT, SENSE_PRESA, estatDeLaPresa } from '../../utils/estatPresa'
 import { botoPorta } from '../ui/buttons'
 
@@ -45,10 +45,11 @@ function Badge({ to = 'neutre', children }) {
 }
 
 /**
- * @param {{presa: object|null, readOnly?: boolean,
+ * @param {{presa: object|null, readOnly?: boolean, decisioOberta?: boolean,
  *          onDecidir: () => void, onObrir: () => void}} props
  */
-export default function BarraPresaEscalat({ presa, readOnly = false, onDecidir, onObrir }) {
+export default function BarraPresaEscalat({ presa, readOnly = false, decisioOberta = false,
+                                            onDecidir, onObrir }) {
   const { t } = useTranslation()
   const e = estatDeLaPresa(presa)
   const dia = e.session?.data
@@ -94,11 +95,18 @@ export default function BarraPresaEscalat({ presa, readOnly = false, onDecidir, 
             <IconChevronRight size={16} stroke={1.5} />
           </button>
         ) : (
+          // ✅ E2c — JA NO ÉS UNA PORTA A UNA ALTRA SUPERFÍCIE: obre i tanca el panell de
+          // decisió que viu a la mateixa pantalla. Per això el chevron deixa de ser de DESTÍ
+          // (dreta) i passa a ser de PLEC (avall/amunt), i el botó declara `aria-expanded`:
+          // un chevron dret prometria una navegació que ja no passa.
           <button type="button" onClick={onDecidir} style={botoPorta}
-            disabled={e.estat === BUIDA}
+            disabled={e.estat === BUIDA} aria-expanded={decisioOberta}
             title={e.estat === BUIDA ? t('escalat.porta_decidir_buida') : undefined}>
-            {t(e.estat === DECIDIDA ? 'escalat.porta_revisar' : 'escalat.porta_decidir')}
-            <IconChevronRight size={16} stroke={1.5} />
+            {t(decisioOberta ? 'escalat.porta_decidir_tanca'
+              : (e.estat === DECIDIDA ? 'escalat.porta_revisar' : 'escalat.porta_decidir'))}
+            {decisioOberta
+              ? <IconChevronUp size={16} stroke={1.5} />
+              : <IconChevronDown size={16} stroke={1.5} />}
           </button>
         )
       )}
