@@ -7,18 +7,18 @@ import { cellaEscalat } from './cellaEscalat.js'
 
 const PRESA = { teoric: 52, real: 53.4, desviacio: 1.4, estat: '' }
 
-test('els TRES valors surten de tres llocs diferents', () => {
+test('E2a · DUES columnes per talla: la Mesura (teòrica) i el Fit actual', () => {
   const c = cellaEscalat({ lineId: 'x:L', vigent: 52, presa: PRESA })
-  assert.equal(c.history.teorica, 52)       // contracte de la presa
-  assert.equal(c.history.propagada, 52)     // corba vigent
-  assert.equal(c.active.value, 53.4)        // la peça arribada
+  assert.deepEqual(c.history, { teorica: 52 })   // una sola referència, no dues iguals
+  assert.equal(c.active.value, 53.4)             // la peça arribada
 })
 
-test('després de propagar, la PROPAGADA es mou i la TEÒRICA es queda', () => {
-  // La presa es va fer contra 52; la base s'ha decidit i la corba ha pujat a 54.
+test('E2a · després de propagar, la MESURA segueix sent la TEÒRICA de la presa', () => {
+  // La presa es va fer contra 52; la base s'ha decidit i la corba ha pujat a 54. La columna
+  // NO passa a 54: si ho fes, el vermell de R1 canviaria de significat a mitja feina.
   const c = cellaEscalat({ lineId: 'x:L', vigent: 54, presa: PRESA })
   assert.equal(c.history.teorica, 52)
-  assert.equal(c.history.propagada, 54)
+  assert.equal(c.active.baseValue, 52)
   assert.equal(c.active.value, 53.4)
 })
 
@@ -37,7 +37,6 @@ test('una cel·la sense mesurar surt BUIDA, no a zero', () => {
 test('sense presa oberta es cau a la corba vigent i no hi ha arribada', () => {
   const c = cellaEscalat({ lineId: 'x:L', vigent: 52 })
   assert.equal(c.history.teorica, 52)
-  assert.equal(c.history.propagada, 52)
   assert.equal(c.active.value, '')
   assert.equal(c.active.baseValue, 52)
   assert.equal(c.active.estat, '')
@@ -51,7 +50,7 @@ test('el veredicte i la desviació viatgen resolts pel servidor, no recalculats'
 
 test('una talla sense corba vigent no peta i no s\'inventa cap referent', () => {
   const c = cellaEscalat({ lineId: 'x:XXL' })
-  assert.deepEqual(c.history, { teorica: null, propagada: null })
+  assert.deepEqual(c.history, { teorica: null })
   assert.equal(c.active.value, '')
   assert.equal(c.active.baseValue, null)
 })
@@ -60,5 +59,5 @@ test('el `0` és un valor i no es confon amb el buit', () => {
   const c = cellaEscalat({ lineId: 'x:L', vigent: 0, presa: { teoric: 0, real: 0, desviacio: 0, estat: '' } })
   assert.equal(c.active.value, 0)
   assert.equal(c.active.baseValue, 0)
-  assert.equal(c.history.propagada, 0)
+  assert.equal(c.history.teorica, 0)
 })

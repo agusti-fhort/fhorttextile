@@ -24,8 +24,12 @@ import { useUnit } from './fittingShared'
 //
 // ARA ÉS EL PAS 1 DEL FLUX E1: la PRESA de les peces físiques arribades. «Fit actual» anota a
 // `PieceFittingLine.valor_real` (porta `fitting/model/<id>/presa/`) i NO toca res del domini.
-// Per talla es veuen TRES valors —teòrica de contracte · arribada · corba propagada vigent— i
-// el vermell diu que la peça arribada s'aparta del que s'esperava (R1).
+// E2a (QA d'Agus, 17/08) — per talla es veuen DOS valors: **Mesura** (la teòrica de contracte)
+// i **Fit actual** (l'arribada). Hi havia una tercera columna, «Propagada», i ensenyava el
+// MATEIX número que la teòrica mentre no s'hagués propagat —o sigui quasi sempre—: dues
+// columnes amb la mateixa xifra fan buscar la diferència que no hi és.
+// El vermell segueix dient que la peça arribada s'aparta del que s'esperava (R1), i el seu
+// referent segueix sent la teòrica (v. `cellaEscalat`).
 //
 // Decidir (acceptar/ajustar/rebutjar) NO es fa aquí: és el pas 2, «Mesurar prenda», i NOMÉS a
 // la talla base (R2, guard partit d'E1/B1). Propagar segueix sent l'acte conscient de Mesures.

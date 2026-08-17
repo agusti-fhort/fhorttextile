@@ -352,9 +352,19 @@ export function buildEscalatGroups(sizeLabels, baseLabel, t) {
     label: s === baseLabel
       ? <span>{s}<i className="ti ti-star" style={{ fontSize: 10, marginLeft: 4, color: 'var(--gold)' }} /></span>
       : s,
+    // E2a (QA d'Agus, 17/08) — UNA SOLA COLUMNA DE REFERÈNCIA: «Mesura».
+    //
+    // Hi havia TEÒRICA i PROPAGADA, i mostraven el mateix valor **per construcció** mentre no
+    // s'hagués propagat (`cellaEscalat`: `teorica = presa?.teoric ?? vigent`). Dues columnes
+    // amb la mateixa xifra no informen: fan buscar la diferència que no hi és.
+    //
+    // ⚠️ EL QUE NO CANVIA, i és el cor de R1: la cel·la activa segueix portant la TEÒRICA com
+    // a `baseValue` (v. `cellaEscalat`), que és el referent del vermell. Aquesta fusió és de
+    // PRESENTACIÓ —dues `historyCols` passen a una—; el contracte de la cel·la no s'ha tocat.
+    // Per això el vermell segueix dient «la peça que ha arribat no fa el que esperàvem» i no
+    // es torna vermell tot sol després d'una propagació.
     historyCols: [
-      { key: 'teorica', label: t('escalat.col_teorica') },
-      { key: 'propagada', label: t('escalat.col_propagada') },
+      { key: 'teorica', label: t('escalat.col_mesura') },
     ],
     activeLabel: t('fitting.grid.fit_current'),
     trailCols: [],

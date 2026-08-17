@@ -5001,8 +5001,7 @@
     "grup": "Identidad"
   },
   "escalat": {
-    "col_teorica": "Teórica",
-    "col_propagada": "Propagada",
+    "col_mesura": "Medida",
     "sense_presa_oberta": "No hay ninguna toma abierta de este modelo: ábrela para anotar las medidas de las prendas recibidas.",
     "sessio_segellada": "La toma está cerrada: no se pueden anotar medidas.",
     "presa_sense": "Ninguna toma abierta",
