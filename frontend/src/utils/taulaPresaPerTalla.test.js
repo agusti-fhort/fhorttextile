@@ -29,6 +29,9 @@ const linia = (o) => ({
   size_label: o.size_label, valor_teoric: o.valor_teoric,
   valor_real: 'valor_real' in o ? o.valor_real : o.valor_teoric,
   nota: o.nota ?? '', decisio: o.decisio ?? '',
+  // E2/B1 — la MARCA del gest. `null` per defecte: la sembra no en posa cap, i és el que
+  // fa que una línia acabada de néixer no compti com a mesurada.
+  presa_at: o.presa_at ?? null,
 })
 
 const grid = (lines, opts = {}) => ({
@@ -92,6 +95,28 @@ test('liniaTeContingut: el número que s\'aparta, la nota i el veredicte; res m�
   // Un real absent no és una presa (i no peta).
   assert.equal(liniaTeContingut(linia({ id: 1, pom_id: 962, size_label: 'M', valor_teoric: 50, valor_real: null })), false)
   assert.equal(liniaTeContingut(null), false)
+})
+
+test('E2/B1 · liniaTeContingut: la MARCA de presa mana sobre els números', () => {
+  // 🔴 EL CAS QUE ELS NÚMEROS NO PODEN VEURE. Una presa CONFIRMADA tal qual deixa
+  // `valor_real === valor_teoric`, que és exactament l'estat del naixement de la línia. Sense
+  // `presa_at` el predicat diria false i la fitxa, el Repàs i la Comprovació no comptarien
+  // aquesta presa. Bessona de `fitting/esdeveniments.py::linia_te_contingut`.
+  const confirmada = linia({
+    id: 1, pom_id: 962, size_label: 'M', valor_teoric: 50, valor_real: 50,
+    presa_at: '2026-08-17T17:20:00Z',
+  })
+  assert.equal(liniaTeContingut(confirmada), true,
+    'una presa confirmada amb el valor teòric ÉS una presa')
+
+  // El contrapunt, i és la llei d'E1: sense marca i sense res més, la MATEIXA fila no ho és.
+  assert.equal(liniaTeContingut(
+    linia({ id: 1, pom_id: 962, size_label: 'M', valor_teoric: 50, valor_real: 50 })), false,
+    'sense marca, valor_real == valor_teoric segueix sent la sembra')
+
+  // Les files d'abans del camp (`presa_at` absent) es llegeixen com sempre.
+  assert.equal(liniaTeContingut(
+    linia({ id: 1, pom_id: 962, size_label: 'M', valor_teoric: 50, valor_real: 51 })), true)
 })
 
 test('una presa de debò a una talla NO base surt a `arribada`', () => {

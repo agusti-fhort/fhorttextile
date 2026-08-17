@@ -26,7 +26,25 @@ ESTAT_FORA = 'Anullada'
 
 
 def linia_te_contingut(linia):
-    """Algú ha tocat aquesta línia? Veredicte, nota o número que s'aparta del teòric."""
+    """Algú ha tocat aquesta línia? Marca de presa, veredicte, nota o número que s'aparta.
+
+    ── E2/B1 · LA MARCA EXPLÍCITA MANA, I LA INFERÈNCIA ES QUEDA DE RESERVA ───────────────
+    `presa_at` diu que algú ha ANOTAT aquesta cel·la, i és l'única de les quatre condicions
+    que no s'endevina: les altres tres deriven de valors i per tant no poden distingir una
+    presa que **coincideix** amb la teòrica del naixement de la línia (que és exactament
+    l'estat que E2b produeix quan l'usuari confirma el pre-omplert tal qual).
+
+    L'ordre importa i no és estètic: la marca es mira PRIMERA perquè és la que sap el gest.
+    La inferència es conserva **darrere** per a les files nascudes abans del camp
+    (`presa_at IS NULL`), que són totes les d'abans del 17/08 i que s'han de seguir llegint
+    exactament com abans. Cap fila canvia de veredicte per aquest canvi.
+
+    ⚠️ BESSONA DECLARADA: `frontend/src/utils/taulaPresaPerTalla.js::liniaTeContingut`. Les
+    dues han de dir el mateix o el Repàs, la fitxa i la Comprovació comptaran fittings
+    diferents. Si toques una, toca l'altra.
+    """
+    if getattr(linia, 'presa_at', None) is not None:
+        return True
     if (linia.decisio or '').strip():
         return True
     if (linia.nota or '').strip():

@@ -42,6 +42,15 @@ export const REJECTED = 'REJECTED'
  */
 export function liniaTeContingut(linia) {
   if (!linia) return false
+  // E2/B1 — LA MARCA EXPLÍCITA MANA, I VA PRIMERA. `presa_at` diu que algú ha ANOTAT la
+  // cel·la; és l'única de les quatre condicions que no s'endevina. Les altres tres deriven de
+  // valors i per tant no poden distingir una presa que COINCIDEIX amb la teòrica del
+  // naixement de la línia — que és exactament l'estat que produeix el pre-omplert d'E2b quan
+  // l'usuari el confirma tal qual.
+  //
+  // La inferència es queda DARRERE per a les files nascudes abans del camp (`presa_at` null),
+  // que es llegeixen exactament com abans. Cap fila canvia de veredicte.
+  if (linia.presa_at) return true
   if ((linia.decisio || '').trim()) return true
   if ((linia.nota || '').trim()) return true
   if (linia.valor_real == null || linia.valor_teoric == null) return false

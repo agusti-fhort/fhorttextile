@@ -197,11 +197,21 @@ def desa_presa_escalat(model, *, pom_id, capa, instancia, garment, talla, valor,
         raise PresaSenseLiniaError(
             f"La presa oberta no té línia per a aquesta mesura a la talla {talla}.")
 
-    # `valor_real = valor_teoric` és el que la línia ja porta de la sembra: escriure-hi el
-    # teòric és treure la presa, no anotar-ne una. Ho decideix `linia_te_contingut` a la
-    # lectura; aquí només es desa el número que ha dit qui mesura.
+    # ── E2/B1 · LA MARCA DEL GEST ────────────────────────────────────────────────────────
+    # Això deia: «escriure-hi el teòric és treure la presa, no anotar-ne una», i era una
+    # conseqüència del predicat inferit, no una decisió. Amb E2b l'usuari pot CONFIRMAR el
+    # pre-omplert tal qual —un gest legítim que dona `valor == valor_teoric`— i això SÍ que és
+    # anotar una presa. Qui distingeix les dues coses ja no és el número: és `presa_at`.
+    #
+    #   · `valor` amb número (coincideixi o no amb la teòrica) → PRESA: marca posada.
+    #   · `valor` buit → DESDIR-SE: la línia torna al teòric i la marca se'n va. Deixar-la
+    #     seria dir que algú ha mesurat una cel·la que ja no té cap presa.
+    #
+    # `_now()` i no `timezone.now()` inline: la data la posa el servidor i mai el client.
+    from django.utils import timezone
     linia.valor_real = linia.valor_teoric if valor is None else float(valor)
-    camps = ['valor_real']
+    linia.presa_at = None if valor is None else timezone.now()
+    camps = ['valor_real', 'presa_at']
     if nota is not None:
         linia.nota = nota
         camps.append('nota')

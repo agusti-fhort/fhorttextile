@@ -436,6 +436,24 @@ class PieceFittingLine(models.Model):
     size_label = models.CharField(max_length=20)
     valor_teoric = models.FloatField()
     valor_real = models.FloatField(null=True, blank=True)
+    # E2/B1 — LA MARCA DEL GEST: quan algú ha anotat de debò aquesta cel·la.
+    #
+    # 🚨 PER QUÈ UN CAMP I NO UNA INFERÈNCIA MÉS. `linia_te_contingut` (`esdeveniments.py`)
+    # decidia «algú ho ha mesurat?» comparant `valor_real != valor_teoric`, i la línia NEIX
+    # amb els dos iguals (`create_piece_fitting`). El predicat, doncs, funcionava per un
+    # efecte lateral: només veia les preses que **per casualitat** no coincidien amb la
+    # teòrica. Amb E2b la cel·la de l'Escalat surt PRE-OMPLERTA amb la teòrica en fantasma i
+    # l'usuari la pot **confirmar tal qual** — un gest humà legítim que produeix exactament
+    # l'estat del naixement i que cap predicat derivat de valors pot distingir-ne.
+    #
+    # Això NO relaxa la llei d'E1 («existir no és haver mesurat»): la REFORÇA. Abans
+    # l'endevinava pels números; ara la sap perquè el gest deixa marca. Les files anteriors a
+    # aquest camp queden a `NULL` i segueixen resolent-se pel predicat vell — v. la cadena
+    # completa a `linia_te_contingut`, que és l'únic lloc on es llegeix.
+    #
+    # `null` = ningú no ha anotat res (la sembra no en posa cap). Treure la presa el torna a
+    # `null`: desdir-se és tornar al no-gest, no deixar una marca de gest amb el valor vell.
+    presa_at = models.DateTimeField(null=True, blank=True)
     nota = models.CharField(max_length=200, blank=True, default='')
     # D-31.21 — EL VEREDICTE DE LA MODISTA sobre aquesta cel·la.
     #
