@@ -113,7 +113,11 @@ export const models = {
   assign: (id, body) => client.post(`/api/v1/models/${id}/assign/`, body),   // {assignee_id, task_ids?}
   unassign: (id) => client.post(`/api/v1/models/${id}/unassign/`),
   // PG-4b-3b — fixa el règim de grading d'un POM del model (l'usarà 3c). {logica}
-  setPomRegim: (modelId, pomId, logica) => client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, { logica }),
+  // S42/F1 · Q1-bis — `garment` diu DE QUINA PEÇA és la regla: `ModelGradingRule` és única
+  // per `(model, pom, garment)` i `set_pom_regim_view` ja el resol (#12d). Qui no el digui rep
+  // la mare, que és el que feia tothom fins ara.
+  setPomRegim: (modelId, pomId, logica, garment = '') =>
+    client.post(`/api/v1/models/${modelId}/pom/${pomId}/regim/`, { logica, garment }),
   // G1 — els ALTRES camps de la regla (increment_base / increment_break / talla_break_label) per
   // la MATEIXA porta que el règim: `set_pom_regim_view` és un upsert de la ModelGradingRule
   // resident amb actualització selectiva per presència de camp. Cap mecànica nova d'escriptura
@@ -153,9 +157,15 @@ export const models = {
   // fitting). Retorna {linies:[{id,valor_real}]} per refrescar la fila. Base inclosa.
   // C4/BLOC 2 — `eixos` diu QUINA germana s'ajusta. Aquesta crida escriu a quatre taules i
   // totes quatre anaven amb el literal de la mesura única.
+  // S42/F1 — I LA PEÇA. La signatura n'acceptava dos de tres, i el `perLinia` de
+  // `PropagatedEditor` ja carregava el tercer: la dada hi era i es perdia a la crida. Sense
+  // l'eix, `_write_base` feia `get_or_create` sobre una clau de dues columnes i, amb una peça
+  // i la mare compartint POM, casava amb DUES files → `MultipleObjectsReturned` (500 mesurat
+  // al POM 962 del model 1379). Qui no el passi segueix rebent la mare.
   escalatAjustarTalla: (modelId, pomId, talla, valor, eixos = {}) =>
     client.post(`/api/v1/models/${modelId}/escalat/ajustar-talla/`,
-                { pom_id: pomId, talla, valor, capa: eixos.capa, instancia: eixos.instancia }),
+                { pom_id: pomId, talla, valor, capa: eixos.capa,
+                  instancia: eixos.instancia, garment: eixos.garment }),
   // Fase B — estat de propagació perquè el botó Propagar MIRI ABANS (read-only):
   // {te_dades_propagades, segellada, version_number, te_regles}.
   // G2 — `te_regles` és la condició dura: sense regla NO es propaga mai; el gest porta a

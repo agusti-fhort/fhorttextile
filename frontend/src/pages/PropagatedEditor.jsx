@@ -79,8 +79,13 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
     // ja porta els camps per separat, que és el que `pom/identitat.py` demana que es faci.
     const info = perLinia.get(lineId)
     if (!info) return Promise.resolve()
+    // S42/F1 — I LA PEÇA, que aquesta funció ja tenia a la mà. `perLinia` carrega
+    // `garment: r.garment` (25 línies més amunt) i la crida n'enviava DOS DE TRES: la junta
+    // era aquesta línia, no la dada. Sense l'eix, el backend resolia la fila per una clau de
+    // dues columnes i, amb la mare i la 02 compartint POM, casava amb DUES → 500.
     return models.escalatAjustarTalla(modelId, info.pom_id, info.talla, value,
-                                      { capa: info.capa, instancia: info.instancia })
+                                      { capa: info.capa, instancia: info.instancia,
+                                        garment: info.garment })
       .catch(e => {
         // G6-B/T3 — la versió vigent està SEGELLADA: el backend refusa l'escriptura (409). Sense
         // això, el rebuig arribaria com un error mut i el tècnic no sabria ni per què no es desa
@@ -145,9 +150,14 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   }
 
   // Canvi de règim del POM (endpoint independent de la sessió) → rellegeix i remunta la graella.
+  // S42/F1 · Q1-bis — LA REGLA ÉS DE LA PEÇA. `ModelGradingRule` és única per
+  // `(model, pom, garment)` des de T3 i `set_pom_regim_view` ja resol l'eix des del #12d;
+  // aquesta crida l'identificava amb el `pom_id` pelat, o sigui que canviar el règim des del
+  // contenidor de la 02 reescrivia la regla de la MARE. La fila el porta (`taula-mesures`
+  // l'emet), com a l'ajust de talla d'aquí sobre.
   const onRegimChange = (row, nova) => {
     if (!nova || nova === (row.logica ?? '')) return
-    models.setPomRegim(modelId, row.pom_id, nova)
+    models.setPomRegim(modelId, row.pom_id, nova, row.garment || '')
       .then(() => load().then(() => setReloadKey(k => k + 1)))
       .catch(() => setErr(t('model_measurements.regim_err')))
   }

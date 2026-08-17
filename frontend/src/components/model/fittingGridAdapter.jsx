@@ -371,8 +371,10 @@ export function buildEscalatRows(rows, sizeLabels, baseLabel) {
       // pom_code (codi_client). taula-mesures ja retorna nom_fitxa.
       pom_id: row.pom_id, codi: row.nom_fitxa || row.pom_code, is_key: row.is_key,
       // C4/BLOC 3 — els eixos viatgen amb la fila perquè qui hi escrigui no hagi de desmuntar
-      // el lineId per saber de quina germana parla. L'escriptura (`escalat/ajustar-talla`)
-      // encara és per `pom_id` sol: desancorar-la és feina del bloc 2.
+      // el lineId per saber de quina germana parla.
+      // ✅ S42/F1 — i ara l'escriptura ELS DIU. El que hi havia deia «`escalat/ajustar-talla`
+      // encara és per `pom_id` sol: desancorar-la és feina del bloc 2», i era una nota
+      // caducada: la crida porta els TRES eixos i el backend hi resol la fila.
       clau: row.clau, capa: row.capa, instancia: row.instancia,
       // SET-2/T7-B7 — l'eix de prenda, pel mateix motiu que a les altres dues taules: el
       // desat l'envia i la poda del backend hi resol. `base-stages` l'emet des de R11.
