@@ -462,7 +462,18 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
             # les files del payload. Fer passar una presa per allà convertiria una base
             # 'CHECKED' en 'MANUAL' sense que ningú ho hagués demanat: dany d'auditoria dins
             # d'un canvi de nom de columna.
-            'capa', 'instancia',
+            # SET-2/F1 — I EL TERCER EIX, que era l'únic que NO es podia dir.
+            # `validate()` (més avall) ja el consultava des de T5, i `filterset_fields`
+            # ja l'exposava en LECTURA (`views.py`) — però no era aquí, i per tant DRF
+            # el descartava del payload: `attrs` no en podia portar cap valor. Efecte
+            # doble i tot dos silenciós: una fila de la peça 02 NEIXIA A LA MARE, i si
+            # la mare ja hi era el guard la denunciava com a duplicada (400 FALS). El
+            # camí de crear mesures per peça estava tancat al BACKEND encara que la
+            # pantalla l'oferís.
+            # ⚠️ LLEI S27 — un camp que no és a `fields` passa `manage.py check` VERD.
+            # Aquest tram s'exerceix a `test_set2_f1_escriptura_garment`, no per
+            # introspecció de `Meta`.
+            'capa', 'instancia', 'garment',
             'base_value_cm', 'is_active', 'notes',
             'nom_fitxa', 'origen',
             'updated_at',
@@ -470,7 +481,7 @@ class BaseMeasurementSerializer(serializers.ModelSerializer):
         read_only_fields = ('updated_at',)
 
     def validate(self, attrs):
-        """La CLAU ÚNICA `(model, pom, capa, instancia)` i la invariant del nom, dites a temps.
+        """La CLAU ÚNICA `(model, pom, capa, instancia, garment)` i la invariant del nom, a temps.
 
         Totes dues viuen a la BD i, sense això, arriben com un IntegrityError —un 500 mut— quan
         el que ha passat és que l'usuari ha triat una cara que aquesta mesura ja té.
