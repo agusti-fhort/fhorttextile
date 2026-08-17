@@ -279,13 +279,23 @@ class PropagarActionTest(TenantTestCase):
         self.assertEqual(self._reals(), TEORICS)       # res s'ha desat
         self.assertEqual(self._teorics(), TEORICS)
 
-    def test_no_base_patch_400_no_desa(self):
-        original = PieceFittingLine.objects.get(pk=self.lines['XL'].pk).valor_real
+    # ⚠️ E1/B1 (17/08) — AQUEST TEST DEIA EL CONTRARI, i el canvi és de LLEI, no de codi.
+    #
+    # Deia: `PATCH valor_real` sobre una talla no-base → 400. Era la lectura correcta de P1
+    # mentre l'únic que es podia fer amb una línia fos DECIDIR-LA. El flux E1 hi separa dos
+    # gestos: PRENDRE (anotar la peça física arribada en aquella talla) és legal a tot el run;
+    # DECIDIR segueix sent només a la base (R2).
+    #
+    # El guard sencer NO desapareix: es queda per a `propagar` (test de sobre) i per al camp
+    # `decisio`. La llei nova, amb el seu banc, viu a `test_e1_guard_partit.py` — aquí només
+    # hi queda la no-regressió del camí que aquest fitxer ja vigilava.
+    def test_no_base_patch_presa_ES_PERMESA(self):
         resp = self._patch(self.lines['XL'], 50)
-        self.assertEqual(resp.status_code, 400)
-        self.assertEqual(resp.data['detail'], self.NO_BASE_DETAIL)
+        self.assertEqual(resp.status_code, 200)
         self.assertEqual(
-            PieceFittingLine.objects.get(pk=self.lines['XL'].pk).valor_real, original)
+            PieceFittingLine.objects.get(pk=self.lines['XL'].pk).valor_real, 50)
+        # La teòrica no es mou: prendre no és corregir la corba.
+        self.assertEqual(self._teorics(), TEORICS)
 
     def test_segellat_mana_sobre_eix(self):
         """Sessió segellada + línia no-base → 409 (estat), no 400 (eix): l'ordre dels guards

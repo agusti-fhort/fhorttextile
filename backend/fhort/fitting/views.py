@@ -592,25 +592,44 @@ class PieceFittingLineViewSet(mixins.UpdateModelMixin,
         'pom', 'piece_fitting__session', 'piece_fitting__model').all()
     http_method_names = ['get', 'patch', 'post', 'head', 'options']
 
-    def _rebuig_escriptura(self, line):
+    def _rebuig_escriptura(self, line, camps=None):
         """Guards d'escriptura, compartits per `partial_update` i `propagar`. Retorna una
-        Response de rebuig, o None si la línia és editable.
+        Response de rebuig, o None si l'escriptura és admissible.
 
         Ordre deliberat: primer l'estat de la sessió (una sessió segellada no s'edita ni tan
-        sols a la base), després l'eix (P1).
+        sols a la base), després l'eix.
+
+        E1/B1 — L'EIX ES MIRA DIFERENT SEGONS QUÈ S'ESCRIU, i `camps` és qui ho diu:
+
+          · `camps=None` (`propagar`) — l'ancoratge que escampa el delta és el gest de la
+            BASE per definició (R2). Guard sencer, com sempre: `fitting_line_is_non_base`.
+          · `camps=<claus del payload>` (`partial_update`) — PRENDRE una talla no-base és
+            legal (pas 1 d'E1); DECIDIR-LA no ho és. El predicat viu a `services`
+            (`fitting_line_decisio_fora_de_base`), que és on hi ha el banc.
+
+        🔑 **Per CAMP i no per endpoint**: un payload mixt `{valor_real, decisio}` entra per
+        la porta legal de la presa, i sense mirar les claus hi colaria el veredicte.
         """
         if services.fitting_line_is_locked(line):
             return Response({'detail': SEALED_SESSION_DETAIL}, status=status.HTTP_409_CONFLICT)
-        if services.fitting_line_is_non_base(line):
-            # 400, no 409: no és conflicte d'estat sinó escriptura fora de l'eix del fitting.
-            return Response({'detail': services.NON_BASE_LINE_DETAIL},
+        if camps is None:
+            if services.fitting_line_is_non_base(line):
+                # 400, no 409: no és conflicte d'estat sinó escriptura fora de l'eix del fitting.
+                return Response({'detail': services.NON_BASE_LINE_DETAIL},
+                                status=status.HTTP_400_BAD_REQUEST)
+        elif services.fitting_line_decisio_fora_de_base(line, camps):
+            # Mateix codi i mateixa forma de resposta que el guard sencer; el que canvia és
+            # el DETALL, perquè el que es rebutja no és el mateix gest i qui ho llegeix ha de
+            # poder distingir «aquí no es mesura» de «aquí no es decideix».
+            return Response({'detail': services.NON_BASE_DECISIO_DETAIL},
                             status=status.HTTP_400_BAD_REQUEST)
         return None
 
     def partial_update(self, request, *args, **kwargs):
-        # Guards ABANS de desar; delega només si la línia és editable.
+        # Guards ABANS de desar; delega només si l'escriptura és admissible. Les claus del
+        # payload hi entren: v. `_rebuig_escriptura` (prendre ≠ decidir).
         linia = self.get_object()
-        rebuig = self._rebuig_escriptura(linia)
+        rebuig = self._rebuig_escriptura(linia, camps=(request.data or {}).keys())
         if rebuig is not None:
             return rebuig
         resposta = super().partial_update(request, *args, **kwargs)

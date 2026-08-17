@@ -54,6 +54,61 @@ def fitting_line_is_non_base(line) -> bool:
     return line.size_label.strip() != base
 
 
+# ── E1/B1 — EL GUARD ES PARTEIX: PRENDRE ≠ DECIDIR ───────────────────────────
+#
+# P1 tancava TOTA escriptura de línia no-base, i era correcte mentre l'únic que es podia fer
+# amb una línia fos decidir-la. El flux E1 hi separa dos gestos:
+#
+#   · PRENDRE  — anotar la xifra de la peça FÍSICA arribada en aquella talla. Dada
+#                d'observació, i n'hi ha a totes les talles del run: és el pas 1.
+#   · DECIDIR  — el veredicte (`decisio`). R2: **els ajustos només s'accepten a la TALLA
+#                BASE**, i la propagació surt d'allà. Segueix sent 400.
+#
+# 🔑 EL GUARD ÉS PER CAMP, NO PER ENDPOINT, i el motiu és el payload mixt: un PATCH amb
+# `valor_real` i `decisio` alhora entra per la porta legal de la presa i colaria el veredicte.
+# Per això el predicat mira QUÈ es vol escriure, no per on ha entrat.
+#
+# ⚠️ OBRIR LA PRESA NO OBRE CAP ESCRIPTURA DE DOMINI, i està comprovat per cens (17/08): la
+# presa no-base no arriba a `consolidate_base_from_fitting` (:515 `size_label != base →
+# continue`), i per tant tampoc al `close`. Els lectors que sí que canvien de resposta ho han
+# de fer: `esdeveniments.linia_te_contingut` (algú HA mesurat) i els exports S8/S10, que
+# sempre han llistat totes les talles. El banc que ho congela és
+# `test_e1_guard_partit.ConsolidacioIgnoraPresaNoBaseTest`.
+#
+# `propagar` NO entra aquí: l'ancoratge que escampa el delta és el gest de la base per
+# definició (R2) i es queda amb el guard sencer, `fitting_line_is_non_base`.
+
+#: Camps que constitueixen una DECISIÓ sobre la cel·la. La resta del serializer
+#: (`valor_real`, `nota`) és PRESA. `decisio` hi és sola a posta: desdir-se (escriure `''`)
+#: també és decidir, i per això el predicat mira la PRESÈNCIA de la clau i mai el seu valor.
+CAMPS_DE_DECISIO = ('decisio',)
+
+NON_BASE_DECISIO_DETAIL = (
+    "Els ajustos només s'accepten a la talla base del model. "
+    "A les altres talles s'hi pot anotar la presa, però no decidir-la."
+)
+
+
+def escriptura_es_decisio(camps) -> bool:
+    """True si el payload declara algun camp de decisió. Predicat pur, sense DRF.
+
+    `camps` és qualsevol iterable de noms (típicament `request.data.keys()`). Mira la
+    presència de la clau i no el valor: `{'decisio': ''}` és el gest de TREURE el veredicte,
+    que és una decisió tant com posar-n'hi un.
+    """
+    return any(c in CAMPS_DE_DECISIO for c in (camps or ()))
+
+
+def fitting_line_decisio_fora_de_base(line, camps) -> bool:
+    """True si aquest payload DECIDEIX sobre una línia que no és de la talla base (R2).
+
+    Reusa `fitting_line_is_non_base` i no en duplica la normalització: si la font de la talla
+    base divergís entre els dos predicats, la vista acceptaria veredictes que el `close`
+    descartaria en silenci — el mateix forat que P1 va tapar, un gest més tard.
+    """
+    return escriptura_es_decisio(camps) and fitting_line_is_non_base(line)
+
+
 # ── Peça 1 — guard de solapament ─────────────────────────────────────────────
 class SessionOverlapError(Exception):
     """Conflicte DUR: ja hi ha una sessió viva del mateix model que solapa la franja
