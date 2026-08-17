@@ -5314,6 +5314,11 @@ export default function TechSheetEditor() {
   // necessita que li diguem com se'n diu: se li passa el nom del model i el rètol genèric cau.
   const nomDelModel = () => (model?.nom_prenda || model?.codi_intern || '').trim()
   const grupsQ8 = (files) => grupsDelFull(files, pecesModel, nomDelModel())
+  // C5 — EL PANELL TRIA PEÇA I TAULA, i per això la inserció ha de saber acotar-se a una prenda.
+  // `undefined` segueix volent dir TOTES: el sedàs és additiu i no canvia cap camí existent.
+  const nomesLaPeca = (grups, garment) => (
+    garment === undefined ? grups : grups.filter(g => g.garment === garment)
+  )
   // L'amplada de la columna del POM surt del corpus REAL, no d'un número escrit a mà: el nom més
   // llarg hi ha de cabre en dues línies. `charMm` és exacte perquè la fitxa va en monoespaiada
   // (mateixa aritmètica que el builder: 0.6 del cos, i el cos de Q8 és 9pt = 3.175 mm).
@@ -5368,14 +5373,14 @@ export default function TechSheetEditor() {
   // ── Q8a · TAULA DE FITTING, PER PEÇA ────────────────────────────────────────
   // La font és l'ÚLTIMA SESSIÓ TANCADA i el seu `PieceFitting`: el grid porta una línia per
   // (mesura × talla) i aquesta taula n'agafa la de la talla base, que és on es prova la peça.
-  const insertTaulaFitting = async () => {
+  const insertTaulaFitting = async (garment) => {
     if (!locked || !sessioTancada) return
     const grid = await gridDeLaSessioTancada()
     if (!grid) return
 
     const { base, files } = filesFitting(grid)
     if (!files.length) { flash(t('tech_sheet.flash_empty_table')); return }
-    const grups = grupsQ8(files)
+    const grups = nomesLaPeca(grupsQ8(files), garment)
     const wPom = ampladaPomQ8(files)
     const snapshotComu = {
       model_id: model.id, fitting_session_id: sessioTancada.id,
@@ -5415,6 +5420,7 @@ export default function TechSheetEditor() {
     for (const p of pecesModel || []) {
       const codi = p?.es_mare ? GARMENT_MARE : (p?.codi || '')
       if (ambFiles.has(codi)) continue
+      if (garment !== undefined && codi !== garment) continue
       const nom = nomDeLaPeca(p, tEn('resum_wizard.model_base'))
       entrades.push({ nota: `${nom} — ${tEn('tech_sheet.q8_no_session')}` })
     }
@@ -5439,7 +5445,7 @@ export default function TechSheetEditor() {
   // Font ÚNICA: `taula-mesures`, que porta en un sol payload el règim (el mateix que la pantalla
   // d'Escalat edita), la corba per talla i l'eix de la prenda. `graded-table/` no serveix
   // `garment` i faria caure totes les files a la mare — que és per què la T1b no es parteix mai.
-  const insertTaulaGrading = async () => {
+  const insertTaulaGrading = async (garment) => {
     if (!locked) return
     const consolidat = await taulaMesuresDelModel()
     if (!consolidat) return
@@ -5447,7 +5453,7 @@ export default function TechSheetEditor() {
     const files = filesGrading(consolidat.rows, talles, base)
     if (!files.length) { flash(t('tech_sheet.flash_empty_table')); return }
 
-    const grups = grupsQ8(files)
+    const grups = nomesLaPeca(grupsQ8(files), garment)
     const wPom = ampladaPomQ8(files)
     const entrades = grups.map(g => ({
       taula: {
@@ -5497,7 +5503,7 @@ export default function TechSheetEditor() {
   //
   // 🔑 LES NOTES NO HI SÓN, i tenen taula pròpia: amb tres columnes per talla no hi cap ni una
   // frase, i encabir-les-hi hauria estat estrènyer les xifres fins a fer-les il·legibles.
-  const insertTaulaSizeSet = async () => {
+  const insertTaulaSizeSet = async (garment) => {
     if (!locked) return
     // 🚨 B0 — LA FONT ÉS L'ESTAT CONSOLIDAT, i la sessió tancada l'ENRIQUEIX. Aquesta taula
     // demanava una sessió TANCADA i per això un model amb l'escalat tancat i cap fitting segellat
@@ -5518,7 +5524,7 @@ export default function TechSheetEditor() {
     const { base, talles, files } = dades
     if (!files.length || !talles.length) { flash(t('tech_sheet.flash_empty_table')); return }
 
-    const grups = grupsQ8(files)
+    const grups = nomesLaPeca(grupsQ8(files), garment)
     const wPom = ampladaPomQ8(files)
     const entrades = grups.map(g => ({
       taula: {
@@ -5563,14 +5569,14 @@ export default function TechSheetEditor() {
   // Layout de Q8a i amb la talla base al costat, perquè una nota sense la xifra a què es refereix
   // obliga a anar a buscar-la a l'altra taula. Només hi entren les files que TENEN nota: una
   // columna de guions no és informació.
-  const insertTaulaNotes = async () => {
+  const insertTaulaNotes = async (garment) => {
     if (!locked || !sessioTancada) return
     const grid = await gridDeLaSessioTancada()
     if (!grid) return
     const { base, files } = filesNotes(grid)
     if (!files.length) { flash(t('tech_sheet.q8_flash_no_notes')); return }
 
-    const grups = grupsQ8(files)
+    const grups = nomesLaPeca(grupsQ8(files), garment)
     const wPom = ampladaPomQ8(files)
     const entrades = grups.map(g => ({
       taula: {
@@ -5920,7 +5926,7 @@ export default function TechSheetEditor() {
     if (variant === 't1a') insertTableT1a(sfId)
     else if (variant === 't1b') insertTableT1b(sfId)
   }
-  const onPickTableVariant = (variant) => {
+  const onPickTableVariant = (variant, garment) => {
     if (variant === 't2') { insertTableT2(); return }
     // T0 — com la T3: no hi ha res a triar. La base és del MODEL, no d'un size fitting.
     if (variant === 'base_measures') { insertTableBaseMeasures(); return }
@@ -5928,10 +5934,10 @@ export default function TechSheetEditor() {
     if (variant === 'repas') { insertTableRepas(); return }
     // Q8 — res a triar: la sessió és L'ÚLTIMA TANCADA, no una de la llista. Oferir-ne un
     // selector convidaria a compondre la fitxa amb un fitting que ja s'ha superat.
-    if (variant === 'q8_fitting') { insertTaulaFitting(); return }
-    if (variant === 'q8_grading') { insertTaulaGrading(); return }
-    if (variant === 'q8_size_set') { insertTaulaSizeSet(); return }
-    if (variant === 'q8_notes') { insertTaulaNotes(); return }
+    if (variant === 'q8_fitting') { insertTaulaFitting(garment); return }
+    if (variant === 'q8_grading') { insertTaulaGrading(garment); return }
+    if (variant === 'q8_size_set') { insertTaulaSizeSet(garment); return }
+    if (variant === 'q8_notes') { insertTaulaNotes(garment); return }
     // R3 — la personalitzada s'insereix ja, 3×3. Preguntar files i columnes abans de veure res
     // no aporta: el panell dret ja té els controls d'afegir i treure files i columnes, i allà
     // es decideix VEIENT la taula, que és quan se sap quantes en calen.
@@ -6177,7 +6183,11 @@ export default function TechSheetEditor() {
   // aquestes dues línies ja tenen l'arbre engegat sense tocar res més.
   const grupsPom = agrupaPerGarment(pomRows)
   const arbrePom = calArbrePerGarment(grupsPom)
-  const pecesDelModel = grupsPom.map(g => g.garment).filter(g => g !== GARMENT_MARE)
+  // C5 — `pecesDelModel` (les prendes deduïdes de les files de POM) se n'ha anat amb la casella
+  // «Una taula per peça (N)» i amb el rètol que la va substituir. El panell de Q8 ja no dedueix
+  // les peces de les files: les demana al contracte de `/peces/`, que és l'únic que en sap el
+  // NOM i l'ORDRE (la mare primer). Deduir-les de les files donava codis sense nom i en l'ordre
+  // en què el payload els servís.
   // T0 — la porta és la seva pròpia: NO demana graduació (és justament la taula que no en
   // porta). L'únic que necessita és que hi hagi almenys una mesura de talla base AMB XIFRA;
   // un model amb només POMs materialitzats buits produiria una taula de cel·les buides.
@@ -6204,36 +6214,39 @@ export default function TechSheetEditor() {
       k: 'repas', icon: 'ti-history', label: t('tech_sheet.table_variant_repas'),
       ok: nRepas > 0, motiu: t('tech_sheet.lib_table_no_repas'),
     },
-    // Q8a — la taula de FITTING per peça. Porta d'una sola condició: que hi hagi una sessió
-    // TANCADA. Amb una d'oberta la variant es veu igualment i diu per què no es pot inserir
-    // (R3: una opció que desapareix no s'aprèn).
-    {
-      k: 'q8_fitting', icon: 'ti-ruler-2', label: t('tech_sheet.table_variant_fitting_peca'),
-      ok: !!sessioTancada, motiu: t('tech_sheet.lib_table_no_closed_session'),
-    },
-    // Q8b — l'ESCALAT per peça. La porta és la mateixa que la T0: que el model tingui mesures.
-    // El règim pot ser buit a totes les files (un model sense graduar) i la taula segueix sent
-    // correcta: dirà «—» a Rule i a Δ, que és exactament el que hi ha.
-    {
-      k: 'q8_grading', icon: 'ti-chart-grid-dots', label: t('tech_sheet.table_variant_grading_peca'),
-      ok: baseMeasuresOk, motiu: t('tech_sheet.lib_table_no_base_values'),
-    },
-    // Q8c i les seves notes: mateixa porta que Q8a —la sessió TANCADA—, i entrades separades
-    // perquè l'espec les vol inseribles independentment: la taula de notes va sovint a una altra
-    // pàgina que la graella de talles.
-    // 🚨 B0 — EL SIZE SET NO MIRA CAP SESSIÓ. La seva font és la corba consolidada del model
-    // (la mateixa porta que Q8b i la T0); una sessió tancada només hi afegeix les preses.
-    {
-      k: 'q8_size_set', icon: 'ti-table-row', label: t('tech_sheet.table_variant_sizeset_peca'),
-      ok: baseMeasuresOk, motiu: t('tech_sheet.lib_table_no_base_values'),
-    },
-    {
-      k: 'q8_notes', icon: 'ti-notes', label: t('tech_sheet.table_variant_notes_peca'),
-      ok: !!sessioTancada, motiu: t('tech_sheet.lib_table_no_closed_session'),
-    },
     { k: 't2', icon: 'ti-list-details', label: t('tech_sheet.table_variant_t2'), ok: true, motiu: '' },
     { k: 'custom', icon: 'ti-table-plus', label: t('tech_sheet.table_variant_custom'), ok: true, motiu: '' },
   ]
+
+  // ── Q8-bis/C5 · LES TAULES DE Q8, AGRUPADES PER PEÇA ────────────────────────
+  // Surten de `TABLE_VARIANTS` i tenen llista pròpia perquè ja no són quatre entrades planes: són
+  // quatre taules PER PRENDA, i qui compon la fitxa tria la peça i la taula, no un paquet.
+  // Les entrades «(per peça)» que inserien el grup sencer de cop se'n van: inserir vuit taules
+  // amb un clic era ràpid de fer i lent de desfer, i el que el tècnic vol és posar la taula
+  // d'aquesta peça al costat del croquis d'aquesta peça.
+  //
+  // Les PORTES són les que ja hi eren i cadascuna té la seva: fitting i notes volen una sessió
+  // TANCADA (una taula de fitting sense fitting no és incompleta, no existeix); escalat i size
+  // set només volen que el model tingui mesures, perquè la seva font és la corba consolidada.
+  const Q8_TAULES = [
+    { k: 'q8_fitting', icon: 'ti-ruler-2', label: t('tech_sheet.q8_taula_fitting'),
+      ok: !!sessioTancada, motiu: t('tech_sheet.lib_table_no_closed_session') },
+    { k: 'q8_grading', icon: 'ti-chart-grid-dots', label: t('tech_sheet.q8_taula_grading'),
+      ok: baseMeasuresOk, motiu: t('tech_sheet.lib_table_no_base_values') },
+    { k: 'q8_size_set', icon: 'ti-table-row', label: t('tech_sheet.q8_taula_sizeset'),
+      ok: baseMeasuresOk, motiu: t('tech_sheet.lib_table_no_base_values') },
+    { k: 'q8_notes', icon: 'ti-notes', label: t('tech_sheet.q8_taula_notes'),
+      ok: !!sessioTancada, motiu: t('tech_sheet.lib_table_no_closed_session') },
+  ]
+  // Les prendes del panell, amb el nom que ja resol el punt únic. Sense contracte de `/peces/`
+  // (encara no ha contestat, o ha fallat) es degrada a UNA entrada sense rètol: el pitjor que pot
+  // passar és no veure els noms, mai no poder inserir res — la mateixa llei que `grupsDelFull`.
+  const pecesDelPanell = (pecesModel && pecesModel.length)
+    ? pecesModel.map(p => ({
+      garment: p?.es_mare ? GARMENT_MARE : (p?.codi || ''),
+      nom: nomDeLaPeca(p, nomDelModel()),
+    }))
+    : [{ garment: undefined, nom: '' }]
 
   // R5 — a la biblioteca NOMÉS hi entra el que es pot inserir de veritat. `addModelFitxer`
   // fabrica un objecte `image` a partir dels bytes del fitxer: oferir-hi un PDF, un XLSX o un
@@ -7916,16 +7929,35 @@ export default function TechSheetEditor() {
                   <span style={libName}>{v.label}</span>
                 </button>
               ))}
-              {/* Q8 — AQUÍ HI HAVIA LA CASELLA «Una taula per peça (N)», i se n'ha anat perquè
-                  ara és el comportament únic. El que en queda és el RÈTOL: qui compon la fitxa ha
-                  de saber quantes taules li sortiran de cada entrada, i això no és una opció sinó
-                  un fet del model. Amb una sola prenda no es pinta res, com abans. */}
-              {pecesDelModel.length > 0 && (
-                <p style={{ ...libEmpty, marginTop: 2 }}
-                  title={t('tech_sheet.split_by_garment_hint', { peces: pecesDelModel.join(' · ') })}>
-                  {t('tech_sheet.split_by_garment_always', { count: pecesDelModel.length + 1 })}
-                </p>
-              )}
+              {/* ── Q8-bis/C5 · LES TAULES DE FITTING, AGRUPADES PER PRENDA ──────────────
+                  Un encapçalament per peça i les seves quatre taules a sota. Es tria PEÇA i
+                  TAULA: les entrades planes que inserien el grup sencer de cop se n'han anat
+                  —vuit taules amb un clic eren ràpides de posar i lentes de treure, i el que el
+                  tècnic vol és la taula d'aquesta peça al costat del croquis d'aquesta peça.
+                  Amb una sola prenda l'encapçalament no es pinta: un rètol que no distingeix res
+                  és soroll (la mateixa llei que `calArbrePerGarment`). */}
+              {pecesDelPanell.map(pc => (
+                <Fragment key={pc.garment ?? 'sense'}>
+                  {pecesDelPanell.length > 1 && (
+                    <p style={{ ...libEmpty, marginTop: 6, marginBottom: 2, fontWeight: 700,
+                                color: COL.textMain, textTransform: 'uppercase',
+                                letterSpacing: '0.04em' }}>
+                      {pc.nom}
+                    </p>
+                  )}
+                  {Q8_TAULES.map(v => (
+                    <button key={`${pc.garment ?? ''}-${v.k}`} type="button" disabled={!v.ok}
+                      onClick={() => onPickTableVariant(v.k, pc.garment)}
+                      title={v.ok
+                        ? t('tech_sheet.lib_table_insert', { nom: pc.nom ? `${v.label} · ${pc.nom}` : v.label })
+                        : v.motiu}
+                      style={{ ...libRow, opacity: v.ok ? 1 : 0.45, cursor: v.ok ? 'pointer' : 'default' }}>
+                      <i className={`ti ${v.icon}`} style={libIcon} />
+                      <span style={libName}>{v.label}</span>
+                    </button>
+                  ))}
+                </Fragment>
+              ))}
               {/* F3 — la partició per secció NOMÉS surt si el model en té més d'una: en una
                   fitxa d'una sola peça seria una casella que no vol dir res. Mai forçada. */}
               {seccionsDelModel.length > 1 && (
