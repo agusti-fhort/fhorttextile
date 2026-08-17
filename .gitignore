@@ -21,3 +21,6 @@ TRADUCCIONS_I18N_*.xlsx
 albara_v2_sample.pdf
 frontend-backoffice/.env
 frontend-backoffice/.env.*
+
+# Q8/QA — bolcat de payloads del banc (el genera el test; no és codi)
+ops/qa/_out/
