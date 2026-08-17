@@ -815,6 +815,25 @@ export const pieceFittings = {
   discard: (id) => client.post(`/api/v1/piece-fittings/${id}/discard/`),
 }
 
+// E1/B3 — LA PRESA DE L'ESCALAT (pas 1): la xifra de la peça FÍSICA arribada, per talla.
+//
+// ⚠️ NO ÉS `escalatAjustarTalla`, i la diferència és tota la peça: aquella EDITA LA CORBA
+// TEÒRICA (escriu `BaseMeasurement`/`ModelGradingOverride` i re-deriva els specs); aquesta
+// ANOTA UNA OBSERVACIÓ a `PieceFittingLine.valor_real` i no toca res del domini. Consolidar
+// és del `close` de «Mesurar prenda» i propagar té la seva porta.
+//
+// El `desa` retorna la cel·la sencera resolta pel servidor —{teoric, real, desviacio, estat}—
+// perquè el vermell de R1 no depengui de com arrodoneixi cada client.
+// 409 `sense_presa_oberta` = no hi ha cap presa viva del model: la pantalla ha d'oferir el
+// gest d'obrir-la, que és el mateix que obre «Mesurar prenda».
+export const presaEscalat = {
+  get: (modelId) => client.get(`/api/v1/fitting/model/${modelId}/presa/`),
+  desa: (modelId, pomId, talla, valor, eixos = {}) =>
+    client.post(`/api/v1/fitting/model/${modelId}/presa/`,
+                { pom_id: pomId, talla, valor, capa: eixos.capa,
+                  instancia: eixos.instancia, garment: eixos.garment }),
+}
+
 // Autosave de cel·la: només PATCH de valor_real / nota.
 export const pieceFittingLines = {
   update: (id, data) => client.patch(`/api/v1/piece-fitting-lines/${id}/`, data),

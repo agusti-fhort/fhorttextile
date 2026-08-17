@@ -4999,5 +4999,11 @@
   },
   "identitat": {
     "grup": "Identity"
+  },
+  "escalat": {
+    "col_teorica": "Expected",
+    "col_propagada": "Graded",
+    "sense_presa_oberta": "There is no open measuring session for this model: open one to record the measurements of the garments received.",
+    "sessio_segellada": "The measuring session is closed: no measurements can be recorded."
   }
 }

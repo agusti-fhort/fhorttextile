@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { IconAlertTriangle, IconLock } from '@tabler/icons-react'
+import { IconAlertTriangle } from '@tabler/icons-react'
 import client from '../api/client'
-import { models } from '../api/endpoints'
+import { models, presaEscalat } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
 import PecesDelModel from '../components/model/PecesDelModel'
 import { filesDeLaPeca } from '../utils/identitatMesura'
@@ -11,12 +11,23 @@ import { mesuraSemblaIncrement } from '../utils/plausibilitatMesura'
 import { formatLen } from '../utils/format'
 import { useUnit } from './fittingShared'
 
-// ESCALAT — editor de la taula propagada del model (totes les talles) sobre l'editor únic MeasureGrid,
-// CONVERGIT amb el fitting: totes les talles editables (base inclosa) i editar una cel·la PROPAGA per
-// regla a les germanes (endpoint escalat/ajustar-talla → propaga_ancoratges, com piece-fitting-lines/
-// propagar). El règim per POM es canvia amb setPomRegim. S'alimenta de taula-mesures (UNA taula vigent
-// neta; LLEI: propagar = llenç net, no eix de versions). Versionar és l'acte conscient "Propagar a
-// grading" a MESURES, no aquí.
+// ESCALAT — la taula del model per talles, sobre l'editor únic MeasureGrid.
+//
+// ⚠️ E1/B3 (17/08) — AQUESTA PANTALLA HA CANVIAT DE NATURALESA. El que hi havia escrit aquí
+// deia: «editar una cel·la PROPAGA per regla a les germanes (endpoint escalat/ajustar-talla →
+// propaga_ancoratges)». Era cert i era el defecte: la columna «Fit actual» EDITAVA LA CORBA
+// TEÒRICA —escrivia `BaseMeasurement`/`ModelGradingOverride` i re-derivava els specs a cada
+// tecla—, de manera que «Mesurar prenda» clonava com a teòric el número que el tècnic acabava
+// d'anotar i la desviació sortia sempre zero (DIAGNOSI_E1 §3.2).
+//
+// ARA ÉS EL PAS 1 DEL FLUX E1: la PRESA de les peces físiques arribades. «Fit actual» anota a
+// `PieceFittingLine.valor_real` (porta `fitting/model/<id>/presa/`) i NO toca res del domini.
+// Per talla es veuen TRES valors —teòrica de contracte · arribada · corba propagada vigent— i
+// el vermell diu que la peça arribada s'aparta del que s'esperava (R1).
+//
+// Decidir (acceptar/ajustar/rebutjar) NO es fa aquí: és el pas 2, «Mesurar prenda», i NOMÉS a
+// la talla base (R2, guard partit d'E1/B1). Propagar segueix sent l'acte conscient de Mesures.
+// El règim per POM es canvia amb setPomRegim; la corba vigent surt de taula-mesures.
 export default function PropagatedEditor({ modelId, onClose, inline = false, readOnly = false }) {
   const { t } = useTranslation()
   const [data, setData] = useState(null)
@@ -24,15 +35,22 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [reloadKey, setReloadKey] = useState(0)   // remunta MeasureGrid en canvi de règim (re-sembra)
-  const [sealed, setSealed] = useState(null)      // payload del 409 {version_number, sortida, ...}
-  const [bumping, setBumping] = useState(false)
+  const [presa, setPresa] = useState(null)        // E1/B3 — estat de la presa viva + valors
 
+  // E1/B3 — DUES fonts, i cadascuna diu una cosa que l'altra no sap:
+  //   · `taula-mesures` → la CORBA VIGENT del model (teòrica propagada);
+  //   · `fitting/model/<id>/presa/` → la PRESA de les peces arribades (+ l'estat de la presa).
+  // La segona no bloqueja la primera: si falla o no hi ha presa oberta, la graella surt com
+  // sempre i el rètol d'estat ho diu. Buidar la taula perquè no hi ha presa seria el pitjor
+  // error d'una superfície de feina.
   const load = useCallback(() => {
     setLoading(true)
-    return client.get(`/api/v1/models/${modelId}/taula-mesures/`)
-      .then(res => setData(res.data))
-      .catch(() => setErr(t('model_measurements.propagated_load_err')))
-      .finally(() => setLoading(false))
+    return Promise.all([
+      client.get(`/api/v1/models/${modelId}/taula-mesures/`)
+        .then(res => { setData(res.data); return true })
+        .catch(() => { setErr(t('model_measurements.propagated_load_err')); return false }),
+      presaEscalat.get(modelId).then(r => setPresa(r.data)).catch(() => setPresa(null)),
+    ]).finally(() => setLoading(false))
   }, [modelId, t])
 
   useEffect(() => { load() }, [load])
@@ -45,8 +63,8 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
   const sizes = useMemo(() => data?.size_run || [], [data])
   const gridGroups = buildEscalatGroups(sizes, base, t)
   const gridRows = useMemo(
-    () => buildEscalatRows(data?.rows || [], sizes, base),
-    [data, sizes, base])
+    () => buildEscalatRows(data?.rows || [], sizes, base, presa?.preses || {}),
+    [data, sizes, base, presa])
 
   // Índex per lineId → {vigent, base} de la fila. El fan servir les dues guardes de sota, i és
   // l'única lectura de l'estat que necessiten (cap dada nova del backend).
@@ -79,33 +97,42 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
     // ja porta els camps per separat, que és el que `pom/identitat.py` demana que es faci.
     const info = perLinia.get(lineId)
     if (!info) return Promise.resolve()
-    // S42/F1 — I LA PEÇA, que aquesta funció ja tenia a la mà. `perLinia` carrega
-    // `garment: r.garment` (25 línies més amunt) i la crida n'enviava DOS DE TRES: la junta
-    // era aquesta línia, no la dada. Sense l'eix, el backend resolia la fila per una clau de
-    // dues columnes i, amb la mare i la 02 compartint POM, casava amb DUES → 500.
-    return models.escalatAjustarTalla(modelId, info.pom_id, info.talla, value,
-                                      { capa: info.capa, instancia: info.instancia,
-                                        garment: info.garment })
+    // 🔑 E1/B3 — AQUESTA CEL·LA JA NO EDITA LA CORBA: ANOTA UNA PRESA.
+    //
+    // Això cridava `models.escalatAjustarTalla`, que escrivia `BaseMeasurement` (o un
+    // `ModelGradingOverride`) i re-derivava els specs a cada tecla. Per això «Mesurar prenda»
+    // clonava com a teòric el número que el tècnic acabava d'anotar i la desviació sortia
+    // sempre zero: el pas 1 destruïa el referent del pas 2 (DIAGNOSI_E1 §3.2).
+    //
+    // Ara va a `PieceFittingLine.valor_real` per una porta que no toca el domini. El que la
+    // presa NO fa —consolidar, propagar— continua tenint les seves portes, i cadascuna és un
+    // acte que algú decideix.
+    return presaEscalat.desa(modelId, info.pom_id, info.talla, value,
+                             { capa: info.capa, instancia: info.instancia,
+                               garment: info.garment })
+      .then(res => { load(); return res })
       .catch(e => {
-        // G6-B/T3 — la versió vigent està SEGELLADA: el backend refusa l'escriptura (409). Sense
-        // això, el rebuig arribaria com un error mut i el tècnic no sabria ni per què no es desa
-        // ni què pot fer. El 409 ja porta la sortida; aquí només es fa visible.
-        if (e?.response?.status === 409 && e.response.data?.error === 'sealed') {
-          setSealed(e.response.data)
+        // Els dos rebutjos que aquesta porta pot donar tenen CARA: sense presa oberta no hi
+        // ha on anotar (i el gest d'obrir-la és a la barra d'estat), i una sessió segellada és
+        // acta. Un rebuig mut faria que el tècnic seguís mesurant creient que es desa.
+        const codi = e?.response?.data?.codi
+        if (codi === 'sense_presa_oberta' || codi === 'sessio_segellada') {
+          setErr(t(`escalat.${codi}`))
         }
         throw e   // MeasureGrid ha de saber igualment que la cel·la NO s'ha desat.
       })
-  }, [modelId, perLinia])
+  }, [modelId, perLinia, load, t])
 
-  // Escriptura per talla (convergit amb el fitting): ancora la talla i PROPAGA per regla a les germanes.
-  // Retorna l'axios promise; MeasureGrid llegeix res.data.linies i refresca la fila (germanes + base).
+  // Anotació de la presa d'una cel·la. Retorna l'axios promise; la resposta porta la cel·la
+  // resolta pel servidor (teòric · real · desviació · estat) i `load()` refresca la graella.
   const onGridSave = useCallback((lineId, value) => {
     if (value == null) return Promise.resolve()
     const info = perLinia.get(lineId)
 
-    // GUARDA-RAIL — escriure el valor que la cel·la JA té és un NO-OP: ni crida. FIX-1 fa que
-    // reescriure el vigent torni la mateixa corba, però la crida que no es fa no es pot equivocar
-    // mai, i estalvia una re-derivació sencera del grading per un teclejat sense conseqüència.
+    // GUARDA-RAIL — reescriure el valor que la cel·la JA té és un NO-OP: ni crida. `info.vigent`
+    // és ara LA PRESA que hi ha desada (no la corba), o sigui que això estalvia una escriptura
+    // idèntica, no una re-derivació: el motiu ha canviat amb la naturalesa de la cel·la, però
+    // la crida que no es fa segueix sent la que no es pot equivocar mai.
     if (info && info.vigent !== '' && info.vigent != null
         && Number(info.vigent) === Number(value)) {
       return Promise.resolve()
@@ -139,15 +166,16 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
     desa(pend.lineId, pend.valor).then(cb.resolve, cb.reject)
   }, [confirmPlaus, desa, load])
 
-  // La sortida legítima: crear una versió nova (v+1) que superi la segellada. No hi ha auto-bump
-  // al backend a propòsit — superar un segell és un acte conscient, i aquest botó és aquest acte.
-  const onCrearNovaVersio = () => {
-    setBumping(true)
-    models.generarGrading(modelId, { new_version: true, allow_reopen_sealed: true })
-      .then(() => { setSealed(null); return load().then(() => setReloadKey(k => k + 1)) })
-      .catch(() => setErr(t('model_measurements.sealed_bump_err')))
-      .finally(() => setBumping(false))
-  }
+  // ⚠️ E1/B3 — AQUÍ HI HAVIA EL RÈTOL DE «VERSIÓ SEGELLADA» I EL BOTÓ DE SUPERAR-LA, i se'n
+  // van perquè han quedat INASSOLIBLES, no per gust. El 409 `sealed` el donava el motor en
+  // re-derivar els specs, i aquesta pantalla el disparava perquè cada tecla els re-derivava.
+  // Ara la cel·la anota una presa i no toca cap `GradingVersion`: el segell no s'hi pot
+  // trobar mai, i un rètol que no pot sortir és pitjor que no tenir-ne —qui llegeixi el
+  // fitxer en dedueix que l'Escalat escriu al grading, que és precisament el que ja no fa.
+  //
+  // EL GEST NO ES PERD i no calia que visqués aquí: la porta que SÍ topa amb el segell és
+  // «Propagar a grading» (`ModelSheet.onPropagarClick`), que ja ofereix la doble confirmació
+  // amb `allow_reopen_sealed`. Superar un segell és un acte de propagació, no de presa.
 
   // Canvi de règim del POM (endpoint independent de la sessió) → rellegeix i remunta la graella.
   // S42/F1 · Q1-bis — LA REGLA ÉS DE LA PEÇA. `ModelGradingRule` és única per
@@ -199,35 +227,6 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
           </span>
         </div>
         {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 8 }}>{err}</div>}
-        {/* G6-B/T3 — La versió vigent està segellada i el backend ha refusat l'escriptura. El
-            rebuig ha de tenir CARA i SORTIDA: què passa, i què pots fer-hi. */}
-        {sealed && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-                        marginBottom: 8, padding: '10px 12px', borderRadius: 6,
-                        border: '0.5px solid var(--border)', background: 'var(--bg-subtle)' }}>
-            <IconLock size={18} stroke={1.5} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-            <span style={{ fontSize: 'var(--fs-body)', flex: 1, minWidth: 220 }}>
-              {t('model_measurements.sealed_title', { v: sealed.version_number })}
-              {' '}
-              <span style={{ color: 'var(--text-muted)' }}>
-                {t('model_measurements.sealed_hint')}
-              </span>
-            </span>
-            {!readOnly && (
-              <button type="button" onClick={onCrearNovaVersio} disabled={bumping}
-                style={{ padding: '6px 14px', borderRadius: 6, border: '0.5px solid var(--border)',
-                         background: 'var(--white)', cursor: bumping ? 'default' : 'pointer',
-                         fontSize: 'var(--fs-body)', whiteSpace: 'nowrap' }}>
-                {bumping ? t('app.loading') : t('model_measurements.sealed_new_version')}
-              </button>
-            )}
-            <button type="button" onClick={() => setSealed(null)}
-              style={{ padding: '6px 10px', borderRadius: 6, border: 0, background: 'transparent',
-                       cursor: 'pointer', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-              {t('app.close')}
-            </button>
-          </div>
-        )}
         {/* FIX-4 — la pregunta de plausibilitat. MAI un bloqueig dur: hi ha peces petites
             legítimes, i una validació que impedeix desar només ensenya a esquivar-la. Es
             pregunta, i el «sí» desa amb normalitat. */}

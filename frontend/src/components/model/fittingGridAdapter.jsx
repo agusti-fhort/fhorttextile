@@ -16,6 +16,7 @@ import { effectiveRegime } from '../../utils/gradingRegime'
 import { formatDelta } from '../../utils/format'
 import { aDocument, etiquetaRegla } from '../../utils/breakConvention'
 import { clauDeFila } from '../../utils/identitatMesura'
+import { cellaEscalat } from '../../utils/cellaEscalat'
 
 // Etiqueta d'una versió: la primera (v1) és Base; les següents són Fit N amb N = version_number - 1.
 const versionLabel = (vn, idx, t) =>
@@ -343,28 +344,33 @@ export function regimeLeadCol(t, onRegimChange, readOnly = false, { compacte = f
 // El separador segueix sent `:` i el desmuntatge segueix sent per l'ÚLTIM `:`, que és el que
 // separa la talla: la clau de mesura fa servir `|` i no n'hi posa cap (v. la capçalera de
 // `pom/identitat.py`, que tria el separador precisament per no col·lidir amb aquest).
+// E1/B3 — DUES columnes de lectura per talla, no una. La llei de què hi va a cadascuna viu a
+// `utils/cellaEscalat` (amb banc); aquí només es declaren les capçaleres.
 export function buildEscalatGroups(sizeLabels, baseLabel, t) {
   return sizeLabels.map(s => ({
     key: s,
     label: s === baseLabel
       ? <span>{s}<i className="ti ti-star" style={{ fontSize: 10, marginLeft: 4, color: 'var(--gold)' }} /></span>
       : s,
-    historyCols: [{ key: 'vigent', label: t('fitting.grid.base') }],
+    historyCols: [
+      { key: 'teorica', label: t('escalat.col_teorica') },
+      { key: 'propagada', label: t('escalat.col_propagada') },
+    ],
     activeLabel: t('fitting.grid.fit_current'),
     trailCols: [],
   }))
 }
 
-export function buildEscalatRows(rows, sizeLabels, baseLabel) {
+// `preses` = el mapa `{clau}:{talla} → {teoric, real, desviacio, estat}` que serveix
+// `fitting/model/<id>/presa/`. Buit (sense presa oberta) → la graella es comporta com abans
+// d'E1: teòrica = corba vigent i cap arribada. V. `utils/cellaEscalat`.
+export function buildEscalatRows(rows, sizeLabels, baseLabel, preses = {}) {
   return (rows || []).map(row => {
     const cells = {}
     for (const s of sizeLabels) {
       const v = s === baseLabel ? row.base_value_cm : (row.graded?.[s] ?? null)
-      cells[s] = {
-        history: { vigent: v },
-        // TOTES editables (base inclosa, sense readonly); baseValue per al marcatge difereix-de-base.
-        active: { lineId: `${row.clau || row.pom_id}:${s}`, value: v == null ? '' : v, baseValue: v },
-      }
+      const lineId = `${row.clau || row.pom_id}:${s}`
+      cells[s] = cellaEscalat({ lineId, vigent: v, presa: preses[lineId] || null })
     }
     return {
       // Nomenclatura client COHERENT amb Mesures: prevaler nom_fitxa (nom de model editable) sobre
