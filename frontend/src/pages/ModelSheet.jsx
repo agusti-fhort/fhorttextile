@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Feedback from '../components/ui/Feedback'
+import SubTabs from '../components/ui/SubTabs'
 import ActionsMenu from '../components/model/ActionsMenu'
 import WatchpointDrawer from '../components/model/WatchpointDrawer'
 import CheckMeasureEditor from '../components/model/CheckMeasureEditor'
@@ -1186,31 +1187,17 @@ export default function ModelSheet({ defaultTab = 'Dashboard', autoEdit = null }
                 </span>
               ) : (
                 // Commutador de subvista (consulta): taula del model ↔ repàs dels fittings fets.
-                /* §8b-bis · TRES GERMANES DINS D'UN PANELL = TABS AMB SUBRATLLAT D'OR, no
-                   píndoles i molt menys en daurat PLE (que és marca fent de navegació). El
-                   menú de PANTALLA ja és el de dalt: barrejar els dos patrons al mateix
-                   nivell és el que la norma prohibeix explícitament. */
-                <div style={{ display: 'flex', gap: 4, borderBottomWidth: 1,
-                              borderBottomStyle: 'solid', borderBottomColor: 'var(--line)' }}>
-                  {[['taula', 'model_sheet.measures_view_table', 'ti-table'],
-                    ['repas', 'model_sheet.measures_view_repas', 'ti-history'],
-                    ['comprovacio', 'comprovacio.titol', 'ti-checkup']].map(([key, label, icon]) => (
-                    <button key={key} type="button" onClick={() => setMesuresView(key)}
-                      aria-current={mesuresView === key ? 'true' : undefined}
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        padding: '8px 14px', border: 'none', background: 'none', cursor: 'pointer',
-                        fontFamily: 'IBM Plex Mono, monospace',
-                        color: mesuresView === key ? 'var(--text-main)' : 'var(--text-soft)',
-                        fontSize: 'var(--fs-body)', fontWeight: mesuresView === key ? 600 : 400,
-                        boxShadow: mesuresView === key ? 'inset 0 -2px 0 var(--gold)' : undefined,
-                      }}>
-                      <i className={`ti ${icon}`} aria-hidden="true"
-                         style={{ fontSize: 14, color: 'currentColor' }} />
-                      {t(label)}
-                    </button>
-                  ))}
-                </div>
+                /* §8b-bis · TRES GERMANES DINS D'UN PANELL = TABS AMB SUBRATLLAT D'OR. La forma
+                   viu a `ui/SubTabs` des d'E2c-bis: l'Escalat n'ha necessitat un altre i dos
+                   commutadors amb el mateix paper i dos codis són dues veritats de crom. Aquest
+                   canvi és NOMÉS el trasllat —mateixes claus, mateixes icones, mateix ordre. */
+                <SubTabs
+                  items={[
+                    { key: 'taula', label: 'model_sheet.measures_view_table', icon: 'ti-table' },
+                    { key: 'repas', label: 'model_sheet.measures_view_repas', icon: 'ti-history' },
+                    { key: 'comprovacio', label: 'comprovacio.titol', icon: 'ti-checkup' },
+                  ]}
+                  actiu={mesuresView} onTria={setMesuresView} />
               )}
               {/* LES QUATRE ACCIONS DEL TAB, EN ORDRE DE FLUX DE TREBALL (Agus, 06/08):
                   ① Editar POM · ② Graduació · ③ Mesurar prenda · ④ Propagar.
