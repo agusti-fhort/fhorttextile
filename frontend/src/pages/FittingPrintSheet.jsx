@@ -14,13 +14,23 @@ import { identitatMesura } from '../utils/identitatMesura'
 // torna cap al fabricant. Per això la columna de la mesura surt BUIDA (s'escriu amb bolígraf) i
 // els tres veredictes són caselles per marcar, no text.
 //
-// A4 APAÏSAT REAL: 297×210 mm = 1123×794 px a 96 dpi, marges 45 px. Les mides es declaren en px
-// per a la pantalla i `@page` les torna a declarar en mm per a la impressora: el navegador
-// pagina amb `@page`, i si les dues no diguessin el mateix el que es veu i el que surt serien
-// dues coses.
-const A4_W = 1123
-const A4_H = 794
-const MARGE = 45
+// A4 APAÏSAT REAL: 297×210 mm amb 15 mm de marge perimetral.
+//
+// 🚨 UNA SOLA GEOMETRIA, EN MIL·LÍMETRES, I LA PANTALLA LA DERIVA. Abans hi havia dues
+// declaracions —px cuits aquí (1123×794, marge 45) i mm a `@page`— i el comentari d'aquest
+// bloc en feia una virtut: «si les dues no diguessin el mateix, el que es veu i el que surt
+// serien dues coses». Deien el mateix per a A4 amb marge de 12 mm i prou. El dia que el marge
+// va passar a 15 mm, l'àrea imprimible va baixar a 267 mm (1009 px) mentre la banda seguia
+// dibuixant-se contra els 1033 px cuits: el 2,4% que sobrava se'l menjava l'`overflow: hidden`
+// de la capçalera i **la data de la caixa C4 desapareixia del paper sense avisar** (mesurat al
+// PDF real: `16/08/2026` present amb l'escala bona, absent amb la cuita).
+//
+// Per això els px ja no s'escriuen: es DERIVEN dels mm, que és el que la impressora obeeix.
+const MM = 96 / 25.4          // px de pantalla per mil·límetre, a 96 dpi
+const MARGE_MM = 15           // marge perimetral, el mateix número que `@page`
+const A4_W = 297 * MM
+const A4_H = 210 * MM
+const MARGE = MARGE_MM * MM
 
 // FILES PER PÀGINA. És un límit CONSERVADOR a posta: la llei del full és que una fila creix
 // només si el seu NOM ho fa, i un nom llarg pot ocupar dues línies. Amb el marge que queda,
@@ -118,24 +128,24 @@ export default function FittingPrintSheet() {
           dibuixat. `print-color-adjust` perquè els filets i els fons de casella no desapareguin
           en imprimir (per defecte el navegador els treu «per estalviar tinta»). */}
       <style>{`
-        @page { size: A4 landscape; margin: 12mm; }
+        @page { size: A4 landscape; margin: 15mm; }
         @media print {
           body { background: #fff; }
           .ftt-noprint { display: none !important; }
           /* A LA IMPRESSORA, ELS MARGES ELS POSA @page — NO EL FULL.
-             A pantalla el full es dibuixa com el paper que és (1123x794 px amb 45 px de vora)
-             perquè es vegi què s'endurà. En imprimir, aquesta mateixa vora se SUMARIA als 12 mm
-             d'@page i el full de 1123 px no cabria als 1032 px imprimibles: cada pàgina en
-             vessava una de mig buida. Aquí es treu la vora pròpia i s'ocupa l'àrea imprimible
-             sencera — 210 mm menys els dos marges = 186 mm—, que és el que manté la promesa
-             d'un div = una pàgina i deixa el peu clavat a baix. */
+             A pantalla el full es dibuixa com el paper que és (297×210 mm amb 15 mm de vora)
+             perquè es vegi què s'endurà. En imprimir, aquesta mateixa vora se SUMARIA als 15 mm
+             d'@page i el full no cabria a l'àrea imprimible: cada pàgina en vessava una de mig
+             buida. Aquí es treu la vora pròpia i s'ocupa l'àrea imprimible sencera — 210 mm
+             menys els dos marges = 180 mm—, que és el que manté la promesa d'un div = una
+             pàgina. */
           /* El CONTENIDOR també desapareix. Duia el fons de la pantalla, un encoixinat i un
              min-height de 100vh: tot això s'imprimeix, i tres fulls de 186 mm dins d'un
              contenidor més alt que la suma acaben repartits en cinc pàgines mig buides. */
           .ftt-wrap { padding: 0 !important; min-height: 0 !important; background: #fff !important; }
           .ftt-full {
             box-shadow: none !important; border: none !important; margin: 0 !important;
-            width: 100% !important; height: 184mm !important; padding: 0 !important;
+            width: 100% !important; height: 180mm !important; padding: 0 !important;
             page-break-inside: avoid; overflow: hidden;
           }
           .ftt-full + .ftt-full { page-break-before: always; }
@@ -155,14 +165,14 @@ export default function FittingPrintSheet() {
       {pagines.map((files_pag, p) => (
         <Pagina key={p} files={files_pag} desDe={p * FILES_PER_PAGINA}
           capcalera={capcalera(p + 1)} ultima={p === pagines.length - 1}
-          baseLabel={baseLabel} dataSessio={dataSessio}
+          dataSessio={dataSessio}
           logoUrl={ple.customer_logo || null} t={t} tEn={tEn} dicc={dicc} />
       ))}
     </div>
   )
 }
 
-function Pagina({ files, desDe, capcalera, ultima, baseLabel, dataSessio, logoUrl, t, tEn, dicc }) {
+function Pagina({ files, desDe, capcalera, ultima, dataSessio, logoUrl, t, tEn, dicc }) {
   const ampladaUtil = A4_W - MARGE * 2
   return (
     <div className="ftt-full" style={{
@@ -174,9 +184,11 @@ function Pagina({ files, desDe, capcalera, ultima, baseLabel, dataSessio, logoUr
     }}>
       <FttHeaderBand amplada={ampladaUtil} dades={capcalera} logoUrl={logoUrl} t={t} />
 
-      <div style={{ fontSize: '7.5pt', color: 'var(--text-muted)', margin: '8px 0 6px' }}>
-        {t('fitting.print.session_line', { data: dataSessio, base: baseLabel })}
-      </div>
+      {/* AQUÍ HI HAVIA LA LÍNIA DE SESSIÓ («FULL DE FITTING · data · Talla base S») i se n'ha
+          anat perquè no deia res que la banda no digués ja: la data viu a la caixa C4 i la
+          talla base surt SUBRATLLADA dins del run a la C3. Costava 6,9 mm dels 180 que té la
+          pàgina i, sobretot, empenyia la taula avall: el tbody començava a 51,5 mm en comptes
+          dels 44,6 que li toquen sota la capçalera. */}
 
       {/* LA LLIÇÓ DE FLEX/MIN-CONTENT: el contenidor de la taula porta `minWidth: 0` i la taula
           va a `width: 100%`. Un fill de flex té `min-width: auto` per defecte —o sigui, la seva
