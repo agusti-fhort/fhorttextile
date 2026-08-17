@@ -1520,11 +1520,17 @@ lectura) · **cap login** (la llei [`ftt-mesurar-impressio-i-no-login`]: autenti
 
 ---
 
-## Q10 · LOGO DEL CLIENT — mapa de Fase A (read-only). 🛑 **FASE B ATURADA**
+## Q10 · LOGO DEL CLIENT — mapa de Fase A. ✅ **FASE B EXECUTADA el 17/08** (v. §Q10-bis)
 
 > **17/08 · Patró B, tram del logo.** La Fase A havia de tornar un mapa net abans de tocar
-> l'asset. No el torna: hi ha **dues troballes que canvien què vol dir «escapçar el logo»**, i
-> totes dues demanen decisió. **Res tocat**: el fitxer del client segueix intacte.
+> l'asset. No el va tornar: hi ha **dues troballes que canvien què vol dir «escapçar el logo»**,
+> i totes dues demanaven decisió, o sigui que la Fase B es va aturar aquí.
+>
+> ⚠️ **ESTAT ACTUALITZAT — l'Agus va decidir el mateix dia**: trim **TÀCTIC** del fitxer del
+> Brownie (fet i verificat, §Q10-bis) i el fix estructural de la ingesta **anotat com a deute**
+> (§Q10-bis.3). El que segueix aquí sota és el mapa, que segueix sent vàlid; el que **ja no ho
+> és** és la frase «res tocat»: el PNG del Brownie s'ha substituït, amb l'original desat al
+> costat.
 
 ### 1 · On viu, i què és
 
@@ -1597,3 +1603,86 @@ El PNG retallat ja està generat i esperant a
 2. Confirmar que la divergència del `.ftt` (troballa A) és acceptable.
 3. Amb el sí: còpia `Logo-BROWNIE.original.png` al costat, substitució al mateix path i mateix
    nom (cap canvi al camp ni al codi), i PDF de verificació.
+
+---
+
+## Q10-bis · LOGO BROWNIE — Fase B FETA (operació d'asset) + el deute que deixa
+
+> **17/08 · decisió d'Agus:** trim **tàctic** del fitxer d'avui; el fix estructural (ingesta)
+> queda anotat i **no es toca**. Fronteres respectades: només el fitxer del logo del Brownie i
+> la seva còpia. Ni el model de `Customer`, ni `upload_logo`, ni la fitxa/Konva, ni serializers.
+
+### 1 · No és un commit: és una OPERACIÓ D'ASSET
+
+```
+$ git check-ignore -v backend/media/fhort/customer_logos/2026/08/Logo-BROWNIE.png
+.gitignore:1:backend/media/     backend/media/fhort/customer_logos/2026/08/Logo-BROWNIE.png
+$ git ls-files backend/media        → (buit)
+```
+
+El logo viu a **media de tenant, fora de git**. No hi ha res a commitar del fitxer: el que es
+commita és aquesta acta. **Un `git checkout` no el recuperarà mai** — per això la còpia de sota
+és l'única xarxa que hi ha.
+
+### 2 · Què s'ha fet, amb els números
+
+| Pas | Resultat |
+|---|---|
+| **Còpia de l'original, ABANS de res** | `…/2026/08/Logo-BROWNIE.original.png` · `www-data:www-data 664` · **verificada per hash contra l'original abans de sobreescriure res** |
+| **Substitució** | mateix directori, **mateix nom** (`Logo-BROWNIE.png`): el camp `Customer.logo` no s'ha tocat i el codi no se n'assabenta |
+| Permisos | `www-data:www-data 664`, com el que hi havia (v. la llei dels `media/` amb `root:root`) |
+
+```
+Logo-BROWNIE.original.png  sha256 c862fdda…67e6  41.066 B  2084×1042  ràtio 2,00
+Logo-BROWNIE.png (ara)     sha256 1401c3f8…fdc2  32.398 B  1610× 253  ràtio 6,36
+```
+
+**El trimmat és el crop EXACTE de l'original**, comprovat abans de copiar-lo: mida igual al
+`getbbox()` de l'alfa (232, 365, 1842, 618), `ImageChops.difference` → `None` (cap píxel de
+tinta alterat) i cap aire residual. **No és una reexportació: és el mateix PNG sense el marge.**
+
+### 3 · Verificat al full REGENERAT (no a un `.ftt`), amb la caixa i el CSS d'avui
+
+Mesurat amb el `object-fit: contain` que `FttHeaderBand` ja porta, dins de la caixa de la spec
+(126×28 pt escalats 0,9645 = 162×36 px). **Cap CSS tocat, cap caixa tocada:**
+
+```
+abans (original)  → llenç 72,0 × 36,0 px =  44% de l'ample · i només ~1/4 d'això era tinta (≈11% d'àrea)
+ara   (trimmat)   → llenç 162,0 × 25,5 px = 100% de l'ample · TOT tinta (71% d'àrea de la caixa)
+```
+
+### 4 · 🚨 DEUTE ESTRUCTURAL — datat 17/08, NO implementat
+
+**(a) La ingesta del logo de client no normalitza res.**
+`POST /customers/<id>/upload-logo/` ([tasks/views_b.py:884-887](backend/fhort/tasks/views_b.py#L884-L887))
+assigna el fitxer **cru**: `customer.logo = logo_file`. I el normalitzador que existeix —
+`accounts/logo.py::normalize_logo` ([:31](backend/fhort/accounts/logo.py#L31)) — **és per a
+l'altre logo** (l'emissor, `TenantConfig.logo_file`, via
+[pom/s2_views.py:387](backend/fhort/pom/s2_views.py#L387)) **i tampoc fa trim d'alfa**:
+converteix format, aplana paletes i acota a 2000 px, res més.
+
+El fix de debò és **normalitzar a la INGESTA**: trim d'alfa quan el client puja el logo, i fer
+que el camí del logo de client hi passi. Llavors qualsevol client futur amb aire queda cobert
+sense pedaç, i el trim d'avui es converteix en el que hauria de ser: la **migració d'un asset
+que va entrar abans que la regla existís**.
+
+**(b) El `.ftt` congela els bytes del logo. Pregunta oberta.**
+`_resolve_logo_obj` ([services_ftt_document.py:144-165](backend/fhort/models_app/services_ftt_document.py#L144-L165))
+copia els bytes dins del document com a asset. Les fitxes **ja desades segueixen amb el logo
+vell**, i el trim d'avui **no les toca**. En normalitzar la ingesta caldrà decidir què se'n fa:
+re-resoldre en obrir? deixar-les congelades (un document tècnic és un document tècnic)? migrar
+els assets? **No es decideix aquí.**
+
+**(c) El trim d'avui és TÀCTIC i té el seu radi escrit:** cobreix el Brownie **als fulls i
+fitxes que es generin de nou**. NO cobreix les fitxes `.ftt` ja desades (b), ni el pròxim logo
+que qualsevol client pengi (a).
+
+**(d) Efecte lateral anotat:** si algú re-puja el logo del Brownie, `upload_logo` fa
+`customer.logo.delete(save=False)` i s'endurà el `Logo-BROWNIE.png` d'ara. La còpia
+`.original.png` sobreviuria —té un altre nom— però **quedaria òrfena**, apuntant a un logo que
+ja no és el del client. Qui netegi `media/` algun dia ha de saber què és.
+
+**(e) Els altres dos clients amb logo NO s'han tocat**, i és correcte: `losan-logo.svg` i
+`Fhort_Textile_Tech.svg` són SVG amb `viewBox` gairebé quadrat (`0 0 841,9 784`). Surten petits
+dins d'una caixa 4,5:1 **perquè el logo és quadrat**, no perquè portin aire. Allà no hi ha res
+a retallar i retallar-hi seria deformar.
