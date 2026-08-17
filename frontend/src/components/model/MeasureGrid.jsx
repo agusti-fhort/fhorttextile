@@ -132,6 +132,9 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     )
   }
   const modified = activeRed(value, active)
+  // E2b — pre-omplert sense gest: la xifra hi és perquè és la teòrica, no perquè ningú l'hagi
+  // mesurada. Deixa de ser fantasma en tocar-la (`edited`), que és quan passa a ser una presa.
+  const fantasma = !!active.fantasma && !edited
   const verdicte = active.veredicte || null
   const colVerdicte = verdicte ? VERDICTE_COL[verdicte] : null
   // `active.readonly` força lectura en una cel·la concreta encara que la graella sigui editable
@@ -141,7 +144,11 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
     // sessió segellada s'ha de poder rellegir amb els mateixos colors amb què es va decidir.
     return (
       <td style={{ ...cellTd(true, false, false),
-                   color: colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)'),
+                   // E2b — el fantasma també en LECTURA: una consulta no pot fer passar per
+                   // presa una xifra que ningú no ha mesurat (és la llei d'E1 a la pantalla).
+                   fontStyle: fantasma ? 'italic' : undefined,
+                   color: fantasma ? 'var(--text-faint)'
+                     : (colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)')),
                    // `active.canvi` (B2) posa la negreta a la columna activa amb el mateix
                    // criteri que a les d'història: un canvi es marca encara que ningú no li
                    // hagi posat veredicte. Qui no l'envia, com abans.
@@ -182,6 +189,15 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
             if (active.onVeredicte && TECLA_VERDICTE[k] && !e.ctrlKey && !e.metaKey && !e.altKey) {
               e.preventDefault(); active.onVeredicte(TECLA_VERDICTE[k]); return
             }
+            // E2b — ENTER SOBRE UN FANTASMA EL CONFIRMA. La cel·la surt pre-omplerta amb la
+            // teòrica i això NO és una presa; l'Enter és el gest que diu «la peça arribada fa
+            // exactament això». Sense aquesta branca, confirmar exigiria reteclejar el mateix
+            // número, i el debounce d'`onChange` no salta perquè no hi ha hagut cap canvi.
+            //
+            // Va ABANS del `if (!onNav)`: confirmar no pot dependre de si hi ha carril. I només
+            // amb `fantasma && !edited` — un cop l'usuari l'ha tocada, la cel·la ja és una presa
+            // pel camí normal i l'Enter torna a ser només navegació.
+            if (e.key === 'Enter' && active.fantasma && !edited) onCommit(value)
             if (!onNav) return
             if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); onNav(active.lineId, 1) }
             else if (e.key === 'ArrowUp') { e.preventDefault(); onNav(active.lineId, -1) }
@@ -189,7 +205,13 @@ function ActiveCell({ active, editable, value, edited, onChange, onCommit, focus
           style={{
             font: 'inherit', width: 70, padding: '2px 4px', textAlign: 'right',
             border: `1px solid ${colVerdicte || 'var(--line)'}`, borderRadius: 4, background: 'var(--white)',
-            color: colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)'),
+            // E2b — EL FANTASMA ES VEU I NO AFIRMA RES. `--text-faint` és el token que la casa
+            // reserva a «deshabilitat i estats buits» (`index.css:72`), que és exactament el
+            // que és una teòrica pre-omplerta: hi ha xifra, però ningú no l'ha mesurada. En
+            // tocar-la (`edited`) recupera la tinta normal, perquè ja és una presa.
+            color: fantasma ? 'var(--text-faint)'
+              : (colVerdicte || (modified ? 'var(--err)' : 'var(--text-main)')),
+            fontStyle: fantasma ? 'italic' : undefined,
             fontWeight: verdicte || (modified && edited) ? 700 : 400,
             textDecoration: verdicte === 'REJECTED' ? 'line-through' : undefined,
             fontVariantNumeric: 'tabular-nums', boxSizing: 'border-box',

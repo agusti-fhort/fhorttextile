@@ -82,7 +82,11 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
         const a = r.cells?.[s]?.active
         // C4/BLOC 3 — hi entra el `pom_id` (i els eixos) perquè l'escriptura no hagi de
         // desmuntar el lineId: la fila ja sap qui és, i el mapa ja la té localitzada.
+        // E2b — `fantasma` viatja amb la línia perquè la GUARDA-RAIL de sota el pugui
+        // distingir: amb el pre-omplert, `value` ÉS la teòrica i la guarda es menjaria la
+        // confirmació sense dir res.
         if (a) m.set(a.lineId, { vigent: a.value, base: r.base_value_cm, codi: r.codi, talla: s,
+                                 fantasma: !!a.fantasma,
                                  pom_id: r.pom_id, capa: r.capa, instancia: r.instancia,
                                  garment: r.garment })
       }
@@ -140,7 +144,14 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
     // és ara LA PRESA que hi ha desada (no la corba), o sigui que això estalvia una escriptura
     // idèntica, no una re-derivació: el motiu ha canviat amb la naturalesa de la cel·la, però
     // la crida que no es fa segueix sent la que no es pot equivocar mai.
-    if (info && info.vigent !== '' && info.vigent != null
+    //
+    // 🚨 E2b — I NO S'APLICA AL FANTASMA. Amb el pre-omplert, `info.vigent` ÉS la teòrica que
+    // la cel·la ensenya sense que ningú l'hagi mesurada: confirmar-la és un GEST (ha de crear
+    // la presa i escriure `presa_at`), i aquesta guarda l'hauria engolit en silenci —el número
+    // coincideix— deixant l'usuari convençut que havia confirmat. La guarda existeix per
+    // estalviar escriptures IDÈNTIQUES a una presa que ja hi és; sense presa no hi ha res a
+    // estalviar.
+    if (info && !info.fantasma && info.vigent !== '' && info.vigent != null
         && Number(info.vigent) === Number(value)) {
       return Promise.resolve()
     }

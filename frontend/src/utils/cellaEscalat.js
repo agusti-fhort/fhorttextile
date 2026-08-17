@@ -51,8 +51,19 @@ export function cellaEscalat({ lineId, vigent = null, presa = null }) {
     history: { teorica },
     active: {
       lineId,
-      // Buit i no `0`: una cel·la sense mesurar ha de sortir BUIDA i convidar a escriure-hi.
-      value: real == null ? '' : real,
+      // ── E2b (QA d'Agus, 17/08) · LA CEL·LA NO COMENÇA MAI BUIDA ────────────────────────
+      // Això era `real == null ? '' : real`, amb l'acta «una cel·la sense mesurar ha de sortir
+      // BUIDA i convidar a escriure-hi». A la QA es va veure el preu: la modista havia de
+      // reteclejar la xifra que ja hi era per confirmar que la peça arribada hi coincideix, i
+      // una taula de vint files vol dir vint números copiats a mà.
+      //
+      // Ara hi surt la TEÒRICA, però com a **FANTASMA**: es veu, no és una presa, i no compta
+      // enlloc fins que algú la toca o la confirma. `fantasma` és el que ho diu a qui la pinta.
+      value: real == null ? (teorica ?? '') : real,
+      // 🔑 NO ÉS «no hi ha valor»: és «el valor que hi ha no l'ha dit ningú». La distinció és
+      // tota la peça — el vermell de R1 no l'agafa (coincideix amb `baseValue` per
+      // construcció), el desat no la dispara sola, i `presa_at` només neix amb el gest.
+      fantasma: real == null && teorica != null,
       baseValue: teorica,
       // Viatgen a la cel·la perquè qui la pinti pugui dir l'estat sense refer el càlcul: la
       // desviació la calcula el servidor (`escalat_presa_views._cella`) i el veredicte és de
