@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { IconAlertTriangle } from '@tabler/icons-react'
 import client from '../api/client'
 import { models, presaEscalat } from '../api/endpoints'
 import MeasureGrid from '../components/model/MeasureGrid'
 import PecesDelModel from '../components/model/PecesDelModel'
+import BarraPresaEscalat from '../components/model/BarraPresaEscalat'
 import { filesDeLaPeca } from '../utils/identitatMesura'
 import { buildEscalatGroups, buildEscalatRows, escalatRuleLeadCols } from '../components/model/fittingGridAdapter'
 import { mesuraSemblaIncrement } from '../utils/plausibilitatMesura'
@@ -30,6 +32,7 @@ import { useUnit } from './fittingShared'
 // El règim per POM es canvia amb setPomRegim; la corba vigent surt de taula-mesures.
 export default function PropagatedEditor({ modelId, onClose, inline = false, readOnly = false }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [modelInfo, setModelInfo] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -227,6 +230,17 @@ export default function PropagatedEditor({ modelId, onClose, inline = false, rea
           </span>
         </div>
         {err && <div style={{ color: 'var(--err)', fontSize: 'var(--fs-body)', marginBottom: 8 }}>{err}</div>}
+        {/* E1/B3 · R5 — L'ESTAT DE LA PRESA I EL PAS SEGÜENT. La navegació va a una porta que
+            JA EXISTEIX i no n'inventa cap: amb sessió resolta, `?tab=Mesures&fitting_session=<id>`
+            és el camí que `ModelSheet` ja sap obrir (obre la tasca `size_check` d'aquella
+            sessió i aterra a la presa); sense presa oberta, al tab Mesures, on el stepper té
+            el gest de «Mesurar prenda». ⚠️ Obrir una presa CREA sessió + peça + N línies, i per
+            això aquesta pantalla no ho fa sola: hi porta (decisió D5 de la diagnosi, OBERTA). */}
+        <BarraPresaEscalat
+          presa={presa} readOnly={readOnly}
+          onDecidir={() => navigate(
+            `/models/${modelId}?tab=Mesures&fitting_session=${presa?.session?.id ?? ''}`)}
+          onObrir={() => navigate(`/models/${modelId}?tab=Mesures`)} />
         {/* FIX-4 — la pregunta de plausibilitat. MAI un bloqueig dur: hi ha peces petites
             legítimes, i una validació que impedeix desar només ensenya a esquivar-la. Es
             pregunta, i el «sí» desa amb normalitat. */}

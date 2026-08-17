@@ -5004,6 +5004,16 @@
     "col_teorica": "Teòrica",
     "col_propagada": "Propagada",
     "sense_presa_oberta": "No hi ha cap presa oberta d'aquest model: obre-la per anotar-hi les mesures de les peces arribades.",
-    "sessio_segellada": "La presa està tancada: no s’hi poden anotar mesures."
+    "sessio_segellada": "La presa està tancada: no s’hi poden anotar mesures.",
+    "presa_sense": "Cap presa oberta",
+    "presa_del": "Presa del {{data}}",
+    "presa_comptador": "{{n}} de {{total}} mesurades",
+    "presa_talles": "Talles: {{talles}}",
+    "presa_pendents": "{{n}} per decidir a la base",
+    "presa_decidida": "Bases decidides",
+    "porta_obrir": "Obrir la presa",
+    "porta_decidir": "Decidir a la talla base",
+    "porta_revisar": "Revisar la decisió",
+    "porta_decidir_buida": "Encara no s’hi ha anotat cap mesura."
   }
 }
