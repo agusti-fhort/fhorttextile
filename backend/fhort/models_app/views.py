@@ -2034,14 +2034,27 @@ def measurements_table_view(request, model_id):
     except Exception:
         pass
 
-    # Règim per POM (logica/increments/break) per a l'editor propagat: resolutor canònic
+    # Règim per PEÇA I POM (logica/increments/break) per a l'editor propagat: resolutor canònic
     # (ModelGradingRule resident → fallback GradingRule del rule_set), batched una sola vegada.
-    rules_by_pom = {}
+    #
+    # ✅ SET-2/F1 · Q1-bis — LA CINQUENA BOCA, censada i tancada. L'acta de
+    # `_load_grading_rules` (`pom/services.py:774-806`) n'enumerava els consumidors i deia que
+    # la línia que separa els adaptats dels que es queden NO és l'app on viuen sinó **si
+    # escriuen**. Aquesta es va classificar com a presentació, i no ho és del tot: aquesta
+    # taula és la FONT de l'Escalat, i el que la pantalla pinta és el que el tècnic edita
+    # després. Amb la llei de la mare a la fila de la 02, la pantalla i el motor
+    # (`generate_graded_specs`, que ja reparteix per peça des de T4) deien coses diferents
+    # sobre la mateixa fila.
+    # ⚠️ `_regla_de` s'importa FORA del `try`: és una funció pura i, si quedés a dins, un
+    # error de càrrega de les regles la deixaria sense definir i la construcció de files
+    # petaria amb un `NameError` — canviar un règim buit per un 500.
+    from fhort.pom.services import _regla_de
+    rules_by_garment = {}
     try:
-        from fhort.pom.services import _load_grading_rules
-        rules_by_pom = _load_grading_rules(model)
+        from fhort.pom.services import _load_grading_rules_per_garment
+        rules_by_garment = _load_grading_rules_per_garment(model)
     except Exception:
-        rules_by_pom = {}
+        rules_by_garment = {}
     # P0.5d — per poder dir si la regla que serveix cada fila viu al MODEL o al JOC. El
     # resolutor torna l'una o l'altra classe i aquí és l'únic lloc on encara se sap.
     from fhort.models_app.models import ModelGradingRule
@@ -2072,7 +2085,12 @@ def measurements_table_view(request, model_id):
     for bm in base_measurements:
         pom = bm.pom
         pg = getattr(pom, 'pom_global', None)
-        rule = rules_by_pom.get(pom.id)
+        # ✅ SET-2/F1 · Q1-bis — LA REGLA DE LA SEVA PEÇA. Era `rules_by_pom.get(pom.id)`:
+        # amb la mare i la 02 compartint POM, les dues files rebien la MATEIXA llei i el
+        # contenidor de la 02 ensenyava el règim, la Δ i el break de la mare. Aquesta taula
+        # alimenta l'Escalat i la CONSULTA de Mesures, o sigui que era la boca que feia que
+        # la pantalla i el motor no diguessin el mateix.
+        rule = _regla_de(rules_by_garment, pom.id, bm.garment)
         rows.append({
             'id': bm.id,
             'ordre': bm.ordre,
@@ -3307,7 +3325,11 @@ def set_size_override_view(request, model_id):
 @permission_classes([_ExecuteTasksCap])
 @bat_escriptura(SUP_ESCALAT)
 def escalat_ajustar_talla_view(request, model_id):
-    """POST /api/v1/models/<model_id>/escalat/ajustar-talla/  Body: {pom_id, talla, valor}
+    """POST /api/v1/models/<model_id>/escalat/ajustar-talla/
+
+    Body: `{pom_id, talla, valor, capa?, instancia?, garment?}` — els tres eixos identifiquen
+    LA MESURA (v. `_identitat_de_mesura`); qui no els diu rep el literal de sempre, que és
+    l'exterior de la instància única de la peça MARE.
 
     Convergència amb el fitting (piece-fitting-lines/propagar): ancora la talla editada i PROPAGA
     EL DELTA per regla a les germanes, com fa el fitting amb propaga_ancoratges. A nivell de MODEL
@@ -3325,7 +3347,8 @@ def escalat_ajustar_talla_view(request, model_id):
     """
     from fhort.models_app.models import ModelGradingOverride, MeasurementChangeLog
     from fhort.pom.models import POMMaster
-    from fhort.pom.services import generate_graded_specs, _load_grading_rules, escala_del_model
+    from fhort.pom.services import (generate_graded_specs, _load_grading_rules_per_garment,
+                                    _regla_de, escala_del_model)
     from fhort.pom.grading_utils import propaga_ancoratges
     from fhort.fitting.services import _resolve_working_size_fitting, vigent_grading_version
     from fhort.fitting.models import GradedSpec
@@ -3385,7 +3408,20 @@ def escalat_ajustar_talla_view(request, model_id):
         if fora:
             return Response({'error': fora, 'codi': CODI_MESURA_FORA_RANG}, status=422)
 
-        rule = _load_grading_rules(model).get(pom.id)
+        # ✅ SET-2/F1 · Q1-bis — LA LLEI DE LA PEÇA, NO LA DE LA MARE.
+        # Això era `_load_grading_rules(model).get(pom.id)`, la 4a de les cinc boques que
+        # serveixen la regla de la peça mare (acta a `pom/services.py:774-806`). Aquella
+        # acta ja deia que la línia que separa els consumidors adaptats dels que es queden
+        # NO és l'app on viuen sinó **si escriuen** — i aquest DECIDEIX UNA ESCRIPTURA:
+        # `propaga_ancoratges` deriva la nova base a partir del delta de la regla. Amb la
+        # llei de la mare, ajustar una talla de la 02 li aplicava un increment que no és
+        # seu (D4 diu que poden divergir) i escrivia el resultat a la seva base.
+        #
+        # 🚨 PER QUÈ VA AL MATEIX COMMIT QUE EL LOOKUP: mentre `_write_base` petava amb
+        # `MultipleObjectsReturned`, el 500 TAPAVA aquest defecte. Arreglar el lookup sol
+        # hauria convertit un error sorollós en un valor mal calculat i MUT. És la llei
+        # S42 girada: tancar una escriptura ARMA el seu lector.
+        rule = _regla_de(_load_grading_rules_per_garment(model), pom.id, garment)
         logica = getattr(rule, 'logica', None) if rule else None
         canonic = getattr(rule, 'increment_base', None) is not None if rule else False
         # LINEAR/canònic → propaga per regla (com el fitting, que sobreescriu TOTES les germanes);
@@ -3412,38 +3448,45 @@ def escalat_ajustar_talla_view(request, model_id):
                     return Response({'error': "No s'ha pogut derivar la base des de la talla ancorada."}, status=400)
                 _write_base(model, pom, round(float(nova_base), 2), auth_user,
                             f'Escalat · ajust talla {talla} (propaga per regla)',
-                            capa=capa, instancia=instancia)
+                            capa=capa, instancia=instancia, garment=garment)
                 # La corba de la regla mana: neteja els pins per cel·la del POM (el fitting sobreescriu
                 # els valor_real de les germanes; aquí l'equivalent és treure els overrides residuals).
                 # L'esborrat tampoc no és per POM: neteja els overrides de LA MESURA que es
                 # torna a propagar. C4/BLOC 2 — els eixos vénen del cos; sense ells s'enduria
                 # els de les germanes, que ningú no ha tocat.
+                # SET-2/F1 — i la PEÇA: `unique_together` d'aquesta taula ja la porta
+                # (`models.py:1089`), o sigui que sense l'eix aquest `.delete()` s'enduia
+                # els pins de l'ALTRA peça, que ningú no ha tocat tampoc.
                 ModelGradingOverride.objects.filter(
                     model=model, pom=pom,
-                    capa=capa, instancia=instancia).delete()
+                    capa=capa, instancia=instancia, garment=garment).delete()
                 propagat, motiu = True, (logica or 'CANONIC')
             elif talla == base_size:
                 # Base sense règim LINEAR: desa la base; germanes intactes (mirall del fitting STEP).
                 _write_base(model, pom, valor, auth_user, f'Escalat · base {talla}',
-                            capa=capa, instancia=instancia)
+                            capa=capa, instancia=instancia, garment=garment)
                 propagat, motiu = False, (logica or 'BASE')
             else:
                 # STEP/FIXED/ZERO o sense regla → override puntual (germanes intactes, com el fitting).
                 # C4/BLOC 2 — els tres punts van per la identitat de la mesura, no pel POM.
+                # SET-2/F1 — els TRES eixos als tres punts. Sense la peça, l'`update_or_create`
+                # naixia sempre a la mare (la clau única de la taula la porta) i el
+                # `MeasurementChangeLog` —que és APPEND-ONLY— quedava amb l'apunt atribuït a
+                # una peça que no era: un error que no es pot corregir mai.
                 prev = (ModelGradingOverride.objects
                         .filter(model=model, pom=pom, size_label=talla,
-                                capa=capa, instancia=instancia)
+                                capa=capa, instancia=instancia, garment=garment)
                         .values_list('value_cm', flat=True).first())
                 ModelGradingOverride.objects.update_or_create(
                     model=model, pom=pom, size_label=talla,
-                    capa=capa, instancia=instancia,
+                    capa=capa, instancia=instancia, garment=garment,
                     defaults={'value_cm': valor, 'motiu': 'Escalat · ajust talla (sense propagació)',
                               'fitting_ref': None, 'created_by': profile},
                 )
                 if prev is None or abs(float(prev) - valor) > 1e-9:
                     MeasurementChangeLog.objects.create(
                         model=model, pom=pom, base_measurement=None,
-                        capa=capa, instancia=instancia,
+                        capa=capa, instancia=instancia, garment=garment,
                         valor_anterior=(float(prev) if prev is not None else None), valor_nou=valor,
                         context='manual', motiu=f'Escalat talla {talla}', created_by=auth_user)
                 propagat, motiu = False, (logica or 'sense_regla')
@@ -3475,25 +3518,27 @@ def escalat_ajustar_talla_view(request, model_id):
     #    el valor vell fins a recarregar. Sense error i sense avís.
     #    La forma la decideix `pom/identitat.clau_mesura`, l'únic lloc que sap com s'aplana.
     #
-    # ③ SET-2/T6a — LA PEÇA. Aquesta vora és d'ESCRIPTURA i el seu contracte d'identitat
-    #    (`_identitat_de_mesura`) porta capa i instància però NO el garment: el cos de la
-    #    petició no en diu res. El default explícit és, doncs, la PEÇA MARE, igual que
-    #    l'exterior i la instància única — i el filtre l'ha de dir també, o amb dues peces
-    #    vives els specs de totes dues cauen al mateix `graded[size_label]` i la resposta
-    #    tornaria la corba de l'última llegida: el defecte ① d'aquí sobre, un eix més tard.
-    #    Obrir el contracte d'ESCRIPTURA al garment és un tram propi (necessita `ModelGarment`
-    #    i una superfície que el sàpiga dir); això NO ho és, i el que no es fa mai és mirar
-    #    quines peces hi ha i triar-ne una.
+    # ③ ✅ SET-2/F1 — LA PEÇA, I EL TRAM PROPI ÉS AQUEST. El que hi havia deia: «obrir el
+    #    contracte d'ESCRIPTURA al garment és un tram propi; això NO ho és», i el filtre
+    #    anava amb el literal `''`. El contracte ja està obert (la pantalla el sap dir i
+    #    `_identitat_de_mesura` el resol), o sigui que el literal se'n va.
+    #
+    #    Aquesta és la SUPERFÍCIE DE RESPONSE LITERAL de la vista: `linies` es construeix
+    #    aquí mateix, sense serializer, i `MeasureGrid` indexa el seu buffer de cel·les per
+    #    aquest `id`. Amb l'eix cuit a `''`, el refresc d'una fila de la 02 no arribava mai
+    #    a la seva cel·la —l'escriptura es feia, la corba es re-derivava, i la pantalla es
+    #    quedava amb el valor vell fins a recarregar—: el mode de fallada mut que ② descriu
+    #    per al `lineId`, un eix més tard.
     from fhort.pom.identitat import clau_mesura
     gv = vigent_grading_version(sf)
     graded = {}
     if gv:
         for spec in GradedSpec.objects.filter(grading_version=gv, pom=pom,
                                               capa=capa, instancia=instancia,
-                                              garment=''):
+                                              garment=garment):
             graded[spec.size_label] = (
                 float(spec.graded_value_cm) if spec.graded_value_cm is not None else None)
-    clau = clau_mesura(pom.id, capa, instancia, '')   # explícit: la mare, v. ③ aquí sobre
+    clau = clau_mesura(pom.id, capa, instancia, garment)
     linies = [{'id': f'{clau}:{s}', 'valor_real': graded.get(s)} for s in size_run]
     return Response({'ok': True, 'propagat': propagat, 'motiu': motiu,
                      'grading_version_id': gv.id if gv else None, 'linies': linies}, status=200)
@@ -3686,7 +3731,7 @@ def _procedencia_de_mesura(bm, m, pom, valor_nou, es_nova):
             setattr(bm, camp, defecte)
 
 
-def _write_base(model, pom, valor, auth_user, motiu, capa=None, instancia=''):
+def _write_base(model, pom, valor, auth_user, motiu, capa=None, instancia='', garment=''):
     """Escriu el BaseMeasurement de LA MESURA indicada i deixa que F1 registri.
 
     ── FASE_3/C1-ins · L'EXPLICACIÓ CANÒNICA DELS LITERALS D'AQUEST FITXER ──────────────
@@ -3708,12 +3753,28 @@ def _write_base(model, pom, valor, auth_user, motiu, capa=None, instancia=''):
     d'aquest fitxer fins ara i el que han de seguir fent mentre la seva porta no els sàpiga dir.
 
     Els altres punts d'aquest fitxer porten una nota d'una línia que apunta aquí.
+
+    ✅ SET-2/F1 — I EL TERCER EIX, QUE ERA EL QUE PETAVA. El docstring de sobre descrivia
+    el mode de fallada del lookup curt («o bé n'agafa una a l'atzar o bé peta amb
+    `MultipleObjectsReturned`») per a `capa`/`instancia`, i era paraula per paraula el que
+    passava amb `garment`: dues files vives que només difereixen per la peça hi cauen totes
+    dues a sobre i el `get_or_create` fa `.get()` sobre un queryset de 2. Mesurat a
+    staging: POM 962 del model 1379 i POM 904 del 1320 → **500 determinista**, no una cursa.
+
+    🚨 **`is_active` NO ENTRA AL LOOKUP.** La lectura temptadora de la diagnosi («una poda
+    no cura el 500») porta a afegir-hi `is_active=True`, i seria canviar un 500 per un
+    altre: la clau única és `(model, pom, capa, instancia, garment)` i NO inclou
+    `is_active`, o sigui que amb la fila de la peça PODADA el lookup no la trobaria i
+    intentaria crear-ne una segona amb la mateixa clau → `IntegrityError`. La clau sencera
+    ja garanteix com a màxim UNA fila; l'eix sol cura el 500. I reviure la fila podada en
+    escriure-hi és el comportament correcte: qui n'ajusta la talla la vol viva.
     """
     from fhort.models_app.models import BaseMeasurement
     from fhort.pom.models import MeasurementLayer
     bm, _created = BaseMeasurement.objects.get_or_create(
         model=model, pom=pom,
         capa=capa or MeasurementLayer.SLUG_DEFECTE, instancia=instancia or '',
+        garment=garment or '',
         defaults={'base_value_cm': valor, 'origen': 'STANDARD'})
     bm.base_value_cm = valor
     bm._changed_by = auth_user
@@ -4981,8 +5042,13 @@ def desactivar_pom_view(request, model_id, pom_id):
         # C4/BLOC 2 — la resposta diu QUINA fila ha caigut. Amb germanes vives, «s'ha podat el
         # POM 12» no és una resposta: n'hi ha dues i el client ha de poder confirmar que la que
         # ha marxat és la que ell mirava.
+        # S42/F1 — i la PRENDA amb elles. El filtre d'aquesta vista ja resol els QUATRE eixos
+        # des de F5+, però la resposta n'emetia dos: amb dues peces vives, «s'ha podat la
+        # capa exterior de la instància única» segueix sense dir QUINA fila ha caigut, que és
+        # justament el que el comentari de sobre diu que aquesta resposta serveix per fer.
         'capa': bm.capa,
         'instancia': bm.instancia,
+        'garment': bm.garment,
         'base_measurement': bm.id,
         'is_active': False,
         'codi': bm.nom_fitxa or bm.pom.codi_client or '',
