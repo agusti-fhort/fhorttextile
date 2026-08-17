@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs'
 
 import { grupsDelFull } from '../../frontend/src/utils/grupsDelFull.js'
 import { ampladaPerTextos, repartimentEnPagines } from '../../frontend/src/utils/repartimentTaules.js'
-import { filesFitting, filesGrading, filesNotes, filesSizeSet } from '../../frontend/src/utils/taulesQ8.js'
+import { filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat } from '../../frontend/src/utils/taulesQ8.js'
 
 const dades = JSON.parse(readFileSync(new URL('./_out/q8_payloads.json', import.meta.url), 'utf8'))
 const { grid, peces } = dades
@@ -156,8 +156,50 @@ prova('amb 120 files per peça es parteix, CAP FILA TALLADA i la capçalera es r
 
 console.log(`      → 240 files = ${tallLlarg.length} trossos en ${Math.max(...tallLlarg.map(t => t.pagina)) + 1} pàgines, cap fila partida`)
 
-// ── 8pt I AMPLADA ───────────────────────────────────────────────────────────────────────────
-console.log('\nSòl de 8pt i amplada de columnes')
+// ── Q8-bis · LES CORRECCIONS DE LA QA D'AGUS ────────────────────────────────────────────────
+console.log('\nQ8-bis · B0 · el size set sense cap sessió tancada')
+
+prova('B0 · amb l\'escalat tancat i cap sessió, el size set SURT amb la corba del model', () => {
+  const ss = filesSizeSetConsolidat(rowsTM, talles, dades.model.base_size_label)
+  assert.equal(ss.files.length, rowsTM.length, 'cap fila es perd per no tenir preses')
+  assert.deepEqual(ss.talles, talles)
+  // La corba hi és; el que hi falta és la PRESA, i es veu que hi falta.
+  const ch = ss.files.find(f => f.codi === 'CH' && f.garment === '')
+  assert.equal(ch.celles.S.teorica, 50)
+  assert.equal(ch.celles.S.actual, null)
+  assert.equal(ch.celles.S.veredicte, '')
+})
+
+prova('B0 · i també es reparteix en 2 grups: la peça no depèn de cap sessió', () => {
+  const ss = filesSizeSetConsolidat(rowsTM, talles, dades.model.base_size_label)
+  assert.equal(grupsDelFull(ss.files, peces, MARE).length, 2)
+})
+
+console.log('\nQ8-bis · C2 · alçades reals per fila')
+// Geometria real del builder a 9pt: fila d'1 línia ≈ 3,7 mm · de 2 línies ≈ 7,0 mm.
+const H1 = 3.7
+const H2 = 7.0
+
+prova('C2 · una sola fila de 2 línies ja NO infla les altres', () => {
+  const nFiles = 60
+  const hFiles = [H2, ...Array(nFiles - 1).fill(H1)]     // una de doble, la resta compactes
+  const real = repartimentEnPagines([{ ...GEO, hFiles, nFiles }], PAG)
+  const antic = repartimentEnPagines([{ ...GEO, hFila: H2, nFiles }], PAG)  // el màxim de la taula
+  assert.ok(real[0].fi > antic[0].fi,
+    `real=${real[0].fi} files a la 1a pàgina vs ${antic[0].fi} amb el màxim`)
+  console.log(`      → 1a pàgina: ${real[0].fi} files amb alçada real · ${antic[0].fi} amb el màxim antic`)
+  assert.equal(real[real.length - 1].fi, nFiles, 'i cap fila es perd')
+})
+
+// ── C4 · APAÏSAT I SÒL DE 8pt ───────────────────────────────────────────────────────────────
+// La decisió que fa l'editor: el format més ESTRET on la taula hi cap sense escalar, provant
+// primer l'apaïsat del mateix paper. I l'escala mai per sota de 8/9.
+console.log('\nQ8-bis · C4 · apaïsat i sòl de 8pt')
+const MARGE = 10
+const FORMATS = { A4P: 210, A4L: 297, A3L: 420, A3P: 297 }
+const ESCALA_MINIMA = 8 / 9
+const formatQueHiCap = (w) => ['A4L', 'A3L', 'A3P'].find(k => FORMATS[k] - 2 * MARGE >= w) || null
+
 const CHAR_MM = 3.175 * 0.6
 const noms = q8a.files.map(f => f.nom_en)
 const wPom = ampladaPerTextos(noms, { charMm: CHAR_MM, padMm: 4, minMm: 34, maxMm: 62 })
@@ -171,20 +213,35 @@ prova('el nom més llarg cap en 2 línies a l\'amplada calculada', () => {
 })
 
 const ample = (cols) => cols.reduce((a, b) => a + b, 0)
-const A4L = 297 - 20
-const A4P = 210 - 20
-const amples = {
-  'Q8a fitting': ample([16, wPom, 18, 18, 16, 22, 52]),
-  'Q8b grading': ample([16, wPom, 18, 14, 14, 18, ...talles.map(() => 14)]),
-  'Q8c size set': ample([16, wPom, ...talles.flatMap(() => [13, 13, 12]), 22]),
-}
-for (const [nom, w] of Object.entries(amples)) {
-  const ptL = 9 * Math.min(1, A4L / w)
-  const ptP = 9 * Math.min(1, A4P / w)
-  console.log(`      ${nom}: ${w.toFixed(0)} mm → A4 apaïsat ${ptL.toFixed(1)}pt · A4 vertical ${ptP.toFixed(1)}pt`)
-  prova(`${nom}: ≥ 8pt en A4 APAÏSAT (el format per defecte de la fitxa)`, () => {
-    assert.ok(ptL >= 8, `${ptL.toFixed(2)}pt`)
+// El cas que va destapar C4: el size set amb CINC talles, no amb les tres del banc.
+const CINC = ['XXS', 'XS', 'S', 'M', 'L']
+const casos = [
+  ['Q8a fitting', ample([16, wPom, 18, 18, 16, 22, 52])],
+  ['Q8b grading (3 talles)', ample([16, wPom, 18, 14, 14, 18, ...talles.map(() => 14)])],
+  ['Q8c size set (3 talles)', ample([16, wPom, ...talles.flatMap(() => [13, 13, 12]), 22])],
+  ['Q8c size set (5 talles)', ample([16, wPom, ...CINC.flatMap(() => [13, 13, 12]), 22])],
+]
+for (const [nom, w] of casos) {
+  const capA4P = w <= FORMATS.A4P - 2 * MARGE
+  const fmtKey = capA4P ? 'A4P' : formatQueHiCap(w)
+  const ampleUtil = FORMATS[fmtKey] - 2 * MARGE
+  const escala = Math.min(1, Math.max(ESCALA_MINIMA, ampleUtil / w))
+  const pt = 9 * escala
+  console.log(`      ${nom}: ${w.toFixed(0)} mm → ${fmtKey} · ${pt.toFixed(1)}pt${capA4P ? '' : ' (apaïsat + avís)'}`)
+  prova(`${nom}: el format triat el fa cabre i MAI baixa de 8pt`, () => {
+    assert.ok(pt >= 8, `${pt.toFixed(2)}pt`)
+    assert.ok(w <= ampleUtil / ESCALA_MINIMA, 'ni amb el sòl no hi cabria')
   })
 }
+
+prova('C4 · el size set de 5 talles NO cap en A4 vertical: és el cas que obliga l\'apaïsat', () => {
+  const w = casos[3][1]
+  assert.ok(w > FORMATS.A4P - 2 * MARGE, `${w} mm hi cabria i llavors C4 no caldria`)
+  assert.equal(formatQueHiCap(w), 'A4L', 'i el full més estret que hi cap és l\'A4 apaïsat')
+  // La prova que C4 existeix per al sòl: en vertical, sense canviar de full, cauria sota 8pt.
+  const ptVertical = 9 * Math.min(1, (FORMATS.A4P - 2 * MARGE) / w)
+  assert.ok(ptVertical < 8, `en vertical serien ${ptVertical.toFixed(1)}pt`)
+  console.log(`      → en A4 vertical serien ${ptVertical.toFixed(1)}pt; per això canvia de full`)
+})
 
 console.log(`\n${ok} proves verdes${process.exitCode ? ' — I ALGUNA DE VERMELLA' : ''}\n`)
