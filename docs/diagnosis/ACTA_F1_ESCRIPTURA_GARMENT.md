@@ -233,6 +233,88 @@ un canvi de contracte que passa `manage.py check` verd i deixa un mock caducat. 
 
 ---
 
+## 10 · VERIFICACIÓ CONTRA EL SERVEI DESPLEGAT (no `--keepdb`)
+
+Els bancs corren contra el test DB. Aquesta secció exerceix el **gunicorn viu**
+(`127.0.0.1:8001`, `Host: fhorttextile.tech`) contra la **BD real de staging**.
+
+**Banc viu sembrat** (model QA, mai el 1379): `1380` · `QA-F1-GARMENT`, amb la topologia
+exacta del POM 962 — dues files del mateix POM, mateixa capa, mateixa instància, garments
+diferents — i **lleis DIVERGENTS**, sense les quals la contramostra no provaria res:
+
+| fila | garment | valor inicial | regla `increment_base` |
+|---|---|---|---|
+| bm **3357** | `''` (mare) | 100 | **+2** |
+| bm **3358** | `02` | 100 | **+10** |
+
+Usuari: `qa.loginunic@fhort.test` (QA del tenant, rol `technician`, té `EXECUTE_TASKS`) — **cap
+compte de persona real**. Token amb el claim `tenant_schema` que exigeix
+`TenantJWTAuthentication` (sense ell, 401 `token_not_valid`).
+
+### Crida B — `garment: "02"`, ancora talla M a 60
+
+```
+HTTP=200
+{"ok":true,"propagat":true,"motiu":"LINEAR","grading_version_id":123,
+ "linies":[{"id":"962|exterior||02:XS","valor_real":40.0},
+           {"id":"962|exterior||02:S", "valor_real":50.0},
+           {"id":"962|exterior||02:M", "valor_real":60.0}]}
+```
+
+| Comprovació | Resultat |
+|---|---|
+| Codi HTTP | **200** |
+| Fila modificada | **bm 3358** (`garment='02'`): 100 → **50** |
+| Fila de la mare | **bm 3357 INTACTA a 100** (`updated_at` anterior a la crida) |
+| Regla que ha servit | **la de la peça 02 (+10)** — corba 40·50·60, pas de 10 |
+| Identitat a la resposta | `962\|exterior\|\|02:…` — **porta l'eix** (fix del `Response` literal) |
+| Registre append-only | `MeasurementChangeLog` 1801 → `base_measurement_id=3358`, `garment='02'` |
+
+Amb la llei de la MARE (+2) la base hauria sortit **58**, no 50. La contramostra de Q1-bis
+queda provada **contra el servei viu**.
+
+### Crida A — SENSE `garment` (el control: aquesta era la que petava)
+
+```
+HTTP=200
+{"linies":[{"id":"962|exterior||:XS","valor_real":56.0},
+           {"id":"962|exterior||:S", "valor_real":58.0},
+           {"id":"962|exterior||:M", "valor_real":60.0}]}
+```
+
+| Comprovació | Resultat |
+|---|---|
+| Codi HTTP | **200** — pre-fix, **aquesta crida exacta** era la que llançava `MultipleObjectsReturned` |
+| Fila modificada | **bm 3357** (la mare): 100 → **58** |
+| Fila de la peça | **bm 3358 INTACTA a 50** |
+| Regla que ha servit | **la de la mare (+2)** — corba 56·58·60, pas de 2 |
+
+**Dues files, dues lleis, dues identitats, i cap crida trepitja la de l'altra.**
+
+### ⚠️ El control del 500 en viu no és reproduïble (i per què)
+
+El servei es va reiniciar a les **11:02:58**, després que el fix fos a disc, o sigui que **el
+desplegat ja el porta**. No s'ha revertit un servei viu per fabricar un 500. El control
+equivalent és el de dalt: la crida sense `garment` sobre dues germanes vives és **exactament**
+la que el banc reprodueix en vermell amb
+`MultipleObjectsReturned: get() returned more than one BaseMeasurement -- it returned 2!`,
+i en viu dona 200.
+
+### El 1379 no s'ha tocat
+
+| fila | garment | valor | `updated_at` |
+|---|---|---|---|
+| bm 3344 | `''` | 0.5 | 2026-08-16 14:56:35 |
+| bm 3354 | `02` | 0.5 | 2026-08-16 14:56:35 |
+
+`MeasurementChangeLog` del model 1379 amb data 2026-08-17: **0 files**.
+
+🚩 **Queda a staging el model QA `1380` (`QA-F1-GARMENT`)** amb les seves 2 mesures i 2 regles.
+No s'ha esborrat a posta: és el banc viu d'aquesta verificació i és inspeccionable. Esborrar-lo
+és una decisió de l'Agus.
+
+---
+
 ## RESULTAT FINAL
 
 **F1 i Q1-bis tancats al mateix tram**, amb l'eix `garment` present a les 14 portes
