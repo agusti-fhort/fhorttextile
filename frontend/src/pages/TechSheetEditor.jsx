@@ -1026,7 +1026,14 @@ function buildTableCellPrimitives(obj) {
   let cxV = cw[0] || 0
   cw.slice(1).forEach(w => { prims.push({ t: 'l', points: [cxV, titolH, cxV, totalH], stroke: TBL.ROW_BORDER, sw: 0.5 }); cxV += w })
   prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: totalH, stroke: TBL.FRAME, sw: TBL.FRAME_SW })
-  return { prims, totalW, totalH }
+  // Q8/B3 — LA GEOMETRIA SURT AMB LES PRIMITIVES. Qui reparteix una taula en pàgines
+  // (`repartimentTaules`) necessita les tres alçades per separat, i el builder és l'ÚNIC que les
+  // sap: depenen del cos, del padding, de si alguna cel·la porta `sub` i de quantes línies ocupa
+  // el títol de columna més llarg. Deduir-les de fora (per exemple `(totalH − hdrH) / nFiles`)
+  // seria una segona aritmètica de la mateixa cosa, i el dia que el builder canviés el padding
+  // el tall de pàgina cauria mig mil·límetre sense que res avisés.
+  // Camps ADDITIUS: els tres consumidors d'avui desestructuren `{prims, totalW, totalH}`.
+  return { prims, totalW, totalH, titolH, hdrH, rowH }
 }
 
 // Camp (S5-1): xip de placeholder d'un camp del catàleg → {prims, totalW, totalH}. Es RESOL
