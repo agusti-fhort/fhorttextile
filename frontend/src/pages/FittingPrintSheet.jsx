@@ -32,10 +32,12 @@ const A4_W = 297 * MM
 const A4_H = 210 * MM
 const MARGE = MARGE_MM * MM
 
-// FILES PER PÀGINA. És un límit CONSERVADOR a posta: la llei del full és que una fila creix
-// només si el seu NOM ho fa, i un nom llarg pot ocupar dues línies. Amb el marge que queda,
-// una pàgina sencera de noms de dues línies encara hi cap sense trepitjar el peu.
-const FILES_PER_PAGINA = 18
+// AQUÍ HI HAVIA `FILES_PER_PAGINA = 18`, i se n'ha anat amb la paginació a mà. Es declarava
+// «un límit CONSERVADOR a posta», amb l'argument que una pàgina sencera de noms de dues línies
+// encara hi cabria: mesurat, era fals —18 files amb un nom de dues línies ja donaven 695 px de
+// 695 disponibles, i la llegenda i la signatura sortien retallades de la impressora sense que
+// res ho anunciés (Q6)—. Un comptador de FILES no pot mesurar una ALÇADA que depèn del text.
+// Ara qui talla és el navegador, que sí que la sap.
 
 // ELS TRES VEREDICTES, en anglès i abreujats com al paper: és el que el fabricant marca.
 const CASELLES = ['AC', 'AD', 'RJ']
@@ -102,13 +104,8 @@ export default function FittingPrintSheet() {
   }
   const files = [...vistes.values()]
 
-  const pagines = []
-  for (let i = 0; i < Math.max(1, Math.ceil(files.length / FILES_PER_PAGINA)); i++) {
-    pagines.push(files.slice(i * FILES_PER_PAGINA, (i + 1) * FILES_PER_PAGINA))
-  }
-
   const dataSessio = (dades.sessio?.data || '').split('-').reverse().join('/')
-  const capcalera = (n) => ({
+  const capcalera = {
     nom: ple.nom || model.nom || '',
     temporada: [ple.temporada, ple.any].filter(Boolean).join(' ') || '',
     collection: ple.collection || '',
@@ -119,8 +116,15 @@ export default function FittingPrintSheet() {
     target: targetFit,
     data: dataSessio,
     format: 'A4',
-    pagina: `${n}/${pagines.length}`,
-  })
+    // EL «i/n» DE LA CAIXA C4 VA BUIT, I ÉS UNA DECISIÓ, NO UN OBLIT (Agus, 17/08). Qui pagina
+    // ara és el navegador —la taula corre i ell talla on toca—, i Chrome NO sap dir-nos per
+    // quina pàgina va: els tres mecanismes que ho haurien de fer estan mesurats i fallen tots
+    // (`@page { @bottom-right }` no s'imprimeix; `counter(page)` dins del thead i dins d'un
+    // `position: fixed` donen `0/0`). Comptar-les nosaltres voldria dir tornar a partir les
+    // files a mà, que és exactament el que aquest commit desmunta. Els tècnics no el demanen,
+    // com no demanen el peu: v. DIAGNOSI_S42 §Q9.1.3.
+    pagina: '',
+  }
 
   return (
     <div className="ftt-wrap" style={{ background: 'var(--bg-muted)', padding: '20px 0', minHeight: '100vh' }}>
@@ -136,20 +140,29 @@ export default function FittingPrintSheet() {
              A pantalla el full es dibuixa com el paper que és (297×210 mm amb 15 mm de vora)
              perquè es vegi què s'endurà. En imprimir, aquesta mateixa vora se SUMARIA als 15 mm
              d'@page i el full no cabria a l'àrea imprimible: cada pàgina en vessava una de mig
-             buida. Aquí es treu la vora pròpia i s'ocupa l'àrea imprimible sencera — 210 mm
-             menys els dos marges = 180 mm—, que és el que manté la promesa d'un div = una
-             pàgina. */
+             buida. Aquí es treu la vora pròpia i s'ocupa l'àrea imprimible sencera. */
           /* El CONTENIDOR també desapareix. Duia el fons de la pantalla, un encoixinat i un
-             min-height de 100vh: tot això s'imprimeix, i tres fulls de 186 mm dins d'un
-             contenidor més alt que la suma acaben repartits en cinc pàgines mig buides. */
+             min-height de 100vh: tot això s'imprimeix i acaba repartit en pàgines mig buides. */
           .ftt-wrap { padding: 0 !important; min-height: 0 !important; background: #fff !important; }
+          /* 🚨 NI ALÇADA FIXA NI OVERFLOW HIDDEN. El full ja no és una pila de divs d'una
+             pàgina cadascun: és UNA taula que corre i que el navegador talla on toca. Amb una
+             alçada de 180 mm i overflow hidden a sobre, tot el que passés de la primera pàgina
+             es retallaria EN SILENCI —que és el mode de fallada que aquest fitxer ja va pagar
+             un cop amb la llegenda i la signatura (Q6: 695 px de 695)—. */
           .ftt-full {
             box-shadow: none !important; border: none !important; margin: 0 !important;
-            width: 100% !important; height: 180mm !important; padding: 0 !important;
-            page-break-inside: avoid; overflow: hidden;
+            width: 100% !important; min-height: 0 !important; height: auto !important;
+            padding: 0 !important; overflow: visible !important;
           }
-          .ftt-full + .ftt-full { page-break-before: always; }
         }
+        /* LA CAPÇALERA ES REPETEIX SOLA perquè viu al THEAD, i la llegenda al TFOOT: és el
+           navegador qui les torna a pintar a cada pàgina, sense que ningú compti res. Els dos
+           display hi són explícits encara que siguin el valor per defecte — qualsevol regla que
+           els toqués mataria la repetició sense dir-ho. I cap fila es parteix per la meitat
+           entre dues pàgines: una mesura tallada horitzontalment no es llegeix. */
+        .ftt-full thead { display: table-header-group; }
+        .ftt-full tfoot { display: table-footer-group; }
+        .ftt-full tr { page-break-inside: avoid; break-inside: avoid; }
         .ftt-full, .ftt-full * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       `}</style>
 
@@ -162,34 +175,33 @@ export default function FittingPrintSheet() {
         </button>
       </div>
 
-      {pagines.map((files_pag, p) => (
-        <Pagina key={p} files={files_pag} desDe={p * FILES_PER_PAGINA}
-          capcalera={capcalera(p + 1)} ultima={p === pagines.length - 1}
-          dataSessio={dataSessio}
-          logoUrl={ple.customer_logo || null} t={t} tEn={tEn} dicc={dicc} />
-      ))}
+      <Full files={files} capcalera={capcalera} dataSessio={dataSessio}
+        logoUrl={ple.customer_logo || null} t={t} tEn={tEn} dicc={dicc} />
     </div>
   )
 }
 
-function Pagina({ files, desDe, capcalera, ultima, dataSessio, logoUrl, t, tEn, dicc }) {
+// EL FULL SENCER — UNA taula que corre, no una pila de pàgines.
+//
+// Abans això es deia `Pagina` i el nom era honest: el JS partia les files de divuit en divuit
+// i en pintava un div per pàgina, capçalera inclosa. Divuit era un número escrit a mà, i un
+// número no pot mesurar una alçada que depèn del text: amb noms de dues línies el full vessava
+// (Q6), i amb les files-títol de peça partiria en dues pàgines un full que en necessita una.
+//
+// Ara qui talla és el navegador, i la capçalera es repeteix perquè viu al `thead` —mesurat amb
+// el pipeline d'impressió real: la banda surt idèntica a cada pàgina, al mateix punt, i el
+// tbody hi arrenca sempre just a sota (44,64 mm del cantell)—. El preu, decidit i acceptat, és
+// que ningú pot numerar les pàgines: v. el camp `pagina` a la capçalera.
+function Full({ files, capcalera, dataSessio, logoUrl, t, tEn, dicc }) {
   const ampladaUtil = A4_W - MARGE * 2
   return (
     <div className="ftt-full" style={{
-      width: A4_W, height: A4_H, padding: MARGE, margin: '0 auto 16px',
+      width: A4_W, minHeight: A4_H, padding: MARGE, margin: '0 auto 16px',
       background: 'var(--white)', border: '1px solid var(--border)',
       boxShadow: '0 1px 4px rgba(0,0,0,.07)', boxSizing: 'border-box',
-      display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column',
       fontFamily: 'IBM Plex Mono, ui-monospace, monospace', color: 'var(--text-main)',
     }}>
-      <FttHeaderBand amplada={ampladaUtil} dades={capcalera} logoUrl={logoUrl} t={t} />
-
-      {/* AQUÍ HI HAVIA LA LÍNIA DE SESSIÓ («FULL DE FITTING · data · Talla base S») i se n'ha
-          anat perquè no deia res que la banda no digués ja: la data viu a la caixa C4 i la
-          talla base surt SUBRATLLADA dins del run a la C3. Costava 6,9 mm dels 180 que té la
-          pàgina i, sobretot, empenyia la taula avall: el tbody començava a 51,5 mm en comptes
-          dels 44,6 que li toquen sota la capçalera. */}
-
       {/* LA LLIÇÓ DE FLEX/MIN-CONTENT: el contenidor de la taula porta `minWidth: 0` i la taula
           va a `width: 100%`. Un fill de flex té `min-width: auto` per defecte —o sigui, la seva
           amplada mínima de contingut— i una taula amb amplades fixes calculades a mà l'empeny
@@ -208,7 +220,20 @@ function Pagina({ files, desDe, capcalera, ultima, dataSessio, logoUrl, t, tEn, 
             <col style={{ width: '13%' }} />
             <col style={{ width: '22%' }} />
           </colgroup>
+          {/* 🚨 LA CAPÇALERA ÉS EL `thead`, I PER AIXÒ ES REPETEIX SOLA.
+              Abans la banda era germana de la taula dins d'un div per pàgina i qui la tornava a
+              pintar era el bucle de paginació. Aquí dins, el navegador la repeteix a cada
+              pàgina d'impressió pel seu compte i el tbody hi arrenca just a sota, sempre a la
+              mateixa alçada, sense que ningú hagi de mesurar res.
+              La banda no és una cel·la de la graella: ocupa les vuit columnes i porta la seva
+              pròpia geometria (spec v3), o sigui que el `th` que la conté no ha de posar-hi ni
+              vora ni encoixinat — només fer-li lloc. */}
           <thead>
+            <tr>
+              <th colSpan={8} style={{ padding: 0, border: 'none' }}>
+                <FttHeaderBand amplada={ampladaUtil} dades={capcalera} logoUrl={logoUrl} t={t} />
+              </th>
+            </tr>
             <tr>
               {[t('fitting.print.col_n'), t('fitting.print.col_layer'), t('fitting.print.col_code'),
                 t('fitting.print.col_name')].map(h => <ThPr key={h}>{h}</ThPr>)}
@@ -228,7 +253,7 @@ function Pagina({ files, desDe, capcalera, ultima, dataSessio, logoUrl, t, tEn, 
               const inst = etiquetaInstancia(l.instancia)
               return (
                 <tr key={l.id}>
-                  <TdPr>{desDe + j + 1}</TdPr>
+                  <TdPr>{j + 1}</TdPr>
                   <TdPr>{capaEn(l.capa, dicc)}</TdPr>
                   <TdPr><b>{l.nom_fitxa || l.codi || ''}</b></TdPr>
                   {/* L'ÚNICA cel·la que embolcalla: la llei és que una fila creix només si el
@@ -253,22 +278,32 @@ function Pagina({ files, desDe, capcalera, ultima, dataSessio, logoUrl, t, tEn, 
               )
             })}
           </tbody>
+
+          {/* LA LLEGENDA VA A CADA PÀGINA: qui té el full 2 a la mà no té el full 1, i sense la
+              llegenda les tres caselles són tres sigles sense significat. La promesa és la
+              mateixa d'abans, però ara la manté el `tfoot` en comptes del bucle de pàgines —el
+              navegador el repeteix igual que el `thead`—, i és l'única manera que li quedava:
+              fora de la taula sortiria UN sol cop, al final de tot. */}
+          <tfoot>
+            <tr>
+              <td colSpan={8} style={{ paddingTop: 9, borderTop: '1px solid var(--border)',
+                                       fontSize: '7.5pt', color: 'var(--text-muted)',
+                                       lineHeight: 1.9 }}>
+                <b>AC</b> = {t('fitting.print.legend_ac')} &nbsp;·&nbsp;
+                <b>AD</b> = {t('fitting.print.legend_ad')} &nbsp;·&nbsp;
+                <b>RJ</b> = {t('fitting.print.legend_rj')}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
-      {/* LA LLEGENDA VA A CADA PÀGINA: qui té el full 2 a la mà no té el full 1, i sense la
-          llegenda les tres caselles són tres sigles sense significat. El PEU I LA SIGNATURA,
-          en canvi, es firmen UNA vegada — van només a l'última. */}
-      <div style={{ marginTop: 'auto', paddingTop: 9, borderTop: '1px solid var(--border)',
-                    fontSize: '7.5pt', color: 'var(--text-muted)', lineHeight: 1.9 }}>
-        <div>
-          <b>AC</b> = {t('fitting.print.legend_ac')} &nbsp;·&nbsp;
-          <b>AD</b> = {t('fitting.print.legend_ad')} &nbsp;·&nbsp;
-          <b>RJ</b> = {t('fitting.print.legend_rj')}
-        </div>
-        {ultima && (
-          <div style={{ marginTop: 10 }}>{t('fitting.print.signature')}</div>
-        )}
+      {/* LA SIGNATURA ES FIRMA UNA VEGADA i per això es queda FORA de la taula: aquí baix del
+          flux, o sigui a l'última pàgina i enlloc més. Abans ho decidia un `ultima` que sortia
+          de la paginació a mà; ara ho decideix el lloc on està escrita, que no es pot
+          equivocar. */}
+      <div style={{ marginTop: 10, fontSize: '7.5pt', color: 'var(--text-muted)' }}>
+        {t('fitting.print.signature')}
       </div>
     </div>
   )
