@@ -907,6 +907,18 @@ function buildTablePrimitives(d) {
 // Taula genèrica (S3): columnes/files lliures (POM fitting/grading, BOM, custom) → {prims, totalW, totalH}.
 // Mateix patró de primitives que buildTablePrimitives (sibling, NO la sobrecarreguem). Sense fetch:
 // obj ja porta columns/rows resolts (snapshot). Cos mínim 8pt (llei fitxa tècnica).
+//
+// ── Q8 · LA BANDA DE TÍTOL, I PER QUÈ ARA SÍ ────────────────────────────────────────────────
+// L'acta de la T0 (:5013) deia que «les taules d'aquesta casa no tenen títol» perquè posar-n'hi
+// un «canviaria el render de TOTES les variants». Era cert d'un títol OBLIGATORI. `obj.titol` és
+// OPCIONAL i, quan no hi és, no s'emet cap primitiva i `totalH` no creix ni un píxel: una T0,
+// una T1a o una BOM ja inserides surten idèntiques al píxel. El que el fa necessari és que un
+// GRUP de N taules apilades per peça sense res que digui de quina peça és cadascuna no es pot
+// llegir — i el full de fitting descarregable ja resol això mateix amb una fila-títol en negreta
+// i filet inferior (`FittingPrintSheet.jsx`), que és la tipografia que aquí es replica.
+//
+// La UNITAT viatja a la mateixa banda, a la dreta: la declara la taula, no el document sencer,
+// perquè una taula viu com a objecte i es pot arrossegar a una altra pàgina o exportar sola.
 function buildTableCellPrimitives(obj) {
   const cols = obj.columns || []
   const rows = obj.rows || []
@@ -932,7 +944,13 @@ function buildTableCellPrimitives(obj) {
     return Math.max(1, Math.ceil(String(c.label ?? '').length / cabenPerLinia))
   })
   const hdrH = Math.max(...hdrLines, 1) * fontPx + T_CELL_PAD_Y * 2
-  const totalH = hdrH + rows.length * rowH
+  // Q8 — la banda de títol: 0 quan no hi ha títol, i llavors tot el que hi ha sota queda
+  // exactament on era. Una mica més alta que una fila de capçalera perquè respiri per sobre
+  // del filet, com la fila-títol del full descarregable (padding 7px a dalt, 2px a baix).
+  const titol = String(obj.titol ?? '').trim()
+  const unitatDecl = String(obj.unitat ?? '').trim()
+  const titolH = (titol || unitatDecl) ? fontPx + T_CELL_PAD_Y * 4 : 0
+  const totalH = titolH + hdrH + rows.length * rowH
   // Offsets x acumulats per columna: els necessiten la capçalera, el contingut i el realçat
   // de la talla base (que és una franja vertical, no una cel·la).
   const cx0 = []
@@ -940,25 +958,35 @@ function buildTableCellPrimitives(obj) {
   const baseIdx = cols.findIndex(c => c.base)   // T1 — columna de la talla base (T1b); -1 si no n'hi ha
   const prims = []
 
+  // Banda de títol (opcional): nom de la peça a l'esquerra, unitat DECLARADA a la dreta. Fons
+  // blanc i filet inferior de tinta forta — la mateixa jerarquia que la fila-títol del full de
+  // fitting: el títol no competeix amb la capçalera negra, la presenta.
+  if (titolH) {
+    prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: titolH, fill: TBL.ROW_EVEN })
+    if (titol) prims.push({ t: 't', x: T_PAD, y: 0, w: totalW - 2 * T_PAD, h: titolH, text: titol, fill: TBL.VAL, size: fontPx, bold: true, mid: true, align: 'left' })
+    if (unitatDecl) prims.push({ t: 't', x: T_PAD, y: 0, w: totalW - 2 * T_PAD, h: titolH, text: unitatDecl, fill: TBL.NOM, size: subPx, mid: true, align: 'right' })
+    prims.push({ t: 'l', points: [0, titolH, totalW, titolH], stroke: TBL.FRAME, sw: TBL.FRAME_SW })
+  }
+
   // Capçalera
-  prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: hdrH, fill: st.headerFill || TBL.HDR_BG })
-  if (baseIdx >= 0) prims.push({ t: 'r', x: cx0[baseIdx], y: 0, w: cw[baseIdx], h: hdrH, fill: TBL.BASE_HDR })
+  prims.push({ t: 'r', x: 0, y: titolH, w: totalW, h: hdrH, fill: st.headerFill || TBL.HDR_BG })
+  if (baseIdx >= 0) prims.push({ t: 'r', x: cx0[baseIdx], y: titolH, w: cw[baseIdx], h: hdrH, fill: TBL.BASE_HDR })
   cols.forEach((c, i) => {
-    prims.push({ t: 't', x: cx0[i] + T_PAD, y: 0, w: cw[i] - 2 * T_PAD, h: hdrH, text: String(c.label ?? ''), fill: TBL.HDR_TEXT, size: fontPx, bold: true, mid: true, align: 'center', wrap: true })
+    prims.push({ t: 't', x: cx0[i] + T_PAD, y: titolH, w: cw[i] - 2 * T_PAD, h: hdrH, text: String(c.label ?? ''), fill: TBL.HDR_TEXT, size: fontPx, bold: true, mid: true, align: 'center', wrap: true })
   })
 
   // Fons de files (zebra opcional) en passada pròpia: la franja de la talla base ha de quedar
   // PER SOBRE dels fons i PER SOTA del text (mateix ordre que buildTablePrimitives).
   if (st.zebra) rows.forEach((row, ri) => {
-    prims.push({ t: 'r', x: 0, y: hdrH + ri * rowH, w: totalW, h: rowH, fill: ri % 2 === 0 ? TBL.ROW_EVEN : TBL.ROW_ODD })
+    prims.push({ t: 'r', x: 0, y: titolH + hdrH + ri * rowH, w: totalW, h: rowH, fill: ri % 2 === 0 ? TBL.ROW_EVEN : TBL.ROW_ODD })
   })
   if (baseIdx >= 0 && rows.length) {
-    prims.push({ t: 'r', x: cx0[baseIdx], y: hdrH, w: cw[baseIdx], h: rows.length * rowH, fill: TBL.BASE_BG })
+    prims.push({ t: 'r', x: cx0[baseIdx], y: titolH + hdrH, w: cw[baseIdx], h: rows.length * rowH, fill: TBL.BASE_BG })
   }
 
   // Contingut
   rows.forEach((row, ri) => {
-    const y = hdrH + ri * rowH
+    const y = titolH + hdrH + ri * rowH
     let cxR = 0
     cols.forEach((c, i) => {
       const cell = norm(row[i])
@@ -986,9 +1014,10 @@ function buildTableCellPrimitives(obj) {
     prims.push({ t: 'l', points: [0, y + rowH, totalW, y + rowH], stroke: TBL.ROW_BORDER, sw: 0.5 })
   })
 
-  // Separadors verticals (interns) + vora exterior
+  // Separadors verticals (interns) + vora exterior. Els filets arrenquen SOTA la banda de
+  // títol: el títol travessa la taula sencera i partir-lo per columnes el faria il·legible.
   let cxV = cw[0] || 0
-  cw.slice(1).forEach(w => { prims.push({ t: 'l', points: [cxV, 0, cxV, totalH], stroke: TBL.ROW_BORDER, sw: 0.5 }); cxV += w })
+  cw.slice(1).forEach(w => { prims.push({ t: 'l', points: [cxV, titolH, cxV, totalH], stroke: TBL.ROW_BORDER, sw: 0.5 }); cxV += w })
   prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: totalH, stroke: TBL.FRAME, sw: TBL.FRAME_SW })
   return { prims, totalW, totalH }
 }
