@@ -18,7 +18,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 import { grupsDelFull } from '../../frontend/src/utils/grupsDelFull.js'
-import { ampladaPerTextos, repartimentEnPagines } from '../../frontend/src/utils/repartimentTaules.js'
+import { ampladaPerTextos, repartimentEnPagines, trossosDeTalles } from '../../frontend/src/utils/repartimentTaules.js'
 import { filesFitting, filesGrading, filesNotes, filesSizeSet, filesSizeSetConsolidat } from '../../frontend/src/utils/taulesQ8.js'
 
 const dades = JSON.parse(readFileSync(new URL('./_out/q8_payloads.json', import.meta.url), 'utf8'))
@@ -61,12 +61,16 @@ prova('VERMELL on toca: la presa que s\'aparta, i NOMÉS aquella', () => {
   assert.equal(wa.dif, 0, 'coincideix → tot en negre')
 })
 
-prova('l\'ACTUAL BUIT no és cap alerta: ningú no ha mesurat aquella cel·la', () => {
-  // A la talla base totes tres files tenen gest. La que no en té viu a les altres talles.
+prova('T1 · la mesura INTACTA d\'una sessió tancada porta Actual: va arribar clavada', () => {
   const ss = filesSizeSet(grid)
   const hl = ss.files.find(f => f.codi === 'HL' && f.garment === '')
-  assert.equal(hl.celles.XS.actual, null, 'existir no és haver mesurat')
-  assert.equal(hl.celles.XS.dif, null, 'i la Dif no s\'inventa un 0')
+  assert.equal(hl.celles.XS.actual, hl.celles.XS.teorica, 'la columna no pot quedar mig buida')
+  assert.equal(hl.celles.XS.dif, 0, 'i qui pinta deixarà el zero en blanc')
+})
+
+prova('T1 · cap fila de la talla base es queda sense Actual', () => {
+  assert.ok(q8a.files.every(f => f.actual != null),
+    `sense Actual: ${q8a.files.filter(f => f.actual == null).map(f => f.codi)}`)
 })
 
 prova('els tres veredictes surten sencers i sense traduir (dada de domini)', () => {
@@ -111,7 +115,9 @@ prova('una cel·la per talla del run i per fila, sense forats a l\'estructura', 
   assert.ok(q8c.files.every(f => Object.keys(f.celles).length === talles.length))
 })
 
-prova('R2 · VEREDICTE NOMÉS A LA BASE', () => {
+prova('T3 · el constructor segueix sabent el veredicte, però la TAULA ja no el pinta', () => {
+  // La dada no desapareix del model —la taula de fitting la necessita—; el que canvia és què
+  // n'ensenya el size set, que és INFORMATIU. R2 segueix valent al constructor.
   const amb = q8c.files.flatMap(f => talles.filter(s => f.celles[s].veredicte))
   assert.ok(amb.every(s => s === dades.model.base_size_label),
     `veredicte fora de la base: ${[...new Set(amb)]}`)
@@ -194,11 +200,12 @@ prova('C2 · una sola fila de 2 línies ja NO infla les altres', () => {
 // ── C4 · APAÏSAT I SÒL DE 8pt ───────────────────────────────────────────────────────────────
 // La decisió que fa l'editor: el format més ESTRET on la taula hi cap sense escalar, provant
 // primer l'apaïsat del mateix paper. I l'escala mai per sota de 8/9.
-console.log('\nQ8-bis · C4 · apaïsat i sòl de 8pt')
+console.log('\nQ8-ter · T3 · sostre A4, partició per talles i sòl de 8pt')
 const MARGE = 10
-const FORMATS = { A4P: 210, A4L: 297, A3L: 420, A3P: 297 }
-const ESCALA_MINIMA = 8 / 9
-const formatQueHiCap = (w) => ['A4L', 'A3L', 'A3P'].find(k => FORMATS[k] - 2 * MARGE >= w) || null
+// T3 — el sostre és l'A4 APAÏSAT i l'A3 ha sortit de la tria automàtica: la fitxa s'imprimeix en
+// A4 i un full que ningú no pot imprimir no és un document.
+const FORMATS = { A4P: 210, A4L: 297 }
+const AMPLE_UTIL_MAX = 270
 
 const CHAR_MM = 3.175 * 0.6
 const noms = q8a.files.map(f => f.nom_en)
@@ -213,35 +220,41 @@ prova('el nom més llarg cap en 2 línies a l\'amplada calculada', () => {
 })
 
 const ample = (cols) => cols.reduce((a, b) => a + b, 0)
-// El cas que va destapar C4: el size set amb CINC talles, no amb les tres del banc.
 const CINC = ['XXS', 'XS', 'S', 'M', 'L']
+// T3 — el size set ha passat de TRES columnes per talla a DUES (teòrica · Actual), i han caigut
+// la Dif i el Verdict. Aquesta és l'aritmètica que decideix si cal apaïsat.
 const casos = [
   ['Q8a fitting', ample([16, wPom, 18, 18, 16, 22, 52])],
-  ['Q8b grading (3 talles)', ample([16, wPom, 18, 14, 14, 18, ...talles.map(() => 14)])],
-  ['Q8c size set (3 talles)', ample([16, wPom, ...talles.flatMap(() => [13, 13, 12]), 22])],
-  ['Q8c size set (5 talles)', ample([16, wPom, ...CINC.flatMap(() => [13, 13, 12]), 22])],
+  ['Q8b grading (5 talles)', ample([16, wPom, 18, 14, 14, 18, ...CINC.map(() => 14)])],
+  ['Q8c size set (5 talles)', ample([16, wPom, ...CINC.flatMap(() => [13, 13])])],
 ]
 for (const [nom, w] of casos) {
   const capA4P = w <= FORMATS.A4P - 2 * MARGE
-  const fmtKey = capA4P ? 'A4P' : formatQueHiCap(w)
-  const ampleUtil = FORMATS[fmtKey] - 2 * MARGE
-  const escala = Math.min(1, Math.max(ESCALA_MINIMA, ampleUtil / w))
-  const pt = 9 * escala
-  console.log(`      ${nom}: ${w.toFixed(0)} mm → ${fmtKey} · ${pt.toFixed(1)}pt${capA4P ? '' : ' (apaïsat + avís)'}`)
-  prova(`${nom}: el format triat el fa cabre i MAI baixa de 8pt`, () => {
+  const fmtKey = capA4P ? 'A4P' : (w <= AMPLE_UTIL_MAX ? 'A4L' : null)
+  const pt = 9 * Math.min(1, (fmtKey ? FORMATS[fmtKey] - 2 * MARGE : AMPLE_UTIL_MAX) / w)
+  console.log(`      ${nom}: ${w.toFixed(0)} mm → ${fmtKey || 'PARTICIÓ'} · ${pt.toFixed(1)}pt`)
+  prova(`${nom}: ≥ 8pt i sense pujar d'A4`, () => {
     assert.ok(pt >= 8, `${pt.toFixed(2)}pt`)
-    assert.ok(w <= ampleUtil / ESCALA_MINIMA, 'ni amb el sòl no hi cabria')
+    assert.ok(fmtKey === 'A4P' || fmtKey === 'A4L', `ha triat ${fmtKey}`)
   })
 }
 
-prova('C4 · el size set de 5 talles NO cap en A4 vertical: és el cas que obliga l\'apaïsat', () => {
-  const w = casos[3][1]
-  assert.ok(w > FORMATS.A4P - 2 * MARGE, `${w} mm hi cabria i llavors C4 no caldria`)
-  assert.equal(formatQueHiCap(w), 'A4L', 'i el full més estret que hi cap és l\'A4 apaïsat')
-  // La prova que C4 existeix per al sòl: en vertical, sense canviar de full, cauria sota 8pt.
-  const ptVertical = 9 * Math.min(1, (FORMATS.A4P - 2 * MARGE) / w)
-  assert.ok(ptVertical < 8, `en vertical serien ${ptVertical.toFixed(1)}pt`)
-  console.log(`      → en A4 vertical serien ${ptVertical.toFixed(1)}pt; per això canvia de full`)
+prova('T3 · amb DUES columnes per talla, el run de 5 torna a cabre en A4 VERTICAL', () => {
+  const w = casos[2][1]
+  assert.ok(w <= FORMATS.A4P - 2 * MARGE, `${w} mm no hi cap`)
+  console.log(`      → size set de 5 talles: ${w} mm (abans de T3 en feia 262 i saltava a apaïsat)`)
+})
+
+prova('T3 · el que no cap ni en A4 apaïsat es parteix per TALLES, no puja de paper', () => {
+  // Un run de 20 talles: 16 + wPom fixos, 26 mm per talla, sostre 270.
+  const bandes = trossosDeTalles(20, 16 + wPom, 26, AMPLE_UTIL_MAX)
+  assert.ok(bandes.length > 1, 'hauria de partir')
+  assert.equal(bandes[0][0], 0)
+  assert.equal(bandes[bandes.length - 1][1], 20, 'cap talla es perd')
+  bandes.slice(1).forEach((b, i) => assert.equal(b[0], bandes[i][1], 'ni se\'n repeteix cap'))
+  const ampleBanda = 16 + wPom + (bandes[0][1] - bandes[0][0]) * 26
+  assert.ok(ampleBanda <= AMPLE_UTIL_MAX, `${ampleBanda} mm se surt del sostre`)
+  console.log(`      → 20 talles = ${bandes.length} bandes de ${bandes[0][1]} · ${ampleBanda.toFixed(0)} mm cadascuna`)
 })
 
 console.log(`\n${ok} proves verdes${process.exitCode ? ' — I ALGUNA DE VERMELLA' : ''}\n`)
