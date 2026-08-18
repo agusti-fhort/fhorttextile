@@ -5507,9 +5507,18 @@ export default function TechSheetEditor() {
   }
 
   // ── Q8c · TAULA DE SIZE SET, PER PEÇA ───────────────────────────────────────
-  // El mateix patró que Q8a però PER CADA TALLA: tres columnes per talla (la teòrica, la que ha
-  // arribat i la desviació). La font és la MATEIXA graella de l'última sessió tancada: aquesta
-  // taula i la de fitting no poden sortir de dos llocs, o la fila de la base diria dues coses.
+  // 🚨 T3 (18/08) · QUÈ ÉS AQUESTA TAULA, i és un canvi d'ONTOLOGIA, no de maquetació. Va néixer
+  // com «Q8a però per cada talla», amb Dif i Verdict a sobre, i això la feia una taula de
+  // DECISIONS repetida N vegades. No ho és: **és INFORMATIVA de com han arribat les prendes**. Les
+  // decisions de la talla base viuen a la taula de fitting i només hi poden viure —una talla
+  // no-base no arriba mai a `BaseMeasurement`, i tenir-les a dos llocs és tenir-ne dues versions.
+  //
+  // Queden DUES columnes per talla: la teòrica i l'Actual. La Dif se'n va perquè la porta la
+  // resta al costat (teòrica i actual, l'una sota l'altra) i el vermell ja diu on hi ha
+  // diferència; el Verdict, perquè aquesta taula no jutja.
+  //
+  // La font és la MATEIXA graella de l'última sessió tancada que Q8a: aquesta taula i la de
+  // fitting no poden sortir de dos llocs, o la fila de la base diria dues coses.
   //
   // 🔑 LES NOTES NO HI SÓN, i tenen taula pròpia: amb tres columnes per talla no hi cap ni una
   // frase, i encabir-les-hi hauria estat estrènyer les xifres fins a fer-les il·legibles.
@@ -5543,25 +5552,20 @@ export default function TechSheetEditor() {
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
           { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
+          // T3 · DUES COLUMNES PER TALLA, NO TRES. La teòrica i com va ARRIBAR, i prou.
           ...talles.flatMap(sl => [
             // La talla base porta la marca al MODEL: el builder hi pinta la franja de realçat, la
             // mateixa que la pantalla. El `*` es manté perquè sobreviu a l'imprès en blanc i negre.
             { key: sl, label: sl === base ? `${sl}*` : sl, width: 13, ...(sl === base ? { base: true } : {}) },
             { key: `${sl}_act`, label: tEn('tech_sheet.q8_col_actual'), width: 13 },
-            { key: `${sl}_dif`, label: tEn('tech_sheet.q8_col_diff'), width: 12 },
           ]),
-          { key: 'verdict', label: tEn('tech_sheet.q8_col_verdict'), width: 22 },
         ],
         rows: g.files.map(f => [
           capaQ8(f), cellaPom(f),
           ...talles.flatMap(sl => {
             const c = f.celles?.[sl] || {}
-            return [xifra(c.teorica) || '–', cellaActual(c.actual, c.teorica), cellaDif(c.dif)]
+            return [xifra(c.teorica) || '–', cellaActual(c.actual, c.teorica)]
           }),
-          // R2 — UNA SOLA COLUMNA DE VEREDICTE, i és la de la BASE. Una per talla seria oferir
-          // dotze caselles de les quals onze no es poden omplir mai: una talla no-base no arriba
-          // a `BaseMeasurement` perquè el `close` la descarta.
-          f.celles?.[base]?.veredicte || '',
         ]),
         style: { fontSize: 9, capcaleraFina: true, zebra: true },
         snapshot: {
