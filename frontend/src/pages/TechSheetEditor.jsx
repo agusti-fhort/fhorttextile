@@ -1072,7 +1072,14 @@ function buildTableCellPrimitives(obj) {
       // R4 · les XIFRES van centrades a la cel·la. Alineades a l'esquerra, una columna de
       // talles es llegeix com un serrell; centrades, la columna es llegeix d'un cop d'ull.
       // El text (nomenclatura, nom de POM, material) es queda a l'esquerra, que és on es llegeix.
-      const align = esNumeric(cell.text) ? 'center' : 'left'
+      //
+      // T2 · `cell.centrat` — L'EXCEPCIÓ QUE L'HEURÍSTIC NO POT ENDEVINAR. `esNumeric` encerta amb
+      // les mesures, però a la taula d'escalat hi ha tres columnes que són CODI, no prosa: el
+      // règim (LINEAR/STEP/FIXED), la talla de trencament (XS) i el «—» de quan no n'hi ha. Cap
+      // no passa per numèrica i totes tres s'alineaven a l'esquerra, de manera que la columna es
+      // llegia com un serrell —exactament el que la R4 evita a les xifres—. La marca és de qui
+      // COMPON la taula, que és qui sap què és cada columna; l'heurístic es queda per omissió.
+      const align = cell.centrat ? 'center' : (esNumeric(cell.text) ? 'center' : 'left')
       if (cell.sub) {
         prims.push({ t: 't', x: cxR + T_PAD, y: y + T_CELL_PAD_Y, w: wCell, h: fontPx + 2, text: cell.text || '', fill, size: fontPx, bold, underline: isBreak, mid: false, align })
         prims.push({ t: 't', x: cxR + T_PAD, y: y + T_CELL_PAD_Y * 2 + fontPx, w: wCell, h: subPx + 2, text: cell.sub, fill: TBL.NOM, size: subPx, italic: true, mid: false })
@@ -5349,9 +5356,9 @@ export default function TechSheetEditor() {
   // `GradingRuleSets`. Sense increment o amb zero, «—»: FIXED i STEP no en tenen, i un 0 pintat
   // diria que la mesura no creix quan el que passa és que la regla no és d'increment.
   const cellaIncrement = (v) => {
-    if (v == null || Number(v) === 0) return { text: '—' }
+    if (v == null || Number(v) === 0) return { text: '—', centrat: true }
     const n = xifra(Math.abs(v))
-    return { text: Number(v) > 0 ? `+${n}` : `−${n}` }
+    return { text: Number(v) > 0 ? `+${n}` : `−${n}`, centrat: true }
   }
 
   // LA GRAELLA DE L'ÚLTIMA SESSIÓ TANCADA, en un sol lloc: la demanen les TRES taules que en
@@ -5478,13 +5485,13 @@ export default function TechSheetEditor() {
         rows: g.files.map(f => [
           capaQ8(f), cellaPom(f),
           // El RÈGIM és dada de domini (LINEAR/STEP/FIXED): no es tradueix ni s'abreuja.
-          f.regla || '—',
+          { text: f.regla || '—', centrat: true },
           cellaIncrement(f.delta), cellaIncrement(f.delta_break),
           // 🔒 EL BREAK ES PRESENTA EN CONVENCIÓ DE DOCUMENT, i la dada NO es toca: la BD desa la
           // PRIMERA talla del tram gran i el full del client escriu l'ÚLTIMA del tram petit, que
           // és una posició de diferència dins del run. Sense run o sense traducció possible, «—»:
           // una etiqueta desplaçada per error és indistingible d'una de correcta.
-          aDocument(f.talla_break, talles) || '—',
+          { text: aDocument(f.talla_break, talles) || '—', centrat: true },
           ...talles.map(sl => xifra(f.valors?.[sl]) || '–'),
         ]),
         style: { fontSize: 9, capcaleraFina: true, zebra: true },
