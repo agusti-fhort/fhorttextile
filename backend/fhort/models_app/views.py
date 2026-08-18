@@ -2008,6 +2008,10 @@ def measurements_table_view(request, model_id):
     # Absència vs. valor equivocat: les cinc superfícies ancorades AMAGAVEN; aquesta COL·LAPSAVA.
     # És pitjor perquè no hi ha res a la pantalla que suggereixi que falta o sobra res.
     graded_by_pom = {}
+    # T4 — declarades FORA del `try`: si la resolució de la versió peta, la resposta ha de sortir
+    # igualment amb la data a `None`, no amb un `NameError` (mateixa acta que `_regla_de`).
+    grading_version_data = None
+    grading_version_number = None
     try:
         from fhort.fitting.models import GradedSpec
         from fhort.fitting.services import (
@@ -2019,6 +2023,14 @@ def measurements_table_view(request, model_id):
         if sf:
             gv = vigent_grading_version(sf)
             if gv:
+                # Q8-ter/T4 — LA DATA DE LA CORBA VIGENT. La fitxa ha de dir de QUIN DIA és cada
+                # taula, i la de graduació no en té cap altra: la seva font és aquesta versió, i
+                # `data` és quan es va crear (l'última propagació la torna a crear —
+                # `bump_grading_version_and_generate`—, o sigui que és la marca de l'últim canvi).
+                # Camp ADDITIU: `gv` ja es resolia aquí mateix per omplir `graded_by_pom`, o sigui
+                # que no hi ha ni una consulta nova.
+                grading_version_data = gv.data.isoformat() if gv.data else None
+                grading_version_number = gv.version_number
                 for spec in GradedSpec.objects.filter(grading_version=gv):
                     # SET-2/T6a — l'eix de la peça entra al mapa alhora que a la `clau` de la
                     # fila (just a sota): si un cresqués i l'altre no, la fila de la 02
@@ -2203,6 +2215,9 @@ def measurements_table_view(request, model_id):
         'rows': rows,
         'total_poms': len(rows),
         'tancat': tancat,
+        # T4 — additius: cap consumidor existent els llegeix i cap camp canvia de valor.
+        'grading_version_data': grading_version_data,
+        'grading_version_number': grading_version_number,
     })
 
 

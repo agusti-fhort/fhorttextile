@@ -1001,7 +1001,11 @@ function buildTableCellPrimitives(obj) {
   // del filet, com la fila-títol del full descarregable (padding 7px a dalt, 2px a baix).
   const titol = String(obj.titol ?? '').trim()
   const unitatDecl = String(obj.unitat ?? '').trim()
-  const titolH = (titol || unitatDecl) ? fontPx + T_CELL_PAD_Y * 4 : 0
+  // T4 — LA DATA DE LA FONT, a la mateixa banda. Va a la DRETA i en cos NORMAL, just abans de la
+  // unitat, que es queda més petita: la data és una dada del document —de quin dia parla aquesta
+  // taula— i la unitat és una convenció de lectura. Jerarquia distinta, cos distint.
+  const dataFont = String(obj.data ?? '').trim()
+  const titolH = (titol || unitatDecl || dataFont) ? fontPx + T_CELL_PAD_Y * 4 : 0
   const totalH = titolH + hdrH + cosH
   // Offsets x acumulats per columna: els necessiten la capçalera, el contingut i el realçat
   // de la talla base (que és una franja vertical, no una cel·la).
@@ -1017,6 +1021,12 @@ function buildTableCellPrimitives(obj) {
     prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: titolH, fill: TBL.ROW_EVEN })
     if (titol) prims.push({ t: 't', x: T_PAD, y: 0, w: totalW - 2 * T_PAD, h: titolH, text: titol, fill: TBL.VAL, size: fontPx, bold: true, mid: true, align: 'left' })
     if (unitatDecl) prims.push({ t: 't', x: T_PAD, y: 0, w: totalW - 2 * T_PAD, h: titolH, text: unitatDecl, fill: TBL.NOM, size: subPx, mid: true, align: 'right' })
+    // La data s'aparta de la unitat el que la unitat ocupa: monoespaiada, o sigui que comptar-ne
+    // els caràcters n'és una mesura exacta i no cal mesurar cap text.
+    if (dataFont) {
+      const reserva = unitatDecl ? unitatDecl.length * subPx * 0.6 + T_PAD * 2 : 0
+      prims.push({ t: 't', x: T_PAD, y: 0, w: totalW - 2 * T_PAD - reserva, h: titolH, text: dataFont, fill: TBL.VAL, size: fontPx, mid: true, align: 'right' })
+    }
     // C3 — FILET FORT sota el títol de grup, com la fila-títol del full de fitting: és el que
     // el fa llegir com un encapçalament i no com una fila més de la taula.
     prims.push({ t: 'l', points: [0, titolH, totalW, titolH], stroke: TBL.FRAME, sw: titol ? 1 : TBL.FRAME_SW })
@@ -5316,6 +5326,14 @@ export default function TechSheetEditor() {
     return `${canonic}${inst ? ` · ${inst}` : ''}`
   }
   const capaQ8 = (fila) => etiquetaCapa(fila.capa, dicc, 'en')
+  // T4 — la DATA de la font de cada taula, en el format del document (dd/mm/aaaa, el mateix que
+  // la capçalera de fitxa). Sense data no es pinta res: una data inventada en un document que va
+  // al fabricant és pitjor que no dir-ne cap.
+  const dataDoc = (iso) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB')
+  }
   // El repartiment per peça i el TÍTOL de cada grup: `grupsDelFull` ja resol l'ordre (la mare
   // primer, del contracte de `/peces/`) i el nom. No se'n reescriu la llei.
   //
@@ -5408,6 +5426,8 @@ export default function TechSheetEditor() {
       taula: {
         id: uid(), type: 'table', layer: 'free', kind: 'q8_fitting',
         garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
+        // T4 — la font d'aquesta taula és la sessió tancada: la seva data és la del document.
+        data: dataDoc(sessioTancada.data),
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
           { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
@@ -5455,7 +5475,8 @@ export default function TechSheetEditor() {
       if (!r.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return null }
       const d = await r.json()
       return { rows: d?.rows || [], talles: d?.size_run || [],
-               base: (model?.base_size_label || '').trim() }
+               base: (model?.base_size_label || '').trim(),
+               dataVersio: d?.grading_version_data || null }
     } catch { flash(t('tech_sheet.flash_table_fetch_error')); return null }
   }
 
@@ -5481,6 +5502,9 @@ export default function TechSheetEditor() {
         id: uid(), type: 'table', layer: 'free', kind: 'q8_grading',
         garmentId: g.garment,
         titol: bandaIdx === 0 ? (g.titol || '') : '', unitat: unitatDeclarada,
+        // T4 — la font de l'escalat és la GradingVersion VIGENT, i la propagació la torna a crear
+        // (`bump_grading_version_and_generate`): la seva data ÉS la de l'última propagació.
+        data: dataDoc(consolidat.dataVersio),
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
           { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
@@ -5543,14 +5567,17 @@ export default function TechSheetEditor() {
     // que hi aporta un fitting són les PRESES, i que no n'hi hagi no vol dir que no hi hagi size
     // set — vol dir que encara ningú no l'ha mesurat, i llavors Actual/Dif/Verdict surten BUITS.
     let dades
+    let dataSizeSet = ''
     if (sessioTancada) {
       const grid = await gridDeLaSessioTancada()
       if (!grid) return
       dades = filesSizeSet(grid)
+      dataSizeSet = dataDoc(sessioTancada.data)
     } else {
       const consolidat = await taulaMesuresDelModel()
       if (!consolidat) return
       dades = filesSizeSetConsolidat(consolidat.rows, consolidat.talles, consolidat.base)
+      dataSizeSet = dataDoc(consolidat.dataVersio)
     }
     const { base, talles, files } = dades
     if (!files.length || !talles.length) { flash(t('tech_sheet.flash_empty_table')); return }
@@ -5567,6 +5594,9 @@ export default function TechSheetEditor() {
         garmentId: g.garment,
         // El títol de grup obre el grup UN COP: a la primera banda de talles i prou.
         titol: bandaIdx === 0 ? (g.titol || '') : '', unitat: unitatDeclarada,
+        // T4 — la font és la PRESA quan n'hi ha (la sessió tancada on es va fer) i, quan no,
+        // la corba vigent, que és exactament d'on surten les xifres en aquell cas (B0).
+        data: dataSizeSet,
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
           { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
@@ -5617,6 +5647,7 @@ export default function TechSheetEditor() {
       taula: {
         id: uid(), type: 'table', layer: 'free', kind: 'q8_notes',
         garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
+        data: dataDoc(sessioTancada.data),
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
           { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
