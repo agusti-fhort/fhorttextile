@@ -43,6 +43,32 @@ function notesPerIdentitat(grid, talla) {
 }
 
 /**
+ * 🚨 Q8-ter/T1 · LA XIFRA AMB QUÈ LA PRENDA VA ARRIBAR, DE TOTES LES MESURES.
+ *
+ * `construeixTaulaPresaPerTalla` serveix `arribada` filtrada per `liniaTeContingut`, i **per a la
+ * seva taula això és el correcte**: allà es documenta una presa VIVA, on una línia intacta encara
+ * no s'ha mesurat i pintar-hi el número que va copiar de la teòrica en néixer seria inventar-se
+ * una presa (v. l'acta d'aquell mòdul, que és el bessó del backend).
+ *
+ * Les taules de Q8 llegeixen una altra cosa: una sessió **TANCADA**. Allà el cicle s'ha acabat, la
+ * prenda física s'ha mesurat sencera i el `close` ja ha consolidat: una línia amb el real igual al
+ * teòric vol dir «va arribar clavada», no «ningú no l'ha mirada». Ometre-la deixava la columna
+ * ACTUAL mig buida en un document que ha de dir com van arribar TOTES les mesures (QA d'Agus
+ * sobre el PDF del 1379).
+ *
+ * Per això es llegeix `valor_real` cru del MATEIX grid —cap font nova— i el predicat de contingut
+ * NO es toca ni es duplica: és d'E2 i segueix manant a la seva superfície.
+ */
+function realsPerIdentitat(grid, talla) {
+  const out = new Map()
+  for (const l of grid?.lines || []) {
+    if (talla != null && (l.size_label || '').trim() !== talla) continue
+    out.set(`${identitatMesura(l)}@${(l.size_label || '').trim()}`, l.valor_real ?? null)
+  }
+  return out
+}
+
+/**
  * Q8a · LA TAULA DE FITTING — una fila per mesura, a la TALLA BASE.
  *
  * 🔑 D'ON SURT LA COLUMNA DE LA TALLA BASE, que és la decisió que sosté tota la taula:
@@ -52,8 +78,10 @@ function notesPerIdentitat(grid, talla) {
  * «la de l'últim aprovat» sense haver de recórrer cap històric. Anar-la a buscar a una altra banda
  * seria una segona veritat per a la mateixa cel·la.
  *
- * `actual` és `null` quan ningú no ha mesurat: una `PieceFittingLine` neix amb `valor_real` copiat
- * del teòric i llegir-lo a pèl ompliria la fitxa de preses que no s'han fet (v. `liniaTeContingut`).
+ * ⚠️ AQUEST DOCSTRING DEIA «`actual` és `null` quan ningú no ha mesurat», i des de T1 (18/08) és
+ * FALS: la sessió que aquesta taula documenta és TANCADA, i allà `valor_real` és com va arribar la
+ * prenda —clavada inclosa—. Es corregeix aquí i no s'hi deixa: un docstring datat i fals és
+ * exactament el que fa néixer el brief equivocat de la sessió següent. V. `realsPerIdentitat`.
  *
  * @param {object} grid  payload de `pieceFittings.get(id)`
  * @returns {{base: string, files: Array}}
@@ -61,15 +89,18 @@ function notesPerIdentitat(grid, talla) {
 export function filesFitting(grid) {
   const { base, files } = construeixTaulaPresaPerTalla(grid)
   const notes = notesPerIdentitat(grid, base)
+  const reals = realsPerIdentitat(grid, base)
   return {
     base,
     files: files.map(f => {
       const v = f.valors?.[base] || { teorica: null, arribada: null, estat: '' }
+      // T1 — TOTES les mesures de la talla de la sessió tancada, no només les que s'han mogut.
+      const actual = reals.has(`${f.identitat}@${base}`) ? reals.get(`${f.identitat}@${base}`) : v.arribada
       return {
         ...f,
         aprovada: v.teorica,
-        actual: v.arribada,
-        dif: diferencia(v.arribada, v.teorica),
+        actual,
+        dif: diferencia(actual, v.teorica),
         veredicte: v.estat,
         nota: notes.get(f.identitat) || '',
       }
@@ -86,6 +117,9 @@ export function filesFitting(grid) {
  */
 export function filesSizeSet(grid) {
   const { base, talles, files } = construeixTaulaPresaPerTalla(grid)
+  // T1 — mateixa llei que la taula de fitting, i per la mateixa raó: la sessió és TANCADA i la
+  // columna Actual ha de dir com va arribar CADA talla, no només les que algú va corregir.
+  const reals = realsPerIdentitat(grid, null)
   return {
     base,
     talles,
@@ -93,10 +127,12 @@ export function filesSizeSet(grid) {
       ...f,
       celles: Object.fromEntries(talles.map(s => {
         const v = f.valors?.[s] || { teorica: null, arribada: null, estat: '' }
+        const clau = `${f.identitat}@${s}`
+        const actual = reals.has(clau) ? reals.get(clau) : v.arribada
         return [s, {
           teorica: v.teorica,
-          actual: v.arribada,
-          dif: diferencia(v.arribada, v.teorica),
+          actual,
+          dif: diferencia(actual, v.teorica),
           // R2 — el veredicte NOMÉS a la base; a la resta, cadena buida i no `null`, perquè la
           // cel·la existeix i el que no hi ha és decisió.
           veredicte: s === base ? v.estat : '',

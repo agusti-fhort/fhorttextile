@@ -5331,8 +5331,11 @@ export default function TechSheetEditor() {
   // La Dif amb signe explícit i el menys TIPOGRÀFIC, com `rowDelta`: un guionet de teclat i un
   // menys no es distingeixen al paper i el signe d'una desviació sí que s'ha de poder llegir.
   const cellaDif = (d) => {
-    if (d == null) return { text: '' }
-    if (Number(d) === 0) return { text: xifra(0) }
+    // T1 — ZERO ÉS BUIT. Un «0.0» a la columna de desviació és tinta que no diu res: el que la
+    // columna comunica és ON hi ha diferència, i una graella plena de zeros amaga precisament els
+    // tres o quatre valors que s'han de veure. La cel·la buida ja diu «aquesta va arribar clavada»,
+    // i qui ho vulgui confirmar té l'Actual al costat, en negre, igual a la columna de la base.
+    if (d == null || Number(d) === 0) return { text: '' }
     const n = xifra(Math.abs(d))
     return { text: Number(d) > 0 ? `+${n}` : `−${n}`, alerta: true }
   }

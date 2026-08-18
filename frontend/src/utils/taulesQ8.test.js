@@ -23,12 +23,16 @@ const linia = (pom, talla, extra = {}) => ({
 
 const grid = (lines) => ({ model: MODEL, lines })
 
-test('EXISTIR NO ÉS HAVER MESURAT: sense gest, `actual` és null i la Dif no s\'inventa un 0', () => {
+// ⚠️ AQUÍ HI HAVIA «EXISTIR NO ÉS HAVER MESURAT: sense gest, `actual` és null», i T1 (18/08) el
+// deroga PER A AQUESTA TAULA. La llei no cau: segueix manant a `taulaPresaPerTalla`, que
+// documenta una presa VIVA i té el seu propi banc. El que Q8a documenta és una sessió TANCADA, on
+// una línia amb el real igual al teòric vol dir «va arribar clavada», no «ningú no l'ha mirada».
+test('a la sessió TANCADA, una línia sense gest porta Actual i la Dif és zero', () => {
   const { base, files } = filesFitting(grid([linia(1, 'S')]))
   assert.equal(base, 'S')
   assert.equal(files[0].aprovada, 50)
-  assert.equal(files[0].actual, null)
-  assert.equal(files[0].dif, null)
+  assert.equal(files[0].actual, 50)
+  assert.equal(files[0].dif, 0)
   assert.equal(files[0].veredicte, '')
 })
 
@@ -62,7 +66,9 @@ test('DUES GERMANES són DUES files, no una: la identitat porta els quatre eixos
   ]))
   assert.equal(files.length, 2)
   assert.deepEqual(files.map(f => f.capa), ['exterior', 'lining'])
-  assert.deepEqual(files.map(f => f.actual), [null, 49])
+  // T1 — totes dues porten Actual; el que les distingeix és que una s'aparta i l'altra no.
+  assert.deepEqual(files.map(f => f.actual), [50, 49])
+  assert.deepEqual(files.map(f => f.dif), [0, -1])
 })
 
 test('l\'eix de la PRENDA viatja amb la fila, que és el que la deixa repartir per peça', () => {
@@ -187,4 +193,29 @@ test('B0 · el consolidat també porta l\'eix de la prenda, o no es podria repar
   const { files } = filesSizeSetConsolidat(
     [filaTM(), filaTM({ garment: '02' })], ['S'], 'S')
   assert.deepEqual(files.map(f => f.garment), ['', '02'])
+})
+
+// ── T1 · l'Actual de TOTES les mesures d'una sessió tancada ──────────────────────────────────
+
+test('T1 · una línia INTACTA d\'una sessió tancada SÍ que porta Actual: va arribar clavada', () => {
+  const { files } = filesFitting(grid([linia(1, 'S')]))     // real == teòric, sense decisió ni nota
+  assert.equal(files[0].actual, 50, 'la columna Actual no pot quedar mig buida al document')
+  assert.equal(files[0].dif, 0, 'i la Dif és zero, que qui pinta deixarà en blanc')
+})
+
+test('T1 · la que s\'aparta segueix dient-ho, i la Dif porta el signe', () => {
+  const { files } = filesFitting(grid([linia(1, 'S', { valor_real: 48.5 })]))
+  assert.equal(files[0].actual, 48.5)
+  assert.equal(files[0].dif, -1.5)
+})
+
+test('T1 · al SIZE SET, totes les talles porten Actual, no només les corregides', () => {
+  const { files } = filesSizeSet(grid([
+    linia(1, 'XS', { valor_teoric: 48, valor_real: 48 }),    // intacta: va arribar clavada
+    linia(1, 'S', { valor_real: 51 }),                       // moguda
+  ]))
+  assert.equal(files[0].celles.XS.actual, 48, 'la intacta també va arribar i es diu')
+  assert.equal(files[0].celles.XS.dif, 0)
+  assert.equal(files[0].celles.S.actual, 51)
+  assert.equal(files[0].celles.M.actual, null, 'la que no té línia segueix sent un forat')
 })
