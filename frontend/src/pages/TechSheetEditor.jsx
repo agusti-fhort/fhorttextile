@@ -981,8 +981,15 @@ function buildTableCellPrimitives(obj) {
   // T4 — LA DATA DE LA FONT, a la mateixa banda. Va a la DRETA i en cos NORMAL, just abans de la
   // unitat, que es queda més petita: la data és una dada del document —de quin dia parla aquesta
   // taula— i la unitat és una convenció de lectura. Jerarquia distinta, cos distint.
+  //
+  // M2 — I AMB ELLA EL NOM DE LA TAULA, al mateix cos i separat pel mateix punt volat: «18/08/2026
+  // · Fitting». El nom de la PEÇA ja el diu el títol de grup a l'esquerra, i sense això una taula
+  // arrencada de la seva pàgina —o la segona d'un grup— no deia QUÈ era. Es componen aquí, en un
+  // sol lloc: qui insereix passa dues dades, no una cadena ja muntada.
   const dataFont = String(obj.data ?? '').trim()
-  const titolH = (titol || unitatDecl || dataFont) ? fontPx + T_CELL_PAD_Y * 4 : 0
+  const nomTaula = String(obj.nomTaula ?? '').trim()
+  const rotul = [dataFont, nomTaula].filter(Boolean).join(' · ')
+  const titolH = (titol || unitatDecl || rotul) ? fontPx + T_CELL_PAD_Y * 4 : 0
   const totalH = titolH + hdrH + cosH
   // Offsets x acumulats per columna: els necessiten la capçalera, el contingut i el realçat
   // de la talla base (que és una franja vertical, no una cel·la).
@@ -998,11 +1005,11 @@ function buildTableCellPrimitives(obj) {
     prims.push({ t: 'r', x: 0, y: 0, w: totalW, h: titolH, fill: TBL.ROW_EVEN })
     if (titol) prims.push({ t: 't', x: T_PAD, y: 0, w: totalW - 2 * T_PAD, h: titolH, text: titol, fill: TBL.VAL, size: fontPx, bold: true, mid: true, align: 'left' })
     if (unitatDecl) prims.push({ t: 't', x: T_PAD, y: 0, w: totalW - 2 * T_PAD, h: titolH, text: unitatDecl, fill: TBL.NOM, size: subPx, mid: true, align: 'right' })
-    // La data s'aparta de la unitat el que la unitat ocupa: monoespaiada, o sigui que comptar-ne
+    // El rètol s'aparta de la unitat el que la unitat ocupa: monoespaiada, o sigui que comptar-ne
     // els caràcters n'és una mesura exacta i no cal mesurar cap text.
-    if (dataFont) {
+    if (rotul) {
       const reserva = unitatDecl ? unitatDecl.length * subPx * 0.6 + T_PAD * 2 : 0
-      prims.push({ t: 't', x: T_PAD, y: 0, w: totalW - 2 * T_PAD - reserva, h: titolH, text: dataFont, fill: TBL.VAL, size: fontPx, mid: true, align: 'right' })
+      prims.push({ t: 't', x: T_PAD, y: 0, w: totalW - 2 * T_PAD - reserva, h: titolH, text: rotul, fill: TBL.VAL, size: fontPx, mid: true, align: 'right' })
     }
     // C3 — FILET FORT sota el títol de grup, com la fila-títol del full de fitting: és el que
     // el fa llegir com un encapçalament i no com una fila més de la taula.
@@ -5337,7 +5344,7 @@ export default function TechSheetEditor() {
         id: uid(), type: 'table', layer: 'free', kind: 'q8_fitting',
         garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
         // T4 — la font d'aquesta taula és la sessió tancada: la seva data és la del document.
-        data: dataDoc(sessioTancada.data),
+        data: dataDoc(sessioTancada.data), nomTaula: tEn('tech_sheet.q8_taula_fitting'),
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
           { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
@@ -5414,7 +5421,7 @@ export default function TechSheetEditor() {
         titol: bandaIdx === 0 ? (g.titol || '') : '', unitat: unitatDeclarada,
         // T4 — la font de l'escalat és la GradingVersion VIGENT, i la propagació la torna a crear
         // (`bump_grading_version_and_generate`): la seva data ÉS la de l'última propagació.
-        data: dataDoc(consolidat.dataVersio),
+        data: dataDoc(consolidat.dataVersio), nomTaula: tEn('tech_sheet.q8_taula_grading'),
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
           { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
@@ -5506,7 +5513,7 @@ export default function TechSheetEditor() {
         titol: bandaIdx === 0 ? (g.titol || '') : '', unitat: unitatDeclarada,
         // T4 — la font és la PRESA quan n'hi ha (la sessió tancada on es va fer) i, quan no,
         // la corba vigent, que és exactament d'on surten les xifres en aquell cas (B0).
-        data: dataSizeSet,
+        data: dataSizeSet, nomTaula: tEn('tech_sheet.q8_taula_sizeset'),
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
           { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
@@ -5561,7 +5568,7 @@ export default function TechSheetEditor() {
       taula: {
         id: uid(), type: 'table', layer: 'free', kind: 'q8_notes',
         garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
-        data: dataDoc(sessioTancada.data),
+        data: dataDoc(sessioTancada.data), nomTaula: tEn('tech_sheet.q8_taula_notes'),
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
           { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
