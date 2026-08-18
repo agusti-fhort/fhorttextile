@@ -211,6 +211,33 @@ const CHAR_MM = 3.175 * 0.6
 const noms = q8a.files.map(f => f.nom_en)
 const wPom = ampladaPerTextos(noms, { charMm: CHAR_MM, padMm: 4, minMm: 34, maxMm: 62 })
 
+// M1/M2 — la mateixa aritmètica que el builder: monoespaiada, cos de capçalera 8pt (el sòl),
+// tracking inclòs. Serveix per saber si una capçalera parteix en dues línies, que és el que fa
+// créixer TOTA la taula (l'alçada la mana el títol de columna més alt).
+const MM_TO_PX_Q8 = 2.4
+const HDR_PX = Math.round(8 * 0.3528 * MM_TO_PX_Q8)
+const HDR_CHAR_MM = (HDR_PX * 0.6 + Math.max(0.4, HDR_PX * 0.06)) / MM_TO_PX_Q8
+const liniesCapcalera = (etiqueta, wMm) => {
+  const caben = Math.max(1, Math.floor((wMm - 4) / HDR_CHAR_MM))
+  return Math.max(1, Math.ceil(etiqueta.length / caben))
+}
+
+prova('M1 · «REAL» cap a UNA línia a la columna de 13 mm del size set; «ACTUAL» no hi cabia', () => {
+  assert.equal(liniesCapcalera('REAL', 13), 1)
+  assert.equal(liniesCapcalera('ACTUAL', 13), 2,
+    'si això fos 1, el canvi no hauria calgut i la prova no diria res')
+  console.log(`      → capçalera 1,93 mm/car · REAL 1 línia · ACTUAL 2 (i les 14 columnes hi creixien)`)
+})
+
+prova('M1 · cap capçalera de les taules Q8 parteix en dues línies', () => {
+  const cols = [
+    ['LAYER', 16], ['POM', wPom], ['REAL', 18], ['REAL', 13], ['DIFF', 16],
+    ['VERDICT', 22], ['NOTES', 52], ['RULE', 18], ['Δ', 14], ['BREAK', 14], ['B. SIZE', 18],
+  ]
+  const parteixen = cols.filter(([et, w]) => liniesCapcalera(et, w) > 1)
+  assert.deepEqual(parteixen, [], `parteixen: ${JSON.stringify(parteixen)}`)
+})
+
 prova('el nom més llarg cap en 2 línies a l\'amplada calculada', () => {
   const llarg = Math.max(...noms.map(s => s.length))
   const perLinia = Math.floor((wPom - 4) / CHAR_MM)
@@ -238,6 +265,18 @@ for (const [nom, w] of casos) {
     assert.ok(fmtKey === 'A4P' || fmtKey === 'A4L', `ha triat ${fmtKey}`)
   })
 }
+
+prova('M2 · el rètol (data · nom · unitat) cap a l\'amplada de la taula més estreta', () => {
+  // Cos normal 9pt per a data i nom; la unitat va a 0,8 del cos.
+  const cosMm = (9 * 0.3528 * MM_TO_PX_Q8 * 0.6) / MM_TO_PX_Q8
+  const subMm = cosMm * 0.8
+  const rotul = '18/08/2026 · Fitting Notes'
+  const unitat = 'Measurements in inches'
+  const need = rotul.length * cosMm + unitat.length * subMm + 8
+  const mesEstreta = Math.min(...casos.map(([, w]) => w))
+  assert.ok(need <= mesEstreta, `el rètol demana ${need.toFixed(0)} mm i la taula més estreta en fa ${mesEstreta}`)
+  console.log(`      → rètol més llarg ${need.toFixed(0)} mm · taula més estreta ${mesEstreta} mm`)
+})
 
 prova('T3 · amb DUES columnes per talla, el run de 5 torna a cabre en A4 VERTICAL', () => {
   const w = casos[2][1]
