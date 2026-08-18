@@ -5515,6 +5515,10 @@ export default function TechSheetEditor() {
             // La talla base porta la marca al MODEL: el builder hi pinta la franja de realçat, la
             // mateixa que la pantalla. El `*` es manté perquè sobreviu a l'imprès en blanc i negre.
             { key: sl, label: sl === base ? `${sl}*` : sl, width: 13, ...(sl === base ? { base: true } : {}) },
+            // M1 — «REAL» hi cap a UNA línia a 13 mm; «ACTUAL» en demanava 15,5 i partia en
+            // dues, i com que l'alçada de capçalera la mana el títol més alt de tota la taula,
+            // aquella segona línia la pagaven les catorze columnes. L'amplada es queda: el que
+            // s'ha alliberat és una línia de capçalera a la taula sencera, no un mil·límetre.
             { key: `${sl}_act`, label: tEn('tech_sheet.q8_col_actual'), width: 13 },
           ]),
         ],
