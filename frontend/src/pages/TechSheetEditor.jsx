@@ -38,7 +38,7 @@ import { useDiccionariMesures } from '../utils/diccionariMesuresFont'
 // F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
 import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
 import { GARMENT_MARE, agrupaPerGarment, calArbrePerGarment, garmentDeFila, partirTaules } from '../utils/garmentFitxa'
-import { ampladaPerTextos, paginesDelRepartiment, repartimentEnPagines } from '../utils/repartimentTaules'
+import { ampladaPerTextos, paginesDelRepartiment, repartimentEnPagines, trossosDeTalles } from '../utils/repartimentTaules'
 import { grupsDelFull } from '../utils/grupsDelFull'
 import { aDocument } from '../utils/breakConvention'
 import { nomDeLaPeca } from '../utils/pecaDefinicio'
@@ -5178,11 +5178,16 @@ export default function TechSheetEditor() {
   // més sinó CANVIAR DE FULL. Aquest número és el que fa que l'apaïsat existeixi.
   const ESCALA_MINIMA = 8 / 9
 
-  // El format més ESTRET que fa cabre `wMm` sense escalar; `null` si cap no hi arriba. L'ordre
-  // importa: primer el que menys canvia el document (l'apaïsat del mateix paper) i només després
-  // el paper gran, perquè passar d'A4 a A3 és una decisió d'impressió, no de maquetació.
+  // 🚨 T3 · EL SOSTRE ÉS L'A4 APAÏSAT, I L'A3 SURT DE LA TRIA AUTOMÀTICA (Agus, 18/08). La versió
+  // anterior provava A4L → A3L → A3P «perquè el paper gran hi cabia», i el salt a A3 que va sortir
+  // a la QA era el senyal que alguna cosa anava malament, no la solució: **la fitxa s'imprimeix en
+  // A4**, i un full que ningú no pot imprimir no és un document. Si l'usuari tria A3 a mà, és cosa
+  // seva; el que no pot fer el tall automàtic és decidir-ho per ell.
+  //
+  // I AMB EL SOSTRE, EL QUE NO HI CAP JA NO S'ENCONGEIX: es parteix per talles (`trossosDeTalles`).
+  const AMPLE_UTIL_MAX = 270            // mm útils de l'A4 apaïsat, declarats per Agus
   const formatQueHiCap = (wMm) => (
-    ['A4L', 'A3L', 'A3P'].find(k => PAGE_FORMATS[k] && PAGE_FORMATS[k].w - 2 * MARGE_GRUP >= wMm) || null
+    PAGE_FORMATS.A4L.w - 2 * MARGE_GRUP >= wMm ? 'A4L' : null
   )
 
   const inserirGrupPaginat = (entrades) => {
@@ -5334,6 +5339,9 @@ export default function TechSheetEditor() {
     charMm: CHAR_MM_Q8, padMm: 4, minMm: 34, maxMm: 62,
   })
   const cellaPom = (fila) => ({ text: nomPomQ8(fila), wrap: true })
+  // T3 — L'AMPLE QUE UNA TAULA DE TALLES NO POT PASSAR. Si al full d'ara ja hi cap, no es mou res;
+  // si no, el sostre és l'A4 apaïsat i el que sobri es parteix per talles. Mai més amunt.
+  const ampleUtilQ8 = () => Math.max(fmt.w - 2 * MARGE_GRUP, AMPLE_UTIL_MAX)
   const xifra = (v) => (v == null ? '' : (fmtMeasure(v, unit) ?? ''))
   // La Dif amb signe explícit i el menys TIPOGRÀFIC, com `rowDelta`: un guionet de teclat i un
   // menys no es distingeixen al paper i el signe d'una desviació sí que s'ha de poder llegir.
@@ -5465,10 +5473,14 @@ export default function TechSheetEditor() {
 
     const grups = nomesLaPeca(grupsQ8(files), garment)
     const wPom = ampladaPomQ8(files)
-    const entrades = grups.map(g => ({
+    // T3 — mateixa partició vertical que el size set, i pel mateix sostre: aquí les columnes
+    // fixes són sis (Layer · POM · Rule · Δ · Break · B. Size) i cada talla n'ocupa una.
+    const bandes = trossosDeTalles(talles.length, 16 + wPom + 18 + 14 + 14 + 18, 14, ampleUtilQ8())
+    const entrades = grups.flatMap(g => bandes.map(([bi, bf], bandaIdx) => ({
       taula: {
         id: uid(), type: 'table', layer: 'free', kind: 'q8_grading',
-        garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
+        garmentId: g.garment,
+        titol: bandaIdx === 0 ? (g.titol || '') : '', unitat: unitatDeclarada,
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
           { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
@@ -5478,7 +5490,7 @@ export default function TechSheetEditor() {
           { key: 'breaksize', label: tEn('tech_sheet.q8_col_break_size'), width: 18 },
           // La talla base va MARCADA al model (`base: true`): el builder hi pinta la franja de
           // realçat, igual que a la T1b. Les talles NO es tradueixen: són dades de domini.
-          ...talles.map(sl => (sl === base
+          ...talles.slice(bi, bf).map(sl => (sl === base
             ? { key: sl, label: `${sl}*`, width: 14, base: true }
             : { key: sl, label: sl, width: 14 })),
         ],
@@ -5492,15 +5504,15 @@ export default function TechSheetEditor() {
           // és una posició de diferència dins del run. Sense run o sense traducció possible, «—»:
           // una etiqueta desplaçada per error és indistingible d'una de correcta.
           { text: aDocument(f.talla_break, talles) || '—', centrat: true },
-          ...talles.map(sl => xifra(f.valors?.[sl]) || '–'),
+          ...talles.slice(bi, bf).map(sl => xifra(f.valors?.[sl]) || '–'),
         ]),
         style: { fontSize: 9, capcaleraFina: true, zebra: true },
         snapshot: {
           model_id: model.id, talla_base: base || null, garment: g.garment,
-          snapshot_at: new Date().toISOString(),
+          talles: talles.slice(bi, bf), snapshot_at: new Date().toISOString(),
         },
       },
-    }))
+    })))
     const n = inserirGrupPaginat(entrades)
     if (n) flash(t('tech_sheet.q8_flash_inserted', { count: n }))
     setTablePicker(null)
@@ -5545,15 +5557,21 @@ export default function TechSheetEditor() {
 
     const grups = nomesLaPeca(grupsQ8(files), garment)
     const wPom = ampladaPomQ8(files)
-    const entrades = grups.map(g => ({
+    // T3 — LA PARTICIÓ VERTICAL. Amb dues columnes per talla el run de cinc torna a cabre en A4
+    // vertical; el fallback només s'activa quan ni l'A4 apaïsat no hi arriba, i llavors parteix
+    // per TALLA SENCERA (la teòrica i l'Actual d'una talla no se separen mai).
+    const bandes = trossosDeTalles(talles.length, 16 + wPom, 26, ampleUtilQ8())
+    const entrades = grups.flatMap(g => bandes.map(([bi, bf], bandaIdx) => ({
       taula: {
         id: uid(), type: 'table', layer: 'free', kind: 'q8_size_set',
-        garmentId: g.garment, titol: g.titol || '', unitat: unitatDeclarada,
+        garmentId: g.garment,
+        // El títol de grup obre el grup UN COP: a la primera banda de talles i prou.
+        titol: bandaIdx === 0 ? (g.titol || '') : '', unitat: unitatDeclarada,
         columns: [
           { key: 'layer', label: tEn('tech_sheet.q8_col_layer'), width: 16 },
           { key: 'pom', label: tEn('tech_sheet.q8_col_pom'), width: wPom },
           // T3 · DUES COLUMNES PER TALLA, NO TRES. La teòrica i com va ARRIBAR, i prou.
-          ...talles.flatMap(sl => [
+          ...talles.slice(bi, bf).flatMap(sl => [
             // La talla base porta la marca al MODEL: el builder hi pinta la franja de realçat, la
             // mateixa que la pantalla. El `*` es manté perquè sobreviu a l'imprès en blanc i negre.
             { key: sl, label: sl === base ? `${sl}*` : sl, width: 13, ...(sl === base ? { base: true } : {}) },
@@ -5562,7 +5580,7 @@ export default function TechSheetEditor() {
         ],
         rows: g.files.map(f => [
           capaQ8(f), cellaPom(f),
-          ...talles.flatMap(sl => {
+          ...talles.slice(bi, bf).flatMap(sl => {
             const c = f.celles?.[sl] || {}
             return [xifra(c.teorica) || '–', cellaActual(c.actual, c.teorica)]
           }),
@@ -5570,10 +5588,13 @@ export default function TechSheetEditor() {
         style: { fontSize: 9, capcaleraFina: true, zebra: true },
         snapshot: {
           model_id: model.id, fitting_session_id: sessioTancada?.id ?? null,
-          talla_base: base || null, garment: g.garment, snapshot_at: new Date().toISOString(),
+          talla_base: base || null, garment: g.garment,
+          // Quines talles porta AQUEST objecte: sense això, dues bandes del mateix grup serien
+          // indistingibles al document i ningú no sabria si el full és sencer.
+          talles: talles.slice(bi, bf), snapshot_at: new Date().toISOString(),
         },
       },
-    }))
+    })))
     const n = inserirGrupPaginat(entrades)
     if (n) flash(t('tech_sheet.q8_flash_inserted', { count: n }))
     setTablePicker(null)

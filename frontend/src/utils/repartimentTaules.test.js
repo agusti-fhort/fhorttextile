@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { ampladaPerTextos, paginesDelRepartiment, repartimentEnPagines } from './repartimentTaules.js'
+import { ampladaPerTextos, paginesDelRepartiment, repartimentEnPagines, trossosDeTalles } from './repartimentTaules.js'
 
 const PAGINA = { yInici: 14, yFinal: 283, separacio: 6 }
 // Geometria d'una taula Q8 típica: banda de títol 6, capçalera 8, fila 5.
@@ -168,4 +168,31 @@ test('C3 · del segon tros endavant la banda és més baixa: el títol obre el g
   // I cap fila es perd ni es duplica, que és la invariant que mai no pot caure.
   assert.equal(amb[amb.length - 1].fi, 100)
   amb.slice(1).forEach((t, i) => assert.equal(t.ini, amb[i].fi))
+})
+
+// ── T3 · partició vertical de talles ─────────────────────────────────────────────────────────
+
+test('T3 · si hi caben totes, UNA taula i cap partició', () => {
+  assert.deepEqual(trossosDeTalles(5, 50, 26, 270), [[0, 5]])
+})
+
+test('T3 · el run que no hi cap es parteix per TALLA SENCERA', () => {
+  // fix 50 · 26 mm per talla · 270 útils → (270−50)/26 = 8 talles per taula
+  assert.deepEqual(trossosDeTalles(20, 50, 26, 270), [[0, 8], [8, 16], [16, 20]])
+})
+
+test('T3 · cap talla es perd ni es repeteix', () => {
+  const trossos = trossosDeTalles(13, 50, 26, 270)
+  assert.equal(trossos[0][0], 0)
+  assert.equal(trossos[trossos.length - 1][1], 13)
+  trossos.slice(1).forEach((t, i) => assert.equal(t[0], trossos[i][1]))
+})
+
+test('T3 · una talla més ampla que el full surt sola i sobresurt: mai un bucle infinit', () => {
+  const trossos = trossosDeTalles(3, 50, 500, 270)
+  assert.deepEqual(trossos, [[0, 1], [1, 2], [2, 3]])
+})
+
+test('T3 · sense talles no hi ha trossos', () => {
+  assert.deepEqual(trossosDeTalles(0, 50, 26, 270), [])
 })

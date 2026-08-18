@@ -130,3 +130,36 @@ export function ampladaPerTextos(textos, { charMm, padMm = 0, minMm = 0, maxMm =
   const necessaria = perLinia * charMm + padMm
   return Math.max(minMm, Math.min(maxMm, necessaria))
 }
+
+/**
+ * Q8-ter/T3 · LA PARTICIÓ VERTICAL: quines TALLES entren a cada taula quan no hi caben totes.
+ *
+ * 🚨 EL FALLBACK APROVAT, i el que substitueix. Fins ara una taula massa ampla tenia dues
+ * sortides: encongir-la (té terra: el sòl de 8pt) o pujar de paper. **Pujar a A3 no és una
+ * sortida** —la fitxa s'imprimeix en A4 i un full que ningú no pot imprimir no és un document—,
+ * i per això A3 surt de la tria automàtica. El que queda és partir per l'eix que la taula té de
+ * sobres: LES TALLES. Dues taules de cinc talles es llegeixen; una de deu a 6pt, no.
+ *
+ * Es parteix per TALLA SENCERA, mai pel mig d'un grup de columnes d'una talla: la teòrica i
+ * l'Actual d'una mateixa talla han d'anar juntes o cap de les dues no vol dir res.
+ *
+ * @param {number} nTalles      quantes talles hi ha
+ * @param {number} ampleFix     mm de les columnes que es REPETEIXEN a cada tros (Layer, POM…)
+ * @param {number} amplePerTalla mm que ocupa una talla sencera (totes les seves columnes)
+ * @param {number} ampleUtil    mm disponibles al full
+ * @returns {Array<[number, number]>} rangs `[ini, fi)` d'índexs de talla, un per taula
+ */
+export function trossosDeTalles(nTalles, ampleFix, amplePerTalla, ampleUtil) {
+  const n = Math.max(0, nTalles | 0)
+  if (!n) return []
+  // Quantes talles caben un cop pagades les columnes fixes. Mínim UNA: amb una sola talla que no
+  // hi càpiga, el que toca és que sobresurti i es vegi, no un bucle que no acaba (mateixa llei
+  // que el bloc mínim d'una fila a `repartimentEnPagines`).
+  const caben = amplePerTalla > 0
+    ? Math.max(1, Math.floor((ampleUtil - ampleFix) / amplePerTalla))
+    : n
+  if (caben >= n) return [[0, n]]
+  const out = []
+  for (let i = 0; i < n; i += caben) out.push([i, Math.min(i + caben, n)])
+  return out
+}
