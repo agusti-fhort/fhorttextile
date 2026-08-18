@@ -32,12 +32,12 @@ import { useUnit, fmtMeasure } from './fittingShared'
 import { comptaPecesInserides, esPecaInserible } from '../utils/pecaInsercio'
 import { potTancar, treuAncoratgeFantasma } from '../utils/tracatPloma'
 import { reparteixCotes, superficieDeCotes } from '../utils/cotesAuto'
-import { nomenclaturaDePom, nomsDePom } from '../utils/nomenclaturaPom'
+import { nomsDePom } from '../utils/nomenclaturaPom'
 import { sufixIdentitat } from '../utils/capaInstancia'
 import { useDiccionariMesures } from '../utils/diccionariMesuresFont'
 // F4 — el `format` per pàgina: la regla d'escriptura i la de lectura, en un sol lloc.
 import { ambFormat, hidratarPagines } from '../utils/paginesFtt'
-import { GARMENT_MARE, agrupaPerGarment, calArbrePerGarment, garmentDeFila, partirTaules } from '../utils/garmentFitxa'
+import { GARMENT_MARE, agrupaPerGarment, calArbrePerGarment, garmentDeFila } from '../utils/garmentFitxa'
 import { ampladaPerTextos, paginesDelRepartiment, repartimentEnPagines, trossosDeTalles } from '../utils/repartimentTaules'
 import { grupsDelFull } from '../utils/grupsDelFull'
 import { aDocument } from '../utils/breakConvention'
@@ -346,29 +346,6 @@ export const cotaLabelDe = (bm) => (bm && (bm.nom_fitxa || bm.codi_client || bm.
 // costat del `pomId`, i un document de cada mena conviu amb l'altre sense tocar res.
 const identitatDeCota = (o) => `${o.pomId}|${o.capa || 'exterior'}|${o.instancia || ''}`
 const identitatDeFila = (bm) => `${bm.pom_id}|${bm.capa || 'exterior'}|${bm.instancia || ''}`
-
-// EL NOM D'UNA MESURA A UNA TAULA DE PAPER — punt únic de les QUATRE taules de la fitxa.
-//
-// Fins avui cada taula portava la seva pròpia cadena en línia (`nom_en || nom_client ||
-// pom_code_global`, `rule.pom_nom_en || …`, `row.nom_en`), i les quatre tenien el mateix parell
-// de forats:
-//
-//  · EL BATEIG NO ARRIBAVA. Rebatejar un POM al model es veia a Mesures i al panell de cotes, i
-//    el paper seguia imprimint el nom del catàleg. La regla d'or de l'Agus —un canvi de nom es
-//    veu IGUAL a tot arreu— es trencava exactament al document que va al fabricant.
-//    `nomsDePom` ja resolia això i no el consumia ningú.
-//
-//  · LA GERMANA NO ES DISTINGIA. Els payloads porten `capa` i `instancia` des de C4, però la
-//    cel·la imprimia només el nom: a ROSALIA, «Chest width» i «Chest width» eren dues files amb
-//    xifres diferents i res que digués quina era el folre. En una graella ho salva la columna de
-//    capa; en un imprès no hi ha res més que aquesta cel·la.
-//
-// La segona línia (`sub`) es queda: és el nom en la llengua del document i no compta com a
-// identitat. El sufix va a la PRIMERA, que és la que es llegeix.
-const nomDeTaula = (fila, dicc, docLang) => {
-  const { canonic, local } = nomsDePom(fila)
-  return { text: `${canonic}${sufixIdentitat(fila, dicc, docLang)}`, sub: local }
-}
 
 // F2 (precedent de col·locació) — objectes del croquis als quals el tècnic assigna una vista
 // (viewSlot) i sobre la bbox dels quals es normalitzen les cotes.
@@ -2825,17 +2802,19 @@ export default function TechSheetEditor() {
   const [peces, setPeces] = useState({ loading: true })
   const [sizeFittings, setSizeFittings] = useState([])
   const [tableData, setTableData] = useState({})    // {objId: jsonData|null} fora del JSON
-  // F3 — partició opcional de les taules de mesures per secció d'origen. Default false: la
-  // fitxa d'una peça (la immensa majoria) no ha de notar que això existeix.
-  const [partirPerSeccio, setPartirPerSeccio] = useState(false)
   const [notice, setNotice] = useState(null)        // toast efímer (p.ex. "ja hi ha capçalera")
   const [thumbnails, setThumbnails] = useState([])
   const [exporting, setExporting] = useState(false)
   const [, setAddingTable] = useState(false)
   const [pickFitting, setPickFitting] = useState(false)
-  // S3: picker de variant de taula (T1a/T1b/T2/custom) — null | { variant?: 't1a'|'t1b'|'t2'|'custom' }.
-  // Obert des del ribbon (botó "Taula", commit 4).
-  const [tablePicker, setTablePicker] = useState(null)
+  // Q8-ter/T5 — AQUÍ HI HAVIA `partirPerSeccio`, la casella de partir per secció d'origen (F3).
+  // Se'n va perquè el seu ÚNIC consumidor era `partirEnTaules`, que alimentava la T1a i la T1b:
+  // retirades aquelles, la casella hauria quedat commutant un estat que ningú no llegeix. Les
+  // taules per prenda parteixen per PEÇA, que és l'eix de sobre; la secció era l'eix de dins i
+  // avui no té cap taula que el faci servir.
+  // Q8-ter/T5 — de l'antic picker de variants només en queda el SETTER: les insercions el
+  // netegen en acabar i el modal que el llegia se n'ha anat amb la T1a i la T1b.
+  const [, setTablePicker] = useState(null)
   // R4 — unitat del tenant (CM|INCH). Les taules són SNAPSHOTS: el valor es formata quan es
   // congela, no a cada render. Formatar-lo al builder el convertiria en un binding viu i
   // contradiria la llei de la taula congelada; llegir el toggle a la inserció, en canvi, és
@@ -2870,7 +2849,6 @@ export default function TechSheetEditor() {
   // POMs del model, per al contenidor del panell dret. FRONTERA G1: aquesta llista serveix per
   // DECIDIR què s'escriu; el que arriba al document és només el string. Cap id hi viatja.
   const [pomRows, setPomRows] = useState([])
-  const [nRepas, setNRepas] = useState(0)      // esdeveniments de fitting del model (porta T3)
   // Q8 — LA SESSIÓ DE LA QUAL PARLEN LES TAULES DE FITTING I DE SIZE SET: l'ÚLTIMA TANCADA.
   // No la que hi ha oberta: una fitxa és un document i el que s'imprimeix ha de ser el que ja
   // està decidit. Una sessió oberta encara es pot moure sota els peus del paper.
@@ -3638,21 +3616,6 @@ export default function TechSheetEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // ── Repàs de fittings: NOMBRE d'esdeveniments, per a la porta de la variant T3 ──
-  // La casa ensenya sempre la variant i diu el motiu quan no es pot inserir (R3/F1), i per
-  // dir-ho cal saber-ho ABANS d'obrir el picker — igual que `pomRows` i `sizeFittings`. Es
-  // llegeix l'endpoint del Repàs tal qual; la inserció el tornarà a demanar quan toqui, que
-  // és quan el snapshot ha de ser fresc.
-  useEffect(() => {
-    if (!id) return undefined
-    let cancelled = false
-    fetch(`${API}/api/v1/fitting/model/${id}/repas/`, { headers: authHeaders })
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (!cancelled && d) setNRepas((d.sessions || []).length) })
-      .catch(() => {})
-    return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
 
   // ── Q8 · l'última sessió TANCADA i les prendes del model, per a les portes de les variants ──
   // Mateix criteri que el Repàs (aquí sobre): la porta ha de poder dir el motiu ABANS d'obrir el
@@ -5108,59 +5071,6 @@ export default function TechSheetEditor() {
     return { ...obj, scale, width: wMm * scale, height: hMm * scale }
   }
 
-  // ── F3 · UNA TAULA PER SECCIÓ ───────────────────────────────────────────────
-  // Un document multi-peça porta les mesures agrupades sota rètols ('01.- DRESS',
-  // '02.- KNICKERS'…) que ara sobreviuen a l'import (BaseMeasurement.seccio). Qui composa la
-  // fitxa vol una taula per peça al costat del seu croquis, no una de sola amb les tres
-  // seguides — però això és una decisió de MAQUETACIÓ, i per això la partició és OPCIONAL i
-  // no s'aplica mai sola.
-  //
-  // `buildTableCellPrimitives` no es toca: cada secció produeix un objecte `table` normal i
-  // corrent, amb les mateixes columnes i el mateix builder. L'única cosa que canvia és
-  // quantes files hi entren i on cau l'objecte.
-  const seccionsDeFiles = (files) => {
-    const vistes = []
-    for (const f of files) {
-      const s = (f?.seccio || '').trim()
-      if (s && !vistes.includes(s)) vistes.push(s)
-    }
-    return vistes
-  }
-
-  // ── SET-2/T9 · UNA TAULA PER PRENDA ─────────────────────────────────────────
-  // L'eix de la PEÇA és el de DALT i el de la secció el de dins: una prenda pot portar
-  // diverses seccions («cos», «caputxa» d'una dessuadora), mai al revés. Per això es parteix
-  // primer per prenda i, dins de cada prenda, per secció exactament com abans.
-  //
-  // ⚠️ DATAT 2026-08-10 — inert sobre el corpus actual: amb totes les files a la mare
-  // `agrupaPerGarment` torna UN grup, la casella ni tan sols es pinta i el resultat és, fila
-  // per fila i objecte per objecte, el d'abans d'aquest tram. Re-verificar amb:
-  //   SELECT DISTINCT garment FROM <tenant>.models_app_basemeasurement;
-  //
-  // La T1b hi passa igual, però les seves files vénen de `graded-table/`, que encara NO
-  // serveix la peça: cauen totes a la mare i la taula no es parteix mai. És el comportament
-  // correcte mentre l'endpoint no la porti (i el dia que la porti, això ja hi és).
-  //
-  // La LLEI de partir viu a `utils/garmentFitxa` (`partirTaules`), amb les seves proves: aquí
-  // només s'hi lliguen les dues caselles i el criteri de secció que ja tenia la casa.
-  const partirEnTaules = (files) => partirTaules(files, {
-    // Q8 — LA PARTICIÓ PER PRENDA JA NO ÉS UNA CASELLA: és el comportament únic. Va néixer
-    // opcional (T9) quan cap dada real tenia peces i el que calia era que la fitxa d'un model
-    // d'una peça no notés que això existia. Amb el model multi-peça viu, una casella per decidir
-    // si les peces es distingeixen és una manera d'equivocar-se —una taula amb les mesures de dues
-    // prendes barrejades i sense rètol no es pot llegir— i una passa més abans de compondre.
-    //
-    // NO ÉS UN CANVI DE COMPORTAMENT PER A LES FITXES D'AVUI: amb una sola prenda `partirTaules`
-    // torna UN grup, exactament com amb la casella apagada. La partició per SECCIÓ es queda
-    // opcional: aquell eix sí que és una decisió de maquetació (F3).
-    perPeca: true, perSeccio: partirPerSeccio, seccionsDe: seccionsDeFiles,
-  })
-
-  // Col·locació ESGLAONADA: N taules a la mateixa x/y naixerien exactament l'una damunt de
-  // l'altra i semblaria que només se n'ha inserit una. El desplaçament és petit a propòsit
-  // (prou per veure-les totes, prou poc per no sortir de la pàgina amb 3-4 peces).
-  const escalonat = (i) => ({ x: 10 + i * 6, y: 14 + i * 8 })
-
   // ── Q8 · INSERIR UN GRUP DE TAULES, APILADES I PAGINADES ────────────────────
   //
   // Les taules de Q8 no s'insereixen d'una en una i esglaonades com les de S3/T9: van en GRUP
@@ -5670,283 +5580,6 @@ export default function TechSheetEditor() {
     setTablePicker(null)
   }
 
-  // Insereix N objectes (un per secció) o UN de sol. Retorna quantes taules ha posat.
-  const inserirTaules = (grups, fesObjecte) => {
-    grups.forEach((g, i) => {
-      const obj = fitTableObj({ ...fesObjecte(g), ...escalonat(i) })
-      addObject(obj)
-    })
-    return grups.length
-  }
-
-  // ── T0 · MESURES TALLA BASE ─────────────────────────────────────────────────
-  // POM, nomenclatura i mida de la talla base. **TRES columnes i prou** (correcció d'Agus,
-  // 30/07): ni tolerància, ni comentaris, ni cap dada de graduació —ni Δ, ni break, ni
-  // columnes de talla—. La primera versió hi va afegir Tol± i Comentaris per mimetisme amb la
-  // T1a i eren precisament les dues coses que sobraven: aquesta taula és la mida, no el full
-  // d'anotació.
-  //
-  // LA TALLA BASE VA A LA CAPÇALERA DE LA COLUMNA `base`, i no en un títol de taula, perquè
-  // **les taules d'aquesta casa no tenen títol**: `buildTableCellPrimitives` pinta capçalera
-  // de columnes + files, i res més (:779-863). Afegir-n'hi un canviaria el render de TOTES
-  // les variants, que és molt més que aquesta correcció. La columna que porta la xifra és qui
-  // declara de quina talla parla — el mateix criteri que la T1b, on la talla base es marca
-  // sobre la seva pròpia columna (`{sl}*`, buildTablePrimitives:733).
-  //
-  // La NOMENCLATURA surt de `nomenclaturaDePom` (utils/nomenclaturaPom.js) i no d'una cadena
-  // escrita aquí: aquesta taula neix ja amb el criteri bo (nom_fitxa → àlies del client →
-  // codi canònic → codi de la casa, mai buida). La T1a encara fa servir `pom_abbreviation` i
-  // té el seu propi fix en curs; quan convergeixi, ho farà cap a aquell mòdul.
-  const insertTableBaseMeasures = async () => {
-    if (!locked) return
-    let bms
-    try {
-      const r = await fetch(`${API}/api/v1/models/${model.id}/base-measurements/`, { headers: authHeaders })
-      if (!r.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
-      const d = await r.json()
-      bms = d.results || d || []
-    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
-    if (!bms.length) { flash(t('tech_sheet.flash_empty_table')); return }
-
-    // La talla surt del MODEL (`base_size_label`, la mateixa que el run declara i que ja va al
-    // snapshot). Sense talla declarada es cau a l'etiqueta pelada: la porta hauria d'haver
-    // aturat aquest cas, i si algun dia no l'atura val més una capçalera correcta però muda
-    // que un separador penjant («Base · (cm)»).
-    const talla = (model?.base_size_label || '').trim()
-    // La 1a columna no porta títol (decisió d'Agus, 31/07): el que hi ha sota és la
-    // nomenclatura amb què el client anomena la mesura, i posar-hi la paraula «Nomenclatura»
-    // era etiquetar una columna que s'explica sola. La columna es queda; cau el títol.
-    // Els títols segueixen l'idioma del DOCUMENT (`tDoc`), no el de qui insereix la taula.
-    const columns = [
-      { key: 'ref', label: '', width: 22 },
-      { key: 'pom', label: tDoc('tech_sheet.tbl_col_pom'), width: 46 },
-      {
-        key: 'base', width: 24,
-        label: talla
-          ? tDoc('tech_sheet.tbl_col_base_cm_talla', { talla })
-          : tDoc('tech_sheet.tbl_col_base_cm'),
-      },
-    ]
-    // Files: TOTES les mesures vives del model, com fa la T1a — inclosos els POMs materialitzats
-    // sense valor encara. La cel·la buida en una fitxa impresa és on el tècnic anota a mà; podar
-    // les files en silenci seria decidir per ell què no li importa. La porta ja garanteix que
-    // almenys una fila porta xifra.
-    const rows = bms.map(bm => [
-      nomenclaturaDePom(bm),
-      nomDeTaula(bm, dicc, docLang),
-      fmtMeasure(bm.base_value_cm, unit) ?? '',
-    ])
-    addObject(fitTableObj({
-      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
-      // SET-2/T9 — la taula surt de TOTES les mesures del model, o sigui de la prenda mare.
-      // Quan la partició per peça tingui més d'una branca, cada objecte portarà la seva.
-      kind: 'base_measures', garmentId: GARMENT_MARE, columns, rows,
-      style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
-      snapshot: {
-        model_id: model.id, talla_base: model?.base_size_label || null,
-        snapshot_at: new Date().toISOString(),
-      },
-    }))
-    setTablePicker(null)
-  }
-
-  // T1a — fitxa de treball fitting (POM base + regla de grading). Tol± queda buit: la
-  // serialització de base-measurements no exposa tolerància (només impressió+anotació manual).
-  // F1 — DUES fonts per a la regla, mai una URL amb `null`. Un model pot portar la graduació
-  // de dues maneres i la T1a ha de sortir igual per totes dues (decisió: la taula llegeix LES
-  // DADES DEL MODEL, tant si el ruleset és sembrat com si ve d'un import):
-  //   · `model.grading_rule_set` → GradingRule del ruleset compartit (camí de sempre).
-  //   · sense ruleset → ModelGradingRule RESIDENT, que ara arriba dins de cada base-measurement
-  //     com a `regla_model` (backend F1). Abans aquest cas interpolava `null` a la query
-  //     (`?rule_set=null`), el backend tornava una llista buida i la columna de regla naixia
-  //     muda sense que res ho digués.
-  const insertTableT1a = async (sfId) => {
-    if (!locked) return
-    // LA CRIDA AL RULESET SE'N VA amb l'última cosa que en llegia. Les columnes de Regla/Δ/Break
-    // ja van sortir d'aquesta taula el 31/07; l'únic que en quedava viu era `rule.pom_nom_en`
-    // per al nom canònic, i el nom ara el resol `nomsDePom` —que a més sap del bateig, cosa que
-    // la regla no podia saber—. Amb això, `grading-rules/` deixa de ser una dependència de la
-    // T1a: una petició menys i un índex per `pom_id` menys, que era l'últim d'aquesta funció.
-    let bms
-    try {
-      const rBm = await fetch(`${API}/api/v1/models/${model.id}/base-measurements/`, { headers: authHeaders })
-      if (!rBm.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
-      const dBm = await rBm.json()
-      bms = dBm.results || dBm || []
-    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
-    if (!bms.length) { flash(t('tech_sheet.flash_empty_table')); return }
-
-    // La taula del FITTING és per anotar-hi a mà el que es mesura damunt la peça: hi queden la
-    // referència, el POM, la base i les dues columnes on s'escriu. Regla/Δ, Break i Tol± en
-    // surten (Agus, 31/07) — són dades de GRADUACIÓ, i el fitting no és on es decideixen; el
-    // que hi feien era omplir amplada que ara és per escriure-hi. Títols en l'idioma del
-    // DOCUMENT, i la 1a columna sense títol.
-    const columns = [
-      { key: 'ref', label: '', width: 22 },
-      { key: 'pom', label: tDoc('tech_sheet.tbl_col_pom'), width: 46 },
-      { key: 'base', label: tDoc('tech_sheet.tbl_col_base_cm'), width: 18 },
-      { key: 'nova', label: tDoc('tech_sheet.tbl_col_new_measure'), width: 34 },
-      { key: 'coment', label: tDoc('tech_sheet.tbl_col_comments'), width: 60 },
-    ]
-    const filesDe = (sub) => sub.map(bm => [
-      // R2 — la nomenclatura per `nomenclaturaDePom`, com la taula de mesures base. Feia
-      // `nom_fitxa || pom_abbreviation`, que és la mateixa cadena escurçada i amb el codi del
-      // client saltat: dues còpies de la mateixa llei que ja havien divergit un cop.
-      nomenclaturaDePom(bm),
-      // El nom canònic de la REGLA ja no mana: el bateig del model és el que el tècnic ha
-      // escrit per a AQUESTA peça i ha de sortir igual a la pantalla i al paper (regla d'or).
-      // `rule.pom_nom_en` era el nom del catàleg vist des del ruleset — el mateix que
-      // `nomsDePom` ja resol, però sense poder saber res del bateig.
-      nomDeTaula(bm, dicc, docLang),
-      fmtMeasure(bm.base_value_cm, unit) ?? '',
-      '', '',                                  // mesura nova · comentaris: per omplir a mà
-    ])
-    // F3 (secció) + T9 (peça) — cap partició s'aplica mai sola: totes dues les demana el
-    // tècnic i totes dues callen si el model no té més d'una branca del seu eix.
-    const grups = partirEnTaules(bms)
-    const n = inserirTaules(grups, g => ({
-      id: uid(), type: 'table', layer: 'free',
-      kind: 'pom_fitting', garmentId: g.garment, columns, rows: filesDe(g.files),
-      style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
-      snapshot: {
-        model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString(),
-        ...(g.seccio ? { seccio: g.seccio } : {}),
-      },
-    }))
-    if (n > 1) flash(t('tech_sheet.flash_tables_per_section', { count: n }))
-    setTablePicker(null)
-  }
-
-  // T1b — grading final: talles + Δ + columna Break. Les xifres graduades van TOTES en negre
-  // (Patró C, deroga T2): el break ja no es codifica a la cel·la (ni vermell ni subratllat ni
-  // negreta), sinó que es resumeix en una columna pròpia al final. Es conserva la negreta
-  // estructural (capçalera + 1a columna) i les franges de la talla base. El color a les dades
-  // queda reservat per a senyals d'EXCEPCIÓ futures. Snapshot congelat: només afecta reinsercions.
-  const insertTableT1b = async (sfId) => {
-    if (!locked) return
-    let data
-    try {
-      const r = await fetch(`${API}/api/v1/fitting/${sfId}/graded-table/`, { headers: authHeaders })
-      if (!r.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
-      data = await r.json()
-    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
-    if (!data.rows || !data.rows.length) { flash(t('tech_sheet.flash_empty_table')); return }
-
-    const sizeLabels = data.size_labels || []
-    // La taula de GRADUACIÓ ensenya el que el patronista ha de llegir: la mesura de cada talla.
-    // Δ i Break en surten senceres (Agus, 31/07): són el CÀLCUL amb què s'hi ha arribat, i
-    // viuen a Escalat, que és on es decideixen. Títols en l'idioma del DOCUMENT; la 1a columna,
-    // sense títol. Les talles NO es tradueixen: són dades de domini.
-    const columns = [
-      { key: 'ref', label: '', width: 22 },
-      { key: 'nom', label: tDoc('tech_sheet.tbl_col_pom'), width: 46 },
-      // T1 — la columna de la talla base porta marca al MODEL (`base`), no només el sufix `*`:
-      // el builder la necessita per pintar-hi la franja de realçat. El `*` es manté perquè
-      // sobreviu a l'imprès en blanc i negre.
-      ...sizeLabels.map(sl => (sl === data.base_size
-        ? { key: sl, label: `${sl}*`, width: 16, base: true }
-        : { key: sl, label: sl, width: 16 })),
-    ]
-    const cellForSize = (row, sl) => fmtMeasure(row.valors?.[sl], unit) ?? '–'
-    // Break = la talla DECLARADA a la regla (`talla_break_label`), com fa la T1a (:4565) i la
-    // pantalla de RuleSets. Abans es deduïa marcant la talla on el delta canviava respecte a
-    // l'anterior — però amb deltes ACUMULATS el delta canvia a cada talla per construcció, i
-    // una LINEAR pura sense cap break les marcava totes (TATE: 0 regles amb break, 18 files
-    // de 23 amb Break pintat). Un break no es dedueix: està declarat o no hi és.
-    const filesDe = (sub) => sub.map(row => [
-      // R2 — mateixa llei que les altres taules. `graded-table` ja serveix `ref` resolt al
-      // servidor i `nomenclaturaDePom` n'accepta els sinònims (`abbreviation`, `codi`).
-      nomenclaturaDePom(row),
-      nomDeTaula(row, dicc, docLang),
-      ...sizeLabels.map(sl => cellForSize(row, sl)),
-    ])
-    // F3/T9 — mateix criteri que a la T1a. Les files de `graded-table/` encara no porten la
-    // peça: cauen totes a la mare i la partició per prenda no s'activa (v. `partirEnTaules`).
-    const grups = partirEnTaules(data.rows)
-    const n = inserirTaules(grups, g => ({
-      id: uid(), type: 'table', layer: 'free',
-      kind: 'pom_grading', garmentId: g.garment, columns, rows: filesDe(g.files),
-      style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
-      snapshot: {
-        model_id: model.id, size_fitting_id: sfId, snapshot_at: new Date().toISOString(),
-        ...(g.seccio ? { seccio: g.seccio } : {}),
-      },
-    }))
-    if (n > 1) flash(t('tech_sheet.flash_tables_per_section', { count: n }))
-    setTablePicker(null)
-  }
-
-  // T3 — REPÀS DE FITTINGS: la mateixa taula que la pantalla de Mesures, per emportar-se-la
-  // impresa al fitting presencial. Eix = ESDEVENIMENT (sessions de fitting + etapes escrites a
-  // la taula de mesures, fusionades cronològicament pel backend), no talla ni versió.
-  //
-  // Mateix patró que la T1b, sense excepcions: es baixa l'endpoint del Repàs TAL QUAL (cap
-  // paràmetre, cap càlcul aquí), es congelen els valors com a STRINGS i l'objecte és un `table`
-  // corrent que `buildTableCellPrimitives` sap pintar. La fitxa és un document, no una vista
-  // viva: el que s'imprimeix ha de dir el que deia el dia que es va inserir.
-  //
-  // La capçalera de columna replica el criteri de la pantalla (repasGridAdapter): la fase per a
-  // una sessió —dada de domini, no es tradueix— i l'origen TRADUÏT per a una etapa, amb les
-  // mateixes claus `basestage.ctx.*` que la taula de mesures, perquè el tècnic llegeixi la
-  // mateixa paraula al paper i a la pantalla. Es replica el criteri, no el codi: aquell mòdul
-  // és de la superfície de Mesures i no es toca.
-  const insertTableRepas = async () => {
-    if (!locked || !model?.id) return
-    let data
-    try {
-      const r = await fetch(`${API}/api/v1/fitting/model/${model.id}/repas/`, { headers: authHeaders })
-      if (!r.ok) { flash(t('tech_sheet.flash_table_fetch_error')); return }
-      data = await r.json()
-    } catch { flash(t('tech_sheet.flash_table_fetch_error')); return }
-    const esdev = data.sessions || []
-    if (!esdev.length || !(data.rows || []).length) { flash(t('tech_sheet.flash_empty_table')); return }
-
-    // dd/mm, com la pantalla. Còpia local d'una línia: importar-la lligaria l'editor a un
-    // mòdul de la superfície de Mesures.
-    const dia = (iso) => {
-      if (!iso) return ''
-      const d = new Date(iso)
-      return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit' })
-    }
-    const capcalera = (s) => {
-      const titol = (s.origen && s.origen !== 'SESSIO')
-        ? t(`basestage.ctx.${String(s.origen).toLowerCase()}`, s.origen)
-        : (s.fase || '')
-      return s.data ? `${titol} @${dia(s.data)}` : titol
-    }
-    const columns = [
-      { key: 'ref', label: t('tech_sheet.tbl_col_nomenclatura'), width: 22 },
-      { key: 'nom', label: t('tech_sheet.tbl_col_pom'), width: 46 },
-      // Amples REALS: 20mm per esdeveniment donen aire a una mesura de 4-5 xifres i deixen que
-      // la capçalera parteixi en dues línies (buildTableCellPrimitives no talla mai un títol).
-      ...esdev.map(s => ({ key: String(s.id), label: capcalera(s), width: 20 })),
-      { key: 'coment', label: t('tech_sheet.tbl_col_comments'), width: 52 },
-    ]
-    const cella = (row, s) => {
-      const v = row.valors?.[String(s.id)]
-      return v ? (fmtMeasure(v.valor_real, unit) ?? '–') : '–'
-    }
-    const rows = (data.rows || []).map(row => [
-      nomenclaturaDePom(row),
-      nomDeTaula(row, dicc, docLang),
-      ...esdev.map(s => cella(row, s)),
-      row.ultim_comentari?.text || '',
-    ])
-    // `fitTableObj` és qui resol la mida: amb molts esdeveniments la taula es passa d'ample i
-    // l'escala uniforme la fa cabre a la pàgina, exactament com T1a/T1b/BOM. El sòl de 8pt el
-    // guarda el builder (`Math.max(8, style.fontSize)`).
-    addObject(fitTableObj({
-      id: uid(), type: 'table', layer: 'free', x: 10, y: 14,
-      kind: 'fitting_history', garmentId: GARMENT_MARE, columns, rows,
-      style: { fontSize: 9, headerFill: TBL.HDR_BG, zebra: true },
-      snapshot: {
-        model_id: model.id, talla: data.talla || null,
-        n_esdeveniments: esdev.length, snapshot_at: new Date().toISOString(),
-      },
-    }))
-    setTablePicker(null)
-  }
-
   // T2 — BOM: neix buida (sense snapshot de fitting), 100% editable a mà.
   const insertTableT2 = () => {
     if (!locked) return
@@ -5984,20 +5617,18 @@ export default function TechSheetEditor() {
     addObject(obj)
     setTablePicker(null)
   }
-
-  // Punt d'entrada del picker (encara sense botó al ribbon — commit 4): tria de variant →
-  // si cal, sub-selector de size fitting → insereix.
-  const runTableVariant = (variant, sfId) => {
-    setTablePicker(null)
-    if (variant === 't1a') insertTableT1a(sfId)
-    else if (variant === 't1b') insertTableT1b(sfId)
-  }
+  // ── Q8-ter/T5 · EL PANELL, DESPRÉS DE LA RETIRADA ───────────────────────────
+  // AQUÍ HI HAVIA EL DESPATX DE T1a · Mesures talla base · T1b · Repàs, i el sub-selector de size
+  // fitting que dues d'elles necessitaven. Se'n van perquè les taules per prenda les substitueixen
+  // senceres: la T1a i la T0 són la de fitting, la T1b és la d'escalat i el Repàs és el size set.
+  //
+  // 🔑 RETIRADA PER RUTA, NO PER FUNCIÓ, i és el que fa que sigui segura: el que cau és la manera
+  // de CREAR-NE de noves. El RENDERITZADOR no es toca —i no cal, perquè no mira mai el `kind`: els
+  // dos punts que pinten una taula (llenç viu i export) criden `buildTableCellPrimitives(obj)`,
+  // que llegeix `columns`, `rows` i `style` i res més—. Una fitxa desada amb una `base_measures` o
+  // una `fitting_history` es continua pintant idèntica. V. `DIAGNOSI_Q8TER_RETIRADA_PANELL.md`.
   const onPickTableVariant = (variant, garment) => {
     if (variant === 't2') { insertTableT2(); return }
-    // T0 — com la T3: no hi ha res a triar. La base és del MODEL, no d'un size fitting.
-    if (variant === 'base_measures') { insertTableBaseMeasures(); return }
-    // T3 — res a triar: el Repàs és del MODEL, no d'un size fitting. S'insereix i prou.
-    if (variant === 'repas') { insertTableRepas(); return }
     // Q8 — res a triar: la sessió és L'ÚLTIMA TANCADA, no una de la llista. Oferir-ne un
     // selector convidaria a compondre la fitxa amb un fitting que ja s'ha superat.
     if (variant === 'q8_fitting') { insertTaulaFitting(garment); return }
@@ -6008,14 +5639,6 @@ export default function TechSheetEditor() {
     // no aporta: el panell dret ja té els controls d'afegir i treure files i columnes, i allà
     // es decideix VEIENT la taula, que és quan se sap quantes en calen.
     if (variant === 'custom') { insertTableCustom(3, 3); return }
-    // F1 — cada variant tria entre els fittings que li serveixen: la T1b NOMÉS entre els que
-    // tenen graduació; la T1a entre tots, i sense cap si el model no en té (el fitting hi és
-    // per traça al snapshot, no per dades: la T1a surt de la base + la regla del model).
-    const candidats = variant === 't1b' ? sfAmbGrading : sizeFittings
-    if (variant === 't1a' && !candidats.length) { runTableVariant(variant, null); return }
-    if (!candidats.length) return      // el picker ja el deshabilita; xarxa de seguretat
-    if (candidats.length === 1) { runTableVariant(variant, candidats[0].id); return }
-    setTablePicker({ variant })
   }
 
   // ── Bloc de dades: capçalera del model (màxim 1 per pàgina) ─────────────────
@@ -6228,15 +5851,6 @@ export default function TechSheetEditor() {
   // deixa traça al snapshot) i la T1b en necessita un amb GRADUACIÓ, no un qualsevol —
   // `graded-table/` d'un fitting sense GradingVersion torna buit i el tècnic ho descobria
   // després de triar-lo.
-  const t1aOk = pomRows.length > 0
-    && (model?.grading_rule_set != null || pomRows.some(r => r.regla_model))
-  const t1aMotiu = pomRows.length === 0
-    ? t('tech_sheet.lib_table_no_base_measures')
-    : t('tech_sheet.lib_table_no_grading_rules')
-  const sfAmbGrading = sizeFittings.filter(sf => (sf.n_graded_specs || 0) > 0)
-  // F3 — les seccions que el model porta de l'import. Surten de pomRows (base-measurements,
-  // ja carregat en obrir), no d'una crida nova.
-  const seccionsDelModel = seccionsDeFiles(pomRows)
   // SET-2/T9 — I LES PECES, que NO són el mateix que les seccions: `seccio` és un rètol de
   // text lliure de l'import i pot partir una sola peça en zones («cos», «caputxa»); `garment`
   // és la prenda del model. Mateixa font (pomRows), cap crida nova, i cap ordre alterat.
@@ -6258,28 +5872,21 @@ export default function TechSheetEditor() {
   // porta). L'únic que necessita és que hi hagi almenys una mesura de talla base AMB XIFRA;
   // un model amb només POMs materialitzats buits produiria una taula de cel·les buides.
   const baseMeasuresOk = pomRows.some(r => r.base_value_cm != null)
+  // ── Q8-ter/T5 · EL PANELL, DESPRÉS DE LA RETIRADA ───────────────────────────
+  // D'AQUÍ SE'N VAN QUATRE ENTRADES —T1a Fitting (POM base) · Mesures talla base · T1b Grading
+  // final · T3 Repàs de fittings— perquè les taules per prenda les substitueixen senceres: la T0
+  // i la T1a són la de fitting, la T1b és la d'escalat, el Repàs és el size set. Tenir-les totes
+  // dues al panell no era oferir més opcions: era oferir dues maneres de dir el mateix, i una
+  // d'elles sense l'eix de la peça.
+  //
+  // 🔑 ES RETIRA LA RUTA, NO EL RENDERITZADOR, i per això les fitxes ja desades no noten res: els
+  // dos punts que pinten una taula criden `buildTableCellPrimitives(obj)`, que llegeix `columns`,
+  // `rows` i `style` i **no mira mai el `kind`**. Una `base_measures` o una `fitting_history`
+  // desades es continuen pintant idèntiques. V. `DIAGNOSI_Q8TER_RETIRADA_PANELL.md`.
+  //
+  // Aquí hi queden les dues que NO tenen substituta —la BOM i la personalitzada—, que són les
+  // úniques que no surten de cap font: neixen buides i s'omplen a mà.
   const TABLE_VARIANTS = [
-    { k: 't1a', icon: 'ti-ruler-measure', label: t('tech_sheet.table_variant_t1a'), ok: t1aOk, motiu: t1aMotiu },
-    // T2 — SEGONA de la llista per decisió d'Agus (30/07): és la taula que més es demana i
-    // la primera que algú busca. Cap altra variant canvia d'ordre relatiu.
-    {
-      k: 'base_measures', icon: 'ti-ruler', label: t('tech_sheet.table_variant_base_measures'),
-      ok: baseMeasuresOk, motiu: t('tech_sheet.lib_table_no_base_values'),
-    },
-    {
-      k: 't1b', icon: 'ti-chart-grid-dots', label: t('tech_sheet.table_variant_t1b'),
-      ok: sfAmbGrading.length > 0,
-      motiu: sizeFittings.length === 0
-        ? t('tech_sheet.lib_table_no_fitting')
-        : t('tech_sheet.lib_table_no_graded_fitting'),
-    },
-    // T3 — el Repàs de fittings imprès. Porta d'una sola condició: que hi hagi algun
-    // esdeveniment. No hi ha res a triar (ni size fitting ni talla): s'insereix tot el que
-    // l'endpoint dona, que és el que la pantalla ja ensenya.
-    {
-      k: 'repas', icon: 'ti-history', label: t('tech_sheet.table_variant_repas'),
-      ok: nRepas > 0, motiu: t('tech_sheet.lib_table_no_repas'),
-    },
     { k: 't2', icon: 'ti-list-details', label: t('tech_sheet.table_variant_t2'), ok: true, motiu: '' },
     { k: 'custom', icon: 'ti-table-plus', label: t('tech_sheet.table_variant_custom'), ok: true, motiu: '' },
   ]
@@ -8024,19 +7631,6 @@ export default function TechSheetEditor() {
                   ))}
                 </Fragment>
               ))}
-              {/* F3 — la partició per secció NOMÉS surt si el model en té més d'una: en una
-                  fitxa d'una sola peça seria una casella que no vol dir res. Mai forçada. */}
-              {seccionsDelModel.length > 1 && (
-                <label style={{ ...libRow, cursor: 'pointer', gap: 6 }}
-                  title={t('tech_sheet.split_by_section_hint', { seccions: seccionsDelModel.join(' · ') })}>
-                  <input type="checkbox" checked={partirPerSeccio}
-                    onChange={e => setPartirPerSeccio(e.target.checked)}
-                    style={{ flexShrink: 0, cursor: 'pointer' }} />
-                  <span style={libName}>
-                    {t('tech_sheet.split_by_section', { count: seccionsDelModel.length })}
-                  </span>
-                </label>
-              )}
             </Contenidor>
 
             <Contenidor titol={t('tech_sheet.lib_files', { n: fitxersAltres.length })} icona="ti-folder" defaultOpen={false} pes={1}>
@@ -8881,46 +8475,11 @@ export default function TechSheetEditor() {
           sense size-fittings, T2/Custom sempre disponibles. */}
       {/* F1 — selector de peces del patró vigent. La peça hi entra encaixada; el nom del
           block és el que en dirà el peu i el panell de capes. */}
-      {/* R3 — d'aquest modal només en queda el TRIA-FITTING: apareix quan el model té més d'un
-          SizeFitting i cal saber de quin es fa la taula. El menú de variants ha marxat a la
-          persiana TAULES de la biblioteca, i la personalitzada s'insereix directament. */}
-      {tablePicker?.variant && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setTablePicker(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: COL.bg, borderRadius: 12, padding: '1.4rem', maxWidth: 360, width: '90%', fontFamily: FONT, border: `1px solid ${COL.border}` }}>
-            <h2 style={{ fontSize: 'var(--fs-h3)', fontWeight: 600, marginBottom: 12 }}>{t('tech_sheet.table_pick_fitting')}</h2>
-            {/* F1 — el modal DIU quins fittings tenen graduació. La T1b es construeix des de
-                `graded-table/`, que d'un fitting sense GradingVersion torna buit: oferir-los
-                tots per igual feia que el tècnic ho descobrís després de triar. Els que no en
-                tenen queden atenuats i deshabilitats per a la T1b; per a la T1a segueixen
-                servint (només hi deixen traça al snapshot), i el comptador de specs hi és de
-                totes maneres perquè la tria sigui informada. El contenidor IMP-* queda així
-                identificat sense cap regla d'anomenar: es veu pel comptador. */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {sizeFittings.map(sf => {
-                const nSpecs = sf.n_graded_specs || 0
-                const inutil = tablePicker.variant === 't1b' && nSpecs === 0
-                return (
-                  <button key={sf.id} type="button" disabled={inutil}
-                    title={inutil ? t('tech_sheet.lib_table_no_graded_fitting') : undefined}
-                    onClick={() => { if (!inutil) runTableVariant(tablePicker.variant, sf.id) }}
-                    style={{ textAlign: 'left', fontSize: 'var(--fs-body)', padding: '8px 10px', border: `1px solid ${COL.border}`, borderRadius: 6, background: COL.field, color: COL.textMain, fontFamily: FONT, cursor: inutil ? 'not-allowed' : 'pointer', opacity: inutil ? 0.45 : 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <span>{sf.codi || sf.nom || sf.talla_base || `#${sf.id}`}{sf.tipus ? ` · ${sf.tipus}` : ''}</span>
-                    <span style={{ fontSize: 'var(--fs-small)', color: nSpecs ? COL.textMain : COL.textMuted, whiteSpace: 'nowrap' }}>
-                      {nSpecs
-                        ? t('tech_sheet.sf_graded_specs', { count: nSpecs })
-                        : t('tech_sheet.sf_no_grading')}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            <button type="button" onClick={() => setTablePicker(null)}
-              style={{ marginTop: 12, fontSize: 'var(--fs-label)', color: COL.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-              {t('tech_sheet.table_picker_cancel')}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Q8-ter/T5 — AQUÍ HI HAVIA EL MODAL SUB-SELECTOR DE SIZE FITTING, i se'n va amb les
+          dues úniques taules que el necessitaven (T1a i T1b). Preguntar de quin size fitting es
+          fa la taula era una passa que les taules per prenda ja no demanen: la seva font no es
+          tria, es DEDUEIX (l'última sessió tancada, la corba vigent). `tablePicker` es queda com a
+          estat perquè les insercions el netegen en acabar, però ja no obre res. */}
       {/* S4: modal "Desar com a plantilla" — mateix look que pickFitting/tablePicker */}
       {saveAsTpl && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setSaveAsTpl(null)}>
